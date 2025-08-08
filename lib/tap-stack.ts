@@ -1,5 +1,5 @@
 import * as aws from '@cdktf/provider-aws';
-import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
+import { Fn, TerraformOutput, TerraformStack, S3Backend } from 'cdktf';
 import { Construct } from 'constructs';
 import { CloudwatchConstruct } from './cloudwatch-construct';
 import { Ec2Construct } from './ec2-construct';
@@ -10,7 +10,7 @@ import { VpcConstruct } from './vpc-construct';
 export interface TapStackProps {
   environmentSuffix?: string;
   awsRegion?: string;
-  // added so bin/tap.ts can pass these without TS errors
+  // keep these so bin/tap.ts compiles and we can persist state
   stateBucket?: string;
   stateBucketRegion?: string;
   defaultTags?: {
@@ -18,7 +18,6 @@ export interface TapStackProps {
       Environment?: string;
       Owner?: string;
       Service?: string;
-      // bin passes Repository & CommitAuthor; allow passthrough
       Repository?: string;
       CommitAuthor?: string;
     };
@@ -30,13 +29,41 @@ export class TapStack extends TerraformStack {
     super(scope, name);
 
     const region = process.env.AWS_REGION || props?.awsRegion || 'us-west-2';
+
+    // ── 1) Persist Terraform state in S3 so future runs reuse it ───────────────
+    const stateBucket =
+      props?.stateBucket ||
+      process.env.TERRAFORM_STATE_BUCKET ||
+      'iac-rlhf-tf-states';
+    const stateBucketRegion =
+      props?.stateBucketRegion ||
+      process.env.TERRAFORM_STATE_BUCKET_REGION ||
+      region;
+
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${process.env.ENVIRONMENT || props?.environmentSuffix || 'development'}/${name}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+      // Optional: add a DynamoDB table for state locking if you have it
+      // dynamodbTable: process.env.TERRAFORM_STATE_LOCK_TABLE,
+    });
+
     new aws.provider.AwsProvider(this, 'aws', { region });
 
     const environment =
       process.env.ENVIRONMENT || props?.environmentSuffix || 'development';
 
-    // unique suffix for resources to avoid collisions across PRs/environments
-    const uniqueSuffix = Fn.substr(Fn.sha1(name), 0, 6);
+    // ── 2) Per-commit suffix: avoids "already exists" if last run had no state ─
+    const ciSha =
+      (process.env.GITHUB_SHA ||
+        process.env.CI_COMMIT_SHA ||
+        process.env.COMMIT_SHA ||
+        '') + '';
+    const ciSuffix = ciSha ? ciSha.substring(0, 6) : '';
+
+    // Fallback to deterministic hash if no CI SHA is available
+    const uniqueSuffix = ciSuffix || Fn.substr(Fn.sha1(name), 0, 6);
 
     const commonTags = {
       Environment: environment,
@@ -61,7 +88,7 @@ export class TapStack extends TerraformStack {
 
     const iam = new IamConstruct(this, `Iam-${uniqueSuffix}`, {
       environment,
-      roleNameSuffix: uniqueSuffix,
+      roleNameSuffix: uniqueSuffix as unknown as string, // CDKTF token is fine
       commonTags,
     });
 
@@ -74,13 +101,13 @@ export class TapStack extends TerraformStack {
       iamInstanceProfile: iam.ec2ProfileName,
       allowedCidrBlocks: ['0.0.0.0/0'],
       logGroupName: `/aws/ec2/${environment}-${uniqueSuffix}`,
-      resourceSuffix: uniqueSuffix,
+      resourceSuffix: uniqueSuffix as unknown as string,
       commonTags,
     });
 
     new S3Construct(this, `S3-${uniqueSuffix}`, {
       environment,
-      // globally unique bucket name
+      // S3 bucket names must be globally unique; include suffix
       bucketName: `${environment}-assets-${uniqueSuffix}`,
       enableVersioning: true,
       lifecycleRules:
