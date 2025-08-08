@@ -10,23 +10,23 @@ class S3Manager:
     """Manages S3 buckets for secure log storage."""
 
     def __init__(
-            self,
-            project_name: str,
-            environment: str,
-            kms_key: aws.kms.Key
+        self,
+        project_name: str,
+        environment: str,
+        kms_key: aws.kms.Key
     ):
         self.project_name = project_name
         self.environment = environment
         self.kms_key = kms_key
         self.account_id = os.getenv('AWS_ACCOUNT_ID')
 
-    def create_logging_bucket(self) -> aws.s3.Bucket:
+    def create_logging_bucket(self) -> aws.s3.BucketV2:
         """Create secure S3 bucket for centralized logging."""
 
         bucket_name = f"{self.project_name}-secure-logs-{self.account_id}"
 
-        # Create the bucket
-        logging_bucket = aws.s3.Bucket(
+        # Create the bucket (V2)
+        logging_bucket = aws.s3.BucketV2(
             f"{self.project_name}-logging-bucket",
             bucket=bucket_name,
             tags={
@@ -37,7 +37,7 @@ class S3Manager:
             }
         )
 
-        # Enable versioning
+        # Enable versioning (V2)
         aws.s3.BucketVersioningV2(
             f"{self.project_name}-logging-bucket-versioning",
             bucket=logging_bucket.id,
@@ -47,13 +47,13 @@ class S3Manager:
             )
         )
 
-        # Configure server-side encryption
-        aws.s3.BucketServerSideEncryptionConfiguration(
+        # Configure server-side encryption (V2)
+        aws.s3.BucketServerSideEncryptionConfigurationV2(
             f"{self.project_name}-logging-bucket-encryption",
             bucket=logging_bucket.id,
             rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="aws:kms",
                         kms_master_key_id=self.kms_key.arn
                     ),
@@ -72,20 +72,20 @@ class S3Manager:
             restrict_public_buckets=True
         )
 
-        # Configure lifecycle policy
+        # Configure lifecycle policy (V2)
         retention_days = int(os.getenv('LOG_RETENTION_DAYS', '90'))
 
-        aws.s3.BucketLifecycleConfiguration(
+        aws.s3.BucketLifecycleConfigurationV2(
             f"{self.project_name}-logging-bucket-lifecycle",
             bucket=logging_bucket.id,
             rules=[
-                aws.s3.BucketLifecycleConfigurationRuleArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
                     id="log-retention-policy",
                     status="Enabled",
-                    expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(
+                    expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
                         days=retention_days
                     ),
-                    noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
+                    noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
                         noncurrent_days=30
                     )
                 )
