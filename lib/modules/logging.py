@@ -20,7 +20,6 @@ class LoggingManager:
 
         cloudtrail = aws.cloudtrail.Trail(
             f"{self.project_name}-cloudtrail",
-            name=f"{self.project_name}-cloudtrail",
             s3_bucket_name=s3_bucket.bucket,
             s3_key_prefix="cloudtrail-logs/",
             include_global_service_events=True,
