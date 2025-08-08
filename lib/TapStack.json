@@ -37,22 +37,22 @@
     },
     "ExistingPublicSubnet1Id": {
       "Type": "String",
-      "Default": "subnet-0123456789abcdef0",
+      "Default": "subnet-048357a049767c96b",
       "Description": "Existing Public Subnet 1 ID (leave empty to create new)"
     },
     "ExistingPublicSubnet2Id": {
       "Type": "String",
-      "Default": "subnet-0123456789abcdef1",
+      "Default": "subnet-0e2ada41e164e96ad",
       "Description": "Existing Public Subnet 2 ID (leave empty to create new)"
     },
     "ExistingPrivateSubnet1Id": {
       "Type": "String",
-      "Default": "subnet-0123456789abcdef2",
+      "Default": "subnet-088ec4083c36bd006",
       "Description": "Existing Private Subnet 1 ID (leave empty to create new)"
     },
     "ExistingPrivateSubnet2Id": {
       "Type": "String",
-      "Default": "subnet-0123456789abcdef3",
+      "Default": "subnet-009212a3c586700dd",
       "Description": "Existing Private Subnet 2 ID (leave empty to create new)"
     },
     "ExistingInternetGatewayId": {
@@ -71,6 +71,14 @@
     }
   },
   "Conditions": {
+    "CreateVPC": {
+      "Fn::Equals": [
+        {
+          "Ref": "UseExistingVPCInfrastructure"
+        },
+        "false"
+      ]
+    },
     "CreatePublicSubnet1": {
       "Fn::Equals": [
         {
@@ -126,12 +134,41 @@
     }
   },
   "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "WebApp-VPC-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Condition": "CreatePublicSubnet1",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "CidrBlock": "10.0.1.0/24",
         "AvailabilityZone": {
@@ -162,7 +199,15 @@
       "Condition": "CreatePublicSubnet2",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "CidrBlock": "10.0.2.0/24",
         "AvailabilityZone": {
@@ -193,7 +238,15 @@
       "Condition": "CreatePrivateSubnet1",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "CidrBlock": "10.0.10.0/24",
         "AvailabilityZone": {
@@ -223,7 +276,15 @@
       "Condition": "CreatePrivateSubnet2",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "CidrBlock": "10.0.11.0/24",
         "AvailabilityZone": {
@@ -252,7 +313,15 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "CidrBlock": "10.0.5.0/24",
         "AvailabilityZone": {
@@ -281,7 +350,15 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "CidrBlock": "10.0.6.0/24",
         "AvailabilityZone": {
@@ -329,7 +406,15 @@
       "Condition": "CreateInternetGateway",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "InternetGatewayId": {
           "Ref": "InternetGateway"
@@ -392,7 +477,15 @@
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "Tags": [
           {
@@ -412,7 +505,15 @@
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "Tags": [
           {
@@ -513,7 +614,15 @@
       "Properties": {
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "SecurityGroupIngress": [
           {
@@ -548,7 +657,15 @@
       "Properties": {
         "GroupDescription": "Security group for EC2 instances",
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "SecurityGroupIngress": [
           {
@@ -595,7 +712,15 @@
       "Properties": {
         "GroupDescription": "Security group for RDS MySQL database",
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "SecurityGroupIngress": [
           {
@@ -740,7 +865,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-app-data-${AWS::AccountId}-${EnvironmentSuffix}"
+          "Fn::Sub": "webapp-app-data-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -769,7 +894,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-app-logs-${AWS::AccountId}-${EnvironmentSuffix}"
+          "Fn::Sub": "webapp-app-logs-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -1238,7 +1363,15 @@
         "Port": 80,
         "Protocol": "HTTP",
         "VpcId": {
-          "Ref": "ExistingVPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "ExistingVPCId"
+            }
+          ]
         },
         "HealthCheckEnabled": true,
         "HealthCheckPath": "/",
@@ -1481,7 +1614,15 @@
     "VPCId": {
       "Description": "VPC ID",
       "Value": {
-        "Ref": "ExistingVPCId"
+        "Fn::If": [
+          "CreateVPC",
+          {
+            "Ref": "VPC"
+          },
+          {
+            "Ref": "ExistingVPCId"
+          }
+        ]
       },
       "Export": {
         "Name": {

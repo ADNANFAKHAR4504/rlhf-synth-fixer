@@ -772,7 +772,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('Template Completeness', () => {
     test('should have correct total number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(47); // Count of all resources in the template (45 + 2 new SSM parameters)
+      expect(resourceCount).toBe(48); // Count of all resources in the template (47 + 1 new VPC resource)
     });
 
     test('all resources with names should use EnvironmentSuffix', () => {
