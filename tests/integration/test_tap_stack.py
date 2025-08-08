@@ -10,7 +10,7 @@ in a real AWS environment.
 import boto3
 import pytest
 import json
-from moto import mock_ec2, mock_s3, mock_iam, mock_kms, mock_rds, mock_lambda, mock_cloudformation
+from moto import mock_aws
 from botocore.exceptions import ClientError
 
 
@@ -27,10 +27,7 @@ class TestTapStackIntegration:
         os.environ['AWS_SESSION_TOKEN'] = 'testing'
         os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 
-    @mock_ec2
-    @mock_s3
-    @mock_iam
-    @mock_kms
+    @mock_aws
     def test_multi_region_deployment(self, aws_credentials):
         """Test that resources are deployed across multiple regions."""
         # Updated to match your actual regions
@@ -51,7 +48,7 @@ class TestTapStackIntegration:
             # Verify multi-region setup
             assert len(regions) == 3
 
-    @mock_kms
+    @mock_aws
     def test_kms_key_encryption(self, aws_credentials):
         """Test KMS key creation and encryption capabilities."""
         kms = boto3.client('kms', region_name='us-east-1')
@@ -79,7 +76,7 @@ class TestTapStackIntegration:
         
         assert decrypt_response['Plaintext'] == plaintext
 
-    @mock_s3
+    @mock_aws
     def test_s3_bucket_security(self, aws_credentials):
         """Test S3 bucket security configuration."""
         s3 = boto3.client('s3', region_name='us-east-1')
@@ -115,7 +112,7 @@ class TestTapStackIntegration:
         versioning = s3.get_bucket_versioning(Bucket=bucket_name)
         assert versioning['Status'] == 'Enabled'
 
-    @mock_iam
+    @mock_aws
     def test_iam_least_privilege(self, aws_credentials):
         """Test IAM roles follow least privilege principle."""
         iam = boto3.client('iam', region_name='us-east-1')
@@ -163,7 +160,7 @@ class TestTapStackIntegration:
         assert ec2_role['Role']['RoleName'] == ec2_role_name
         assert lambda_role['Role']['RoleName'] == lambda_role_name
 
-    @mock_ec2
+    @mock_aws
     def test_vpc_configuration(self, aws_credentials):
         """Test VPC configuration matches your implementation."""
         ec2 = boto3.client('ec2', region_name='us-east-1')
@@ -213,7 +210,7 @@ class TestTapStackIntegration:
         assert vpc_info['EnableDnsSupport'] is True
         assert vpc_info['EnableDnsHostnames'] is True
 
-    @mock_rds
+    @mock_aws
     def test_rds_encryption_and_backup(self, aws_credentials):
         """Test RDS encryption and backup configuration."""
         rds = boto3.client('rds', region_name='us-east-1')
@@ -245,17 +242,36 @@ class TestTapStackIntegration:
             # Expected in mocked environment due to various constraints
             assert 'InvalidParameterValue' in str(e) or 'DBSubnetGroupNotFoundFault' in str(e)
 
-    @mock_lambda
+    @mock_aws
     def test_lambda_function_security(self, aws_credentials):
         """Test Lambda function security configuration."""
         lambda_client = boto3.client('lambda', region_name='us-east-1')
+        iam = boto3.client('iam', region_name='us-east-1')
+        
+        # Create IAM role first for Lambda
+        lambda_role_policy = {
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+            }]
+        }
+        
+        role_name = 'PROD-lambda-role-test'
+        iam.create_role(
+            RoleName=role_name,
+            AssumeRolePolicyDocument=json.dumps(lambda_role_policy)
+        )
+        
+        role_arn = f'arn:aws:iam::123456789012:role/{role_name}'
         
         # Create Lambda function (matching your config)
         function_name = 'PROD-lambda-us-east-1-test'
         lambda_client.create_function(
             FunctionName=function_name,
             Runtime='python3.11',  # Matching your config
-            Role='arn:aws:iam::123456789012:role/PROD-lambda-role-test',
+            Role=role_arn,
             Handler='lambda_function.lambda_handler',  # Matching your config
             Code={
                 'ZipFile': b'''
