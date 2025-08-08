@@ -38,9 +38,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         region = os.environ.get('REGION', 'unknown')
         function_name = os.environ.get('FUNCTION_NAME', 'unknown')
         
-        # Parse the HTTP method and path
+        # Parse the HTTP method, path, and headers
         http_method = event.get('httpMethod', 'GET')
         path = event.get('path', '/')
+        headers = event.get('headers', {})
+        origin = headers.get('Origin') or headers.get('origin', '')
         
         # Log request details
         logger.info(f"Request: {http_method} {path}")
@@ -48,23 +50,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         # Handle different HTTP methods
         if http_method == 'GET':
-            return handle_get_request(path, environment)
+            return handle_get_request(path, environment, origin)
         elif http_method == 'POST':
-            return handle_post_request(event, environment)
+            return handle_post_request(event, environment, origin)
         elif http_method == 'PUT':
-            return handle_put_request(event, environment)
+            return handle_put_request(event, environment, origin)
         elif http_method == 'DELETE':
-            return handle_delete_request(path, environment)
+            return handle_delete_request(path, environment, origin)
         elif http_method == 'OPTIONS':
-            return handle_options_request()
+            return handle_options_request(origin)
         else:
-            return create_response(405, {'error': f'Method {http_method} not allowed'})
+            return create_response(405, {'error': f'Method {http_method} not allowed'}, origin=origin)
             
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
         return create_response(500, {'error': 'Internal server error'})
 
-def handle_get_request(path: str, environment: str) -> Dict[str, Any]:
+def handle_get_request(path: str, environment: str, origin: str = '') -> Dict[str, Any]:
     """Handle GET requests."""
     if path == '/':
         return create_response(200, {
@@ -89,7 +91,7 @@ def handle_get_request(path: str, environment: str) -> Dict[str, Any]:
     else:
         return create_response(404, {'error': 'Endpoint not found'})
 
-def handle_post_request(event: Dict[str, Any], environment: str) -> Dict[str, Any]:
+def handle_post_request(event: Dict[str, Any], environment: str, origin: str = '') -> Dict[str, Any]:
     """Handle POST requests."""
     try:
         body = event.get('body', '{}')
@@ -130,7 +132,7 @@ def handle_post_request(event: Dict[str, Any], environment: str) -> Dict[str, An
         logger.error(f"Error processing POST request: {e}")
         return create_response(500, {'error': 'Internal server error'})
 
-def handle_put_request(event: Dict[str, Any], environment: str) -> Dict[str, Any]:
+def handle_put_request(event: Dict[str, Any], environment: str, origin: str = '') -> Dict[str, Any]:
     """Handle PUT requests."""
     try:
         body = event.get('body', '{}')
@@ -171,7 +173,7 @@ def handle_put_request(event: Dict[str, Any], environment: str) -> Dict[str, Any
         logger.error(f"Error processing PUT request: {e}")
         return create_response(500, {'error': 'Internal server error'})
 
-def handle_delete_request(path: str, environment: str) -> Dict[str, Any]:
+def handle_delete_request(path: str, environment: str, origin: str = '') -> Dict[str, Any]:
     """Handle DELETE requests."""
     return create_response(200, {
         'message': 'DELETE request processed successfully',
@@ -180,11 +182,30 @@ def handle_delete_request(path: str, environment: str) -> Dict[str, Any]:
         'path': path
     })
 
-def handle_options_request() -> Dict[str, Any]:
+def handle_options_request(origin: str = '') -> Dict[str, Any]:
     """Handle OPTIONS requests for CORS."""
-    return create_response(200, {}, cors_headers=True)
+    return create_response(200, {}, cors_headers=True, origin=origin)
 
-def create_response(status_code: int, body: Dict[str, Any], cors_headers: bool = False) -> Dict[str, Any]:
+def get_allowed_origin(origin: str) -> str:
+    """
+    Get allowed CORS origin based on request origin and environment configuration.
+    
+    Args:
+        origin: The origin from the request headers
+        
+    Returns:
+        Allowed origin for CORS or default secure origin
+    """
+    allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'https://example.com').split(',')
+    allowed_origins = [origin.strip() for origin in allowed_origins]
+    
+    if origin in allowed_origins:
+        return origin
+    
+    # Return first allowed origin as default (most secure)
+    return allowed_origins[0] if allowed_origins else 'https://example.com'
+
+def create_response(status_code: int, body: Dict[str, Any], cors_headers: bool = False, origin: str = None) -> Dict[str, Any]:
     """
     Create a standardized API Gateway response.
     
@@ -192,6 +213,7 @@ def create_response(status_code: int, body: Dict[str, Any], cors_headers: bool =
         status_code: HTTP status code
         body: Response body
         cors_headers: Whether to include CORS headers
+        origin: Request origin for CORS validation
         
     Returns:
         Dict containing the API Gateway response
@@ -201,8 +223,9 @@ def create_response(status_code: int, body: Dict[str, Any], cors_headers: bool =
     }
     
     if cors_headers:
+        allowed_origin = get_allowed_origin(origin or '')
         headers.update({
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': allowed_origin,
             'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
             'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
         })

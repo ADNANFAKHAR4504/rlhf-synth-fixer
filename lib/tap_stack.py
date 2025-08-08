@@ -109,21 +109,17 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       opts=ResourceOptions(parent=self)
     )
 
-    # Create enhanced custom policy for CloudWatch metrics and logging
+    # Create scoped custom policy for CloudWatch metrics only (no duplicate logging)
     cloudwatch_policy = iam.Policy(
       f"lambda-cloudwatch-policy-{self.environment_suffix}",
-      description="Allow Lambda to write custom metrics and logs to CloudWatch",
+      description="Allow Lambda to write custom metrics to CloudWatch",
       policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [
           {
             "Effect": "Allow",
             "Action": [
-              "cloudwatch:PutMetricData",
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-              "logs:DescribeLogStreams"
+              "cloudwatch:PutMetricData"
             ],
             "Resource": "*",
             "Condition": {
@@ -131,14 +127,6 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
                 "cloudwatch:namespace": "AWS/Lambda/Custom"
               }
             }
-          },
-          {
-            "Effect": "Allow",
-            "Action": [
-              "xray:PutTraceSegments",
-              "xray:PutTelemetryRecords"
-            ],
-            "Resource": "*"
           }
         ]
       }),
@@ -188,7 +176,8 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
           "ENVIRONMENT": self.environment_suffix,
           "LOG_LEVEL": "INFO",
           "REGION": self.region,
-          "FUNCTION_NAME": f"tap-api-handler-{self.environment_suffix}"
+          "FUNCTION_NAME": f"tap-api-handler-{self.environment_suffix}",
+          "ALLOWED_ORIGINS": "https://example.com,https://app.example.com"
         }
       },
       tags=common_tags,
@@ -240,7 +229,7 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       opts=ResourceOptions(parent=self)
     )
 
-    # Create Lambda integration for proxy resource
+    # Create Lambda integration for proxy resource with REST APIGW-style URI
     api_integration = apigateway.Integration(
       f"api-integration-{self.environment_suffix}",
       rest_api=api_gateway.id,
@@ -248,11 +237,14 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       http_method=api_method.http_method,
       integration_http_method="POST",
       type="AWS_PROXY",
-      uri=lambda_function.invoke_arn,
+      uri=pulumi.Output.all(lambda_function.arn, self.region).apply(
+        lambda args: f"arn:aws:apigateway:{args[1]}:lambda:path/" +
+                     f"2015-03-31/functions/{args[0]}/invocations"
+      ),
       opts=ResourceOptions(parent=self)
     )
 
-    # Create Lambda integration for root resource
+    # Create Lambda integration for root resource with REST APIGW-style URI
     root_integration = apigateway.Integration(
       f"root-integration-{self.environment_suffix}",
       rest_api=api_gateway.id,
@@ -260,11 +252,14 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       http_method=root_method.http_method,
       integration_http_method="POST",
       type="AWS_PROXY",
-      uri=lambda_function.invoke_arn,
+      uri=pulumi.Output.all(lambda_function.arn, self.region).apply(
+        lambda args: f"arn:aws:apigateway:{args[1]}:lambda:path/" +
+                     f"2015-03-31/functions/{args[0]}/invocations"
+      ),
       opts=ResourceOptions(parent=self)
     )
 
-    # Configure CORS for the API Gateway
+    # Configure CORS for the API Gateway - Proxy resource OPTIONS
     cors_method = apigateway.Method(
       f"cors-method-{self.environment_suffix}",
       rest_api=api_gateway.id,
@@ -273,7 +268,18 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       authorization="NONE",
       opts=ResourceOptions(parent=self)
     )
+    
+    # Configure CORS for the API Gateway - Root resource OPTIONS
+    cors_root_method = apigateway.Method(
+      f"cors-root-method-{self.environment_suffix}",
+      rest_api=api_gateway.id,
+      resource_id=api_gateway.root_resource_id,
+      http_method="OPTIONS",
+      authorization="NONE",
+      opts=ResourceOptions(parent=self)
+    )
 
+    # CORS integration for proxy resource  
     apigateway.Integration(
       f"cors-integration-{self.environment_suffix}",
       rest_api=api_gateway.id,
@@ -285,7 +291,21 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       },
       opts=ResourceOptions(parent=self)
     )
+    
+    # CORS integration for root resource
+    apigateway.Integration(
+      f"cors-root-integration-{self.environment_suffix}",
+      rest_api=api_gateway.id,
+      resource_id=api_gateway.root_resource_id,
+      http_method=cors_root_method.http_method,
+      type="MOCK",
+      request_templates={
+        "application/json": '{"statusCode": 200}'
+      },
+      opts=ResourceOptions(parent=self)
+    )
 
+    # Method responses for CORS - Proxy resource
     cors_method_response = apigateway.MethodResponse(
       f"cors-method-response-{self.environment_suffix}",
       rest_api=api_gateway.id,
@@ -299,7 +319,23 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       },
       opts=ResourceOptions(parent=self)
     )
+    
+    # Method responses for CORS - Root resource
+    cors_root_method_response = apigateway.MethodResponse(
+      f"cors-root-method-response-{self.environment_suffix}",
+      rest_api=api_gateway.id,
+      resource_id=api_gateway.root_resource_id,
+      http_method=cors_root_method.http_method,
+      status_code="200",
+      response_parameters={
+        "method.response.header.Access-Control-Allow-Headers": True,
+        "method.response.header.Access-Control-Allow-Methods": True,
+        "method.response.header.Access-Control-Allow-Origin": True
+      },
+      opts=ResourceOptions(parent=self)
+    )
 
+    # Integration responses with secure CORS headers - Proxy resource
     cors_integration_response = apigateway.IntegrationResponse(
       f"cors-integration-response-{self.environment_suffix}",
       rest_api=api_gateway.id,
@@ -311,7 +347,24 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
           "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
         "method.response.header.Access-Control-Allow-Methods":
           "'GET,POST,PUT,DELETE,OPTIONS'",
-        "method.response.header.Access-Control-Allow-Origin": "'*'"
+        "method.response.header.Access-Control-Allow-Origin": "'https://example.com'"
+      },
+      opts=ResourceOptions(parent=self)
+    )
+    
+    # Integration responses with secure CORS headers - Root resource
+    cors_root_integration_response = apigateway.IntegrationResponse(
+      f"cors-root-integration-response-{self.environment_suffix}",
+      rest_api=api_gateway.id,
+      resource_id=api_gateway.root_resource_id,
+      http_method=cors_root_method.http_method,
+      status_code=cors_root_method_response.status_code,
+      response_parameters={
+        "method.response.header.Access-Control-Allow-Headers":
+          "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+        "method.response.header.Access-Control-Allow-Methods":
+          "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Origin": "'https://example.com'"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -338,6 +391,7 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
           api_integration,
           root_integration,
           cors_integration_response,
+          cors_root_integration_response,
           lambda_permission
         ]
       )

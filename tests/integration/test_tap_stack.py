@@ -85,6 +85,14 @@ class TestTapStackLiveIntegration:
       response = requests.get(api_url, timeout=30)
       # Should get a response (even if it's an error response)
       assert response.status_code in [200, 404, 500]
+      
+      # Test CORS headers are present and secure
+      cors_origin = response.headers.get('Access-Control-Allow-Origin')
+      if cors_origin:
+        # Should not be wildcard - should be a specific domain
+        assert cors_origin != '*', "CORS origin should not be wildcard for security"
+        assert cors_origin.startswith('https://'), "CORS origin should use HTTPS"
+        
     except requests.RequestException as e:
       pytest.fail(f"Failed to reach API Gateway endpoint: {e}")
 
@@ -279,3 +287,70 @@ class TestTapStackLiveIntegration:
         print(f"Throttles alarm {throttles_alarm_name} not found in current deployment")
     except Exception as e:
       print(f"Could not check throttles alarm: {e}")
+      
+  def test_api_gateway_cors_configuration(self):
+    """Test API Gateway CORS configuration with secure origins."""
+    if self.skip_tests:
+      pytest.skip("No deployment outputs found")
+
+    api_url = self.outputs.get('api_gateway_url')
+    assert api_url, "API Gateway URL not found in outputs"
+
+    # Test OPTIONS request for CORS preflight
+    try:
+      response = requests.options(
+        api_url,
+        timeout=30,
+        headers={
+          'Origin': 'https://example.com',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'Content-Type'
+        }
+      )
+      
+      # Should get successful OPTIONS response
+      assert response.status_code == 200
+      
+      # Verify secure CORS headers
+      assert 'Access-Control-Allow-Origin' in response.headers
+      cors_origin = response.headers['Access-Control-Allow-Origin']
+      assert cors_origin != '*', "CORS should not use wildcard origin"
+      assert cors_origin.startswith('https://'), "CORS origin should be HTTPS"
+      
+      assert 'Access-Control-Allow-Methods' in response.headers
+      allowed_methods = response.headers['Access-Control-Allow-Methods']
+      assert 'OPTIONS' in allowed_methods
+      assert 'GET' in allowed_methods
+      assert 'POST' in allowed_methods
+      
+      print(f"CORS validation passed - Origin: {cors_origin}, Methods: {allowed_methods}")
+      
+    except requests.RequestException as e:
+      pytest.fail(f"OPTIONS request for CORS failed: {e}")
+
+  def test_lambda_environment_variables(self):
+    """Test that Lambda function has correct environment variables including ALLOWED_ORIGINS."""
+    if self.skip_tests:
+      pytest.skip("No deployment outputs found")
+
+    function_name = self.outputs.get('lambda_function_name')
+    assert function_name, "Lambda function name not found in outputs"
+
+    try:
+      response = self.lambda_client.get_function(FunctionName=function_name)
+      env_vars = response['Configuration'].get('Environment', {}).get('Variables', {})
+      
+      # Test that ALLOWED_ORIGINS is configured
+      assert 'ALLOWED_ORIGINS' in env_vars, "ALLOWED_ORIGINS environment variable should be set"
+      
+      allowed_origins = env_vars['ALLOWED_ORIGINS']
+      assert 'https://' in allowed_origins, "ALLOWED_ORIGINS should contain HTTPS origins"
+      assert '*' not in allowed_origins, "ALLOWED_ORIGINS should not contain wildcard"
+      
+      print(f"Lambda ALLOWED_ORIGINS: {allowed_origins}")
+      
+    except Exception as e:
+      if "ExpiredTokenException" in str(e) or "UnauthorizedOperation" in str(e):
+        pytest.skip(f"Skip Lambda environment test due to credential issues: {e}")
+      else:
+        raise
