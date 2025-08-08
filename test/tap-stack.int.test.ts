@@ -1,25 +1,25 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   APIGatewayClient,
-  GetRestApiCommand,
   GetResourcesCommand,
+  GetRestApiCommand,
 } from '@aws-sdk/client-api-gateway';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  ListAliasesCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  EventBridgeClient,
-  DescribeEventBusCommand,
-  ListRulesCommand,
-} from '@aws-sdk/client-eventbridge';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeEventBusCommand,
+  EventBridgeClient,
+  ListRulesCommand,
+} from '@aws-sdk/client-eventbridge';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+  ListAliasesCommand,
+} from '@aws-sdk/client-lambda';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Read deployment outputs
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
@@ -48,7 +48,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
     test('API Gateway endpoint is accessible', async () => {
       const response = await fetch(`${outputs.ApiGatewayUrl}users`);
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await response.json() as { message: string };
       expect(data.message).toBe('User operation successful');
     });
 
@@ -97,7 +97,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
         headers: { 'Content-Type': 'application/json' },
       });
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await response.json() as { message: string; orderId: string; customerId: string };
       expect(data.message).toBe('Order processed successfully');
       expect(data.orderId).toBeDefined();
       expect(data.customerId).toBe('default');
@@ -110,7 +110,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
         headers: { 'Content-Type': 'application/json' },
       });
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await response.json() as { message: string; customerId: string };
       expect(data.message).toBe('Order processed successfully');
       expect(data.customerId).toBe(customerId);
     });
@@ -256,7 +256,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       // GET users
       const getResponse = await fetch(`${outputs.ApiGatewayUrl}users`);
       expect(getResponse.status).toBe(200);
-      const getData = await getResponse.json();
+      const getData = await getResponse.json() as { message: string };
       expect(getData.message).toBe('User operation successful');
 
       // POST users
@@ -266,7 +266,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
         body: JSON.stringify({ name: 'Test User' }),
       });
       expect(postResponse.status).toBe(200);
-      const postData = await postResponse.json();
+      const postData = await postResponse.json() as { message: string };
       expect(postData.message).toBe('User operation successful');
     });
 
@@ -274,7 +274,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       // GET orders
       const getResponse = await fetch(`${outputs.ApiGatewayUrl}orders`);
       expect(getResponse.status).toBe(200);
-      const getData = await getResponse.json();
+      const getData = await getResponse.json() as { message: string };
       expect(getData.message).toBe('Order processed successfully');
 
       // POST orders
@@ -284,7 +284,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
         body: JSON.stringify({ item: 'Test Item' }),
       });
       expect(postResponse.status).toBe(200);
-      const postData = await postResponse.json();
+      const postData = await postResponse.json() as { message: string; orderId: string };
       expect(postData.message).toBe('Order processed successfully');
       expect(postData.orderId).toBeDefined();
 
@@ -299,7 +299,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
         }
       );
       expect(customerResponse.status).toBe(200);
-      const customerData = await customerResponse.json();
+      const customerData = await customerResponse.json() as { message: string; customerId: string };
       expect(customerData.message).toBe('Order processed successfully');
       expect(customerData.customerId).toBe(customerId);
     });
@@ -311,13 +311,13 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
     test('Lambda functions return consistent version information', async () => {
       const userResponse = await fetch(`${outputs.ApiGatewayUrl}users`);
-      const userData = await userResponse.json();
+      const userData = await userResponse.json() as { version: string };
       expect(userData.version).toBeDefined();
 
       const orderResponse = await fetch(`${outputs.ApiGatewayUrl}orders`, {
         method: 'POST',
       });
-      const orderData = await orderResponse.json();
+      const orderData = await orderResponse.json() as { version: string };
       expect(orderData.version).toBeDefined();
     });
   });
