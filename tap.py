@@ -52,7 +52,7 @@ def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number):
 # Force replacement when IPv6 CIDR block changes (AWS doesn't allow in-place updates)
 public_subnet = aws.ec2.Subnet("public-subnet",
     vpc_id=vpc.id,
-    cidr_block="10.0.1.0/24",
+    cidr_block="10.0.11.0/24",
     ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: derive_ipv6_subnet_cidr(x, 1)),
     availability_zone=aws.get_availability_zones().names[0],
     assign_ipv6_address_on_creation=True,
@@ -69,7 +69,7 @@ public_subnet = aws.ec2.Subnet("public-subnet",
 # Force replacement when IPv6 CIDR block changes (AWS doesn't allow in-place updates)
 private_subnet = aws.ec2.Subnet("private-subnet",
     vpc_id=vpc.id,
-    cidr_block="10.0.2.0/24",
+    cidr_block="10.0.12.0/24",
     ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: derive_ipv6_subnet_cidr(x, 2)),
     availability_zone=aws.get_availability_zones().names[1],
     assign_ipv6_address_on_creation=True,
