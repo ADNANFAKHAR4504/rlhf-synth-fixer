@@ -48,12 +48,15 @@ instead of the platform+language declared in the task description.
    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
    region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
 8. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
-9. Use the selected task description for the workflow.
-10. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
-11. Remove the gitworktree created for this task.
-12. Finally, set the status of the task in the csv as status "done" and fill the trainr_notes column with a short note on
-the process.
-13. Clear your context and start again from point 1.
+9. Use the selected task description for the workflow. Start the workflow.
+10. Once the workflow has finished. Ask iac-infra-qa-trainer to run a last round of build, synth, lint, unit and
+integration tests and make sure everything is passing.
+11. If iac-infra-qa-trainer is not making all the pipelines pass. Stop and mark the task as error.
+12. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
+13. Remove the gitworktree created for this task.
+14. Finally, set the status of the task in the csv as status "done" and fill the trainr_notes column with a short note
+ on the process.
+15. Clear your context and start again from point 1.
 
 Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the sub-agent. Just send the task information
 to the generator agent
