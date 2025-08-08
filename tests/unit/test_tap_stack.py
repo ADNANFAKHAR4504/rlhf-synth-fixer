@@ -1,14 +1,10 @@
-import sys
-import os
 import unittest
 import aws_cdk as cdk
 from aws_cdk.assertions import Template, Match
 
-# Add the root project directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-
-# Import the actual stack class
-from lib.serverless_stack import ServerlessStack
+# Import the actual stack class.
+# Assuming the file is named `serverless_stack.py`.
+from lib.tap_stack import ServerlessStack
 
 
 class TestServerlessStack(unittest.TestCase):
@@ -77,46 +73,39 @@ class TestServerlessStack(unittest.TestCase):
   def test_lambda_grants_dynamodb_access(self):
     """Test that the IAM role has permissions to access the DynamoDB table."""
     self.template.has_resource_properties("AWS::IAM::Policy", {
-      "PolicyDocument": {
-        "Statement": [
-          {
-            "Action": [
-              "dynamodb:BatchGetItem",
-              "dynamodb:GetItem",
-              "dynamodb:Scan",
-              "dynamodb:Query",
-              "dynamodb:GetRecords",
-              "dynamodb:BatchWriteItem",
-              "dynamodb:PutItem",
-              "dynamodb:UpdateItem",
-              "dynamodb:DeleteItem"
-            ],
-            "Effect": "Allow",
-            "Resource": [
-              {"Fn::GetAtt": [Match.any_value(), "Arn"]},
-              {
-                "Fn::Join": [
-                  "",
-                  [{"Fn::GetAtt": [Match.any_value(), "Arn"]}, "/*"]
-                ]
-              }
+        "PolicyDocument": {
+            "Statement": [
+                {
+                    "Action": [
+                        "dynamodb:BatchGetItem",
+                        "dynamodb:GetItem",
+                        "dynamodb:Scan",
+                        "dynamodb:Query",
+                        "dynamodb:GetRecords",
+                        "dynamodb:BatchWriteItem",
+                        "dynamodb:PutItem",
+                        "dynamodb:UpdateItem",
+                        "dynamodb:DeleteItem"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": [
+                        { "Fn::GetAtt": [ Match.any_value(), "Arn" ] },
+                        { "Fn::Join": [ "", [ { "Fn::GetAtt": [ Match.any_value(), "Arn" ] }, "/*" ] ] }
+                    ]
+                }
             ]
-          }
-        ]
-      }
+        }
     })
 
   def test_autoscaling_targets_created(self):
     """Check that DynamoDB read/write autoscaling is configured."""
     self.template.resource_count_is("AWS::ApplicationAutoScaling::ScalableTarget", 2)
-
     self.template.has_resource_properties("AWS::ApplicationAutoScaling::ScalableTarget", {
       "MinCapacity": 1,
       "MaxCapacity": 1000,
       "ScalableDimension": "dynamodb:table:ReadCapacityUnits",
       "ServiceNamespace": "dynamodb"
     })
-
     self.template.has_resource_properties("AWS::ApplicationAutoScaling::ScalableTarget", {
       "MinCapacity": 1,
       "MaxCapacity": 1000,
@@ -137,17 +126,12 @@ class TestServerlessStack(unittest.TestCase):
       "Value": {"Ref": Match.any_value()},
       "Export": {"Name": "ServerlessStackV3DynamoDBTableName"}
     })
-
     self.template.has_output("LambdaFunctionName", {
       "Value": {"Ref": Match.any_value()},
       "Export": {"Name": "ServerlessStackV3LambdaFunctionName"}
     })
-
     self.template.has_output("CloudWatchDashboardName", {
       "Value": {"Ref": Match.any_value()},
       "Export": {"Name": "ServerlessStackV3CloudWatchDashboardName"}
     })
 
-
-if __name__ == "__main__":
-  unittest.main()
