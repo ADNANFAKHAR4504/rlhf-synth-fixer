@@ -25,7 +25,24 @@ class TestIPv6DualStackVPCIntegration(unittest.TestCase):
       self.skipTest(f"Outputs file {self.outputs_file} not found. Deploy infrastructure first.")
     
     with open(self.outputs_file, 'r', encoding='utf-8') as f:
-      return json.load(f)
+      outputs = json.load(f)
+    
+    # Process outputs to handle string representations of lists (common with some IaC tools)
+    processed_outputs = {}
+    for key, value in outputs.items():
+      if isinstance(value, str):
+        # Try to parse as JSON if it looks like a JSON array
+        if value.strip().startswith('[') and value.strip().endswith(']'):
+          try:
+            processed_outputs[key] = json.loads(value)
+          except json.JSONDecodeError:
+            processed_outputs[key] = value
+        else:
+          processed_outputs[key] = value
+      else:
+        processed_outputs[key] = value
+    
+    return processed_outputs
 
   def test_vpc_exists_with_correct_attributes(self):
     """Test VPC exists with correct ID format and IPv4/IPv6 CIDR blocks."""
@@ -95,18 +112,43 @@ class TestIPv6DualStackVPCIntegration(unittest.TestCase):
     self.assertIsNotNone(sg_id)
     self.assertRegex(sg_id, r'^sg-[a-f0-9]{17}$', "Security Group ID should match AWS format")
 
+  def _ensure_ipv6_list(self, ipv6_data, instance_name):
+    """Convert IPv6 address data to list format if needed."""
+    if ipv6_data is None:
+      return None
+    
+    # If it's already a list, return it
+    if isinstance(ipv6_data, list):
+      return ipv6_data
+    
+    # If it's a string, try to parse it
+    if isinstance(ipv6_data, str):
+      # Handle comma-separated values
+      if ',' in ipv6_data:
+        return [addr.strip() for addr in ipv6_data.split(',')]
+      # Handle single address
+      else:
+        return [ipv6_data.strip()]
+    
+    # If it's some other type, convert to string and try
+    return [str(ipv6_data)]
+
   def test_ec2_instances_static_ipv6_addresses(self):
     """Test EC2 instances have static IPv6 addresses assigned."""
     instance1_id = self.outputs.get("instance1_id")
-    instance1_ipv6 = self.outputs.get("instance1_ipv6_addresses")
+    instance1_ipv6_raw = self.outputs.get("instance1_ipv6_addresses")
     instance2_id = self.outputs.get("instance2_id")
-    instance2_ipv6 = self.outputs.get("instance2_ipv6_addresses")
+    instance2_ipv6_raw = self.outputs.get("instance2_ipv6_addresses")
     
     # Validate instance IDs
     self.assertIsNotNone(instance1_id)
     self.assertRegex(instance1_id, r'^i-[a-f0-9]{17}$', "Instance ID should match AWS format")
     self.assertIsNotNone(instance2_id)
     self.assertRegex(instance2_id, r'^i-[a-f0-9]{17}$', "Instance ID should match AWS format")
+    
+    # Convert IPv6 addresses to list format
+    instance1_ipv6 = self._ensure_ipv6_list(instance1_ipv6_raw, "instance1")
+    instance2_ipv6 = self._ensure_ipv6_list(instance2_ipv6_raw, "instance2")
     
     # Validate IPv6 addresses
     self.assertIsNotNone(instance1_ipv6)
@@ -157,8 +199,12 @@ class TestIPv6DualStackVPCIntegration(unittest.TestCase):
   def test_ipv6_addresses_within_subnet_cidr(self):
     """Test that instance IPv6 addresses are within their subnet CIDR blocks."""
     public_subnet_ipv6_cidr = self.outputs.get("public_subnet_ipv6_cidr_block")
-    instance1_ipv6 = self.outputs.get("instance1_ipv6_addresses")
-    instance2_ipv6 = self.outputs.get("instance2_ipv6_addresses")
+    instance1_ipv6_raw = self.outputs.get("instance1_ipv6_addresses")
+    instance2_ipv6_raw = self.outputs.get("instance2_ipv6_addresses")
+    
+    # Convert IPv6 addresses to list format
+    instance1_ipv6 = self._ensure_ipv6_list(instance1_ipv6_raw, "instance1")
+    instance2_ipv6 = self._ensure_ipv6_list(instance2_ipv6_raw, "instance2")
     
     if not (public_subnet_ipv6_cidr and instance1_ipv6 and instance2_ipv6):
       self.skipTest("Required IPv6 configuration not available")
@@ -204,9 +250,13 @@ class TestIPv6DualStackVPCIntegration(unittest.TestCase):
     vpc_ipv6_cidr = self.outputs.get("vpc_ipv6_cidr_block")
     public_subnet_ipv6_cidr = self.outputs.get("public_subnet_ipv6_cidr_block")
     private_subnet_ipv6_cidr = self.outputs.get("private_subnet_ipv6_cidr_block")
-    instance1_ipv6 = self.outputs.get("instance1_ipv6_addresses")
-    instance2_ipv6 = self.outputs.get("instance2_ipv6_addresses")
+    instance1_ipv6_raw = self.outputs.get("instance1_ipv6_addresses")
+    instance2_ipv6_raw = self.outputs.get("instance2_ipv6_addresses")
     eigw_id = self.outputs.get("egress_igw_id")
+    
+    # Convert IPv6 addresses to list format
+    instance1_ipv6 = self._ensure_ipv6_list(instance1_ipv6_raw, "instance1")
+    instance2_ipv6 = self._ensure_ipv6_list(instance2_ipv6_raw, "instance2")
     
     # All IPv6 components should be present
     ipv6_components = [vpc_ipv6_cidr, public_subnet_ipv6_cidr, private_subnet_ipv6_cidr, 
@@ -240,9 +290,13 @@ class TestIPv6DualStackVPCIntegration(unittest.TestCase):
     
     # Requirement 3: EC2 instances in public subnet with static IPv6 addresses
     instance1_id = self.outputs.get("instance1_id")
-    instance1_ipv6 = self.outputs.get("instance1_ipv6_addresses")
+    instance1_ipv6_raw = self.outputs.get("instance1_ipv6_addresses")
     instance2_id = self.outputs.get("instance2_id")
-    instance2_ipv6 = self.outputs.get("instance2_ipv6_addresses")
+    instance2_ipv6_raw = self.outputs.get("instance2_ipv6_addresses")
+    
+    # Convert IPv6 addresses to list format
+    instance1_ipv6 = self._ensure_ipv6_list(instance1_ipv6_raw, "instance1")
+    instance2_ipv6 = self._ensure_ipv6_list(instance2_ipv6_raw, "instance2")
     
     self.assertIsNotNone(instance1_id, "EC2 instance1 should exist")
     self.assertIsNotNone(instance1_ipv6, "Instance1 should have IPv6 addresses")
