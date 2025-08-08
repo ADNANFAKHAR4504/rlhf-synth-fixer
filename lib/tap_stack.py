@@ -242,7 +242,7 @@ class TapStack(pulumi.ComponentResource):
     def _create_regional_monitoring(self, region: str, lambda_function, api_gateway, region_opts):
         """Create CloudWatch monitoring and alarms for a region"""
         
-        # Lambda error rate alarm
+        # Lambda error rate alarm - FIXED: Removed alarm_name parameter
         lambda_error_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.project_name}-lambda-errors-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
@@ -253,14 +253,13 @@ class TapStack(pulumi.ComponentResource):
             statistic="Sum",
             threshold="5",
             alarm_description="Lambda function error rate",
-            alarm_name=f"{self.project_name}-lambda-errors-{region}-{self.environment}",
             dimensions={
                 "FunctionName": lambda_function.name
             },
             opts=region_opts
         )
         
-        # Lambda duration alarm
+        # Lambda duration alarm - FIXED: Removed alarm_name parameter
         lambda_duration_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.project_name}-lambda-duration-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
@@ -271,14 +270,13 @@ class TapStack(pulumi.ComponentResource):
             statistic="Average",
             threshold="25000",  # 25 seconds
             alarm_description="Lambda function duration",
-            alarm_name=f"{self.project_name}-lambda-duration-{region}-{self.environment}",
             dimensions={
                 "FunctionName": lambda_function.name
             },
             opts=region_opts
         )
         
-        # API Gateway 4XX error alarm
+        # API Gateway 4XX error alarm - FIXED: Removed alarm_name parameter
         api_4xx_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.project_name}-api-4xx-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
@@ -289,14 +287,13 @@ class TapStack(pulumi.ComponentResource):
             statistic="Sum",
             threshold="10",
             alarm_description="API Gateway 4XX errors",
-            alarm_name=f"{self.project_name}-api-4xx-{region}-{self.environment}",
             dimensions={
                 "ApiName": api_gateway.name
             },
             opts=region_opts
         )
         
-        # API Gateway 5XX error alarm
+        # API Gateway 5XX error alarm - FIXED: Removed alarm_name parameter
         api_5xx_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.project_name}-api-5xx-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
@@ -307,7 +304,6 @@ class TapStack(pulumi.ComponentResource):
             statistic="Sum",
             threshold="1",
             alarm_description="API Gateway 5XX errors",
-            alarm_name=f"{self.project_name}-api-5xx-{region}-{self.environment}",
             dimensions={
                 "ApiName": api_gateway.name
             },
