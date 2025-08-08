@@ -78,5 +78,11 @@ export class StorageConstruct extends Construct {
     cdk.Tags.of(this.bucket).add('Region', region);
     cdk.Tags.of(this.bucket).add('Versioning', 'Enabled');
     cdk.Tags.of(this.bucket).add('Encryption', 'S3Managed');
+
+    // Output the bucket name for integration tests
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: this.bucket.bucketName,
+      description: 'Name of the S3 bucket',
+    });
   }
 }
