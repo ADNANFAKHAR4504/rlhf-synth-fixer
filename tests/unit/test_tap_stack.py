@@ -3,15 +3,24 @@ import aws_cdk as cdk
 from aws_cdk.assertions import Template, Match
 from lib.tap_stack import ServerlessStack
 
-
 class TestServerlessStack(unittest.TestCase):
+  """
+  A test suite for the ServerlessStack, with corrected assertions for the
+  DynamoDB table and the Lambda execution role.
+  """
 
   def setUp(self):
+    """Set up the CDK app, stack, and template for each test."""
     self.app = cdk.App()
     self.stack = ServerlessStack(self.app, "TestServerlessStack")
     self.template = Template.from_stack(self.stack)
 
   def test_dynamodb_table_created(self):
+    """
+    FIXED: The assertion was corrected to match the actual CloudFormation output.
+    The stack's `PROVISIONED` billing mode results in the `ProvisionedThroughput`
+    property being present, not a top-level `BillingMode` property.
+    """
     self.template.resource_count_is("AWS::DynamoDB::Table", 1)
     self.template.has_resource_properties("AWS::DynamoDB::Table", Match.object_like({
       "KeySchema": [{
@@ -22,10 +31,16 @@ class TestServerlessStack(unittest.TestCase):
         "AttributeName": "ItemId",
         "AttributeType": "S"
       }],
-      "BillingMode": "PROVISIONED"
+      # The stack creates a PROVISIONED table, which means the CloudFormation
+      # output includes ProvisionedThroughput instead of a BillingMode key.
+      "ProvisionedThroughput": {
+        "ReadCapacityUnits": 5,
+        "WriteCapacityUnits": 5
+      }
     }))
 
   def test_lambda_function_created(self):
+    """Test that the Lambda function is created with the correct properties."""
     self.template.resource_count_is("AWS::Lambda::Function", 1)
     self.template.has_resource_properties("AWS::Lambda::Function", {
       "Handler": "index.handler",
@@ -41,6 +56,12 @@ class TestServerlessStack(unittest.TestCase):
     })
 
   def test_lambda_execution_role_created(self):
+    """
+    FIXED: The assertion was corrected to properly match the managed policy ARN.
+    The original test used an incorrect nested matcher (`any_value` inside `array_with`)
+    which caused a runtime error. This version uses a `string_like_regexp` matcher
+    to correctly verify the managed policy ARN.
+    """
     self.template.has_resource_properties("AWS::IAM::Role", {
       "AssumeRolePolicyDocument": {
         "Statement": Match.array_with([
@@ -54,19 +75,14 @@ class TestServerlessStack(unittest.TestCase):
         ])
       },
       "ManagedPolicyArns": Match.array_with([
-        Match.object_like({
-          "Fn::Join": Match.array_with([
-            Match.any_value(),
-            Match.array_with([
-              "arn:aws:iam::aws:policy/",
-              "service-role/AWSLambdaBasicExecutionRole"
-            ])
-          ])
-        })
+        Match.string_like_regexp(
+          r"arn:.+:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        )
       ])
     })
 
   def test_lambda_grants_dynamodb_access(self):
+    """Test that the IAM policy grants the correct DynamoDB access."""
     self.template.has_resource_properties("AWS::IAM::Policy", {
       "PolicyDocument": {
         "Statement": Match.array_with([
@@ -84,6 +100,7 @@ class TestServerlessStack(unittest.TestCase):
     })
 
   def test_autoscaling_targets_created(self):
+    """Test that two autoscaling targets are created for the DynamoDB table."""
     self.template.resource_count_is("AWS::ApplicationAutoScaling::ScalableTarget", 2)
     self.template.has_resource_properties("AWS::ApplicationAutoScaling::ScalableTarget", {
       "MinCapacity": 1,
@@ -99,12 +116,14 @@ class TestServerlessStack(unittest.TestCase):
     })
 
   def test_cloudwatch_dashboard_created(self):
+    """Test that a CloudWatch Dashboard resource is created."""
     self.template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
     self.template.has_resource_properties("AWS::CloudWatch::Dashboard", {
       "DashboardName": "TestServerlessStack-ServerlessMonitoringDashboardV3"
     })
 
   def test_cfn_outputs_exist(self):
+    """Test that the CloudFormation outputs are created with correct export names."""
     self.template.has_output("DynamoDBTableName", {
       "Value": {
         "Ref": Match.any_value()
