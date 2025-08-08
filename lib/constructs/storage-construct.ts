@@ -57,9 +57,9 @@ export class StorageConstruct extends Construct {
     this.bucket.addToResourcePolicy(allowAccessStatement);
 
     // Enable S3 Metadata for comprehensive object visibility
-    // Using stack name pattern: stackname-parameter-region-account
+    // Using stack name pattern: stackname-parameter-region-account (lowercase for S3)
     const metadataBucket = new s3.CfnBucket(this, 'BucketMetadata', {
-      bucketName: `TapStack-${environmentSuffix}-${region}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `tapstack-${environmentSuffix}-${region}-${cdk.Aws.ACCOUNT_ID}`,
       versioningConfiguration: {
         status: 'Enabled',
       },
