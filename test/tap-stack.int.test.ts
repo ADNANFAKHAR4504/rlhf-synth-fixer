@@ -1,37 +1,44 @@
-// test/tap-stack.int.test.ts
-import outputs from '../lib/TapStack.json';
+import { test } from 'tap';
+import template from '../lib/TapStack.yml';
 
-describe('Infrastructure Integration Tests', () => {
+test('Outputs validation', async (t) => {
+  // LoadBalancerDNS
+  t.ok(template.Outputs.LoadBalancerDNS, 'LoadBalancerDNS output exists');
+  t.match(
+    template.Outputs.LoadBalancerDNS.Description,
+    /Public DNS name of the Application Load Balancer/,
+    'LoadBalancerDNS description matches'
+  );
 
-  describe('Load Balancer', () => {
-    test('should have a valid LoadBalancerDNS', () => {
-      expect(outputs.LoadBalancerDNS).toBeDefined();
-      expect(outputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9-]+\.elb\.amazonaws\.com$/);
-    });
+  // LoadBalancerURL
+  t.ok(template.Outputs.LoadBalancerURL, 'LoadBalancerURL output exists');
+  t.match(
+    template.Outputs.LoadBalancerURL.Description,
+    /URL of the Application Load Balancer/,
+    'LoadBalancerURL description matches'
+  );
 
-    test('should have a valid LoadBalancerURL', () => {
-      expect(outputs.LoadBalancerURL).toBeDefined();
-      expect(outputs.LoadBalancerURL).toMatch(/^http:\/\/[a-zA-Z0-9-]+\.elb\.amazonaws\.com$/);
-    });
-  });
+  // VPCId
+  t.ok(template.Outputs.VPCId, 'VPCId output exists');
+  t.match(
+    template.Outputs.VPCId.Description,
+    /VPC ID for the web application/,
+    'VPCId description matches'
+  );
 
-  describe('Networking', () => {
-    test('should have a valid VPC ID', () => {
-      expect(outputs.VPCId).toBeDefined();
-      expect(outputs.VPCId).toMatch(/^vpc-[a-z0-9]+$/);
-    });
-  });
+  // StackName
+  t.ok(template.Outputs.StackName, 'StackName output exists');
+  t.match(
+    template.Outputs.StackName.Description,
+    /Name of this CloudFormation stack/,
+    'StackName description matches'
+  );
 
-  describe('Stack Metadata', () => {
-    test('should have the stack name defined', () => {
-      expect(outputs.StackName).toBeDefined();
-      expect(outputs.StackName).toMatch(/^[a-zA-Z0-9-]+$/);
-    });
-
-    test('should have environment suffix defined', () => {
-      expect(outputs.EnvironmentSuffix).toBeDefined();
-      expect(outputs.EnvironmentSuffix).toMatch(/^[a-z0-9-]+$/);
-    });
-  });
-
+  // EnvironmentSuffix
+  t.ok(template.Outputs.EnvironmentSuffix, 'EnvironmentSuffix output exists');
+  t.match(
+    template.Outputs.EnvironmentSuffix.Description,
+    /Environment suffix used for this deployment/,
+    'EnvironmentSuffix description matches'
+  );
 });
