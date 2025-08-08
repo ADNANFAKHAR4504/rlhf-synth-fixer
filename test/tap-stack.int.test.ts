@@ -14,6 +14,7 @@ import {
   ConfigServiceClient,
   DescribeConfigRulesCommand,
   DescribeConfigurationRecordersCommand,
+  DescribeConfigurationRecorderStatusCommand, // <--- This is the required import
 } from '@aws-sdk/client-config-service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -117,6 +118,7 @@ testSuite('IaC Foundational Security Stack - Integration Tests', () => {
     });
 
     test('Configuration Recorder should be active and recording', async () => {
+      // Step 1: Find the recorder's name
       const { ConfigurationRecorders } = await configClient.send(
         new DescribeConfigurationRecordersCommand({})
       );
@@ -124,7 +126,20 @@ testSuite('IaC Foundational Security Stack - Integration Tests', () => {
         r.name?.includes(environmentSuffix)
       );
       expect(recorder).toBeDefined();
-      const lastStatus = recorder?.lastStatus;
+      expect(recorder?.name).toBeDefined();
+
+      // Step 2: Get the status for that specific recorder
+      const { ConfigurationRecordersStatus } = await configClient.send(
+        new DescribeConfigurationRecorderStatusCommand({
+          ConfigurationRecorderNames: [recorder!.name!],
+        })
+      );
+
+      const recorderStatus = ConfigurationRecordersStatus?.[0];
+      expect(recorderStatus).toBeDefined();
+
+      // Now you can safely access lastStatus
+      const lastStatus = recorderStatus?.lastStatus;
       expect(['SUCCESS', 'PENDING']).toContain(lastStatus);
     });
 
