@@ -1,9 +1,9 @@
 {
   "platform": "pulumi",
   "language": "py",
-  "complexity": "medium",
+  "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291182",
+  "po_id": "291365",
   "team": "6",
-  "startedAt": "2025-08-04T20:26:36.898Z"
+  "startedAt": "2025-08-08T15:01:54.218Z"
 }
