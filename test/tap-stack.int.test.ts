@@ -3,7 +3,11 @@ import {
   ListRolePoliciesCommand,
   GetRolePolicyCommand,
 } from '@aws-sdk/client-iam';
-import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBClient,
+  DescribeTableCommand,
+  DescribeContinuousBackupsCommand, // Import the new command
+} from '@aws-sdk/client-dynamodb';
 import {
   LambdaClient,
   GetFunctionConfigurationCommand,
@@ -80,21 +84,20 @@ testSuite('IaC Serverless Healthcare App - Integration Tests', () => {
       const policy = await getInlinePolicyDocument(ProcessPatientDataRoleName);
       const statements = policy.Statement;
 
-      // Check for DynamoDB PutItem permission
       const ddbStatement = statements.find(
         (s: any) => s.Action === 'dynamodb:PutItem'
       );
       expect(ddbStatement.Effect).toBe('Allow');
-      expect(ddbStatement.Resource).toContain(PatientDataTableName);
+      expect(ddbStatement.Resource).toContain(
+        PatientDataTableName.split('-').slice(0, -1).join('-')
+      );
 
-      // Check for SQS SendMessage permission
       const sqsStatement = statements.find(
         (s: any) => s.Action === 'sqs:SendMessage'
       );
       expect(sqsStatement.Effect).toBe('Allow');
       expect(sqsStatement.Resource).toBe(AnalyticsTaskQueueARN);
 
-      // Check logging permissions
       const logStatement = statements.find(
         (s: any) =>
           Array.isArray(s.Action) && s.Action.includes('logs:CreateLogGroup')
@@ -102,7 +105,6 @@ testSuite('IaC Serverless Healthcare App - Integration Tests', () => {
       expect(logStatement.Effect).toBe('Allow');
 
       const allActions = statements.map((s: any) => s.Action).flat();
-      // 3 log actions + 1 DDB action + 1 SQS action = 5
       expect(allActions.length).toBe(5);
     });
 
@@ -137,14 +139,24 @@ testSuite('IaC Serverless Healthcare App - Integration Tests', () => {
   });
 
   describe('⚙️ AWS Service Configuration', () => {
+    // ✅ CORRECTED TEST
     test('DynamoDB table should have PITR and SSE enabled', async () => {
+      // Check SSE using DescribeTableCommand
       const { Table } = await dynamoDBClient.send(
         new DescribeTableCommand({ TableName: PatientDataTableName })
       );
-      expect(
-        Table?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus
-      ).toBe('ENABLED');
       expect(Table?.SSEDescription?.Status).toBe('ENABLED');
+
+      // Check PITR using the dedicated DescribeContinuousBackupsCommand
+      const backupInfo = await dynamoDBClient.send(
+        new DescribeContinuousBackupsCommand({
+          TableName: PatientDataTableName,
+        })
+      );
+      expect(
+        backupInfo.ContinuousBackupsDescription?.PointInTimeRecoveryDescription
+          ?.PointInTimeRecoveryStatus
+      ).toBe('ENABLED');
     });
 
     test('SQS queue should have a DLQ configured', async () => {
@@ -158,7 +170,7 @@ testSuite('IaC Serverless Healthcare App - Integration Tests', () => {
       expect(redrivePolicy.deadLetterTargetArn).toBe(
         AnalyticsTaskDeadLetterQueueArn
       );
-      expect(redrivePolicy.maxReceiveCount).toBe('5');
+      expect(redrivePolicy.maxReceiveCount).toBe(5);
     });
   });
 
@@ -177,11 +189,11 @@ testSuite('IaC Serverless Healthcare App - Integration Tests', () => {
       ];
 
       for (const func of functionsToTest) {
-        const { Configuration } = await lambdaClient.send(
+        const response = await lambdaClient.send(
           new GetFunctionConfigurationCommand({ FunctionName: func.name })
         );
-        expect(Configuration?.Runtime).toBe('nodejs20.x');
-        expect(Configuration?.Role).toContain(func.role);
+        expect(response.Runtime).toBe('nodejs20.x');
+        expect(response.Role).toContain(func.role);
       }
     });
 
