@@ -366,12 +366,12 @@ describe('TapStack Unit Tests', () => {
       const template = Template.fromStack(stack);
       
       template.hasResourceProperties('AWS::SSM::Parameter', {
-        Name: Match.stringLikeRegexp('/tap/.*/cloudtrail-config'),
+        Name: Match.stringLikeRegexp('/tap/.*/primary/cloudtrail-config'),
         Type: 'String',
       });
       
       template.hasResourceProperties('AWS::SSM::Parameter', {
-        Name: Match.stringLikeRegexp('/tap/.*/inspector-status'),
+        Name: Match.stringLikeRegexp('/tap/.*/primary/inspector-status'),
         Type: 'String',
       });
     });
