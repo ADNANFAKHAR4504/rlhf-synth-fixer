@@ -112,7 +112,7 @@ describe('Secure Lambda CloudFormation Template', () => {
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('SecureLambdaFunction');
-      expect(param.AllowedPattern).toBe('^[A-Za-z0-9_-]+$');
+      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9-_]+$');
       expect(param.MinLength).toBe(1);
       expect(param.MaxLength).toBe(64);
     });
