@@ -21,7 +21,7 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
         cls.team = "nova"  # Must match your actual deployed resources
         
-        # Robust AWS client configuration
+        # Robust AWS client configurations
         cls.aws_config = Config(
             retries={
                 'max_attempts': 10 if cls.ci_mode else 5,
