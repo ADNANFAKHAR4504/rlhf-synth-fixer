@@ -1,18 +1,18 @@
-# AWS Security Infrastructure Requirements
+# Web Application Infrastructure Requirements
 
-I need help creating a comprehensive security infrastructure for a new AWS application deployment. The security configuration must follow these requirements:
+I need to deploy a web application on AWS with high availability architecture. The deployment must include the following components:
 
-1. All IAM roles should have proper trust policies defining allowed principals
-2. Encrypt EBS volumes and RDS instances using AWS KMS keys
-3. S3 buckets need policies that prevent public PUT operations
-4. IAM users require MFA enablement with 90-day access key rotation
-5. Use AWS WAF to protect Load Balancers from web attacks like SQL injection and XSS
-6. EC2 instances should use instance profiles with read-only S3 permissions
-7. CloudTrail logs must be encrypted and stored in secure S3 buckets
-8. SNS topics should only accept messages from authorized AWS services
-9. Security groups must restrict inbound connections, allowing SSH only from specific IP ranges
-10. Enable GuardDuty across all regions for continuous monitoring
+1. Create a VPC with public and private subnets across multiple availability zones for high availability
+2. Deploy an Application Load Balancer to distribute HTTP/HTTPS traffic to application instances
+3. Set up EC2 instances or Auto Scaling groups in private subnets for the application layer
+4. Configure an Amazon RDS database instance with automatic backups enabled
+5. Create IAM roles with appropriate permissions for application instances to interact with AWS services
+6. Implement security groups with proper network access controls
+7. Use the new Application Load Balancer integration with VPC IPAM for better IP address management
+8. Configure RDS with Multi-AZ deployment for database high availability
 
-The infrastructure should use the new AWS Security Hub for centralized security management and include AWS Shield Advanced for enhanced DDoS protection. Please provide the complete infrastructure code with proper resource naming using 'prod-' and 'dev-' prefixes for different environments.
+The architecture should span at least two availability zones and include both public and private subnet configurations. The Application Load Balancer should be internet-facing to handle incoming traffic, while application instances and database should be in private subnets for security.
 
-Target region: us-east-1
+Target deployment region: us-east-1
+
+Please provide complete infrastructure code with one code block per file.
