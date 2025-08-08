@@ -304,7 +304,7 @@ export class TapStack extends cdk.Stack {
           },
         },
         artifacts: {
-          files: ['deployment-package.zip', 'appspec.yml', 'scripts/**/*'],
+          files: ['deployment-package.zip'],
         },
       }),
       artifacts: codebuild.Artifacts.s3({
@@ -312,7 +312,6 @@ export class TapStack extends cdk.Stack {
         includeBuildId: true,
         packageZip: true,
       }),
-      cache: codebuild.Cache.local(codebuild.LocalCacheMode.SOURCE),
     });
 
     // ========================================
@@ -347,29 +346,43 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+    // Create IAM role for EC2 instances
+    const ec2Role = new iam.Role(this, 'EC2Role', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+      ],
+    });
+
+    // Create Launch Template for EC2 instances
+    const launchTemplate = new ec2.LaunchTemplate(
       this,
-      'WebAppASG',
+      'WebAppLaunchTemplate',
       {
-        vpc,
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
           ec2.InstanceSize.MICRO
         ),
         machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        role: ec2Role,
+        userData: ec2.UserData.forLinux(),
+      }
+    );
+
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'WebAppASG',
+      {
+        vpc,
+        launchTemplate: launchTemplate,
         minCapacity: 2,
         maxCapacity: 6,
-        role: new iam.Role(this, 'EC2Role', {
-          assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-          managedPolicies: [
-            iam.ManagedPolicy.fromAwsManagedPolicyName(
-              'AmazonSSMManagedInstanceCore'
-            ),
-            iam.ManagedPolicy.fromAwsManagedPolicyName(
-              'CloudWatchAgentServerPolicy'
-            ),
-          ],
-        }),
+        desiredCapacity: 2,
       }
     );
 

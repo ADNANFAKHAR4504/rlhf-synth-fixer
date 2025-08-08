@@ -177,10 +177,6 @@ describe('TapStack', () => {
         },
         Artifacts: {
           Type: 'S3'
-        },
-        Cache: {
-          Type: 'LOCAL',
-          Modes: ['LOCAL_SOURCE_CACHE']
         }
       });
     });
@@ -262,8 +258,10 @@ describe('TapStack', () => {
     });
 
     test('should use correct instance type', () => {
-      template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
-        InstanceType: 't3.micro'
+      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+        LaunchTemplateData: {
+          InstanceType: 't3.micro'
+        }
       });
     });
   });
