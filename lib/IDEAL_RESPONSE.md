@@ -7,6 +7,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready web application infrastructure with ALB, Auto Scaling, RDS PostgreSQL, and comprehensive security'
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
   VpcCidr:
     Type: String
     Default: '10.0.0.0/16'
@@ -28,10 +35,6 @@ Parameters:
     Default: 'db.t3.micro'
     AllowedValues: ['db.t3.micro', 'db.t3.small', 'db.t3.medium']
     Description: 'RDS instance class'
-
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'EC2 Key Pair for SSH access'
 
 Resources:
   # VPC and Networking
@@ -165,11 +168,9 @@ Resources:
           CidrIp: !Ref AllowedCidrBlock
           Description: 'HTTPS traffic from allowed CIDR'
       SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ProdAppWebServerSecurityGroup
-          Description: 'HTTP to web servers'
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'All outbound traffic'
       Tags:
         - Key: Name
           Value: ProdApp-ALB-SG
@@ -185,18 +186,13 @@ Resources:
           ToPort: 80
           SourceSecurityGroupId: !Ref ProdAppALBSecurityGroup
           Description: 'HTTP from ALB'
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedCidrBlock
-          Description: 'SSH access'
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: '0.0.0.0/0'
           Description: 'All outbound traffic'
       Tags:
         - Key: Name
-          Value: ProdApp-WebServer-SG
+          Value: !Sub 'ProdApp-WebServer-SG-${EnvironmentSuffix}'
 
   ProdAppDatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -211,7 +207,7 @@ Resources:
           Description: 'PostgreSQL from web servers'
       Tags:
         - Key: Name
-          Value: ProdApp-Database-SG
+          Value: !Sub 'ProdApp-Database-SG-${EnvironmentSuffix}'
 
   # Database Subnet Group
   ProdAppDBSubnetGroup:
@@ -228,12 +224,13 @@ Resources:
   # RDS PostgreSQL Database
   ProdAppDatabase:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: prodapp-postgresql-db
+      DBInstanceIdentifier: !Sub 'prodapp-postgresql-db-${EnvironmentSuffix}'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: postgres
-      EngineVersion: '15.4'
+      EngineVersion: '15.13'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -252,7 +249,7 @@ Resources:
         - postgresql
       Tags:
         - Key: Name
-          Value: ProdApp-PostgreSQL-DB
+          Value: !Sub 'ProdApp-PostgreSQL-DB-${EnvironmentSuffix}'
 
   # RDS Enhanced Monitoring Role
   ProdAppRDSEnhancedMonitoringRole:
@@ -307,15 +304,14 @@ Resources:
     Properties:
       LaunchTemplateName: ProdApp-LaunchTemplate
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2023 AMI (update for your region)
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2}}"
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt ProdAppEC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref ProdAppWebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd
@@ -362,6 +358,12 @@ Resources:
   # Auto Scaling Group
   ProdAppAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        PauseTime: PT5M
+        WaitOnResourceSignals: false
     Properties:
       AutoScalingGroupName: ProdApp-ASG
       VPCZoneIdentifier:
@@ -377,12 +379,6 @@ Resources:
       HealthCheckGracePeriod: 300
       TargetGroupARNs:
         - !Ref ProdAppTargetGroup
-      UpdatePolicy:
-        AutoScalingRollingUpdate:
-          MinInstancesInService: 1
-          MaxBatchSize: 1
-          PauseTime: PT5M
-          WaitOnResourceSignals: false
       Tags:
         - Key: Name
           Value: ProdApp-ASG-Instance
@@ -452,13 +448,6 @@ Resources:
       Subnets:
         - !Ref ProdAppPublicSubnet1
         - !Ref ProdAppPublicSubnet2
-      LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: 'true'
-        - Key: access_logs.s3.bucket
-          Value: !Ref ProdAppALBLogsBucket
-        - Key: access_logs.s3.prefix
-          Value: 'alb-logs'
       Tags:
         - Key: Name
           Value: ProdApp-ALB
@@ -481,16 +470,6 @@ Resources:
         - Key: Name
           Value: ProdApp-TargetGroup
 
-  # SSL Certificate (self-signed for demo - replace with ACM certificate in production)
-  ProdAppSSLCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Sub '${AWS::StackName}.example.com'
-      ValidationMethod: DNS
-      Tags:
-        - Key: Name
-          Value: ProdApp-SSL-Certificate
-
   # HTTPS Listener
   ProdAppHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -499,48 +478,9 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ProdAppTargetGroup
       LoadBalancerArn: !Ref ProdAppALB
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref ProdAppSSLCertificate
+      Port: 80
+      Protocol: HTTP
 
-  # S3 Bucket for ALB Logs
-  ProdAppALBLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'prodapp-alb-logs-${AWS::AccountId}-${AWS::Region}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
-
-  # S3 Bucket Policy for ALB Logs
-  ProdAppALBLogsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ProdAppALBLogsBucket
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 's3:PutObject'
-            Resource: !Sub '${ProdAppALBLogsBucket}/*'
-          - Effect: Allow
-            Principal:
-              Service: elasticloadbalancing.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub '${ProdAppALBLogsBucket}/alb-logs/AWSLogs/${AWS::AccountId}/*'
 
   # CloudWatch Log Groups
   ProdAppHTTPDAccessLogGroup:
@@ -560,25 +500,25 @@ Outputs:
     Description: 'VPC ID'
     Value: !Ref ProdAppVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${AWS::StackName}-VPC-ID-${EnvironmentSuffix}'
 
   ALBDNSName:
     Description: 'Application Load Balancer DNS Name'
     Value: !GetAtt ProdAppALB.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-ALB-DNS'
+      Name: !Sub '${AWS::StackName}-ALB-DNS-${EnvironmentSuffix}'
 
   DatabaseEndpoint:
     Description: 'RDS PostgreSQL Database Endpoint'
     Value: !GetAtt ProdAppDatabase.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-DB-Endpoint'
+      Name: !Sub '${AWS::StackName}-DB-Endpoint-${EnvironmentSuffix}'
 
   AutoScalingGroupName:
     Description: 'Auto Scaling Group Name'
     Value: !Ref ProdAppAutoScalingGroup
     Export:
-      Name: !Sub '${AWS::StackName}-ASG-Name'
+      Name: !Sub '${AWS::StackName}-ASG-Name-${EnvironmentSuffix}'
 ```
 
 ## Key Features and Security Implementations

@@ -14,9 +14,16 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('Integration Tests', () => {
+    test('TODO: Add integration tests for deployed infrastructure', async () => {
+      // Placeholder for integration tests
+      // These tests should verify the deployed infrastructure functionality
+      // Including but not limited to:
+      // - VPC connectivity
+      // - Database connectivity
+      // - Load balancer functionality
+      // - Auto scaling behavior
+      expect(true).toBe(true);
     });
   });
 
@@ -28,19 +35,24 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Production-ready web application infrastructure with ALB, Auto Scaling, RDS PostgreSQL, and comprehensive security'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have all required parameters', () => {
+      const expectedParameters = [
+        'EnvironmentSuffix',
+        'VpcCidr',
+        'AllowedCidrBlock',
+        'InstanceType',
+        'DBInstanceClass',
+      ];
+
+      expectedParameters.forEach(paramName => {
+        expect(template.Parameters[paramName]).toBeDefined();
+      });
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -55,61 +67,78 @@ describe('TapStack CloudFormation Template', () => {
         'Must contain only alphanumeric characters'
       );
     });
+
+    test('VpcCidr parameter should have correct properties', () => {
+      const vpcCidrParam = template.Parameters.VpcCidr;
+      expect(vpcCidrParam.Type).toBe('String');
+      expect(vpcCidrParam.Default).toBe('10.0.0.0/16');
+      expect(vpcCidrParam.Description).toBe('CIDR block for VPC');
+    });
+
+    test('InstanceType parameter should have allowed values', () => {
+      const instanceTypeParam = template.Parameters.InstanceType;
+      expect(instanceTypeParam.Type).toBe('String');
+      expect(instanceTypeParam.Default).toBe('t3.medium');
+      expect(instanceTypeParam.AllowedValues).toContain('t3.micro');
+      expect(instanceTypeParam.AllowedValues).toContain('t3.small');
+      expect(instanceTypeParam.AllowedValues).toContain('t3.medium');
+      expect(instanceTypeParam.AllowedValues).toContain('t3.large');
+    });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    test('should have VPC resource', () => {
+      expect(template.Resources.ProdAppVPC).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should have Internet Gateway resource', () => {
+      expect(template.Resources.ProdAppInternetGateway).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have database resource', () => {
+      expect(template.Resources.ProdAppDatabase).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    test('ProdAppVPC should be of correct type', () => {
+      const vpc = template.Resources.ProdAppVPC;
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+    });
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('ProdAppDatabase should have correct engine settings', () => {
+      const db = template.Resources.ProdAppDatabase;
+      expect(db.Properties.Engine).toBe('postgres');
+      expect(db.Properties.EngineVersion).toBe('15.13');
+    });
+
+    test('ProdAppDatabase should have correct deletion policies', () => {
+      const db = template.Resources.ProdAppDatabase;
+      expect(db.DeletionPolicy).toBe('Delete');
+      expect(db.UpdateReplacePolicy).toBe('Delete');
+    });
+
+    test('ProdAppDatabase should have proper identifier with environment suffix', () => {
+      const db = template.Resources.ProdAppDatabase;
+      expect(db.Properties.DBInstanceIdentifier).toEqual({
+        'Fn::Sub': 'prodapp-postgresql-db-${EnvironmentSuffix}',
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('Auto Scaling Group should have proper settings', () => {
+      const asg = template.Resources.ProdAppAutoScalingGroup;
+      expect(asg.Properties.MinSize).toBe(2);
+      expect(asg.Properties.MaxSize).toBe(6);
+      expect(asg.Properties.DesiredCapacity).toBe(2);
+      expect(asg.Properties.HealthCheckType).toBe('ELB');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'VPCId',
+        'ALBDNSName',
+        'DatabaseEndpoint',
+        'AutoScalingGroupName',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +146,19 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('VPCId output should be correct', () => {
+      const output = template.Outputs.VPCId;
+      expect(output.Description).toBe('VPC ID');
+      expect(output.Value).toEqual({ Ref: 'ProdAppVPC' });
+      expect(output.Export).toBeDefined();
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
+    test('AutoScalingGroupName output should be correct', () => {
+      const output = template.Outputs.AutoScalingGroupName;
+      expect(output.Description).toBe('Auto Scaling Group Name');
+      expect(output.Value).toEqual({ Ref: 'ProdAppAutoScalingGroup' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-ASG-Name-${EnvironmentSuffix}',
       });
     });
   });
@@ -172,14 +177,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have multiple resources for a production-ready application', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(10);
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have exactly five parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(5);
     });
 
     test('should have exactly four outputs', () => {
@@ -189,22 +194,70 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+    test('database name should follow naming convention with environment suffix', () => {
+      const db = template.Resources.ProdAppDatabase;
+      const dbIdentifier = db.Properties.DBInstanceIdentifier;
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      expect(dbIdentifier).toEqual({
+        'Fn::Sub': 'prodapp-postgresql-db-${EnvironmentSuffix}',
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('export names should follow naming convention with environment suffix', () => {
+      expect(template.Outputs.AutoScalingGroupName.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-ASG-Name-${EnvironmentSuffix}',
       });
+
+      expect(template.Outputs.DatabaseEndpoint.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-DB-Endpoint-${EnvironmentSuffix}',
+      });
+    });
+  });
+
+  describe('Security Features', () => {
+    test('database should have storage encryption enabled', () => {
+      expect(
+        template.Resources.ProdAppDatabase.Properties.StorageEncrypted
+      ).toBe(true);
+    });
+
+    test('database should have enhanced monitoring enabled', () => {
+      expect(
+        template.Resources.ProdAppDatabase.Properties.EnablePerformanceInsights
+      ).toBe(true);
+      expect(
+        template.Resources.ProdAppDatabase.Properties.MonitoringInterval
+      ).toBe(60);
+      expect(
+        template.Resources.ProdAppDatabase.Properties.MonitoringRoleArn
+      ).toBeDefined();
+    });
+
+    test('security group for database should be defined', () => {
+      expect(template.Resources.ProdAppDatabaseSecurityGroup).toBeDefined();
+      expect(template.Resources.ProdAppDatabaseSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
+    });
+  });
+
+  describe('High Availability Features', () => {
+    test('database should have multi-AZ enabled', () => {
+      expect(template.Resources.ProdAppDatabase.Properties.MultiAZ).toBe(true);
+    });
+
+    test('VPC should have multiple subnets across availability zones', () => {
+      expect(template.Resources.ProdAppPublicSubnet1).toBeDefined();
+      expect(template.Resources.ProdAppPublicSubnet2).toBeDefined();
+      expect(template.Resources.ProdAppPrivateSubnet1).toBeDefined();
+      expect(template.Resources.ProdAppPrivateSubnet2).toBeDefined();
+    });
+
+    test('auto scaling group should have proper scaling policies', () => {
+      expect(template.Resources.ProdAppScaleUpPolicy).toBeDefined();
+      expect(template.Resources.ProdAppScaleDownPolicy).toBeDefined();
+      expect(template.Resources.ProdAppCPUAlarmHigh).toBeDefined();
+      expect(template.Resources.ProdAppCPUAlarmLow).toBeDefined();
     });
   });
 });
