@@ -20,6 +20,14 @@ Parameters:
     Default: 'serverless-app'
     Description: 'Application name for resource naming'
   
+  # Performance Configuration Parameters
+  LambdaProvisionedConcurrency:
+    Type: Number
+    Default: 1000
+    Description: 'Provisioned concurrency for Lambda functions to avoid cold starts'
+    MinValue: 100
+    MaxValue: 10000
+  
 
 
 Resources:
@@ -192,7 +200,22 @@ Resources:
 
 
 
+  # Lambda Version for Provisioned Concurrency
+  LambdaVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref MainLambdaFunction
+      Description: 'Production version for provisioned concurrency'
 
+  # Lambda Alias for Provisioned Concurrency
+  LambdaAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref MainLambdaFunction
+      FunctionVersion: !Ref LambdaVersion
+      Name: 'prod'
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: !Ref LambdaProvisionedConcurrency
 
   # Lambda permission for API Gateway
   LambdaApiGatewayPermission:
@@ -246,7 +269,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambdaFunction.Arn}/invocations'
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambdaFunction.Arn}:prod/invocations'
         IntegrationResponses:
           - StatusCode: 200
       MethodResponses:

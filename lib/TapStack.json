@@ -23,6 +23,13 @@
             "Type": "String",
             "Default": "serverless-app",
             "Description": "Application name for resource naming"
+        },
+        "LambdaProvisionedConcurrency": {
+            "Type": "Number",
+            "Default": 1000,
+            "Description": "Provisioned concurrency for Lambda functions to avoid cold starts",
+            "MinValue": 100,
+            "MaxValue": 10000
         }
     },
     "Resources": {
@@ -217,6 +224,32 @@
                 }
             }
         },
+        "LambdaVersion": {
+            "Type": "AWS::Lambda::Version",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "MainLambdaFunction"
+                },
+                "Description": "Production version for provisioned concurrency"
+            }
+        },
+        "LambdaAlias": {
+            "Type": "AWS::Lambda::Alias",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "MainLambdaFunction"
+                },
+                "FunctionVersion": {
+                    "Ref": "LambdaVersion"
+                },
+                "Name": "prod",
+                "ProvisionedConcurrencyConfig": {
+                    "ProvisionedConcurrentExecutions": {
+                        "Ref": "LambdaProvisionedConcurrency"
+                    }
+                }
+            }
+        },
         "LambdaApiGatewayPermission": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {
@@ -290,7 +323,7 @@
                     "Type": "AWS_PROXY",
                     "IntegrationHttpMethod": "POST",
                     "Uri": {
-                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambdaFunction.Arn}/invocations"
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambdaFunction.Arn}:prod/invocations"
                     },
                     "IntegrationResponses": [
                         {

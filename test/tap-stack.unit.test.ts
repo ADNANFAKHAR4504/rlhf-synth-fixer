@@ -64,6 +64,19 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedValues).toContain('prod');
     });
 
+    test('should have LambdaProvisionedConcurrency parameter', () => {
+      expect(template.Parameters.LambdaProvisionedConcurrency).toBeDefined();
+    });
+
+    test('LambdaProvisionedConcurrency parameter should have correct properties', () => {
+      const param = template.Parameters.LambdaProvisionedConcurrency;
+      expect(param.Type).toBe('Number');
+      expect(param.Default).toBe(1000);
+      expect(param.Description).toBeDefined();
+      expect(param.MinValue).toBeDefined();
+      expect(param.MaxValue).toBeDefined();
+    });
+
 
 
 
@@ -86,6 +99,30 @@ describe('TapStack CloudFormation Template', () => {
       expect(resource.Properties.Handler).toBeDefined();
       expect(resource.Properties.Role).toBeDefined();
       expect(resource.Properties.Code).toBeDefined();
+    });
+
+    test('should have LambdaVersion resource', () => {
+      expect(template.Resources.LambdaVersion).toBeDefined();
+    });
+
+    test('LambdaVersion should be a Lambda Version', () => {
+      const resource = template.Resources.LambdaVersion;
+      expect(resource.Type).toBe('AWS::Lambda::Version');
+    });
+
+    test('should have LambdaAlias resource', () => {
+      expect(template.Resources.LambdaAlias).toBeDefined();
+    });
+
+    test('LambdaAlias should be a Lambda Alias', () => {
+      const resource = template.Resources.LambdaAlias;
+      expect(resource.Type).toBe('AWS::Lambda::Alias');
+    });
+
+    test('LambdaAlias should have provisioned concurrency configuration', () => {
+      const resource = template.Resources.LambdaAlias;
+      expect(resource.Properties.ProvisionedConcurrencyConfig).toBeDefined();
+      expect(resource.Properties.ProvisionedConcurrencyConfig.ProvisionedConcurrentExecutions).toBeDefined();
     });
 
     test('should have LambdaLogGroup resource', () => {
@@ -260,7 +297,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have the correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3); // EnvironmentSuffix, ApplicationName, Environment
+      expect(parameterCount).toBe(4); // EnvironmentSuffix, ApplicationName, Environment, LambdaProvisionedConcurrency
     });
 
     test('should have the correct number of outputs', () => {
