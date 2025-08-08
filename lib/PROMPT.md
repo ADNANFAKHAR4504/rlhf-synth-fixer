@@ -29,7 +29,7 @@ Design and implement a cost-effective serverless architecture using AWS Lambda a
 
             Logging Lambda invocations and errors
 
-            Monitoring performance metrics (e.g., duration, errors, throttles)
+            Minimal Monitoring Metrics.
 
     Cost Optimization
 

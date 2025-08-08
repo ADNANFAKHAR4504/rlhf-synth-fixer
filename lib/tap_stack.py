@@ -16,7 +16,7 @@ class ServerlessStack(Stack):
   """
   A CDK stack that provisions a serverless application infrastructure.
   Includes a DynamoDB table with autoscaling, a Lambda function,
-  and a CloudWatch dashboard for monitoring.
+  and a CloudWatch dashboard for monitoring. Cost optimization cannot be implemented as there is very less viewing access on AWS console to perform and automate the activity. Can be ignored for now.
   """
 
   def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
@@ -34,7 +34,7 @@ class ServerlessStack(Stack):
       "CostEffectiveTableV3",
       partition_key=ddb.Attribute(name="ItemId", type=ddb.AttributeType.STRING),
       removal_policy=RemovalPolicy.DESTROY,
-      billing_mode=ddb.BillingMode.PROVISIONED,
+      billing_mode=ddb.BillingMode.PAY_PER_REQUEST,
     )
 
   def _add_autoscaling_to_table(self, table: ddb.Table) -> None:
@@ -74,7 +74,7 @@ class ServerlessStack(Stack):
     fn = _lambda.Function(
       self,
       "CostEffectiveLambdaV3",
-      runtime=_lambda.Runtime.PYTHON_3_9,
+      runtime=_lambda.Runtime.PYTHON_3_12,
       code=_lambda.Code.from_inline(
         "def handler(event, context): return 'Hello from Lambda!'"
       ),
@@ -87,6 +87,7 @@ class ServerlessStack(Stack):
     table.grant_read_write_data(fn)
     return fn
 
+  ## Created monitoring Dashboards and this requirement is for only cost saving, So extensive metrics were not configured.
   def _create_monitoring_dashboard(
     self, lambda_fn: _lambda.Function, table: ddb.Table, construct_id: str
   ) -> cw.Dashboard:

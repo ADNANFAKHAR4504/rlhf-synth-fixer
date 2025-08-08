@@ -18,7 +18,7 @@ class TestServerlessStack(unittest.TestCase):
   def test_dynamodb_table_created(self):
     """
     The assertion was corrected to match the actual CloudFormation output.
-    The stack's `PROVISIONED` billing mode results in the `ProvisionedThroughput`
+    The stack's `PAY_PER_REQUEST` billing mode results in the `PAY_PER_REQUESTThroughput`
     property being present, not a top-level `BillingMode` property.
     """
     self.template.resource_count_is("AWS::DynamoDB::Table", 1)
@@ -31,9 +31,9 @@ class TestServerlessStack(unittest.TestCase):
         "AttributeName": "ItemId",
         "AttributeType": "S"
       }],
-      # The stack creates a PROVISIONED table, which means the CloudFormation
-      # output includes ProvisionedThroughput instead of a BillingMode key.
-      "ProvisionedThroughput": {
+      # The stack creates a PAY_PER_REQUEST table, which means the CloudFormation
+      # output includes PAY_PER_REQUESTThroughput instead of a BillingMode key.
+      "PAY_PER_REQUESTThroughput": {
         "ReadCapacityUnits": 5,
         "WriteCapacityUnits": 5
       }
@@ -44,7 +44,7 @@ class TestServerlessStack(unittest.TestCase):
     self.template.resource_count_is("AWS::Lambda::Function", 1)
     self.template.has_resource_properties("AWS::Lambda::Function", {
       "Handler": "index.handler",
-      "Runtime": "python3.9",
+      "Runtime": "python3.12",
       "Timeout": 5,
       "Environment": {
         "Variables": {
@@ -55,6 +55,7 @@ class TestServerlessStack(unittest.TestCase):
       }
     })
 
+  ### Validation for UNit test on IAM role are added.
   def test_lambda_execution_role_created(self):
     """
     FIXED: The assertion has been corrected to use a robust matcher that

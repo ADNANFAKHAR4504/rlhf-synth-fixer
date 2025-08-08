@@ -46,10 +46,10 @@ class TestServerlessStackIntegration(unittest.TestCase):
   @mark.it("has a DynamoDB Table Name output")
   def test_dynamodb_table_name_outputs_exist(self):
     """
-    Verifies that the `ServerlessStackDynamoDBTableName` output exists
+    Verifies that the `ServerlessStackV3DynamoDBTableName` output exists
     and its value is a valid DynamoDB table name.
     """
-    output_key = "ServerlessStackDynamoDBTableName"
+    output_key = "ServerlessStackV3DynamoDBTableName"
     if output_key not in self.outputs:
       raise SkipTest(f"Skipping test: Missing output key '{output_key}'.")
 
@@ -61,10 +61,10 @@ class TestServerlessStackIntegration(unittest.TestCase):
   @mark.it("has a Lambda Function Name output")
   def test_lambda_function_name_outputs_exist(self):
     """
-    Verifies that the `ServerlessStackLambdaFunctionName` output exists
+    Verifies that the `ServerlessStackV3LambdaFunctionName` output exists
     and its value is a valid Lambda function name.
     """
-    output_key = "ServerlessStackLambdaFunctionName"
+    output_key = "ServerlessStackV3LambdaFunctionName"
     if output_key not in self.outputs:
       raise SkipTest(f"Skipping test: Missing output key '{output_key}'.")
 
@@ -76,10 +76,10 @@ class TestServerlessStackIntegration(unittest.TestCase):
   @mark.it("has a CloudWatch Dashboard Name output")
   def test_cloudwatch_dashboard_name_outputs_exist(self):
     """
-    Verifies that the `ServerlessStackCloudWatchDashboardName` output exists
+    Verifies that the `ServerlessStackV3CloudWatchDashboardName` output exists
     and its value is a valid CloudWatch dashboard name.
     """
-    output_key = "ServerlessStackCloudWatchDashboardName"
+    output_key = "ServerlessStackV3CloudWatchDashboardName"
     if output_key not in self.outputs:
       raise SkipTest(f"Skipping test: Missing output key '{output_key}'.")
 
