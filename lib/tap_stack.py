@@ -513,3 +513,4 @@ def handler(event, context):
             "s3_buckets": s3_names,
             "vpc_ids": self.vpc_ids
         })
+
