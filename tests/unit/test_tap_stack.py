@@ -59,13 +59,16 @@ class TestTapStackUnit:
         assert args.environment_suffix == "test-env"
 
     @patch('pulumi.ComponentResource.__init__')
+    @patch('pulumi_aws.Provider')
     @patch('pulumi_aws.kms.Key')
-    def test_tapstack_initialization_with_kms_creation(self, mock_kms_key, mock_component):
+    def test_tapstack_initialization_with_kms_creation(self, mock_kms_key, mock_aws_provider, mock_component):
         """Test TapStack initialization and KMS key creation."""
         from lib.tap_stack import TapStack, TapStackArgs
         
+        # Setup mocks
         mock_component.return_value = None
         mock_kms_key.return_value = Mock()
+        mock_aws_provider.return_value = Mock()
         
         args = TapStackArgs("test")
         
@@ -80,8 +83,10 @@ class TestTapStackUnit:
              patch.object(TapStack, '_create_monitoring'), \
              patch.object(TapStack, 'register_outputs'):
             
-            stack = TapStack("test-stack", args)
-            assert stack is not None
+            # Mock the _transformations attribute that Pulumi expects
+            with patch.object(TapStack, '_transformations', []):
+                stack = TapStack("test-stack", args)
+                assert stack is not None
 
     @patch('pulumi.ComponentResource.__init__')
     @patch('pulumi_aws.secretsmanager.Secret')
@@ -94,7 +99,7 @@ class TestTapStackUnit:
         
         args = TapStackArgs("test")
         
-        with patch.object(TapStack, '_create_kms_keys'), \
+        with patch.object(TapStack, '_create_kms_keys') as mock_kms, \
              patch.object(TapStack, '_create_iam_roles'), \
              patch.object(TapStack, '_create_cloudtrail'), \
              patch.object(TapStack, '_create_vpc_infrastructure'), \
@@ -105,17 +110,28 @@ class TestTapStackUnit:
              patch.object(TapStack, '_create_monitoring'), \
              patch.object(TapStack, 'register_outputs'):
             
-            stack = TapStack("test-stack", args)
-            assert stack is not None
+            # Mock the kms_key attribute that secrets manager expects
+            def setup_kms_key(self):
+                self.kms_key = Mock()
+                self.kms_key.arn = "mock-kms-arn"
+            
+            mock_kms.side_effect = setup_kms_key
+            
+            with patch.object(TapStack, '_transformations', []):
+                stack = TapStack("test-stack", args)
+                assert stack is not None
 
     @patch('pulumi.ComponentResource.__init__')
     @patch('pulumi_aws.iam.Role')
-    def test_tapstack_iam_roles_creation(self, mock_iam_role, mock_component):
+    @patch('pulumi_aws.iam.RolePolicyAttachment')
+    def test_tapstack_iam_roles_creation(self, mock_policy_attachment, mock_iam_role, mock_component):
         """Test TapStack IAM roles creation."""
         from lib.tap_stack import TapStack, TapStackArgs
         
         mock_component.return_value = None
         mock_iam_role.return_value = Mock()
+        mock_iam_role.return_value.name = "mock-role-name"
+        mock_policy_attachment.return_value = Mock()
         
         args = TapStackArgs("prod")
         
@@ -130,17 +146,24 @@ class TestTapStackUnit:
              patch.object(TapStack, '_create_monitoring'), \
              patch.object(TapStack, 'register_outputs'):
             
-            stack = TapStack("prod-stack", args)
-            assert stack is not None
+            with patch.object(TapStack, '_transformations', []):
+                stack = TapStack("prod-stack", args)
+                assert stack is not None
 
     @patch('pulumi.ComponentResource.__init__')
     @patch('pulumi_aws.cloudtrail.Trail')
-    def test_tapstack_cloudtrail_creation(self, mock_cloudtrail, mock_component):
+    @patch('pulumi_aws.get_caller_identity')
+    def test_tapstack_cloudtrail_creation(self, mock_get_caller_identity, mock_cloudtrail, mock_component):
         """Test TapStack CloudTrail creation."""
         from lib.tap_stack import TapStack, TapStackArgs
         
         mock_component.return_value = None
         mock_cloudtrail.return_value = Mock()
+        
+        # Mock the get_caller_identity function
+        mock_caller_identity = Mock()
+        mock_caller_identity.account_id = "123456789012"
+        mock_get_caller_identity.return_value = mock_caller_identity
         
         args = TapStackArgs("staging")
         
@@ -155,17 +178,20 @@ class TestTapStackUnit:
              patch.object(TapStack, '_create_monitoring'), \
              patch.object(TapStack, 'register_outputs'):
             
-            stack = TapStack("staging-stack", args)
-            assert stack is not None
+            with patch.object(TapStack, '_transformations', []):
+                stack = TapStack("staging-stack", args)
+                assert stack is not None
 
     @patch('pulumi.ComponentResource.__init__')
     @patch('pulumi_aws.ec2.Vpc')
-    def test_tapstack_vpc_creation(self, mock_vpc, mock_component):
+    @patch('pulumi_aws.Provider')
+    def test_tapstack_vpc_creation(self, mock_aws_provider, mock_vpc, mock_component):
         """Test TapStack VPC infrastructure creation."""
         from lib.tap_stack import TapStack, TapStackArgs
         
         mock_component.return_value = None
         mock_vpc.return_value = Mock()
+        mock_aws_provider.return_value = Mock()
         
         args = TapStackArgs("dev")
         
@@ -180,8 +206,9 @@ class TestTapStackUnit:
              patch.object(TapStack, '_create_monitoring'), \
              patch.object(TapStack, 'register_outputs'):
             
-            stack = TapStack("dev-stack", args)
-            assert stack is not None
+            with patch.object(TapStack, '_transformations', []):
+                stack = TapStack("dev-stack", args)
+                assert stack is not None
 
     def test_standard_tags_expected_values(self):
         """Test that expected standard tag values are correct."""
@@ -573,3 +600,4 @@ class TestTapStackUnit:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
