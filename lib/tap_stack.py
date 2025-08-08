@@ -29,7 +29,8 @@ common_tags = {
 
 def create_vpc_and_networking() -> Dict[str, Any]:
   """
-  Creates a dual-stack VPC with public/private subnets and a managed NAT Gateway.
+  Creates a dual-stack VPC with public/private subnets, a NAT Gateway for IPv4,
+  and an Egress-Only Internet Gateway for IPv6.
   """
   vpc = aws.ec2.Vpc(
     f"{project_name}-vpc",
