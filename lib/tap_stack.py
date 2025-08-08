@@ -1,725 +1,421 @@
-import json
-from typing import Dict, List, Optional
 import pulumi
 import pulumi_aws as aws
-import pulumi_awsx as awsx
-from pulumi import ComponentResource, ResourceOptions, Output
+import json
+from typing import Dict, Any
 
-
-class TapStackArgs:
-    def __init__(
-        self,
-        environment: str,
-        primary_region: str,
-        secondary_region: str,
-        enable_monitoring: bool = True,
-        lambda_timeout: int = 30,
-        api_stage_name: str = "v1"
-    ):
-        self.environment = environment
-        self.primary_region = primary_region
-        self.secondary_region = secondary_region
-        self.enable_monitoring = enable_monitoring
-        self.lambda_timeout = lambda_timeout
-        self.api_stage_name = api_stage_name
-
-
-class VPCComponent(ComponentResource):
-    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
-        super().__init__("custom:networking:VPC", name, {}, opts)
+class TapStack(pulumi.ComponentResource):
+    """Multi-region serverless infrastructure stack for AWS Lambda and API Gateway"""
+    
+    def __init__(self, name: str, args: Dict[str, Any], opts: pulumi.ResourceOptions = None):
+        super().__init__("custom:TapStack", name, None, opts)
         
-        # Create VPC
-        self.vpc = aws.ec2.Vpc(
-            f"{name}-vpc",
+        self.project_name = args.get("project_name", "iac-aws-nova")
+        self.environment = args.get("environment", "dev")
+        self.regions = args.get("regions", ["us-east-1", "us-west-2"])
+        
+        # Resource collections
+        self.lambda_functions = {}
+        self.api_gateways = {}
+        self.s3_buckets = {}
+        self.cloudwatch_alarms = {}
+        self.vpcs = {}
+        
+        # Create infrastructure in each region
+        for region in self.regions:
+            self._create_regional_infrastructure(region)
+        
+        # Create global monitoring dashboard
+        self._create_global_monitoring()
+        
+        # Export key outputs
+        self._register_outputs()
+
+    def _create_regional_infrastructure(self, region: str):
+        """Create infrastructure resources for a specific region"""
+        region_opts = pulumi.ResourceOptions(provider=aws.Provider(
+            f"provider-{region}",
+            region=region
+        ))
+        
+        # VPC for the region
+        vpc = aws.ec2.Vpc(
+            f"{self.project_name}-vpc-{region}-{self.environment}",
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={
-                "Name": f"nova-vpc-{args.environment}",
-                "Environment": args.environment,
-                "Project": "nova-model-breaking"
+                "Name": f"{self.project_name}-vpc-{region}-{self.environment}",
+                "Environment": self.environment,
+                "Region": region
             },
-            opts=ResourceOptions(parent=self)
+            opts=region_opts
         )
+        self.vpcs[region] = vpc
         
-        # Create Internet Gateway
-        self.igw = aws.ec2.InternetGateway(
-            f"{name}-igw",
-            vpc_id=self.vpc.id,
-            tags={
-                "Name": f"nova-igw-{args.environment}",
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Create public subnets
-        self.public_subnets = []
-        availability_zones = aws.get_availability_zones(state="available")
-        
-        for i, az in enumerate(availability_zones.names[:2]):
+        # Private subnets for Lambda
+        private_subnets = []
+        for i, az_suffix in enumerate(['a', 'b']):
             subnet = aws.ec2.Subnet(
-                f"{name}-public-subnet-{i+1}",
-                vpc_id=self.vpc.id,
+                f"{self.project_name}-private-{region}{az_suffix}-{self.environment}",
+                vpc_id=vpc.id,
                 cidr_block=f"10.0.{i+1}.0/24",
-                availability_zone=az,
-                map_public_ip_on_launch=True,
+                availability_zone=f"{region}{az_suffix}",
                 tags={
-                    "Name": f"nova-public-subnet-{i+1}-{args.environment}",
-                    "Environment": args.environment,
-                    "Type": "public"
+                    "Name": f"{self.project_name}-private-{region}{az_suffix}-{self.environment}",
+                    "Type": "Private"
                 },
-                opts=ResourceOptions(parent=self)
+                opts=region_opts
             )
-            self.public_subnets.append(subnet)
+            private_subnets.append(subnet)
         
-        # Create private subnets
-        self.private_subnets = []
-        for i, az in enumerate(availability_zones.names[:2]):
-            subnet = aws.ec2.Subnet(
-                f"{name}-private-subnet-{i+1}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.0.{i+10}.0/24",
-                availability_zone=az,
-                tags={
-                    "Name": f"nova-private-subnet-{i+1}-{args.environment}",
-                    "Environment": args.environment,
-                    "Type": "private"
-                },
-                opts=ResourceOptions(parent=self)
-            )
-            self.private_subnets.append(subnet)
-        
-        # Create route table for public subnets
-        self.public_route_table = aws.ec2.RouteTable(
-            f"{name}-public-rt",
-            vpc_id=self.vpc.id,
-            routes=[
-                aws.ec2.RouteTableRouteArgs(
-                    cidr_block="0.0.0.0/0",
-                    gateway_id=self.igw.id
-                )
-            ],
-            tags={
-                "Name": f"nova-public-rt-{args.environment}",
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Associate public subnets with route table
-        for i, subnet in enumerate(self.public_subnets):
-            aws.ec2.RouteTableAssociation(
-                f"{name}-public-rta-{i+1}",
-                subnet_id=subnet.id,
-                route_table_id=self.public_route_table.id,
-                opts=ResourceOptions(parent=self)
-            )
-        
-        # Create security group for Lambda functions
-        self.lambda_security_group = aws.ec2.SecurityGroup(
-            f"{name}-lambda-sg",
+        # Security group for Lambda functions
+        lambda_sg = aws.ec2.SecurityGroup(
+            f"{self.project_name}-lambda-sg-{region}-{self.environment}",
+            vpc_id=vpc.id,
             description="Security group for Lambda functions",
-            vpc_id=self.vpc.id,
-            egress=[
-                aws.ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"]
-                )
-            ],
+            egress=[{
+                "protocol": "-1",
+                "from_port": 0,
+                "to_port": 0,
+                "cidr_blocks": ["0.0.0.0/0"]
+            }],
             tags={
-                "Name": f"nova-lambda-sg-{args.environment}",
-                "Environment": args.environment
+                "Name": f"{self.project_name}-lambda-sg-{region}-{self.environment}"
             },
-            opts=ResourceOptions(parent=self)
+            opts=region_opts
         )
         
-        # VPC Endpoints for AWS services
-        self.s3_endpoint = aws.ec2.VpcEndpoint(
-            f"{name}-s3-endpoint",
-            vpc_id=self.vpc.id,
-            service_name=f"com.amazonaws.{args.primary_region}.s3",
-            vpc_endpoint_type="Gateway",
-            route_table_ids=[self.public_route_table.id],
-            tags={
-                "Name": f"nova-s3-endpoint-{args.environment}",
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-
-class LambdaComponent(ComponentResource):
-    def __init__(self, name: str, args: TapStackArgs, vpc: VPCComponent, opts: Optional[ResourceOptions] = None):
-        super().__init__("custom:compute:Lambda", name, {}, opts)
-        
-        # Create IAM role for Lambda
-        self.lambda_role = aws.iam.Role(
-            f"{name}-lambda-role",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Action": "sts:AssumeRole",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "lambda.amazonaws.com"
-                        }
-                    }
-                ]
-            }),
-            tags={
-                "Name": f"nova-lambda-role-{args.environment}",
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Attach necessary policies
-        aws.iam.RolePolicyAttachment(
-            f"{name}-lambda-vpc-policy",
-            role=self.lambda_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        aws.iam.RolePolicyAttachment(
-            f"{name}-lambda-basic-policy",
-            role=self.lambda_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Custom policy for S3 and CloudWatch
-        lambda_policy = aws.iam.Policy(
-            f"{name}-lambda-custom-policy",
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:GetObject",
-                            "s3:PutObject",
-                            "s3:DeleteObject"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "cloudwatch:PutMetricData",
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream",
-                            "logs:PutLogEvents"
-                        ],
-                        "Resource": "*"
-                    }
-                ]
-            }),
-            opts=ResourceOptions(parent=self)
-        )
-        
-        aws.iam.RolePolicyAttachment(
-            f"{name}-lambda-custom-policy-attachment",
-            role=self.lambda_role.name,
-            policy_arn=lambda_policy.arn,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Lambda function code
-        lambda_code = """
-import json
-import boto3
-import logging
-from datetime import datetime
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-def lambda_handler(event, context):
-    try:
-        logger.info(f"Received event: {json.dumps(event)}")
-        
-        # Process the request
-        response_body = {
-            "message": "Hello from Nova Model Breaking API",
-            "timestamp": datetime.utcnow().isoformat(),
-            "region": context.invoked_function_arn.split(":")[3],
-            "version": context.function_version,
-            "request_id": context.aws_request_id
-        }
-        
-        # Custom CloudWatch metric
-        cloudwatch = boto3.client('cloudwatch')
-        cloudwatch.put_metric_data(
-            Namespace='NovaModelBreaking',
-            MetricData=[
-                {
-                    'MetricName': 'RequestCount',
-                    'Value': 1,
-                    'Unit': 'Count',
-                    'Dimensions': [
-                        {
-                            'Name': 'Environment',
-                            'Value': event.get('environment', 'unknown')
-                        }
-                    ]
-                }
-            ]
-        )
-        
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            },
-            "body": json.dumps(response_body)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error processing request: {str(e)}")
-        return {
-            "statusCode": 500,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({
-                "error": "Internal server error",
-                "message": str(e)
-            })
-        }
-"""
-        
-        # Create Lambda function
-        self.function = aws.lambda_.Function(
-            f"{name}-function",
-            runtime="python3.9",
-            code=pulumi.AssetArchive({
-                "lambda_function.py": pulumi.StringAsset(lambda_code)
-            }),
-            handler="lambda_function.lambda_handler",
-            role=self.lambda_role.arn,
-            timeout=args.lambda_timeout,
-            memory_size=256,
-            vpc_config=aws.lambda_.FunctionVpcConfigArgs(
-                subnet_ids=[subnet.id for subnet in vpc.private_subnets],
-                security_group_ids=[vpc.lambda_security_group.id]
-            ),
-            environment=aws.lambda_.FunctionEnvironmentArgs(
-                variables={
-                    "ENVIRONMENT": args.environment,
-                    "REGION": args.primary_region
-                }
-            ),
-            tags={
-                "Name": f"nova-function-{args.environment}",
-                "Environment": args.environment,
-                "Project": "nova-model-breaking"
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Create Lambda alias for blue-green deployments
-        self.alias = aws.lambda_.Alias(
-            f"{name}-alias",
-            function_name=self.function.name,
-            function_version="$LATEST",
-            description=f"Alias for {args.environment} environment",
-            opts=ResourceOptions(parent=self)
-        )
-
-
-class APIGatewayComponent(ComponentResource):
-    def __init__(self, name: str, args: TapStackArgs, lambda_func: LambdaComponent, opts: Optional[ResourceOptions] = None):
-        super().__init__("custom:api:Gateway", name, {}, opts)
-        
-        # Create API Gateway
-        self.api = aws.apigateway.RestApi(
-            f"{name}-api",
-            description=f"Nova Model Breaking API - {args.environment}",
-            endpoint_configuration=aws.apigateway.RestApiEndpointConfigurationArgs(
-                types="REGIONAL"
-            ),
-            tags={
-                "Name": f"nova-api-{args.environment}",
-                "Environment": args.environment,
-                "Project": "nova-model-breaking"
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Create API Gateway resource
-        self.resource = aws.apigateway.Resource(
-            f"{name}-api-resource",
-            rest_api=self.api.id,
-            parent_id=self.api.root_resource_id,
-            path_part="nova",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Create method
-        self.method = aws.apigateway.Method(
-            f"{name}-api-method",
-            rest_api=self.api.id,
-            resource_id=self.resource.id,
-            http_method="GET",
-            authorization="NONE",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Create integration
-        self.integration = aws.apigateway.Integration(
-            f"{name}-api-integration",
-            rest_api=self.api.id,
-            resource_id=self.resource.id,
-            http_method=self.method.http_method,
-            integration_http_method="POST",
-            type="AWS_PROXY",
-            uri=lambda_func.alias.invoke_arn,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Lambda permission for API Gateway
-        self.lambda_permission = aws.lambda_.Permission(
-            f"{name}-lambda-permission",
-            statement_id="AllowExecutionFromAPIGateway",
-            action="lambda:InvokeFunction",
-            function=lambda_func.alias.function_name,
-            qualifier=lambda_func.alias.name,
-            principal="apigateway.amazonaws.com",
-            source_arn=pulumi.Output.concat(self.api.execution_arn, "/*/*"),
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Create deployment
-        self.deployment = aws.apigateway.Deployment(
-            f"{name}-api-deployment",
-            rest_api=self.api.id,
-            stage_name=args.api_stage_name,
-            stage_description=f"Deployment for {args.environment}",
-            opts=ResourceOptions(
-                parent=self,
-                depends_on=[self.method, self.integration]
-            )
-        )
-        
-        # Create stage with monitoring
-        self.stage = aws.apigateway.Stage(
-            f"{name}-api-stage",
-            deployment=self.deployment.id,
-            rest_api=self.api.id,
-            stage_name=args.api_stage_name,
-            xray_tracing_enabled=True,
-            tags={
-                "Name": f"nova-api-stage-{args.environment}",
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-
-class S3Component(ComponentResource):
-    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
-        super().__init__("custom:storage:S3", name, {}, opts)
-        
-        # Primary region bucket
-        self.primary_bucket = aws.s3.Bucket(
-            f"{name}-primary-bucket",
-            bucket=f"nova-model-breaking-{args.environment}-{args.primary_region}",
-            tags={
-                "Name": f"nova-primary-bucket-{args.environment}",
-                "Environment": args.environment,
-                "Region": args.primary_region
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Configure bucket versioning
-        aws.s3.BucketVersioning(
-            f"{name}-primary-bucket-versioning",
-            bucket=self.primary_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
-                status="Enabled"
-            ),
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Configure bucket encryption
-        aws.s3.BucketServerSideEncryptionConfiguration(
-            f"{name}-primary-bucket-encryption",
-            bucket=self.primary_bucket.id,
-            rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+        # S3 bucket for deployment artifacts
+        s3_bucket = aws.s3.Bucket(
+            f"{self.project_name}-artifacts-{region}-{self.environment}",
+            bucket=f"{self.project_name}-artifacts-{region}-{self.environment}-{pulumi.get_stack()}",
+            versioning=aws.s3.BucketVersioningArgs(enabled=True),
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                     apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
                     )
                 )
-            ],
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Block public access
-        aws.s3.BucketPublicAccessBlock(
-            f"{name}-primary-bucket-pab",
-            bucket=self.primary_bucket.id,
-            block_public_acls=True,
-            block_public_policy=True,
-            ignore_public_acls=True,
-            restrict_public_buckets=True,
-            opts=ResourceOptions(parent=self)
-        )
-
-
-class MonitoringComponent(ComponentResource):
-    def __init__(self, name: str, args: TapStackArgs, lambda_func: LambdaComponent, api: APIGatewayComponent, opts: Optional[ResourceOptions] = None):
-        super().__init__("custom:monitoring:CloudWatch", name, {}, opts)
-        
-        # SNS topic for alerts
-        self.alert_topic = aws.sns.Topic(
-            f"{name}-alerts",
-            name=f"nova-alerts-{args.environment}",
+            ),
             tags={
-                "Name": f"nova-alerts-{args.environment}",
-                "Environment": args.environment
+                "Environment": self.environment,
+                "Region": region
             },
-            opts=ResourceOptions(parent=self)
+            opts=region_opts
+        )
+        self.s3_buckets[region] = s3_bucket
+        
+        # IAM role for Lambda functions
+        lambda_role = aws.iam.Role(
+            f"{self.project_name}-lambda-role-{region}-{self.environment}",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"}
+                }]
+            }),
+            managed_policy_arns=[
+                "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+                "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+            ],
+            opts=region_opts
         )
         
-        # Lambda error alarm
-        self.lambda_error_alarm = aws.cloudwatch.MetricAlarm(
-            f"{name}-lambda-error-alarm",
+        # Lambda function
+        lambda_function = aws.lambda_.Function(
+            f"{self.project_name}-api-{region}-{self.environment}",
+            runtime="python3.9",
+            code=pulumi.AssetArchive({
+                "index.py": pulumi.StringAsset(self._get_lambda_code())
+            }),
+            handler="index.handler",
+            role=lambda_role.arn,
+            timeout=30,
+            memory_size=128,
+            vpc_config=aws.lambda_.FunctionVpcConfigArgs(
+                subnet_ids=[subnet.id for subnet in private_subnets],
+                security_group_ids=[lambda_sg.id]
+            ),
+            tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
+            environment=aws.lambda_.FunctionEnvironmentArgs(
+                variables={
+                    "REGION": region,
+                    "ENVIRONMENT": self.environment,
+                    "PROJECT_NAME": self.project_name
+                }
+            ),
+            tags={
+                "Environment": self.environment,
+                "Region": region
+            },
+            opts=region_opts
+        )
+        self.lambda_functions[region] = lambda_function
+        
+        # API Gateway
+        api_gateway = aws.apigateway.RestApi(
+            f"{self.project_name}-api-{region}-{self.environment}",
+            description=f"API Gateway for {self.project_name} in {region}",
+            tags={
+                "Environment": self.environment,
+                "Region": region
+            },
+            opts=region_opts
+        )
+        
+        # API Gateway resource and method
+        api_resource = aws.apigateway.Resource(
+            f"{self.project_name}-api-resource-{region}-{self.environment}",
+            rest_api=api_gateway.id,
+            parent_id=api_gateway.root_resource_id,
+            path_part="api",
+            opts=region_opts
+        )
+        
+        api_method = aws.apigateway.Method(
+            f"{self.project_name}-api-method-{region}-{self.environment}",
+            rest_api=api_gateway.id,
+            resource_id=api_resource.id,
+            http_method="ANY",
+            authorization="NONE",
+            opts=region_opts
+        )
+        
+        # Lambda integration
+        integration = aws.apigateway.Integration(
+            f"{self.project_name}-api-integration-{region}-{self.environment}",
+            rest_api=api_gateway.id,
+            resource_id=api_resource.id,
+            http_method=api_method.http_method,
+            integration_http_method="POST",
+            type="AWS_PROXY",
+            uri=lambda_function.invoke_arn,
+            opts=region_opts
+        )
+        
+        # Lambda permission for API Gateway
+        lambda_permission = aws.lambda_.Permission(
+            f"{self.project_name}-api-permission-{region}-{self.environment}",
+            statement_id="AllowExecutionFromAPIGateway",
+            action="lambda:InvokeFunction",
+            function=lambda_function.name,
+            principal="apigateway.amazonaws.com",
+            source_arn=pulumi.Output.concat(api_gateway.execution_arn, "/*/*"),
+            opts=region_opts
+        )
+        
+        # API Gateway deployment with rolling update strategy
+        deployment = aws.apigateway.Deployment(
+            f"{self.project_name}-api-deployment-{region}-{self.environment}",
+            rest_api=api_gateway.id,
+            stage_name=self.environment,
+            stage_description=f"Deployment for {self.environment} environment",
+            opts=pulumi.ResourceOptions(
+                depends_on=[api_method, integration],
+                parent=region_opts.provider if region_opts else None,
+                replace_on_changes=["stage_name"]
+            )
+        )
+        
+        self.api_gateways[region] = {
+            "api": api_gateway,
+            "deployment": deployment
+        }
+        
+        # CloudWatch monitoring
+        self._create_regional_monitoring(region, lambda_function, api_gateway, region_opts)
+
+    def _create_regional_monitoring(self, region: str, lambda_function, api_gateway, region_opts):
+        """Create CloudWatch monitoring and alarms for a region"""
+        
+        # Lambda error rate alarm
+        lambda_error_alarm = aws.cloudwatch.MetricAlarm(
+            f"{self.project_name}-lambda-errors-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
+            evaluation_periods="2",
             metric_name="Errors",
             namespace="AWS/Lambda",
-            period=300,
+            period="300",
             statistic="Sum",
-            threshold=1,
-            alarm_description=f"Lambda function errors in {args.environment}",
-            alarm_name=f"nova-lambda-errors-{args.environment}",
+            threshold="5",
+            alarm_description="Lambda function error rate",
+            alarm_name=f"{self.project_name}-lambda-errors-{region}-{self.environment}",
             dimensions={
-                "FunctionName": lambda_func.function.name
+                "FunctionName": lambda_function.name
             },
-            alarm_actions=[self.alert_topic.arn],
-            tags={
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
+            opts=region_opts
         )
         
         # Lambda duration alarm
-        self.lambda_duration_alarm = aws.cloudwatch.MetricAlarm(
-            f"{name}-lambda-duration-alarm",
+        lambda_duration_alarm = aws.cloudwatch.MetricAlarm(
+            f"{self.project_name}-lambda-duration-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
-            evaluation_periods=3,
+            evaluation_periods="2",
             metric_name="Duration",
             namespace="AWS/Lambda",
-            period=300,
+            period="300",
             statistic="Average",
-            threshold=10000,  # 10 seconds
-            alarm_description=f"Lambda function duration in {args.environment}",
-            alarm_name=f"nova-lambda-duration-{args.environment}",
+            threshold="25000",  # 25 seconds
+            alarm_description="Lambda function duration",
+            alarm_name=f"{self.project_name}-lambda-duration-{region}-{self.environment}",
             dimensions={
-                "FunctionName": lambda_func.function.name
+                "FunctionName": lambda_function.name
             },
-            alarm_actions=[self.alert_topic.arn],
-            tags={
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
+            opts=region_opts
         )
         
-        # API Gateway 4XX errors alarm
-        self.api_4xx_alarm = aws.cloudwatch.MetricAlarm(
-            f"{name}-api-4xx-alarm",
+        # API Gateway 4XX error alarm
+        api_4xx_alarm = aws.cloudwatch.MetricAlarm(
+            f"{self.project_name}-api-4xx-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
+            evaluation_periods="2",
             metric_name="4XXError",
             namespace="AWS/ApiGateway",
-            period=300,
+            period="300",
             statistic="Sum",
-            threshold=10,
-            alarm_description=f"API Gateway 4XX errors in {args.environment}",
-            alarm_name=f"nova-api-4xx-{args.environment}",
+            threshold="10",
+            alarm_description="API Gateway 4XX errors",
+            alarm_name=f"{self.project_name}-api-4xx-{region}-{self.environment}",
             dimensions={
-                "ApiName": api.api.name,
-                "Stage": args.api_stage_name
+                "ApiName": api_gateway.name
             },
-            alarm_actions=[self.alert_topic.arn],
-            tags={
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
+            opts=region_opts
         )
         
-        # API Gateway 5XX errors alarm
-        self.api_5xx_alarm = aws.cloudwatch.MetricAlarm(
-            f"{name}-api-5xx-alarm",
+        # API Gateway 5XX error alarm
+        api_5xx_alarm = aws.cloudwatch.MetricAlarm(
+            f"{self.project_name}-api-5xx-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
-            evaluation_periods=1,
+            evaluation_periods="1",
             metric_name="5XXError",
             namespace="AWS/ApiGateway",
-            period=300,
+            period="300",
             statistic="Sum",
-            threshold=1,
-            alarm_description=f"API Gateway 5XX errors in {args.environment}",
-            alarm_name=f"nova-api-5xx-{args.environment}",
+            threshold="1",
+            alarm_description="API Gateway 5XX errors",
+            alarm_name=f"{self.project_name}-api-5xx-{region}-{self.environment}",
             dimensions={
-                "ApiName": api.api.name,
-                "Stage": args.api_stage_name
+                "ApiName": api_gateway.name
             },
-            alarm_actions=[self.alert_topic.arn],
-            tags={
-                "Environment": args.environment
-            },
-            opts=ResourceOptions(parent=self)
+            opts=region_opts
         )
         
-        # Custom dashboard
-        self.dashboard = aws.cloudwatch.Dashboard(
-            f"{name}-dashboard",
-            dashboard_name=f"Nova-Model-Breaking-{args.environment}",
-            dashboard_body=pulumi.Output.all(
-                lambda_func.function.name,
-                api.api.name
-            ).apply(lambda args: json.dumps({
-                "widgets": [
-                    {
-                        "type": "metric",
-                        "x": 0,
-                        "y": 0,
-                        "width": 12,
-                        "height": 6,
-                        "properties": {
-                            "metrics": [
-                                ["AWS/Lambda", "Duration", "FunctionName", args[0]],
-                                [".", "Errors", ".", "."],
-                                [".", "Invocations", ".", "."]
-                            ],
-                            "period": 300,
-                            "stat": "Average",
-                            "region": "us-east-1",
-                            "title": "Lambda Metrics"
-                        }
-                    },
-                    {
-                        "type": "metric",
-                        "x": 0,
-                        "y": 6,
-                        "width": 12,
-                        "height": 6,
-                        "properties": {
-                            "metrics": [
-                                ["AWS/ApiGateway", "Count", "ApiName", args[1]],
-                                [".", "Latency", ".", "."],
-                                [".", "4XXError", ".", "."],
-                                [".", "5XXError", ".", "."]
-                            ],
-                            "period": 300,
-                            "stat": "Sum",
-                            "region": "us-east-1",
-                            "title": "API Gateway Metrics"
-                        }
+        self.cloudwatch_alarms[region] = {
+            "lambda_errors": lambda_error_alarm,
+            "lambda_duration": lambda_duration_alarm,
+            "api_4xx": api_4xx_alarm,
+            "api_5xx": api_5xx_alarm
+        }
+
+    def _create_global_monitoring(self):
+        """Create global CloudWatch dashboard"""
+        primary_region = self.regions[0]
+        primary_opts = pulumi.ResourceOptions(provider=aws.Provider(
+            f"provider-{primary_region}",
+            region=primary_region
+        ))
+        
+        dashboard_body = {
+            "widgets": []
+        }
+        
+        # Add widgets for each region
+        for i, region in enumerate(self.regions):
+            dashboard_body["widgets"].extend([
+                {
+                    "type": "metric",
+                    "x": 0,
+                    "y": i * 6,
+                    "width": 12,
+                    "height": 6,
+                    "properties": {
+                        "metrics": [
+                            ["AWS/Lambda", "Invocations", "FunctionName", f"{self.project_name}-api-{region}-{self.environment}"],
+                            [".", "Errors", ".", "."],
+                            [".", "Duration", ".", "."]
+                        ],
+                        "period": 300,
+                        "stat": "Average",
+                        "region": region,
+                        "title": f"Lambda Metrics - {region}"
                     }
-                ]
-            })),
-            opts=ResourceOptions(parent=self)
+                },
+                {
+                    "type": "metric",
+                    "x": 12,
+                    "y": i * 6,
+                    "width": 12,
+                    "height": 6,
+                    "properties": {
+                        "metrics": [
+                            ["AWS/ApiGateway", "Count", "ApiName", f"{self.project_name}-api-{region}-{self.environment}"],
+                            [".", "4XXError", ".", "."],
+                            [".", "5XXError", ".", "."]
+                        ],
+                        "period": 300,
+                        "stat": "Sum",
+                        "region": region,
+                        "title": f"API Gateway Metrics - {region}"
+                    }
+                }
+            ])
+        
+        dashboard = aws.cloudwatch.Dashboard(
+            f"{self.project_name}-dashboard-{self.environment}",
+            dashboard_name=f"{self.project_name}-{self.environment}",
+            dashboard_body=json.dumps(dashboard_body),
+            opts=primary_opts
         )
 
+    def _get_lambda_code(self) -> str:
+        """Return the Lambda function code"""
+        return """
+import json
+import os
 
-class TapStack(ComponentResource):
-    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
-        super().__init__("custom:stack:TapStack", name, {}, opts)
-        
-        # Create VPC
-        self.vpc = VPCComponent(f"{name}-vpc", args, ResourceOptions(parent=self))
-        
-        # Create Lambda function
-        self.lambda_component = LambdaComponent(
-            f"{name}-lambda", 
-            args, 
-            self.vpc, 
-            ResourceOptions(parent=self)
-        )
-        
-        # Create API Gateway
-        self.api = APIGatewayComponent(
-            f"{name}-api", 
-            args, 
-            self.lambda_component, 
-            ResourceOptions(parent=self)
-        )
-        
-        # Create S3 buckets
-        self.s3 = S3Component(f"{name}-s3", args, ResourceOptions(parent=self))
-        
-        # Create monitoring (if enabled)
-        if args.enable_monitoring:
-            self.monitoring = MonitoringComponent(
-                f"{name}-monitoring", 
-                args, 
-                self.lambda_component, 
-                self.api, 
-                ResourceOptions(parent=self)
+def handler(event, context):
+    region = os.environ.get('REGION', 'unknown')
+    environment = os.environ.get('ENVIRONMENT', 'unknown')
+    project_name = os.environ.get('PROJECT_NAME', 'unknown')
+    
+    return {
+        'statusCode': 200,
+        'headers': {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        },
+        'body': json.dumps({
+            'message': 'Hello from AWS Lambda!',
+            'region': region,
+            'environment': environment,
+            'project': project_name,
+            'timestamp': context.aws_request_id
+        })
+    }
+"""
+
+    def _register_outputs(self):
+        """Register stack outputs"""
+        # API Gateway URLs
+        api_urls = {}
+        for region in self.regions:
+            api_urls[region] = pulumi.Output.concat(
+                "https://",
+                self.api_gateways[region]["api"].id,
+                f".execute-api.{region}.amazonaws.com/{self.environment}/api"
             )
         
-        # Outputs
-        self.api_url = pulumi.Output.concat(
-            "https://",
-            self.api.api.id,
-            ".execute-api.",
-            args.primary_region,
-            ".amazonaws.com/",
-            args.api_stage_name,
-            "/nova"
-        )
+        # Lambda function ARNs
+        lambda_arns = {region: func.arn for region, func in self.lambda_functions.items()}
         
-        self.lambda_function_name = self.lambda_component.function.name
-        self.s3_bucket_name = self.s3.primary_bucket.bucket
-
-
-# Main stack instantiation
-def create_stack():
-    config = pulumi.Config()
-    environment = config.require("environment")
-    secondary_region = config.require("secondary-region")
-    enable_monitoring = config.get_bool("enable-monitoring", True)
-    
-    current_region = aws.get_region()
-    
-    args = TapStackArgs(
-        environment=environment,
-        primary_region=current_region.name,
-        secondary_region=secondary_region,
-        enable_monitoring=enable_monitoring
-    )
-    
-    stack = TapStack("nova-model-breaking", args)
-    
-    # Export outputs
-    pulumi.export("api_url", stack.api_url)
-    pulumi.export("lambda_function_name", stack.lambda_function_name)
-    pulumi.export("s3_bucket_name", stack.s3_bucket_name)
-    pulumi.export("vpc_id", stack.vpc.vpc.id)
-    
-    if enable_monitoring:
-        pulumi.export("dashboard_url", pulumi.Output.concat(
-            "https://console.aws.amazon.com/cloudwatch/home?region=",
-            current_region.name,
-            "#dashboards:name=",
-            stack.monitoring.dashboard.dashboard_name
-        ))
-        pulumi.export("alert_topic_arn", stack.monitoring.alert_topic.arn)
-    
-    return stack
-
-
-if __name__ == "__main__":
-    create_stack()
+        # S3 bucket names
+        s3_names = {region: bucket.bucket for region, bucket in self.s3_buckets.items()}
+        
+        self.register_outputs({
+            "api_urls": api_urls,
+            "lambda_arns": lambda_arns,
+            "s3_buckets": s3_names,
+            "vpc_ids": {region: vpc.id for region, vpc in self.vpcs.items()}
+        })
