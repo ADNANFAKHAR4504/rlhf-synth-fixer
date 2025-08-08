@@ -53,6 +53,11 @@
         }
     },
     "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix to ensure unique resource names",
+            "Default": "dev"
+        },
         "VpcCidr": {
             "Type": "String",
             "Description": "VPC CIDR block — must be 10.0.0.0/16 for this template.",
@@ -226,7 +231,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-vpc"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-vpc"
                         }
                     },
                     {
@@ -243,7 +248,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-igw"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-igw"
                         }
                     }
                 ]
@@ -282,7 +287,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-public-1"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-1"
                         }
                     }
                 ]
@@ -310,7 +315,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-public-2"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-2"
                         }
                     }
                 ]
@@ -338,7 +343,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-private-1"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-1"
                         }
                     }
                 ]
@@ -366,7 +371,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-private-2"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-2"
                         }
                     }
                 ]
@@ -382,7 +387,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-public-rt"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-rt"
                         }
                     }
                 ]
@@ -454,7 +459,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-nat-1"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-nat-1"
                         }
                     }
                 ]
@@ -477,7 +482,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-nat-2"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-nat-2"
                         }
                     }
                 ]
@@ -493,7 +498,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-private-rt-1"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-rt-1"
                         }
                     }
                 ]
@@ -521,7 +526,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-private-rt-2"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-rt-2"
                         }
                     }
                 ]
@@ -586,7 +591,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-s3-endpoint"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-s3-endpoint"
                         }
                     }
                 ]
@@ -617,7 +622,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-dynamodb-endpoint"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-dynamodb-endpoint"
                         }
                     }
                 ]
@@ -672,7 +677,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-alb-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -687,7 +692,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-alb-logs"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-logs"
                         }
                     }
                 ]
@@ -752,7 +757,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-alb-sg"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-sg"
                         }
                     }
                 ]
@@ -785,7 +790,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-instance-sg"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-instance-sg"
                         }
                     }
                 ]
@@ -794,6 +799,9 @@
         "InstanceProfileRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-InstanceRole"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -857,7 +865,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-alb"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb"
                 },
                 "Subnets": [
                     {
@@ -878,7 +886,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-alb"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb"
                         }
                     }
                 ],
@@ -924,7 +932,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-tg"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-tg"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -984,7 +992,7 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "${AWS::StackName}-lt"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lt"
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
@@ -1034,6 +1042,9 @@
         "WebAutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-asg"
+                },
                 "VPCZoneIdentifier": [
                     {
                         "Ref": "PrivateSubnet1"
@@ -1072,7 +1083,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-asg-instance"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-asg-instance"
                         },
                         "PropagateAtLaunch": true
                     }
