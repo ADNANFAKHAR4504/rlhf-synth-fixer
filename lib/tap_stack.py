@@ -1,9 +1,9 @@
 import json
-from typing import Dict, List, Optional
+from typing import Optional
 
 import pulumi
 import pulumi_aws as aws
-from pulumi import Config, Output, ResourceOptions
+from pulumi import Config, ResourceOptions
 
 
 class TapStackArgs:
@@ -54,29 +54,37 @@ class TapStack(pulumi.ComponentResource):
         })
 
     def _load_config(self) -> None:
-        """Load all configuration values from Pulumi Config"""
+        """Load all configuration values from Pulumi Config with safe defaults"""
         self.config = Config()
         
         # Corporate prefix and naming
         self.name_prefix = self.config.get("namePrefix") or "corp"
         self.resource_name_prefix = f"{self.name_prefix}-{self.environment_suffix}"
         
-        # GitHub configuration
-        self.github_owner = self.config.require("github.owner")
-        self.github_repo = self.config.require("github.repo")
+        # AWS Region configuration - target region vs backend region
+        self.target_region = self.config.get("aws.region") or "us-west-2"
+        self.backend_region = self.config.get("aws.backendRegion") or "us-east-1"
+        
+        # GitHub configuration with safe defaults
+        self.github_owner = self.config.get("github.owner") or "placeholder-owner"
+        self.github_repo = self.config.get("github.repo") or "placeholder-repo"
         self.github_branch = self.config.get("github.branch") or "main"
         self.github_connection_arn = self.config.get("github.connectionArn")
         
         # Deployment configuration
         self.deploy_target_bucket = self.config.get("deploy.targetBucketName") or f"{self.resource_name_prefix}-deploy-target"
         
-        # RBAC configuration
+        # RBAC configuration with safe JSON parsing
         approver_arns_str = self.config.get("rbac.approverArns") or "[]"
-        self.rbac_approver_arns = json.loads(approver_arns_str) if isinstance(approver_arns_str, str) else approver_arns_str
+        try:
+            self.rbac_approver_arns = json.loads(approver_arns_str) if isinstance(approver_arns_str, str) else (approver_arns_str or [])
+        except json.JSONDecodeError:
+            pulumi.log.warn(f"Invalid JSON for rbac.approverArns: {approver_arns_str}, using empty list")
+            self.rbac_approver_arns = []
         
-        # Slack configuration
-        self.slack_workspace_id = self.config.require("slack.workspaceId")
-        self.slack_channel_id = self.config.require("slack.channelId")
+        # Slack configuration with safe defaults
+        self.slack_workspace_id = self.config.get("slack.workspaceId") or "T0000000000"
+        self.slack_channel_id = self.config.get("slack.channelId") or "C0000000000"
         
         # Build configuration
         self.buildspec_content = self.config.get("build.buildspec") or self._get_default_buildspec()
@@ -127,29 +135,31 @@ artifacts:
             block_public_policy=True,
             ignore_public_acls=True,
             restrict_public_buckets=True,
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.artifacts_bucket])
         )
         
-        # Enable server-side encryption
-        aws.s3.BucketServerSideEncryptionConfiguration(
+        # Enable server-side encryption (using V2 for latest provider)
+        aws.s3.BucketServerSideEncryptionConfigurationV2(
             f"{self.resource_name_prefix}-artifacts-bucket-encryption",
             bucket=self.artifacts_bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                    sse_algorithm="AES256"
-                )
-            )],
-            opts=ResourceOptions(parent=self)
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs(
+                rules=[aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="AES256"
+                    )
+                )]
+            ),
+            opts=ResourceOptions(parent=self, depends_on=[self.artifacts_bucket])
         )
         
-        # Enable versioning for artifact integrity
-        aws.s3.BucketVersioning(
+        # Enable versioning for artifact integrity  
+        aws.s3.BucketVersioningV2(
             f"{self.resource_name_prefix}-artifacts-bucket-versioning",
             bucket=self.artifacts_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
                 status="Enabled"
             ),
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.artifacts_bucket])
         )
 
     def _create_service_roles(self) -> None:
@@ -234,7 +244,7 @@ artifacts:
             f"{self.resource_name_prefix}-codebuild-role",
             assume_role_policy=json.dumps(codebuild_assume_role_policy),
             tags={**self.tags, "Purpose": "CodeBuild Service Role"},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.artifacts_bucket])
         )
         
         # CodeBuild Policy - Least privilege access
@@ -248,7 +258,7 @@ artifacts:
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
                     ],
-                    "Resource": f"arn:aws:logs:us-west-2:*:log-group:/aws/codebuild/{self.resource_name_prefix}-*"
+                    "Resource": f"arn:aws:logs:{self.target_region}:*:log-group:/aws/codebuild/{self.resource_name_prefix}-*"
                 },
                 {
                     "Effect": "Allow",
@@ -379,7 +389,7 @@ artifacts:
                 environment_variables=[
                     aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
                         name="AWS_DEFAULT_REGION",
-                        value="us-west-2"
+                        value=self.target_region
                     ),
                     aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
                         name="AWS_ACCOUNT_ID",
@@ -387,6 +397,10 @@ artifacts:
                     ),
                     aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
                         name="ENVIRONMENT",
+                        value=self.environment_suffix
+                    ),
+                    aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
+                        name="ENVIRONMENT_SUFFIX",
                         value=self.environment_suffix
                     )
                 ]
@@ -402,7 +416,7 @@ artifacts:
                 )
             ),
             tags={**self.tags, "Purpose": "Build Stage"},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.codebuild_role, build_log_group])
         )
         
         # Deploy Project CloudWatch Log Group
@@ -445,11 +459,15 @@ phases:
                 environment_variables=[
                     aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
                         name="AWS_DEFAULT_REGION",
-                        value="us-west-2"
+                        value=self.target_region
                     ),
                     aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
                         name="DEPLOY_BUCKET",
                         value=self.deploy_target_bucket
+                    ),
+                    aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
+                        name="ENVIRONMENT_SUFFIX",
+                        value=self.environment_suffix
                     )
                 ]
             ),
@@ -464,7 +482,7 @@ phases:
                 )
             ),
             tags={**self.tags, "Purpose": "Deploy Stage"},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.codebuild_role, deploy_log_group])
         )
 
     def _create_codepipeline(self) -> None:
@@ -555,7 +573,13 @@ phases:
                 )
             ],
             tags={**self.tags, "Purpose": "CI/CD Pipeline"},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[
+                self.pipeline_role, 
+                self.artifacts_bucket, 
+                self.build_project, 
+                self.deploy_project,
+                self.codestar_connection if hasattr(self, 'codestar_connection') else None
+            ])
         )
 
     def _create_notifications(self) -> None:
@@ -582,8 +606,8 @@ phases:
             opts=ResourceOptions(parent=self)
         )
         
-        # CodeStar Notifications Rule for Pipeline State Changes
-        pipeline_notification_rule = aws.codestarnotifications.NotificationRule(
+        # CodeStar Notifications Rule for Pipeline State Changes  
+        aws.codestarnotifications.NotificationRule(
             f"{self.resource_name_prefix}-pipeline-notifications",
             name=f"{self.resource_name_prefix}-pipeline-notifications",
             detail_type="FULL",
