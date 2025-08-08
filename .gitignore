@@ -97,3 +97,6 @@ tasks-status.md
 worktree/
 bin/.terraform.lock.hcl
 bin/tfplan
+coverage
+.coverage
+cov.json
