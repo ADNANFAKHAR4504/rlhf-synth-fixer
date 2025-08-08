@@ -27,10 +27,10 @@
         },
         "DBPassword": {
             "Type": "String",
-            "Default": "SecurePassword123!",
             "NoEcho": true,
-            "Description": "Database password (minimum 8 characters)",
-            "MinLength": 8
+            "Description": "Database password (minimum 8 characters, required for security)",
+            "MinLength": 8,
+            "AllowedPattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$"
         },
         "InstanceType": {
             "Type": "String",
@@ -533,8 +533,19 @@
                         "IpProtocol": "tcp",
                         "FromPort": 22,
                         "ToPort": 22,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "SSH access"
+                        "CidrIp": {
+                            "Fn::If": [
+                                "CreateVPC",
+                                {
+                                    "Fn::GetAtt": [
+                                        "SecureAppVPC",
+                                        "CidrBlock"
+                                    ]
+                                },
+                                "10.0.0.0/16"
+                            ]
+                        },
+                        "Description": "SSH access from VPC only"
                     },
                     {
                         "IpProtocol": "tcp",
@@ -604,14 +615,7 @@
                         "SourceSecurityGroupId": {
                             "Ref": "EC2SecurityGroup"
                         },
-                        "Description": "MySQL access from EC2 instances"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 3306,
-                        "ToPort": 3306,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Direct administrative access to MySQL"
+                        "Description": "MySQL access from EC2 instances only"
                     }
                 ],
                 "Tags": [

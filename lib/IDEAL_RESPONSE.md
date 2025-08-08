@@ -25,10 +25,10 @@ Parameters:
 
   DBPassword:
     Type: String
-    Default: "SecurePassword123!"
     NoEcho: true
-    Description: "Database password (minimum 8 characters)"
+    Description: "Database password (minimum 8 characters, required for security)"
     MinLength: 8
+    AllowedPattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$"
 
   InstanceType:
     Type: String
@@ -41,12 +41,36 @@ Parameters:
 
   NotificationEmail:
     Type: String
+    Default: "admin@example.com"
     Description: "Email address for CloudWatch alarm notifications"
     AllowedPattern: '[^@]+@[^@]+\.[^@]+'
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "EC2 Key Pair for SSH access"
+    Type: String
+    Default: ""
+    Description: "EC2 Key Pair for SSH access (leave empty to skip attaching a key)"
+
+  # Optional: specify an explicit MySQL engine version (leave empty to use AWS default/latest)
+  DBEngineVersion:
+    Type: String
+    Default: "8.0.43"
+    Description: "Optional MySQL engine version (e.g., 8.0.43). Leave empty to let AWS choose a supported version."
+
+  # Optional networking parameters to deploy into an existing VPC
+  VpcId:
+    Type: String
+    Default: ""
+    Description: "Existing VPC ID to deploy into (leave empty to create a new VPC)"
+
+  PublicSubnet1Id:
+    Type: String
+    Default: ""
+    Description: "Existing public subnet ID 1 (leave empty to create subnets)"
+
+  PublicSubnet2Id:
+    Type: String
+    Default: ""
+    Description: "Existing public subnet ID 2 (leave empty to create subnets)"
 
 Mappings:
   RegionMap:
@@ -55,10 +79,22 @@ Mappings:
     us-west-2:
       AMI: ami-0d70546e43a941d70
 
+Conditions:
+  CreateVPC: !Equals [!Ref VpcId, ""]
+  CreateSubnets: !And
+    - !Equals [!Ref PublicSubnet1Id, ""]
+    - !Equals [!Ref PublicSubnet2Id, ""]
+  CreateVPCAndSubnets: !And
+    - !Condition CreateVPC
+    - !Condition CreateSubnets
+  UseExplicitEngineVersion: !Not [!Equals [!Ref DBEngineVersion, ""]]
+  UseKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+
 Resources:
   # VPC and Networking Components
   SecureAppVPC:
     Type: AWS::EC2::VPC
+    Condition: CreateVPC
     Properties:
       CidrBlock: "10.0.0.0/16"
       EnableDnsHostnames: true
@@ -73,8 +109,13 @@ Resources:
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
+    Condition: CreateSubnets
     Properties:
-      VpcId: !Ref SecureAppVPC
+      VpcId:
+        Fn::If:
+          - CreateVPC
+          - Ref: SecureAppVPC
+          - Ref: VpcId
       CidrBlock: "10.0.1.0/24"
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
@@ -88,8 +129,13 @@ Resources:
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
+    Condition: CreateSubnets
     Properties:
-      VpcId: !Ref SecureAppVPC
+      VpcId:
+        Fn::If:
+          - CreateVPC
+          - Ref: SecureAppVPC
+          - Ref: VpcId
       CidrBlock: "10.0.2.0/24"
       AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
@@ -103,6 +149,7 @@ Resources:
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Condition: CreateVPC
     Properties:
       Tags:
         - Key: Name
@@ -114,13 +161,16 @@ Resources:
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateVPC
     Properties:
       VpcId: !Ref SecureAppVPC
       InternetGatewayId: !Ref InternetGateway
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
+    Condition: CreateVPCAndSubnets
     Properties:
+      # When CreateVPCAndSubnets is true, CreateVPC is always true
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
@@ -132,6 +182,7 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
+    Condition: CreateVPCAndSubnets
     DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
@@ -140,12 +191,14 @@ Resources:
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateVPCAndSubnets
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateVPCAndSubnets
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
@@ -201,8 +254,8 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub "${SecureAppDataBucket}/*"
-                  - !Ref SecureAppDataBucket
+                  - !Sub "arn:aws:s3:::${SecureAppDataBucket}/*"
+                  - !Sub "arn:aws:s3:::${SecureAppDataBucket}"
         - PolicyName: RDSConnectAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -235,13 +288,21 @@ Resources:
     Properties:
       GroupName: !Sub "${AWS::StackName}-EC2SecurityGroup-${EnvironmentSuffix}"
       GroupDescription: "Security group for SecureApp EC2 instances"
-      VpcId: !Ref SecureAppVPC
+      VpcId:
+        Fn::If:
+          - CreateVPC
+          - Ref: SecureAppVPC
+          - Ref: VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: "0.0.0.0/0"
-          Description: "SSH access"
+          CidrIp:
+            Fn::If:
+              - CreateVPC
+              - !GetAtt SecureAppVPC.CidrBlock
+              - "10.0.0.0/16"
+          Description: "SSH access from VPC only"
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -269,18 +330,17 @@ Resources:
     Properties:
       GroupName: !Sub "${AWS::StackName}-RDSSecurityGroup-${EnvironmentSuffix}"
       GroupDescription: "Security group for SecureApp RDS instance"
-      VpcId: !Ref SecureAppVPC
+      VpcId:
+        Fn::If:
+          - CreateVPC
+          - Ref: SecureAppVPC
+          - Ref: VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref EC2SecurityGroup
-          Description: "MySQL access from EC2 instances"
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: "0.0.0.0/0"
-          Description: "Direct administrative access to MySQL"
+          Description: "MySQL access from EC2 instances only"
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-RDSSecurityGroup"
@@ -296,8 +356,12 @@ Resources:
       DBSubnetGroupName: !Sub "${AWS::StackName}-rds-subnet-group-${EnvironmentSuffix}"
       DBSubnetGroupDescription: "Subnet group for SecureApp RDS instance"
       SubnetIds:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        Fn::If:
+          - CreateSubnets
+          - - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+          - - !Ref PublicSubnet1Id
+            - !Ref PublicSubnet2Id
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-RDSSubnetGroup"
@@ -326,7 +390,8 @@ Resources:
       DBInstanceIdentifier: !Sub "secureapp-mysqlinstance-${EnvironmentSuffix}"
       DBInstanceClass: "db.t3.micro"
       Engine: "mysql"
-      EngineVersion: "8.0.35"
+      EngineVersion:
+        !If [UseExplicitEngineVersion, !Ref DBEngineVersion, !Ref AWS::NoValue]
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
       AllocatedStorage: 20
@@ -356,7 +421,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If [UseKeyPair, !Ref KeyPairName, !Ref AWS::NoValue]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -427,8 +492,12 @@ Resources:
       MaxSize: 3
       DesiredCapacity: 2
       VPCZoneIdentifier:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        Fn::If:
+          - CreateSubnets
+          - - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+          - - !Ref PublicSubnet1Id
+            - !Ref PublicSubnet2Id
       HealthCheckType: EC2
       HealthCheckGracePeriod: 300
       Tags:
@@ -492,7 +561,11 @@ Resources:
 Outputs:
   VPCId:
     Description: "VPC ID for SecureApp"
-    Value: !Ref SecureAppVPC
+    Value:
+      Fn::If:
+        - CreateVPC
+        - Ref: SecureAppVPC
+        - Ref: VpcId
     Export:
       Name: !Sub "${AWS::StackName}-VPC-ID"
 

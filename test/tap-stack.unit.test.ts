@@ -91,7 +91,7 @@ describe('SecureApp CloudFormation Template', () => {
       const dbPasswordParam = template.Parameters.DBPassword;
       expect(dbPasswordParam.Type).toBe('String');
       expect(dbPasswordParam.NoEcho).toBe(true);
-      expect(dbPasswordParam.Description).toBe('Database password (minimum 8 characters)');
+      expect(dbPasswordParam.Description).toBe('Database password (minimum 8 characters, required for security)');
       expect(dbPasswordParam.MinLength).toBe(8);
     });
 
