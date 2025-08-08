@@ -8,7 +8,7 @@ import { TapStack } from '../lib/tap-stack'; // Import the TapStack class
 
 const app = new App();
 
-new TapStack(app, 'tap-stack-prod-new-v2', {
+new TapStack(app, 'tap-stack-prod-new-v3', {
   awsRegion: 'us-east-1',
   tags: {
     Project: 'TapProject',
