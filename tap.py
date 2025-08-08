@@ -49,6 +49,7 @@ def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number):
         return base_cidr.replace('::', f':{subnet_number:x}::/64')
 
 # Create a public subnet with IPv6 CIDR block
+# Force replacement when IPv6 CIDR block changes (AWS doesn't allow in-place updates)
 public_subnet = aws.ec2.Subnet("public-subnet",
     vpc_id=vpc.id,
     cidr_block="10.0.1.0/24",
@@ -59,9 +60,13 @@ public_subnet = aws.ec2.Subnet("public-subnet",
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
-    })
+    },
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"]
+    ))
 
 # Create a private subnet with IPv6 CIDR block
+# Force replacement when IPv6 CIDR block changes (AWS doesn't allow in-place updates)
 private_subnet = aws.ec2.Subnet("private-subnet",
     vpc_id=vpc.id,
     cidr_block="10.0.2.0/24",
@@ -71,7 +76,10 @@ private_subnet = aws.ec2.Subnet("private-subnet",
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
-    })
+    },
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"]
+    ))
 
 # Create a route table for the public subnet
 public_rt = aws.ec2.RouteTable("public-rt",
@@ -194,6 +202,7 @@ launch_template = aws.ec2.LaunchTemplate("web-server-lt",
     })
 
 # Create EC2 instances with static IPv6 addresses in public subnet
+# These will be automatically replaced when the subnet is replaced
 instance1 = aws.ec2.Instance("web-server-1",
     ami=ami.id,
     instance_type="t3.micro",
@@ -205,7 +214,11 @@ instance1 = aws.ec2.Instance("web-server-1",
         "Environment": "Production",
         "Project": "IPv6StaticTest",
         "Name": "web-server-1"
-    })
+    },
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["subnet_id", "ipv6_address_count"],
+        depends_on=[public_subnet]
+    ))
 
 instance2 = aws.ec2.Instance("web-server-2",
     ami=ami.id,
@@ -218,9 +231,14 @@ instance2 = aws.ec2.Instance("web-server-2",
         "Environment": "Production",
         "Project": "IPv6StaticTest",
         "Name": "web-server-2"
-    })
+    },
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["subnet_id", "ipv6_address_count"],
+        depends_on=[public_subnet]
+    ))
 
 # Create an auto-scaling group for the public subnet
+# Force replacement when subnet changes (due to IPv6 CIDR changes)
 asg = aws.autoscaling.Group("web-server-asg",
     launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
         id=launch_template.id,
@@ -238,7 +256,11 @@ asg = aws.autoscaling.Group("web-server-asg",
         "key": "Project",
         "value": "IPv6StaticTest",
         "propagate_at_launch": True
-    }])
+    }],
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["vpc_zone_identifiers"],
+        depends_on=[public_subnet]
+    ))
 
 # Export key resource IDs and IPv6 information
 pulumi.export("vpc_id", vpc.id)

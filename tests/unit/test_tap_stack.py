@@ -128,6 +128,17 @@ class TestTapStack(unittest.TestCase):
     self.assertIn('aws.ec2.InternetGateway', source_code)
     self.assertIn('aws.ec2.RouteTable', source_code)
 
+  def test_resource_replacement_options(self):
+    """Test that subnets have proper replacement options for IPv6 changes."""
+    with open('tap.py', 'r', encoding='utf-8') as f:
+      source_code = f.read()
+    
+    # Check that ResourceOptions are used for subnet replacement
+    self.assertIn('pulumi.ResourceOptions', source_code)
+    self.assertIn('replace_on_changes=["ipv6_cidr_block"', source_code)
+    self.assertIn('replace_on_changes=["subnet_id"', source_code)
+    self.assertIn('depends_on=[public_subnet]', source_code)
+
 
 if __name__ == '__main__':
   unittest.main()
