@@ -55,12 +55,10 @@ Resources:
             Condition:
               BoolIfExists:
                 'aws:MultiFactorAuthPresent': 'false'
-      ManagedPolicyName: !Sub 'MfaEnforcedPolicy-${EnvironmentSuffix}'
 
   MfaEnforcedUsersGroup:
     Type: 'AWS::IAM::Group'
     Properties:
-      GroupName: !Sub 'MfaEnforcedUsers-${EnvironmentSuffix}'
       ManagedPolicyArns:
         - !Ref MfaEnforcedPolicy
 
@@ -108,7 +106,6 @@ Resources:
   ConfigRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub 'ConfigRoleForSecurityBaseline-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
