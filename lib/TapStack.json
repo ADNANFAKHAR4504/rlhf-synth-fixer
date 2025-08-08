@@ -160,15 +160,7 @@
       "Condition": "CreatePublicSubnet1",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "CidrBlock": "10.0.1.0/24",
         "AvailabilityZone": {
@@ -199,15 +191,7 @@
       "Condition": "CreatePublicSubnet2",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "CidrBlock": "10.0.2.0/24",
         "AvailabilityZone": {
@@ -238,15 +222,7 @@
       "Condition": "CreatePrivateSubnet1",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "CidrBlock": "10.0.10.0/24",
         "AvailabilityZone": {
@@ -276,15 +252,7 @@
       "Condition": "CreatePrivateSubnet2",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "CidrBlock": "10.0.11.0/24",
         "AvailabilityZone": {
@@ -313,15 +281,7 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "CidrBlock": "10.0.5.0/24",
         "AvailabilityZone": {
@@ -350,15 +310,7 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "CidrBlock": "10.0.6.0/24",
         "AvailabilityZone": {
@@ -406,15 +358,7 @@
       "Condition": "CreateInternetGateway",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "InternetGatewayId": {
           "Ref": "InternetGateway"
@@ -477,15 +421,7 @@
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "Tags": [
           {
@@ -505,15 +441,7 @@
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "Tags": [
           {
@@ -614,15 +542,7 @@
       "Properties": {
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "SecurityGroupIngress": [
           {
@@ -657,15 +577,7 @@
       "Properties": {
         "GroupDescription": "Security group for EC2 instances",
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "SecurityGroupIngress": [
           {
@@ -712,15 +624,7 @@
       "Properties": {
         "GroupDescription": "Security group for RDS MySQL database",
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "SecurityGroupIngress": [
           {
@@ -1363,15 +1267,7 @@
         "Port": 80,
         "Protocol": "HTTP",
         "VpcId": {
-          "Fn::If": [
-            "CreateVPC",
-            {
-              "Ref": "VPC"
-            },
-            {
-              "Ref": "ExistingVPCId"
-            }
-          ]
+          "Ref": "ExistingVPCId"
         },
         "HealthCheckEnabled": true,
         "HealthCheckPath": "/",
@@ -1614,15 +1510,7 @@
     "VPCId": {
       "Description": "VPC ID",
       "Value": {
-        "Fn::If": [
-          "CreateVPC",
-          {
-            "Ref": "VPC"
-          },
-          {
-            "Ref": "ExistingVPCId"
-          }
-        ]
+        "Ref": "ExistingVPCId"
       },
       "Export": {
         "Name": {
