@@ -425,10 +425,12 @@ export class TapStack extends cdk.Stack {
           actions: [
             new codepipeline_actions.GitHubSourceAction({
               actionName: 'GitHub_Source',
-              owner: 'your-github-username',
+              owner: 'Prakhar12s',
               repo: 'enterprise-web-app',
               branch: 'main',
-              oauthToken: cdk.SecretValue.secretsManager('github-token'),
+              oauthToken: cdk.SecretValue.secretsManager(
+                'arn:aws:secretsmanager:us-east-1:718240086340:secret:github-token-IAC-291873-Zo3agm'
+              ),
               output: sourceOutput,
               trigger: codepipeline_actions.GitHubTrigger.WEBHOOK,
             }),
