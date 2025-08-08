@@ -33,8 +33,8 @@ class LoggingManager:
                 include_management_events=True,
                 data_resources=[aws.cloudtrail.TrailEventSelectorDataResourceArgs(
                     type="AWS::S3::Object",
-                    # Correctly log all object-level events for all buckets in account
-                    values=["arn:aws:s3:::*/*"]
+                    # Log all S3 object-level events - use wildcard format
+                    values=["arn:aws:s3:::*"]
                 )]
             )],
             tags={
@@ -76,10 +76,10 @@ class LoggingManager:
             f"{self.project_name}-vpc-flow-log",
             vpc_id=vpc_id,
             traffic_type="ALL",
-            log_destination_type="cloud-watch-logs",
+            log_destination_type="cloudwatch-logs",
             log_destination=log_group.arn,
             iam_role_arn=flow_logs_role.arn,
-            log_format="${srcaddr} ${dstaddr} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}",
+            log_format="${srcaddr} ${dstaddr} ${dstport} ${protocol} ${packets} ${bytes} ${action}",
             tags={
                 "Name": f"{self.project_name}-vpc-flow-log",
                 "Environment": self.environment,
