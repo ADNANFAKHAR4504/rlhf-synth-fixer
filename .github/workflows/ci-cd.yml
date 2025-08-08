@@ -17,7 +17,7 @@ permissions:
 
 env:
   NODE_VERSION: '22.17.0'
-  # Use PR number for resource isolation, fallback to 'main' for main branch
+  # Use PR number for resource isolation, fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
@@ -53,6 +53,14 @@ jobs:
           PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
           LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
           PO_ID=$(jq -r '.po_id // empty' metadata.json)
+          TEAM=$(jq -r '.team // "unknown"' metadata.json)
+          STARTED_AT=$(jq -r '.startedAt // "unknown"' metadata.json)
+
+          # If team or started_at is unknown, fail the job
+          if [ "$TEAM" == "unknown" ] || [ "$STARTED_AT" == "unknown" ]; then
+            echo "❌ Missing required metadata: team or started_at"
+            exit 1
+          fi
 
           echo "Detected platform: $PLATFORM, language: $LANGUAGE"
 
@@ -69,77 +77,14 @@ jobs:
           fi
 
           if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
-            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
             exit 1
           fi
-
-  version-check:
-    name: Check Runtime Versions
-    runs-on: ubuntu-24.04
-    needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22.17.0
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.17.0'
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-
-      - name: Setup Python 3.12.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.11'
-          check-latest: true
-
-      - name: Install pipenv
-        run: |
-          python -m pip install --upgrade pip
-          pip install pipenv==2025.0.4
-
-      - name: Install Pulumi CLI
-        if: needs.synth.outputs.platform == 'pulumi'
-        uses: pulumi/actions@v5
-        with:
-          pulumi-version: 3.109.0
-
-      - name: Verify Node.js version
-        run: |
-          node --version
-          npm --version
-          if [ "$(node --version)" != "v22.17.0" ]; then
-            echo "❌ Node.js version mismatch! Expected: v22.17.0, Got: $(node --version)"
-            exit 1
-          fi
-          echo "✅ Node.js version is correct: $(node --version)"
-
-      - name: Verify Python version
-        run: |
-          python --version
-          if [ "$(python --version)" != "Python 3.12.11" ]; then
-            echo "❌ Python version mismatch! Expected: Python 3.12.11, Got: $(python --version)"
-            exit 1
-          fi
-          echo "✅ Python version is correct: $(python --version)"
-
-      - name: Verify pipenv version
-        run: |
-          pipenv --version
-          PIPENV_VERSION=$(pipenv --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-          if [ "$PIPENV_VERSION" != "2025.0.4" ]; then
-            echo "❌ Pipenv version mismatch! Expected: 2025.0.4, Got: $PIPENV_VERSION"
-            exit 1
-          fi
-          echo "✅ Pipenv version is correct: $PIPENV_VERSION"
 
   build:
     name: Build
     runs-on: ubuntu-24.04
-    needs: version-check
+    needs: detect-metadata
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
@@ -147,47 +92,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Setup Python 3.12.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.11'
-          check-latest: true
-
-      - name: Install pipenv
-        run: |
-          python -m pip install --upgrade pip
-          pip install pipenv==2025.0.4
-
-      - name: Install dependencies
-        run: npm ci
+          download-artifacts: 'false'
+          upload-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Build
         run: npm run build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          include-hidden-files: true # <-- This one!
-          path: |
-            bin/
-            lib/
-            package*.json
-            tsconfig.json
-            cdk.json
-            metadata.json
 
   synth:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
     environment: dev
     permissions:
       contents: read
@@ -200,12 +120,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Environment
+        if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Configure AWS
+        if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -213,6 +136,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Synth
+        if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         run: |
           echo "Project: platform=${{ needs.detect-metadata.outputs.platform }}, language=${{ needs.detect-metadata.outputs.language }}"
 
@@ -228,10 +152,6 @@ jobs:
             npm run cdktf:synth
           else
             echo "ℹ️ Not a CDK project, skipping CDK synth"
-            echo "This is expected for non-CDK projects like CloudFormation templates"
-            # Create empty cdk.out directory to satisfy artifact upload
-            mkdir -p cdk.out
-            echo "# No CDK artifacts generated for non-CDK projects" > cdk.out/README.md
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -240,21 +160,13 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: cdk-artifacts
-          path: |
-            cdk.out/
-            cdktf.out/
-
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
-    needs: synth
+    needs: [detect-metadata, synth]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-    environment: dev
 
+    environment: dev
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -264,7 +176,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
-          download-cdk-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -275,13 +187,10 @@ jobs:
 
       - name: Bootstrap
         run: |
-          PLATFORM="${{ needs.synth.outputs.platform }}"
-          LANGUAGE="${{ needs.synth.outputs.language }}"
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
-            echo "Cleaning up cdk.out folder..."
-            echo "✅ CDK project detected, running CDK bootstrap..."
-            rm -rf cdk.out
             npm run cdk:bootstrap
 
           elif [ "$PLATFORM" = "pulumi" ]; then
@@ -302,8 +211,8 @@ jobs:
 
       - name: Deploy
         run: |
-          PLATFORM="${{ needs.synth.outputs.platform }}"
-          LANGUAGE="${{ needs.synth.outputs.language }}"
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK deploy..."
@@ -321,7 +230,7 @@ jobs:
             echo "✅ Pulumi project detected, running Pulumi deploy..."
             echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
             echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-            export PYTHONPATH=.
+            export PYTHONPATH=.:bin
             pipenv run pulumi-create-stack
             echo "Deploying infrastructure ..."
             pipenv run pulumi-deploy
@@ -342,8 +251,8 @@ jobs:
 
       - name: Get Deployment Outputs
         run: |
-          PLATFORM="${{ needs.synth.outputs.platform }}"
-          LANGUAGE="${{ needs.synth.outputs.language }}"
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, getting CDK outputs..."
@@ -387,7 +296,7 @@ jobs:
             touch cfn-outputs/flat-outputs.json
             cdktf output --outputs-file cfn-outputs/flat-outputs.json
             cat cfn-outputs/flat-outputs.json || echo "No outputs found in cfn-outputs/flat-outputs.json"
-          elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
+          elif [ "${{ needs.detect-metadata.outputs.platform }}" = "cfn" ]; then
             echo "✅ CloudFormation project detected, getting stack outputs..."
             mkdir -p cfn-outputs
             # Try to find the stack name (assuming TapStack<ENVIRONMENT_SUFFIX>)
@@ -437,7 +346,6 @@ jobs:
             echo "Flat outputs:"
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
             rm -f temp-${STACK_NAME}-outputs.json temp-stack.json temp-merged.json temp-flat.json
-
             
           else
             echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
@@ -473,6 +381,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       # Python setup is handled by the setup-environment action
 
@@ -489,10 +398,6 @@ jobs:
             echo "✅ TypeScript project detected, running ESLint..."
             npm run lint
           elif [ "$LANGUAGE" = "py" ]; then
-            # --- NEW: Install Python dev dependencies within this step ---
-            echo "Installing Python dev dependencies via pipenv..."
-            pipenv install --dev --deploy --system || { echo "❌ pipenv install failed!"; exit 1; }
-            echo "Python dev dependencies installed."
             echo "Executing pipenv run lint..."
             LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
             LINT_EXIT_CODE=$?
@@ -543,7 +448,7 @@ jobs:
   unit-tests:
     name: Unit Testing
     runs-on: ubuntu-24.04
-    needs: lint
+    needs: [detect-metadata, lint]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
@@ -556,6 +461,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Convert YAML to JSON for CloudFormation projects
         if: ${{ needs.lint.outputs.platform == 'cfn' && needs.lint.outputs.language == 'yaml' }}
@@ -613,7 +519,7 @@ jobs:
   integration-tests-live:
     name: Integration Tests (Live)
     runs-on: ubuntu-24.04
-    needs: [lint, unit-tests, deploy]
+    needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
@@ -626,6 +532,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -724,6 +631,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
