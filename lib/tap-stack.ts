@@ -37,14 +37,17 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
-    // Environment suffix for resource naming
+    // Environment suffix for resource naming with timestamp to ensure uniqueness
+    const timestamp = Date.now();
     const envSuffix = props?.environmentSuffix || 'default';
+    const uniqueSuffix = `${envSuffix}-${timestamp}`;
 
     // Common tags for all resources
     const commonTags = {
       Environment: 'Production',
       Project: 'Serverless-Web-App',
       ManagedBy: 'CDKTF',
+      DeploymentId: uniqueSuffix,
     };
 
     // AWS Provider
@@ -59,9 +62,9 @@ export class TapStack extends TerraformStack {
     // Data sources
     const current = new DataAwsCallerIdentity(this, 'current');
 
-    // S3 Bucket for Lambda deployment packages
+    // S3 Bucket for Lambda deployment packages with unique naming
     const lambdaBucket = new S3Bucket(this, 'lambda-deployment-bucket', {
-      bucket: `lambda-deployments-${current.accountId}-${envSuffix}`,
+      bucket: `lambda-deployments-${current.accountId}-${uniqueSuffix}`,
       tags: { ...commonTags, Purpose: 'Lambda deployment packages' },
     });
 
@@ -88,9 +91,9 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    // DynamoDB Tables
+    // DynamoDB Tables with unique naming
     const userTable = new DynamodbTable(this, 'prod-service-user-table', {
-      name: `prod-service-users-${envSuffix}`,
+      name: `prod-service-users-${uniqueSuffix}`,
       hashKey: 'userId',
       billingMode: 'PAY_PER_REQUEST',
       serverSideEncryption: {
@@ -105,11 +108,11 @@ export class TapStack extends TerraformStack {
           type: 'S',
         },
       ],
-      tags: { ...commonTags, Name: `prod-service-users-${envSuffix}` },
+      tags: { ...commonTags, Name: `prod-service-users-${uniqueSuffix}` },
     });
 
     const sessionTable = new DynamodbTable(this, 'prod-service-session-table', {
-      name: `prod-service-sessions-${envSuffix}`,
+      name: `prod-service-sessions-${uniqueSuffix}`,
       hashKey: 'sessionId',
       billingMode: 'PAY_PER_REQUEST',
       serverSideEncryption: {
@@ -128,12 +131,12 @@ export class TapStack extends TerraformStack {
           type: 'S',
         },
       ],
-      tags: { ...commonTags, Name: `prod-service-sessions-${envSuffix}` },
+      tags: { ...commonTags, Name: `prod-service-sessions-${uniqueSuffix}` },
     });
 
-    // IAM Role for Lambda execution
+    // IAM Role for Lambda execution with unique naming
     const lambdaRole = new IamRole(this, 'lambda-execution-role', {
-      name: `prod-service-lambda-execution-role-${envSuffix}`,
+      name: `prod-service-lambda-execution-role-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -149,9 +152,9 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // DynamoDB access policy for Lambda
+    // DynamoDB access policy for Lambda with unique naming
     const dynamoPolicy = new IamPolicy(this, 'lambda-dynamodb-policy', {
-      name: `prod-service-lambda-dynamodb-policy-${envSuffix}`,
+      name: `prod-service-lambda-dynamodb-policy-${uniqueSuffix}`,
       description: 'DynamoDB access policy for Lambda functions',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -190,27 +193,27 @@ export class TapStack extends TerraformStack {
       policyArn: dynamoPolicy.arn,
     });
 
-    // CloudWatch Log Groups
+    // CloudWatch Log Groups with unique naming
     new CloudwatchLogGroup(this, 'api-gateway-log-group', {
-      name: `/aws/apigateway/prod-service-api-${envSuffix}`,
+      name: `/aws/apigateway/prod-service-api-${uniqueSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
 
     new CloudwatchLogGroup(this, 'user-handler-log-group', {
-      name: `/aws/lambda/prod-service-user-handler-${envSuffix}`,
+      name: `/aws/lambda/prod-service-user-handler-${uniqueSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
 
     new CloudwatchLogGroup(this, 'session-handler-log-group', {
-      name: `/aws/lambda/prod-service-session-handler-${envSuffix}`,
+      name: `/aws/lambda/prod-service-session-handler-${uniqueSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
 
     new CloudwatchLogGroup(this, 'health-check-log-group', {
-      name: `/aws/lambda/prod-service-health-check-${envSuffix}`,
+      name: `/aws/lambda/prod-service-health-check-${uniqueSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
@@ -425,12 +428,12 @@ exports.handler = async (event) => {
       tags: commonTags,
     });
 
-    // Lambda Functions
+    // Lambda Functions with unique naming
     const userHandlerFunction = new LambdaFunction(
       this,
       'user-handler-function',
       {
-        functionName: `prod-service-user-handler-${envSuffix}`,
+        functionName: `prod-service-user-handler-${uniqueSuffix}`,
         s3Bucket: lambdaBucket.id,
         s3Key: 'user-handler.zip',
         handler: 'index.handler',
@@ -453,7 +456,7 @@ exports.handler = async (event) => {
       this,
       'session-handler-function',
       {
-        functionName: `prod-service-session-handler-${envSuffix}`,
+        functionName: `prod-service-session-handler-${uniqueSuffix}`,
         s3Bucket: lambdaBucket.id,
         s3Key: 'session-handler.zip',
         handler: 'index.handler',
@@ -476,7 +479,7 @@ exports.handler = async (event) => {
       this,
       'health-check-function',
       {
-        functionName: `prod-service-health-check-${envSuffix}`,
+        functionName: `prod-service-health-check-${uniqueSuffix}`,
         s3Bucket: lambdaBucket.id,
         s3Key: 'health-check.zip',
         handler: 'index.handler',
@@ -495,9 +498,9 @@ exports.handler = async (event) => {
       }
     );
 
-    // API Gateway REST API
+    // API Gateway REST API with unique naming
     const restApi = new ApiGatewayRestApi(this, 'service-api', {
-      name: `prod-service-api-${envSuffix}`,
+      name: `prod-service-api-${uniqueSuffix}`,
       description: 'Serverless Web Application API',
       endpointConfiguration: {
         types: ['REGIONAL'],
@@ -802,7 +805,7 @@ exports.handler = async (event) => {
       deploymentId: deployment.id,
       stageName: 'prod',
       accessLogSettings: {
-        destinationArn: `arn:aws:logs:${props?.awsRegion || 'us-east-1'}:${current.accountId}:log-group:/aws/apigateway/prod-service-api-${envSuffix}`,
+        destinationArn: `arn:aws:logs:${props?.awsRegion || 'us-east-1'}:${current.accountId}:log-group:/aws/apigateway/prod-service-api-${uniqueSuffix}`,
         format: JSON.stringify({
           requestId: '$context.requestId',
           ip: '$context.identity.sourceIp',
