@@ -123,13 +123,25 @@
   "Mappings": {
     "RegionMap": {
       "us-east-1": {
-        "AMI": "ami-0abcdef1234567890"
+        "AMI": "ami-0c02fb55956c7d316"
       },
       "us-west-2": {
-        "AMI": "ami-0abcdef1234567890"
+        "AMI": "ami-008fe2fc65df48dac"
       },
       "eu-west-1": {
-        "AMI": "ami-0abcdef1234567890"
+        "AMI": "ami-01dd271720c1ba44f"
+      },
+      "us-east-2": {
+        "AMI": "ami-0c7217cdde317cfec"
+      },
+      "eu-central-1": {
+        "AMI": "ami-0a628e1e89aaedf80"
+      },
+      "ap-southeast-1": {
+        "AMI": "ami-047126e50991d067b"
+      },
+      "ap-northeast-1": {
+        "AMI": "ami-0d52744d6551d851e"
       }
     }
   },
