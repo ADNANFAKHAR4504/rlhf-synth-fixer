@@ -50,7 +50,8 @@ class TapStack(pulumi.ComponentResource):
             "artifactsBucket": self.artifacts_bucket.bucket,
             "buildProjectName": self.build_project.name,
             "notificationsTopicArn": self.notifications_topic.arn,
-            "chatbotConfigName": self.chatbot_config.configuration_name,
+            "chatbotEnabled": self.slack_enabled,
+            "chatbotConfigName": self.chatbot_config.configuration_name if self.chatbot_config else "disabled",
         })
 
     def _load_config(self) -> None:
@@ -83,8 +84,9 @@ class TapStack(pulumi.ComponentResource):
             self.rbac_approver_arns = []
         
         # Slack configuration with safe defaults
-        self.slack_workspace_id = self.config.get("slack.workspaceId") or "T0000000000"
-        self.slack_channel_id = self.config.get("slack.channelId") or "C0000000000"
+        self.slack_workspace_id = self.config.get("slack.workspaceId") or "T099JAU1EDT"
+        self.slack_channel_id = self.config.get("slack.channelId") or "C0995LYSAKH"
+        self.slack_enabled = self.config.get("slack.enabled") or 'false'
         
         # Build configuration
         self.buildspec_content = self.config.get("build.buildspec") or self._get_default_buildspec()
@@ -599,19 +601,23 @@ phases:
             tags={**self.tags, "Purpose": "Pipeline Notifications"},
             opts=ResourceOptions(parent=self)
         )
-        
-        # AWS Chatbot Slack Channel Configuration
-        self.chatbot_config = aws.chatbot.SlackChannelConfiguration(
-            f"{self.resource_name_prefix}-chatbot-config",
-            configuration_name=f"{self.resource_name_prefix}-slack-notifications",
-            iam_role_arn=self.notifications_role.arn,
-            slack_channel_id=self.slack_channel_id,
-            slack_team_id=self.slack_workspace_id,
-            sns_topic_arns=[self.notifications_topic.arn],
-            logging_level="INFO",
-            tags={**self.tags, "Purpose": "Slack Notifications"},
-            opts=ResourceOptions(parent=self)
-        )
+        if slack_enabled:
+            
+            
+            # AWS Chatbot Slack Channel Configuration
+            self.chatbot_config = aws.chatbot.SlackChannelConfiguration(
+                f"{self.resource_name_prefix}-chatbot-config",
+                configuration_name=f"{self.resource_name_prefix}-slack-notifications",
+                iam_role_arn=self.notifications_role.arn,
+                slack_channel_id=self.slack_channel_id,
+                slack_team_id=self.slack_workspace_id,
+                sns_topic_arns=[self.notifications_topic.arn],
+                logging_level="INFO",
+                tags={**self.tags, "Purpose": "Slack Notifications"},
+                opts=ResourceOptions(parent=self)
+            )
+        else:
+            self.chatbot_config = None
         
         # CodeStar Notifications Rule for Pipeline State Changes  
         aws.codestarnotifications.NotificationRule(

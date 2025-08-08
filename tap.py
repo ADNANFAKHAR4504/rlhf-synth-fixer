@@ -48,6 +48,7 @@ config_defaults = {
     # Slack configuration with placeholder values
     'slack.workspaceId': 'T099JAU1EDT',  # Placeholder Slack workspace ID
     'slack.channelId': 'C0995LYSAKH',    # Placeholder Slack channel ID
+    'slack.enabled' : 'false',  # Default to false, can be enabled later
     
     # Build configuration
     'build.buildspec': None,  # Will use default buildspec
