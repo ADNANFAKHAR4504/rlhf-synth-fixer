@@ -9,6 +9,7 @@ Metadata:
         Parameters:
           - InstanceType
           - KeyPairName
+          - LatestAmiId
       - Label:
           default: "Database Configuration"
         Parameters:
@@ -35,6 +36,8 @@ Metadata:
         default: "EC2 Instance Type"
       KeyPairName:
         default: "EC2 Key Pair Name (leave empty to create new)"
+      LatestAmiId:
+        default: "Latest Amazon Linux 2 AMI ID"
       DBInstanceClass:
         default: "RDS Instance Class"
       DBUsername:
@@ -71,6 +74,11 @@ Parameters:
     Type: String
     Default: ''
     Description: EC2 Key Pair name for SSH access (leave empty to create a new one)
+  
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value::AWS::EC2::Image::Id
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI ID
   
   # Database Configuration
   DBInstanceClass:
@@ -418,7 +426,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: ami-0c55b159cbfafe1f0  # Amazon Linux 2 AMI in us-east-1
+        ImageId: !Ref LatestAmiId  # Latest Amazon Linux 2 AMI
         InstanceType: !Ref InstanceType
         KeyName: !If 
           - CreateKeyPair
