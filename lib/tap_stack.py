@@ -660,7 +660,7 @@ class TapStack(TerraformStack):
             "iam:ChangePassword",
             "iam:GetUser"
           ],
-          "resources": ["arn:aws:iam::" + self.current_account.account_id + ":user/$${{aws:username}}"]
+          "resources": ["arn:aws:iam::" + self.current_account.account_id + ":user/$${aws:username}"]
         },
         {
           "sid": "AllowManageOwnMFA",
@@ -673,8 +673,8 @@ class TapStack(TerraformStack):
             "iam:ResyncMFADevice"
           ],
           "resources": [
-            "arn:aws:iam::" + self.current_account.account_id + ":mfa/$${{aws:username}}",
-            "arn:aws:iam::" + self.current_account.account_id + ":user/$${{aws:username}}"
+            "arn:aws:iam::" + self.current_account.account_id + ":mfa/$${aws:username}",
+            "arn:aws:iam::" + self.current_account.account_id + ":user/$${aws:username}"
           ]
         },
         {
@@ -855,7 +855,7 @@ class TapStack(TerraformStack):
             "type": "Service",
             "identifiers": ["cloudtrail.amazonaws.com"]
           }],
-          "actions": ["s3:GetBucketAcl"],
+          "actions": ["s3:GetBucketAcl", "s3:GetBucketLocation"],
           "resources": [self.cloudtrail_bucket.arn],
           "condition": [{
             "test": "StringEquals",
