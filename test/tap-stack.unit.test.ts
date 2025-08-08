@@ -63,6 +63,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedValues).toContain('staging');
       expect(param.AllowedValues).toContain('prod');
     });
+
+
+
+
   });
 
   describe('Resources', () => {
@@ -256,7 +260,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have the correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5); // EnvironmentSuffix, ApplicationName, Environment, LambdaProvisionedConcurrency, LambdaReservedConcurrency
+      expect(parameterCount).toBe(3); // EnvironmentSuffix, ApplicationName, Environment
     });
 
     test('should have the correct number of outputs', () => {

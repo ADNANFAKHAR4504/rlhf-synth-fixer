@@ -20,20 +20,6 @@ Parameters:
     Default: 'serverless-app'
     Description: 'Application name for resource naming'
   
-  LambdaProvisionedConcurrency:
-    Type: Number
-    Default: 1000
-    Description: 'Provisioned concurrency for Lambda functions to avoid cold starts'
-    MinValue: 100
-    MaxValue: 10000
-  
-  LambdaReservedConcurrency:
-    Type: Number
-    Default: 5000
-    Description: 'Reserved concurrency limit for Lambda functions'
-    MinValue: 100
-    MaxValue: 10000
-  
 
 
 Resources:
