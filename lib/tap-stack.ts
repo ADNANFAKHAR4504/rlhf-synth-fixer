@@ -429,7 +429,7 @@ export class TapStack extends cdk.Stack {
               repo: 'enterprise-web-app',
               branch: 'main',
               oauthToken: cdk.SecretValue.secretsManager(
-                'arn:aws:secretsmanager:us-east-1:718240086340:secret:github-token-IAC-291873-Zo3agm'
+                'arn:aws:secretsmanager:us-west-2:718240086340:secret:github-token-IAC-291873-NqyjXr'
               ),
               output: sourceOutput,
               trigger: codepipeline_actions.GitHubTrigger.WEBHOOK,
