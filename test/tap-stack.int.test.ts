@@ -518,7 +518,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         console.log(`✓ S3 bucket is accessible:`);
         console.log(`  - Bucket: ${s3BucketName}`);
         console.log(`  - Region: ${awsRegion}`);
-        console.log(`  - Response headers: ${JSON.stringify(response.$metadata?.httpHeaders || {})}`);
+        console.log(`  - Request ID: ${response.$metadata?.requestId || 'N/A'}`);
         
       } catch (error: any) {
         if (error.name === 'NotFound' || error.name === 'NoSuchBucket') {
