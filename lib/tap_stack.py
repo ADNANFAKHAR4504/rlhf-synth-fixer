@@ -7,16 +7,15 @@ secure AWS infrastructure under the TAP project with enterprise-grade standards.
 It integrates KMS, IAM, S3, Logging, and VPC components using modular design
 from MODEL_RESPONSE.md and adheres strictly to constraints in PROMPT.md.
 """
-
-from modules.vpc import VPCManager
-from modules.logging import LoggingManager
-from modules.s3 import S3Manager
-from modules.iam import IAMManager
-from modules.kms import KMSManager
 import os
 import pulumi
 from pulumi import ResourceOptions
-from pulumi_aws import s3
+from lib.modules.vpc import VPCManager
+from lib.modules.logging import LoggingManager
+from lib.modules.s3 import S3Manager
+from lib.modules.iam import IAMManager
+from lib.modules.kms import KMSManager
+
 
 # === Importing secure infrastructure modules ===
 
