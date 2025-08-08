@@ -40,7 +40,7 @@ echo "<h1>Hello from Pulumi!</h1>" > /var/www/html/index.html
         name_prefix=f"{name}-lt-",
         image_id=ami_id,
         instance_type=instance_type,
-        user_data=pulumi.Output.apply(user_data, lambda data: pulumi.Output.encode_base64(data)),
+        user_data=pulumi.Output.from_input(user_data).apply(lambda data: pulumi.Output.secret(pulumi.Output.from_input(data).apply(lambda d: pulumi.Output.from_input(d).apply(pulumi.Output.encode_base64)))),
         vpc_security_group_ids=[security_group_id],
         tags={**tags, "Name": f"{name}-launch-template"},
         opts=ResourceOptions(parent=self)
@@ -64,7 +64,7 @@ echo "<h1>Hello from Pulumi!</h1>" > /var/www/html/index.html
         opts=ResourceOptions(parent=self)
     )
 
-    # Export key outputs
-    self.instance_ids = self.autoscaling_group.id.apply(
-        lambda asg_id: pulumi_aws.get_autoscaling_group_instance_ids(asg_id).ids
-    )
+    # Export key outputs - FIX: Return a proper Output instead of trying to call AWS API
+    # For Auto Scaling Groups, we'll return the ASG ARN as a list since individual instance IDs
+    # are dynamic and may not be available immediately
+    self.instance_ids = pulumi.Output.from_input([self.autoscaling_group.arn])
