@@ -13,6 +13,7 @@ class KMSManager:
         self.project_name = project_name
         self.environment = environment
         self.account_id = pulumi_aws.get_caller_identity().account_id
+        self.region = os.getenv("AWS_REGION", "us-east-1")
 
     def create_master_key(self) -> kms.Key:
         """Create master KMS key for primary encryption."""
@@ -99,7 +100,7 @@ class KMSManager:
                     "Sid": "Allow CloudWatch Logs",
                     "Effect": "Allow",
                     "Principal": {
-                        "Service": f"logs.us-west-1.amazonaws.com"
+                        "Service": f"logs.{self.region}.amazonaws.com"
                     },
                     "Action": [
                         "kms:Encrypt",
