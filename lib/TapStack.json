@@ -9,6 +9,25 @@
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
         },
+        "SSLCertificateArn": {
+            "Type": "String",
+            "Description": "ARN of existing SSL certificate from ACM",
+            "Default": ""
+        },
+        "DomainName": {
+            "Type": "String",
+            "Description": "Domain name for the application (used for certificate creation)",
+            "Default": "webapp.mydomain.com"
+        },
+        "CreateCertificate": {
+            "Type": "String",
+            "Description": "Whether to create a new certificate (Yes or No)",
+            "Default": "Yes",
+            "AllowedValues": [
+                "Yes",
+                "No"
+            ]
+        },
         "VpcCidr": {
             "Type": "String",
             "Default": "10.0.0.0/16",
@@ -39,6 +58,16 @@
                 "db.t3.medium"
             ],
             "Description": "RDS instance class"
+        }
+    },
+    "Conditions": {
+        "CreateNewCertificate": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateCertificate"
+                },
+                "Yes"
+            ]
         }
     },
     "Resources": {
@@ -723,6 +752,44 @@
                 "LoadBalancerArn": {
                     "Ref": "ProdAppALB"
                 },
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "Certificates": [
+                    {
+                        "CertificateArn": {
+                            "Fn::If": [
+                                "CreateNewCertificate",
+                                {
+                                    "Ref": "ProdAppSSLCertificate"
+                                },
+                                {
+                                    "Ref": "SSLCertificateArn"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdAppHTTPListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "redirect",
+                        "RedirectConfig": {
+                            "Protocol": "HTTPS",
+                            "Port": "443",
+                            "Host": "#{host}",
+                            "Path": "/#{path}",
+                            "Query": "#{query}",
+                            "StatusCode": "HTTP_301"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ProdAppALB"
+                },
                 "Port": 80,
                 "Protocol": "HTTP"
             }
@@ -739,6 +806,24 @@
             "Properties": {
                 "LogGroupName": "/aws/ec2/prodapp/httpd/error",
                 "RetentionInDays": 30
+            }
+        },
+        "ProdAppSSLCertificate": {
+            "Type": "AWS::CertificateManager::Certificate",
+            "Condition": "CreateNewCertificate",
+            "Properties": {
+                "DomainName": {
+                    "Ref": "DomainName"
+                },
+                "ValidationMethod": "DNS",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ProdApp-SSL-Certificate-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
             }
         }
     },
@@ -790,6 +875,25 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-ASG-Name-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "SSLCertificateARN": {
+            "Description": "SSL Certificate ARN",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewCertificate",
+                    {
+                        "Ref": "ProdAppSSLCertificate"
+                    },
+                    {
+                        "Ref": "SSLCertificateArn"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SSL-Certificate-ARN-${EnvironmentSuffix}"
                 }
             }
         }
