@@ -1,9 +1,42 @@
 #!/bin/bash
-set -e
+
+# Debug mode control - set DEBUG_MODE=1 to continue on failures
+DEBUG_MODE=${DEBUG_MODE:-0}
+
+if [ "$DEBUG_MODE" = "1" ]; then
+    echo "🔧 DEBUG MODE ENABLED - Script will continue on failures"
+else
+    set -e  # Exit on error only if not in debug mode
+fi
 
 echo "=== Docker Entry Point - Starting CI/CD Pipeline ==="
 
+# Track failed steps
+FAILED_STEPS=()
 
+# Function to run a step and handle errors
+run_step() {
+    local step_name="$1"
+    local command="$2"
+    
+    echo ""
+    echo "=== $step_name ==="
+    
+    if [ "$DEBUG_MODE" = "1" ]; then
+        # In debug mode, capture exit code but continue
+        if eval "$command"; then
+            echo "✅ $step_name completed successfully"
+        else
+            local exit_code=$?
+            echo "❌ $step_name failed with exit code: $exit_code"
+            FAILED_STEPS+=("$step_name (exit code: $exit_code)")
+        fi
+    else
+        # Normal mode - let errors propagate
+        eval "$command"
+        echo "✅ $step_name completed successfully"
+    fi
+}
 
 # Set up AWS credentials if they exist
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
@@ -36,6 +69,7 @@ fi
 # Set default environment variables
 export CI=${CI:-1}
 export TASK_PATH=${TASK_PATH:unknown} # cfn-yaml/Pr278 
+export DEBUG_MODE=${DEBUG_MODE:-1}
 # Set ENVIRONMENT_SUFFIX as the last part of the task path lowercased
 if [[ "$TASK_PATH" == */* ]]; then
     ENVIRONMENT_SUFFIX=$(echo "$TASK_PATH" | awk -F/ '{print $NF}' | tr '[:upper:]' '[:lower:]')
@@ -71,38 +105,48 @@ echo "Detected project: platform=$PLATFORM, language=$LANGUAGE"
 
 # Execute CI/CD pipeline steps in order
 echo ""
-echo "=== STEP 1: BUILD ==="
+echo "Starting CI/CD pipeline execution..."
+
+# STEP 1: BUILD
 if [ -f "scripts/build.sh" ]; then
-    ./scripts/build.sh
+    run_step "STEP 1: BUILD" "./scripts/build.sh"
 else
-    echo "Running build directly..."
-    npm run build
+    run_step "STEP 1: BUILD" "npm run build"
 fi
 
-echo ""
-echo "=== STEP 2: SYNTH ==="
-./scripts/synth.sh
+# STEP 2: SYNTH
+run_step "STEP 2: SYNTH" "./scripts/synth.sh"
 
+# STEP 3: LINT
+run_step "STEP 3: LINT" "./scripts/lint.sh"
 
-echo ""
-echo "=== STEP 3: LINT ==="
-./scripts/lint.sh
+# STEP 4: UNIT TESTS
+run_step "STEP 4: UNIT TESTS" "./scripts/unit-tests.sh"
 
-echo ""
-echo "=== STEP 4: UNIT TESTS ==="
-./scripts/unit-tests.sh
+# STEP 5: DEPLOY
+run_step "STEP 5: DEPLOY" "./scripts/deploy.sh"
 
-echo ""
-echo "=== STEP 5: DEPLOY ==="
-./scripts/deploy.sh
+# STEP 6: INTEGRATION TESTS
+run_step "STEP 6: INTEGRATION TESTS" "./scripts/integration-tests.sh"
 
-echo ""
-echo "=== STEP 6: INTEGRATION TESTS ==="
-./scripts/integration-tests.sh
+# STEP 7: DESTROY (Optional)
+run_step "STEP 7: DESTROY (Optional)" "./scripts/destroy.sh"
 
 echo ""
-echo "=== STEP 7: DESTROY (Optional) ==="
-./scripts/destroy.sh
+echo "=== CI/CD Pipeline Execution Complete ==="
 
-echo ""
-echo "=== CI/CD Pipeline Completed Successfully ==="
+# Report results
+if [ "$DEBUG_MODE" = "1" ] && [ ${#FAILED_STEPS[@]} -gt 0 ]; then
+    echo ""
+    echo "⚠️  SUMMARY: The following steps failed:"
+    for step in "${FAILED_STEPS[@]}"; do
+        echo "   - $step"
+    done
+    echo ""
+    echo "Exit with failure code since some steps failed"
+    exit 1
+elif [ ${#FAILED_STEPS[@]} -eq 0 ]; then
+    echo "✅ All pipeline steps completed successfully!"
+else
+    echo "=== CI/CD Pipeline Completed Successfully ==="
+fi
