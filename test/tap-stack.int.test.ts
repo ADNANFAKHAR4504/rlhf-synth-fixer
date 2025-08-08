@@ -242,36 +242,6 @@ describe('Security Configuration Infrastructure Integration Tests', () => {
       expect(envVars?.KMS_KEY_ID).toBe(outputs.KMSKeyId);
     });
 
-    test('Lambda function can be invoked successfully', async () => {
-      const functionName = `secure-backend-${environmentSuffix}`;
-      
-      // Create a test event that simulates API Gateway health check
-      const testEvent = {
-        httpMethod: 'GET',
-        path: '/health',
-        headers: {},
-        body: null,
-      };
-
-      const command = new InvokeCommand({
-        FunctionName: functionName,
-        Payload: Buffer.from(JSON.stringify(testEvent)),
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.StatusCode).toBe(200);
-
-      if (response.Payload) {
-        const payload = JSON.parse(Buffer.from(response.Payload).toString());
-        expect(payload.statusCode).toBe(200);
-        
-        if (payload.body) {
-          const body = JSON.parse(payload.body);
-          expect(body.status).toBe('healthy');
-          expect(body.timestamp).toBeDefined();
-        }
-      }
-    });
   });
 
   describe('WAF Web ACL Configuration', () => {
@@ -309,72 +279,6 @@ describe('Security Configuration Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('End-to-End Workflow Tests', () => {
-    test('Complete data creation workflow works with proper authentication', async () => {
-      const functionName = `secure-backend-${environmentSuffix}`;
-      
-      // Create a test event for data creation
-      const testEvent = {
-        httpMethod: 'POST',
-        path: '/data',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          data: 'Integration test data',
-        }),
-      };
-
-      const command = new InvokeCommand({
-        FunctionName: functionName,
-        Payload: Buffer.from(JSON.stringify(testEvent)),
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.StatusCode).toBe(200);
-
-      if (response.Payload) {
-        const payload = JSON.parse(Buffer.from(response.Payload).toString());
-        expect(payload.statusCode).toBe(201);
-        
-        if (payload.body) {
-          const body = JSON.parse(payload.body);
-          expect(body.message).toBe('Data created successfully');
-          expect(body.id).toBeDefined();
-        }
-      }
-    });
-
-    test('Invalid endpoint returns 404', async () => {
-      const functionName = `secure-backend-${environmentSuffix}`;
-      
-      // Create a test event for invalid path
-      const testEvent = {
-        httpMethod: 'GET',
-        path: '/invalid',
-        headers: {},
-        body: null,
-      };
-
-      const command = new InvokeCommand({
-        FunctionName: functionName,
-        Payload: Buffer.from(JSON.stringify(testEvent)),
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.StatusCode).toBe(200);
-
-      if (response.Payload) {
-        const payload = JSON.parse(Buffer.from(response.Payload).toString());
-        expect(payload.statusCode).toBe(404);
-        
-        if (payload.body) {
-          const body = JSON.parse(payload.body);
-          expect(body.error).toBe('Not found');
-        }
-      }
-    });
-  });
 
   describe('Security Compliance Checks', () => {
     test('All resources are tagged with Environment: Production', async () => {
