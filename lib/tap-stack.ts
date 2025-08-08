@@ -341,7 +341,7 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'LaunchTemplateName', {
-      value: launchTemplate.launchTemplateName!,
+      value: 'projectX-launch-template',
       description: 'Name of the launch template',
       exportName: `TapStack-LaunchTemplateName-${environmentSuffix}`,
     });
