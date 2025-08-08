@@ -4,7 +4,6 @@ import os
 import pulumi
 import pulumi_aws as aws
 
-
 class LoggingManager:
     """Manages centralized logging for all AWS services."""
 
@@ -14,7 +13,7 @@ class LoggingManager:
         self.environment = environment
         self.kms_key = kms_key
         self.logging_key = logging_key
-        self.region = "us-west-1"
+        self.region = aws.config.region or "us-west-1"
 
     def create_cloudtrail(
             self,
@@ -31,19 +30,15 @@ class LoggingManager:
             enable_logging=True,
             enable_log_file_validation=True,
             kms_key_id=self.kms_key.arn,
-            event_selectors=[
-                aws.cloudtrail.TrailEventSelectorArgs(
-                    read_write_type="All",
-                    include_management_events=True,
-                    data_resources=[
-                        aws.cloudtrail.TrailEventSelectorDataResourceArgs(
-                            type="AWS::S3::Object",
-                            # Logs all object-level operations in all buckets
-                            values=["arn:aws:s3:::*/*"]
-                        )
-                    ]
-                )
-            ],
+            event_selectors=[aws.cloudtrail.TrailEventSelectorArgs(
+                read_write_type="All",
+                include_management_events=True,
+                data_resources=[aws.cloudtrail.TrailEventSelectorDataResourceArgs(
+                    type="AWS::S3::Object",
+                    # Correctly log all object-level events for all buckets in account
+                    values=["arn:aws:s3"]
+                )]
+            )],
             tags={
                 "Name": f"{self.project_name}-cloudtrail",
                 "Environment": self.environment,
@@ -63,7 +58,7 @@ class LoggingManager:
             f"{self.project_name}-vpc-flow-logs",
             name=f"/aws/vpc/{self.project_name}-flow-logs",
             retention_in_days=retention_days,
-            kms_key_id=self.logging_key.arn,
+            kms_key_id=self.logging_key.arn,  # ensure symmetric CMK with proper policy
             tags={
                 "Name": f"{self.project_name}-vpc-flow-logs",
                 "Environment": self.environment,
@@ -86,11 +81,13 @@ class LoggingManager:
             log_destination_type="cloud-watch-logs",
             log_destination=log_group.arn,
             iam_role_arn=flow_logs_role.arn,
-            log_format="${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}",
+            log_format="${srcaddr} ${dstaddr} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}",
             tags={
                 "Name": f"{self.project_name}-vpc-flow-log",
                 "Environment": self.environment,
                 "Purpose": "network-traffic-logging",
-                "ManagedBy": "pulumi"})
+                "ManagedBy": "pulumi"
+            }
+        )
 
         return flow_log
