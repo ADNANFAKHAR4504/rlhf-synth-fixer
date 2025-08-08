@@ -13,7 +13,7 @@ class TestServerlessStack(unittest.TestCase):
 
   def test_dynamodb_table_created(self):
     self.template.resource_count_is("AWS::DynamoDB::Table", 1)
-    self.template.has_resource_properties("AWS::DynamoDB::Table", {
+    self.template.has_resource_properties("AWS::DynamoDB::Table", Match.object_like({
       "KeySchema": [{
         "AttributeName": "ItemId",
         "KeyType": "HASH"
@@ -23,7 +23,7 @@ class TestServerlessStack(unittest.TestCase):
         "AttributeType": "S"
       }],
       "BillingMode": "PROVISIONED"
-    })
+    }))
 
   def test_lambda_function_created(self):
     self.template.resource_count_is("AWS::Lambda::Function", 1)
@@ -54,9 +54,15 @@ class TestServerlessStack(unittest.TestCase):
         ])
       },
       "ManagedPolicyArns": Match.array_with([
-        Match.string_like_regexp(
-          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-        )
+        Match.object_like({
+          "Fn::Join": Match.array_with([
+            Match.any_value(),
+            Match.array_with([
+              "arn:aws:iam::aws:policy/",
+              "service-role/AWSLambdaBasicExecutionRole"
+            ])
+          ])
+        })
       ])
     })
 
