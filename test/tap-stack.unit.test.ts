@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { ServerlessStack } from '../lib/serverless-stack';
+import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
   let app: cdk.App;
@@ -567,7 +567,7 @@ describe('ServerlessStack', () => {
       expect(code).toContain('Order processed successfully');
       expect(code).toContain('orderId');
       expect(code).toContain('customerId');
-      expect(code).toContain('eventbridge.putEvents');
+      expect(code).toContain('PutEventsCommand');
     });
 
     test('Scheduled function includes Powertools and handles scheduled tasks', () => {
