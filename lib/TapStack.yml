@@ -136,6 +136,11 @@ Conditions:
   CreateKeyPair: !Equals [!Ref KeyPairName, '']
 
 Resources:
+  # ========== AMI Lookup ==========
+  LatestAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+
   # ========== Key Pair ==========
   KeyPair:
     Type: AWS::EC2::KeyPair
@@ -418,7 +423,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: ami-0c2d3e23c4f7c4e6e  # Amazon Linux 2023 in us-west-2
+        ImageId: !Ref LatestAmi
         InstanceType: !Ref InstanceType
         KeyName: !If 
           - CreateKeyPair
@@ -795,3 +800,9 @@ Outputs:
       - !Ref KeyPairName
     Export:
       Name: !Sub '${AWS::StackName}-KeyPair-Name'
+  
+  LatestAmiId:
+    Description: Latest Amazon Linux 2023 AMI ID used
+    Value: !Ref LatestAmi
+    Export:
+      Name: !Sub '${AWS::StackName}-Latest-AMI'
