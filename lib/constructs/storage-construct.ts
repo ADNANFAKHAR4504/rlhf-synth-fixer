@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 interface StorageConstructProps {
@@ -19,7 +19,7 @@ export class StorageConstruct extends Construct {
 
     // Create S3 bucket with versioning and encryption
     this.bucket = new s3.Bucket(this, 'DevBucket', {
-      bucketName: `multiregion-dev-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
+      // Let CDK auto-generate unique bucket name to avoid conflicts
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
