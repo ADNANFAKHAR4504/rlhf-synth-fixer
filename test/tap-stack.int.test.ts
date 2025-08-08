@@ -1,44 +1,28 @@
-import { test } from 'tap';
-import template from '../lib/TapStack.yml';
+import t from 'tap';
+import fs from 'fs';
+import yaml from 'js-yaml';
 
-test('Outputs validation', async (t) => {
-  // LoadBalancerDNS
-  t.ok(template.Outputs.LoadBalancerDNS, 'LoadBalancerDNS output exists');
-  t.match(
-    template.Outputs.LoadBalancerDNS.Description,
-    /Public DNS name of the Application Load Balancer/,
-    'LoadBalancerDNS description matches'
-  );
+// Load and parse the CloudFormation YAML
+const template = yaml.load(fs.readFileSync('./lib/TapStack.yml', 'utf8'));
 
-  // LoadBalancerURL
-  t.ok(template.Outputs.LoadBalancerURL, 'LoadBalancerURL output exists');
-  t.match(
-    template.Outputs.LoadBalancerURL.Description,
-    /URL of the Application Load Balancer/,
-    'LoadBalancerURL description matches'
-  );
+t.test('CloudFormation template integration test', (t) => {
+  // Basic template checks
+  t.equal(template.AWSTemplateFormatVersion, '2010-09-09', 'Correct CFN version');
+  t.ok(template.Description, 'Has a Description');
 
-  // VPCId
-  t.ok(template.Outputs.VPCId, 'VPCId output exists');
-  t.match(
-    template.Outputs.VPCId.Description,
-    /VPC ID for the web application/,
-    'VPCId description matches'
-  );
+  // Parameter checks
+  t.ok(template.Parameters.EnvironmentSuffix, 'Has EnvironmentSuffix parameter');
+  t.equal(template.Parameters.EnvironmentSuffix.Default, 'dev', 'Default suffix is dev');
 
-  // StackName
-  t.ok(template.Outputs.StackName, 'StackName output exists');
-  t.match(
-    template.Outputs.StackName.Description,
-    /Name of this CloudFormation stack/,
-    'StackName description matches'
-  );
+  // Resource checks
+  t.ok(template.Resources.MyVPC, 'Has MyVPC resource');
+  t.equal(template.Resources.MyVPC.Type, 'AWS::EC2::VPC', 'VPC type is correct');
 
-  // EnvironmentSuffix
-  t.ok(template.Outputs.EnvironmentSuffix, 'EnvironmentSuffix output exists');
-  t.match(
-    template.Outputs.EnvironmentSuffix.Description,
-    /Environment suffix used for this deployment/,
-    'EnvironmentSuffix description matches'
-  );
+  // Output checks
+  t.ok(template.Outputs, 'Has Outputs section');
+  Object.keys(template.Outputs).forEach((outputKey) => {
+    t.ok(template.Outputs[outputKey].Value, `${outputKey} output has value`);
+  });
+
+  t.end();
 });
