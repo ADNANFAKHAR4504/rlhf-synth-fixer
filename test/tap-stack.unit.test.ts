@@ -338,10 +338,20 @@ beforeAll(() => {
             tags = resource.Properties.Tags;
           }
 
-          if (tags) {
-            const nameTag = tags.find((tag: any) => tag.Key === 'Name');
-            const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-            const appTag = tags.find((tag: any) => tag.Key === 'Application');
+         if (tags) {
+  // Handle both array and object tag formats
+  let nameTag, envTag, appTag;
+  
+  if (Array.isArray(tags)) {
+    nameTag = tags.find((tag: any) => tag.Key === 'Name');
+    envTag = tags.find((tag: any) => tag.Key === 'Environment');
+    appTag = tags.find((tag: any) => tag.Key === 'Application');
+  } else {
+    // Handle object format tags
+    nameTag = tags.Name ? { Key: 'Name', Value: tags.Name } : undefined;
+    envTag = tags.Environment ? { Key: 'Environment', Value: tags.Environment } : undefined;
+    appTag = tags.Application ? { Key: 'Application', Value: tags.Application } : undefined;
+  }
 
             expect(nameTag).toBeDefined();
             expect(envTag).toBeDefined();
@@ -373,7 +383,12 @@ beforeAll(() => {
                                resource.Properties.Name;
           
           if (nameProperty && typeof nameProperty === 'object' && nameProperty['Fn::Sub']) {
-            expect(nameProperty['Fn::Sub']).toContain('${Environment}');
+            // Handle both string and array Fn::Sub formats
+if (Array.isArray(nameProperty['Fn::Sub'])) {
+  expect(nameProperty['Fn::Sub'][0]).toContain('${Environment}');
+} else {
+  expect(nameProperty['Fn::Sub']).toContain('${Environment}');
+}
           }
         }
       });
@@ -479,7 +494,7 @@ beforeAll(() => {
       expect(template.Resources.ProcessorFunction.DependsOn).toBe('LambdaLogGroup');
       
       // IAM policy should reference role
-      expect(template.Resources.LambdaExecutionPolicy.Properties.Roles).toContain({ 'Ref': 'LambdaExecutionRole' });
+expect(template.Resources.LambdaExecutionPolicy.Properties.Roles).toContainEqual({ 'Ref': 'LambdaExecutionRole' });
     });
   });
 });
