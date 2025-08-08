@@ -28,7 +28,6 @@ class TapStackArgs:
     self.environment_suffix = environment_suffix or "dev"
     self.tags = tags
 
-
 class TapStack(pulumi.ComponentResource):
   def __init__(
       self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None
