@@ -1,11 +1,33 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { LambdaClient, GetFunctionConfigurationCommand, InvokeCommand } from '@aws-sdk/client-lambda';
-import { APIGatewayClient, GetRestApiCommand } from '@aws-sdk/client-api-gateway';
-import { CloudWatchClient, ListMetricsCommand, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { EventBridgeClient, DescribeEventBusCommand, ListRulesCommand } from '@aws-sdk/client-eventbridge';
-import { SchedulerClient, GetScheduleGroupCommand, GetScheduleCommand } from '@aws-sdk/client-scheduler';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  LambdaClient,
+  GetFunctionConfigurationCommand,
+  InvokeCommand,
+} from '@aws-sdk/client-lambda';
+import {
+  APIGatewayClient,
+  GetRestApiCommand,
+} from '@aws-sdk/client-api-gateway';
+import {
+  CloudWatchClient,
+  ListMetricsCommand,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  EventBridgeClient,
+  DescribeEventBusCommand,
+  ListRulesCommand,
+} from '@aws-sdk/client-eventbridge';
+import {
+  SchedulerClient,
+  GetScheduleGroupCommand,
+  GetScheduleCommand,
+} from '@aws-sdk/client-scheduler';
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
 
 // AWS Service Clients
 const lambda = new LambdaClient({ region: 'us-east-1' });
@@ -48,8 +70,12 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.Runtime).toBe('nodejs20.x');
       expect(response.Handler).toBe('index.handler');
       expect(response.TracingConfig?.Mode).toBe('Active');
-      expect(response.Environment?.Variables?.POWERTOOLS_SERVICE_NAME).toBe('user-service');
-      expect(response.Environment?.Variables?.POWERTOOLS_METRICS_NAMESPACE).toBe('ServerlessApp');
+      expect(response.Environment?.Variables?.POWERTOOLS_SERVICE_NAME).toBe(
+        'user-service'
+      );
+      expect(
+        response.Environment?.Variables?.POWERTOOLS_METRICS_NAMESPACE
+      ).toBe('ServerlessApp');
     });
 
     test('Order Lambda function exists and is configured correctly', async () => {
@@ -67,8 +93,12 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.Runtime).toBe('nodejs20.x');
       expect(response.Handler).toBe('index.handler');
       expect(response.TracingConfig?.Mode).toBe('Active');
-      expect(response.Environment?.Variables?.POWERTOOLS_SERVICE_NAME).toBe('order-service');
-      expect(response.Environment?.Variables?.EVENT_BUS_NAME).toBe(EVENT_BUS_NAME);
+      expect(response.Environment?.Variables?.POWERTOOLS_SERVICE_NAME).toBe(
+        'order-service'
+      );
+      expect(response.Environment?.Variables?.EVENT_BUS_NAME).toBe(
+        EVENT_BUS_NAME
+      );
     });
 
     test('Scheduled Processing Lambda function exists and is configured correctly', async () => {
@@ -102,7 +132,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
       expect(response.Layers).toBeDefined();
       expect(response.Layers?.length).toBeGreaterThan(0);
-      const powertoolsLayer = response.Layers?.find((layer) =>
+      const powertoolsLayer = response.Layers?.find(layer =>
         layer.Arn?.includes('AWSLambdaPowertoolsTypeScriptV2')
       );
       expect(powertoolsLayer).toBeDefined();
@@ -117,7 +147,9 @@ describe('Serverless Infrastructure Integration Tests', () => {
       }
 
       // Test that API URL is valid
-      expect(API_URL).toMatch(/https:\/\/.*\.execute-api\..*\.amazonaws\.com\/.*/);
+      expect(API_URL).toMatch(
+        /https:\/\/.*\.execute-api\..*\.amazonaws\.com\/.*/
+      );
     });
 
     test('API Gateway has CORS configured', async () => {
@@ -169,7 +201,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       });
       const response = await eventBridge.send(command);
 
-      const orderRule = response.Rules?.find((rule) =>
+      const orderRule = response.Rules?.find(rule =>
         rule.Name?.includes('order-processing')
       );
       expect(orderRule).toBeDefined();
@@ -256,7 +288,8 @@ describe('Serverless Infrastructure Integration Tests', () => {
       }
 
       // Extract log group name from ARN
-      const logGroupName = outputs.PowertoolsLogGroupArn.split(':log-group:')[1]?.split(':')[0];
+      const logGroupName =
+        outputs.PowertoolsLogGroupArn.split(':log-group:')[1]?.split(':')[0];
       if (!logGroupName) {
         throw new Error('Could not extract log group name from ARN');
       }
@@ -266,7 +299,9 @@ describe('Serverless Infrastructure Integration Tests', () => {
       });
       const response = await logs.send(command);
 
-      const logGroup = response.logGroups?.find((lg) => lg.logGroupName === logGroupName);
+      const logGroup = response.logGroups?.find(
+        lg => lg.logGroupName === logGroupName
+      );
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(7);
     });
@@ -278,7 +313,8 @@ describe('Serverless Infrastructure Integration Tests', () => {
       }
 
       // Extract log group name from ARN
-      const logGroupName = outputs.EventBridgeLogGroupArn.split(':log-group:')[1]?.split(':')[0];
+      const logGroupName =
+        outputs.EventBridgeLogGroupArn.split(':log-group:')[1]?.split(':')[0];
       if (!logGroupName) {
         throw new Error('Could not extract log group name from ARN');
       }
@@ -288,7 +324,9 @@ describe('Serverless Infrastructure Integration Tests', () => {
       });
       const response = await logs.send(command);
 
-      const logGroup = response.logGroups?.find((lg) => lg.logGroupName === logGroupName);
+      const logGroup = response.logGroups?.find(
+        lg => lg.logGroupName === logGroupName
+      );
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(7);
     });
@@ -312,18 +350,19 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const response = await cloudWatch.send(command);
 
       // Check for function error alarms
-      const userErrorAlarm = response.MetricAlarms?.find((alarm) =>
+      const userErrorAlarm = response.MetricAlarms?.find(alarm =>
         alarm.AlarmName?.includes('UserFunctionErrorAlarm')
       );
-      const orderErrorAlarm = response.MetricAlarms?.find((alarm) =>
+      const orderErrorAlarm = response.MetricAlarms?.find(alarm =>
         alarm.AlarmName?.includes('OrderFunctionErrorAlarm')
       );
-      const scheduledErrorAlarm = response.MetricAlarms?.find((alarm) =>
+      const scheduledErrorAlarm = response.MetricAlarms?.find(alarm =>
         alarm.AlarmName?.includes('ScheduledFunctionErrorAlarm')
       );
 
       // At least some alarms should exist
-      const alarmsExist = userErrorAlarm || orderErrorAlarm || scheduledErrorAlarm;
+      const alarmsExist =
+        userErrorAlarm || orderErrorAlarm || scheduledErrorAlarm;
       expect(alarmsExist).toBeTruthy();
     });
   });
@@ -348,7 +387,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const response = await lambda.send(command);
 
       expect(response.StatusCode).toBe(200);
-      
+
       // Parse the response payload
       if (response.Payload) {
         const result = JSON.parse(response.Payload.toString());

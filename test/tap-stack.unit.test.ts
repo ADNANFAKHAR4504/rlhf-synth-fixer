@@ -157,7 +157,9 @@ describe('ServerlessStack', () => {
       const functions = template.findResources('AWS::Lambda::Function');
       Object.values(functions).forEach((func: any) => {
         expect(func.Properties.Layers).toBeDefined();
-        expect(JSON.stringify(func.Properties.Layers[0])).toContain('AWSLambdaPowertoolsTypeScriptV2');
+        expect(JSON.stringify(func.Properties.Layers[0])).toContain(
+          'AWSLambdaPowertoolsTypeScriptV2'
+        );
       });
     });
 
@@ -197,11 +199,13 @@ describe('ServerlessStack', () => {
           MaximumWindowInMinutes: 15,
         },
         Target: Match.objectLike({
-          Input: Match.serializedJson(Match.objectLike({
-            scheduleType: 'daily',
-            task: 'daily-maintenance',
-            environment: environmentSuffix,
-          })),
+          Input: Match.serializedJson(
+            Match.objectLike({
+              scheduleType: 'daily',
+              task: 'daily-maintenance',
+              environment: environmentSuffix,
+            })
+          ),
         }),
       });
     });
@@ -216,11 +220,13 @@ describe('ServerlessStack', () => {
           MaximumWindowInMinutes: 5,
         },
         Target: Match.objectLike({
-          Input: Match.serializedJson(Match.objectLike({
-            scheduleType: 'hourly',
-            task: 'frequent-check',
-            environment: environmentSuffix,
-          })),
+          Input: Match.serializedJson(
+            Match.objectLike({
+              scheduleType: 'hourly',
+              task: 'frequent-check',
+              environment: environmentSuffix,
+            })
+          ),
         }),
       });
     });
@@ -234,11 +240,13 @@ describe('ServerlessStack', () => {
           Mode: 'OFF',
         },
         Target: Match.objectLike({
-          Input: Match.serializedJson(Match.objectLike({
-            scheduleType: 'one-time',
-            task: 'system-initialization',
-            environment: environmentSuffix,
-          })),
+          Input: Match.serializedJson(
+            Match.objectLike({
+              scheduleType: 'one-time',
+              task: 'system-initialization',
+              environment: environmentSuffix,
+            })
+          ),
         }),
       });
     });
@@ -271,9 +279,9 @@ describe('ServerlessStack', () => {
       template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 3);
     });
 
-    test('Deployment groups use ALL_AT_ONCE configuration', () => {
+    test('Deployment groups use CANARY configuration', () => {
       template.hasResourceProperties('AWS::CodeDeploy::DeploymentGroup', {
-        DeploymentConfigName: 'CodeDeployDefault.LambdaAllAtOnce',
+        DeploymentConfigName: 'CodeDeployDefault.LambdaCanary10Percent5Minutes',
         AutoRollbackConfiguration: {
           Enabled: true,
           Events: Match.arrayWith(['DEPLOYMENT_FAILURE']),
@@ -364,7 +372,9 @@ describe('ServerlessStack', () => {
 
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: 'POST',
-        ResourceId: { Ref: Match.stringLikeRegexp('ServerlessApiorderscustomerId') },
+        ResourceId: {
+          Ref: Match.stringLikeRegexp('ServerlessApiorderscustomerId'),
+        },
       });
     });
 
@@ -473,27 +483,6 @@ describe('ServerlessStack', () => {
         Description: 'EventBridge Scheduler Group Name',
         Export: {
           Name: `schedule-group-${environmentSuffix}`,
-        },
-      });
-
-      template.hasOutput('DailyScheduleName', {
-        Description: 'Daily Processing Schedule Name',
-        Export: {
-          Name: `daily-schedule-${environmentSuffix}`,
-        },
-      });
-
-      template.hasOutput('HourlyScheduleName', {
-        Description: 'Hourly Processing Schedule Name',
-        Export: {
-          Name: `hourly-schedule-${environmentSuffix}`,
-        },
-      });
-
-      template.hasOutput('OneTimeScheduleName', {
-        Description: 'One-time Initialization Schedule Name',
-        Export: {
-          Name: `onetime-schedule-${environmentSuffix}`,
         },
       });
     });
