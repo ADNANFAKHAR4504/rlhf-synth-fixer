@@ -134,14 +134,14 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("environment", self.environment_suffix)
     pulumi.export("tags", self.tags)
 
-    # Primary region outputs
-    if self.regions:
-        primary_region = self.regions[0]
-        pulumi.export("primary_region", primary_region)
-        pulumi.export("primary_vpc_id", self.regional_networks[primary_region].vpc_id)
-        pulumi.export("primary_instance_ids", self.regional_compute[primary_region].instance_ids)
-        pulumi.export("primary_web_server_sg_id", self.regional_security[primary_region].web_server_sg_id)
-        pulumi.export("primary_dashboard_name", self.regional_monitoring[primary_region].dashboard_name)
+    # Primary region outputs - TEMPORARILY COMMENTED OUT FOR DEBUGGING
+    # if self.regions:
+    #     primary_region = self.regions[0]
+    #     pulumi.export("primary_region", primary_region)
+    #     pulumi.export("primary_vpc_id", self.regional_networks[primary_region].vpc_id)
+    #     pulumi.export("primary_instance_ids", self.regional_compute[primary_region].instance_ids)
+    #     pulumi.export("primary_web_server_sg_id", self.regional_security[primary_region].web_server_sg_id)
+    #     pulumi.export("primary_dashboard_name", self.regional_monitoring[primary_region].dashboard_name)
 
     # All regions data for reference - TEMPORARILY COMMENTED OUT FOR DEBUGGING
     # all_regions_data_outputs = {}
