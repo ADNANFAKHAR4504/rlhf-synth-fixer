@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready scalable web application infrastructure with Auto Scaling, Load Balancer, and proper security configuration'
+Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -418,7 +418,7 @@ Outputs:
     Description: 'Public DNS name of the Application Load Balancer'
     Value: !GetAtt WebAppLoadBalancer.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-LoadBalancer-DNS'
+      Name: !Sub '${AWS::StackName}-LoadBalancerDNS'
 
   LoadBalancerURL:
     Description: 'URL of the Application Load Balancer'
