@@ -122,7 +122,7 @@ describe('TapStack Unit Tests (from JSON)', () => {
     it('configured for API proxy and S3 use', () => {
       const fn = template.Resources['LambdaFunction'];
       expect(fn.Type).toBe('AWS::Lambda::Function');
-      expect(fn.Properties.Runtime).toBe('python3.9');
+      expect(fn.Properties.Runtime).toBe('python3.12');
       expect(fn.Properties.Handler).toBe('index.lambda_handler');
       expect(fn.Properties.Timeout).toBe(30);
       expect(fn.Properties.MemorySize).toBe(256);
