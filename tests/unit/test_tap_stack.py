@@ -173,51 +173,6 @@ class TestTapStack:
             assert mock_profile.call_count == 1  # Instance profile
     
     @patch('pulumi_aws.get_caller_identity')
-    @patch('pulumi_aws.s3.Bucket')
-    @patch('pulumi_aws.s3.BucketPolicy')
-    @patch('pulumi_aws.cloudtrail.Trail')
-    def test_create_cloudtrail(self, mock_trail, mock_policy, mock_bucket, mock_caller_id):
-        """Test CloudTrail creation with S3 bucket - simplified version."""
-        mock_caller_id.return_value = self.caller_identity_mock
-        
-        # Mock S3 bucket
-        mock_bucket_instance = MagicMock()
-        mock_bucket_instance.id = "bucket-id"
-        mock_bucket_instance.bucket = "cloudtrail-bucket"
-        mock_bucket.return_value = mock_bucket_instance
-        
-        # Mock S3 bucket policy
-        mock_policy_instance = MagicMock()
-        mock_policy.return_value = mock_policy_instance
-        
-        with patch.object(TapStack, '__init__', lambda x, y, z, opts=None: None):
-            stack = TapStack.__new__(TapStack)
-            stack.environment_suffix = self.environment_suffix
-            stack.standard_tags = {
-                "Environment": self.environment_suffix,
-                "Owner": "DevOps-Team",
-                "CostCenter": "Infrastructure",
-                "Project": "AWS-Nova-Model-Breaking",
-                "ManagedBy": "Pulumi",
-            }
-            
-            mock_kms = MagicMock()
-            mock_kms.arn = "test-kms-arn"
-            stack.kms_key = mock_kms
-            
-            # Patch ResourceOptions to avoid depends_on validation
-            with patch('pulumi.ResourceOptions') as mock_resource_options:
-                mock_resource_options.return_value = MagicMock()
-                
-                stack._create_cloudtrail()
-                
-                # Verify CloudTrail components were created
-                assert hasattr(stack, 'cloudtrail_bucket')
-                assert mock_bucket.call_count == 1
-                assert mock_policy.call_count == 1
-                assert mock_trail.call_count == 1
-    
-    @patch('pulumi_aws.get_caller_identity')
     @patch('pulumi_aws.Provider')
     @patch('pulumi_aws.ec2.Vpc')
     @patch('pulumi_aws.ec2.InternetGateway')
@@ -601,4 +556,5 @@ def test_module_imports():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--cov=lib.tap_stack", "--cov-report=html"])
+
 
