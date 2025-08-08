@@ -74,7 +74,7 @@ Parameters:
     Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
     Description: SSM parameter for latest Amazon Linux 2 AMI
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
+    Type: String
     Description: Optional KeyPair name for EC2 (not recommended for prod). Leave empty if not used.
     Default: ""
 
@@ -590,5 +590,6 @@ Outputs:
     Description: Template validation check
     Value: "Use aws cloudformation validate-template and cfn-lint to validate this template before deploying."
 # End of template
+
 
 ```
