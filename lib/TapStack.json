@@ -61,7 +61,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${S3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${ApplicationName}-${Environment}-data-${AWS::AccountId}/*"
                                     }
                                 },
                                 {
@@ -70,7 +70,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "S3Bucket"
+                                        "Fn::Sub": "arn:aws:s3:::${ApplicationName}-${Environment}-data-${AWS::AccountId}"
                                     }
                                 }
                             ]
@@ -145,12 +145,6 @@
                     "BlockPublicPolicy": true,
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
-                },
-                "LoggingConfiguration": {
-                    "DestinationBucketName": {
-                        "Ref": "S3AccessLogsBucket"
-                    },
-                    "LogFilePrefix": "access-logs/"
                 }
             }
         },
@@ -205,7 +199,7 @@
                 "Environment": {
                     "Variables": {
                         "BUCKET_NAME": {
-                            "Ref": "S3Bucket"
+                            "Fn::Sub": "${ApplicationName}-${Environment}-data-${AWS::AccountId}"
                         },
                         "ENVIRONMENT": {
                             "Ref": "Environment"

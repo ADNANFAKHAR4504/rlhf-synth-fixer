@@ -51,11 +51,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ApplicationName}-${Environment}-data-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref S3Bucket
+                Resource: !Sub 'arn:aws:s3:::${ApplicationName}-${Environment}-data-${AWS::AccountId}'
         - PolicyName: CloudWatchLogsPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -105,9 +105,7 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName: !Ref S3AccessLogsBucket
-        LogFilePrefix: 'access-logs/'
+
 
 
   # S3 bucket for access logs
@@ -147,7 +145,7 @@ Resources:
 
       Environment:
         Variables:
-          BUCKET_NAME: !Ref S3Bucket
+          BUCKET_NAME: !Sub '${ApplicationName}-${Environment}-data-${AWS::AccountId}'
           ENVIRONMENT: !Ref Environment
       Code:
         ZipFile: |
