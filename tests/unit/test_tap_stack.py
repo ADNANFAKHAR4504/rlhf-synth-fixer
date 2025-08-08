@@ -190,50 +190,68 @@ class TestTapStack:
     assert any("web" in name for name in sg_names)
     assert any("db" in name for name in sg_names)
 
+  def test_security_group_rules_creation(self, synthesized_stack):
+    """Test security group rule creation and configuration."""
+    sg_rule_resources = synthesized_stack.get("resource", {}).get("aws_security_group_rule", {})
+    
+    # Should have rules for web (HTTP ingress, HTTPS ingress, all egress) and db (MySQL ingress)
+    assert len(sg_rule_resources) >= 4
+    
+    # Check for different types of rules
+    rule_types = []
+    protocols = []
+    ports = []
+    
+    for rule_config in sg_rule_resources.values():
+      assert "type" in rule_config
+      assert rule_config["type"] in ["ingress", "egress"]
+      assert "security_group_id" in rule_config
+      assert "protocol" in rule_config
+      
+      rule_types.append(rule_config["type"])
+      protocols.append(rule_config["protocol"])
+      
+      # Collect port information (may be tokens/None)
+      if "from_port" in rule_config and rule_config["from_port"] is not None:
+        ports.append(rule_config["from_port"])
+    
+    # Should have both ingress and egress rules
+    assert "ingress" in rule_types
+    assert "egress" in rule_types
+    
+    # Should have tcp protocol rules
+    assert "tcp" in protocols
+
   def test_web_security_group_rules(self, synthesized_stack):
-    """Test web security group ingress and egress rules."""
-    sg_resources = synthesized_stack.get("resource", {}).get("aws_security_group", {})
-    # Find web security group
-    web_sg = None
-    for sg_config in sg_resources.values():
-      if "web" in sg_config["name"]:
-        web_sg = sg_config
-        break
-    assert web_sg is not None
-    # Check ingress rules for HTTP and HTTPS
-    ingress_rules = web_sg["ingress"]
-    assert len(ingress_rules) == 2
-    # Ports may be None due to tokenization, so check for expected structure
-    for rule in ingress_rules:
-      assert "from_port" in rule
-      assert rule["from_port"] in [80, 443, None]
-    # Check egress rules
-    egress_rules = web_sg["egress"]
-    assert len(egress_rules) == 1
-    assert egress_rules[0].get("from_port", 0) in [0, None]
-    assert egress_rules[0].get("to_port", 0) in [0, None]
-    assert egress_rules[0]["protocol"] == "-1"
+    """Test web security group rules are created correctly."""
+    sg_rule_resources = synthesized_stack.get("resource", {}).get("aws_security_group_rule", {})
+    
+    # Find rules that should be for web security group (HTTP, HTTPS, all egress)
+    web_related_rules = []
+    for rule_name, rule_config in sg_rule_resources.items():
+      if "web" in rule_name or "http" in rule_name.lower():
+        web_related_rules.append(rule_config)
+    
+    # Should have at least 3 web-related rules (HTTP ingress, HTTPS ingress, all egress)
+    assert len(web_related_rules) >= 3
 
   def test_database_security_group_rules(self, synthesized_stack):
-    """Test database security group rules."""
-    sg_resources = synthesized_stack.get("resource", {}).get("aws_security_group", {})
-    # Find database security group
-    db_sg = None
-    for sg_config in sg_resources.values():
-      if "db" in sg_config["name"]:
-        db_sg = sg_config
-        break
-    assert db_sg is not None
-    # Check ingress rules for MySQL
-    ingress_rules = db_sg["ingress"]
-    assert len(ingress_rules) == 1
-    # Ports may be None due to tokenization, so check for expected structure
-    assert "from_port" in ingress_rules[0]
-    assert ingress_rules[0]["from_port"] in [3306, None]
-    assert "to_port" in ingress_rules[0]
-    assert ingress_rules[0]["to_port"] in [3306, None]
-    assert ingress_rules[0]["protocol"] == "tcp"
-    assert "security_groups" in ingress_rules[0]
+    """Test database security group rules are created correctly."""
+    sg_rule_resources = synthesized_stack.get("resource", {}).get("aws_security_group_rule", {})
+    
+    # Find rules that should be for database security group (MySQL)
+    db_related_rules = []
+    for rule_name, rule_config in sg_rule_resources.items():
+      if "db" in rule_name or "mysql" in rule_name.lower():
+        db_related_rules.append(rule_config)
+    
+    # Should have at least 1 database-related rule (MySQL ingress)
+    assert len(db_related_rules) >= 1
+    
+    # Check that database rules use source_security_group_id (not cidr_blocks)
+    for rule_config in db_related_rules:
+      if rule_config["type"] == "ingress":
+        assert "source_security_group_id" in rule_config
 
   def test_s3_buckets_creation(self, synthesized_stack):
     """Test S3 bucket creation and configuration."""

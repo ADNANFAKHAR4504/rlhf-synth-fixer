@@ -20,6 +20,7 @@ from cdktf_cdktf_provider_aws.route_table import RouteTable
 from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup
+from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
 from cdktf_cdktf_provider_aws.flow_log import FlowLog
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -391,40 +392,49 @@ class TapStack(TerraformStack):
       name=f"tap-web-sg-{self.environment_suffix}",
       description="Security group for web tier - allows HTTP/HTTPS traffic",
       vpc_id=self.vpc.id,
-      ingress=[
-        {
-          "from_port": 80,
-          "to_port": 80,
-          "protocol": "tcp",
-          "cidr_blocks": ["0.0.0.0/0"],
-          "security_groups": [],
-          "description": "HTTP traffic from internet"
-        },
-        {
-          "from_port": 443,
-          "to_port": 443,
-          "protocol": "tcp",
-          "cidr_blocks": ["0.0.0.0/0"],
-          "security_groups": [],
-          "description": "HTTPS traffic from internet"
-        }
-      ],
-      egress=[
-        {
-          "from_port": 0,
-          "to_port": 0,
-          "protocol": "-1",
-          "cidr_blocks": ["0.0.0.0/0"],
-          "security_groups": [],
-          "description": "All outbound traffic"
-        }
-      ],
       tags={
         "Name": f"tap-web-sg-{self.environment_suffix}",
         "Environment": self.environment_suffix,
         "Tier": "Web",
         "Purpose": "Web tier security group with HTTP/HTTPS access"
       }
+    )
+
+    # Web tier security group rules
+    SecurityGroupRule(
+      self,
+      "web_http_ingress",
+      type="ingress",
+      from_port=80,
+      to_port=80,
+      protocol="tcp",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.web_sg.id,
+      description="HTTP traffic from internet"
+    )
+
+    SecurityGroupRule(
+      self,
+      "web_https_ingress",
+      type="ingress",
+      from_port=443,
+      to_port=443,
+      protocol="tcp",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.web_sg.id,
+      description="HTTPS traffic from internet"
+    )
+
+    SecurityGroupRule(
+      self,
+      "web_all_egress",
+      type="egress",
+      from_port=0,
+      to_port=0,
+      protocol="-1",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.web_sg.id,
+      description="All outbound traffic"
     )
 
     # Database security group
@@ -434,22 +444,25 @@ class TapStack(TerraformStack):
       name=f"tap-db-sg-{self.environment_suffix}",
       description="Security group for database tier - allows MySQL access from web tier only",
       vpc_id=self.vpc.id,
-      ingress=[
-        {
-          "from_port": 3306,
-          "to_port": 3306,
-          "protocol": "tcp",
-          "cidr_blocks": [],
-          "security_groups": [self.web_sg.id],
-          "description": "MySQL access from web tier"
-        }
-      ],
       tags={
         "Name": f"tap-db-sg-{self.environment_suffix}",
         "Environment": self.environment_suffix,
         "Tier": "Database",
         "Purpose": "Database security group with restricted MySQL access"
       }
+    )
+
+    # Database security group rules
+    SecurityGroupRule(
+      self,
+      "db_mysql_ingress",
+      type="ingress",
+      from_port=3306,
+      to_port=3306,
+      protocol="tcp",
+      source_security_group_id=self.web_sg.id,
+      security_group_id=self.db_sg.id,
+      description="MySQL access from web tier"
     )
 
   def _create_s3_infrastructure(self):
@@ -647,7 +660,7 @@ class TapStack(TerraformStack):
             "iam:ChangePassword",
             "iam:GetUser"
           ],
-          "resources": [f"arn:aws:iam::{self.current_account.account_id}:user/${{${{aws:username}}}}"]
+          "resources": ["arn:aws:iam::" + self.current_account.account_id + ":user/${aws:username}"]
         },
         {
           "sid": "AllowManageOwnMFA",
@@ -660,8 +673,8 @@ class TapStack(TerraformStack):
             "iam:ResyncMFADevice"
           ],
           "resources": [
-            f"arn:aws:iam::{self.current_account.account_id}:mfa/${{${{aws:username}}}}",
-            f"arn:aws:iam::{self.current_account.account_id}:user/${{${{aws:username}}}}"
+            "arn:aws:iam::" + self.current_account.account_id + ":mfa/${aws:username}",
+            "arn:aws:iam::" + self.current_account.account_id + ":user/${aws:username}"
           ]
         },
         {
