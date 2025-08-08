@@ -25,10 +25,10 @@ Parameters:
 
   DBPassword:
     Type: String
+    Default: "SecurePassword123!"
     NoEcho: true
-    Description: "Database password (minimum 8 characters, required for security)"
+    Description: "Database password (minimum 8 characters)"
     MinLength: 8
-    AllowedPattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$"
 
   InstanceType:
     Type: String
