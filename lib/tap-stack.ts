@@ -6,7 +6,6 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as securityhub from 'aws-cdk-lib/aws-securityhub';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
@@ -309,18 +308,9 @@ export class TapStack extends cdk.Stack {
       webAclArn: webAcl.attrArn,
     });
 
-    // Enable AWS Security Hub (only in primary region)
-    if (props.isPrimaryRegion) {
-      const securityHubResource = new securityhub.CfnHub(this, 'SecurityHub', {
-        enableDefaultStandards: true,
-      });
-
-      // Add dependency to ensure proper ordering
-      securityHubResource.node.addDependency(vpc);
-
-      // Set error handling to continue if SecurityHub already exists
-      securityHubResource.addPropertyOverride('OnError', 'CONTINUE');
-    }
+    // Security Hub is an account-level service that should be enabled at the account/organization level
+    // This stack focuses on application-specific security controls (WAF, IAM, etc.)
+    // For SecurityHub enablement, use: aws securityhub enable-security-hub --enable-default-standards
 
     // Store SSM Parameter for Inspector enablement status
     // Note: Inspector v2 enablement is typically done at the org level

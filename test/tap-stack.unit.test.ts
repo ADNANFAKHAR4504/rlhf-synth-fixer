@@ -326,33 +326,7 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
-  describe('Security Hub', () => {
-    test('should enable Security Hub in primary region only', () => {
-      const app = new cdk.App();
-      const primaryStack = new TapStack(app, 'TestPrimaryStack', {
-        environmentSuffix,
-        isPrimaryRegion: true,
-        env: { account: '123456789012', region: 'us-west-1' },
-      });
-      const secondaryStack = new TapStack(app, 'TestSecondaryStack', {
-        environmentSuffix,
-        isPrimaryRegion: false,
-        env: { account: '123456789012', region: 'us-east-1' },
-      });
-      
-      const primaryTemplate = Template.fromStack(primaryStack);
-      const secondaryTemplate = Template.fromStack(secondaryStack);
-      
-      primaryTemplate.hasResourceProperties('AWS::SecurityHub::Hub', {
-        EnableDefaultStandards: true,
-      });
-      
-      // Secondary region should not have Security Hub
-      expect(() => {
-        secondaryTemplate.hasResourceProperties('AWS::SecurityHub::Hub', {});
-      }).toThrow();
-    });
-  });
+
 
   describe('SSM Parameters', () => {
     test('should store configuration in SSM', () => {
@@ -396,8 +370,7 @@ describe('TapStack Unit Tests', () => {
       const primaryTemplate = Template.fromStack(primaryStack);
       const secondaryTemplate = Template.fromStack(secondaryStack);
       
-      // Primary should have Security Hub
-      primaryTemplate.hasResourceProperties('AWS::SecurityHub::Hub', {});
+      // Both stacks should have their own VPCs
       
       // Both should have their own VPCs
       primaryTemplate.resourceCountIs('AWS::EC2::VPC', 1);
