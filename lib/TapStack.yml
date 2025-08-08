@@ -481,6 +481,12 @@ Outputs:
     Export:
       Name: !Sub ${EnvironmentName}-LoadBalancerURL
 
+  LoadBalancerName:
+    Description: Name of the Application Load Balancer
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub ${EnvironmentName}-LoadBalancerName
+
   StaticContentBucketURL:
     Description: URL of the S3 static content bucket
     Value: !Sub http://${StaticContentBucket}.s3-website-us-east-1.amazonaws.com
