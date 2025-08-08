@@ -8,7 +8,7 @@ from dataclasses import dataclass
 class TapStackArgs:
     """Arguments for TapStack"""
     project_name: str = "iac-aws-nova"
-    environment: str = "dev"
+    environment_suffix: str = "dev"  # Changed from 'environment' to 'environment_suffix'
     regions: List[str] = None
     
     def __post_init__(self):
@@ -22,7 +22,7 @@ class TapStack(pulumi.ComponentResource):
         super().__init__("custom:TapStack", name, None, opts)
         
         self.project_name = args.project_name
-        self.environment = args.environment
+        self.environment = args.environment_suffix  # Use environment_suffix from args
         self.regions = args.regions
         
         # Resource collections
@@ -438,4 +438,3 @@ def handler(event, context):
             "s3_buckets": s3_names,
             "vpc_ids": self.vpc_ids
         })
-
