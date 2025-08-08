@@ -24,10 +24,12 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
-import fs from 'fs';
+import * as fs from 'fs';
 
 // Skip integration tests if outputs file doesn't exist (development environment)
 let outputs: any;
+let shouldSkipTests = false;
+
 try {
   outputs = JSON.parse(
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -39,14 +41,7 @@ try {
   console.log(
     'Run "npm run test:integration" after deploying infrastructure to run integration tests'
   );
-  // Use describe.skip to gracefully skip all tests
-  describe.skip('Secure Infrastructure Integration Tests', () => {
-    test('skipped - no infrastructure outputs', () => {
-      // This test is intentionally skipped
-    });
-  });
-  // Exit early to avoid running the rest of the file
-  return;
+  shouldSkipTests = true;
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
@@ -60,7 +55,14 @@ const kmsClient = new KMSClient({ region });
 const ssmClient = new SSMClient({ region });
 const iamClient = new IAMClient({ region });
 
-describe('Secure Infrastructure Integration Tests', () => {
+if (shouldSkipTests) {
+  describe.skip('Secure Infrastructure Integration Tests', () => {
+    test('skipped - no infrastructure outputs', () => {
+      // This test is intentionally skipped
+    });
+  });
+} else {
+  describe('Secure Infrastructure Integration Tests', () => {
   describe('VPC Configuration', () => {
     test('should have deployed VPC with correct configuration', async () => {
       const command = new DescribeVpcsCommand({
@@ -327,4 +329,5 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(projectTag?.Value).toBe('org-secure-environment');
     });
   });
-});
+  });
+}
