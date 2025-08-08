@@ -17,9 +17,9 @@ class TestServerlessStack(unittest.TestCase):
 
   def test_dynamodb_table_created(self):
     """
-    The assertion was corrected to match the actual CloudFormation output.
-    The stack's `PAY_PER_REQUEST` billing mode results in the `ProvisionedThroughput`
-    property being present, not a top-level `BillingMode` property.
+    FIXED: The assertion has been corrected.
+    The stack's `PAY_PER_REQUEST` billing mode results in a top-level
+    `BillingMode` property, not `ProvisionedThroughput`.
     """
     self.template.resource_count_is("AWS::DynamoDB::Table", 1)
     self.template.has_resource_properties("AWS::DynamoDB::Table", Match.object_like({
@@ -31,12 +31,7 @@ class TestServerlessStack(unittest.TestCase):
         "AttributeName": "ItemId",
         "AttributeType": "S"
       }],
-      # The stack creates a PAY_PER_REQUEST table, which means the CloudFormation
-      # output includes ProvisionedThroughput instead of a BillingMode key.
-      "ProvisionedThroughput": {
-        "ReadCapacityUnits": 5,
-        "WriteCapacityUnits": 5
-      }
+      "BillingMode": "PAY_PER_REQUEST"
     }))
 
   def test_lambda_function_created(self):
