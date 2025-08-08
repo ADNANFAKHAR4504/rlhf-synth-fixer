@@ -391,26 +391,6 @@ Resources:
       AlarmActions:
         - !Ref WebAppScaleDownPolicy
 
-  # DynamoDB sample resource (keeps parity with your earlier template)
-  TurnAroundPromptTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      TableName: !Sub 'TurnAroundPromptTable-${EnvironmentSuffix}'
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
-      Tags:
-        - Key: Environment
-          Value: 'Production'
-        - Key: Application
-          Value: 'WebApp'
 
 # -------------------------
 # Outputs
@@ -433,18 +413,6 @@ Outputs:
     Value: !Ref WebAppVPC
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
-
-  TurnAroundPromptTableName:
-    Description: 'Name of the DynamoDB table'
-    Value: !Ref TurnAroundPromptTable
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-
-  TurnAroundPromptTableArn:
-    Description: 'ARN of the DynamoDB table'
-    Value: !GetAtt TurnAroundPromptTable.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
 
   StackName:
     Description: 'Name of this CloudFormation stack'
