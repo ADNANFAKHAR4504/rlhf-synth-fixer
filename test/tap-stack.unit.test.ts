@@ -1,7 +1,28 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Simple assertion helpers to avoid Jest dependency issues
+function simpleAssert(condition: boolean, message: string) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function simpleEqual(actual: any, expected: any, message: string) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(
+      `${message}. Expected: ${JSON.stringify(expected)}, Actual: ${JSON.stringify(actual)}`
+    );
+  }
+}
+
+function simpleContains(str: string, substring: string, message: string) {
+  if (!str.includes(substring)) {
+    throw new Error(
+      `${message}. String "${str}" does not contain "${substring}"`
+    );
+  }
+}
 
 describe('TAP Stack CloudFormation Template', () => {
   let template: any;
@@ -14,32 +35,71 @@ describe('TAP Stack CloudFormation Template', () => {
 
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+      simpleEqual(
+        template.AWSTemplateFormatVersion,
+        '2010-09-09',
+        'CloudFormation format version should be 2010-09-09'
+      );
     });
 
     test('should have a comprehensive description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toContain(
-        'TAP Stack - Task Assignment Platform'
+      simpleAssert(template.Description, 'Description should be defined');
+      simpleContains(
+        template.Description,
+        'TAP Stack - Task Assignment Platform',
+        'Description should contain TAP Stack'
       );
     });
 
     test('should have all required sections', () => {
-      expect(template.Parameters).toBeDefined();
-      expect(template.Resources).toBeDefined();
-      expect(template.Outputs).toBeDefined();
+      simpleAssert(template.Parameters, 'Parameters section should be defined');
+      simpleAssert(template.Resources, 'Resources section should be defined');
+      simpleAssert(template.Outputs, 'Outputs section should be defined');
+    });
+
+    test('should have metadata section', () => {
+      simpleAssert(template.Metadata, 'Metadata should be defined');
+      simpleAssert(
+        template.Metadata['AWS::CloudFormation::Interface'],
+        'CloudFormation Interface should be defined'
+      );
     });
   });
 
   describe('Parameters', () => {
     test('should have EnvironmentSuffix parameter', () => {
       const param = template.Parameters.EnvironmentSuffix;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.AllowedPattern).toBeDefined();
-      expect(param.Description).toContain(
-        'Environment suffix for resource naming'
+      simpleAssert(param, 'EnvironmentSuffix parameter should be defined');
+      simpleEqual(
+        param.Type,
+        'String',
+        'EnvironmentSuffix should be String type'
+      );
+      simpleEqual(
+        param.Default,
+        'dev',
+        'EnvironmentSuffix default should be dev'
+      );
+      simpleAssert(
+        param.AllowedPattern,
+        'EnvironmentSuffix should have AllowedPattern'
+      );
+    });
+
+    test('should have correct parameter description', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      simpleContains(
+        param.Description,
+        'Environment suffix for resource naming',
+        'Should have correct description'
+      );
+    });
+
+    test('should have constraint description', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      simpleAssert(
+        param.ConstraintDescription,
+        'Should have constraint description'
       );
     });
   });
@@ -47,71 +107,154 @@ describe('TAP Stack CloudFormation Template', () => {
   describe('DynamoDB Resources', () => {
     test('should have TurnAroundPromptTable', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      expect(table).toBeDefined();
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(table.Properties.DeletionProtectionEnabled).toBe(false);
+      simpleAssert(table, 'TurnAroundPromptTable should be defined');
+      simpleEqual(
+        table.Type,
+        'AWS::DynamoDB::Table',
+        'Should be DynamoDB table type'
+      );
+    });
+
+    test('should have correct billing mode', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      simpleEqual(
+        table.Properties.BillingMode,
+        'PAY_PER_REQUEST',
+        'Should use PAY_PER_REQUEST billing'
+      );
+    });
+
+    test('should have deletion protection disabled', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      simpleEqual(
+        table.Properties.DeletionProtectionEnabled,
+        false,
+        'Deletion protection should be disabled'
+      );
     });
 
     test('should have correct table name with environment suffix', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+      simpleEqual(
+        table.Properties.TableName,
+        { 'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}' },
+        'Should have correct table name'
+      );
     });
 
     test('should have correct key schema', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Properties.KeySchema).toHaveLength(1);
-      expect(table.Properties.KeySchema[0].AttributeName).toBe('id');
-      expect(table.Properties.KeySchema[0].KeyType).toBe('HASH');
+      simpleAssert(
+        table.Properties.KeySchema.length === 1,
+        'Should have exactly 1 key schema item'
+      );
+      simpleEqual(
+        table.Properties.KeySchema[0].AttributeName,
+        'id',
+        'Key attribute should be id'
+      );
+      simpleEqual(
+        table.Properties.KeySchema[0].KeyType,
+        'HASH',
+        'Key type should be HASH'
+      );
     });
 
     test('should have correct attribute definitions', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Properties.AttributeDefinitions).toHaveLength(1);
-      expect(table.Properties.AttributeDefinitions[0].AttributeName).toBe('id');
-      expect(table.Properties.AttributeDefinitions[0].AttributeType).toBe('S');
+      simpleAssert(
+        table.Properties.AttributeDefinitions.length === 1,
+        'Should have exactly 1 attribute definition'
+      );
+      simpleEqual(
+        table.Properties.AttributeDefinitions[0].AttributeName,
+        'id',
+        'Attribute name should be id'
+      );
+      simpleEqual(
+        table.Properties.AttributeDefinitions[0].AttributeType,
+        'S',
+        'Attribute type should be S'
+      );
     });
 
     test('should have deletion policies set', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+      simpleEqual(
+        table.DeletionPolicy,
+        'Delete',
+        'DeletionPolicy should be Delete'
+      );
+      simpleEqual(
+        table.UpdateReplacePolicy,
+        'Delete',
+        'UpdateReplacePolicy should be Delete'
+      );
     });
   });
 
   describe('Outputs', () => {
     test('should have TurnAroundPromptTableName output', () => {
       const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output).toBeDefined();
-      expect(output.Description).toContain('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+      simpleAssert(
+        output,
+        'TurnAroundPromptTableName output should be defined'
+      );
+      simpleContains(
+        output.Description,
+        'Name of the DynamoDB table',
+        'Should have correct description'
+      );
+      simpleEqual(
+        output.Value,
+        { Ref: 'TurnAroundPromptTable' },
+        'Should reference the table'
+      );
     });
 
     test('should have TurnAroundPromptTableArn output', () => {
       const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output).toBeDefined();
-      expect(output.Description).toContain('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
+      simpleAssert(output, 'TurnAroundPromptTableArn output should be defined');
+      simpleContains(
+        output.Description,
+        'ARN of the DynamoDB table',
+        'Should have correct description'
+      );
+      simpleEqual(
+        output.Value,
+        { 'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'] },
+        'Should get table ARN'
+      );
     });
 
     test('should have StackName output', () => {
       const output = template.Outputs.StackName;
-      expect(output).toBeDefined();
-      expect(output.Description).toContain('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
+      simpleAssert(output, 'StackName output should be defined');
+      simpleContains(
+        output.Description,
+        'Name of this CloudFormation stack',
+        'Should have correct description'
+      );
+      simpleEqual(
+        output.Value,
+        { Ref: 'AWS::StackName' },
+        'Should reference stack name'
+      );
     });
 
     test('should have EnvironmentSuffix output', () => {
       const output = template.Outputs.EnvironmentSuffix;
-      expect(output).toBeDefined();
-      expect(output.Description).toContain(
-        'Environment suffix used for this deployment'
+      simpleAssert(output, 'EnvironmentSuffix output should be defined');
+      simpleContains(
+        output.Description,
+        'Environment suffix used for this deployment',
+        'Should have correct description'
       );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+      simpleEqual(
+        output.Value,
+        { Ref: 'EnvironmentSuffix' },
+        'Should reference parameter'
+      );
     });
 
     test('should have all outputs with exports', () => {
@@ -122,37 +265,103 @@ describe('TAP Stack CloudFormation Template', () => {
         'EnvironmentSuffix',
       ];
       outputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-        expect(template.Outputs[outputName].Export).toBeDefined();
-        expect(template.Outputs[outputName].Export.Name).toBeDefined();
+        simpleAssert(
+          template.Outputs[outputName],
+          `Output ${outputName} should be defined`
+        );
+        simpleAssert(
+          template.Outputs[outputName].Export,
+          `Output ${outputName} should have Export`
+        );
+        simpleAssert(
+          template.Outputs[outputName].Export.Name,
+          `Output ${outputName} should have Export Name`
+        );
+      });
+    });
+
+    test('should have correct export names', () => {
+      const outputs = Object.keys(template.Outputs);
+      outputs.forEach(outputName => {
+        const exportName = template.Outputs[outputName].Export.Name;
+        simpleAssert(exportName['Fn::Sub'], 'Export name should use Fn::Sub');
+        simpleContains(
+          exportName['Fn::Sub'],
+          '${AWS::StackName}',
+          'Export name should include stack name'
+        );
       });
     });
   });
 
   describe('Template Validation', () => {
     test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+      simpleAssert(template, 'Template should be defined');
+      simpleEqual(typeof template, 'object', 'Template should be an object');
     });
 
     test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1); // Only DynamoDB table
+      simpleEqual(resourceCount, 1, 'Should have exactly 1 resource');
     });
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1); // Only EnvironmentSuffix
+      simpleEqual(parameterCount, 1, 'Should have exactly 1 parameter');
     });
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4); // Table name, ARN, stack name, environment suffix
+      simpleEqual(outputCount, 4, 'Should have exactly 4 outputs');
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should have no IAM resources', () => {
+      const resources = Object.values(template.Resources);
+      const iamResources = resources.filter(
+        (resource: any) =>
+          resource.Type && resource.Type.startsWith('AWS::IAM::')
+      );
+      simpleEqual(iamResources.length, 0, 'Should have no IAM resources');
+    });
+
+    test('should have no VPC resources', () => {
+      const resources = Object.values(template.Resources);
+      const vpcResources = resources.filter(
+        (resource: any) =>
+          resource.Type && resource.Type.startsWith('AWS::EC2::')
+      );
+      simpleEqual(vpcResources.length, 0, 'Should have no VPC resources');
+    });
+
+    test('should have no S3 resources', () => {
+      const resources = Object.values(template.Resources);
+      const s3Resources = resources.filter(
+        (resource: any) =>
+          resource.Type && resource.Type.startsWith('AWS::S3::')
+      );
+      simpleEqual(s3Resources.length, 0, 'Should have no S3 resources');
+    });
+
+    test('should be deployable without CAPABILITY_NAMED_IAM', () => {
+      // Check that no resources have explicit names that would require CAPABILITY_NAMED_IAM
+      const resources = Object.values(template.Resources);
+      resources.forEach((resource: any) => {
+        if (resource.Type && resource.Type.startsWith('AWS::IAM::')) {
+          const properties = resource.Properties || {};
+          simpleAssert(
+            !properties.RoleName,
+            'IAM roles should not have explicit RoleName'
+          );
+          simpleAssert(
+            !properties.UserName,
+            'IAM users should not have explicit UserName'
+          );
+          simpleAssert(
+            !properties.PolicyName,
+            'IAM policies should not have explicit PolicyName'
+          );
+        }
+      });
     });
   });
 });
