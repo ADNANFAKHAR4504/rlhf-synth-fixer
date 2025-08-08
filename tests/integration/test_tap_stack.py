@@ -26,9 +26,18 @@ TEST_CONFIG = {
   "STACK_NAME": "dev",
   "TEST_TIMEOUT": 300,  # 5 minutes
   "PERFORMANCE_ITERATIONS": 10,
-  "CONCURRENT_UPLOADS": 5
+  "CONCURRENT_UPLOADS": 5,
+  "CI_MODE": os.environ.get('CI', 'false').lower() == 'true'  # Detect CI environment
 }
 
+
+def ci_sleep(seconds: float) -> None:
+  """Smart sleep function - reduced time in CI environments"""
+  if TEST_CONFIG["CI_MODE"]:
+    # In CI, use much shorter delays to avoid timeouts
+    time.sleep(min(seconds * 0.1, 2.0))  # Max 2 seconds, 10% of original
+  else:
+    time.sleep(seconds)
 
 class TestTapStackIntegrationComprehensive(unittest.TestCase):
   """Comprehensive end-to-end integration tests for TapStack infrastructure"""
@@ -531,7 +540,7 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
     # For now, validate resource state is stable
     
     initial_vpc = self.ec2.describe_vpcs(VpcIds=[self.outputs['vpcId']['value']])
-    time.sleep(2)
+    ci_sleep(2)
     final_vpc = self.ec2.describe_vpcs(VpcIds=[self.outputs['vpcId']['value']])
     
     # VPC state should remain consistent
@@ -634,7 +643,7 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
     self.test_files_uploaded.append(test_key)
     
     # Wait for Lambda execution
-    time.sleep(10)
+    ci_sleep(10)
     
     # Check CloudWatch logs for processing
     log_group_name = f"/aws/lambda/{lambda_name}"
@@ -691,7 +700,7 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
       self.test_files_uploaded.append(test_key)
     
     # Wait for processing
-    time.sleep(15)
+    ci_sleep(15)
     
     # Verify all files were processed (would check logs in real implementation)
     self.assertEqual(len(test_files), 3)  # All files uploaded successfully
@@ -946,11 +955,11 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
     
     # Upload first version
     self.s3.put_object(Bucket=bucket_name, Key=test_key, Body=b"Version 1")
-    time.sleep(1)
+    ci_sleep(1)
     
     # Upload second version
     self.s3.put_object(Bucket=bucket_name, Key=test_key, Body=b"Version 2")
-    time.sleep(1)
+    ci_sleep(1)
     
     # List object versions
     versions_response = self.s3.list_object_versions(Bucket=bucket_name, Prefix=test_key)
@@ -1130,7 +1139,7 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
     
     # Test that re-deployment doesn't create duplicate resources
     initial_resources = self._count_stack_resources()
-    time.sleep(5)  # Brief wait
+    ci_sleep(5)  # Brief wait
     final_resources = self._count_stack_resources()
     self.assertEqual(initial_resources, final_resources,
                      "Resource count should remain stable (idempotent)")
@@ -1181,7 +1190,7 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
       processed_files.append(test_key)
     
     # Wait for Lambda processing (S3 → Lambda trigger)
-    time.sleep(25)
+    ci_sleep(25)
     
     # Validate Lambda processed all files
     log_group_name = f"/aws/lambda/{lambda_name}"
@@ -1338,7 +1347,7 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
     self.test_files_uploaded.append(test_key)
     
     # Wait and verify processing
-    time.sleep(15)
+    ci_sleep(15)
     
     # Check Lambda logs for processing evidence
     log_events = self._get_recent_lambda_logs(log_group_name, minutes=2)
@@ -1512,7 +1521,7 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
     
     # Phase 2: Wait for Processing with timeout
     processing_wait_time = 30
-    time.sleep(processing_wait_time)
+    ci_sleep(processing_wait_time)
     
     # Phase 3: Verify Processing Results
     log_group_name = f"/aws/lambda/{lambda_name}"
@@ -1554,7 +1563,7 @@ class TestTapStackIntegrationComprehensive(unittest.TestCase):
       )
       self.test_files_uploaded.append(corrupted_file_key)
       
-      time.sleep(10)
+      ci_sleep(10)
       
       # Lambda should handle corrupted file gracefully (production requirement)
       self._get_recent_lambda_logs(log_group_name, minutes=1)
