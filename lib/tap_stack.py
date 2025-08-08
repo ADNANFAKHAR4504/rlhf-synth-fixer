@@ -31,7 +31,7 @@ class TapStack(pulumi.ComponentResource):
         self.s3_buckets = {}
         self.cloudwatch_alarms = {}
         self.vpcs = {}
-        self.providers = {}  # Store providers to avoid duplicates
+        self.providers = {}
         
         # Create providers for each region first
         self._create_regional_providers()
@@ -49,7 +49,6 @@ class TapStack(pulumi.ComponentResource):
     def _create_regional_providers(self):
         """Create AWS providers for each region"""
         for region in self.regions:
-            # Create unique provider name for each region
             provider_name = f"{self.project_name}-provider-{region}-{self.environment}"
             self.providers[region] = aws.Provider(
                 provider_name,
@@ -57,9 +56,35 @@ class TapStack(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self)
             )
 
+    def _get_s3_bucket_name(self, region: str) -> str:
+        """Generate a valid S3 bucket name following AWS naming conventions"""
+        # Convert stack name to lowercase and replace invalid characters
+        stack_name = pulumi.get_stack().lower().replace("_", "-")
+        
+        # Create bucket name: project-artifacts-region-environment-stack
+        bucket_name = f"{self.project_name}-artifacts-{region}-{self.environment}-{stack_name}"
+        
+        # Ensure the name follows S3 naming rules
+        # Replace any remaining invalid characters and ensure lowercase
+        bucket_name = bucket_name.lower().replace("_", "-")
+        
+        # Truncate if too long (S3 bucket names must be 3-63 characters)
+        if len(bucket_name) > 63:
+            # Keep the most important parts and truncate the middle
+            prefix = f"{self.project_name}-artifacts"
+            suffix = f"-{region}-{self.environment}"
+            remaining_length = 63 - len(prefix) - len(suffix) - 1  # -1 for connecting dash
+            
+            if remaining_length > 0:
+                truncated_stack = stack_name[:remaining_length]
+                bucket_name = f"{prefix}-{truncated_stack}{suffix}"
+            else:
+                bucket_name = f"{prefix}{suffix}"
+        
+        return bucket_name
+
     def _create_regional_infrastructure(self, region: str):
         """Create infrastructure resources for a specific region"""
-        # Use the pre-created provider for this region
         region_opts = pulumi.ResourceOptions(
             provider=self.providers[region],
             parent=self
@@ -113,10 +138,11 @@ class TapStack(pulumi.ComponentResource):
             opts=region_opts
         )
         
-        # S3 bucket for deployment artifacts
+        # S3 bucket for deployment artifacts - FIXED: Use proper naming
+        bucket_name = self._get_s3_bucket_name(region)
         s3_bucket = aws.s3.Bucket(
             f"{self.project_name}-artifacts-{region}-{self.environment}",
-            bucket=f"{self.project_name}-artifacts-{region}-{self.environment}-{pulumi.get_stack()}",
+            bucket=bucket_name,  # Use the properly formatted bucket name
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
@@ -284,7 +310,7 @@ class TapStack(pulumi.ComponentResource):
             namespace="AWS/Lambda",
             period="300",
             statistic="Average",
-            threshold="25000",  # 25 seconds
+            threshold="25000",
             alarm_description="Lambda function duration",
             dimensions={
                 "FunctionName": lambda_function.name
