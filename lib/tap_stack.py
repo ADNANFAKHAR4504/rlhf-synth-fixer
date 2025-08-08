@@ -29,8 +29,7 @@ common_tags = {
 
 def create_vpc_and_networking() -> Dict[str, Any]:
   """
-  Creates a dual-stack VPC with public/private subnets, a NAT Instance for IPv4,
-  and an Egress-Only Internet Gateway for IPv6.
+  Creates a dual-stack VPC with public/private subnets and a managed NAT Gateway.
   """
   vpc = aws.ec2.Vpc(
     f"{project_name}-vpc",
@@ -86,33 +85,16 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       subnet_id=subnet.id, route_table_id=public_rt.id
     )
 
-  nat_ami = aws.ec2.get_ami(
-    most_recent=True,
-    owners=["amazon"],
-    filters=[{"name": "name", "values": ["amzn-ami-hvm-*-x86_64-nat"]}]
+  eip = aws.ec2.Eip(
+      f"{project_name}-nat-eip",
+      tags=common_tags,
+      opts=pulumi.ResourceOptions(depends_on=[igw])
   )
-
-  nat_sg = aws.ec2.SecurityGroup(
-    f"{project_name}-nat-sg",
-    vpc_id=vpc.id,
-    description="Allow traffic from private subnets to NAT instance",
-    ingress=[aws.ec2.SecurityGroupIngressArgs(
-      protocol="-1", from_port=0, to_port=0, cidr_blocks=["10.0.0.0/16"],
-    )],
-    egress=[aws.ec2.SecurityGroupEgressArgs(
-      protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"],
-    )],
-    tags={**common_tags, "Name": f"{project_name}-nat-sg"}
-  )
-
-  nat_instance = aws.ec2.Instance(
-    f"{project_name}-nat-instance",
-    instance_type="t3.micro",
-    ami=nat_ami.id,
+  nat_gw = aws.ec2.NatGateway(
+    f"{project_name}-nat-gw",
     subnet_id=public_subnets[0].id,
-    vpc_security_group_ids=[nat_sg.id],
-    source_dest_check=False,
-    tags={**common_tags, "Name": f"{project_name}-nat-instance"}
+    allocation_id=eip.id,
+    tags={**common_tags, "Name": f"{project_name}-nat-gw"}
   )
 
   private_subnets = []
@@ -136,7 +118,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
     routes=[
       aws.ec2.RouteTableRouteArgs(
         cidr_block="0.0.0.0/0",
-        instance_id=nat_instance.id
+        nat_gateway_id=nat_gw.id
       ),
       aws.ec2.RouteTableRouteArgs(
         ipv6_cidr_block="::/0",
