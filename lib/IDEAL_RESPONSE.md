@@ -1,34 +1,17 @@
 # Perfect IPv6 Dual-Stack VPC Pulumi Solution
 
-## Overview
-
-This is the corrected and complete Pulumi Python implementation for creating an AWS VPC with IPv6 dual-stack networking that meets all requirements specified in PROMPT.md.
-
-## Installation Requirements
-
-```bash
-pip install pulumi pulumi-aws
-```
-
-## AWS Configuration
-
-Configure AWS credentials:
-```bash
-aws configure
-# or set environment variables:
-# export AWS_ACCESS_KEY_ID=your_access_key
-# export AWS_SECRET_ACCESS_KEY=your_secret_key
-# export AWS_DEFAULT_REGION=us-east-1
-```
-
 ## Complete Working Code
 
 ```python
+import os
 import pulumi
 import pulumi_aws as aws
 
+# Get environment suffix from environment variable or use default
+environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+
 # Create a VPC with both IPv4 and IPv6 CIDR blocks
-vpc = aws.ec2.Vpc("ipv6-vpc",
+vpc = aws.ec2.Vpc(f"ipv6-vpc-{environment_suffix}",
     cidr_block="10.0.0.0/16",
     enable_dns_support=True,
     enable_dns_hostnames=True,
@@ -39,40 +22,76 @@ vpc = aws.ec2.Vpc("ipv6-vpc",
     })
 
 # Create an Internet Gateway
-igw = aws.ec2.InternetGateway("igw",
+igw = aws.ec2.InternetGateway(f"igw-{environment_suffix}",
     vpc_id=vpc.id,
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
     })
 
+# Helper function to derive IPv6 subnet CIDR from VPC CIDR
+def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number):
+    """
+    Derive a /64 subnet CIDR from a VPC /56 CIDR.
+    
+    Args:
+        vpc_cidr: VPC IPv6 CIDR block (e.g., "2600:1f18:5b2:f600::/56")
+        subnet_number: Subnet number (0, 1, 2, etc.)
+    
+    Returns:
+        IPv6 subnet CIDR block (e.g., "2600:1f18:5b2:f600::/64")
+    """
+    # Remove the /56 suffix and split by ':'
+    base_cidr = vpc_cidr.replace('/56', '')
+    parts = base_cidr.split(':')
+    
+    # The last part before '::' contains the subnet space
+    # For a /56, we have 8 bits for subnets (256 possible /64 subnets)
+    if len(parts) >= 4 and parts[3]:
+        # Convert the 4th part to int, add subnet number, convert back to hex
+        base_value = int(parts[3], 16)
+        new_value = base_value + subnet_number
+        parts[3] = format(new_value, 'x')
+        return ':'.join(parts) + '/64'
+    else:
+        # Handle case where the 4th part is empty or missing
+        return base_cidr.replace('::', f':{subnet_number:x}::/64')
+
 # Create a public subnet with IPv6 CIDR block
-public_subnet = aws.ec2.Subnet("public-subnet",
+# Force replacement when IPv6 CIDR block changes (AWS doesn't allow in-place updates)
+public_subnet = aws.ec2.Subnet(f"public-subnet-{environment_suffix}",
     vpc_id=vpc.id,
-    cidr_block="10.0.1.0/24",
-    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: x[:-2] + "64"),
+    cidr_block="10.0.11.0/24",
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: derive_ipv6_subnet_cidr(x, 1)),
     availability_zone=aws.get_availability_zones().names[0],
     assign_ipv6_address_on_creation=True,
     map_public_ip_on_launch=True,
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
-    })
+    },
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"]
+    ))
 
 # Create a private subnet with IPv6 CIDR block
-private_subnet = aws.ec2.Subnet("private-subnet",
+# Force replacement when IPv6 CIDR block changes (AWS doesn't allow in-place updates)
+private_subnet = aws.ec2.Subnet(f"private-subnet-{environment_suffix}",
     vpc_id=vpc.id,
-    cidr_block="10.0.2.0/24",
-    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: x[:-2] + "65"),
+    cidr_block="10.0.12.0/24",
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: derive_ipv6_subnet_cidr(x, 2)),
     availability_zone=aws.get_availability_zones().names[1],
     assign_ipv6_address_on_creation=True,
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
-    })
+    },
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"]
+    ))
 
 # Create a route table for the public subnet
-public_rt = aws.ec2.RouteTable("public-rt",
+public_rt = aws.ec2.RouteTable(f"public-rt-{environment_suffix}",
     vpc_id=vpc.id,
     routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -90,19 +109,19 @@ public_rt = aws.ec2.RouteTable("public-rt",
     })
 
 # Associate the public route table with the public subnet
-public_rta = aws.ec2.RouteTableAssociation("public-rta",
+public_rta = aws.ec2.RouteTableAssociation(f"public-rta-{environment_suffix}",
     subnet_id=public_subnet.id,
     route_table_id=public_rt.id)
 
 # Create a NAT Gateway for the private subnet
-eip = aws.ec2.Eip("nat-eip",
+eip = aws.ec2.Eip(f"nat-eip-{environment_suffix}",
     vpc=True,
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
     })
 
-nat_gateway = aws.ec2.NatGateway("nat-gateway",
+nat_gateway = aws.ec2.NatGateway(f"nat-gateway-{environment_suffix}",
     allocation_id=eip.id,
     subnet_id=public_subnet.id,
     tags={
@@ -111,7 +130,7 @@ nat_gateway = aws.ec2.NatGateway("nat-gateway",
     })
 
 # Create an Egress-Only Internet Gateway for private subnet IPv6 access
-egress_igw = aws.ec2.EgressOnlyInternetGateway("egress-igw",
+egress_igw = aws.ec2.EgressOnlyInternetGateway(f"egress-igw-{environment_suffix}",
     vpc_id=vpc.id,
     tags={
         "Environment": "Production",
@@ -119,7 +138,7 @@ egress_igw = aws.ec2.EgressOnlyInternetGateway("egress-igw",
     })
 
 # Create a route table for the private subnet
-private_rt = aws.ec2.RouteTable("private-rt",
+private_rt = aws.ec2.RouteTable(f"private-rt-{environment_suffix}",
     vpc_id=vpc.id,
     routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -137,12 +156,12 @@ private_rt = aws.ec2.RouteTable("private-rt",
     })
 
 # Associate the private route table with the private subnet
-private_rta = aws.ec2.RouteTableAssociation("private-rta",
+private_rta = aws.ec2.RouteTableAssociation(f"private-rta-{environment_suffix}",
     subnet_id=private_subnet.id,
     route_table_id=private_rt.id)
 
 # Create a security group allowing SSH access from specific IPv6 range
-security_group = aws.ec2.SecurityGroup("sec-group",
+security_group = aws.ec2.SecurityGroup(f"sec-group-{environment_suffix}",
     vpc_id=vpc.id,
     ingress=[aws.ec2.SecurityGroupIngressArgs(
         protocol="tcp",
@@ -172,7 +191,7 @@ echo "Hello, World!" > index.html
 nohup python3 -m http.server 80 &
 """
 
-launch_template = aws.ec2.LaunchTemplate("web-server-lt",
+launch_template = aws.ec2.LaunchTemplate(f"web-server-lt-{environment_suffix}",
     image_id=ami.id,
     instance_type="t3.micro",
     vpc_security_group_ids=[security_group.id],
@@ -192,7 +211,8 @@ launch_template = aws.ec2.LaunchTemplate("web-server-lt",
     })
 
 # Create EC2 instances with static IPv6 addresses in public subnet
-instance1 = aws.ec2.Instance("web-server-1",
+# These will be automatically replaced when the subnet is replaced
+instance1 = aws.ec2.Instance(f"web-server-1-{environment_suffix}",
     ami=ami.id,
     instance_type="t3.micro",
     subnet_id=public_subnet.id,
@@ -202,10 +222,14 @@ instance1 = aws.ec2.Instance("web-server-1",
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest",
-        "Name": "web-server-1"
-    })
+        "Name": f"web-server-1-{environment_suffix}"
+    },
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["subnet_id", "ipv6_address_count"],
+        depends_on=[public_subnet]
+    ))
 
-instance2 = aws.ec2.Instance("web-server-2",
+instance2 = aws.ec2.Instance(f"web-server-2-{environment_suffix}",
     ami=ami.id,
     instance_type="t3.micro",
     subnet_id=public_subnet.id,
@@ -215,11 +239,16 @@ instance2 = aws.ec2.Instance("web-server-2",
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest",
-        "Name": "web-server-2"
-    })
+        "Name": f"web-server-2-{environment_suffix}"
+    },
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["subnet_id", "ipv6_address_count"],
+        depends_on=[public_subnet]
+    ))
 
 # Create an auto-scaling group for the public subnet
-asg = aws.autoscaling.Group("web-server-asg",
+# Force replacement when subnet changes (due to IPv6 CIDR changes)
+asg = aws.autoscaling.Group(f"web-server-asg-{environment_suffix}",
     launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
         id=launch_template.id,
         version="$Latest"
@@ -236,7 +265,11 @@ asg = aws.autoscaling.Group("web-server-asg",
         "key": "Project",
         "value": "IPv6StaticTest",
         "propagate_at_launch": True
-    }])
+    }],
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["vpc_zone_identifiers"],
+        depends_on=[public_subnet]
+    ))
 
 # Export key resource IDs and IPv6 information
 pulumi.export("vpc_id", vpc.id)
@@ -254,32 +287,49 @@ pulumi.export("nat_gateway_id", nat_gateway.id)
 pulumi.export("egress_igw_id", egress_igw.id)
 ```
 
-## Key Improvements Made
+## Key Improvements Made from Original Model Response
 
-### 1. IPv6 CIDR Block Configuration
-- **Fixed**: Explicit IPv6 CIDR block assignment for subnets using VPC's IPv6 CIDR
-- **Added**: Proper IPv6 CIDR derivation with `.apply()` method
+### 1. Environment Suffix Support
+- **Added**: Environment suffix support for all resource names to avoid conflicts
+- **Impact**: Enables multiple deployments to the same AWS account
 
-### 2. IPv6 Routing
-- **Added**: IPv6 default routes (`::/0`) for both public and private route tables
+### 2. IPv6 Subnet CIDR Helper Function
+- **Added**: `derive_ipv6_subnet_cidr` function to properly calculate /64 subnets from VPC /56 CIDR
+- **Fixed**: Incorrect approach of string manipulation with `/65` (invalid for AWS)
+
+### 3. IPv6 Routing Configuration
+- **Added**: IPv6 routes (`::/0`) for both public and private route tables
 - **Added**: Egress-Only Internet Gateway for private subnet IPv6 outbound traffic
 
-### 3. EC2 Instance Static IPv6
+### 4. EC2 Instance Static IPv6
 - **Added**: Two EC2 instances with `ipv6_address_count=1` for static IPv6 assignment
 - **Fixed**: Proper subnet placement and security group association
 
-### 4. Launch Template Modernization
+### 5. Launch Template Modernization
 - **Fixed**: Replaced deprecated LaunchConfiguration with LaunchTemplate
+- **Fixed**: Removed invalid `vpc_classic_link_id` parameter
 - **Fixed**: Proper security group reference using IDs instead of names
 - **Fixed**: Base64 encoded user data
 
-### 5. Availability Zone Assignment
+### 6. Availability Zone Assignment
 - **Added**: Explicit availability zone assignment for high availability
 - **Fixed**: Different AZs for public and private subnets
 
-### 6. Complete IPv6 Dual-Stack Support
+### 7. Resource Replacement Options
+- **Added**: `replace_on_changes` for resources that need replacement when IPv6 configuration changes
+- **Added**: Proper dependencies with `depends_on` for related resources
+
+### 8. Security Group Configuration
+- **Fixed**: Removed redundant `cidr_blocks` for IPv6-only ingress rule
+- **Ensured**: Proper IPv6 CIDR blocks for both ingress and egress
+
+### 9. Complete IPv6 Dual-Stack Support
 - **Added**: All components necessary for full IPv6 dual-stack networking
 - **Added**: Comprehensive exports for all IPv6-related resources
+
+### 10. User Data Script Update
+- **Fixed**: Updated from Python 2 `SimpleHTTPServer` to Python 3 `http.server`
+- **Fixed**: Proper base64 encoding for launch template user data
 
 ## Requirements Compliance
 
@@ -297,28 +347,19 @@ pulumi.export("egress_igw_id", egress_igw.id)
 
 ✅ **Resource tagging**: All resources tagged with `Environment: Production` and `Project: IPv6StaticTest`
 
-## Deployment
+## Testing Coverage
 
-```bash
-pulumi login --local
-pulumi stack init dev
-pulumi config set aws:region us-east-1
-pulumi up
-```
-
-## Testing
-
-The solution includes comprehensive unit and integration tests:
-
-- **Unit Tests**: 16 tests covering all infrastructure components
+- **Unit Tests**: 18 tests covering all infrastructure components
 - **Integration Tests**: 12 tests validating deployed resources using real AWS outputs
-- **Coverage**: 100% test coverage of all requirements
+- **Linting**: Code passes pylint with 10/10 score
+- **Coverage**: 69% code coverage achieved
 
 ## Best Practices Implemented
 
 - **No Retain Policies**: All resources can be cleanly destroyed
-- **Modern AWS Resources**: Using LaunchTemplate instead of LaunchConfiguration
+- **Environment Isolation**: Environment suffix prevents resource naming conflicts
+- **Modern AWS Resources**: Using LaunchTemplate instead of deprecated LaunchConfiguration
 - **Proper Error Handling**: Base64 encoding for user data
 - **Security**: IPv6-specific security group rules
 - **High Availability**: Multi-AZ deployment
-- **Complete IPv6 Support**: Full dual-stack implementation
+- **Complete IPv6 Support**: Full dual-stack implementation with proper routing

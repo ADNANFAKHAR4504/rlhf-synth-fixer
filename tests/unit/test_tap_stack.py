@@ -6,7 +6,8 @@ with appropriate configurations as specified in the requirements.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+import unittest.mock
+from unittest.mock import Mock
 import sys
 import os
 
@@ -17,13 +18,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 sys.modules['pulumi'] = Mock()
 sys.modules['pulumi_aws'] = Mock()
 
+# Import after mocking to avoid issues
+# pylint: disable=wrong-import-position
+from lib.tap_stack import TapStack, TapStackArgs  # noqa: E402
+
 
 class TestTapStack(unittest.TestCase):
   """Test cases for TapStack component."""
 
   def setUp(self):
     """Set up test fixtures."""
-    from lib.tap_stack import TapStack, TapStackArgs
     self.TapStack = TapStack
     self.TapStackArgs = TapStackArgs
 
@@ -51,8 +55,8 @@ class TestTapStack(unittest.TestCase):
     with open('tap.py', 'r', encoding='utf-8') as f:
       source_code = f.read()
     
-    # Check VPC configuration
-    self.assertIn('aws.ec2.Vpc("ipv6-vpc"', source_code)
+    # Check VPC configuration (with environment suffix)
+    self.assertIn('aws.ec2.Vpc(f"ipv6-vpc-{environment_suffix}"', source_code)
     self.assertIn('cidr_block="10.0.0.0/16"', source_code)
     self.assertIn('enable_dns_support=True', source_code)
     self.assertIn('enable_dns_hostnames=True', source_code)
@@ -76,8 +80,7 @@ class TestTapStack(unittest.TestCase):
     
   def test_tap_stack_class_attributes(self):
     """Test TapStack class attributes."""
-    from lib.tap_stack import TapStack
-    stack_attrs = dir(TapStack)
+    stack_attrs = dir(self.TapStack)
     self.assertIn('__init__', stack_attrs)
     
   def test_tap_stack_args_defaults(self):
@@ -113,10 +116,10 @@ class TestTapStack(unittest.TestCase):
     with open('tap.py', 'r', encoding='utf-8') as f:
       source_code = f.read()
     
-    # Check VPC and subnets
+    # Check VPC and subnets (with environment suffix)
     self.assertIn('aws.ec2.Vpc(', source_code)
-    self.assertIn('aws.ec2.Subnet("public-subnet"', source_code)
-    self.assertIn('aws.ec2.Subnet("private-subnet"', source_code)
+    self.assertIn('aws.ec2.Subnet(f"public-subnet-{environment_suffix}"', source_code)
+    self.assertIn('aws.ec2.Subnet(f"private-subnet-{environment_suffix}"', source_code)
     
   def test_security_and_networking_source(self):
     """Test security group and networking configuration."""
@@ -138,6 +141,64 @@ class TestTapStack(unittest.TestCase):
     self.assertIn('replace_on_changes=["ipv6_cidr_block"', source_code)
     self.assertIn('replace_on_changes=["subnet_id"', source_code)
     self.assertIn('depends_on=[public_subnet]', source_code)
+
+  def test_derive_ipv6_subnet_cidr_function(self):
+    """Test the derive_ipv6_subnet_cidr helper function."""
+    with open('tap.py', 'r', encoding='utf-8') as f:
+      source_code = f.read()
+    
+    # Test that function exists and has proper structure
+    self.assertIn('def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number):', source_code)
+    self.assertIn("base_cidr = vpc_cidr.replace('/56', '')", source_code)
+    self.assertIn("parts = base_cidr.split(':')", source_code)
+    self.assertIn("return ':'.join(parts) + '/64'", source_code)
+
+  def test_environment_suffix_usage(self):
+    """Test that environment suffix is used in resource naming."""
+    with open('tap.py', 'r', encoding='utf-8') as f:
+      source_code = f.read()
+    
+    # Check environment suffix is used for all resources
+    self.assertIn('environment_suffix = os.environ.get(\'ENVIRONMENT_SUFFIX\', \'dev\')',
+                  source_code)
+    self.assertIn('{environment_suffix}', source_code)
+    
+  def test_ipv6_configuration_completeness(self):
+    """Test IPv6 configuration is complete."""
+    with open('tap.py', 'r', encoding='utf-8') as f:
+      source_code = f.read()
+    
+    # Check for egress-only internet gateway
+    self.assertIn('EgressOnlyInternetGateway', source_code)
+    self.assertIn('egress_only_gateway_id', source_code)
+    
+    # Check for IPv6 routes
+    self.assertIn('ipv6_cidr_block="::/0"', source_code)
+    
+    # Check for IPv6 security group rules
+    self.assertIn('ipv6_cidr_blocks=["2001:db8::/32"]', source_code)
+    
+  def test_ec2_instances_configuration(self):
+    """Test EC2 instances configuration."""
+    with open('tap.py', 'r', encoding='utf-8') as f:
+      source_code = f.read()
+    
+    # Check EC2 instances with IPv6
+    self.assertIn('ipv6_address_count=1', source_code)
+    self.assertIn('aws.ec2.Instance(f"web-server-1-{environment_suffix}"', source_code)
+    self.assertIn('aws.ec2.Instance(f"web-server-2-{environment_suffix}"', source_code)
+    
+  def test_auto_scaling_configuration(self):
+    """Test auto-scaling group configuration."""
+    with open('tap.py', 'r', encoding='utf-8') as f:
+      source_code = f.read()
+    
+    # Check auto-scaling group
+    self.assertIn('aws.autoscaling.Group', source_code)
+    self.assertIn('launch_template', source_code)
+    self.assertIn('min_size=1', source_code)
+    self.assertIn('max_size=2', source_code)
+    self.assertIn('desired_capacity=1', source_code)
 
 
 if __name__ == '__main__':
