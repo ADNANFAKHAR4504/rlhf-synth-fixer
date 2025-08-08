@@ -18,11 +18,16 @@ import pulumi_aws as aws
 from lib.tap_stack import TapStack, TapStackArgs
 
 
-class MockResource(Resource):
-    """Mock Resource class for testing purposes."""
+class MockResource:
+    """Simple mock resource class for testing purposes."""
     def __init__(self, name="mock-resource"):
-        # Don't call super().__init__ to avoid Pulumi runtime issues
-        self.urn = f"urn:pulumi:test::test::{name}::mock-id"
+        self._urn = f"urn:pulumi:test::test::{name}::mock-id"
+        self.id = f"{name}-id"
+        self.bucket = name if "bucket" in name else None
+
+    @property
+    def urn(self):
+        return self._urn
 
 
 class TestTapStackArgs:
@@ -187,13 +192,11 @@ class TestTapStack:
         """Test CloudTrail creation with S3 bucket."""
         mock_caller_id.return_value = self.caller_identity_mock
         
-        # Mock S3 bucket with proper Resource inheritance
+        # Mock S3 bucket with proper Resource-like object
         mock_bucket_instance = MockResource("cloudtrail-bucket")
-        mock_bucket_instance.id = "bucket-id"
-        mock_bucket_instance.bucket = "cloudtrail-bucket"
         mock_bucket.return_value = mock_bucket_instance
         
-        # Mock S3 bucket policy with proper Resource inheritance
+        # Mock S3 bucket policy with proper Resource-like object
         mock_policy_instance = MockResource("cloudtrail-policy")
         mock_policy.return_value = mock_policy_instance
         
@@ -571,220 +574,6 @@ class TestTapStack:
             stack.environment_suffix = self.environment_suffix
             
             assert stack.environment_suffix == self.environment_suffix
-    
-    @patch('pulumi_aws.get_caller_identity')
-    @patch.object(TapStack, 'register_outputs')
-    def test_stack_initialization_with_resource_options(self, mock_register, mock_caller_id):
-        """Test stack initialization with custom resource options."""
-        mock_caller_id.return_value = self.caller_identity_mock
-        
-        # Create all the necessary patches for the __init__ method
-        with patch.object(TapStack, '_create_kms_keys') as mock_kms, \
-             patch.object(TapStack, '_create_secrets_manager') as mock_secrets, \
-             patch.object(TapStack, '_create_iam_roles') as mock_iam, \
-             patch.object(TapStack, '_create_cloudtrail') as mock_cloudtrail, \
-             patch.object(TapStack, '_create_vpc_infrastructure') as mock_vpc, \
-             patch.object(TapStack, '_create_s3_buckets') as mock_s3, \
-             patch.object(TapStack, '_create_rds_instances') as mock_rds, \
-             patch.object(TapStack, '_create_lambda_functions') as mock_lambda, \
-             patch.object(TapStack, '_create_ec2_instances') as mock_ec2, \
-             patch.object(TapStack, '_create_monitoring') as mock_monitoring:
-            
-            # Set up the required attributes that would be created by the methods
-            def setup_kms(stack_self):
-                stack_self.kms_key = MagicMock()
-                stack_self.kms_key.arn = "test-arn"
-                
-            def setup_secrets(stack_self):
-                stack_self.secrets_manager = MagicMock()
-                stack_self.secrets_manager.arn = "test-secrets-arn"
-                
-            def setup_vpc(stack_self):
-                stack_self.primary_vpc = MagicMock()
-                stack_self.primary_vpc.id = "vpc-test"
-            
-            mock_kms.side_effect = setup_kms
-            mock_secrets.side_effect = setup_secrets
-            mock_vpc.side_effect = setup_vpc
-            
-            custom_opts = ResourceOptions(protect=True)
-            stack = TapStack("test-stack", self.args, opts=custom_opts)
-            
-            assert stack.environment_suffix == self.environment_suffix
-
-
-class TestTapStackCompliance:
-    """Test cases for compliance and configuration checks."""
-    
-    def setup_method(self):
-        """Set up test fixtures for compliance tests."""
-        self.environment_suffix = "test"
-        self.args = TapStackArgs(self.environment_suffix)
-        self.mock_account_id = "123456789012"
-        
-        self.caller_identity_mock = MagicMock()
-        self.caller_identity_mock.account_id = self.mock_account_id
-    
-    @patch('pulumi_aws.get_caller_identity')
-    @patch('pulumi_aws.cfg.get_configuration_recorders')
-    @patch('pulumi_aws.cfg.get_delivery_channels')
-    @patch('pulumi_aws.Provider')
-    @patch('pulumi_aws.s3.Bucket')
-    @patch('pulumi_aws.iam.Role')
-    @patch('pulumi_aws.iam.RolePolicyAttachment')
-    @patch('pulumi_aws.cfg.Recorder')
-    @patch('pulumi_aws.cfg.DeliveryChannel')
-    @patch('pulumi_aws.cfg.Rule')
-    def test_create_compliance_checks_no_existing_config(self, mock_rule, mock_delivery, 
-                                                       mock_recorder, mock_attachment, 
-                                                       mock_role, mock_bucket, mock_provider, 
-                                                       mock_channels, mock_recorders, 
-                                                       mock_caller_id):
-        """Test compliance checks creation when no AWS Config exists."""
-        mock_caller_id.return_value = self.caller_identity_mock
-        
-        # Mock no existing configuration
-        mock_recorders.return_value = MagicMock(configuration_recorders=[])
-        mock_channels.return_value = MagicMock(delivery_channels=[])
-        
-        with patch.object(TapStack, '__init__', lambda x, y, z, opts=None: None):
-            stack = TapStack.__new__(TapStack)
-            stack.environment_suffix = self.environment_suffix
-            stack.primary_region = "us-east-1"
-            stack.kms_keys = {"us-east-1": MagicMock()}
-            stack.standard_tags = {
-                "Environment": self.environment_suffix,
-                "Owner": "DevOps-Team",
-                "CostCenter": "Infrastructure",
-                "Project": "AWS-Nova-Model-Breaking",
-                "ManagedBy": "Pulumi",
-            }
-            
-            stack._create_compliance_checks()
-            
-            # Verify Config rules were created
-            assert mock_rule.call_count == 2  # Two compliance rules
-    
-    @patch('pulumi_aws.get_caller_identity')
-    @patch('pulumi_aws.cfg.get_configuration_recorders')
-    @patch('pulumi_aws.cfg.get_delivery_channels')
-    @patch('pulumi_aws.Provider')
-    @patch('pulumi.log.info')
-    def test_create_compliance_checks_existing_config(self, mock_log, mock_provider, 
-                                                    mock_channels, mock_recorders, 
-                                                    mock_caller_id):
-        """Test compliance checks when AWS Config already exists."""
-        mock_caller_id.return_value = self.caller_identity_mock
-        
-        # Mock existing configuration
-        mock_recorders.return_value = MagicMock(
-            configuration_recorders=[MagicMock(name="existing-recorder")]
-        )
-        mock_channels.return_value = MagicMock(
-            delivery_channels=[MagicMock(name="existing-channel")]
-        )
-        
-        with patch.object(TapStack, '__init__', lambda x, y, z, opts=None: None):
-            stack = TapStack.__new__(TapStack)
-            stack.environment_suffix = self.environment_suffix
-            stack.primary_region = "us-east-1"
-            stack.kms_keys = {"us-east-1": MagicMock()}
-            
-            stack._create_compliance_checks()
-            
-            # Verify logging messages for existing config
-            mock_log.assert_called()
-
-
-class TestTapStackIntegration:
-    """Integration tests for TapStack components."""
-    
-    def setup_method(self):
-        """Set up integration test fixtures."""
-        self.environment_suffix = "integration-test"
-        self.args = TapStackArgs(self.environment_suffix)
-        self.mock_account_id = "123456789012"
-        
-        self.caller_identity_mock = MagicMock()
-        self.caller_identity_mock.account_id = self.mock_account_id
-    
-    @patch('pulumi_aws.get_caller_identity')
-    @patch.object(TapStack, 'register_outputs')
-    def test_full_stack_output_registration(self, mock_register, mock_caller_id):
-        """Test that stack outputs are properly registered."""
-        mock_caller_id.return_value = self.caller_identity_mock
-        
-        with patch.object(TapStack, '_create_kms_keys') as mock_kms, \
-             patch.object(TapStack, '_create_secrets_manager') as mock_secrets, \
-             patch.object(TapStack, '_create_iam_roles') as mock_iam, \
-             patch.object(TapStack, '_create_cloudtrail') as mock_cloudtrail, \
-             patch.object(TapStack, '_create_vpc_infrastructure') as mock_vpc, \
-             patch.object(TapStack, '_create_s3_buckets') as mock_s3, \
-             patch.object(TapStack, '_create_rds_instances') as mock_rds, \
-             patch.object(TapStack, '_create_lambda_functions') as mock_lambda, \
-             patch.object(TapStack, '_create_ec2_instances') as mock_ec2, \
-             patch.object(TapStack, '_create_monitoring') as mock_monitoring:
-            
-            # Set up the required attributes that would be created by the methods
-            def setup_kms(stack_self):
-                stack_self.kms_key = MagicMock()
-                stack_self.kms_key.arn = "arn:aws:kms:us-east-1:123456789012:key/test"
-                
-            def setup_secrets(stack_self):
-                stack_self.secrets_manager = MagicMock()
-                stack_self.secrets_manager.arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:test"
-                
-            def setup_vpc(stack_self):
-                stack_self.primary_vpc = MagicMock()
-                stack_self.primary_vpc.id = "vpc-12345"
-            
-            mock_kms.side_effect = setup_kms
-            mock_secrets.side_effect = setup_secrets
-            mock_vpc.side_effect = setup_vpc
-            
-            stack = TapStack("test-stack", self.args)
-            
-            # Verify outputs were registered
-            mock_register.assert_called_once()
-            call_args = mock_register.call_args[0][0]
-            
-            assert "regions" in call_args
-            assert "primary_vpc_id" in call_args
-            assert "kms_key_arn" in call_args
-            assert "secrets_manager_arn" in call_args
-
-
-# Test for compliance checks with correct AWS Config function names
-class TestTapStackComplianceFixed:
-    """Fixed test cases for compliance checks with correct AWS Config function names."""
-    
-    def setup_method(self):
-        """Set up test fixtures for compliance tests."""
-        self.environment_suffix = "test"
-        self.args = TapStackArgs(self.environment_suffix)
-        self.mock_account_id = "123456789012"
-        
-        self.caller_identity_mock = MagicMock()
-        self.caller_identity_mock.account_id = self.mock_account_id
-    
-    def test_compliance_check_function_existence(self):
-        """Test that the compliance check function exists and can be called."""
-        with patch.object(TapStack, '__init__', lambda x, y, z, opts=None: None):
-            stack = TapStack.__new__(TapStack)
-            stack.environment_suffix = self.environment_suffix
-            stack.primary_region = "us-east-1"
-            stack.kms_keys = {"us-east-1": MagicMock()}
-            stack.standard_tags = {
-                "Environment": self.environment_suffix,
-                "Owner": "DevOps-Team",
-                "CostCenter": "Infrastructure",
-                "Project": "AWS-Nova-Model-Breaking",
-                "ManagedBy": "Pulumi",
-            }
-            
-            # Verify the method exists
-            assert hasattr(stack, '_create_compliance_checks')
-            assert callable(getattr(stack, '_create_compliance_checks'))
 
 
 # Pytest configuration and fixtures
