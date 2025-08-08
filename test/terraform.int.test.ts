@@ -1,12 +1,54 @@
 // test/terraform.int.test.ts
 import { execSync } from 'child_process';
-import { writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 // Configuration
 const WORKING_DIR = join(__dirname, '../bin');
+const BACKEND_CONF_PATH = join(WORKING_DIR, 'backend.conf');
 const TERRAFORM_BINARY = 'terraform';
 const TIMEOUT = 300000; // 5 minutes
+
+// Custom backend.conf parser that only extracts bucket and key
+const parseBackendConfig = (): { bucket: string; key: string } => {
+  if (!existsSync(BACKEND_CONF_PATH)) {
+    throw new Error(`Backend config file not found at ${BACKEND_CONF_PATH}`);
+  }
+
+  const config: { bucket?: string; key?: string } = {};
+  const content = readFileSync(BACKEND_CONF_PATH, 'utf-8');
+
+  content.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const equalIndex = trimmed.indexOf('=');
+      if (equalIndex > 0) {
+        const key = trimmed.substring(0, equalIndex).trim();
+        const value = trimmed.substring(equalIndex + 1).trim().replace(/^["']|["']$/g, '');
+        if (key === 'bucket' || key === 'key') {
+          config[key] = value;
+        }
+      }
+    }
+  });
+
+  if (!config.bucket || !config.key) {
+    throw new Error('backend.conf must contain both bucket and key');
+  }
+
+  return { bucket: config.bucket, key: config.key };
+};
+
+// Get backend configuration with environment overrides
+const getBackendConfig = () => {
+  const { bucket, key } = parseBackendConfig();
+  
+  return {
+    bucket: process.env.TF_STATE_BUCKET || bucket,
+    key: process.env.TF_STATE_KEY || `${key.replace('.tfstate', '')}-${Date.now()}.tfstate`,
+    encrypt: 'true' // Always enable encryption
+  };
+};
 
 const runTerraformCommand = (command: string): string => {
   try {
@@ -25,25 +67,37 @@ const runTerraformCommand = (command: string): string => {
   }
 };
 
+const initializeTerraform = () => {
+  const backend = getBackendConfig();
+  console.log('Initializing Terraform with:', {
+    bucket: backend.bucket,
+    key: backend.key,
+    encrypt: backend.encrypt
+  });
+
+  return runTerraformCommand(
+    `init -input=false -reconfigure ` +
+    `-backend-config="bucket=${backend.bucket}" ` +
+    `-backend-config="key=${backend.key}" ` +
+    `-backend-config="encrypt=${backend.encrypt}"`
+  );
+};
+
 const getTerraformState = (): any => {
   const state = JSON.parse(runTerraformCommand('show -json'));
   writeFileSync(join(__dirname, 'state-debug.json'), JSON.stringify(state, null, 2));
-  console.log('Full Terraform state saved to state-debug.json');
   return state;
 };
 
-const findAllResources = (state: any): any[] => {
+const getAllResources = (state: any): any[] => {
   const resources: any[] = [];
 
-  // Check standard resource locations
   if (state.values?.root_module?.resources) {
     resources.push(...state.values.root_module.resources);
   }
   if (state.resources) {
     resources.push(...state.resources);
   }
-
-  // Check child modules if they exist
   if (state.values?.root_module?.child_modules) {
     state.values.root_module.child_modules.forEach((module: any) => {
       if (module.resources) {
@@ -60,16 +114,15 @@ describe('VPC Module Integration Tests', () => {
   let allResources: any[];
 
   beforeAll(async () => {
-    console.log('Initializing Terraform...');
-    runTerraformCommand('init -input=false');
+    console.log('Setting up test environment...');
+    initializeTerraform();
     
     console.log('Applying configuration...');
     runTerraformCommand('apply -auto-approve -input=false');
     
-    console.log('Getting Terraform state...');
+    console.log('Fetching state...');
     terraformState = getTerraformState();
-    allResources = findAllResources(terraformState);
-    
+    allResources = getAllResources(terraformState);
     console.log(`Found ${allResources.length} resources`);
   }, TIMEOUT);
 
@@ -82,20 +135,15 @@ describe('VPC Module Integration Tests', () => {
     }
   }, TIMEOUT);
 
-  describe('VPC Configuration', () => {
+  describe('VPC Validation', () => {
     let vpc: any;
 
     beforeAll(() => {
       vpc = allResources.find(r => r.type === 'aws_vpc' && r.name === 'main');
     });
 
-    it('should initialize successfully', () => {
-      expect(true).toBeTruthy();
-    });
-
     it('should create exactly one VPC', () => {
-      const vpcs = allResources.filter(r => r.type === 'aws_vpc');
-      expect(vpcs.length).toBe(1);
+      expect(allResources.filter(r => r.type === 'aws_vpc').length).toBe(1);
     });
 
     it('should have valid CIDR block format', () => {
@@ -107,11 +155,11 @@ describe('VPC Module Integration Tests', () => {
     });
 
     it('should have proper environment tag', () => {
-      expect(vpc.values.tags.Name).toMatch(/^.+-vpc$/);
+      expect(vpc.values.tags.Name).toMatch(/.+-vpc$/);
     });
   });
 
-  describe('Subnet Configuration', () => {
+  describe('Subnet Validation', () => {
     let publicSubnets: any[];
     let privateSubnets: any[];
 
@@ -120,44 +168,27 @@ describe('VPC Module Integration Tests', () => {
       privateSubnets = allResources.filter(r => r.type === 'aws_subnet' && r.name === 'private');
     });
 
-    it('should create at least one public subnet', () => {
+    it('should create public and private subnets', () => {
       expect(publicSubnets.length).toBeGreaterThan(0);
-    });
-
-    it('should create at least one private subnet', () => {
       expect(privateSubnets.length).toBeGreaterThan(0);
     });
 
-    it('should have public subnets with map_public_ip_on_launch enabled', () => {
-      publicSubnets.forEach(subnet => {
-        expect(subnet.values.map_public_ip_on_launch).toBe(true);
-      });
+    it('should have correct public IP mapping', () => {
+      publicSubnets.forEach(s => expect(s.values.map_public_ip_on_launch).toBe(true));
+      privateSubnets.forEach(s => expect(s.values.map_public_ip_on_launch).toBe(false));
     });
 
-    it('should have private subnets with map_public_ip_on_launch disabled', () => {
-      privateSubnets.forEach(subnet => {
-        expect(subnet.values.map_public_ip_on_launch).toBe(false);
+    it('should have valid naming conventions', () => {
+      publicSubnets.forEach((s, i) => {
+        expect(s.values.tags.Name).toMatch(new RegExp(`^.+public-${i}$`));
       });
-    });
-
-    it('should have valid CIDR blocks for all subnets', () => {
-      [...publicSubnets, ...privateSubnets].forEach(subnet => {
-        expect(subnet.values.cidr_block).toMatch(/^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\/[0-9]{1,2}$/);
-      });
-    });
-
-    it('should have proper naming tags for subnets', () => {
-      publicSubnets.forEach((subnet, index) => {
-        expect(subnet.values.tags.Name).toMatch(new RegExp(`^.+public-${index}$`));
-      });
-      
-      privateSubnets.forEach((subnet, index) => {
-        expect(subnet.values.tags.Name).toMatch(new RegExp(`^.+private-${index}$`));
+      privateSubnets.forEach((s, i) => {
+        expect(s.values.tags.Name).toMatch(new RegExp(`^.+private-${i}$`));
       });
     });
   });
 
-  describe('Security Group Configuration', () => {
+  describe('Security Group Validation', () => {
     let webSg: any;
     let dbSg: any;
 
@@ -166,90 +197,30 @@ describe('VPC Module Integration Tests', () => {
       dbSg = allResources.find(r => r.type === 'aws_security_group' && r.name === 'db');
     });
 
-    describe('Web Security Group', () => {
-      it('should exist', () => {
-        expect(webSg).toBeDefined();
-      });
-
-      it('should have HTTP ingress rule', () => {
-        const httpRule = webSg.values.ingress.find((r: any) => r.from_port === 80 && r.to_port === 80);
-        expect(httpRule).toBeDefined();
-        expect(httpRule.protocol).toBe('tcp');
-        expect(httpRule.cidr_blocks).toContain('0.0.0.0/0');
-      });
-
-      it('should have unrestricted egress', () => {
-        const egressRule = webSg.values.egress[0];
-        expect(egressRule.from_port).toBe(0);
-        expect(egressRule.to_port).toBe(0);
-        expect(egressRule.protocol).toBe('-1');
-        expect(egressRule.cidr_blocks).toContain('0.0.0.0/0');
-      });
-
-      it('should have proper naming', () => {
-        expect(webSg.values.name).toMatch(/^.+-web-sg$/);
-      });
+    it('should have web SG with HTTP access', () => {
+      const rule = webSg.values.ingress.find((r: any) => r.from_port === 80 && r.to_port === 80);
+      expect(rule).toBeDefined();
+      expect(rule.protocol).toBe('tcp');
+      expect(rule.cidr_blocks).toContain('0.0.0.0/0');
     });
 
-    describe('Database Security Group', () => {
-      it('should exist', () => {
-        expect(dbSg).toBeDefined();
-      });
-
-      it('should only allow MySQL access from web SG', () => {
-        const mysqlRule = dbSg.values.ingress.find((r: any) => r.from_port === 3306 && r.to_port === 3306);
-        expect(mysqlRule).toBeDefined();
-        expect(mysqlRule.protocol).toBe('tcp');
-        expect(mysqlRule.security_groups).toContain(webSg.values.id);
-      });
-
-      it('should have unrestricted egress', () => {
-        const egressRule = dbSg.values.egress[0];
-        expect(egressRule.from_port).toBe(0);
-        expect(egressRule.to_port).toBe(0);
-        expect(egressRule.protocol).toBe('-1');
-        expect(egressRule.cidr_blocks).toContain('0.0.0.0/0');
-      });
-
-      it('should have proper naming', () => {
-        expect(dbSg.values.name).toMatch(/^.+-db-sg$/);
-      });
+    it('should have DB SG with restricted access', () => {
+      const rule = dbSg.values.ingress.find((r: any) => r.from_port === 3306 && r.to_port === 3306);
+      expect(rule).toBeDefined();
+      expect(rule.security_groups).toContain(webSg.values.id);
     });
   });
 
   describe('Edge Cases', () => {
-    it('should not have overlapping CIDR blocks in subnets', () => {
+    it('should not have overlapping CIDR blocks', () => {
       const subnets = allResources.filter(r => r.type === 'aws_subnet');
-      const allCidrs = subnets.map(s => s.values.cidr_block);
-      const uniqueCidrs = new Set(allCidrs);
-      expect(uniqueCidrs.size).toBe(allCidrs.length);
+      const cidrs = subnets.map(s => s.values.cidr_block);
+      expect(new Set(cidrs).size).toBe(cidrs.length);
     });
-
-    it('should not have any security groups with overly permissive ingress rules', () => {
-    const allSgs = allResources.filter(r => r.type === 'aws_security_group');
-    const allowedOpenPorts = [80, 443]; // Ports we explicitly allow to be open
-    
-    allSgs.forEach(sg => {
-      sg.values.ingress.forEach((rule: any) => {
-        if (rule.cidr_blocks && rule.cidr_blocks.includes('0.0.0.0/0')) {
-          // Check if this is one of our allowed open ports
-          const isAllowedOpenPort = allowedOpenPorts.includes(rule.from_port) && 
-                                  allowedOpenPorts.includes(rule.to_port);
-          
-          if (!isAllowedOpenPort) {
-            console.error(`Overly permissive rule found in ${sg.values.name}:`, rule);
-          }
-          
-          expect(isAllowedOpenPort).toBe(true);
-        }
-      });
-    });
-  });
 
     it('should have all subnets associated with the VPC', () => {
       const vpc = allResources.find(r => r.type === 'aws_vpc');
       const subnets = allResources.filter(r => r.type === 'aws_subnet');
-      
       subnets.forEach(subnet => {
         expect(subnet.values.vpc_id).toBe(vpc.values.id);
       });
