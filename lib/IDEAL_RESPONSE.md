@@ -395,7 +395,15 @@ Resources:
           - Sid: AllowALBWrite
             Effect: Allow
             Principal: { Service: delivery.logs.amazonaws.com }
-            Action: s3:PutObject
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${LogBucket}/*"
+          - Sid: AllowALBLogDelivery
+            Effect: Allow
+            Principal:
+              { Service: logdelivery.elasticloadbalancing.amazonaws.com }
+            Action:
+              - s3:PutObject
             Resource: !Sub "arn:aws:s3:::${LogBucket}/*"
 
   ## Security Groups
