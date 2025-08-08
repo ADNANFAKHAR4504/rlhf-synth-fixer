@@ -2,12 +2,12 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
 // Import security infrastructure stacks
-import { NetworkingStack } from './networking-stack';
-import { SecurityServicesStack } from './security-services-stack';
-import { StorageStack } from './storage-stack';
 import { ComputeStack } from './compute-stack';
 import { MonitoringStack } from './monitoring-stack';
+import { NetworkingStack } from './networking-stack';
+import { SecurityServicesStack } from './security-services-stack';
 import { SecurityStack } from './security-stack';
+import { StorageStack } from './storage-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -19,15 +19,15 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this as any).node.tryGetContext('environmentSuffix') ||
       'dev';
 
     // Create networking infrastructure first
     const networkingStack = new NetworkingStack(
-      scope,
+      this,
       `NetworkingStack${environmentSuffix}`,
       {
         env: props?.env,
@@ -38,7 +38,7 @@ export class TapStack extends cdk.Stack {
 
     // Create security services
     new SecurityServicesStack(
-      scope,
+      this,
       `SecurityServicesStack${environmentSuffix}`,
       {
         env: props?.env,
@@ -49,7 +49,7 @@ export class TapStack extends cdk.Stack {
 
     // Create storage with encryption
     const storageStack = new StorageStack(
-      scope,
+      this,
       `StorageStack${environmentSuffix}`,
       {
         vpc: networkingStack.vpc,
@@ -62,7 +62,7 @@ export class TapStack extends cdk.Stack {
 
     // Create compute infrastructure
     const computeStack = new ComputeStack(
-      scope,
+      this,
       `ComputeStack${environmentSuffix}`,
       {
         vpc: networkingStack.vpc,
@@ -76,7 +76,7 @@ export class TapStack extends cdk.Stack {
 
     // Create monitoring and alerting
     const monitoringStack = new MonitoringStack(
-      scope,
+      this,
       `MonitoringStack${environmentSuffix}`,
       {
         kmsKey: storageStack.kmsKey,
@@ -88,7 +88,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Create security certificates
-    new SecurityStack(scope, `SecurityStack${environmentSuffix}`, {
+    new SecurityStack(this, `SecurityStack${environmentSuffix}`, {
       env: props?.env,
       stackName: `SecurityStack${environmentSuffix}`,
       description: `Security certificates for ${environmentSuffix} environment`,
