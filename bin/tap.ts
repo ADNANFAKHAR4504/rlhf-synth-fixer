@@ -20,9 +20,9 @@ Tags.of(app).add('Project', 'MultiRegionDevEnvironment');
 // Deploy infrastructure to both regions
 const usEast1Stack = new TapStack(
   app,
-  `TapStack-useast1-${environmentSuffix}`,
+  `TapStack${environmentSuffix}-useast1`,
   {
-    stackName: `TapStack-useast1-${environmentSuffix}`,
+    stackName: `TapStack${environmentSuffix}-useast1`,
     environmentSuffix: environmentSuffix,
     region: 'us-east-1',
     isPrimaryRegion: true,
@@ -35,9 +35,9 @@ const usEast1Stack = new TapStack(
 
 const usWest1Stack = new TapStack(
   app,
-  `TapStack-uswest1-${environmentSuffix}`,
+  `TapStack${environmentSuffix}-uswest1`,
   {
-    stackName: `TapStack-uswest1-${environmentSuffix}`,
+    stackName: `TapStack${environmentSuffix}-uswest1`,
     environmentSuffix: environmentSuffix,
     region: 'us-west-1',
     isPrimaryRegion: false,
