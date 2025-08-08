@@ -182,14 +182,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThan(10);
     });
 
-    test('should have exactly five parameters', () => {
+    test('should have exactly eight parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(8);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have exactly five outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(5);
     });
   });
 
