@@ -549,6 +549,60 @@ EnableCloudwatchLogsExports:
 
 **Current Status**: ⚠️ **PARTIAL DEPLOYMENT - REQUIRES INVESTIGATION**
 
+### 16. **CloudTrail Limit Exceeded Issue (Root Cause Identified)**
+
+**Issue Identified**:
+
+```
+CREATE_FAILED: CloudTrailAuditLog
+ResourceStatusReason: "User: 718240086340 already has 5 trails in us-east-1"
+```
+
+**Root Cause**: AWS CloudTrail has a limit of 5 trails per region per account. The account has already reached this limit.
+
+**Impact**: CloudTrail creation failure likely caused cascade failures in dependent resources, leading to partial stack deployment.
+
+**Resolution Options**:
+
+1. **Option A - Remove Existing Trails** (if safe to do):
+
+   ```bash
+   # List existing trails
+   aws cloudtrail describe-trails --region us-east-1
+
+   # Delete unused trails (CAUTION: Only delete if safe)
+   aws cloudtrail delete-trail --name <unused-trail-name>
+   ```
+
+2. **Option B - Make CloudTrail Optional** (Recommended):
+
+   ```yaml
+   # Add condition to make CloudTrail optional
+   Conditions:
+     CreateCloudTrail: !Equals [!Ref CreateCloudTrailParameter, 'true']
+
+   Parameters:
+     CreateCloudTrailParameter:
+       Type: String
+       Default: 'false'
+       AllowedValues: ['true', 'false']
+
+   # Apply condition to CloudTrail resources
+   CloudTrailAuditLog:
+     Type: AWS::CloudTrail::Trail
+     Condition: CreateCloudTrail
+   ```
+
+3. **Option C - Remove CloudTrail** (Simplest):
+   ```yaml
+   # Remove CloudTrail resources entirely from template
+   # Keep other security features (KMS, S3 encryption, VPC isolation)
+   ```
+
+**Recommended Action**: Make CloudTrail optional or remove it entirely, as the core Financial Services infrastructure (KMS encryption, VPC isolation, RDS security) works without it.
+
+**Current Status**: ⚠️ **CLOUDTRAIL LIMIT ISSUE IDENTIFIED - TEMPLATE MODIFICATION NEEDED**
+
 ### 12. **Final Validation Results**
 
 **Template Validation**: ✅ **PASSING**

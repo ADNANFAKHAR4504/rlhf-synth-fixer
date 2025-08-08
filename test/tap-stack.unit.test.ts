@@ -115,16 +115,21 @@ describe('Financial Services CloudFormation Template', () => {
   });
 
   describe('Mappings', () => {
-    test('should have RegionMap with updated AMI ID', () => {
+    test('should have RegionMap with us-west-2 AMI ID', () => {
       const regionMap = template.Mappings.RegionMap;
       simpleAssert(regionMap, 'RegionMap should be defined');
       simpleAssert(
-        regionMap['us-east-1'],
-        'us-east-1 region should be defined'
+        regionMap['us-west-2'],
+        'us-west-2 region should be defined'
       );
       simpleAssert(
-        regionMap['us-east-1'].AMI,
-        'AMI should be defined for us-east-1'
+        regionMap['us-west-2'].AMI,
+        'AMI should be defined for us-west-2'
+      );
+      simpleEqual(
+        regionMap['us-west-2'].AMI,
+        'ami-0aff18ec83b712f05',
+        'Should have correct AMI ID for us-west-2'
       );
     });
   });
