@@ -7,21 +7,20 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If you're testing a YAML template, run:
-    // `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
 
+  //
+  // ===== BASIC STRUCTURE TESTS =====
+  //
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
     test('should have a description', () => {
-      expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
         'TAP Stack - Task Assignment Platform CloudFormation Template'
       );
@@ -33,82 +32,140 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  //
+  // ===== PARAMETERS =====
+  //
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have EnvironmentSuffix parameter with correct defaults', () => {
+      const envSuffix = template.Parameters.EnvironmentSuffix;
+      expect(envSuffix.Type).toBe('String');
+      expect(envSuffix.Default).toBe('dev');
+      expect(envSuffix.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have LatestAmiId parameter for Launch Template', () => {
+      const amiParam = template.Parameters.LatestAmiId;
+      expect(amiParam.Type).toContain('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(amiParam.Default).toContain('/aws/service/ami-amazon-linux-latest/');
     });
   });
 
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = ['StackName', 'EnvironmentSuffix'];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+  //
+  // ===== CONDITIONS =====
+  //
+  describe('Conditions', () => {
+    test('should have IsUsWest2 region restriction', () => {
+      expect(template.Conditions.IsUsWest2).toBeDefined();
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+  //
+  // ===== VPC & NETWORKING =====
+  //
+  describe('VPC Networking', () => {
+    test('should have VPC with correct CIDR block', () => {
+      expect(template.Resources.WebAppVPC.Properties.CidrBlock).toBe('10.0.0.0/16');
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
+    test('should have 2 public subnets in different AZs', () => {
+      expect(template.Resources.PublicSubnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
+      expect(template.Resources.PublicSubnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
     });
 
-    test('should have at least one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(1); // Should have at least the DynamoDB table
+    test('should attach Internet Gateway to VPC', () => {
+      expect(template.Resources.InternetGatewayAttachment.Properties.VpcId.Ref).toBe('WebAppVPC');
     });
 
-    test('should have at least two parameters', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(2); // Should have 5 parameters after cleanup
+    test('should have a default public route to IGW', () => {
+      expect(template.Resources.DefaultPublicRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+    });
+  });
+
+  //
+  // ===== SECURITY GROUPS =====
+  //
+  describe('Security Groups', () => {
+    test('WebServerSecurityGroup should allow HTTP and SSH', () => {
+      const ingress = template.Resources.WebServerSecurityGroup.Properties.SecurityGroupIngress;
+      const ports = ingress.map((r: any) => r.FromPort);
+      expect(ports).toEqual(expect.arrayContaining([80, 22]));
     });
 
-    test('should have at least four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBeGreaterThanOrEqual(4); // Should have at least the original 4 outputs
+    test('LoadBalancerSecurityGroup should allow HTTP from anywhere', () => {
+      const ingress = template.Resources.LoadBalancerSecurityGroup.Properties.SecurityGroupIngress;
+      expect(ingress[0].FromPort).toBe(80);
+      expect(ingress[0].CidrIp).toBe('0.0.0.0/0');
+    });
+  });
+
+  //
+  // ===== IAM ROLE =====
+  //
+  describe('IAM Role', () => {
+    test('WebAppEC2Role should have S3 read-only access', () => {
+      const policies = template.Resources.WebAppEC2Role.Properties.ManagedPolicyArns;
+      expect(policies).toContain('arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess');
+    });
+  });
+
+  //
+  // ===== EC2 LAUNCH TEMPLATE =====
+  //
+  describe('EC2 Launch Template', () => {
+    test('should reference LatestAmiId parameter', () => {
+      expect(template.Resources.WebAppLaunchTemplate.Properties.LaunchTemplateData.ImageId.Ref).toBe('LatestAmiId');
+    });
+
+    test('should have instance type t2.micro', () => {
+      expect(template.Resources.WebAppLaunchTemplate.Properties.LaunchTemplateData.InstanceType).toBe('t2.micro');
+    });
+  });
+
+  //
+  // ===== LOAD BALANCER =====
+  //
+  describe('Load Balancer', () => {
+    test('should be internet-facing ALB with IPv4', () => {
+      const lb = template.Resources.WebAppLoadBalancer.Properties;
+      expect(lb.Scheme).toBe('internet-facing');
+      expect(lb.Type).toBe('application');
+      expect(lb.IpAddressType).toBe('ipv4');
+    });
+
+    test('Outputs should include LoadBalancerDNS and LoadBalancerURL', () => {
+      expect(template.Outputs.LoadBalancerDNS).toBeDefined();
+      expect(template.Outputs.LoadBalancerURL).toBeDefined();
+    });
+  });
+
+  //
+  // ===== AUTO SCALING =====
+  //
+  describe('Auto Scaling', () => {
+    test('should have ASG with min 2, max 5', () => {
+      const asg = template.Resources.WebAppAutoScalingGroup.Properties;
+      expect(asg.MinSize).toBe('2');
+      expect(asg.MaxSize).toBe('5');
+    });
+
+    test('should have scale up and scale down policies', () => {
+      expect(template.Resources.WebAppScaleUpPolicy).toBeDefined();
+      expect(template.Resources.WebAppScaleDownPolicy).toBeDefined();
+    });
+  });
+
+  //
+  // ===== CLOUDWATCH ALARMS =====
+  //
+  describe('CloudWatch Alarms', () => {
+    test('CPUAlarmHigh should trigger above 70%', () => {
+      expect(template.Resources.CPUAlarmHigh.Properties.Threshold).toBe('70');
+      expect(template.Resources.CPUAlarmHigh.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
+    });
+
+    test('CPUAlarmLow should trigger below 25%', () => {
+      expect(template.Resources.CPUAlarmLow.Properties.Threshold).toBe('25');
+      expect(template.Resources.CPUAlarmLow.Properties.ComparisonOperator).toBe('LessThanThreshold');
     });
   });
 });
