@@ -16,33 +16,33 @@ commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
 
 # Validate region constraint - explicitly exclude us-east-1
 if aws_region == "us-east-1":
-    raise ValueError("us-east-1 region is explicitly excluded from deployment as per requirements")
+  raise ValueError("us-east-1 region is explicitly excluded from deployment as per requirements")
 if state_bucket_region == "us-east-1":
-    raise ValueError("us-east-1 region is explicitly excluded for state bucket as per requirements")
+  raise ValueError("us-east-1 region is explicitly excluded for state bucket as per requirements")
 
 # Calculate the stack name
 stack_name = f"TapStack{environment_suffix}"
 
 # default_tags is structured in adherence to the AwsProvider default_tags interface
 default_tags = {
-    "tags": {
-        "Environment": environment_suffix,
-        "Repository": repository_name,
-        "Author": commit_author,
-    }
+  "tags": {
+    "Environment": environment_suffix,
+    "Repository": repository_name,
+    "Author": commit_author,
+  }
 }
 
 app = App()
 
 # Create the TapStack with the calculated properties
 TapStack(
-    app,
-    stack_name,
-    environment_suffix=environment_suffix,
-    state_bucket=state_bucket,
-    state_bucket_region=state_bucket_region,
-    aws_region=aws_region,
-    default_tags=default_tags,
+  app,
+  stack_name,
+  environment_suffix=environment_suffix,
+  state_bucket=state_bucket,
+  state_bucket_region=state_bucket_region,
+  aws_region=aws_region,
+  default_tags=default_tags,
 )
 
 # Synthesize the app to generate the Terraform configuration
