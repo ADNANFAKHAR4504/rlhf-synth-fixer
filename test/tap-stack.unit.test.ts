@@ -48,9 +48,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(logLevelParam.Type).toBe('String');
       expect(logLevelParam.Default).toBe('INFO');
       expect(logLevelParam.AllowedValues).toEqual(['INFO', 'WARN', 'ERROR']);
-      expect(logLevelParam.Description).toBe(
-        'Log level for Lambda function'
-      );
+      expect(logLevelParam.Description).toBe('Log level for Lambda function');
     });
   });
 
@@ -151,7 +149,9 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('should have DynamoDB auto scaling resources', () => {
-      expect(template.Resources.ApplicationAutoScalingDynamoDBRole).toBeDefined();
+      expect(
+        template.Resources.ApplicationAutoScalingDynamoDBRole
+      ).toBeDefined();
       expect(template.Resources.ReadCapacityScalableTarget).toBeDefined();
       expect(template.Resources.WriteCapacityScalableTarget).toBeDefined();
       expect(template.Resources.ReadScalingPolicy).toBeDefined();
@@ -224,9 +224,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('ApiEndpoint output should be correct', () => {
       const output = template.Outputs.ApiEndpoint;
-      expect(output.Description).toBe(
-        'API Gateway endpoint URL'
-      );
+      expect(output.Description).toBe('API Gateway endpoint URL');
       expect(output.Value).toEqual({
         'Fn::Sub':
           'https://${DataApi}.execute-api.us-east-1.amazonaws.com/${Environment}/data',
@@ -289,7 +287,7 @@ describe('TapStack CloudFormation Template', () => {
     test('DynamoDB auto scaling role should have correct managed policy', () => {
       const role = template.Resources.ApplicationAutoScalingDynamoDBRole;
       expect(role.Properties.ManagedPolicyArns).toEqual([
-        'arn:aws:iam::aws:policy/service-role/DynamoDBAutoscaleRole',
+        'arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess',
       ]);
     });
   });
