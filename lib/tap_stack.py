@@ -40,7 +40,7 @@ class ServerlessStack(Stack):
   def _configure_autoscaling(self, table: ddb.Table) -> None:
     read_scaling = appautoscaling.ScalableTarget(
       self,
-      "DynamoDBReadScalingTarget",
+      "DynamoDBReadScalingTargets",
       min_capacity=1,
       max_capacity=1000,
       resource_id=f"table/{table.table_name}",
@@ -48,14 +48,14 @@ class ServerlessStack(Stack):
       service_namespace=appautoscaling.ServiceNamespace.DYNAMODB,
     )
     read_scaling.scale_to_track_metric(
-      "DynamoDBReadCapacityUtilization",
+      "DynamoDBReadCapacityUtilizations",
       target_value=70,
       predefined_metric=appautoscaling.PredefinedMetric.DYNAMODB_READ_CAPACITY_UTILIZATION,
     )
 
     write_scaling = appautoscaling.ScalableTarget(
       self,
-      "DynamoDBWriteScalingTarget",
+      "DynamoDBWriteScalingTargets",
       min_capacity=1,
       max_capacity=1000,
       resource_id=f"table/{table.table_name}",
@@ -63,7 +63,7 @@ class ServerlessStack(Stack):
       service_namespace=appautoscaling.ServiceNamespace.DYNAMODB,
     )
     write_scaling.scale_to_track_metric(
-      "DynamoDBWriteCapacityUtilization",
+      "DynamoDBWriteCapacityUtilizations",
       target_value=70,
       predefined_metric=appautoscaling.PredefinedMetric.DYNAMODB_WRITE_CAPACITY_UTILIZATION,
     )
