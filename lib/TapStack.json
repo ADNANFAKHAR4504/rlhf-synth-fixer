@@ -341,8 +341,8 @@
                         "MetricsEnabled": true,
                         "CachingEnabled": true,
                         "CacheTtlInSeconds": 300,
-                        "ThrottlingRateLimit": 10000,
-                        "ThrottlingBurstLimit": 20000
+                        "ThrottlingRateLimit": 100000,
+                        "ThrottlingBurstLimit": 200000
                     }
                 ]
             }
