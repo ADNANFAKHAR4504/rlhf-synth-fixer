@@ -488,7 +488,7 @@ config:
   aws:region: us-west-1
 ```
 
-### `requirements.txt`
+### `requirements.txt` 
 ```
 pulumi>=3.100.0
 pulumi-aws>=6.15.0
