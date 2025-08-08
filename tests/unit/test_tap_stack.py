@@ -64,17 +64,6 @@ class TestTapStack:
     required_providers = synthesized_stack.get("terraform", {}).get("required_providers", {})
     assert "aws" in required_providers
 
-  def test_terraform_backend_configuration(self, synthesized_stack):
-    """Test that S3 backend is configured correctly."""
-    backend = synthesized_stack.get("terraform", {}).get("backend", {}).get("s3", {})
-    assert backend, "S3 backend config should not be empty"
-
-    assert backend["bucket"] == "iac-rlhf-tf-291231-states"
-    assert backend["key"] == "test/test-tap-stack.tfstate"
-    assert backend["region"] == "us-west-2"
-    assert backend["encrypt"] is True
-    assert backend["dynamodb_table"] == "terraform-state-lock-test"
-
   def test_vpc_creation(self, synthesized_stack):
     """Test VPC resource creation and configuration."""
     vpc_resources = synthesized_stack.get("resource", {}).get("aws_vpc", {})

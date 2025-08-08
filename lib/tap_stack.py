@@ -94,13 +94,15 @@ class TapStack(TerraformStack):
     )
 
     # Configure S3 Backend for state management
+    # Note: DynamoDB table for state locking should be created separately first
+    # or remove dynamodb_table parameter to disable state locking
     S3Backend(
       self,
       bucket=state_bucket,
       key=f"{environment_suffix}/{construct_id}.tfstate",
       region=state_bucket_region,
-      encrypt=True,
-      dynamodb_table=f"terraform-state-lock-{environment_suffix}"
+      encrypt=True
+      # dynamodb_table=f"terraform-state-lock-{environment_suffix}"  # Disabled for now
     )
 
     # Get AWS account information
