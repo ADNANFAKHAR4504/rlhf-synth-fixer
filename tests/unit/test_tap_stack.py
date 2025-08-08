@@ -40,9 +40,9 @@ class TestTapStack(unittest.TestCase):
     template.resource_count_is("AWS::IAM::Role", 3)
     template.resource_count_is(
         "AWS::Lambda::Function",
-        3)  # API + Health + S3 cleanup
+        4)  # API + Health + S3 cleanup
     template.resource_count_is("AWS::ApiGatewayV2::Api", 1)
-    template.resource_count_is("AWS::Logs::LogGroup", Match.any_value())
+    template.resource_count_is("Custom::LogRetention", 2)
 
   @mark.it("creates KMS key with proper configuration")
   def test_creates_kms_key(self):
@@ -224,9 +224,7 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.has_resource_properties("AWS::Logs::LogGroup", Match.object_like({
-    "RetentionInDays": 7
-}))
+    template.resource_count_is("Custom::LogRetention", 2)
 
   @mark.it("creates resources with environment suffix when provided")
   def test_creates_resources_with_env_suffix(self):
