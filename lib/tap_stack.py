@@ -397,6 +397,7 @@ class TapStack(TerraformStack):
           "to_port": 80,
           "protocol": "tcp",
           "cidr_blocks": ["0.0.0.0/0"],
+          "security_groups": [],
           "description": "HTTP traffic from internet"
         },
         {
@@ -404,6 +405,7 @@ class TapStack(TerraformStack):
           "to_port": 443,
           "protocol": "tcp",
           "cidr_blocks": ["0.0.0.0/0"],
+          "security_groups": [],
           "description": "HTTPS traffic from internet"
         }
       ],
@@ -413,6 +415,7 @@ class TapStack(TerraformStack):
           "to_port": 0,
           "protocol": "-1",
           "cidr_blocks": ["0.0.0.0/0"],
+          "security_groups": [],
           "description": "All outbound traffic"
         }
       ],
@@ -436,6 +439,7 @@ class TapStack(TerraformStack):
           "from_port": 3306,
           "to_port": 3306,
           "protocol": "tcp",
+          "cidr_blocks": [],
           "security_groups": [self.web_sg.id],
           "description": "MySQL access from web tier"
         }
@@ -643,7 +647,7 @@ class TapStack(TerraformStack):
             "iam:ChangePassword",
             "iam:GetUser"
           ],
-          "resources": [f"arn:aws:iam::{self.current_account.account_id}:user/${{aws:username}}"]
+          "resources": [f"arn:aws:iam::{self.current_account.account_id}:user/${{${{aws:username}}}}"]
         },
         {
           "sid": "AllowManageOwnMFA",
@@ -656,8 +660,8 @@ class TapStack(TerraformStack):
             "iam:ResyncMFADevice"
           ],
           "resources": [
-            f"arn:aws:iam::{self.current_account.account_id}:mfa/${{aws:username}}",
-            f"arn:aws:iam::{self.current_account.account_id}:user/${{aws:username}}"
+            f"arn:aws:iam::{self.current_account.account_id}:mfa/${{${{aws:username}}}}",
+            f"arn:aws:iam::{self.current_account.account_id}:user/${{${{aws:username}}}}"
           ]
         },
         {
