@@ -547,7 +547,6 @@ Resources:
           - DeviceIndex: 0
             AssociatePublicIpAddress: false
             Groups: [!Ref InstanceSecurityGroup]
-        SecurityGroupIds: [!Ref InstanceSecurityGroup]
         UserData: !Base64 |
           #!/bin/bash -xe
           yum update -y

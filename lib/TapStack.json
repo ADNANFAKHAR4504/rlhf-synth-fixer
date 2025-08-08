@@ -1035,11 +1035,6 @@
                             ]
                         }
                     ],
-                    "SecurityGroupIds": [
-                        {
-                            "Ref": "InstanceSecurityGroup"
-                        }
-                    ],
                     "UserData": {
                         "Fn::Base64": "#!/bin/bash -xe\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"<html><body><h1>TapStack webserver</h1><p>Instance: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>\" > /var/www/html/index.html\n"
                     }
