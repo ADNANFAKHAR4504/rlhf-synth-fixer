@@ -34,6 +34,73 @@
       "MaxLength": 16,
       "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
       "NoEcho": true
+    },
+    "ExistingPublicSubnet1Id": {
+      "Type": "String",
+      "Default": "10.0.1.0/24",
+      "Description": "Existing Public Subnet 1 ID (leave empty to create new)"
+    },
+    "ExistingPublicSubnet2Id": {
+      "Type": "String",
+      "Default": "10.0.2.0/24",
+      "Description": "Existing Public Subnet 2 ID (leave empty to create new)"
+    },
+    "ExistingPrivateSubnet1Id": {
+      "Type": "String",
+      "Default": "10.0.10.0/24",
+      "Description": "Existing Private Subnet 1 ID (leave empty to create new)"
+    },
+    "ExistingPrivateSubnet2Id": {
+      "Type": "String",
+      "Default": "10.0.11.0/24",
+      "Description": "Existing Private Subnet 2 ID (leave empty to create new)"
+    },
+    "ExistingInternetGatewayId": {
+      "Type": "String",
+      "Default": "igw-0ab6cd53c8ed36df2",
+      "Description": "Existing Internet Gateway ID (leave empty to create new)"
+    }
+  },
+  "Conditions": {
+    "CreatePublicSubnet1": {
+      "Fn::Equals": [
+        {
+          "Ref": "ExistingPublicSubnet1Id"
+        },
+        ""
+      ]
+    },
+    "CreatePublicSubnet2": {
+      "Fn::Equals": [
+        {
+          "Ref": "ExistingPublicSubnet2Id"
+        },
+        ""
+      ]
+    },
+    "CreatePrivateSubnet1": {
+      "Fn::Equals": [
+        {
+          "Ref": "ExistingPrivateSubnet1Id"
+        },
+        ""
+      ]
+    },
+    "CreatePrivateSubnet2": {
+      "Fn::Equals": [
+        {
+          "Ref": "ExistingPrivateSubnet2Id"
+        },
+        ""
+      ]
+    },
+    "CreateInternetGateway": {
+      "Fn::Equals": [
+        {
+          "Ref": "ExistingInternetGatewayId"
+        },
+        ""
+      ]
     }
   },
   "Mappings": {
@@ -52,6 +119,7 @@
   "Resources": {
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
+      "Condition": "CreatePublicSubnet1",
       "Properties": {
         "VpcId": {
           "Ref": "ExistingVPCId"
@@ -82,6 +150,7 @@
     },
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
+      "Condition": "CreatePublicSubnet2",
       "Properties": {
         "VpcId": {
           "Ref": "ExistingVPCId"
@@ -112,11 +181,12 @@
     },
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
+      "Condition": "CreatePrivateSubnet1",
       "Properties": {
         "VpcId": {
           "Ref": "ExistingVPCId"
         },
-        "CidrBlock": "10.0.3.0/24",
+        "CidrBlock": "10.0.10.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
             0,
@@ -141,11 +211,12 @@
     },
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
+      "Condition": "CreatePrivateSubnet2",
       "Properties": {
         "VpcId": {
           "Ref": "ExistingVPCId"
         },
-        "CidrBlock": "10.0.4.0/24",
+        "CidrBlock": "10.0.11.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
             1,
@@ -228,6 +299,7 @@
     },
     "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
+      "Condition": "CreateInternetGateway",
       "Properties": {
         "Tags": [
           {
@@ -245,6 +317,7 @@
     },
     "AttachGateway": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Condition": "CreateInternetGateway",
       "Properties": {
         "VpcId": {
           "Ref": "ExistingVPCId"
@@ -256,7 +329,6 @@
     },
     "NATGatewayEIP": {
       "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
       "Properties": {
         "Domain": "vpc",
         "Tags": [
@@ -271,6 +343,15 @@
             "Value": "Production"
           }
         ]
+      },
+      "DependsOn": {
+        "Fn::If": [
+          "CreateInternetGateway",
+          "AttachGateway",
+          {
+            "Ref": "AWS::NoValue"
+          }
+        ]
       }
     },
     "NATGateway": {
@@ -283,7 +364,15 @@
           ]
         },
         "SubnetId": {
-          "Ref": "PublicSubnet1"
+          "Fn::If": [
+            "CreatePublicSubnet1",
+            {
+              "Ref": "PublicSubnet1"
+            },
+            {
+              "Ref": "ExistingPublicSubnet1Id"
+            }
+          ]
         },
         "Tags": [
           {
@@ -341,15 +430,31 @@
     },
     "PublicRoute": {
       "Type": "AWS::EC2::Route",
-      "DependsOn": "AttachGateway",
       "Properties": {
         "RouteTableId": {
           "Ref": "PublicRouteTable"
         },
         "DestinationCidrBlock": "0.0.0.0/0",
         "GatewayId": {
-          "Ref": "InternetGateway"
+          "Fn::If": [
+            "CreateInternetGateway",
+            {
+              "Ref": "InternetGateway"
+            },
+            {
+              "Ref": "ExistingInternetGatewayId"
+            }
+          ]
         }
+      },
+      "DependsOn": {
+        "Fn::If": [
+          "CreateInternetGateway",
+          "AttachGateway",
+          {
+            "Ref": "AWS::NoValue"
+          }
+        ]
       }
     },
     "PrivateRoute": {
@@ -366,6 +471,7 @@
     },
     "PublicSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreatePublicSubnet1",
       "Properties": {
         "SubnetId": {
           "Ref": "PublicSubnet1"
@@ -377,6 +483,7 @@
     },
     "PublicSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreatePublicSubnet2",
       "Properties": {
         "SubnetId": {
           "Ref": "PublicSubnet2"
@@ -388,6 +495,7 @@
     },
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreatePrivateSubnet1",
       "Properties": {
         "SubnetId": {
           "Ref": "PrivateSubnet1"
@@ -399,6 +507,7 @@
     },
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreatePrivateSubnet2",
       "Properties": {
         "SubnetId": {
           "Ref": "PrivateSubnet2"
@@ -1010,10 +1119,26 @@
         "DesiredCapacity": 2,
         "VPCZoneIdentifier": [
           {
-            "Ref": "PrivateSubnet1"
+            "Fn::If": [
+              "CreatePrivateSubnet1",
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "ExistingPrivateSubnet1Id"
+              }
+            ]
           },
           {
-            "Ref": "PrivateSubnet2"
+            "Fn::If": [
+              "CreatePrivateSubnet2",
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "ExistingPrivateSubnet2Id"
+              }
+            ]
           }
         ],
         "TargetGroupARNs": [
@@ -1072,10 +1197,26 @@
         "IpAddressType": "ipv4",
         "Subnets": [
           {
-            "Ref": "PublicSubnet1"
+            "Fn::If": [
+              "CreatePublicSubnet1",
+              {
+                "Ref": "PublicSubnet1"
+              },
+              {
+                "Ref": "ExistingPublicSubnet1Id"
+              }
+            ]
           },
           {
-            "Ref": "PublicSubnet2"
+            "Fn::If": [
+              "CreatePublicSubnet2",
+              {
+                "Ref": "PublicSubnet2"
+              },
+              {
+                "Ref": "ExistingPublicSubnet2Id"
+              }
+            ]
           }
         ],
         "SecurityGroups": [

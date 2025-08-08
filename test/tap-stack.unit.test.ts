@@ -44,6 +44,11 @@ describe('TapStack CloudFormation Template', () => {
       'SSHAccessCIDR',
       'S3AccessCIDR',
       'DBMasterUsername',
+      'ExistingPublicSubnet1Id',
+      'ExistingPublicSubnet2Id',
+      'ExistingPrivateSubnet1Id',
+      'ExistingPrivateSubnet2Id',
+      'ExistingInternetGatewayId',
     ];
 
     test('should have all required parameters', () => {
@@ -740,12 +745,24 @@ describe('TapStack CloudFormation Template', () => {
   describe('Resource Dependencies', () => {
     test('NATGateway EIP should depend on Internet Gateway attachment', () => {
       const eip = template.Resources.NATGatewayEIP;
-      expect(eip.DependsOn).toBe('AttachGateway');
+      expect(eip.DependsOn).toEqual({
+        'Fn::If': [
+          'CreateInternetGateway',
+          'AttachGateway',
+          { Ref: 'AWS::NoValue' },
+        ],
+      });
     });
 
     test('Public route should depend on Internet Gateway attachment', () => {
       const route = template.Resources.PublicRoute;
-      expect(route.DependsOn).toBe('AttachGateway');
+      expect(route.DependsOn).toEqual({
+        'Fn::If': [
+          'CreateInternetGateway',
+          'AttachGateway',
+          { Ref: 'AWS::NoValue' },
+        ],
+      });
     });
 
     test('Auto Scaling Group should reference target group', () => {
