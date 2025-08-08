@@ -20,11 +20,39 @@ igw = aws.ec2.InternetGateway("igw",
         "Project": "IPv6StaticTest"
     })
 
+# Helper function to derive IPv6 subnet CIDR from VPC CIDR
+def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number):
+    """
+    Derive a /64 subnet CIDR from a VPC /56 CIDR.
+    
+    Args:
+        vpc_cidr: VPC IPv6 CIDR block (e.g., "2600:1f18:5b2:f600::/56")
+        subnet_number: Subnet number (0, 1, 2, etc.)
+    
+    Returns:
+        IPv6 subnet CIDR block (e.g., "2600:1f18:5b2:f600::/64")
+    """
+    # Remove the /56 suffix and split by ':'
+    base_cidr = vpc_cidr.replace('/56', '')
+    parts = base_cidr.split(':')
+    
+    # The last part before '::' contains the subnet space
+    # For a /56, we have 8 bits for subnets (256 possible /64 subnets)
+    if len(parts) >= 4 and parts[3]:
+        # Convert the 4th part to int, add subnet number, convert back to hex
+        base_value = int(parts[3], 16)
+        new_value = base_value + subnet_number
+        parts[3] = format(new_value, 'x')
+        return ':'.join(parts) + '/64'
+    else:
+        # Handle case where the 4th part is empty or missing
+        return base_cidr.replace('::', f':{subnet_number:x}::/64')
+
 # Create a public subnet with IPv6 CIDR block
 public_subnet = aws.ec2.Subnet("public-subnet",
     vpc_id=vpc.id,
     cidr_block="10.0.1.0/24",
-    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: x.replace('/56', '/64').replace('0::', '0001::')),
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: derive_ipv6_subnet_cidr(x, 1)),
     availability_zone=aws.get_availability_zones().names[0],
     assign_ipv6_address_on_creation=True,
     map_public_ip_on_launch=True,
@@ -37,7 +65,7 @@ public_subnet = aws.ec2.Subnet("public-subnet",
 private_subnet = aws.ec2.Subnet("private-subnet",
     vpc_id=vpc.id,
     cidr_block="10.0.2.0/24",
-    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: x.replace('/56', '/64').replace('0::', '0002::')),
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: derive_ipv6_subnet_cidr(x, 2)),
     availability_zone=aws.get_availability_zones().names[1],
     assign_ipv6_address_on_creation=True,
     tags={

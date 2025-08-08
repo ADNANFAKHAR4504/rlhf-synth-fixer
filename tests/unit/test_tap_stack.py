@@ -63,14 +63,16 @@ class TestTapStack(unittest.TestCase):
     self.assertIn('"Project": "IPv6StaticTest"', source_code)
 
   def test_ipv6_subnet_configuration_fixed(self):
-    """Test that IPv6 subnets use valid /64 CIDR blocks, not /65."""
+    """Test that IPv6 subnets use valid /64 CIDR blocks with proper helper function."""
     with open('tap.py', 'r', encoding='utf-8') as f:
       source_code = f.read()
     
     # Ensure /65 is not used (would be invalid for AWS IPv6 subnets)
     self.assertNotIn('/65', source_code)
-    # Check for proper IPv6 subnet configuration
-    self.assertIn('replace(\'/56\', \'/64\')', source_code)
+    # Check for proper IPv6 subnet configuration using helper function
+    self.assertIn('derive_ipv6_subnet_cidr', source_code)
+    self.assertIn('def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number)', source_code)
+    self.assertIn('replace(\'/56\', \'\')', source_code)  # Inside the helper function
     
   def test_tap_stack_class_attributes(self):
     """Test TapStack class attributes."""
