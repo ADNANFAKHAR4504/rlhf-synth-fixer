@@ -36,6 +36,7 @@ Parameters:
 
 Conditions:
   HasSubnetIds: !Not [!Equals [!Join ['', !Ref SubnetIds], '']]
+  BucketExists: !Not [!Equals [!Ref S3BucketName, '']]
 
 Resources:
   LambdaLogGroup:
@@ -415,6 +416,7 @@ Resources:
 
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: BucketExists
     Properties:
       Bucket: !Ref S3BucketName
       PolicyDocument:
@@ -424,22 +426,20 @@ Resources:
             Effect: Allow
             Principal:
               Service: logs.amazonaws.com
-            Action:
-              - s3:PutObject
-              - s3:GetBucketAcl
-            Resource: 
-              - !Sub 'arn:aws:s3:::${S3BucketName}'
-              - !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/*'
+          - Sid: 'AllowCloudWatchLogsGetBucketAcl'
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
           - Sid: 'AllowLogExportLambda'
             Effect: Allow
             Principal:
               AWS: !GetAtt LogExportLambdaRole.Arn
             Action:
               - s3:PutObject
-              - s3:GetBucketAcl
               - s3:GetBucketLocation
               - s3:ListBucket
             Resource:

@@ -57,7 +57,7 @@ describe('Secure Lambda CloudFormation Template', () => {
   beforeAll(() => {
     // If testing a yaml template, run `cfn-flip template.yml > lib/SecureLambda.json`
     // Otherwise, ensure the template is in JSON format.
-    const templatePath: string = path.join(__dirname, '../lib/SecureLambda.json');
+    const templatePath: string = path.join(__dirname, '../lib/TapStack.json');
     const templateContent: string = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent) as CloudFormationTemplate;
   });
