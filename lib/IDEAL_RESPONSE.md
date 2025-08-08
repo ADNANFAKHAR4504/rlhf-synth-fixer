@@ -42,6 +42,11 @@ Metadata:
         Parameters: [CreateSSMEndpoint, CreateCWEndpoint]
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix to ensure unique resource names (must be lowercase for S3 bucket compatibility)
+    Default: dev
+    AllowedPattern: "^[a-z0-9-]+$"
   VpcCidr:
     Type: String
     Description: VPC CIDR block — must be 10.0.0.0/16 for this template.
@@ -139,7 +144,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-vpc"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-vpc"
         - Key: Project
           Value: TapStack
 
@@ -148,7 +153,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-igw"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-igw"
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -165,7 +170,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-public-1"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-public-1"
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -175,7 +180,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-public-2"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-public-2"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -186,7 +191,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-private-1"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-private-1"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -197,7 +202,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-private-2"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-private-2"
 
   # Route tables & routes
   PublicRouteTable:
@@ -206,7 +211,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-public-rt"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-public-rt"
 
   PublicDefaultRoute:
     Type: AWS::EC2::Route
@@ -249,7 +254,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-nat-1"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-nat-1"
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -259,7 +264,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-nat-2"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-nat-2"
 
   # Private route tables (one per AZ) that route to the NAT in same AZ
   PrivateRouteTable1:
@@ -268,7 +273,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-private-rt-1"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-private-rt-1"
 
   PrivateRoute1:
     Type: AWS::EC2::Route
@@ -283,7 +288,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-private-rt-2"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-private-rt-2"
 
   PrivateRoute2:
     Type: AWS::EC2::Route
@@ -317,7 +322,7 @@ Resources:
       VpcEndpointType: Gateway
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-s3-endpoint"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-s3-endpoint"
 
   VPCEndpointDynamoDB:
     Type: AWS::EC2::VPCEndpoint
@@ -331,7 +336,7 @@ Resources:
       VpcEndpointType: Gateway
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-dynamodb-endpoint"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-dynamodb-endpoint"
 
   # Optional interface endpoints for SSM / CloudWatch
   SSMInterfaceEndpoint:
@@ -363,7 +368,14 @@ Resources:
     Condition: CreateLogBucketCond
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-alb-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Join
+        - "-"
+        - - !Ref AWS::StackName
+          - !Ref EnvironmentSuffix
+          - "alb"
+          - "logs"
+          - !Ref AWS::AccountId
+          - !Ref AWS::Region
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -373,7 +385,7 @@ Resources:
         IgnorePublicAcls: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-alb-logs"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb-logs"
 
   LogBucketPolicy:
     Condition: CreateLogBucketCond
@@ -408,7 +420,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-alb-sg"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb-sg"
 
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -425,12 +437,13 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-instance-sg"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-instance-sg"
 
   ## IAM Role for EC2 instances (least privilege for SSM, CloudWatch, S3)
   InstanceProfileRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-InstanceRole"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -464,7 +477,7 @@ Resources:
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${AWS::StackName}-alb"
+      Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb"
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
@@ -473,7 +486,7 @@ Resources:
       Type: application
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-alb"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb"
       LoadBalancerAttributes:
         - Key: access_logs.s3.enabled
           Value:
@@ -490,7 +503,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${AWS::StackName}-tg"
+      Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-tg"
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -525,7 +538,7 @@ Resources:
   WebServerLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub "${AWS::StackName}-lt"
+      LaunchTemplateName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-lt"
       LaunchTemplateData:
         ImageId: !Ref ImageId
         InstanceType: !Ref InstanceType
@@ -549,6 +562,7 @@ Resources:
   WebAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-asg"
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -563,7 +577,7 @@ Resources:
         - !Ref ALBTargetGroup
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-asg-instance"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-asg-instance"
           PropagateAtLaunch: true
 
 Outputs:
@@ -591,6 +605,5 @@ Outputs:
     Description: Template validation check
     Value: "Use aws cloudformation validate-template and cfn-lint to validate this template before deploying."
 # End of template
-
 
 ```

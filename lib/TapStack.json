@@ -55,8 +55,9 @@
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
-            "Description": "Environment suffix to ensure unique resource names",
-            "Default": "dev"
+            "Description": "Environment suffix to ensure unique resource names (must be lowercase for S3 bucket compatibility)",
+            "Default": "dev",
+            "AllowedPattern": "^[a-z0-9-]+$"
         },
         "VpcCidr": {
             "Type": "String",
@@ -677,7 +678,25 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "AWS::StackName"
+                            },
+                            {
+                                "Ref": "EnvironmentSuffix"
+                            },
+                            "alb",
+                            "logs",
+                            {
+                                "Ref": "AWS::AccountId"
+                            },
+                            {
+                                "Ref": "AWS::Region"
+                            }
+                        ]
+                    ]
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"

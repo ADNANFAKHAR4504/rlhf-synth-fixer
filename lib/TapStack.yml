@@ -39,8 +39,9 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: Environment suffix to ensure unique resource names
+    Description: Environment suffix to ensure unique resource names (must be lowercase for S3 bucket compatibility)
     Default: dev
+    AllowedPattern: "^[a-z0-9-]+$"
   VpcCidr:
     Type: String
     Description: VPC CIDR block — must be 10.0.0.0/16 for this template.
@@ -362,7 +363,14 @@ Resources:
     Condition: CreateLogBucketCond
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Join
+        - "-"
+        - - !Ref AWS::StackName
+          - !Ref EnvironmentSuffix
+          - "alb"
+          - "logs"
+          - !Ref AWS::AccountId
+          - !Ref AWS::Region
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
