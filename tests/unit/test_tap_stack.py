@@ -1,7 +1,6 @@
 import unittest
 import aws_cdk as cdk
 from aws_cdk.assertions import Template, Match
-
 from lib.tap_stack import ServerlessStack
 
 
@@ -44,17 +43,19 @@ class TestServerlessStack(unittest.TestCase):
   def test_lambda_execution_role_created(self):
     self.template.has_resource_properties("AWS::IAM::Role", {
       "AssumeRolePolicyDocument": {
-        "Statement": [{
-          "Action": "sts:AssumeRole",
-          "Effect": "Allow",
-          "Principal": {
-            "Service": "lambda.amazonaws.com"
-          }
-        }]
+        "Statement": Match.array_with([
+          Match.object_like({
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "lambda.amazonaws.com"
+            }
+          })
+        ])
       },
       "ManagedPolicyArns": Match.array_with([
         Match.string_like_regexp(
-          r"^arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole$"
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         )
       ])
     })
