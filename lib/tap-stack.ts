@@ -108,3 +108,4 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'instance_id', { value: ec2.instanceId });
   }
 }
+ 
