@@ -3,14 +3,11 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand,
 } from '@aws-sdk/client-ec2';
 import {
   ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeListenersCommand,
-  DescribeTargetGroupsCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import {
@@ -26,7 +23,7 @@ import {
   SecretsManagerClient,
   DescribeSecretCommand,
 } from '@aws-sdk/client-secrets-manager';
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam'; // Added IAM client
+import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -41,7 +38,7 @@ const rdsClient = new RDSClient({ region: REGION });
 const s3Client = new S3Client({ region: REGION });
 const lambdaClient = new LambdaClient({ region: REGION });
 const secretsManagerClient = new SecretsManagerClient({ region: REGION });
-const iamClient = new IAMClient({ region: REGION }); // Initialized IAM client
+const iamClient = new IAMClient({ region: REGION });
 
 // --- Read Deployed Stack Outputs ---
 let outputs: { [key: string]: string } = {};
@@ -67,8 +64,8 @@ testSuite('Web Application Stack Integration Tests', () => {
   const s3BucketName = outputs.S3BucketName;
   const dbSecretArn = outputs.DBSecretARN;
   const lambdaFunctionName = 'WebApp-Placeholder-Function'; // This name comes from the template
-
   // Resource identifiers discovered during tests
+
   let albArn: string;
   let rdsInstanceIdentifier: string;
   let securityGroupIds: { [key: string]: string } = {};
@@ -83,9 +80,8 @@ testSuite('Web Application Stack Integration Tests', () => {
     );
     if (!alb || !alb.LoadBalancerArn)
       throw new Error('Could not find deployed Application Load Balancer');
-    albArn = alb.LoadBalancerArn;
+    albArn = alb.LoadBalancerArn; // Discover the RDS Instance Identifier from its endpoint address
 
-    // Discover the RDS Instance Identifier from its endpoint address
     const rdsResponse = await rdsClient.send(
       new DescribeDBInstancesCommand({})
     );
@@ -94,9 +90,8 @@ testSuite('Web Application Stack Integration Tests', () => {
     );
     if (!rdsInstance || !rdsInstance.DBInstanceIdentifier)
       throw new Error('Could not find deployed RDS Instance');
-    rdsInstanceIdentifier = rdsInstance.DBInstanceIdentifier;
+    rdsInstanceIdentifier = rdsInstance.DBInstanceIdentifier; // Discover Security Group IDs by name
 
-    // Discover Security Group IDs by name
     const sgResponse = await ec2Client.send(
       new DescribeSecurityGroupsCommand({
         Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
@@ -189,27 +184,23 @@ testSuite('Web Application Stack Integration Tests', () => {
       );
     });
 
-    // --- NEW ROBUST TEST ---
     test("Lambda function's IAM role should have the correct trust policy", async () => {
       // 1. Get the Lambda function's configuration to find its role ARN
-      const { Configuration } = await lambdaClient.send(
+      const functionConfig = await lambdaClient.send(
         new GetFunctionConfigurationCommand({
           FunctionName: lambdaFunctionName,
         })
       );
-      const roleArn = Configuration?.Role;
-      expect(roleArn).toBeDefined();
+      const roleArn = functionConfig.Role;
+      expect(roleArn).toBeDefined(); // 2. Extract the role name from the ARN (e.g., 'WebAppStack-MyRole-123ABC')
 
-      // 2. Extract the role name from the ARN (e.g., 'WebAppStack-MyRole-123ABC')
-      const roleName = roleArn!.split('/').pop();
+      const roleName = roleArn!.split('/').pop(); // 3. Get the role from IAM using the extracted name
 
-      // 3. Get the role from IAM using the extracted name
       const { Role } = await iamClient.send(
         new GetRoleCommand({ RoleName: roleName })
       );
-      expect(Role).toBeDefined();
+      expect(Role).toBeDefined(); // 4. Decode and parse the AssumeRolePolicyDocument to verify who can assume it
 
-      // 4. Decode and parse the AssumeRolePolicyDocument to verify who can assume it
       const trustPolicy = JSON.parse(
         decodeURIComponent(Role!.AssumeRolePolicyDocument!)
       );
@@ -257,14 +248,14 @@ testSuite('Web Application Stack Integration Tests', () => {
     });
 
     test('Lambda function should be configured correctly in the VPC', async () => {
-      const { Configuration } = await lambdaClient.send(
+      const functionConfig = await lambdaClient.send(
         new GetFunctionConfigurationCommand({
           FunctionName: lambdaFunctionName,
         })
       );
-      expect(Configuration?.PackageType).toBe('Image');
-      expect(Configuration?.VpcConfig?.VpcId).toBe(vpcId);
-      expect(Configuration?.VpcConfig?.SecurityGroupIds).toContain(
+      expect(functionConfig.PackageType).toBe('Image');
+      expect(functionConfig.VpcConfig?.VpcId).toBe(vpcId);
+      expect(functionConfig.VpcConfig?.SecurityGroupIds).toContain(
         securityGroupIds.web
       );
     });

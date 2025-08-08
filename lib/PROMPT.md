@@ -1,5 +1,3 @@
-### ## Optimized Prompt for Claude Sonnet
-
 You are an expert AWS DevOps engineer specializing in Infrastructure as Code (IaC). Your task is to generate a complete, production-ready CloudFormation YAML template named `web-app-stack.yml`.
 
 This template will provision a secure, scalable, and highly available environment for a mission-critical web application. Adhere strictly to AWS best practices, especially the principle of least privilege for all security configurations.
