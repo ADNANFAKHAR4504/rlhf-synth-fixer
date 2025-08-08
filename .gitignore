@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-cov.json
-node_modules/
-.coverage
-=======
 # Compiled JavaScript files (but keep config files)
 /bin/*.js
 /lib/*.js
@@ -105,4 +100,3 @@ bin/tfplan
 
 
 build
->>>>>>> be870e07730ffab1732eea155923038d74dd93fc
