@@ -226,7 +226,8 @@ Resources:
   WebAppLaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      LaunchTemplateName: 'WebApp-LaunchTemplate'
+      LaunchTemplateName:
+        Fn::Sub: "WebApp-LaunchTemplate-${EnvironmentSuffix}"
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: 't2.micro'
