@@ -16,14 +16,8 @@ const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
 // AWS Account and Region Configuration
-const awsAccountId =
-  process.env.AWS_ACCOUNT_ID ||
-  app.node.tryGetContext('awsAccountId') ||
-  '123456789012';
-const awsRegion =
-  process.env.AWS_DEFAULT_REGION ||
-  app.node.tryGetContext('awsRegion') ||
-  'us-east-1';
+// const awsAccountId = process.env.AWS_ACCOUNT_ID || '123456789012'; // dummy for local
+// const awsRegion = process.env.AWS_DEFAULT_REGION || 'us-east-1'; // default region
 
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
@@ -34,7 +28,7 @@ new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
-    account: awsAccountId,
-    region: awsRegion,
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
   },
 });
