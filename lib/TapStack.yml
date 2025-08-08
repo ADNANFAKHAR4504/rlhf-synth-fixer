@@ -130,6 +130,9 @@ Resources:
               - kms:GenerateDataKey
               - kms:ReEncrypt*
             Resource: '*'
+          # Removed the explicit 'Allow EC2 Instance Role' statement from the KMS Key Policy
+          # to resolve the circular dependency. The EC2InstanceRole's inline policy
+          # named 'KMSAccess' already grants it the necessary permissions.
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -480,8 +483,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${S3Bucket}/*'
-              - !Ref S3Bucket
+              - !Sub '${S3Bucket.Arn}/*'
+              - !GetAtt S3Bucket.Arn
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -499,7 +502,7 @@ Resources:
             Principal:
               AWS: !GetAtt EC2InstanceRole.Arn
             Action: 's3:ListBucket'
-            Resource: !Ref S3Bucket
+            Resource: !GetAtt S3Bucket.Arn
 
   # Secrets Manager
   DatabaseSecret:
@@ -560,7 +563,7 @@ Resources:
                 Resource: !Sub '${S3Bucket.Arn}/*'
               - Effect: Allow
                 Action: s3:ListBucket
-                Resource: !Sub '${S3Bucket.Arn}/*'
+                Resource: !GetAtt S3Bucket.Arn
         - PolicyName: SecretsManagerAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -584,81 +587,6 @@ Resources:
       InstanceProfileName: !Sub '${Project}-${Environment}-ec2-profile'
       Roles:
         - !Ref EC2InstanceRole
-
-  # Update KMS Key Policy to allow EC2 role
-  # Note: This resource attempts to update the policy of an existing KMSKey,
-  # but in CloudFormation, a KMS::Key resource defines the entire policy.
-  # If you modify the policy here, it will overwrite the initial policy defined in KMSKey.
-  # The permissions granted to EC2InstanceRole are already included in EC2InstanceRole's inline policies.
-  # This section is redundant if the KMSKey's initial policy is comprehensive.
-  # Removed as it's a redundant definition and can cause issues if not managed carefully.
-  # KMSKeyPolicyUpdate:
-  #   Type: AWS::KMS::Key
-  #   Properties:
-  #     Description: 'KMS Key for encrypting resources in secure infrastructure'
-  #     EnableKeyRotation: true
-  #     KeyId: !Ref KMSKey
-  #     KeyPolicy:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Sid: Enable IAM User Permissions
-  #           Effect: Allow
-  #           Principal:
-  #             AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-  #           Action: 'kms:*'
-  #           Resource: '*'
-  #         - Sid: Allow CloudFormation Service
-  #           Effect: Allow
-  #           Principal:
-  #             Service: cloudformation.amazonaws.com
-  #           Action:
-  #             - kms:Decrypt
-  #             - kms:DescribeKey
-  #           Resource: '*'
-  #         - Sid: Allow EC2 Service
-  #           Effect: Allow
-  #           Principal:
-  #             Service: ec2.amazonaws.com
-  #           Action:
-  #             - kms:Decrypt
-  #             - kms:DescribeKey
-  #             - kms:Encrypt
-  #             - kms:GenerateDataKey
-  #             - kms:ReEncrypt*
-  #           Resource: '*'
-  #         - Sid: Allow S3 Service
-  #           Effect: Allow
-  #           Principal:
-  #             Service: s3.amazonaws.com
-  #           Action:
-  #             - kms:Decrypt
-  #             - kms:DescribeKey
-  #             - kms:Encrypt
-  #             - kms:GenerateDataKey
-  #             - kms:ReEncrypt*
-  #           Resource: '*'
-  #         - Sid: Allow Secrets Manager Service
-  #           Effect: Allow
-  #           Principal:
-  #             Service: secretsmanager.amazonaws.com
-  #           Action:
-  #             - kms:Decrypt
-  #             - kms:DescribeKey
-  #             - kms:Encrypt
-  #             - kms:GenerateDataKey
-  #             - kms:ReEncrypt*
-  #           Resource: '*'
-  #         - Sid: Allow EC2 Instance Role
-  #           Effect: Allow
-  #           Principal:
-  #             AWS: !GetAtt EC2InstanceRole.Arn
-  #           Action:
-  #             - kms:Decrypt
-  #             - kms:DescribeKey
-  #             - kms:Encrypt
-  #             - kms:GenerateDataKey
-  #             - kms:ReEncrypt*
-  #           Resource: '*'
 
   # Launch Template
   LaunchTemplate:
