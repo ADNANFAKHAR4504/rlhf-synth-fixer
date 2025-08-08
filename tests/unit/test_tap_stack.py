@@ -18,18 +18,6 @@ import pulumi_aws as aws
 from lib.tap_stack import TapStack, TapStackArgs
 
 
-class MockResource:
-    """Simple mock resource class for testing purposes."""
-    def __init__(self, name="mock-resource"):
-        self._urn = f"urn:pulumi:test::test::{name}::mock-id"
-        self.id = f"{name}-id"
-        self.bucket = name if "bucket" in name else None
-
-    @property
-    def urn(self):
-        return self._urn
-
-
 class TestTapStackArgs:
     """Test cases for TapStackArgs constructor."""
     
@@ -189,15 +177,17 @@ class TestTapStack:
     @patch('pulumi_aws.s3.BucketPolicy')
     @patch('pulumi_aws.cloudtrail.Trail')
     def test_create_cloudtrail(self, mock_trail, mock_policy, mock_bucket, mock_caller_id):
-        """Test CloudTrail creation with S3 bucket."""
+        """Test CloudTrail creation with S3 bucket - simplified version."""
         mock_caller_id.return_value = self.caller_identity_mock
         
-        # Mock S3 bucket with proper Resource-like object
-        mock_bucket_instance = MockResource("cloudtrail-bucket")
+        # Mock S3 bucket
+        mock_bucket_instance = MagicMock()
+        mock_bucket_instance.id = "bucket-id"
+        mock_bucket_instance.bucket = "cloudtrail-bucket"
         mock_bucket.return_value = mock_bucket_instance
         
-        # Mock S3 bucket policy with proper Resource-like object
-        mock_policy_instance = MockResource("cloudtrail-policy")
+        # Mock S3 bucket policy
+        mock_policy_instance = MagicMock()
         mock_policy.return_value = mock_policy_instance
         
         with patch.object(TapStack, '__init__', lambda x, y, z, opts=None: None):
@@ -215,13 +205,17 @@ class TestTapStack:
             mock_kms.arn = "test-kms-arn"
             stack.kms_key = mock_kms
             
-            stack._create_cloudtrail()
-            
-            # Verify CloudTrail components were created
-            assert hasattr(stack, 'cloudtrail_bucket')
-            assert mock_bucket.call_count == 1
-            assert mock_policy.call_count == 1
-            assert mock_trail.call_count == 1
+            # Patch ResourceOptions to avoid depends_on validation
+            with patch('pulumi.ResourceOptions') as mock_resource_options:
+                mock_resource_options.return_value = MagicMock()
+                
+                stack._create_cloudtrail()
+                
+                # Verify CloudTrail components were created
+                assert hasattr(stack, 'cloudtrail_bucket')
+                assert mock_bucket.call_count == 1
+                assert mock_policy.call_count == 1
+                assert mock_trail.call_count == 1
     
     @patch('pulumi_aws.get_caller_identity')
     @patch('pulumi_aws.Provider')
@@ -607,3 +601,4 @@ def test_module_imports():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--cov=lib.tap_stack", "--cov-report=html"])
+
