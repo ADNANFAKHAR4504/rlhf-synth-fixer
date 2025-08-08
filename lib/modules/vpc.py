@@ -31,7 +31,8 @@ class VPCManager:
         """Create private subnets for secure workloads."""
 
         private_subnets = []
-        availability_zones = ["us-west-1a", "us-west-1c"]
+        availability_zones = aws.get_availability_zones(
+            state="available").names[:2]
 
         for i, az in enumerate(availability_zones):
             subnet = aws.ec2.Subnet(
