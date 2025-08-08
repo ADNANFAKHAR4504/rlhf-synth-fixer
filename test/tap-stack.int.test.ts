@@ -38,7 +38,7 @@ if (fs.existsSync(outputsPath)) {
   console.warn('💡 Make sure to run: npm run cdk:deploy');
 }
 
-const region = process.env.AWS_REGION || 'us-west-2';
+const region = process.env.AWS_REGION || 'us-east-1';
 const ec2Client = new EC2Client({ region });
 const asgClient = new AutoScalingClient({ region });
 const cloudWatchClient = new CloudWatchClient({ region });
@@ -382,36 +382,45 @@ describe('ProjectX Infrastructure Integration Tests', () => {
   });
 
   describe('CloudWatch Alarms', () => {
-    test('CloudWatch alarms are configured for Auto Scaling Group', async () => {
-      if (!autoScalingGroupName) {
-        console.log('⏭️ Skipping CloudWatch test - no Auto Scaling Group name available');
-        return;
-      }
+      test('CloudWatch alarms are configured for Auto Scaling Group', async () => {
+    const cpuAlarmName = outputs.CPUUtilizationAlarmName;
+    const instanceCountAlarmName = outputs.InstanceCountAlarmName;
+    const healthyHostAlarmName = outputs.HealthyHostCountAlarmName;
+    
+    if (!cpuAlarmName || !instanceCountAlarmName || !healthyHostAlarmName) {
+      console.log('⏭️ Skipping CloudWatch test - alarm names not available in outputs');
+      return;
+    }
 
-      const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'ProjectX-ASG',
-      });
-      const response = await cloudWatchClient.send(command);
-      
-      expect(response.MetricAlarms!.length).toBeGreaterThanOrEqual(3);
-      
-      // Check for specific alarms
-      const cpuAlarm = response.MetricAlarms!.find(
-        alarm => alarm.MetricName === 'CPUUtilization'
-      );
-      const instanceCountAlarm = response.MetricAlarms!.find(
-        alarm => alarm.MetricName === 'GroupDesiredCapacity'
-      );
-      const healthyHostAlarm = response.MetricAlarms!.find(
-        alarm => alarm.MetricName === 'GroupInServiceInstances'
-      );
-      
-      expect(cpuAlarm).toBeDefined();
-      expect(instanceCountAlarm).toBeDefined();
-      expect(healthyHostAlarm).toBeDefined();
-      
-      console.log('✅ CloudWatch alarms verified:', response.MetricAlarms!.length, 'alarms');
+    const command = new DescribeAlarmsCommand({
+      AlarmNames: [cpuAlarmName, instanceCountAlarmName, healthyHostAlarmName],
     });
+    const response = await cloudWatchClient.send(command);
+    
+    expect(response.MetricAlarms!.length).toBe(3);
+    
+    // Check for specific alarms by metric name
+    const cpuAlarm = response.MetricAlarms!.find(
+      alarm => alarm.MetricName === 'CPUUtilization'
+    );
+    const instanceCountAlarm = response.MetricAlarms!.find(
+      alarm => alarm.MetricName === 'GroupDesiredCapacity'
+    );
+    const healthyHostAlarm = response.MetricAlarms!.find(
+      alarm => alarm.MetricName === 'GroupInServiceInstances'
+    );
+    
+    expect(cpuAlarm).toBeDefined();
+    expect(cpuAlarm!.AlarmName).toBe(cpuAlarmName);
+    
+    expect(instanceCountAlarm).toBeDefined();
+    expect(instanceCountAlarm!.AlarmName).toBe(instanceCountAlarmName);
+    
+    expect(healthyHostAlarm).toBeDefined();
+    expect(healthyHostAlarm!.AlarmName).toBe(healthyHostAlarmName);
+    
+    console.log('✅ CloudWatch alarms verified:', response.MetricAlarms!.length, 'alarms');
+  });
   });
 
   describe('IAM Resources', () => {

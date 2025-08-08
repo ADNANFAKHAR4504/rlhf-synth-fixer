@@ -29,7 +29,7 @@ describe('ProjectXInfrastructureStack', () => {
       // Verify the stack uses the provided environment suffix
       testTemplate.hasOutput('VpcId', {
         Export: {
-          Name: 'ProjectX-VpcId-prod',
+          Name: 'TapStack-VpcId-prod',
         },
       });
     });
@@ -46,7 +46,7 @@ describe('ProjectXInfrastructureStack', () => {
       // Verify the stack uses the context environment suffix
       contextTemplate.hasOutput('VpcId', {
         Export: {
-          Name: 'ProjectX-VpcId-staging',
+          Name: 'TapStack-VpcId-staging',
         },
       });
     });
@@ -62,7 +62,7 @@ describe('ProjectXInfrastructureStack', () => {
       // Verify the stack uses the default environment suffix
       defaultTemplate.hasOutput('VpcId', {
         Export: {
-          Name: 'ProjectX-VpcId-dev',
+          Name: 'TapStack-VpcId-dev',
         },
       });
     });
@@ -80,7 +80,7 @@ describe('ProjectXInfrastructureStack', () => {
       // Verify props take precedence over context
       priorityTemplate.hasOutput('VpcId', {
         Export: {
-          Name: 'ProjectX-VpcId-prod',
+          Name: 'TapStack-VpcId-prod',
         },
       });
     });
@@ -249,7 +249,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('VpcId', {
         Description: 'VPC ID for ProjectX infrastructure',
         Export: {
-          Name: 'ProjectX-VpcId-test',
+          Name: 'TapStack-VpcId-test',
         },
       });
     });
@@ -258,7 +258,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('VpcCidr', {
         Description: 'VPC CIDR block',
         Export: {
-          Name: 'ProjectX-VpcCidr-test',
+          Name: 'TapStack-VpcCidr-test',
         },
       });
     });
@@ -267,7 +267,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('PublicSubnetIds', {
         Description: 'Public subnet IDs across multiple AZs',
         Export: {
-          Name: 'ProjectX-PublicSubnetIds-test',
+          Name: 'TapStack-PublicSubnetIds-test',
         },
       });
     });
@@ -276,7 +276,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('SecurityGroupId', {
         Description: 'Security Group ID for web servers',
         Export: {
-          Name: 'ProjectX-SecurityGroupId-test',
+          Name: 'TapStack-SecurityGroupId-test',
         },
       });
     });
@@ -285,7 +285,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('AutoScalingGroupName', {
         Description: 'Auto Scaling Group name',
         Export: {
-          Name: 'ProjectX-AutoScalingGroupName-test',
+          Name: 'TapStack-AutoScalingGroupName-test',
         },
       });
     });
@@ -294,7 +294,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('AvailabilityZones', {
         Description: 'Availability Zones used by the infrastructure',
         Export: {
-          Name: 'ProjectX-AvailabilityZones-test',
+          Name: 'TapStack-AvailabilityZones-test',
         },
       });
     });
