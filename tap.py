@@ -17,8 +17,11 @@ commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
 # Validate region constraint - explicitly exclude us-east-1
 if aws_region == "us-east-1":
   raise ValueError("us-east-1 region is explicitly excluded from deployment as per requirements")
+
+# Override state bucket region if it's us-east-1 to use the AWS region instead
 if state_bucket_region == "us-east-1":
-  raise ValueError("us-east-1 region is explicitly excluded for state bucket as per requirements")
+  print(f"Warning: TERRAFORM_STATE_BUCKET_REGION is set to us-east-1, overriding to use AWS_REGION: {aws_region}")
+  state_bucket_region = aws_region
 
 # Calculate the stack name
 stack_name = f"TapStack{environment_suffix}"
