@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291778",
+  "team": "2",
+  "startedAt": "2025-08-06T14:03:21.463Z",
+  "subtask": "Infrastructure Security Architecture",
+  "subject_labels": [
+    "AWS Secure Foundational Environment",
+    "Infrastructure Security Implementation",
+    "CDK TypeScript Architecture",
+    "Multi-AZ High Availability Design",
+    "Defense-in-Depth Security Controls"
+  ],
+  "testDependencies": {
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.0",
+    "@types/jest": "^29.5.14",
+    "aws-cdk-lib": "2.204.0",
+    "@aws-sdk/client-s3": "^3.848.0",
+    "@aws-sdk/client-ec2": "^3.848.0",
+    "@aws-sdk/client-kms": "^3.859.0",
+    "@aws-sdk/client-cloudwatch": "^3.846.0",
+    "@aws-sdk/client-cloudtrail": "^3.848.0",
+    "markdownlint-cli": "^0.45.0"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Hardik-2117",
+  "dockerS3Location": ""
+}
