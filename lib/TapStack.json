@@ -950,33 +950,6 @@
                   "Arn"
                 ]
               }
-            },
-            {
-              "Effect": "Deny",
-              "Principal": "*",
-              "Action": "s3:*",
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "AppLogsBucket",
-                    "Arn"
-                  ]
-                },
-                {
-                  "Fn::Sub": "${AppLogsBucket.Arn}/*"
-                }
-              ],
-              "Condition": {
-                "Bool": {
-                  "aws:ViaAWSService": "false"
-                },
-                "StringNotEquals": {
-                  "aws:PrincipalServiceName": "cloudtrail.amazonaws.com",
-                  "aws:userid": {
-                    "Fn::Sub": "${EC2Role}:*"
-                  }
-                }
-              }
             }
           ]
         }
