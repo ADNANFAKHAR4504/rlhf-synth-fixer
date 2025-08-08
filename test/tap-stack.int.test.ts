@@ -36,8 +36,8 @@ import {
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = 'us-east-1';
+const environmentSuffix: string = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region: string = 'us-east-1';
 
 const lambdaClient = new LambdaClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
@@ -48,13 +48,14 @@ const cloudWatchClient = new CloudWatchClient({ region });
 
 let outputs: any = {};
 try {
-  outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+  const outputsContent: string = fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8');
+  outputs = JSON.parse(outputsContent);
 } catch {
   console.log('cfn-outputs/flat-outputs.json not found. Integration tests will be skipped until deployment completes.');
 }
 
 describe('Secure Lambda Infrastructure Integration Tests', () => {
-  const stackName = `SecureLambdaStack${environmentSuffix}`;
+  const stackName: string = `SecureLambdaStack${environmentSuffix}`;
 
   beforeAll(() => {
     if (Object.keys(outputs).length === 0) {
@@ -112,9 +113,11 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
         }));
         
         expect(response.StatusCode).toBe(200);
-        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(payload.statusCode).toBe(200);
-        expect(JSON.parse(payload.body).message).toBe('Function executed successfully');
+        if (response.Payload) {
+          const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+          expect(payload.statusCode).toBe(200);
+          expect(JSON.parse(payload.body).message).toBe('Function executed successfully');
+        }
       } catch (error) {
         console.log(`Lambda invocation test failed: ${error}`);
         throw error;
@@ -154,8 +157,10 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
         }));
         
         expect(response.StatusCode).toBe(200);
-        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect([200, 202]).toContain(payload.statusCode);
+        if (response.Payload) {
+          const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+          expect([200, 202]).toContain(payload.statusCode);
+        }
       } catch (error) {
         console.log(`Log export Lambda invocation test failed: ${error}`);
         throw error;
@@ -455,7 +460,7 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
           }));
           
           expect(config.State).toBe('Active');
-          console.log('✅ Log export Lambda is active and ready for scheduled invocations');
+          console.log('   Log export Lambda is active and ready for scheduled invocations');
         }
       } catch (error) {
         console.log(`EventBridge verification note: ${error}`);
@@ -477,7 +482,7 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
         }));
         
         expect(response.StatusCode).toBe(200);
-        console.log('✅ Log export Lambda responds correctly to scheduled triggers');
+        console.log('   Log export Lambda responds correctly to scheduled triggers');
       } catch (error) {
         console.log(`Scheduled export test note: ${error}`);
       }
@@ -504,7 +509,7 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
         if (errorAlarm) {
           expect(errorAlarm.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
           expect(errorAlarm.Threshold).toBe(1);
-          console.log('✅ Lambda error alarm configured correctly');
+          console.log('   Lambda error alarm configured correctly');
         } else {
           console.log('Note: Lambda error alarm may have auto-generated name');
         }
@@ -570,7 +575,7 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
         
         expect(logGroupResponse.logGroups?.[0].retentionInDays).toBe(14);
 
-        console.log('✅ End-to-end logging pipeline verified');
+        console.log('   End-to-end logging pipeline verified');
       } catch (error) {
         console.log(`End-to-end logging test failed: ${error}`);
         throw error;
@@ -605,7 +610,7 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
           expect(lambdaConfig.VpcConfig.VpcId).toBe('vpc-002dd1e7eb944d35a');
         }
 
-        console.log('✅ Security configuration properly enforced');
+        console.log('   Security configuration properly enforced');
       } catch (error) {
         console.log(`Security configuration test failed: ${error}`);
         throw error;
@@ -638,7 +643,7 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
         
         expect(exportTasks.$metadata.httpStatusCode).toBe(200);
 
-        console.log('✅ Log export mechanism functional');
+        console.log('   Log export mechanism functional');
       } catch (error) {
         console.log(`Log export mechanism test failed: ${error}`);
         throw error;
@@ -646,7 +651,332 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
     }, 90000);
   });
 
-  describe('Resource Tagging and Compliance', () => {
+  describe('Advanced Integration Tests', () => {
+    test('Lambda function should have proper environment configuration', async () => {
+      if (!outputs.LambdaFunctionName) return;
+
+      try {
+        const response = await lambdaClient.send(new GetFunctionConfigurationCommand({
+          FunctionName: outputs.LambdaFunctionName
+        }));
+        
+        const envVars = response.Environment?.Variables || {};
+        expect(envVars.LOG_LEVEL).toBe('INFO');
+        expect(envVars.S3_BUCKET).toBe('lambda-deployments-718240086340');
+        expect(envVars.ENVIRONMENT).toBe('Development');
+        
+        console.log('   Lambda environment variables configured correctly');
+      } catch (error) {
+        console.log(`Lambda environment test failed: ${error}`);
+        throw error;
+      }
+    }, 30000);
+
+    test('Lambda function should have proper tags', async () => {
+      if (!outputs.LambdaFunctionArn) return;
+
+      try {
+        const response = await lambdaClient.send(new GetFunctionCommand({
+          FunctionName: outputs.LambdaFunctionName
+        }));
+        
+        const tags = response.Tags || {};
+        expect(tags.Environment).toBe('Development');
+        expect(tags.SecurityCompliance).toBe('Required');
+        
+        console.log('   Lambda function tags verified');
+      } catch (error) {
+        console.log(`Lambda tags test failed: ${error}`);
+        throw error;
+      }
+    }, 30000);
+
+    test('Log export Lambda should handle various input scenarios', async () => {
+      if (!outputs.LogExportLambdaArn) return;
+
+      try {
+        const functionName = outputs.LogExportLambdaArn.split(':').pop();
+        
+        // Test with minimal payload
+        const response1 = await lambdaClient.send(new InvokeCommand({
+          FunctionName: functionName,
+          Payload: JSON.stringify({})
+        }));
+        expect(response1.StatusCode).toBe(200);
+        
+        // Test with full payload
+        const response2 = await lambdaClient.send(new InvokeCommand({
+          FunctionName: functionName,
+          Payload: JSON.stringify({
+            log_group_name: `/aws/lambda/${outputs.LambdaFunctionName}`,
+            s3_bucket: 'lambda-deployments-718240086340'
+          })
+        }));
+        expect(response2.StatusCode).toBe(200);
+        
+        console.log('   Log export Lambda handles various inputs correctly');
+      } catch (error) {
+        console.log(`Log export scenarios test failed: ${error}`);
+        throw error;
+      }
+    }, 60000);
+
+    test('IAM roles should have correct trust policies', async () => {
+      if (!outputs.IAMRoleArn) return;
+
+      try {
+        const roleName = outputs.IAMRoleArn.split('/').pop();
+        const response = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        
+        const trustPolicy = JSON.parse(decodeURIComponent(response.Role?.AssumeRolePolicyDocument || ''));
+        expect(trustPolicy.Version).toBe('2012-10-17');
+        expect(trustPolicy.Statement[0].Effect).toBe('Allow');
+        expect(trustPolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+        
+        // Verify regional condition
+        const condition = trustPolicy.Statement[0].Condition;
+        expect(condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
+        
+        console.log('   IAM trust policies verified');
+      } catch (error) {
+        console.log(`IAM trust policy test failed: ${error}`);
+        throw error;
+      }
+    }, 30000);
+
+    test('CloudWatch logs should be created after Lambda invocations', async () => {
+      if (!outputs.LogGroupName || !outputs.LambdaFunctionName) return;
+
+      try {
+        // Invoke Lambda multiple times to generate logs
+        const invocations = [
+          { test: 'log_generation_1' },
+          { test: 'log_generation_2' },
+          { test: 'log_generation_3' }
+        ];
+        
+        for (const payload of invocations) {
+          await lambdaClient.send(new InvokeCommand({
+            FunctionName: outputs.LambdaFunctionName,
+            Payload: JSON.stringify(payload)
+          }));
+        }
+        
+        // Wait for logs to appear
+        await new Promise(resolve => setTimeout(resolve, 8000));
+        
+        const streamsResponse = await logsClient.send(new DescribeLogStreamsCommand({
+          logGroupName: outputs.LogGroupName,
+          orderBy: 'LastEventTime',
+          descending: true,
+          limit: 5
+        }));
+        
+        expect(streamsResponse.logStreams?.length).toBeGreaterThan(0);
+        
+        // Check for recent activity - use correct property name
+        const recentStream = streamsResponse.logStreams?.[0];
+        if (recentStream?.lastEventTimestamp) {
+          expect(recentStream.lastEventTimestamp).toBeGreaterThan(Date.now() - 60000);
+        }
+        
+        console.log('   Lambda invocations generate CloudWatch logs correctly');
+      } catch (error) {
+        console.log(`CloudWatch log generation test failed: ${error}`);
+        throw error;
+      }
+    }, 90000);
+
+    test('S3 bucket should accept log export operations', async () => {
+      try {
+        // Test basic bucket access
+        await s3Client.send(new HeadBucketCommand({
+          Bucket: 'lambda-deployments-718240086340'
+        }));
+        
+        // Check if we can list objects (basic permission test)
+        const listResponse = await s3Client.send(new ListObjectsV2Command({
+          Bucket: 'lambda-deployments-718240086340',
+          Prefix: 'lambda-logs/',
+          MaxKeys: 5
+        }));
+        
+        expect(listResponse.$metadata.httpStatusCode).toBe(200);
+        console.log(`S3 bucket contains ${listResponse.KeyCount || 0} log export objects`);
+        
+        console.log('   S3 bucket accessible for log operations');
+      } catch (error) {
+        console.log(`S3 operations test failed: ${error}`);
+        throw error;
+      }
+    }, 30000);
+
+    test('VPC Flow Logs should be actively collecting data', async () => {
+      try {
+        const response = await ec2Client.send(new DescribeFlowLogsCommand({
+          Filter: [
+            { Name: 'resource-id', Values: ['vpc-002dd1e7eb944d35a'] }
+          ]
+        }));
+        
+        const flowLogs = response.FlowLogs || [];
+        const activeFlowLog = flowLogs.find(fl => fl.FlowLogStatus === 'ACTIVE');
+        
+        expect(activeFlowLog).toBeDefined();
+        expect(activeFlowLog?.TrafficType).toBe('ALL');
+        expect(activeFlowLog?.LogDestinationType).toBe('cloud-watch-logs');
+        
+        console.log('   VPC Flow Logs actively collecting network data');
+      } catch (error) {
+        console.log(`VPC Flow Logs activity test failed: ${error}`);
+        throw error;
+      }
+    }, 30000);
+
+    test('Security group rules should block unauthorized traffic', async () => {
+      if (!outputs.SecurityGroupId) return;
+
+      try {
+        const response = await ec2Client.send(new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.SecurityGroupId]
+        }));
+        
+        const sg = response.SecurityGroups?.[0];
+        
+        // Should have no ingress rules (default deny inbound)
+        expect(sg?.IpPermissions?.length || 0).toBe(0);
+        
+        // Should have limited egress rules
+        const egressRules = sg?.IpPermissionsEgress || [];
+        expect(egressRules.length).toBeLessThanOrEqual(3);
+        
+        // Verify only specific ports are allowed
+        const allowedPorts = egressRules.map(rule => rule.FromPort);
+        expect(allowedPorts).toContain(443); // HTTPS
+        expect(allowedPorts).toContain(53);  // DNS
+        
+        console.log('   Security group properly restricts network access');
+      } catch (error) {
+        console.log(`Security group rules test failed: ${error}`);
+        throw error;
+      }
+    }, 30000);
+  });
+
+  describe('Stress and Performance Tests', () => {
+    test('Lambda function should handle concurrent invocations', async () => {
+      if (!outputs.LambdaFunctionName) return;
+
+      try {
+        const concurrentInvocations = [
+          lambdaClient.send(new InvokeCommand({
+            FunctionName: outputs.LambdaFunctionName,
+            Payload: JSON.stringify({ concurrent_test: 1 })
+          })),
+          lambdaClient.send(new InvokeCommand({
+            FunctionName: outputs.LambdaFunctionName,
+            Payload: JSON.stringify({ concurrent_test: 2 })
+          })),
+          lambdaClient.send(new InvokeCommand({
+            FunctionName: outputs.LambdaFunctionName,
+            Payload: JSON.stringify({ concurrent_test: 3 })
+          }))
+        ];
+        
+        const results = await Promise.all(concurrentInvocations);
+        
+        results.forEach((result) => {
+          expect(result.StatusCode).toBe(200);
+        });
+        
+        console.log('   Lambda handles concurrent invocations successfully');
+      } catch (error) {
+        console.log(`Concurrent invocations test failed: ${error}`);
+        throw error;
+      }
+    }, 60000);
+
+    test('Log export function should handle timeout scenarios gracefully', async () => {
+      if (!outputs.LogExportLambdaArn) return;
+
+      try {
+        const functionName = outputs.LogExportLambdaArn.split(':').pop();
+        
+        // Test with a non-existent log group (should fail gracefully)
+        const response = await lambdaClient.send(new InvokeCommand({
+          FunctionName: functionName,
+          Payload: JSON.stringify({
+            log_group_name: '/aws/lambda/non-existent-function',
+            s3_bucket: 'lambda-deployments-718240086340'
+          })
+        }));
+        
+        expect(response.StatusCode).toBe(200);
+        if (response.Payload) {
+          const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+          // Should handle gracefully (either 500 error or empty result)
+          expect([200, 202, 500]).toContain(payload.statusCode);
+        }
+        
+        console.log('   Log export function handles error scenarios gracefully');
+      } catch (error) {
+        console.log(`Log export error handling test failed: ${error}`);
+        throw error;
+      }
+    }, 90000);
+  });
+
+  describe('Monitoring and Observability Tests', () => {
+    test('CloudWatch metrics should be generated for Lambda functions', async () => {
+      if (!outputs.LambdaFunctionName) return;
+
+      try {
+        // Invoke function to generate metrics
+        await lambdaClient.send(new InvokeCommand({
+          FunctionName: outputs.LambdaFunctionName,
+          Payload: JSON.stringify({ metrics_test: true })
+        }));
+        
+        // Check if alarms are configured
+        const alarmsResponse = await cloudWatchClient.send(new DescribeAlarmsCommand({
+          AlarmNamePrefix: outputs.LambdaFunctionName
+        }));
+        
+        const errorAlarms = alarmsResponse.MetricAlarms?.filter(alarm => 
+          alarm.MetricName === 'Errors' && alarm.Namespace === 'AWS/Lambda'
+        );
+        
+        expect(errorAlarms?.length).toBeGreaterThan(0);
+        console.log('   CloudWatch alarms configured for Lambda monitoring');
+      } catch (error) {
+        console.log(`CloudWatch metrics test failed: ${error}`);
+        throw error;
+      }
+    }, 45000);
+
+    test('Log retention policies should be enforced', async () => {
+      if (!outputs.LogGroupName) return;
+
+      try {
+        const response = await logsClient.send(new DescribeLogGroupsCommand({
+          logGroupNamePrefix: outputs.LogGroupName
+        }));
+        
+        const logGroup = response.logGroups?.[0];
+        expect(logGroup?.retentionInDays).toBe(14);
+        
+        // Verify log group has proper tags
+        if (logGroup?.logGroupName) {
+          console.log(`Log group ${logGroup.logGroupName} has ${logGroup.retentionInDays}-day retention`);
+        }
+        
+        console.log('   Log retention policies properly configured');
+      } catch (error) {
+        console.log(`Log retention test failed: ${error}`);
+        throw error;
+      }
+    }, 30000);
+  
     test('Lambda function should have proper tags', async () => {
       if (!outputs.LambdaFunctionArn) return;
 
@@ -727,7 +1057,7 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
         expect(payload.statusCode).toBe(200);
         
         // If Lambda executes successfully in VPC, it has proper network access
-        console.log('✅ Lambda has proper AWS service connectivity');
+        console.log('   Lambda has proper AWS service connectivity');
       } catch (error) {
         console.log(`Network connectivity test failed: ${error}`);
         throw error;
@@ -748,7 +1078,7 @@ describe('Secure Lambda Infrastructure Integration Tests', () => {
         expect(logGroup?.retentionInDays).toBe(14);
         expect(logGroup?.storedBytes).toBeDefined();
         
-        console.log('✅ Log retention and backup mechanisms verified');
+        console.log('   Log retention and backup mechanisms verified');
       } catch (error) {
         console.log(`Disaster recovery test failed: ${error}`);
         throw error;

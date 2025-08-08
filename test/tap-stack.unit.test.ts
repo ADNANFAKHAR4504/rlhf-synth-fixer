@@ -57,7 +57,7 @@ describe('Secure Lambda CloudFormation Template', () => {
   beforeAll(() => {
     // If testing a yaml template, run `cfn-flip template.yml > lib/SecureLambda.json`
     // Otherwise, ensure the template is in JSON format.
-    const templatePath: string = path.join(__dirname, '../lib/TapStack.json');
+    const templatePath: string = path.join(__dirname, '../lib/SecureLambda.json');
     const templateContent: string = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent) as CloudFormationTemplate;
   });
@@ -94,7 +94,8 @@ describe('Secure Lambda CloudFormation Template', () => {
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('vpc-002dd1e7eb944d35a');
-      expect(param.AllowedPattern).toBe('^vpc-[0-9a-f]{8,17}');
+      expect(param.AllowedPattern).toBe('^vpc-[0-9a-f]{8,17}$');
+
     });
 
     test('should have S3BucketName parameter with correct defaults', () => {
@@ -102,7 +103,7 @@ describe('Secure Lambda CloudFormation Template', () => {
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('lambda-deployments-718240086340');
-      expect(param.AllowedPattern).toBe('^[a-z0-9][a-z0-9-]*[a-z0-9]');
+      expect(param.AllowedPattern).toBe('^[a-z0-9][a-z0-9-]*[a-z0-9]$');
       expect(param.MinLength).toBe(3);
       expect(param.MaxLength).toBe(63);
     });
@@ -112,7 +113,7 @@ describe('Secure Lambda CloudFormation Template', () => {
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('SecureLambdaFunction');
-      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9-_]+');
+      expect(param.AllowedPattern).toBe('^[A-Za-z0-9_-]+$');
       expect(param.MinLength).toBe(1);
       expect(param.MaxLength).toBe(64);
     });
@@ -136,6 +137,12 @@ describe('Secure Lambda CloudFormation Template', () => {
   describe('Conditions', () => {
     test('should have HasSubnetIds condition', () => {
       const condition: any = template.Conditions.HasSubnetIds;
+      expect(condition).toBeDefined();
+      expect(condition['Fn::Not']).toBeDefined();
+    });
+
+    test('should have BucketExists condition', () => {
+      const condition: any = template.Conditions.BucketExists;
       expect(condition).toBeDefined();
       expect(condition['Fn::Not']).toBeDefined();
     });
@@ -406,12 +413,17 @@ describe('Secure Lambda CloudFormation Template', () => {
       expect(policy.Properties.Bucket).toEqual({ Ref: 'S3BucketName' });
     });
 
+    test('S3BucketPolicy should have BucketExists condition', () => {
+      const policy: Resource = template.Resources.S3BucketPolicy;
+      expect(policy.Condition).toBe('BucketExists');
+    });
+
     test('S3BucketPolicy should allow CloudWatch Logs service', () => {
       const policy: Resource = template.Resources.S3BucketPolicy;
       const statements: PolicyStatement[] = policy.Properties.PolicyDocument.Statement;
       const cwStatement: PolicyStatement | undefined = statements.find((s: PolicyStatement) => (s as any).Sid === 'AllowCloudWatchLogsExport');
       expect(cwStatement?.Principal.Service).toBe('logs.amazonaws.com');
-      expect(cwStatement?.Action).toContain('s3:PutObject');
+      expect(cwStatement?.Action).toBe('s3:PutObject');
     });
 
     test('S3BucketPolicy should allow log export Lambda', () => {
@@ -419,6 +431,18 @@ describe('Secure Lambda CloudFormation Template', () => {
       const statements: PolicyStatement[] = policy.Properties.PolicyDocument.Statement;
       const lambdaStatement: PolicyStatement | undefined = statements.find((s: PolicyStatement) => (s as any).Sid === 'AllowLogExportLambda');
       expect(lambdaStatement?.Principal.AWS).toEqual({ 'Fn::GetAtt': ['LogExportLambdaRole', 'Arn'] });
+    });
+
+    test('S3BucketPolicy should have separate statements for different actions', () => {
+      const policy: Resource = template.Resources.S3BucketPolicy;
+      const statements: PolicyStatement[] = policy.Properties.PolicyDocument.Statement;
+      expect(statements.length).toBeGreaterThanOrEqual(3);
+      
+      const putObjectStatement = statements.find((s: PolicyStatement) => (s as any).Sid === 'AllowCloudWatchLogsExport');
+      const getBucketAclStatement = statements.find((s: PolicyStatement) => (s as any).Sid === 'AllowCloudWatchLogsGetBucketAcl');
+      
+      expect(putObjectStatement).toBeDefined();
+      expect(getBucketAclStatement).toBeDefined();
     });
   });
 
@@ -473,7 +497,7 @@ describe('Secure Lambda CloudFormation Template', () => {
     });
 
     test('should have correct number of resources', () => {
-      const expectedResourceCount: number = 13; // All Lambda infrastructure resources
+      const expectedResourceCount: number = 14; // All Lambda infrastructure resources + conditions
       const resourceCount: number = Object.keys(template.Resources).length;
       expect(resourceCount).toBe(expectedResourceCount);
     });
@@ -486,6 +510,11 @@ describe('Secure Lambda CloudFormation Template', () => {
     test('should have correct number of parameters', () => {
       const paramCount: number = Object.keys(template.Parameters).length;
       expect(paramCount).toBe(5);
+    });
+
+    test('should have correct number of conditions', () => {
+      const conditionCount: number = Object.keys(template.Conditions).length;
+      expect(conditionCount).toBe(2);
     });
   });
 
