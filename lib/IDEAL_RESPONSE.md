@@ -348,16 +348,19 @@ Outputs:
 ## Key Features Implemented
 
 ### 1. Serverless Components
+
 - **AWS Lambda Function**: Python 3.9 runtime with comprehensive error handling
 - **API Gateway Integration**: REST API with POST method on /data path
 - **AWS Lambda Permission**: Proper IAM permission for API Gateway to invoke Lambda
 
 ### 2. Configuration and Parameters
+
 - **Environment Parameter**: String type with allowed values (dev, stage, prod), default: dev
 - **LogLevel Parameter**: String type with allowed values (INFO, WARN, ERROR), default: INFO
 
 ### 3. Lambda Function Specifications
-- **Environment Variables**: 
+
+- **Environment Variables**:
   - STAGE: References Environment parameter
   - AWS_REGION: Explicitly set to us-east-1
   - LOG_LEVEL: References LogLevel parameter
@@ -367,11 +370,13 @@ Outputs:
   - DynamoDB: PutItem access only
 
 ### 4. Monitoring and Logging
+
 - **Dedicated CloudWatch Log Group**: 14-day retention policy
 - **CloudWatch Alarm**: Monitors Lambda error rate (>5% for 5 minutes)
-- **Math Expression**: Calculates error rate as (Errors/Invocations)*100
+- **Math Expression**: Calculates error rate as (Errors/Invocations)\*100
 
 ### 5. Data Storage
+
 - **DynamoDB Table**: Primary key 'id' of type String
 - **Provisioned Throughput**: 5 RCU and 5 WCU initially
 - **Auto Scaling Configuration**:
@@ -380,6 +385,7 @@ Outputs:
   - Proper IAM role with AmazonDynamoDBFullAccess policy
 
 ### 6. Region Constraint
+
 - All resources explicitly reference us-east-1 region where required
 - Lambda environment variable AWS_REGION set to us-east-1
 - API Gateway URLs and ARNs reference us-east-1
@@ -387,22 +393,26 @@ Outputs:
 ## Security and Best Practices
 
 ### IAM Least Privilege
+
 - Lambda execution role only grants necessary permissions
 - Separate policies for CloudWatch Logs and DynamoDB access
 - DynamoDB auto-scaling role uses managed policy
 
 ### Error Handling
+
 - Comprehensive try-catch block in Lambda function
 - Proper HTTP status codes (200 for success, 500 for errors)
 - Structured error responses with meaningful messages
 
 ### Logging
+
 - Configurable log level via parameter
 - Structured logging with context information
 - CloudWatch integration for centralized log management
 
 ### CORS Support
-- Access-Control-Allow-Origin header set to '*' for cross-origin requests
+
+- Access-Control-Allow-Origin header set to '\*' for cross-origin requests
 - Proper Content-Type headers for JSON responses
 
 ## Testing Strategy
@@ -410,6 +420,7 @@ Outputs:
 The solution includes comprehensive test coverage:
 
 ### Unit Tests (36 tests)
+
 - Template structure validation
 - Parameter configuration verification
 - Resource configuration testing
@@ -417,6 +428,7 @@ The solution includes comprehensive test coverage:
 - Output structure verification
 
 ### Integration Tests (17 tests)
+
 - Infrastructure validation with mock AWS outputs
 - API Gateway endpoint format validation
 - Lambda function configuration testing

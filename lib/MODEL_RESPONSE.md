@@ -17,7 +17,7 @@ Parameters:
       - prod
     Default: dev
     Description: 'Environment name'
-    
+
   LogLevel:
     Type: String
     AllowedValues:
