@@ -176,7 +176,9 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
     test('Lambda role should have proper S3 permissions', () => {
       const role = template.Resources.LambdaExecutionRole;
       const policies = role.Properties.Policies;
-      const s3Policy = policies.find(p => p.PolicyName === 'S3AccessPolicy');
+      const s3Policy = policies.find(
+        (p: any) => p.PolicyName === 'S3AccessPolicy'
+      );
       expect(s3Policy).toBeDefined();
       expect(s3Policy.PolicyDocument.Statement[0].Action).toContain(
         's3:GetObject'
@@ -243,7 +245,7 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
         'LambdaSecurityGroupId',
       ];
 
-      expectedOutputs.forEach(outputName => {
+      expectedOutputs.forEach((outputName: string) => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
     });
@@ -310,13 +312,13 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
         'LambdaExecutionRole',
       ];
 
-      taggedResources.forEach(resourceName => {
+      taggedResources.forEach((resourceName: string) => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties && resource.Properties.Tags) {
           const tags = resource.Properties.Tags;
-          const projectTag = tags.find(tag => tag.Key === 'Project');
-          const envTag = tags.find(tag => tag.Key === 'Environment');
-          const ownerTag = tags.find(tag => tag.Key === 'Owner');
+          const projectTag = tags.find((tag: any) => tag.Key === 'Project');
+          const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+          const ownerTag = tags.find((tag: any) => tag.Key === 'Owner');
 
           expect(projectTag).toBeDefined();
           expect(envTag).toBeDefined();
@@ -332,7 +334,9 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
       const policies = lambdaRole.Properties.Policies;
 
       // Should have specific S3 permissions, not broad access
-      const s3Policy = policies.find(p => p.PolicyName === 'S3AccessPolicy');
+      const s3Policy = policies.find(
+        (p: any) => p.PolicyName === 'S3AccessPolicy'
+      );
       expect(s3Policy).toBeDefined();
       expect(s3Policy.PolicyDocument.Statement[0].Action).not.toContain('s3:*');
     });

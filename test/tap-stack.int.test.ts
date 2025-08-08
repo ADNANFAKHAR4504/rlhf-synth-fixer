@@ -243,7 +243,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
 
         // Should have a statement denying insecure connections
         const denyInsecureStatement = policy.Statement?.find(
-          stmt =>
+          (stmt: any) =>
             stmt.Sid === 'DenyInsecureConnections' && stmt.Effect === 'Deny'
         );
         expect(denyInsecureStatement).toBeDefined();
@@ -278,7 +278,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
       );
 
       const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
-      privateSubnetIds.forEach(subnetId => {
+      privateSubnetIds.forEach((subnetId: string) => {
         expect(response.VpcConfig?.SubnetIds).toBeDefined();
         expect(response.VpcConfig?.SubnetIds).toContain(subnetId);
       });
@@ -352,11 +352,11 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
 
-      publicSubnets.forEach(subnetId => {
+      publicSubnets.forEach((subnetId: string) => {
         expect(subnetId).toMatch(/^subnet-[0-9a-f]{8,}$/);
       });
 
-      privateSubnets.forEach(subnetId => {
+      privateSubnets.forEach((subnetId: string) => {
         expect(subnetId).toMatch(/^subnet-[0-9a-f]{8,}$/);
       });
 
