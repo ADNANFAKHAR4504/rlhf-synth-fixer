@@ -1,28 +1,28 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
-  S3Client,
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 import {
-  SecretsManagerClient,
   DescribeSecretCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
-import { WAFV2Client, GetWebACLCommand } from '@aws-sdk/client-wafv2';
+import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Read outputs from deployment
 const outputsPath = path.join(
@@ -167,10 +167,10 @@ describe('MainStack Integration Tests', () => {
       if (targetGroups && targetGroups.length > 0) {
         const tg = targetGroups[0];
         expect(tg.HealthCheckEnabled).toBe(true);
-        expect(tg.HealthCheckPath).toBe('/health');
+        expect(tg.HealthCheckPath).toBe('/'); // Changed from /health to / for simple HTTP server
         expect(tg.HealthCheckProtocol).toBe('HTTP');
         expect(tg.HealthyThresholdCount).toBe(2);
-        expect(tg.UnhealthyThresholdCount).toBe(3);
+        expect(tg.UnhealthyThresholdCount).toBe(5); // Increased from 3 to 5 for more lenient health checks
       }
     });
   });
