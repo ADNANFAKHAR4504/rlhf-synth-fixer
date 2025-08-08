@@ -53,12 +53,9 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
   npm run cfn:deploy-json
-elif [ "$PLATFORM" = "pulumi" ]; then
-  echo "✅ Pulumi project detected, running Pulumi deploy..."
-  pipenv run pulumi-deploy
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, pulumi+py"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python"
   exit 1
 fi
 
@@ -135,48 +132,11 @@ if [ "$PLATFORM" = "cdk" ]; then
     cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
     echo "Flat outputs:"
     cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
-  elif [ "$PLATFORM" = "pulumi" ]; then
-    echo "✅ Pulumi project detected, getting Pulumi outputs..."
-    mkdir -p cfn-outputs
-    echo "Getting stack outputs for environment suffix: ${ENVIRONMENT_SUFFIX}"
-    
-    # Get outputs in JSON format using pulumi stack output command
-    pipenv run pulumi stack output --json > cfn-outputs/raw-outputs.json || echo "No outputs found"
-    
-    # Process the raw outputs to create flat-outputs.json
-    if [ -f cfn-outputs/raw-outputs.json ]; then
-      # Initialize flat-outputs.json
-      echo "{}" > cfn-outputs/flat-outputs.json
-      
-      # Process each output and flatten it properly
-      cat cfn-outputs/raw-outputs.json | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' | while IFS='=' read -r key value; do
-        # Handle array values (like IPv6 addresses) - keep them as JSON arrays
-        if echo "$value" | jq -e 'type == "array"' > /dev/null 2>&1; then
-          jq --arg key "$key" --argjson value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
-        else
-          jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
-        fi
-        mv temp-flat.json cfn-outputs/flat-outputs.json
-      done
-      
-      # Also create all-outputs.json for consistency
-      echo "{\"TapStack${ENVIRONMENT_SUFFIX}\":" > cfn-outputs/all-outputs.json
-      cat cfn-outputs/raw-outputs.json >> cfn-outputs/all-outputs.json
-      echo "}" >> cfn-outputs/all-outputs.json
-      
-      rm -f cfn-outputs/raw-outputs.json
-    else
-      echo "{}" > cfn-outputs/all-outputs.json
-      echo "{}" > cfn-outputs/flat-outputs.json
-    fi
-    
-    echo "Pulumi outputs:"
-    cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
   else
-    echo "ℹ️ Not a CDK, CDKTF, CloudFormation or Pulumi project, creating empty outputs for consistency"
+    echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
     mkdir -p cfn-outputs
     echo "{}" > cfn-outputs/all-outputs.json
     echo "{}" > cfn-outputs/flat-outputs.json
-    echo "# No outputs for non-supported projects" > cdk-stacks.json
+    echo "# No CDK outputs for non-CDK projects" > cdk-stacks.json
   fi
 
