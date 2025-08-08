@@ -73,6 +73,15 @@ describe('TapStack Unit Tests (from JSON)', () => {
     });
   });
 
+  describe('CloudWatch Log Group', () => {
+    it('creates log group with 14-day retention', () => {
+      const lg = template.Resources['LambdaLogGroup'];
+      expect(lg).toBeDefined();
+      expect(lg.Type).toBe('AWS::Logs::LogGroup');
+      expect(lg.Properties.RetentionInDays).toBe(14);
+    });
+  });
+
   describe('IAM Role', () => {
     it('creates execution role with basic policy', () => {
       const role = template.Resources['LambdaExecutionRole'];
@@ -134,6 +143,18 @@ describe('TapStack Unit Tests (from JSON)', () => {
       expect(rootMethod.Properties.HttpMethod).toBe('ANY');
       expect(rootMethod.Properties.Integration.Type).toBe('AWS_PROXY');
     });
+
+    it('has proxy resource and deployment', () => {
+      const resource = template.Resources['ApiGatewayResource'];
+      expect(resource).toBeDefined();
+      expect(resource.Type).toBe('AWS::ApiGateway::Resource');
+      expect(resource.Properties.PathPart).toBe('{proxy+}');
+
+      const deployment = template.Resources['ApiGatewayDeployment'];
+      expect(deployment).toBeDefined();
+      expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
+      expect(deployment.Properties.StageName).toBeDefined();
+    });
   });
 
   describe('Lambda Permissions', () => {
@@ -159,6 +180,14 @@ describe('TapStack Unit Tests (from JSON)', () => {
       expect(err.Properties.Namespace).toBe('AWS/Lambda');
       expect(dur.Properties.MetricName).toBe('Duration');
       expect(dur.Properties.Namespace).toBe('AWS/Lambda');
+    });
+
+    it('creates invocation alarm on the Lambda function', () => {
+      const inv = template.Resources['LambdaInvocationAlarm'];
+      expect(inv).toBeDefined();
+      expect(inv.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(inv.Properties.MetricName).toBe('Invocations');
+      expect(inv.Properties.Namespace).toBe('AWS/Lambda');
     });
   });
 
