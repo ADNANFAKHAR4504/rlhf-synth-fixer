@@ -198,7 +198,7 @@ export class TapStack extends cdk.Stack {
     // Store CloudTrail configuration for organization-level trail
     // Note: CloudTrail is typically configured at the organization level
     new ssm.StringParameter(this, 'CloudTrailConfig', {
-      parameterName: `/tap/${environmentSuffix}/cloudtrail-config`,
+      parameterName: `/tap${environmentSuffix}/${props.isPrimaryRegion ? 'primary' : 'secondary'}/cloudtrail-config`,
       stringValue: JSON.stringify({
         bucket: cloudtrailBucket.bucketName,
         encryptionKey: kmsKey.keyArn,
@@ -320,7 +320,7 @@ export class TapStack extends cdk.Stack {
     // Note: Inspector v2 enablement is typically done at the org level
     if (props.isPrimaryRegion) {
       new ssm.StringParameter(this, 'InspectorStatus', {
-        parameterName: `/tap/${environmentSuffix}/inspector-status`,
+        parameterName: `/tap${environmentSuffix}/${props.isPrimaryRegion ? 'primary' : 'secondary'}/inspector-status`,
         stringValue:
           'Inspector should be enabled at organization level for EC2 and ECR scanning',
         description: 'Status of Amazon Inspector v2 enablement',
