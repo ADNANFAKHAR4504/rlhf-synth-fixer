@@ -17,7 +17,7 @@ class TestServerlessStack(unittest.TestCase):
 
   def test_dynamodb_table_created(self):
     """
-    FIXED: The assertion was corrected to match the actual CloudFormation output.
+    The assertion was corrected to match the actual CloudFormation output.
     The stack's `PROVISIONED` billing mode results in the `ProvisionedThroughput`
     property being present, not a top-level `BillingMode` property.
     """
@@ -57,10 +57,10 @@ class TestServerlessStack(unittest.TestCase):
 
   def test_lambda_execution_role_created(self):
     """
-    FIXED: The assertion was corrected to properly match the managed policy ARN.
-    The original test used an incorrect nested matcher (`any_value` inside `array_with`)
-    which caused a runtime error. This version uses a `string_like_regexp` matcher
-    to correctly verify the managed policy ARN.
+    FIXED: The assertion was simplified to correctly match the managed policy ARN.
+    The previous attempts used complex matchers that were causing a runtime error.
+    This version directly matches the string for the ARN, which is the most
+    reliable way to test for the `AWSLambdaBasicExecutionRole` policy.
     """
     self.template.has_resource_properties("AWS::IAM::Role", {
       "AssumeRolePolicyDocument": {
@@ -75,9 +75,7 @@ class TestServerlessStack(unittest.TestCase):
         ])
       },
       "ManagedPolicyArns": Match.array_with([
-        Match.string_like_regexp(
-          r"arn:.+:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-        )
+        "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       ])
     })
 
