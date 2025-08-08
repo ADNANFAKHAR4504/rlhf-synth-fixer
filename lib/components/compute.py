@@ -5,7 +5,7 @@ Pulumi Component for Compute Infrastructure (EC2 Auto Scaling)
 from typing import Optional
 import pulumi
 import pulumi_aws as aws
-from pulumi import ResourceOptions
+from pulumi import ResourceOptions, InvokeOptions
 
 import base64
 
@@ -32,7 +32,7 @@ class ComputeInfrastructure(pulumi.ComponentResource):
             {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]},
             {"name": "state", "values": ["available"]}
         ],
-        opts=ResourceOptions(provider=opts.provider if opts and opts.provider else None)
+        opts=InvokeOptions(provider=opts.provider if opts and opts.provider else None)
     )
     ami_id = ami.id
     instance_type = "t3.micro"
