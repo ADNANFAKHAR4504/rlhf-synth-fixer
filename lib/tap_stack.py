@@ -3,16 +3,17 @@ import pulumi_aws as aws
 from pulumi import Config, Output, export
 from pulumi_aws.ec2 import get_ami
 from base64 import b64encode
+import json
 
 # Initialize Pulumi configuration
 config = Config()
 region = config.get("region") or "us-west-2"
 domain_name = config.get_secret("domainName")  # Optional domain name for Route 53
 
-# Setting up AWS provider
+# Set up AWS provider
 aws_provider = aws.Provider("aws", region=region)
 
-# Creating VPC with dual-stack (IPv4 and IPv6)
+# Create VPC with dual-stack (IPv4 and IPv6)
 vpc = aws.ec2.Vpc(
     "web-vpc",
     cidr_block="10.0.0.0/16",
@@ -23,7 +24,7 @@ vpc = aws.ec2.Vpc(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating Internet Gateway
+# Create Internet Gateway
 igw = aws.ec2.InternetGateway(
     "web-igw",
     vpc_id=vpc.id,
@@ -31,7 +32,7 @@ igw = aws.ec2.InternetGateway(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating Route Tables for IPv4 and IPv6
+# Create Route Table for public subnets (IPv4 and IPv6)
 public_route_table = aws.ec2.RouteTable(
     "public-route-table",
     vpc_id=vpc.id,
@@ -49,7 +50,7 @@ public_route_table = aws.ec2.RouteTable(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating two public subnets in different AZs
+# Create two public subnets in different AZs
 subnet1 = aws.ec2.Subnet(
     "public-subnet-1",
     vpc_id=vpc.id,
@@ -57,7 +58,6 @@ subnet1 = aws.ec2.Subnet(
     ipv6_cidr_block=Output.concat(vpc.ipv6_cidr_block, "1::/64"),
     assign_ipv6_address_on_creation=True,
     availability_zone=f"{region}a",
-    map_public_ip_on_creation=True,
     tags={"Name": "public-subnet-1"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
@@ -69,12 +69,11 @@ subnet2 = aws.ec2.Subnet(
     ipv6_cidr_block=Output.concat(vpc.ipv6_cidr_block, "2::/64"),
     assign_ipv6_address_on_creation=True,
     availability_zone=f"{region}b",
-    map_public_ip_on_creation=True,
     tags={"Name": "public-subnet-2"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Associating route table with subnets
+# Associate route table with subnets
 route_table_assoc1 = aws.ec2.RouteTableAssociation(
     "route-table-assoc-1",
     subnet_id=subnet1.id,
@@ -89,22 +88,22 @@ route_table_assoc2 = aws.ec2.RouteTableAssociation(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating IAM role for EC2 instance
+# Create IAM role for EC2 instance
 ec2_role = aws.iam.Role(
     "ec2-role",
-    assume_role_policy="""{
+    assume_role_policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [{
             "Action": "sts:AssumeRole",
             "Principal": {"Service": "ec2.amazonaws.com"},
             "Effect": "Allow"
         }]
-    }""",
+    }),
     tags={"Name": "ec2-role"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Attaching CloudWatch Agent policy to EC2 role
+# Attach CloudWatch Agent policy to EC2 role
 cloudwatch_policy = aws.iam.RolePolicyAttachment(
     "cloudwatch-policy",
     role=ec2_role.name,
@@ -112,14 +111,14 @@ cloudwatch_policy = aws.iam.RolePolicyAttachment(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating instance profile
+# Create instance profile
 instance_profile = aws.iam.InstanceProfile(
     "ec2-instance-profile",
     role=ec2_role.name,
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Getting latest Amazon Linux 2 AMI
+# Get latest Amazon Linux 2 AMI
 ami = get_ami(
     most_recent=True,
     filters=[
@@ -138,7 +137,7 @@ systemctl start nginx
 echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
 """
 
-# Creating Security Group for EC2
+# Create Security Group for EC2
 ec2_sg = aws.ec2.SecurityGroup(
     "ec2-sg",
     vpc_id=vpc.id,
@@ -148,9 +147,7 @@ ec2_sg = aws.ec2.SecurityGroup(
             protocol="tcp",
             from_port=80,
             to_port=80,
-            cidr_blocks=["0.0.0.0/0"],
-            ipv6_cidr_blocks=["::/0"],
-            description="Allow HTTP from ALB"
+            security_groups=[]  # Will be updated after ALB SG creation
         )
     ],
     egress=[
@@ -166,23 +163,7 @@ ec2_sg = aws.ec2.SecurityGroup(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating EC2 instance
-ec2_instance = aws.ec2.Instance(
-    "web-instance",
-    instance_type="t3.micro",
-    ami=ami.id,
-    subnet_id=subnet1.id,
-    associate_public_ip_address=True,
-    ipv6_address_count=1,
-    security_groups=[ec2_sg.id],
-    iam_instance_profile=instance_profile.name,
-    user_data=b64encode(user_data).decode(),
-    monitoring=True,
-    tags={"Name": "web-instance"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
-)
-
-# Creating Security Group for ALB
+# Create Security Group for ALB
 alb_sg = aws.ec2.SecurityGroup(
     "alb-sg",
     vpc_id=vpc.id,
@@ -210,7 +191,36 @@ alb_sg = aws.ec2.SecurityGroup(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating ALB
+# Update EC2 Security Group to reference ALB Security Group
+ec2_sg_ingress = aws.ec2.SecurityGroupRule(
+    "ec2-sg-ingress",
+    type="ingress",
+    protocol="tcp",
+    from_port=80,
+    to_port=80,
+    source_security_group_id=albrun
+    security_group_id=ec2_sg.id,
+    description="Allow HTTP from ALB",
+    opts=pulumi.ResourceOptions(provider=aws_provider, depends_on=[alb_sg])
+)
+
+# Create EC MVT instance
+ec2_instance = aws.ec2.Instance(
+    "web-instance",
+    instance_type="t3.micro",
+    ami=ami.id,
+    subnet_id=subnet1.id,
+    associate_public_ip_address=True,
+    ipv6_address_count=1,
+    security_groups=[ec2_sg.id],
+    iam_instance_profile=instance_profile.name,
+    user_data=b64encode(user_data).decode(),
+    monitoring=True,
+    tags={"Name": "web-instance"},
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+)
+
+# Create ALB
 alb = aws.lb.LoadBalancer(
     "web-alb",
     internal=False,
@@ -223,7 +233,7 @@ alb = aws.lb.LoadBalancer(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating Target Group
+# Create Target Group
 target_group = aws.lb.TargetGroup(
     "web-tg",
     port=80,
@@ -243,7 +253,7 @@ target_group = aws.lb.TargetGroup(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Registering EC2 instance with Target Group
+# Register EC2 instance with Target Group
 target_group_attachment = aws.lb.TargetGroupAttachment(
     "web-tg-attachment",
     target_group_arn=target_group.arn,
@@ -252,7 +262,7 @@ target_group_attachment = aws.lb.TargetGroupAttachment(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating ALB Listener
+# Create ALB Listener
 listener = aws.lb.Listener(
     "web-listener",
     load_balancer_arn=alb.arn,
@@ -268,30 +278,30 @@ listener = aws.lb.Listener(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Creating CloudWatch Dashboard
+# Create CloudWatch Dashboard
 dashboard_body = Output.all(alb.arn, target_group.arn).apply(
-    lambda args: f"""{{
+    lambda args: json.dumps({
         "widgets": [
-            {{
+            {
                 "type": "metric",
                 "x": 0,
                 "y": 0,
                 "width": 12,
                 "height": 6,
-                "properties": {{
+                "properties": {
                     "metrics": [
-                        ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "{args[0].split('/')[-1]}", {{ "period": 60 }}],
-                        ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", "{args[1].split('/')[-1]}"],
-                        ["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", "{args[0].split('/')[-1]}"]
+                        ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", args[0].split('/')[-1], {"period": 60}],
+                        ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", args[1].split('/')[-1]],
+                        ["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", args[0].split('/')[-1]]
                     ],
                     "view": "timeSeries",
-                    "stacked": false,
-                    "region": "{region}",
+                    "stacked": False,
+                    "region": region,
                     "title": "ALB Metrics"
-                }}
-            }}
+                }
+            }
         ]
-    }}"""
+    })
 )
 
 dashboard = aws.cloudwatch.Dashboard(
@@ -302,6 +312,7 @@ dashboard = aws.cloudwatch.Dashboard(
 )
 
 # Optional Route 53 configuration
+website_url = alb.dns_name
 if domain_name:
     hosted_zone = aws.route53.get_zone(name=domain_name)
     record_a = aws.route53.Record(
@@ -329,10 +340,8 @@ if domain_name:
         opts=pulumi.ResourceOptions(provider=aws_provider)
     )
     website_url = Output.concat("http://", domain_name)
-else:
-    website_url = alb.dns_name
 
-# Exporting key outputs
+# Export key outputs
 export("alb_dns_name", alb.dns_name)
 export("website_url", website_url)
 export("ec2_public_ip", ec2_instance.public_ip)
