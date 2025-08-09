@@ -1,0 +1,106 @@
+Role:
+You are an expert DevOps engineer with deep knowledge of Pulumi (Python), AWS infrastructure, and CI/CD pipelines. You will act as both a troubleshooter and implementer.
+
+Objective:
+Run our Pulumi-based deploy job end-to-end, fix all errors until the deployment passes successfully, and then destroy all created AWS resources before ending the process.
+
+Context
+Infrastructure as Code: Pulumi (Python), AWS provider pulumi-aws v6.x.
+
+Project Name: TapStack
+
+Backend State: S3 bucket iac-rlhf-pulumi-states in region us-east-1.
+
+Entry Point: tap.py → lib/tap_stack.py defines AWS resources.
+
+Config Files:
+
+Pulumi.yaml (project definition, main: tap.py)
+
+Pulumi.dev.yaml (stack config, aws:region = us-east-1)
+
+requirements.txt (pulumi>=3.0.0,<4.0.0, pulumi-aws>=6.0.0,<8.0.0)
+
+CI/CD Scripts:
+
+deploy.sh — reads metadata.json for platform & language, sets env vars, runs deploy, collects outputs.
+
+destroy.sh — platform-based destruction; Pulumi destroy not yet wired in.
+
+Environment Variable: ENVIRONMENT_SUFFIX (example: pr741).
+
+Pulumi Stack Example: TapStackpr741.
+
+Known Issues to Resolve
+Slack Chatbot creation fails if Slack workspace isn’t authorized.
+
+Config has slack.enabled=false, but resource still attempts creation.
+
+Expected Fix: Strictly guard aws.chatbot.SlackChannelConfiguration creation when disabled or when IDs are missing/unauthorized.
+
+CodeStar NotificationRule creation fails on first run without service-linked role.
+
+Expected Fix: Create aws.iam.ServiceLinkedRole for codestar-notifications.amazonaws.com before NotificationRule, add depends_on.
+
+IAM Policy creation fails with MalformedPolicyDocument: should not specify a principal.
+
+Expected Fix: Remove Principal from managed policy JSON; keep it only in assume_role_policy.
+
+Pulumi Output serialization error:
+
+TypeError: Object of type Output is not JSON serializable.
+
+Expected Fix: Wrap Output values in .apply(...) before json.dumps().
+
+Your Tasks
+Inspect provided files:
+
+tap_stack.py
+
+tap.py
+
+Pulumi.yaml
+
+Pulumi.dev.yaml
+
+requirements.txt
+
+deploy.sh
+
+destroy.sh
+
+Simulate running deploy.sh with a valid metadata.json where platform="pulumi", language="python", ENVIRONMENT_SUFFIX is set (e.g., pr741).
+
+Identify and fix all errors in the Pulumi code until pulumi up completes successfully.
+
+Ensure the fixes are committed to tap_stack.py and other relevant files.
+
+After successful deployment:
+
+Run pulumi destroy --yes for the same stack to remove all resources.
+
+Confirm that all AWS resources created (S3 buckets, IAM roles/policies, CodePipeline, CodeBuild, SNS, Chatbot, etc.) are deleted.
+
+Provide a final summary of:
+
+What errors occurred
+
+What changes were made
+
+Evidence that deployment succeeded
+
+Evidence that destroy succeeded
+
+Constraints & Requirements
+Use the same Pulumi backend (S3 bucket iac-rlhf-pulumi-states in us-east-1).
+
+Do not modify unrelated logic.
+
+Maintain least privilege in IAM policies.
+
+Deployment and destroy must be idempotent — repeatable without errors.
+
+Keep output logs from both deploy and destroy runs.
+
+Now execute the above tasks. Start by examining the files to understand the pipeline flow and resource creation order, then run the deployment. Fix and iterate until it works. Finally, clean up everything you created.
+
