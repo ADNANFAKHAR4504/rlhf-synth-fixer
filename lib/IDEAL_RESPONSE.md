@@ -1,0 +1,66 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation Template to:
+    - Create a KMS Key
+    - Encrypt all S3 Buckets with the KMS Key
+    - Store a password securely in AWS Secrets Manager
+
+Resources:
+
+  ### 1. KMS Key for S3 encryption ###
+  S3KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key used to encrypt S3 buckets
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+
+  S3KMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/s3-bucket-encryption
+      TargetKeyId: !Ref S3KMSKey
+
+  ### 2. Example S3 Bucket Encrypted with KMS ###
+  MyEncryptedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3KMSKey
+      VersioningConfiguration:
+        Status: Enabled
+
+  ### 3. Secret in AWS Secrets Manager ###
+  MyAppSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: MyAppPassword
+      Description: Password for my application
+      SecretString: '{"username":"admin","password":"ReplaceMe123!"}'
+
+Outputs:
+
+  BucketName:
+    Description: Name of the encrypted S3 bucket
+    Value: !Ref MyEncryptedBucket
+
+  SecretArn:
+    Description: ARN of the stored secret
+    Value: !Ref MyAppSecret
+
+  KMSKeyArn:
+    Description: ARN of the KMS key used for encryption
+    Value: !GetAtt S3KMSKey.Arn
+
+```
