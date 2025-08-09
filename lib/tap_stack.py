@@ -62,8 +62,8 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       vpc_id=vpc.id,
       availability_zone=az,
       cidr_block=f"10.0.{i+1}.0/24",
-      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-          lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[i])
+      ipv6_cidr_block=pulumi.Output.from_input(vpc.ipv6_cidr_block).apply(
+          lambda cidr: pulumi.cidrsubnet(cidr, 8, i)
       ),
       assign_ipv6_address_on_creation=True,
       map_public_ip_on_launch=True,
@@ -106,8 +106,8 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       vpc_id=vpc.id,
       availability_zone=az,
       cidr_block=f"10.0.{100+i+1}.0/24",
-      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-          lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[100 + i])
+      ipv6_cidr_block=pulumi.Output.from_input(vpc.ipv6_cidr_block).apply(
+          lambda cidr: pulumi.cidrsubnet(cidr, 8, 100 + i)
       ),
       assign_ipv6_address_on_creation=True,
       tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}
