@@ -47,7 +47,7 @@ import {
 } from '@aws-sdk/client-ssm';
 
 const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  fs.readFileSync('lib/flat-outputs.json', 'utf8')
 );
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)

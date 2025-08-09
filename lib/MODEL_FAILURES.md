@@ -178,3 +178,107 @@ asg.scaleOnCpuUtilization(`ScaleUpPolicy-${envSuffix}`, {
 **Root Cause**: The model assigned the return value to a variable that was never used. Since the scaling policy is automatically attached to the Auto Scaling Group, the return value isn't needed.
 
 ---
+
+## Security Issues Identified
+
+### ⚠️ **Security Issues Identified and Improvements Needed:**
+
+## 1. **IAM Role Permissions - Too Broad**
+
+**Current Issue**: CloudWatch Logs policy allows access to all log groups in the account
+```typescript
+resources: [`arn:aws:logs:${this.region}:${this.account}:*`]
+```
+
+**Security Risk**: Violates least privilege principle
+**Impact**: High - Could access sensitive logs from other applications
+
+**Improvement**: Restrict to specific log group
+```typescript
+resources: [
+  `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/webapp-${envSuffix}:*`,
+  `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/webapp-${envSuffix}`
+]
+```
+
+## 2. **Missing Resource-Based Policies**
+
+**Current Issue**: S3 bucket relies only on IAM policies
+**Security Risk**: Medium - No additional layer of access control
+**Impact**: Medium - Less defense in depth
+
+**Improvement**: Add explicit S3 bucket policy with conditions
+
+## 3. **Security Group SSH Access**
+
+**Current Issue**: SSH allowed from entire VPC (10.0.0.0/16)
+**Security Risk**: Medium - Broader access than necessary
+**Impact**: Medium - Potential lateral movement
+
+**Improvement**: 
+- Remove SSH access entirely (use SSM Session Manager)
+- Or restrict to specific management subnet/IP ranges
+
+## 4. **Missing WAF Protection**
+
+**Current Issue**: No Web Application Firewall
+**Security Risk**: High - No protection against common web attacks
+**Impact**: High - Vulnerable to OWASP Top 10 attacks
+
+**Improvement**: Add AWS WAF with managed rule sets
+
+## 5. **Missing Secrets Management**
+
+**Current Issue**: No centralized secrets management
+**Security Risk**: Medium - Hardcoded configurations
+**Impact**: Medium - Difficult to rotate credentials
+
+**Improvement**: Use AWS Secrets Manager for sensitive configurations
+
+## 6. **Missing Network ACLs**
+
+**Current Issue**: Only security groups for network security
+**Security Risk**: Low - Single layer of network defense
+**Impact**: Low - But adds defense in depth
+
+**Improvement**: Add Network ACLs for additional network security
+
+## 7. **Missing GuardDuty Integration**
+
+**Current Issue**: No threat detection
+**Security Risk**: Medium - No anomaly detection
+**Impact**: Medium - Delayed threat response
+
+**Improvement**: Enable GuardDuty for threat detection
+
+## 8. **Missing Config Rules**
+
+**Current Issue**: No compliance monitoring
+**Security Risk**: Low - No automated compliance checking
+**Impact**: Low - Manual compliance verification
+
+**Improvement**: Add AWS Config rules for compliance monitoring
+
+## 9. **Missing KMS Customer Managed Keys**
+
+**Current Issue**: Using AWS managed encryption keys
+**Security Risk**: Low - Less control over encryption
+**Impact**: Low - But better for compliance
+
+**Improvement**: Use customer-managed KMS keys
+
+## 10. **Missing SNS Topic Encryption**
+
+**Current Issue**: SNS topic not encrypted
+**Security Risk**: Low - Alert messages not encrypted
+**Impact**: Low - Potential information disclosure
+
+**Improvement**: Encrypt SNS topic with KMS
+
+## 11. **Missing CloudTrail**
+
+**Current Issue**: No API call logging
+**Security Risk**: High - No audit trail
+**Impact**: High - Cannot track who did what
+
+**Improvement**: Enable CloudTrail for API logging
