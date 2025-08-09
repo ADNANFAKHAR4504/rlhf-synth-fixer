@@ -11,6 +11,7 @@ import { WafConstruct } from './constructs/waf-construct';
 
 export interface SecureInfrastructureStackProps extends cdk.StackProps {
   environment: string;
+  alertEmail?: string; // Add configurable alert email
 }
 
 export class SecureInfrastructureStack extends cdk.Stack {
@@ -40,6 +41,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
       'MonitoringConstruct',
       {
         environment,
+        alertEmail: props.alertEmail, // Pass configurable email
       }
     );
 

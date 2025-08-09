@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
@@ -15,9 +16,10 @@ export class WafConstruct extends Construct {
     const { environment } = props;
 
     // CloudWatch Log Group for WAF logs
-    // const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
-    //   retention: logs.RetentionDays.THREE_MONTHS,
-    // });
+    const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
+      retention: logs.RetentionDays.THREE_MONTHS,
+      logGroupName: `/aws/waf/${environment}/web-acl-logs`,
+    });
 
     // Create WAF Web ACL
     this.webAcl = new wafv2.CfnWebACL(this, `WebACL-${environment}`, {
@@ -136,18 +138,20 @@ export class WafConstruct extends Construct {
       },
     });
 
-    // WAF Logging Configuration - Temporarily disabled to fix deployment
-    // TODO: Implement proper WAF logging with Kinesis Firehose delivery stream
-    /*
+    // WAF Logging Configuration - Enabled for production
     new wafv2.CfnLoggingConfiguration(this, `WAFLoggingConfig-${environment}`, {
       resourceArn: this.webAcl.attrArn,
-      logDestinationConfigs: [`arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:${wafLogGroup.logGroupName}:*`],
+      logDestinationConfigs: [wafLogGroup.logGroupArn],
     });
-    */
 
     // Tag WAF resources
     cdk.Tags.of(this.webAcl).add('Name', `WebACL-${environment}`);
     cdk.Tags.of(this.webAcl).add('Component', 'Security');
     cdk.Tags.of(this.webAcl).add('Environment', environment);
+
+    // Tag WAF log group
+    cdk.Tags.of(wafLogGroup).add('Name', `WAFLogGroup-${environment}`);
+    cdk.Tags.of(wafLogGroup).add('Component', 'Security');
+    cdk.Tags.of(wafLogGroup).add('Environment', environment);
   }
 }

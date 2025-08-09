@@ -1,5 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 export interface VpcConstructProps {
@@ -76,5 +78,55 @@ export class VpcConstruct extends Construct {
     cdk.Tags.of(this.vpc).add('Name', `VPC-${environment}`);
     cdk.Tags.of(this.vpc).add('Component', 'Network');
     cdk.Tags.of(this.vpc).add('Environment', environment);
+
+    // Create CloudWatch Log Group for VPC Flow Logs
+    const flowLogGroup = new logs.LogGroup(
+      this,
+      `VPCFlowLogGroup-${environment}`,
+      {
+        retention: logs.RetentionDays.ONE_YEAR,
+        logGroupName: `/aws/vpc/${environment}/flow-logs`,
+      }
+    );
+
+    // Create IAM role for VPC Flow Logs
+    const flowLogRole = new iam.Role(this, `VPCFlowLogRole-${environment}`, {
+      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+      inlinePolicies: {
+        VPCFlowLogPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              resources: [flowLogGroup.logGroupArn],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // Enable VPC Flow Logs
+    this.vpc.addFlowLog(`VPCFlowLog-${environment}`, {
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        flowLogGroup,
+        flowLogRole
+      ),
+      trafficType: ec2.FlowLogTrafficType.ALL,
+      maxAggregationInterval: ec2.FlowLogMaxAggregationInterval.ONE_MINUTE,
+    });
+
+    // Tag VPC Flow Log resources
+    cdk.Tags.of(flowLogGroup).add('Name', `VPCFlowLogGroup-${environment}`);
+    cdk.Tags.of(flowLogGroup).add('Component', 'Network');
+    cdk.Tags.of(flowLogGroup).add('Environment', environment);
+    cdk.Tags.of(flowLogRole).add('Name', `VPCFlowLogRole-${environment}`);
+    cdk.Tags.of(flowLogRole).add('Component', 'Network');
+    cdk.Tags.of(flowLogRole).add('Environment', environment);
   }
 }

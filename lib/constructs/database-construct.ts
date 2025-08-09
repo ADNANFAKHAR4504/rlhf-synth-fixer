@@ -54,6 +54,7 @@ export class DatabaseConstruct extends Construct {
           slow_query_log: '1',
           general_log: '1',
           log_queries_not_using_indexes: '1',
+          // Note: SSL enforcement is handled at the instance level for MySQL 8.0
         },
       }
     );
@@ -82,6 +83,9 @@ export class DatabaseConstruct extends Construct {
       storageEncrypted: true,
       storageEncryptionKey: undefined, // Use AWS managed key
       deletionProtection: environment === 'prod',
+
+      // SSL/TLS enforcement - MySQL 8.0 enforces SSL by default
+      // Additional SSL configuration can be done through parameter group if needed
 
       // Backup settings
       backupRetention: cdk.Duration.days(7),

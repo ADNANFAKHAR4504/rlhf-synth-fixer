@@ -11,6 +11,7 @@ import { Construct } from 'constructs';
 export interface MonitoringConstructProps {
   environment: string;
   cloudTrailLogGroup?: logs.LogGroup;
+  alertEmail?: string; // Add configurable alert email
 }
 
 export class MonitoringConstruct extends Construct {
@@ -30,9 +31,11 @@ export class MonitoringConstruct extends Construct {
 
     // Add email subscription with configurable email address
     const alertEmail =
+      props.alertEmail ||
       process.env.ALERT_EMAIL ||
       cdk.Stack.of(this).node.tryGetContext('alertEmail') ||
-      'security-team@company.com';
+      cdk.Stack.of(this).node.tryGetContext(`${environment}.alertEmail`) ||
+      'security-alerts@your-company-domain.com'; // More generic fallback
 
     this.alertTopic.addSubscription(new subs.EmailSubscription(alertEmail));
 
