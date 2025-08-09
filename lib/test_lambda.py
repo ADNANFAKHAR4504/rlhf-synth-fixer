@@ -9,11 +9,10 @@ import sys
 import unittest
 from unittest.mock import MagicMock
 
-# Add the current directory to Python path to import lambda_function
-sys.path.insert(0, os.path.dirname(__file__))
-
 import lambda_function
 
+# Add the current directory to Python path to import lambda_function
+sys.path.insert(0, os.path.dirname(__file__))
 
 class TestLambdaFunction(unittest.TestCase):
   """Test cases for Lambda function handler"""
