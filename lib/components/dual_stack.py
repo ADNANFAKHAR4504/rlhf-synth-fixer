@@ -48,8 +48,7 @@ class DualStackInfrastructure(pulumi.ComponentResource):
     )
 
     # 4. Create Public and Private Subnets (dual-stack)
-    # The IPv6 CIDR for subnets is a /64 from the VPC's /56 block.
-    # The IPv4 CIDR blocks are now correctly formatted.
+    # Fix the IPv6 CIDR generation to create valid subnet blocks
     self.public_subnet = aws.ec2.Subnet(
       f"{base_name}-public-subnet",
       vpc_id=self.vpc.id,
