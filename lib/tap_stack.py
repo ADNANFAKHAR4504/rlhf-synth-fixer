@@ -123,8 +123,8 @@ instance_profile = aws.iam.InstanceProfile(
 ami = get_ami(
   most_recent=True,
   filters=[
-    aws.ec2.GetAmiFilter(name="name", values=["amzn2-ami-hvm-*-x86_64-gp2"]),
-    aws.ec2.GetAmiFilter(name="owner-alias", values=["amazon"])
+    {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]},
+    {"name": "owner-alias", "values": ["amazon"]}
   ],
   opts=pulumi.ResourceOptions(provider=aws_provider)
 )
