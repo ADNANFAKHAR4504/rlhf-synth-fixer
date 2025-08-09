@@ -390,11 +390,11 @@ jobs:
       - name: Ensure pylint is installed
         run: pip install pylint
 
-      - name: Run Lint
-        run: pipenv run lint
-
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Run Lint
+        run: pipenv run lint
 
       # Python setup is handled by the setup-environment action
 
