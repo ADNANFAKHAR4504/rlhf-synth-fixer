@@ -142,14 +142,7 @@ ec2_sg = aws.ec2.SecurityGroup(
     "ec2-sg",
     vpc_id=vpc.id,
     description="Allow HTTP from ALB",
-    ingress=[
-        aws.ec2.SecurityGroupIngressArgs(
-            protocol="tcp",
-            from_port=80,
-            to_port=80,
-            security_groups=[]  # Will be updated after ALB SG creation
-        )
-    ],
+    ingress=[],
     egress=[
         aws.ec2.SecurityGroupEgressArgs(
             protocol="-1",
@@ -191,20 +184,20 @@ alb_sg = aws.ec2.SecurityGroup(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Update EC2 Security Group to reference ALB Security Group
+# Add ingress rule for EC2 Security Group to allow traffic from ALB
 ec2_sg_ingress = aws.ec2.SecurityGroupRule(
     "ec2-sg-ingress",
     type="ingress",
     protocol="tcp",
     from_port=80,
     to_port=80,
-    source_security_group_id=albrun
+    source_security_group_id=alb_sg.id,
     security_group_id=ec2_sg.id,
     description="Allow HTTP from ALB",
     opts=pulumi.ResourceOptions(provider=aws_provider, depends_on=[alb_sg])
 )
 
-# Create EC MVT instance
+# Create EC2 instance
 ec2_instance = aws.ec2.Instance(
     "web-instance",
     instance_type="t3.micro",
@@ -217,7 +210,7 @@ ec2_instance = aws.ec2.Instance(
     user_data=b64encode(user_data).decode(),
     monitoring=True,
     tags={"Name": "web-instance"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=aws_provider, depends_on=[ec2_sg_ingress])
 )
 
 # Create ALB
