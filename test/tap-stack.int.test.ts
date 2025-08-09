@@ -59,17 +59,20 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Initialize AWS clients
-const autoScalingClient = new AutoScalingClient({ region: 'us-east-1' });
-const cloudWatchClient = new CloudWatchClient({ region: 'us-east-1' });
-const ec2Client = new EC2Client({ region: 'us-east-1' });
-const elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
-const kmsClient = new KMSClient({ region: 'us-east-1' });
-const s3Client = new S3Client({ region: 'us-east-1' });
-const snsClient = new SNSClient({ region: 'us-east-1' });
-const ssmClient = new SSMClient({ region: 'us-east-1' });
-const wafClient = new WAFV2Client({ region: 'us-east-1' });
-const resourceGroupsClient = new ResourceGroupsTaggingAPIClient({ region: 'us-east-1' });
+// Get region from environment variable or default to us-west-2 (matching our test setup)
+const region = process.env.AWS_REGION || 'us-west-2';
+
+// Initialize AWS clients with dynamic region
+const autoScalingClient = new AutoScalingClient({ region });
+const cloudWatchClient = new CloudWatchClient({ region });
+const ec2Client = new EC2Client({ region });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region });
+const kmsClient = new KMSClient({ region });
+const s3Client = new S3Client({ region });
+const snsClient = new SNSClient({ region });
+const ssmClient = new SSMClient({ region });
+const wafClient = new WAFV2Client({ region });
+const resourceGroupsClient = new ResourceGroupsTaggingAPIClient({ region });
 
 describe('Secure Web Application Infrastructure Integration Tests', () => {
   describe('VPC and Network Configuration', () => {
@@ -254,19 +257,26 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
     });
 
     test('ALB Listener is configured', async () => {
-      const listenerArn = outputs[`tf-listener-arn-${environmentSuffix}`];
-      expect(listenerArn).toBeDefined();
-
-      const command = new DescribeListenersCommand({
-        ListenerArns: [listenerArn],
+      // Get the load balancer ARN first, then find its listeners
+      const albCommand = new DescribeLoadBalancersCommand({
+        Names: [`tf-secure-alb-${environmentSuffix}`],
       });
 
-      const response = await elbv2Client.send(command);
-      const listener = response.Listeners?.[0];
+      const albResponse = await elbv2Client.send(albCommand);
+      const loadBalancer = albResponse.LoadBalancers?.[0];
+      expect(loadBalancer).toBeDefined();
 
-      expect(listener).toBeDefined();
-      expect(listener?.Port).toBe(80);
-      expect(listener?.Protocol).toBe('HTTP');
+      const listenersCommand = new DescribeListenersCommand({
+        LoadBalancerArn: loadBalancer?.LoadBalancerArn,
+      });
+
+      const listenersResponse = await elbv2Client.send(listenersCommand);
+      const listeners = listenersResponse.Listeners || [];
+
+      expect(listeners.length).toBeGreaterThan(0);
+      const httpListener = listeners.find(l => l.Port === 80);
+      expect(httpListener).toBeDefined();
+      expect(httpListener?.Protocol).toBe('HTTP');
     });
 
     test('Load Balancer is accessible via HTTP', async () => {
@@ -526,12 +536,18 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
       
       // Check for managed rule groups
       const rules = webAcl?.Rules || [];
-      expect(rules.length).toBeGreaterThanOrEqual(3);
+      expect(rules.length).toBeGreaterThanOrEqual(5); // We have 5 rules now
       
       const ruleNames = rules.map(r => r.Name);
       expect(ruleNames).toContain('AWSManagedRulesCommonRuleSet');
       expect(ruleNames).toContain('AWSManagedRulesKnownBadInputsRuleSet');
+      expect(ruleNames).toContain('AWSManagedRulesSQLiRuleSet');
+      expect(ruleNames).toContain('AWSManagedRulesBotControlRuleSet');
       expect(ruleNames).toContain('RateLimitRule');
+
+      // Check rate limit rule configuration
+      const rateLimitRule = rules.find(r => r.Name === 'RateLimitRule');
+      expect(rateLimitRule?.Statement?.RateBasedStatement?.Limit).toBe(1000); // Updated limit
     });
 
     test('WAF is associated with Load Balancer', async () => {
@@ -545,29 +561,53 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
     });
   });
 
+  describe('SNS Topic Configuration', () => {
+    test('SNS topic exists for security notifications', async () => {
+      const snsTopicArn = outputs.SecurityNotificationsTopicArn;
+      expect(snsTopicArn).toBeDefined();
+      expect(snsTopicArn).toContain('sns');
+      expect(snsTopicArn).toContain(`tf-security-notifications-${environmentSuffix}`);
+      expect(snsTopicArn).toContain(region);
+    });
+  });
+
   describe('CloudWatch Alarms Configuration', () => {
     test('CloudWatch alarms are created and active', async () => {
-      const alarm4xxName = outputs[`tf-4xx-alarm-name-${environmentSuffix}`];
-      const alarm5xxName = outputs[`tf-5xx-alarm-name-${environmentSuffix}`];
-      const responseTimeAlarmName = outputs[`tf-response-time-alarm-name-${environmentSuffix}`];
-
-      expect(alarm4xxName).toBe(`tf-ALB-4xx-errors-${environmentSuffix}`);
-      expect(alarm5xxName).toBe(`tf-ALB-5xx-errors-${environmentSuffix}`);
-      expect(responseTimeAlarmName).toBe(`tf-ALB-response-time-${environmentSuffix}`);
+      const expectedAlarms = [
+        `tf-ALB-4xx-errors-${environmentSuffix}`,
+        `tf-ALB-5xx-errors-${environmentSuffix}`,
+        `tf-ALB-response-time-${environmentSuffix}`,
+        `tf-WAF-blocked-requests-${environmentSuffix}`,
+        `tf-EC2-high-cpu-${environmentSuffix}`
+      ];
 
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [alarm4xxName, alarm5xxName, responseTimeAlarmName],
+        AlarmNames: expectedAlarms,
       });
 
       const response = await cloudWatchClient.send(command);
       const alarms = response.MetricAlarms || [];
 
-      expect(alarms.length).toBe(3);
+      expect(alarms.length).toBe(5);
       
       alarms.forEach(alarm => {
         expect(alarm.StateValue).toBeDefined();
         expect(['OK', 'ALARM', 'INSUFFICIENT_DATA']).toContain(alarm.StateValue);
+        expect(alarm.AlarmName).toMatch(/^tf-/);
       });
+
+      // Verify specific alarm configurations
+      const alarm4xx = alarms.find(a => a.AlarmName?.includes('4xx-errors'));
+      expect(alarm4xx?.Threshold).toBe(10);
+      expect(alarm4xx?.EvaluationPeriods).toBe(2);
+
+      const alarm5xx = alarms.find(a => a.AlarmName?.includes('5xx-errors'));
+      expect(alarm5xx?.Threshold).toBe(5);
+      expect(alarm5xx?.EvaluationPeriods).toBe(2);
+
+      const responseTimeAlarm = alarms.find(a => a.AlarmName?.includes('response-time'));
+      expect(responseTimeAlarm?.Threshold).toBe(1);
+      expect(responseTimeAlarm?.EvaluationPeriods).toBe(3);
     });
   });
 
@@ -655,7 +695,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
       
       // Check WAF ARN contains correct region
       const wafArn = outputs.WAFWebACLArn;
-      expect(wafArn).toContain('us-east-1'); // Current test region
+      expect(wafArn).toContain(region); // Use dynamic region instead of hardcoded
     });
 
     test('All encryption is enabled on data storage resources', async () => {

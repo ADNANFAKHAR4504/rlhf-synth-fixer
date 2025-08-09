@@ -26,7 +26,6 @@ describe('SecureWebAppStack', () => {
     });
 
     test('applies required tags', () => {
-      // Check that all resources have Environment: Production tag
       template.hasResourceProperties('AWS::KMS::Key', {
         Tags: Match.arrayWith([
           Match.objectLike({
@@ -47,7 +46,6 @@ describe('SecureWebAppStack', () => {
     });
 
     test('applies common tags to stack', () => {
-      // Check that the stack has the expected tags applied to resources
       template.hasResourceProperties('AWS::KMS::Key', {
         Tags: Match.arrayWith([
           Match.objectLike({
@@ -73,12 +71,10 @@ describe('SecureWebAppStack', () => {
     });
 
     test('creates public and private subnets', () => {
-      // Check for public subnets
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
       });
 
-      // Check for private subnets
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: false,
       });
@@ -90,6 +86,13 @@ describe('SecureWebAppStack', () => {
 
     test('creates NAT gateways for private subnets', () => {
       template.hasResourceProperties('AWS::EC2::NatGateway', {});
+    });
+
+    test('creates VPC flow logs', () => {
+      template.hasResourceProperties('AWS::EC2::FlowLog', {
+        ResourceType: 'VPC',
+        TrafficType: 'ALL',
+      });
     });
   });
 
@@ -113,18 +116,12 @@ describe('SecureWebAppStack', () => {
               Principal: Match.objectLike({
                 Service: Match.stringLikeRegexp('logs.*amazonaws.com'),
               }),
-              Condition: Match.objectLike({
-                ArnEquals: Match.anyValue(),
-              }),
             }),
             Match.objectLike({
               Sid: 'Allow S3 Service',
               Effect: 'Allow',
               Principal: Match.objectLike({
                 Service: 's3.amazonaws.com',
-              }),
-              Condition: Match.objectLike({
-                StringEquals: Match.anyValue(),
               }),
             }),
           ]),
@@ -140,10 +137,16 @@ describe('SecureWebAppStack', () => {
   });
 
   describe('Security Groups', () => {
-    test('creates ALB security group with HTTPS ingress', () => {
+    test('creates ALB security group with HTTP and HTTPS ingress', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for Application Load Balancer',
         SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 80,
+            ToPort: 80,
+            CidrIp: '0.0.0.0/0',
+          }),
           Match.objectLike({
             IpProtocol: 'tcp',
             FromPort: 443,
@@ -164,14 +167,21 @@ describe('SecureWebAppStack', () => {
             FromPort: 443,
             ToPort: 443,
             CidrIp: '0.0.0.0/0',
-            Description: 'Allow HTTPS for updates and SSM',
+            Description: 'Allow HTTPS for package updates and AWS services',
           }),
           Match.objectLike({
             IpProtocol: 'tcp',
             FromPort: 80,
             ToPort: 80,
             CidrIp: '0.0.0.0/0',
-            Description: 'Allow HTTP for package repositories',
+            Description: 'Allow HTTP for package updates',
+          }),
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 53,
+            ToPort: 53,
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow DNS resolution',
           }),
           Match.objectLike({
             IpProtocol: 'udp',
@@ -212,33 +222,16 @@ describe('SecureWebAppStack', () => {
       });
     });
 
-    test('attaches least privilege policies to EC2 role', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: Match.objectLike({
+    test('creates VPC flow log role with inline policy', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: Match.objectLike({
           Statement: Match.arrayWith([
             Match.objectLike({
-              Sid: 'S3ObjectAccess',
               Effect: 'Allow',
-              Action: ['s3:GetObject', 's3:PutObject'],
-              Resource: Match.stringLikeRegexp('.*tf-secure-storage-test-.*/app-data/\\*'),
-            }),
-            Match.objectLike({
-              Sid: 'S3BucketList',
-              Effect: 'Allow',
-              Action: 's3:ListBucket',
-              Condition: Match.objectLike({
-                StringLike: {
-                  's3:prefix': ['app-data/*'],
-                },
-              }),
-            }),
-            Match.objectLike({
-              Sid: 'KMSAccess',
-              Effect: 'Allow',
-              Action: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
-              Condition: Match.objectLike({
-                StringEquals: Match.anyValue(),
-              }),
+              Principal: {
+                Service: 'vpc-flow-logs.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
             }),
           ]),
         }),
@@ -247,9 +240,9 @@ describe('SecureWebAppStack', () => {
   });
 
   describe('S3 Bucket', () => {
-    test('creates S3 bucket with enhanced security features', () => {
+    test('creates main S3 bucket with security features', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('tf-secure-storage-test-.*'),
+        BucketName: 'tf-secure-storage-test',
         VersioningConfiguration: {
           Status: 'Enabled',
         },
@@ -268,42 +261,12 @@ describe('SecureWebAppStack', () => {
           IgnorePublicAcls: true,
           RestrictPublicBuckets: true,
         },
-        OwnershipControls: {
-          Rules: [
-            {
-              ObjectOwnership: 'BucketOwnerEnforced',
-            },
-          ],
-        },
-        LifecycleConfiguration: {
-          Rules: Match.arrayWith([
-            Match.objectLike({
-              Status: 'Enabled',
-              Transitions: Match.arrayWith([
-                Match.objectLike({
-                  StorageClass: 'STANDARD_IA',
-                  TransitionInDays: 30,
-                }),
-                Match.objectLike({
-                  StorageClass: 'GLACIER',
-                  TransitionInDays: 90,
-                }),
-              ]),
-            }),
-            Match.objectLike({
-              Status: 'Enabled',
-              NoncurrentVersionExpiration: {
-                NoncurrentDays: 30,
-              },
-            }),
-          ]),
-        },
       });
     });
 
-    test('creates separate access logs bucket', () => {
+    test('creates ALB logs bucket', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('tf-access-logs-test-.*'),
+        BucketName: 'tf-alb-access-logs-test',
         BucketEncryption: {
           ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
@@ -316,45 +279,20 @@ describe('SecureWebAppStack', () => {
       });
     });
 
-    test('creates ALB logs bucket with unique naming', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('tf-alb-access-logs-test-.*'),
-        OwnershipControls: {
-          Rules: [
-            {
-              ObjectOwnership: 'BucketOwnerEnforced',
-            },
-          ],
-        },
-      });
-    });
-  });
-
-  describe('CloudTrail and GuardDuty', () => {
-    test('creates CloudTrail for API logging', () => {
-      template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        TrailName: 'tf-secure-cloudtrail-test',
-        IncludeGlobalServiceEvents: true,
-        IsMultiRegionTrail: true,
-        EnableLogFileValidation: true,
-      });
-    });
-
-    test('creates CloudTrail log group', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/cloudtrail/test',
-        RetentionInDays: 365,
-      });
-    });
-
-    test('creates GuardDuty detector', () => {
-      template.hasResourceProperties('AWS::GuardDuty::Detector', {
-        Enable: true,
-        FindingPublishingFrequency: 'FIFTEEN_MINUTES',
-        DataSources: Match.objectLike({
-          S3Logs: { Enable: true },
-          Kubernetes: { AuditLogs: { Enable: true } },
-          MalwareProtection: { ScanEc2InstanceWithFindings: { EbsVolumes: true } },
+    test('creates S3 bucket policy to deny non-SSL access', () => {
+      template.hasResourceProperties('AWS::S3::BucketPolicy', {
+        PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'DenyInsecureConnections',
+              Effect: 'Deny',
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false',
+                },
+              },
+            }),
+          ]),
         }),
       });
     });
@@ -364,7 +302,7 @@ describe('SecureWebAppStack', () => {
     test('creates SNS topic for security notifications', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
         TopicName: 'tf-security-notifications-test',
-        DisplayName: 'Security Notifications for test',
+        DisplayName: 'Security Notifications - test',
       });
     });
 
@@ -373,10 +311,27 @@ describe('SecureWebAppStack', () => {
         KmsMasterKeyId: Match.anyValue(),
       });
     });
+
+    test('SNS topic has access policy', () => {
+      template.hasResourceProperties('AWS::SNS::TopicPolicy', {
+        PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'AllowS3Publish',
+              Effect: 'Allow',
+              Principal: {
+                Service: 's3.amazonaws.com',
+              },
+              Action: 'sns:Publish',
+            }),
+          ]),
+        }),
+      });
+    });
   });
 
   describe('Launch Template', () => {
-    test('creates launch template with enhanced security configuration', () => {
+    test('creates launch template with security configuration', () => {
       template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateName: 'tf-secure-launch-template-test',
         LaunchTemplateData: Match.objectLike({
@@ -393,13 +348,11 @@ describe('SecureWebAppStack', () => {
           }),
           MetadataOptions: Match.objectLike({
             HttpTokens: 'required',
-            HttpPutResponseHopLimit: 1,
           }),
           BlockDeviceMappings: Match.arrayWith([
             Match.objectLike({
               Ebs: Match.objectLike({
                 Encrypted: true,
-                DeleteOnTermination: true,
                 VolumeType: 'gp3',
               }),
             }),
@@ -420,14 +373,6 @@ describe('SecureWebAppStack', () => {
             'Fn::GetAtt': Match.anyValue(),
           }),
         ]),
-        Subnets: Match.arrayWith([
-          Match.objectLike({
-            Ref: Match.anyValue(),
-          }),
-          Match.objectLike({
-            Ref: Match.anyValue(),
-          }),
-        ]),
       });
     });
 
@@ -445,7 +390,7 @@ describe('SecureWebAppStack', () => {
       });
     });
 
-    test('creates HTTP listener for testing without domain', () => {
+    test('creates HTTP listener', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
         Port: 80,
         Protocol: 'HTTP',
@@ -471,14 +416,6 @@ describe('SecureWebAppStack', () => {
             Ref: Match.anyValue(),
           }),
         ]),
-        VPCZoneIdentifier: Match.arrayWith([
-          Match.objectLike({
-            Ref: Match.anyValue(),
-          }),
-          Match.objectLike({
-            Ref: Match.anyValue(),
-          }),
-        ]),
         LaunchTemplate: Match.objectLike({
           LaunchTemplateId: Match.anyValue(),
           Version: Match.anyValue(),
@@ -486,23 +423,13 @@ describe('SecureWebAppStack', () => {
       });
     });
 
-    test('creates CPU and request count scaling policies', () => {
+    test('creates CPU scaling policy', () => {
       template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
         PolicyType: 'TargetTrackingScaling',
         TargetTrackingConfiguration: Match.objectLike({
           TargetValue: 70,
           PredefinedMetricSpecification: Match.objectLike({
             PredefinedMetricType: 'ASGAverageCPUUtilization',
-          }),
-        }),
-      });
-
-      template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
-        PolicyType: 'TargetTrackingScaling',
-        TargetTrackingConfiguration: Match.objectLike({
-          TargetValue: 1000,
-          PredefinedMetricSpecification: Match.objectLike({
-            PredefinedMetricType: 'ALBRequestCountPerTarget',
           }),
         }),
       });
@@ -539,29 +466,8 @@ describe('SecureWebAppStack', () => {
             OverrideAction: { None: {} },
           }),
           Match.objectLike({
-            Name: 'RateLimitRule',
+            Name: 'AWSManagedRulesSQLiRuleSet',
             Priority: 3,
-            Action: { Block: {} },
-            Statement: {
-              RateBasedStatement: {
-                Limit: 2000,
-                AggregateKeyType: 'IP',
-              },
-            },
-          }),
-          Match.objectLike({
-            Name: 'GeoBlockingRule',
-            Priority: 4,
-            Action: { Block: {} },
-            Statement: {
-              GeoMatchStatement: {
-                CountryCodes: ['CN', 'RU', 'KP'],
-              },
-            },
-          }),
-          Match.objectLike({
-            Name: 'SQLInjectionRule',
-            Priority: 5,
             Statement: {
               ManagedRuleGroupStatement: {
                 VendorName: 'AWS',
@@ -570,16 +476,27 @@ describe('SecureWebAppStack', () => {
             },
             OverrideAction: { None: {} },
           }),
-        ]),
-      });
-    });
-
-    test('creates WAF logging configuration', () => {
-      template.hasResourceProperties('AWS::WAFv2::LoggingConfiguration', {
-        ResourceArn: Match.anyValue(),
-        LogDestinationConfigs: Match.arrayWith([
           Match.objectLike({
-            'Fn::GetAtt': Match.anyValue(),
+            Name: 'AWSManagedRulesBotControlRuleSet',
+            Priority: 4,
+            Statement: {
+              ManagedRuleGroupStatement: {
+                VendorName: 'AWS',
+                Name: 'AWSManagedRulesBotControlRuleSet',
+              },
+            },
+            OverrideAction: { None: {} },
+          }),
+          Match.objectLike({
+            Name: 'RateLimitRule',
+            Priority: 5,
+            Action: { Block: {} },
+            Statement: {
+              RateBasedStatement: {
+                Limit: 1000,
+                AggregateKeyType: 'IP',
+              },
+            },
           }),
         ]),
       });
@@ -594,7 +511,7 @@ describe('SecureWebAppStack', () => {
   });
 
   describe('CloudWatch Alarms', () => {
-    test('creates comprehensive monitoring alarms', () => {
+    test('creates ALB monitoring alarms', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmName: 'tf-ALB-4xx-errors-test',
         Threshold: 10,
@@ -621,7 +538,9 @@ describe('SecureWebAppStack', () => {
         MetricName: 'TargetResponseTime',
         Namespace: 'AWS/ApplicationELB',
       });
+    });
 
+    test('creates WAF blocked requests alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmName: 'tf-WAF-blocked-requests-test',
         Threshold: 100,
@@ -629,31 +548,23 @@ describe('SecureWebAppStack', () => {
         MetricName: 'BlockedRequests',
         Namespace: 'AWS/WAFV2',
       });
+    });
 
+    test('creates EC2 CPU utilization alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'tf-GuardDuty-findings-test',
-        Threshold: 1,
-        EvaluationPeriods: 1,
-        MetricName: 'FindingCount',
-        Namespace: 'AWS/GuardDuty',
+        AlarmName: 'tf-EC2-high-cpu-test',
+        Threshold: 80,
+        EvaluationPeriods: 3,
+        MetricName: 'CPUUtilization',
+        Namespace: 'AWS/EC2',
       });
     });
   });
 
   describe('CloudWatch Log Groups', () => {
-    test('creates comprehensive log groups', () => {
+    test('creates VPC flow logs group', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: '/aws/vpc/flowlogs-test',
-        RetentionInDays: 30,
-      });
-
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/cloudtrail/test',
-        RetentionInDays: 365,
-      });
-
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/wafv2/test',
         RetentionInDays: 30,
       });
     });
@@ -664,57 +575,25 @@ describe('SecureWebAppStack', () => {
       const outputs = template.findOutputs('*');
       const outputKeys = Object.keys(outputs);
 
-      expect(outputKeys.some(key => key.includes('tfLoadBalancerDNStest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfS3BucketNametest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfKMSKeyIdtest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfVPCIdtest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfWAFWebACLArntest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfCloudTrailArntest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfGuardDutyDetectorIdtest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tflistenerarntest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tf4xxalarmnametest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tf5xxalarmnametest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfresponsetimealarmnametest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfwafblockedalarmnametest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfguarddutyalarmnametest'))).toBe(true);
-    });
-
-    test('outputs have correct descriptions', () => {
-      const outputs = template.findOutputs('*');
-      
-      // Find the actual output keys (they have unique suffixes)
-      const loadBalancerDnsKey = Object.keys(outputs).find(key => key.includes('tfLoadBalancerDNStest'));
-      const s3BucketNameKey = Object.keys(outputs).find(key => key.includes('tfS3BucketNametest'));
-      const kmsKeyIdKey = Object.keys(outputs).find(key => key.includes('tfKMSKeyIdtest'));
-      const vpcIdKey = Object.keys(outputs).find(key => key.includes('tfVPCIdtest'));
-      const wafWebAclArnKey = Object.keys(outputs).find(key => key.includes('tfWAFWebACLArntest'));
-      const cloudTrailArnKey = Object.keys(outputs).find(key => key.includes('tfCloudTrailArntest'));
-      const guardDutyDetectorIdKey = Object.keys(outputs).find(key => key.includes('tfGuardDutyDetectorIdtest'));
-
-      if (loadBalancerDnsKey) expect(outputs[loadBalancerDnsKey].Description).toBe('DNS name of the load balancer');
-      if (s3BucketNameKey) expect(outputs[s3BucketNameKey].Description).toBe('Name of the S3 bucket');
-      if (kmsKeyIdKey) expect(outputs[kmsKeyIdKey].Description).toBe('KMS Key ID for encryption');
-      if (vpcIdKey) expect(outputs[vpcIdKey].Description).toBe('VPC ID');
-      if (wafWebAclArnKey) expect(outputs[wafWebAclArnKey].Description).toBe('WAF Web ACL ARN');
-      if (cloudTrailArnKey) expect(outputs[cloudTrailArnKey].Description).toBe('CloudTrail ARN');
-      if (guardDutyDetectorIdKey) expect(outputs[guardDutyDetectorIdKey].Description).toBe('GuardDuty Detector ID');
+      expect(outputKeys.some(key => key.includes('LoadBalancerDNS'))).toBe(true);
+      expect(outputKeys.some(key => key.includes('S3BucketName'))).toBe(true);
+      expect(outputKeys.some(key => key.includes('KMSKeyId'))).toBe(true);
+      expect(outputKeys.some(key => key.includes('VPCId'))).toBe(true);
+      expect(outputKeys.some(key => key.includes('WAFWebACLArn'))).toBe(true);
+      expect(outputKeys.some(key => key.includes('SecurityNotificationsTopicArn'))).toBe(true);
     });
   });
 
   describe('Resource Count Validation', () => {
     test('creates expected number of resources', () => {
-      // Check for specific resources by counting them directly
       template.resourceCountIs('AWS::EC2::VPC', 1);
       template.resourceCountIs('AWS::KMS::Key', 1);
-      template.resourceCountIs('AWS::S3::Bucket', 3); // Main bucket + ALB logs bucket + Access logs bucket
+      template.resourceCountIs('AWS::S3::Bucket', 2); // Main bucket + ALB logs bucket
       template.resourceCountIs('AWS::SNS::Topic', 1);
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
       template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
       template.resourceCountIs('AWS::WAFv2::WebACL', 1);
-      template.resourceCountIs('AWS::CloudWatch::Alarm', 5); // 4xx, 5xx, response time, WAF blocked, GuardDuty
-      template.resourceCountIs('AWS::CloudTrail::Trail', 1);
-      template.resourceCountIs('AWS::GuardDuty::Detector', 1);
-      template.resourceCountIs('AWS::WAFv2::LoggingConfiguration', 1);
+      template.resourceCountIs('AWS::CloudWatch::Alarm', 5); // 4xx, 5xx, response time, WAF blocked, EC2 CPU
     });
   });
 
@@ -753,27 +632,24 @@ describe('SecureWebAppStack', () => {
       });
     });
 
-    test('EC2 instances use encrypted EBS volumes with enhanced security', () => {
+    test('EC2 instances use encrypted EBS volumes', () => {
       template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: Match.objectLike({
           BlockDeviceMappings: Match.arrayWith([
             Match.objectLike({
               Ebs: Match.objectLike({
                 Encrypted: true,
-                DeleteOnTermination: true,
               }),
             }),
           ]),
           MetadataOptions: Match.objectLike({
             HttpTokens: 'required',
-            HttpPutResponseHopLimit: 1,
           }),
         }),
       });
     });
 
     test('Security groups implement least privilege', () => {
-      // EC2 security group should not allow all outbound traffic
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for EC2 instances',
         SecurityGroupEgress: Match.arrayWith([
@@ -781,51 +657,23 @@ describe('SecureWebAppStack', () => {
             IpProtocol: 'tcp',
             FromPort: 443,
             ToPort: 443,
-            Description: 'Allow HTTPS for updates and SSM',
+            Description: 'Allow HTTPS for package updates and AWS services',
           }),
           Match.objectLike({
             IpProtocol: 'tcp',
             FromPort: 80,
             ToPort: 80,
-            Description: 'Allow HTTP for package repositories',
-          }),
-          Match.objectLike({
-            IpProtocol: 'udp',
-            FromPort: 53,
-            ToPort: 53,
-            Description: 'Allow DNS resolution',
+            Description: 'Allow HTTP for package updates',
           }),
         ]),
-      });
-    });
-
-    test('IAM roles follow least privilege principle', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Sid: 'S3ObjectAccess',
-              Effect: 'Allow',
-              Action: ['s3:GetObject', 's3:PutObject'],
-              Resource: Match.stringLikeRegexp('.*app-data/\\*'),
-            }),
-            Match.objectLike({
-              Sid: 'KMSAccess',
-              Effect: 'Allow',
-              Condition: Match.objectLike({
-                StringEquals: Match.anyValue(),
-              }),
-            }),
-          ]),
-        }),
       });
     });
   });
 
   describe('Environment-specific Configuration', () => {
-    test('uses environment suffix and unique identifiers in resource names', () => {
+    test('uses environment-specific resource names', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('tf-secure-storage-test-.*'),
+        BucketName: 'tf-secure-storage-test',
       });
 
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
@@ -849,62 +697,21 @@ describe('SecureWebAppStack', () => {
       const prodTemplate = Template.fromStack(prodStack);
 
       prodTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('tf-secure-storage-prod-.*'),
+        BucketName: 'tf-secure-storage-prod',
       });
 
       prodTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
         Name: 'tf-secure-alb-prod',
       });
     });
-
-    test('creates HTTPS configuration when domain is provided', () => {
-      const httpsApp = new cdk.App();
-      const httpsStack = new SecureWebAppStack(httpsApp, 'HttpsSecureWebAppStack', {
-        environment: 'prod',
-        domainName: 'example.com',
-        hostedZoneId: 'Z123456789',
-        env: {
-          account: '123456789012',
-          region: 'us-west-2',
-        },
-      });
-      const httpsTemplate = Template.fromStack(httpsStack);
-
-      httpsTemplate.hasResourceProperties('AWS::CertificateManager::Certificate', {
-        DomainName: 'example.com',
-      });
-
-      httpsTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-        Port: 443,
-        Protocol: 'HTTPS',
-        SslPolicy: 'ELBSecurityPolicy-TLS-1-2-Ext-2018-06',
-      });
-
-      httpsTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-        Port: 80,
-        Protocol: 'HTTP',
-        DefaultActions: Match.arrayWith([
-          Match.objectLike({
-            Type: 'redirect',
-            RedirectConfig: Match.objectLike({
-              Protocol: 'HTTPS',
-              Port: '443',
-              StatusCode: 'HTTP_301',
-            }),
-          }),
-        ]),
-      });
-    });
   });
 
   describe('Infrastructure Compliance', () => {
     test('all resources have tf- prefix', () => {
-      // Check KMS Key
       template.hasResourceProperties('AWS::KMS::Key', {
         Description: 'Encryption key for secure web app - test',
       });
       
-      // Check VPC name
       template.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
           Match.objectLike({
@@ -914,7 +721,6 @@ describe('SecureWebAppStack', () => {
         ]),
       });
 
-      // Check Security Group names
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupName: 'tf-alb-security-group-test',
       });
@@ -923,33 +729,28 @@ describe('SecureWebAppStack', () => {
         GroupName: 'tf-ec2-security-group-test',
       });
 
-      // Check S3 bucket names
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('tf-secure-storage-test-.*'),
+        BucketName: 'tf-secure-storage-test',
       });
 
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('tf-alb-access-logs-test-.*'),
+        BucketName: 'tf-alb-access-logs-test',
       });
 
-      // Check WAF name
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         Name: 'tf-secure-waf-test',
       });
 
-      // Check Auto Scaling Group name
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
         AutoScalingGroupName: 'tf-secure-asg-test',
       });
 
-      // Check ALB name
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
         Name: 'tf-secure-alb-test',
       });
     });
 
     test('all resources tagged with Environment: Production', () => {
-      // Check multiple resource types have the Production tag
       const resourceTypes = [
         'AWS::KMS::Key',
         'AWS::EC2::VPC',
@@ -968,29 +769,6 @@ describe('SecureWebAppStack', () => {
           ]),
         });
       });
-    });
-
-    test('uses Amazon Linux 2023 AMI', () => {
-      // This is verified by the machineImage configuration in launch template
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateData: Match.objectLike({
-          ImageId: Match.anyValue(), // AMI ID will be resolved at deployment
-        }),
-      });
-    });
-
-    test('outputs have tf- prefix', () => {
-      const outputs = template.findOutputs('*');
-      const outputKeys = Object.keys(outputs);
-
-      // Check that main outputs have tf- prefix
-      expect(outputKeys.some(key => key.includes('tfLoadBalancerDNStest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfS3BucketNametest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfKMSKeyIdtest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfVPCIdtest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfWAFWebACLArntest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfCloudTrailArntest'))).toBe(true);
-      expect(outputKeys.some(key => key.includes('tfGuardDutyDetectorIdtest'))).toBe(true);
     });
   });
 

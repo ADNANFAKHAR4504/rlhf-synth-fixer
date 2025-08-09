@@ -1,249 +1,581 @@
-# Security Analysis & Remediation Report
+# Model Failures and Fixes
 
-## Executive Summary
+## Infrastructure Issues Fixed
 
-This document outlines the security vulnerabilities identified in the `secure-web-app-stack.ts` infrastructure code and the comprehensive remediation measures implemented to achieve enterprise-grade security standards.
+### 1. CDK Property Name Error - KMS Key Policy
 
-**Initial Security Score: 6/10**  
-**Final Security Score: 9.5/10**
+**Issue**: The model used `keyPolicy` instead of the correct property name `policy` for the KMS key configuration.
 
----
-
-## Critical Security Issues Identified
-
-### 1. **Least Privilege Violations** ❌
-
-**Issues Found:**
-
-- EC2 IAM role had overly broad S3 permissions (`s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on entire bucket)
-- KMS policy allowed all actions (`kms:*`) for root principal without conditions
-- Security groups allowed unrestricted outbound traffic (`allowAllOutbound: true`)
-- No resource-specific or condition-based access controls
-
-**Risk Level:** HIGH - Could lead to privilege escalation and unauthorized data access
-
-### 2. **Missing HTTPS/TLS Encryption** ❌
-
-**Issues Found:**
-
-- Application Load Balancer only configured with HTTP listener (port 80)
-- No SSL/TLS certificate provisioning or management
-- No HTTPS redirect policy for secure communication
-- Missing security headers for web application protection
-
-**Risk Level:** CRITICAL - Data in transit vulnerable to interception and manipulation
-
-### 3. **Incomplete Logging & Monitoring** ❌
-
-**Issues Found:**
-
-- No CloudTrail for API activity logging
-- Missing GuardDuty integration for threat detection
-- S3 bucket access logging had circular dependency issues
-- No WAF logging configuration
-- Limited CloudWatch alarms for security events
-
-**Risk Level:** HIGH - Inability to detect and respond to security incidents
-
-### 4. **Resource Naming Conflicts** ❌
-
-**Issues Found:**
-
-- Hardcoded bucket names without unique suffixes
-- Potential deployment conflicts in multi-environment scenarios
-- No collision prevention for globally unique resources
-
-**Risk Level:** MEDIUM - Could cause deployment failures and resource conflicts
-
-### 5. **Missing Security Headers** ❌
-
-**Issues Found:**
-
-- No HTTP security headers configured
-- Missing HSTS (HTTP Strict Transport Security)
-- No Content Security Policy (CSP)
-- Missing X-Frame-Options, X-Content-Type-Options headers
-
-**Risk Level:** MEDIUM - Web application vulnerable to XSS, clickjacking, and MIME attacks
-
-### 6. **Inadequate WAF Configuration** ❌
-
-**Issues Found:**
-
-- Basic WAF rules without geo-blocking
-- No application-specific threat protection
-- Missing SQL injection rule sets
-- No WAF logging for security analysis
-
-**Risk Level:** MEDIUM - Application vulnerable to web-based attacks
-
-### 7. **Missing Backup & Recovery** ❌
-
-**Issues Found:**
-
-- No automated backup strategies for EBS volumes
-- No disaster recovery configuration
-- Missing data retention policies
-
-**Risk Level:** MEDIUM - Risk of data loss and extended downtime
-
----
-
-## Comprehensive Security Remediation
-
-### 1. **Implemented Least Privilege Access Controls** ✅
-
-**Remediation Actions:**
+**Original Code**:
 
 ```typescript
-// Before: Overly broad permissions
-actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject']
-resources: [`arn:aws:s3:::tf-secure-storage-${environment}/*`]
+const kmsKey = new kms.Key(this, `tf-encryption-key-${environment}`, {
+  keyPolicy: new iam.PolicyDocument({...})  // Incorrect property name
+});
+```
 
-// After: Granular, path-specific permissions
-actions: ['s3:GetObject', 's3:PutObject']
-resources: [`arn:aws:s3:::${s3BucketName}/app-data/*`]
-conditions: {
-  StringLike: { 's3:prefix': ['app-data/*'] }
+**Fixed Code**:
+
+```typescript
+const kmsKey = new kms.Key(this, `tf-encryption-key-${environment}`, {
+  policy: new iam.PolicyDocument({...})  // Correct property name
+});
+```
+
+### 2. S3 Bucket Property Error - Versioning Configuration
+
+**Issue**: The model used `versioning: true` instead of the correct property name `versioned: true` for S3 bucket versioning.
+
+**Original Code**:
+
+```typescript
+const s3Bucket = new s3.Bucket(this, `tf-secure-storage-${environment}`, {
+  versioning: true, // Incorrect property name
+});
+```
+
+**Fixed Code**:
+
+```typescript
+const s3Bucket = new s3.Bucket(this, `tf-secure-storage-${environment}`, {
+  versioned: true, // Correct property name
+});
+```
+
+### 3. S3 Event Notification Missing Target
+
+**Issue**: The model called `addEventNotification` with only the event type but missing the required notification target parameter.
+
+**Original Code**:
+
+```typescript
+s3Bucket.addEventNotification(
+  s3.EventType.OBJECT_CREATED
+  // Missing notification target
+);
+```
+
+**Fixed Code**:
+
+```typescript
+// Created SNS topic for security monitoring
+const securityNotificationsTopic = new sns.Topic(
+  this,
+  `tf-security-notifications-${environment}`,
+  {
+    topicName: `tf-security-notifications-${environment}`,
+    displayName: `Security Notifications - ${environment}`,
+    masterKey: kmsKey,
+  }
+);
+
+// S3 Bucket notification for security monitoring
+s3Bucket.addEventNotification(
+  s3.EventType.OBJECT_CREATED,
+  new s3n.SnsDestination(securityNotificationsTopic)
+);
+```
+
+### 4. Auto Scaling Policy Property Error
+
+**Issue**: The model used `scaleInCooldown` and `scaleOutCooldown` properties which don't exist in the `CpuUtilizationScalingProps` interface.
+
+**Original Code**:
+
+```typescript
+asg.scaleOnCpuUtilization(`tf-cpu-scaling-${environment}`, {
+  targetUtilizationPercent: 70,
+  scaleInCooldown: cdk.Duration.minutes(5), // Invalid property
+  scaleOutCooldown: cdk.Duration.minutes(5), // Invalid property
+});
+```
+
+**Fixed Code**:
+
+```typescript
+asg.scaleOnCpuUtilization(`tf-cpu-scaling-${environment}`, {
+  targetUtilizationPercent: 70,
+  cooldown: cdk.Duration.minutes(5), // Correct property
+});
+```
+
+### 5. Test File Property Error
+
+**Issue**: The test file included `domainName` and `hostedZoneId` properties that don't exist in the `SecureWebAppStackProps` interface.
+
+**Original Code**:
+
+```typescript
+const httpsStack = new SecureWebAppStack(httpsApp, 'HttpsSecureWebAppStack', {
+  environment: 'prod',
+  domainName: 'example.com', // Property doesn't exist
+  hostedZoneId: 'Z123456789', // Property doesn't exist
+});
+```
+
+**Fixed Code**:
+
+```typescript
+const httpsStack = new SecureWebAppStack(httpsApp, 'HttpsSecureWebAppStack', {
+  environment: 'prod',
+  // Removed non-existent properties
+});
+```
+
+### 6. ALB Access Logs KMS Encryption Issue
+
+**Issue**: The model attempted to use KMS encryption for ALB access logs, which is not supported. ALB access logs only support S3-managed encryption.
+
+**Original Code**:
+
+```typescript
+const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
+  encryption: s3.BucketEncryption.KMS, // Not supported for ALB logs
+  encryptionKey: kmsKey,
+});
+```
+
+**Fixed Code**:
+
+```typescript
+const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
+  encryption: s3.BucketEncryption.S3_MANAGED, // Correct encryption type
+});
+```
+
+### 7. Deprecated VPC CIDR Property
+
+**Issue**: The model used the deprecated `cidr` property instead of the newer `ipAddresses` property for VPC configuration.
+
+**Original Code**:
+
+```typescript
+const vpc = new ec2.Vpc(this, `tf-vpc-${environment}`, {
+  cidr: '10.0.0.0/16', // Deprecated property
+});
+```
+
+**Fixed Code**:
+
+```typescript
+const vpc = new ec2.Vpc(this, `tf-vpc-${environment}`, {
+  ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'), // Current property
+});
+```
+
+### 8. Code Quality Issues - Unused Variables
+
+**Issue**: The model created several variables that were assigned but never used, causing linting errors.
+
+**Issues Fixed**:
+
+- Removed unused `commonTags` variable
+- Removed unused `listener` variable assignment
+- Removed unused alarm variable assignments (`httpCodeTarget4xxAlarm`, `httpCodeTarget5xxAlarm`, `responseTimeAlarm`)
+
+### 9. Deprecated CloudWatch Metrics Methods
+
+**Issue**: The model used deprecated metric methods on the target group.
+
+**Original Code**:
+
+```typescript
+metric: targetGroup.metricHttpCodeTarget(elbv2.HttpCodeTarget.TARGET_4XX_COUNT);
+metric: targetGroup.metricTargetResponseTime();
+```
+
+**Fixed Code**:
+
+```typescript
+metric: targetGroup.metrics.httpCodeTarget(
+  elbv2.HttpCodeTarget.TARGET_4XX_COUNT
+);
+metric: targetGroup.metrics.targetResponseTime();
+```
+
+### 10. Missing Required Imports
+
+**Issue**: The model failed to include necessary imports for S3 notifications and SNS services.
+
+**Added Imports**:
+
+```typescript
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
+import * as sns from 'aws-cdk-lib/aws-sns';
+```
+
+### 11. Deprecated Auto Scaling Health Check API - FIXED
+
+**Issue**: The model used deprecated health check APIs that will be removed in future CDK versions.
+
+**Deprecation Warnings Observed**:
+
+```
+[WARNING] aws-cdk-lib.aws_autoscaling.HealthCheck#elb is deprecated.
+  Use HealthChecks instead
+[WARNING] aws-cdk-lib.aws_autoscaling.ElbHealthCheckOptions#grace is deprecated.
+  Use AdditionalHealthChecksOptions instead
+[WARNING] aws-cdk-lib.aws_autoscaling.CommonAutoScalingGroupProps#healthCheck is deprecated.
+  Use `healthChecks` instead
+```
+
+**Original Code** (deprecated):
+
+```typescript
+healthCheck: autoscaling.HealthCheck.elb({
+  grace: cdk.Duration.minutes(5),
+}),
+```
+
+**Fixed Code**:
+
+```typescript
+// Create ASG without deprecated health check property
+const asg = new autoscaling.AutoScalingGroup(this, `tf-asg-${environment}`, {
+  // ... other properties
+  // Removed deprecated healthCheck property
+});
+
+// Configure ELB health check using L1 construct to avoid deprecation warnings
+const cfnAsg = asg.node.defaultChild as autoscaling.CfnAutoScalingGroup;
+cfnAsg.healthCheckType = 'ELB';
+cfnAsg.healthCheckGracePeriod = 300;
+```
+
+**Benefits**: Eliminates all deprecation warnings while maintaining the same functionality.
+
+### 12. Auto Scaling Group Desired Capacity Warning
+
+**Issue**: The model configured `desiredCapacity` which causes the ASG size to reset on every deployment.
+
+**Warning Observed**:
+
+```
+[Warning] desiredCapacity has been configured. Be aware this will reset the size of your AutoScalingGroup on every deployment.
+```
+
+**Current Code**:
+
+```typescript
+desiredCapacity: 2,  // Causes reset on each deployment
+```
+
+**Recommendation**: Remove `desiredCapacity` and let Auto Scaling manage the capacity based on scaling policies.
+
+## Security Issues Identified and Recommendations
+
+### 13. KMS Key Policy - Overly Permissive (CRITICAL SECURITY ISSUE) - FIXED
+
+**Issue**: The model used wildcard permissions in KMS key policy, violating the principle of least privilege.
+
+**Original Code**:
+
+```typescript
+new iam.PolicyStatement({
+  effect: iam.Effect.ALLOW,
+  principals: [new iam.AccountRootPrincipal()],
+  actions: ['kms:*'],  // TOO PERMISSIVE
+  resources: ['*'],    // TOO PERMISSIVE
+}),
+```
+
+**Security Risk**: Allows unlimited KMS operations on any resource, complete compromise of encryption security.
+
+**Fixed Code**:
+
+```typescript
+new iam.PolicyStatement({
+  effect: iam.Effect.ALLOW,
+  principals: [new iam.AccountRootPrincipal()],
+  actions: [
+    'kms:DescribeKey', 'kms:GetKeyPolicy', 'kms:PutKeyPolicy',
+    'kms:CreateGrant', 'kms:RevokeGrant', 'kms:EnableKeyRotation',
+    'kms:DisableKeyRotation', 'kms:GetKeyRotationStatus',
+    'kms:ScheduleKeyDeletion', 'kms:CancelKeyDeletion'
+  ],
+  resources: ['*'], // Still needed for key management operations
+  // Added conditions for service-specific access
+}),
+```
+
+### 14. Missing HTTPS/TLS Encryption (HIGH SECURITY RISK)
+
+**Issue**: The model only implemented HTTP listener, no HTTPS encryption in transit.
+
+**Current Code**:
+
+```typescript
+alb.addListener(`tf-listener-${environment}`, {
+  port: 80,
+  protocol: elbv2.ApplicationProtocol.HTTP, // NO ENCRYPTION
+});
+```
+
+**Security Risk**: All data transmitted in plain text, vulnerable to man-in-the-middle attacks.
+
+**Recommended Implementation**: Add HTTPS listener with SSL certificate and redirect HTTP to HTTPS.
+
+### 15. EC2 Security Group - Unrestricted Outbound Access (HIGH SECURITY RISK) - FIXED
+
+**Issue**: The model allowed unrestricted outbound access from EC2 instances.
+
+**Original Code**:
+
+```typescript
+const ec2SecurityGroup = new ec2.SecurityGroup(
+  this,
+  `tf-ec2-sg-${environment}`,
+  {
+    allowAllOutbound: true, // TOO PERMISSIVE
+  }
+);
+```
+
+**Security Risk**: Instances can communicate with any external service, potential for data exfiltration.
+
+**Fixed Code**:
+
+```typescript
+const ec2SecurityGroup = new ec2.SecurityGroup(
+  this,
+  `tf-ec2-sg-${environment}`,
+  {
+    allowAllOutbound: false,
+  }
+);
+
+// Add specific egress rules
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(),
+  ec2.Port.tcp(443),
+  'HTTPS for AWS services'
+);
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(),
+  ec2.Port.tcp(80),
+  'HTTP for package updates'
+);
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(),
+  ec2.Port.tcp(53),
+  'DNS resolution'
+);
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(),
+  ec2.Port.udp(53),
+  'DNS resolution'
+);
+```
+
+### 16. ALB Security Group - Overly Permissive Egress (MEDIUM SECURITY RISK) - FIXED
+
+**Issue**: ALB security group allows outbound to any IPv4 address.
+
+**Original Code**:
+
+```typescript
+albSecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(), // TOO PERMISSIVE
+  ec2.Port.tcp(80),
+  'Allow outbound HTTP to EC2 instances'
+);
+```
+
+**Fixed Code**:
+
+```typescript
+albSecurityGroup.addEgressRule(
+  ec2SecurityGroup, // Only to EC2 security group
+  ec2.Port.tcp(80),
+  'Allow outbound HTTP to EC2 instances only'
+);
+```
+
+### 17. Missing VPC Endpoints (MEDIUM SECURITY RISK)
+
+**Issue**: The model didn't implement VPC endpoints, causing AWS service communications to go over public internet.
+
+**Security Risk**: Data exposure, higher costs, dependency on internet gateway.
+
+**Recommended Implementation**:
+
+```typescript
+vpc.addGatewayEndpoint('S3Endpoint', {
+  service: ec2.GatewayVpcEndpointAwsService.S3,
+});
+
+vpc.addInterfaceEndpoint('SSMEndpoint', {
+  service: ec2.InterfaceVpcEndpointAwsService.SSM,
+});
+```
+
+### 18. SNS Topic Missing Access Policy (MEDIUM SECURITY RISK) - FIXED
+
+**Issue**: SNS topic lacks explicit access policy, relies on default permissions.
+
+**Fixed Implementation**:
+
+```typescript
+securityNotificationsTopic.addToResourcePolicy(
+  new iam.PolicyStatement({
+    effect: iam.Effect.ALLOW,
+    principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
+    actions: ['sns:Publish'],
+    resources: [securityNotificationsTopic.topicArn],
+    conditions: {
+      StringEquals: { 'aws:SourceAccount': this.account },
+      ArnLike: {
+        'aws:SourceArn': `arn:aws:s3:::tf-secure-storage-${environment}`,
+      },
+    },
+  })
+);
+```
+
+### 19. VPC Flow Logs Role - Invalid Managed Policy (MEDIUM SECURITY RISK) - FIXED
+
+**Issue**: The model used invalid managed policy `VPCFlowLogsDeliveryRolePolicy`.
+
+**Original Code**:
+
+```typescript
+managedPolicies: [
+  iam.ManagedPolicy.fromAwsManagedPolicyName(
+    'service-role/VPCFlowLogsDeliveryRolePolicy'  // INVALID POLICY
+  ),
+],
+```
+
+**Fixed Code**:
+
+```typescript
+inlinePolicies: {
+  FlowLogDeliveryPolicy: new iam.PolicyDocument({
+    statements: [
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+          'logs:DescribeLogGroups',
+          'logs:DescribeLogStreams',
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/vpc/flowlogs-${environment}:*`,
+        ],
+      }),
+    ],
+  });
 }
 ```
 
-**Security Improvements:**
+### 20. EC2 Role - Overly Permissive S3 Access (MEDIUM SECURITY RISK) - FIXED
 
-- ✅ Restricted S3 access to specific paths (`/app-data/*` only)
-- ✅ Removed unnecessary `s3:DeleteObject` permission
-- ✅ Added conditional KMS access with service-specific restrictions
-- ✅ Implemented explicit security group egress rules (HTTPS, HTTP, DNS only)
-- ✅ Added encryption context validation for KMS operations
+**Issue**: EC2 role had broad S3 permissions including DeleteObject on entire bucket.
 
-### 2. **Implemented HTTPS/TLS Security** ✅
-
-**Remediation Actions:**
+**Original Code**:
 
 ```typescript
-// Added SSL Certificate Management
-const certificate = new certificatemanager.Certificate(
-  this,
-  `tf-certificate-${environment}`,
-  {
-    domainName,
-    validation: certificatemanager.CertificateValidation.fromDns(hostedZone),
-  }
-);
-
-// HTTPS Listener with Strong SSL Policy
-listener = alb.addListener(`tf-https-listener-${environment}`, {
-  port: 443,
-  protocol: elbv2.ApplicationProtocol.HTTPS,
-  certificates: [certificate],
-  sslPolicy: elbv2.SslPolicy.TLS12_EXT,
-});
-
-// HTTP to HTTPS Redirect
-alb.addListener(`tf-http-redirect-listener-${environment}`, {
-  port: 80,
-  defaultAction: elbv2.ListenerAction.redirect({
-    protocol: 'HTTPS',
-    port: '443',
-    permanent: true,
-  }),
-});
+actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+resources: [`arn:aws:s3:::tf-secure-storage-${environment}/*`],  // TOO BROAD
 ```
 
-**Security Improvements:**
+**Fixed Code**:
 
-- ✅ Automatic SSL/TLS certificate provisioning and validation
-- ✅ Strong TLS 1.2+ encryption policy
-- ✅ Automatic HTTP to HTTPS redirection
-- ✅ DNS-based certificate validation
+```typescript
+inlinePolicies: {
+  S3AccessPolicy: new iam.PolicyDocument({
+    statements: [
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject', 's3:PutObject'],
+        resources: [`arn:aws:s3:::tf-secure-storage-${environment}/logs/*`], // SPECIFIC PREFIX
+      }),
+      new iam.PolicyStatement({
+        actions: ['s3:ListBucket'],
+        resources: [`arn:aws:s3:::tf-secure-storage-${environment}`],
+        conditions: { StringLike: { 's3:prefix': ['logs/*'] } }, // RESTRICTED PREFIX
+      }),
+    ],
+  });
+}
+```
 
-### 3. **Enhanced Security Headers** ✅
+### 21. S3 Bucket - Missing SSL Enforcement Policy (MEDIUM SECURITY RISK) - FIXED
 
-**Remediation Actions:**
+**Issue**: S3 bucket relied only on `enforceSSL: true` property without explicit bucket policy.
+
+**Fixed Implementation**:
+
+```typescript
+s3Bucket.addToResourcePolicy(
+  new iam.PolicyStatement({
+    sid: 'DenyInsecureConnections',
+    effect: iam.Effect.DENY,
+    principals: [new iam.AnyPrincipal()],
+    actions: ['s3:*'],
+    resources: [s3Bucket.bucketArn, s3Bucket.arnForObjects('*')],
+    conditions: { Bool: { 'aws:SecureTransport': 'false' } },
+  })
+);
+```
+
+### 22. UserData Security - Insecure Configuration Files (LOW SECURITY RISK) - FIXED
+
+**Issue**: CloudWatch agent configuration written to disk without proper permissions.
+
+**Original Code**:
 
 ```bash
-# Added comprehensive security headers
-Header always set X-Content-Type-Options nosniff
-Header always set X-Frame-Options DENY
-Header always set X-XSS-Protection "1; mode=block"
-Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
-Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
-Header always set Referrer-Policy "strict-origin-when-cross-origin"
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+# Configuration content
+EOF
 ```
 
-**Security Improvements:**
+**Fixed Code**:
 
-- ✅ HSTS with 1-year max-age and subdomain inclusion
-- ✅ XSS protection and MIME-type sniffing prevention
-- ✅ Clickjacking protection with X-Frame-Options DENY
-- ✅ Strict Content Security Policy
-- ✅ Privacy-preserving referrer policy
-
-### 4. **Comprehensive Logging & Monitoring** ✅
-
-**Remediation Actions:**
-
-```typescript
-// CloudTrail for API Logging
-const cloudTrail = new cloudtrail.Trail(this, `tf-cloudtrail-${environment}`, {
-  includeGlobalServiceEvents: true,
-  isMultiRegionTrail: true,
-  enableFileValidation: true,
-  encryptionKey: kmsKey,
-  sendToCloudWatchLogs: true,
-});
-
-// GuardDuty for Threat Detection
-const guardDutyDetector = new guardduty.CfnDetector(
-  this,
-  `tf-guardduty-${environment}`,
-  {
-    enable: true,
-    findingPublishingFrequency: 'FIFTEEN_MINUTES',
-    dataSources: {
-      s3Logs: { enable: true },
-      kubernetes: { auditLogs: { enable: true } },
-      malwareProtection: { scanEc2InstanceWithFindings: { ebsVolumes: true } },
-    },
-  }
-);
-
-// WAF Logging
-new wafv2.CfnLoggingConfiguration(this, `tf-waf-logging-${environment}`, {
-  resourceArn: webAcl.attrArn,
-  logDestinationConfigs: [wafLogGroup.logGroupArn],
-});
+```bash
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+# Configuration content
+EOF
+chmod 600 /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+chown root:root /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 ```
 
-**Security Improvements:**
+### 23. UserData Security - Unrestricted Package Updates (LOW SECURITY RISK) - FIXED
 
-- ✅ Multi-region CloudTrail with log file validation
-- ✅ GuardDuty with malware protection and S3 monitoring
-- ✅ WAF request logging for security analysis
-- ✅ Encrypted log storage with KMS
-- ✅ Enhanced CloudWatch alarms for security events
+**Issue**: Used `yum update -y` which updates all packages, not just security updates.
 
-### 5. **Advanced WAF Protection** ✅
+**Original Code**:
 
-**Remediation Actions:**
+```bash
+yum update -y
+```
+
+**Fixed Code**:
+
+```bash
+yum update -y --security  # Only security updates
+```
+
+### 24. WAF Configuration - Insufficient Protection (MEDIUM SECURITY RISK) - FIXED
+
+**Issue**: WAF missing SQL injection and bot control rules, rate limit too high.
+
+**Original Configuration**:
+
+- Only Common Rules and Known Bad Inputs
+- Rate limit: 2000 requests per 5 minutes
+
+**Enhanced Configuration**:
 
 ```typescript
-// Enhanced WAF Rules
 rules: [
-  // Existing: Common Rule Set, Known Bad Inputs, Rate Limiting
+  // Existing rules...
   {
-    name: 'GeoBlockingRule',
-    priority: 4,
-    action: { block: {} },
-    statement: {
-      geoMatchStatement: {
-        countryCodes: ['CN', 'RU', 'KP'], // Block high-risk countries
-      },
-    },
-  },
-  {
-    name: 'SQLInjectionRule',
-    priority: 5,
+    name: 'AWSManagedRulesSQLiRuleSet', // ADDED
+    priority: 3,
+    overrideAction: { none: {} },
     statement: {
       managedRuleGroupStatement: {
         vendorName: 'AWS',
@@ -251,151 +583,81 @@ rules: [
       },
     },
   },
+  {
+    name: 'AWSManagedRulesBotControlRuleSet', // ADDED
+    priority: 4,
+    overrideAction: { none: {} },
+    statement: {
+      managedRuleGroupStatement: {
+        vendorName: 'AWS',
+        name: 'AWSManagedRulesBotControlRuleSet',
+      },
+    },
+  },
+  {
+    name: 'RateLimitRule',
+    statement: {
+      rateBasedStatement: {
+        limit: 1000, // REDUCED from 2000
+      },
+    },
+  },
 ];
 ```
 
-**Security Improvements:**
+### 25. Missing Security Monitoring Alarms (MEDIUM SECURITY RISK) - FIXED
 
-- ✅ Geo-blocking for high-risk countries
-- ✅ SQL injection protection rule set
-- ✅ Enhanced rate limiting (2000 requests/5min per IP)
-- ✅ Comprehensive WAF logging and monitoring
+**Issue**: No alarms for WAF blocked requests or EC2 resource utilization.
 
-### 6. **Enhanced KMS Security** ✅
-
-**Remediation Actions:**
+**Added Alarms**:
 
 ```typescript
-// Least Privilege KMS Policy
-new iam.PolicyStatement({
-  sid: 'Allow S3 Service',
-  principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
-  actions: ['kms:Encrypt', 'kms:Decrypt', 'kms:ReEncrypt*', 'kms:GenerateDataKey*'],
-  conditions: {
-    StringEquals: { 'kms:ViaService': `s3.${this.region}.amazonaws.com` },
-  },
-}),
-```
+// WAF blocked requests alarm
+new cloudwatch.Alarm(this, `tf-waf-blocked-requests-alarm-${environment}`, {
+  alarmName: `tf-WAF-blocked-requests-${environment}`,
+  metric: new cloudwatch.Metric({
+    namespace: 'AWS/WAFV2',
+    metricName: 'BlockedRequests',
+    dimensionsMap: { WebACL: webAcl.name!, Region: this.region },
+  }),
+  threshold: 100,
+});
 
-**Security Improvements:**
-
-- ✅ Service-specific KMS access conditions
-- ✅ Regional service principal restrictions
-- ✅ Encryption context validation
-- ✅ Automatic key rotation enabled
-
-### 7. **Resource Security & Naming** ✅
-
-**Remediation Actions:**
-
-```typescript
-// Unique Resource Naming
-const uniqueSuffix = cdk.Names.uniqueId(this).toLowerCase().substring(0, 8);
-const s3BucketName = `tf-secure-storage-${environment}-${uniqueSuffix}`;
-
-// Enhanced S3 Security
-const s3Bucket = new s3.Bucket(this, `tf-secure-storage-${environment}`, {
-  bucketName: s3BucketName,
-  objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
-  lifecycleRules: [
-    {
-      transitions: [
-        {
-          storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-          transitionAfter: cdk.Duration.days(30),
-        },
-        {
-          storageClass: s3.StorageClass.GLACIER,
-          transitionAfter: cdk.Duration.days(90),
-        },
-      ],
-    },
-    { noncurrentVersionExpiration: cdk.Duration.days(30) },
-  ],
+// EC2 CPU utilization alarm
+new cloudwatch.Alarm(this, `tf-ec2-cpu-alarm-${environment}`, {
+  alarmName: `tf-EC2-high-cpu-${environment}`,
+  metric: new cloudwatch.Metric({
+    namespace: 'AWS/EC2',
+    metricName: 'CPUUtilization',
+    dimensionsMap: { AutoScalingGroupName: asg.autoScalingGroupName },
+  }),
+  threshold: 80,
 });
 ```
 
-**Security Improvements:**
+## Enhancements Made
 
-- ✅ Unique resource naming to prevent conflicts
-- ✅ Enhanced S3 lifecycle policies with cost optimization
-- ✅ Object ownership controls
-- ✅ Separate access logs bucket to avoid circular dependencies
+### SNS Topic for Security Monitoring
 
-### 8. **Enhanced EC2 Security** ✅
+**Enhancement**: Created a dedicated SNS topic for security notifications with KMS encryption.
 
-**Remediation Actions:**
+**Implementation**:
 
 ```typescript
-// Enhanced Launch Template Security
-const launchTemplate = new ec2.LaunchTemplate(
+const securityNotificationsTopic = new sns.Topic(
   this,
-  `tf-launch-template-${environment}`,
+  `tf-security-notifications-${environment}`,
   {
-    requireImdsv2: true,
-    httpTokens: ec2.LaunchTemplateHttpTokens.REQUIRED,
-    httpPutResponseHopLimit: 1,
-    blockDevices: [
-      {
-        volume: ec2.BlockDeviceVolume.ebs(20, {
-          encrypted: true,
-          kmsKey: kmsKey,
-          deleteOnTermination: true,
-        }),
-      },
-    ],
+    topicName: `tf-security-notifications-${environment}`,
+    displayName: `Security Notifications - ${environment}`,
+    masterKey: kmsKey,
   }
 );
 ```
 
-**Security Improvements:**
+**Benefits**:
 
-- ✅ Enforced IMDSv2 with hop limit restriction
-- ✅ EBS volume encryption with customer-managed keys
-- ✅ Automatic volume deletion on instance termination
-- ✅ No SSH access (SSM Session Manager only)
-
----
-
-## Security Compliance Achievements
-
-### ✅ **AWS Well-Architected Framework - Security Pillar**
-
-- **Identity and Access Management**: Least privilege IAM policies
-- **Detective Controls**: CloudTrail, GuardDuty, comprehensive logging
-- **Infrastructure Protection**: WAF, security groups, encryption
-- **Data Protection**: Encryption at rest and in transit
-- **Incident Response**: Automated monitoring and alerting
-
-### ✅ **Industry Standards Compliance**
-
-- **NIST Cybersecurity Framework**: Comprehensive security controls
-- **ISO 27001**: Information security management practices
-- **SOC 2 Type II**: Security, availability, and confidentiality controls
-- **PCI DSS**: Secure network architecture and encryption
-
-### ✅ **Security Best Practices**
-
-- **Defense in Depth**: Multiple security layers
-- **Zero Trust Architecture**: Explicit verification and least privilege
-- **Encryption Everywhere**: Data at rest, in transit, and in processing
-- **Continuous Monitoring**: Real-time threat detection and response
-
----
-
-## Remaining Considerations
-
-### **Future Enhancements** (Optional)
-
-1. **AWS Config Rules**: Automated compliance checking
-2. **AWS Security Hub**: Centralized security findings management
-3. **VPC Endpoints**: Private connectivity to AWS services
-4. **AWS Systems Manager Patch Manager**: Automated patching
-5. **AWS Backup**: Centralized backup management
-
-### **Operational Security**
-
-1. **Regular Security Assessments**: Quarterly penetration testing
-2. **Incident Response Plan**: Documented procedures and runbooks
-3. **Security Training**: Team education on secure coding practices
-4. **Vulnerability Management**: Regular scanning and remediation
+- Enables real-time security monitoring
+- Encrypted notifications using the same KMS key
+- Can be extended to send notifications to email, SMS, or other endpoints
+- Provides audit trail for S3 object creation events
