@@ -661,4 +661,37 @@ const securityNotificationsTopic = new sns.Topic(
 - Encrypted notifications using the same KMS key
 - Can be extended to send notifications to email, SMS, or other endpoints
 - Provides audit trail for S3 object creation events
+
+### 27. S3 Bucket Naming Conflict - FIXED
+**Issue**: ALB access logs bucket name conflicts with existing bucket in AWS account.
+
+**Error Observed**:
+```
+The bucket tf-alb-access-logs-pr806 already exists
+```
+
+**Root Cause**: Hard-coded bucket names can conflict with existing buckets in the same region.
+
+**Original Code**:
+```typescript
+const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
+  bucketName: `tf-alb-access-logs-${environment}`,  // Hard-coded name causes conflict
+  // ...
+});
+```
+
+**Fixed Code**:
+```typescript
+const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
+  // Remove explicit bucketName to let CDK auto-generate unique name
+  encryption: s3.BucketEncryption.S3_MANAGED,
+  // ...
+});
+```
+
+**Benefits**: 
+- Eliminates bucket naming conflicts
+- CDK generates unique bucket names automatically
+- Maintains all original functionality
+- Bucket can still be referenced programmatically via `albLogsBucket.bucketName`
 - Reduces required IAM permissions for deployment

@@ -502,9 +502,9 @@ export class SecureWebAppStack extends cdk.Stack {
       }
     );
 
-    // ALB Access Logs
+    // ALB Access Logs - using auto-generated name to avoid conflicts
     const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
-      bucketName: `tf-alb-access-logs-${environment}`,
+      // Remove explicit bucketName to let CDK auto-generate unique name
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       lifecycleRules: [
