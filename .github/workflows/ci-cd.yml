@@ -209,6 +209,9 @@ jobs:
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - name: Deploy
         run: |
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
