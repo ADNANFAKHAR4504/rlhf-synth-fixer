@@ -37,43 +37,8 @@ export class SecureWebAppStack extends cdk.Stack {
             sid: 'Enable IAM User Permissions',
             effect: iam.Effect.ALLOW,
             principals: [new iam.AccountRootPrincipal()],
-            actions: [
-              'kms:DescribeKey',
-              'kms:GetKeyPolicy',
-              'kms:PutKeyPolicy',
-              'kms:CreateGrant',
-              'kms:RevokeGrant',
-              'kms:EnableKeyRotation',
-              'kms:DisableKeyRotation',
-              'kms:GetKeyRotationStatus',
-              'kms:ScheduleKeyDeletion',
-              'kms:CancelKeyDeletion',
-            ],
+            actions: ['kms:*'],
             resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow EC2 EBS encryption',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ArnPrincipal(
-                `arn:aws:iam::${this.account}:role/tf-ec2-instance-role-${environment}`
-              ),
-            ],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-              'kms:CreateGrant',
-              'kms:ListGrants',
-              'kms:RevokeGrant',
-            ],
-            resources: ['*'],
-            conditions: {
-              StringEquals: {
-                'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
-              },
-            },
           }),
           new iam.PolicyStatement({
             sid: 'Allow EC2 Service',
@@ -412,6 +377,9 @@ export class SecureWebAppStack extends cdk.Stack {
         }),
       },
     });
+
+    // Grant KMS permissions to EC2 role for EBS encryption
+    kmsKey.grantEncryptDecrypt(ec2Role);
 
     // 5. S3 Bucket with enhanced security configurations
     const s3Bucket = new s3.Bucket(this, `tf-secure-storage-${environment}`, {
