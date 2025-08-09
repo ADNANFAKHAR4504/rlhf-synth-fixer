@@ -1,5 +1,201 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`Additional Unit Tests for Enhanced Coverage ComputeStack should handle edge case with single subnet 1`] = `
+"{
+  "data": {
+    "aws_ami": {
+      "TestSingleSubnet_LatestAmi_C71E02F7": {
+        "filter": [
+          {
+            "name": "name",
+            "values": [
+              "amzn2-ami-hvm-*-x86_64-gp2"
+            ]
+          },
+          {
+            "name": "virtualization-type",
+            "values": [
+              "hvm"
+            ]
+          }
+        ],
+        "most_recent": true,
+        "owners": [
+          "amazon"
+        ]
+      }
+    }
+  },
+  "output": {
+    "TestSingleSubnet_instance_ids_FB098F0F": {
+      "value": [
+        "\${aws_instance.TestSingleSubnet_ec2-instance-1_CAF9CF8F.id}",
+        "\${aws_instance.TestSingleSubnet_ec2-instance-2_191D039E.id}",
+        "\${aws_instance.TestSingleSubnet_ec2-instance-3_82099D54.id}"
+      ]
+    },
+    "TestSingleSubnet_private_ips_8748C067": {
+      "value": [
+        "\${aws_instance.TestSingleSubnet_ec2-instance-1_CAF9CF8F.private_ip}",
+        "\${aws_instance.TestSingleSubnet_ec2-instance-2_191D039E.private_ip}",
+        "\${aws_instance.TestSingleSubnet_ec2-instance-3_82099D54.private_ip}"
+      ]
+    },
+    "TestSingleSubnet_public_ips_849234D8": {
+      "value": [
+        "\${aws_instance.TestSingleSubnet_ec2-instance-1_CAF9CF8F.public_ip}",
+        "\${aws_instance.TestSingleSubnet_ec2-instance-2_191D039E.public_ip}",
+        "\${aws_instance.TestSingleSubnet_ec2-instance-3_82099D54.public_ip}"
+      ]
+    }
+  },
+  "resource": {
+    "aws_instance": {
+      "TestSingleSubnet_ec2-instance-1_CAF9CF8F": {
+        "ami": "ami-single-test",
+        "instance_type": "t3.nano",
+        "lifecycle": {
+          "create_before_destroy": true
+        },
+        "monitoring": false,
+        "root_block_device": {
+          "encrypted": true,
+          "volume_size": 20,
+          "volume_type": "gp3"
+        },
+        "subnet_id": "subnet-single",
+        "tags": {
+          "Environment": "dev",
+          "ManagedBy": "Terraform",
+          "Name": "myproject-dev-instance-1",
+          "Project": "myproject"
+        },
+        "user_data": "#!/bin/bash\\necho \\"Hello from instance!\\" > /var/www/html/index.html\\n",
+        "vpc_security_group_ids": [
+          "sg-single"
+        ]
+      },
+      "TestSingleSubnet_ec2-instance-2_191D039E": {
+        "ami": "ami-single-test",
+        "instance_type": "t3.nano",
+        "lifecycle": {
+          "create_before_destroy": true
+        },
+        "monitoring": false,
+        "root_block_device": {
+          "encrypted": true,
+          "volume_size": 20,
+          "volume_type": "gp3"
+        },
+        "subnet_id": "subnet-single",
+        "tags": {
+          "Environment": "dev",
+          "ManagedBy": "Terraform",
+          "Name": "myproject-dev-instance-2",
+          "Project": "myproject"
+        },
+        "user_data": "#!/bin/bash\\necho \\"Hello from instance!\\" > /var/www/html/index.html\\n",
+        "vpc_security_group_ids": [
+          "sg-single"
+        ]
+      },
+      "TestSingleSubnet_ec2-instance-3_82099D54": {
+        "ami": "ami-single-test",
+        "instance_type": "t3.nano",
+        "lifecycle": {
+          "create_before_destroy": true
+        },
+        "monitoring": false,
+        "root_block_device": {
+          "encrypted": true,
+          "volume_size": 20,
+          "volume_type": "gp3"
+        },
+        "subnet_id": "subnet-single",
+        "tags": {
+          "Environment": "dev",
+          "ManagedBy": "Terraform",
+          "Name": "myproject-dev-instance-3",
+          "Project": "myproject"
+        },
+        "user_data": "#!/bin/bash\\necho \\"Hello from instance!\\" > /var/www/html/index.html\\n",
+        "vpc_security_group_ids": [
+          "sg-single"
+        ]
+      }
+    }
+  }
+}"
+`;
+
+exports[`Additional Unit Tests for Enhanced Coverage DatabaseStack should handle password from environment variable 1`] = `
+"{
+  "output": {
+    "TestDatabaseEnv_db_instance_endpoint_2B135E91": {
+      "value": "\${aws_db_instance.TestDatabaseEnv_RdsInstance_EF647F58.endpoint}"
+    },
+    "TestDatabaseEnv_db_instance_id_194FD5E9": {
+      "value": "\${aws_db_instance.TestDatabaseEnv_RdsInstance_EF647F58.id}"
+    },
+    "TestDatabaseEnv_db_instance_port_5594C7D4": {
+      "value": "\${aws_db_instance.TestDatabaseEnv_RdsInstance_EF647F58.port}"
+    },
+    "TestDatabaseEnv_db_subnet_group_id_D9BFB76D": {
+      "value": "\${aws_db_subnet_group.TestDatabaseEnv_DbSubnetGroup_60DF1A99.id}"
+    }
+  },
+  "resource": {
+    "aws_db_instance": {
+      "TestDatabaseEnv_RdsInstance_EF647F58": {
+        "allocated_storage": 20,
+        "backup_retention_period": 7,
+        "backup_window": "03:00-04:00",
+        "db_name": "testdb",
+        "db_subnet_group_name": "\${aws_db_subnet_group.TestDatabaseEnv_DbSubnetGroup_60DF1A99.name}",
+        "engine": "mysql",
+        "engine_version": "8.0",
+        "final_snapshot_identifier": "myproject-dev-final-snapshot",
+        "identifier": "myproject-dev-db",
+        "instance_class": "db.t3.micro",
+        "maintenance_window": "sun:04:00-sun:05:00",
+        "max_allocated_storage": 100,
+        "multi_az": false,
+        "password": "env-password-123!",
+        "publicly_accessible": false,
+        "skip_final_snapshot": false,
+        "storage_encrypted": true,
+        "storage_type": "gp3",
+        "tags": {
+          "Environment": "dev",
+          "ManagedBy": "Terraform",
+          "Name": "myproject-dev-db",
+          "Project": "myproject"
+        },
+        "username": "admin",
+        "vpc_security_group_ids": [
+          "sg-test1"
+        ]
+      }
+    },
+    "aws_db_subnet_group": {
+      "TestDatabaseEnv_DbSubnetGroup_60DF1A99": {
+        "name": "myproject-dev-db-subnet-group",
+        "subnet_ids": [
+          "subnet-test1",
+          "subnet-test2"
+        ],
+        "tags": {
+          "Environment": "dev",
+          "ManagedBy": "Terraform",
+          "Name": "myproject-dev-db-subnet-group",
+          "Project": "myproject"
+        }
+      }
+    }
+  }
+}"
+`;
+
 exports[`Unit Tests ComputeStack should create EC2 instances 1`] = `
 "{
   "data": {

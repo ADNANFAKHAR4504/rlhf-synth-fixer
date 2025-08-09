@@ -1,6 +1,6 @@
-# MODEL\_FAILURES.md
+# MODEL_FAILURES.md
 
-This document records discrepancies between **MODEL\_RESPONSE.md** and **PROMPT.md**, with concrete evidence and impact. The evaluated response is **Terraform HCL**; the prompt explicitly requires **Terraform CDK (CDKTF) in TypeScript**.
+This document records discrepancies between **MODEL_RESPONSE.md** and **PROMPT.md**, with concrete evidence and impact. The evaluated response is **Terraform HCL**; the prompt explicitly requires **Terraform CDK (CDKTF) in TypeScript**.
 
 ---
 
@@ -15,49 +15,49 @@ This document records discrepancies between **MODEL\_RESPONSE.md** and **PROMPT.
 
 ## Findings
 
-**Technology mismatch**
+### Technology Mismatch
 
 * **Violates:** “All code must be written using **Terraform CDK (TypeScript)**.”
 * **Evidence:** Response consists entirely of `*.tf` (HCL). No TypeScript, no CDKTF.
 * **Impact:** Cannot run `cdktf synth`/`cdktf deploy`. Fails core requirement.
 
-**Missing CDKTF application scaffolding**
+### Missing CDKTF Application Scaffolding
 
 * **Violates:** “Directory structure should include `bin/` (entrypoint), `modules/` or `lib/` (reusable stacks), `test/`,.”
 * **Evidence:** No `bin/`, no `lib/` TS constructs, no `cdktf.json`, no `package.json`, no tests.
 * **Impact:** No executable CDKTF app; cannot synthesize or test.
 
-**Secrets handling not per prompt**
+### Secrets Handling Not Per Prompt
 
 * **Violates:** “Database credentials must not be hardcoded. Use `passwordSecretArn` or `passwordEnvVarName` at synth.”
 * **Evidence:** RDS module expects a plain `password` variable; no Secrets Manager or synth-time env handling.
 * **Impact:** Security requirement unmet.
 
-**Multi-environment validation not demonstrated**
+### Multi-Environment Validation Not Demonstrated
 
 * **Violates:** “Validate that the configuration is deployable in all environments without changing logic.”
 * **Evidence:** No CDKTF workspaces or commands; no tests proving dev/staging/prod deployability.
 * **Impact:** Cannot prove environment portability.
 
-**Testing absent**
+### Testing Absent
 
 * **Violates:** “`test/` for unit and integration tests.”
 * **Evidence:** No test framework or tests.
 * **Impact:** No automated verification of DRY constraints or cross-stack wiring.
 
-**Version pinning incomplete for CDKTF toolchain**
+### Version Pinning Incomplete for CDKTF Toolchain
 
 * **Violates:** “Provider and module version pinning.”
 * **Evidence:** AWS provider is pinned in HCL, but no CDKTF/TypeScript dependency pins (no `package.json`).
 * **Impact:** Non-deterministic builds even if later ported.
 
-**Backend/state isolation shown in HCL, not in CDKTF**
+### Backend/State Isolation Shown in HCL, Not in CDKTF
 
 * **Violates:** “Configure a remote S3 + DynamoDB backend for state isolation” (within the CDKTF solution).
 * **Evidence:** HCL `backend "s3"` blocks exist; CDKTF-native backend/workspace config absent.
 * **Impact:** Doesn’t satisfy state isolation requirement for a CDKTF app.
 
-**Separation of concerns only partial in naming**
+### Separation of Concerns Only Partial in Naming
 
 * **Violates:** “Use environment suffixes and workspace-specific variables/overrides.”
 * **Evidence:** Naming uses `${environment}`; CDKTF workspace/override mechanics not present.
