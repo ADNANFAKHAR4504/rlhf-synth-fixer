@@ -65,9 +65,9 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       ipv6_cidr_block=pulumi.Output.all(
         vpc.ipv6_cidr_block, random_offset.result
       ).apply(
-          lambda args: str(list(
+          lambda args, index=i: str(list(
             ipaddress.IPv6Network(args[0]).subnets(new_prefix=64)
-          )[args[1] + i])
+          )[args[1] + index])
       ),
       assign_ipv6_address_on_creation=True,
       map_public_ip_on_launch=True,
@@ -109,9 +109,9 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       ipv6_cidr_block=pulumi.Output.all(
         vpc.ipv6_cidr_block, random_offset.result
       ).apply(
-          lambda args: str(list(
+          lambda args, index=i: str(list(
             ipaddress.IPv6Network(args[0]).subnets(new_prefix=64)
-          )[args[1] + 100 + i])
+          )[args[1] + 100 + index])
       ),
       assign_ipv6_address_on_creation=True,
       tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}
@@ -177,26 +177,13 @@ def create_security_groups(
 
 
 def create_iam_role() -> aws.iam.InstanceProfile:
-  trust_policy = json.dumps({
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": {"Service": "ec2.amazonaws.com"},
-      "Action": "sts:AssumeRole"
-    }]
-  })
-  ec2_role = aws.iam.Role(
-    f"{project_name}-ec2-role",
-    assume_role_policy=trust_policy,
-    tags=common_tags
-  )
+  trust_policy = json.dumps({"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}]})
+  ec2_role = aws.iam.Role(f"{project_name}-ec2-role", assume_role_policy=trust_policy, tags=common_tags)
   aws.iam.RolePolicyAttachment(
     f"{project_name}-ssm-policy", role=ec2_role.name,
     policy_arn="arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   )
-  return aws.iam.InstanceProfile(
-    f"{project_name}-ec2-profile", role=ec2_role.name, tags=common_tags
-  )
+  return aws.iam.InstanceProfile(f"{project_name}-ec2-profile", role=ec2_role.name, tags=common_tags)
 
 
 def create_compute_layer(
@@ -205,10 +192,7 @@ def create_compute_layer(
     instance_profile: aws.iam.InstanceProfile,
     target_group: aws.lb.TargetGroup
 ) -> aws.autoscaling.Group:
-  ami = aws.ec2.get_ami(
-    most_recent=True, owners=["amazon"],
-    filters=[{"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}]
-  )
+  ami = aws.ec2.get_ami(most_recent=True, owners=["amazon"], filters=[{"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}])
   user_data = """#!/bin/bash
 yum update -y
 yum install -y nginx
@@ -216,14 +200,10 @@ systemctl start nginx
 systemctl enable nginx
 echo "<h1>Hello from $(hostname -f) in a private subnet!</h1>" > /var/www/html/index.html
 """
-  encoded_user_data = base64.b64encode(
-    user_data.encode("ascii")).decode("ascii")
-
+  encoded_user_data = base64.b64encode(user_data.encode("ascii")).decode("ascii")
   launch_template = aws.ec2.LaunchTemplate(
     f"{project_name}-lt", image_id=ami.id, instance_type="t3.micro",
-    iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-      arn=instance_profile.arn
-    ),
+    iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(arn=instance_profile.arn),
     user_data=encoded_user_data,
     network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfaceArgs(
       security_groups=[ec2_sg.id],
@@ -236,15 +216,9 @@ echo "<h1>Hello from $(hostname -f) in a private subnet!</h1>" > /var/www/html/i
     f"{project_name}-asg",
     vpc_zone_identifiers=[subnet.id for subnet in private_subnets],
     desired_capacity=2, min_size=2, max_size=3,
-    launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
-      id=launch_template.id, version="$Latest"
-    ),
+    launch_template=aws.autoscaling.GroupLaunchTemplateArgs(id=launch_template.id, version="$Latest"),
     target_group_arns=[target_group.arn],
-    tags=[
-      aws.autoscaling.GroupTagArgs(
-        key=k, value=v, propagate_at_launch=True
-      ) for k, v in common_tags.items()
-    ]
+    tags=[aws.autoscaling.GroupTagArgs(key=k, value=v, propagate_at_launch=True) for k, v in common_tags.items()]
   )
   return asg
 
@@ -255,10 +229,8 @@ def create_load_balancer(
     alb_sg: aws.ec2.SecurityGroup
 ) -> Dict[str, Any]:
   alb = aws.lb.LoadBalancer(
-    f"{project_name}-alb", internal=False,
-    load_balancer_type="application",
-    ip_address_type="dualstack",
-    security_groups=[alb_sg.id],
+    f"{project_name}-alb", internal=False, load_balancer_type="application",
+    ip_address_type="dualstack", security_groups=[alb_sg.id],
     subnets=[subnet.id for subnet in public_subnets],
     tags={**common_tags, "Name": f"{project_name}-alb"}
   )
@@ -272,11 +244,8 @@ def create_load_balancer(
     tags={**common_tags, "Name": f"{project_name}-tg"}
   )
   listener = aws.lb.Listener(
-    f"{project_name}-listener", load_balancer_arn=alb.arn,
-    port=80, protocol="HTTP",
-    default_actions=[aws.lb.ListenerDefaultActionArgs(
-      type="forward", target_group_arn=target_group.arn
-    )]
+    f"{project_name}-listener", load_balancer_arn=alb.arn, port=80, protocol="HTTP",
+    default_actions=[aws.lb.ListenerDefaultActionArgs(type="forward", target_group_arn=target_group.arn)]
   )
   return {"alb": alb, "target_group": target_group}
 
@@ -289,16 +258,12 @@ def create_route53_records(alb: aws.lb.LoadBalancer):
   aws.route53.Record(
     f"{project_name}-a-record",
     zone_id=zone.zone_id, name=domain_name, type="A",
-    aliases=[aws.route53.RecordAliasArgs(
-      name=alb.dns_name, zone_id=alb.zone_id, evaluate_target_health=True
-    )]
+    aliases=[aws.route53.RecordAliasArgs(name=alb.dns_name, zone_id=alb.zone_id, evaluate_target_health=True)]
   )
   aws.route53.Record(
     f"{project_name}-aaaa-record",
     zone_id=zone.zone_id, name=domain_name, type="AAAA",
-    aliases=[aws.route53.RecordAliasArgs(
-      name=alb.dns_name, zone_id=alb.zone_id, evaluate_target_health=True
-    )]
+    aliases=[aws.route53.RecordAliasArgs(name=alb.dns_name, zone_id=alb.zone_id, evaluate_target_health=True)]
   )
 
 
