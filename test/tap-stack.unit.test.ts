@@ -35,12 +35,15 @@ describe("TapStack (unit)", () => {
     delete process.env.AWS_REGION;
     delete process.env.ENVIRONMENT;
     delete process.env.ENVIRONMENT_SUFFIX;
+    delete process.env.ALLOWED_SSH_CIDRS; // <-- ensure we don't leak this across tests
   });
 
   it("synthesizes and contains core resources (dev path)", () => {
     process.env.AWS_REGION = "us-west-2";
     process.env.ENVIRONMENT = "dev";
     process.env.ENVIRONMENT_SUFFIX = "devtest";
+    // optional: set a safe CIDR to keep behavior consistent
+    process.env.ALLOWED_SSH_CIDRS = "203.0.113.0/24";
 
     const app = new App();
     const stack = new TapStack(app, "TestStackDev");
@@ -73,6 +76,9 @@ describe("TapStack (unit)", () => {
     process.env.AWS_REGION = "us-west-2";
     process.env.ENVIRONMENT = "production";
     process.env.ENVIRONMENT_SUFFIX = "prodtest";
+
+    // ✅ REQUIRED by TapStack for production: provide restrictive SSH CIDR(s)
+    process.env.ALLOWED_SSH_CIDRS = "203.0.113.0/24";
 
     const app = new App();
     const stack = new TapStack(app, "TestStackProd");
@@ -125,6 +131,7 @@ describe("TapStack (unit)", () => {
     process.env.AWS_REGION = "us-east-1";
     process.env.ENVIRONMENT = "staging"; // exercise non-dev/non-production branch
     process.env.ENVIRONMENT_SUFFIX = "stagetest";
+    process.env.ALLOWED_SSH_CIDRS = "203.0.113.0/24"; // keep consistent
 
     const app = new App();
     const stack = new TapStack(app, "TestStackStaging");

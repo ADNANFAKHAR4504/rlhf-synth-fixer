@@ -1,6 +1,8 @@
 import * as aws from '@cdktf/provider-aws';
 import { Construct } from 'constructs';
 
+export type NatMode = 'single' | 'per-az' | 'none';
+
 export interface VpcConstructProps {
   environment: string;
   region: string;
@@ -10,6 +12,8 @@ export interface VpcConstructProps {
   privateSubnetCidrs: string[];
   databaseSubnetCidrs: string[];
   commonTags: { [key: string]: string };
+  /** Optional override. Defaults: production=per-az, others=single */
+  natMode?: NatMode;
 }
 
 export class VpcConstruct extends Construct {
@@ -29,18 +33,12 @@ export class VpcConstruct extends Construct {
       cidrBlock: config.vpcCidr,
       enableDnsSupport: true,
       enableDnsHostnames: true,
-      tags: {
-        ...config.commonTags,
-        Name: `${config.environment}-vpc`,
-      },
+      tags: { ...config.commonTags, Name: `${config.environment}-vpc` },
     });
 
     const igw = new aws.internetGateway.InternetGateway(this, 'IGW', {
       vpcId: mainVpc.id,
-      tags: {
-        ...config.commonTags,
-        Name: `${config.environment}-igw`,
-      },
+      tags: { ...config.commonTags, Name: `${config.environment}-igw` },
     });
 
     const publicSubnets = config.publicSubnetCidrs.map(
@@ -83,31 +81,58 @@ export class VpcConstruct extends Construct {
         })
     );
 
-    const eips = privateSubnets.map(
-      (_, i) =>
-        new aws.eip.Eip(this, `NatEip${i}`, {
+    // ── NAT strategy (quota-safe) ──────────────────────────────────────────────
+    const natMode: NatMode =
+      config.natMode ??
+      (config.environment === 'production' ? 'per-az' : 'single');
+
+    const natGatewayIds: string[] = [];
+
+    if (natMode === 'single') {
+      // One EIP + One NAT in first public subnet
+      const eip = new aws.eip.Eip(this, 'NatEip0', {
+        domain: 'vpc',
+        tags: { ...config.commonTags, Name: `${config.environment}-nat-eip-1` },
+      });
+
+      const nat = new aws.natGateway.NatGateway(this, 'NatGateway0', {
+        allocationId: eip.id,
+        subnetId: publicSubnets[0].id,
+        tags: {
+          ...config.commonTags,
+          Name: `${config.environment}-nat-gateway-1`,
+        },
+      });
+
+      natGatewayIds.push(nat.id);
+    } else if (natMode === 'per-az') {
+      // One NAT per private subnet / AZ (will consume multiple EIPs)
+      privateSubnets.forEach((_, i) => {
+        const eip = new aws.eip.Eip(this, `NatEip${i}`, {
           domain: 'vpc',
           tags: {
             ...config.commonTags,
             Name: `${config.environment}-nat-eip-${i + 1}`,
           },
-        })
-    );
+        });
 
-    const natGateways = privateSubnets.map(
-      (_, i) =>
-        new aws.natGateway.NatGateway(this, `NatGateway${i}`, {
-          allocationId: eips[i].id,
+        const nat = new aws.natGateway.NatGateway(this, `NatGateway${i}`, {
+          allocationId: eip.id,
           subnetId: publicSubnets[i].id,
           tags: {
             ...config.commonTags,
             Name: `${config.environment}-nat-gateway-${i + 1}`,
           },
-        })
-    );
+        });
+
+        natGatewayIds.push(nat.id);
+      });
+    } else {
+      // natMode === 'none' → no NAT/EIP
+    }
 
     // ── Route tables ───────────────────────────────────────────────────────────
-    // Public: single RT with default route to IGW, associate to all public subnets
+    // Public RT -> IGW
     const publicRt = new aws.routeTable.RouteTable(this, 'PublicRouteTable', {
       vpcId: mainVpc.id,
       route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
@@ -118,35 +143,79 @@ export class VpcConstruct extends Construct {
       new aws.routeTableAssociation.RouteTableAssociation(
         this,
         `PublicRTA${i}`,
-        {
-          routeTableId: publicRt.id,
-          subnetId: sub.id,
-        }
+        { routeTableId: publicRt.id, subnetId: sub.id }
       );
     });
 
-    // Private: one RT per private subnet -> route to matching NAT GW
-    privateSubnets.forEach((sub, i) => {
-      const rt = new aws.routeTable.RouteTable(this, `PrivateRouteTable${i}`, {
+    // Private RTs:
+    if (natMode === 'per-az') {
+      // One RT per private subnet to its NAT
+      privateSubnets.forEach((sub, i) => {
+        const rt = new aws.routeTable.RouteTable(
+          this,
+          `PrivateRouteTable${i}`,
+          {
+            vpcId: mainVpc.id,
+            route: [
+              { cidrBlock: '0.0.0.0/0', natGatewayId: natGatewayIds[i] ?? '' },
+            ],
+            tags: {
+              ...config.commonTags,
+              Name: `${config.environment}-private-rt-${i + 1}`,
+            },
+          }
+        );
+
+        new aws.routeTableAssociation.RouteTableAssociation(
+          this,
+          `PrivateRTA${i}`,
+          { routeTableId: rt.id, subnetId: sub.id }
+        );
+      });
+    } else if (natMode === 'single') {
+      // One RT targeting the single NAT, associate to all private subnets
+      const rt = new aws.routeTable.RouteTable(this, 'PrivateRouteTable', {
         vpcId: mainVpc.id,
-        route: [{ cidrBlock: '0.0.0.0/0', natGatewayId: natGateways[i].id }],
+        route:
+          natGatewayIds.length > 0
+            ? [{ cidrBlock: '0.0.0.0/0', natGatewayId: natGatewayIds[0] }]
+            : [],
         tags: {
           ...config.commonTags,
-          Name: `${config.environment}-private-rt-${i + 1}`,
+          Name: `${config.environment}-private-rt`,
         },
       });
 
-      new aws.routeTableAssociation.RouteTableAssociation(
-        this,
-        `PrivateRTA${i}`,
-        {
-          routeTableId: rt.id,
-          subnetId: sub.id,
-        }
-      );
-    });
+      privateSubnets.forEach((sub, i) => {
+        new aws.routeTableAssociation.RouteTableAssociation(
+          this,
+          `PrivateRTA${i}`,
+          { routeTableId: rt.id, subnetId: sub.id }
+        );
+      });
+    } else {
+      // natMode === 'none': create plain private RTs without 0.0.0.0/0
+      privateSubnets.forEach((sub, i) => {
+        const rt = new aws.routeTable.RouteTable(
+          this,
+          `PrivateRouteTable${i}`,
+          {
+            vpcId: mainVpc.id,
+            tags: {
+              ...config.commonTags,
+              Name: `${config.environment}-private-rt-${i + 1}`,
+            },
+          }
+        );
+        new aws.routeTableAssociation.RouteTableAssociation(
+          this,
+          `PrivateRTA${i}`,
+          { routeTableId: rt.id, subnetId: sub.id }
+        );
+      });
+    }
 
-    // ── VPC Flow Logs to CloudWatch ────────────────────────────────────────────
+    // ── VPC Flow Logs ──────────────────────────────────────────────────────────
     const flowLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
       this,
       'VpcFlowLogsGroup',
@@ -192,25 +261,23 @@ export class VpcConstruct extends Construct {
       }),
     });
 
-    // VPC Flow Logs (most compatible args)
     new aws.flowLog.FlowLog(this, 'VpcFlowLog', {
-      // send to CloudWatch Logs by pointing at the Log Group ARN directly
       logDestination: flowLogGroup.arn,
-      iamRoleArn: flowLogsRole.arn, // role that allows delivery to CWL
+      iamRoleArn: flowLogsRole.arn,
       trafficType: 'ALL',
       vpcId: mainVpc.id,
       tags: {
         ...config.commonTags,
         Name: `${config.environment}-vpc-flow-logs`,
       },
-    } as any);
+    } as aws.flowLog.FlowLogConfig);
 
-    // Output props for wiring
+    // Outputs
     this.vpcId = mainVpc.id;
     this.publicSubnets = publicSubnets.map(s => s.id);
     this.privateSubnets = privateSubnets.map(s => s.id);
     this.databaseSubnets = databaseSubnets.map(s => s.id);
     this.internetGatewayId = igw.id;
-    this.natGatewayIds = natGateways.map(n => n.id);
+    this.natGatewayIds = natGatewayIds;
   }
 }
