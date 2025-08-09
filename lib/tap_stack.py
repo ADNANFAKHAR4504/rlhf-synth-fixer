@@ -7,6 +7,7 @@ AWS infrastructure following all best practices, including a CloudWatch
 dashboard, Route 53 DNS automation, and an Nginx web server.
 """
 import base64
+import ipaddress
 import json
 
 from typing import List, Dict, Any
@@ -63,7 +64,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       availability_zone=az,
       cidr_block=f"10.0.{i+1}.0/24",
       ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-          lambda cidr: cidr.apply(lambda c: str(list(ipaddress.IPv6Network(c).subnets(new_prefix=64))[i]))
+          lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[i])
       ),
       assign_ipv6_address_on_creation=True,
       map_public_ip_on_launch=True,
@@ -107,7 +108,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       availability_zone=az,
       cidr_block=f"10.0.{100+i+1}.0/24",
       ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-          lambda cidr: cidr.apply(lambda c: str(list(ipaddress.IPv6Network(c).subnets(new_prefix=64))[100 + i]))
+          lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[100 + i])
       ),
       assign_ipv6_address_on_creation=True,
       tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}
