@@ -684,8 +684,8 @@ phases:
                             "Action": [
                                 "codepipeline:StartPipelineExecution"
                             ],
-                            "Resource": pipeline_arn,
-                            "Principal": {"AWS": "arn:aws:iam::root"}  # Placeholder
+                            "Resource": pipeline_arn
+                            #"Principal": {"AWS": "arn:aws:iam::root"}  # Placeholder
                         },
                         {
                             "Sid": "AllowManualApproval",
@@ -693,8 +693,8 @@ phases:
                             "Action": [
                                 "codepipeline:PutApprovalResult"
                             ],
-                            "Resource": f"{pipeline_arn}/*/*",
-                            "Principal": {"AWS": "arn:aws:iam::root"}  # Placeholder
+                            "Resource": f"{pipeline_arn}/*/*"
+                            #"Principal": {"AWS": "arn:aws:iam::root"}  # Placeholder
                         }
                     ]
                 })
