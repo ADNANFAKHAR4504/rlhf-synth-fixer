@@ -278,10 +278,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
     return bucket;
   }
 
-  private createEC2IAMRole(
-    envSuffix: string,
-    bucket: s3.Bucket
-  ): iam.Role {
+  private createEC2IAMRole(envSuffix: string, bucket: s3.Bucket): iam.Role {
     const role = new iam.Role(this, `EC2Role-${envSuffix}`, {
       roleName: `EC2-WebApp-Role-${envSuffix}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
