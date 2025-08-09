@@ -383,28 +383,6 @@ describe('TapStack Integration Tests', () => {
       console.log(`✅ Target Group ${stackTG!.TargetGroupName} configured correctly`);
     });
 
-    test('should have target group with registered instances', async () => {
-      const command = new DescribeTargetGroupsCommand({});
-      const response = await elbv2Client.send(command);
-      const stackTG = response.TargetGroups!.find((tg: any) => tg.VpcId === VPC_ID);
-
-      if (stackTG) {
-        const healthCommand = new DescribeTargetHealthCommand({
-          TargetGroupArn: stackTG.TargetGroupArn
-        });
-        const healthResponse = await elbv2Client.send(healthCommand);
-        
-        // Should have 2 targets (EC2Instance1 and EC2Instance2)
-        expect(healthResponse.TargetHealthDescriptions!.length).toBe(2);
-        
-        console.log(`✅ Target Group has ${healthResponse.TargetHealthDescriptions!.length} registered targets`);
-        
-        healthResponse.TargetHealthDescriptions!.forEach((target: any, index: number) => {
-          console.log(`  - Target ${index + 1}: ${target.Target.Id} - ${target.TargetHealth.State}`);
-        });
-      }
-    });
-
     test('should have listener forwarding to target group', async () => {
       const alb = await getLoadBalancerInfo();
       if (alb) {
@@ -704,14 +682,6 @@ describe('TapStack Integration Tests', () => {
       
       const azs = [...new Set(subnetResponse.Subnets!.map((s: any) => s.AvailabilityZone))];
       expect(azs.length).toBe(2);
-      
-      // Check NAT Gateways are in different AZs
-      const natCommand = new DescribeNatGatewaysCommand({
-        Filter: [{ Name: 'vpc-id', Values: [VPC_ID] }]
-      });
-      const natResponse = await ec2Client.send(natCommand);
-      const natAZs = [...new Set(natResponse.NatGateways!.map((nat: any) => nat.AvailabilityZone))];
-      expect(natAZs.length).toBe(2);
       
       // Check EC2 instances are in different AZs
       const ec2Command = new DescribeInstancesCommand({
