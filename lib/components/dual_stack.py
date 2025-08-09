@@ -56,7 +56,7 @@ class DualStackInfrastructure(pulumi.ComponentResource):
       cidr_block=f"{ipv4_cidr.split('.')[0]}.{ipv4_cidr.split('.')[1]}.1.0/24",
       assign_ipv6_address_on_creation=True,
       ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
-        lambda cidr: f"{':'.join(cidr.split(':')[0:4])}:1::/64"
+        lambda cidr: f"{cidr[:-2]}1::/64"
       ),
       map_public_ip_on_launch=True,
       tags={**tags, "Name": f"{base_name}-public-subnet"},
@@ -69,7 +69,7 @@ class DualStackInfrastructure(pulumi.ComponentResource):
       cidr_block=f"{ipv4_cidr.split('.')[0]}.{ipv4_cidr.split('.')[1]}.2.0/24",
       assign_ipv6_address_on_creation=True,
       ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
-        lambda cidr: f"{':'.join(cidr.split(':')[0:4])}:2::/64"
+        lambda cidr: f"{cidr[:-2]}2::/64"
       ),
       map_public_ip_on_launch=False,
       tags={**tags, "Name": f"{base_name}-private-subnet"},

@@ -58,7 +58,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Define the CIDR blocks for each region
     ipv4_cidrs = {'us-east-1': '10.1.0.0/16', 'eu-west-1': '10.2.0.0/16'}
-    ipv6_cidrs = {'us-east-1': 'fd00:10:1::/56', 'eu-west-1': 'fd00:10:2::/56'}
+    # ipv6_cidrs = {'us-east-1': 'fd00:10:1::/56', 'eu-west-1': 'fd00:10:2::/56'}
     
     # Deploy to each region with proper multi-region setup
     for i, region in enumerate(self.regions):
