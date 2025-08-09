@@ -52,6 +52,51 @@ export class SecureWebAppStack extends cdk.Stack {
             resources: ['*'],
           }),
           new iam.PolicyStatement({
+            sid: 'Allow EC2 EBS encryption',
+            effect: iam.Effect.ALLOW,
+            principals: [
+              new iam.ArnPrincipal(
+                `arn:aws:iam::${this.account}:role/tf-ec2-instance-role-${environment}`
+              ),
+            ],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+              'kms:ListGrants',
+              'kms:RevokeGrant',
+            ],
+            resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
+              },
+            },
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow EC2 Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+              'kms:ListGrants',
+              'kms:RevokeGrant',
+            ],
+            resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
+              },
+            },
+          }),
+          new iam.PolicyStatement({
             sid: 'Allow CloudWatch Logs',
             effect: iam.Effect.ALLOW,
             principals: [new iam.ServicePrincipal('logs.amazonaws.com')],
@@ -321,11 +366,47 @@ export class SecureWebAppStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
+                'kms:Encrypt',
                 'kms:Decrypt',
-                'kms:GenerateDataKey',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
                 'kms:DescribeKey',
+                'kms:CreateGrant',
+                'kms:ListGrants',
+                'kms:RevokeGrant',
               ],
               resources: [kmsKey.keyArn],
+              conditions: {
+                StringEquals: {
+                  'kms:ViaService': [
+                    `ec2.${this.region}.amazonaws.com`,
+                    `s3.${this.region}.amazonaws.com`,
+                    `logs.${this.region}.amazonaws.com`,
+                  ],
+                },
+              },
+            }),
+          ],
+        }),
+        EBSVolumePolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'ec2:CreateVolume',
+                'ec2:AttachVolume',
+                'ec2:DetachVolume',
+                'ec2:ModifyVolume',
+                'ec2:DescribeVolumes',
+                'ec2:DescribeVolumeStatus',
+                'ec2:DescribeVolumeAttribute',
+              ],
+              resources: ['*'],
+              conditions: {
+                StringEquals: {
+                  'aws:RequestedRegion': this.region,
+                },
+              },
             }),
           ],
         }),
