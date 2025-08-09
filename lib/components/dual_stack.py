@@ -49,10 +49,11 @@ class DualStackInfrastructure(pulumi.ComponentResource):
 
     # 4. Create Public and Private Subnets (dual-stack)
     # The IPv6 CIDR for subnets is a /64 from the VPC's /56 block.
+    # The IPv4 CIDR blocks are now correctly formatted.
     self.public_subnet = aws.ec2.Subnet(
       f"{base_name}-public-subnet",
       vpc_id=self.vpc.id,
-      cidr_block=f"{ipv4_cidr.split('/')[0].rsplit('.', 1)[0]}.1.0/24",
+      cidr_block=f"{ipv4_cidr.split('.')[0]}.{ipv4_cidr.split('.')[1]}.1.0/24",
       assign_ipv6_address_on_creation=True,
       ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
         lambda cidr: f"{cidr.split('::')[0]}::1:0/64"
@@ -65,7 +66,7 @@ class DualStackInfrastructure(pulumi.ComponentResource):
     self.private_subnet = aws.ec2.Subnet(
       f"{base_name}-private-subnet",
       vpc_id=self.vpc.id,
-      cidr_block=f"{ipv4_cidr.split('/')[0].rsplit('.', 1)[0]}.2.0/24",
+      cidr_block=f"{ipv4_cidr.split('.')[0]}.{ipv4_cidr.split('.')[1]}.2.0/24",
       assign_ipv6_address_on_creation=True,
       ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
         lambda cidr: f"{cidr.split('::')[0]}::2:0/64"
