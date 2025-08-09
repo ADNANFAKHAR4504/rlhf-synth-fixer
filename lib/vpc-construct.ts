@@ -14,6 +14,7 @@ export interface VpcConstructProps {
   commonTags: { [key: string]: string };
   /** Optional override. Defaults: production=per-az, others=single */
   natMode?: NatMode;
+  resourceSuffix?: string; 
 }
 
 export class VpcConstruct extends Construct {
@@ -26,6 +27,8 @@ export class VpcConstruct extends Construct {
 
   constructor(scope: Construct, id: string, config: VpcConstructProps) {
     super(scope, id);
+
+    const suffix = config.resourceSuffix ? `-${config.resourceSuffix}` : '';
 
     new aws.dataAwsRegion.DataAwsRegion(this, 'current');
 
@@ -220,14 +223,14 @@ export class VpcConstruct extends Construct {
       this,
       'VpcFlowLogsGroup',
       {
-        name: `/aws/vpc/${config.environment}-flow-logs`,
+        name: `/aws/vpc/${config.environment}-${id}-flow-logs${suffix}`,
         retentionInDays: config.environment === 'production' ? 365 : 30,
         tags: config.commonTags,
       }
     );
 
     const flowLogsRole = new aws.iamRole.IamRole(this, 'VpcFlowLogsRole', {
-      name: `${config.environment}-vpc-flow-logs-role`,
+      name: `${config.environment}-${id}-vpc-flow-logs-role${suffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [

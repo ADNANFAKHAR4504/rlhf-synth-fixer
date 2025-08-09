@@ -102,6 +102,8 @@ export class TapStack extends TerraformStack {
       privateSubnetCidrs: ['10.0.11.0/24', '10.0.12.0/24', '10.0.13.0/24'],
       databaseSubnetCidrs: ['10.0.21.0/24', '10.0.22.0/24', '10.0.23.0/24'],
       commonTags,
+      resourceSuffix: uniqueSuffix 
+
     });
 
     const iam = new IamConstruct(this, `Iam-${uniqueSuffix}`, {
