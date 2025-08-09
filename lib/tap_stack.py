@@ -16,7 +16,7 @@ import pulumi
 import pulumi_aws as aws
 
 config = pulumi.Config()
-project_name = "prod-dual-stack-app"
+project_name = "dual-stack-app-v1"
 domain_name = config.get("domain_name")
 environment = config.get("environment") or "prod"
 aws_region = config.get("aws:region") or "us-east-1"
