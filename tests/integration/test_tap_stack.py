@@ -18,7 +18,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
   def test_placeholder(self):
     """Placeholder test - implement actual integration tests here."""
-    self.assertTrue(True)
+    pass
 
 
 if __name__ == '__main__':
