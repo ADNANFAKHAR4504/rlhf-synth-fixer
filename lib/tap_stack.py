@@ -42,7 +42,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
     tags={**common_tags, "Name": f"{project_name}-vpc"}
   )
 
-  azs = aws.get_availability_zones(state="available").names[:2]
+  azs = sorted(aws.get_availability_zones(state="available").names[:2])
 
   igw = aws.ec2.InternetGateway(
     f"{project_name}-igw", vpc_id=vpc.id,
