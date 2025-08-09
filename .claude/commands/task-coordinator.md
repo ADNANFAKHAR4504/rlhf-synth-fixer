@@ -49,14 +49,15 @@ instead of the platform+language declared in the task description.
    region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
 8. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
 9. Use the selected task description for the workflow. Start the workflow.
-10. Once the workflow has finished. Ask iac-infra-qa-trainer to run a last round of build, synth, lint, unit and
-integration tests and make sure everything is passing.
+10. Once the workflow has finished. Ask iac-infra-qa-trainer to run a last round of build, synth, lint, and unit tests and make
+sure everything is passing.
 11. If iac-infra-qa-trainer is not making all the pipelines pass. Stop and mark the task as error.
 12. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
 13. Remove the gitworktree created for this task.
 14. Finally, set the status of the task in the csv as status "done" and fill the trainr_notes column with a short note
  on the process.
-15. Clear your context and start again from point 1.
+15. Clear your context, make sure you are positioned in the root folder `iac-test-automations/` and start again from
+point 1.
 
 Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the sub-agent. Just send the task information
 to the generator agent
@@ -127,6 +128,7 @@ Each sub-agent must provide status updates at these key points:
 - Report test execution progress and coverage metrics with current test being run
 - Report cleanup completion status and any cleanup failures
 - Report blocking conditions if infrastructure deployment fails repeatedly
+- Report unit-test coverage.
 
 #### Phase 3: iac-code-reviewer
 
