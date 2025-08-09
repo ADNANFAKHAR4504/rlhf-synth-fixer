@@ -1,44 +1,6 @@
-I'll help you build a secure web application infrastructure on AWS using CDK TypeScript. Here's a comprehensive solution with all the security best practices you requested:
+I'll create a comprehensive, production-ready AWS infrastructure using CDK TypeScript with all the security best practices you've requested. Here's the complete solution:
 
-## Project Structure
-
-First, let's set up the project structure:
-
-```bash
-mkdir secure-web-app-cdk
-cd secure-web-app-cdk
-npm init -y
-npm install aws-cdk-lib constructs
-npm install -D @types/node typescript
-```
-
-## 1. Main Stack Entry Point
-
-**bin/app.ts**
-
-```typescript
-#!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { SecureWebAppStack } from '../lib/secure-web-app-stack';
-
-const app = new cdk.App();
-
-// Get environment from context or default to 'prod'
-const environment = app.node.tryGetContext('environment') || 'prod';
-
-new SecureWebAppStack(app, `tf-secure-web-app-${environment}`, {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
-  },
-  environment: environment,
-});
-```
-
-## 2. Main Stack Implementation
-
-**lib/secure-web-app-stack.ts**
+## Main Stack File (`lib/secure-web-app-stack.ts`)
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -51,10 +13,13 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Construct } from 'constructs';
 
 export interface SecureWebAppStackProps extends cdk.StackProps {
   environment: string;
+  allowedCidrBlocks?: string[];
 }
 
 export class SecureWebAppStack extends cdk.Stack {
@@ -62,8 +27,9 @@ export class SecureWebAppStack extends cdk.Stack {
     super(scope, id, props);
 
     const { environment } = props;
+    const allowedCidrBlocks = props.allowedCidrBlocks || ['10.0.0.0/8'];
 
-    // Common tags for all resources
+    // Common tags
     const commonTags = {
       Environment: 'Production',
       Project: 'SecureWebApp',
@@ -75,11 +41,12 @@ export class SecureWebAppStack extends cdk.Stack {
     cdk.Tags.of(this).add('Project', 'SecureWebApp');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
 
-    // 1. KMS Key for encryption
+    // 1. KMS Key for encryption (created first as other resources depend on it)
     const kmsKey = new kms.Key(this, `tf-encryption-key-${environment}`, {
-      alias: `tf-secure-web-app-key-${environment}`,
-      description: `Encryption key for secure web app - ${environment}`,
+      alias: `tf-encryption-key-${environment}`,
+      description: `KMS key for encrypting resources in ${environment} environment`,
       enableKeyRotation: true,
+      rotationPeriod: cdk.Duration.days(365),
       keyPolicy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
@@ -92,7 +59,9 @@ export class SecureWebAppStack extends cdk.Stack {
           new iam.PolicyStatement({
             sid: 'Allow CloudWatch Logs',
             effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('logs.amazonaws.com')],
+            principals: [
+              new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+            ],
             actions: [
               'kms:Encrypt',
               'kms:Decrypt',
@@ -119,12 +88,13 @@ export class SecureWebAppStack extends cdk.Stack {
       }),
     });
 
-    // 2. VPC with public and private subnets
+    // 2. VPC with public and private subnets across multiple AZs
     const vpc = new ec2.Vpc(this, `tf-vpc-${environment}`, {
-      vpcName: `tf-secure-vpc-${environment}`,
-      cidr: '10.0.0.0/16',
+      vpcName: `tf-vpc-${environment}`,
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 3,
-      natGateways: 2, // For high availability
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -136,43 +106,20 @@ export class SecureWebAppStack extends cdk.Stack {
           name: `tf-private-subnet-${environment}`,
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
-        {
-          cidrMask: 24,
-          name: `tf-isolated-subnet-${environment}`,
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      ],
+      natGateways: 2, // For high availability
+      flowLogs: {
+        [`tf-vpc-flow-logs-${environment}`]: {
+          destination: ec2.FlowLogDestination.toCloudWatchLogs(
+            new logs.LogGroup(this, `tf-vpc-flow-logs-${environment}`, {
+              logGroupName: `/aws/vpc/flowlogs-${environment}`,
+              retention: logs.RetentionDays.ONE_MONTH,
+              encryptionKey: kmsKey,
+            })
+          ),
+          trafficType: ec2.FlowLogTrafficType.ALL,
         },
-      ],
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-    });
-
-    // VPC Flow Logs for security monitoring
-    const flowLogRole = new iam.Role(this, `tf-flow-log-role-${environment}`, {
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/VPCFlowLogsDeliveryRolePolicy'
-        ),
-      ],
-    });
-
-    const flowLogGroup = new logs.LogGroup(
-      this,
-      `tf-vpc-flow-logs-${environment}`,
-      {
-        logGroupName: `/aws/vpc/flowlogs-${environment}`,
-        retention: logs.RetentionDays.ONE_MONTH,
-        encryptionKey: kmsKey,
-      }
-    );
-
-    new ec2.FlowLog(this, `tf-vpc-flow-log-${environment}`, {
-      resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(
-        flowLogGroup,
-        flowLogRole
-      ),
-      trafficType: ec2.FlowLogTrafficType.ALL,
+      },
     });
 
     // 3. Security Groups
@@ -181,29 +128,31 @@ export class SecureWebAppStack extends cdk.Stack {
       `tf-alb-sg-${environment}`,
       {
         vpc,
-        securityGroupName: `tf-alb-security-group-${environment}`,
+        securityGroupName: `tf-alb-sg-${environment}`,
         description: 'Security group for Application Load Balancer',
         allowAllOutbound: false,
       }
     );
 
-    // Allow HTTP and HTTPS from anywhere (will be protected by WAF)
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic from anywhere'
-    );
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic from anywhere'
-    );
+    // Allow HTTP and HTTPS from allowed CIDR blocks
+    allowedCidrBlocks.forEach((cidr, index) => {
+      albSecurityGroup.addIngressRule(
+        ec2.Peer.ipv4(cidr),
+        ec2.Port.tcp(80),
+        `Allow HTTP from ${cidr}`
+      );
+      albSecurityGroup.addIngressRule(
+        ec2.Peer.ipv4(cidr),
+        ec2.Port.tcp(443),
+        `Allow HTTPS from ${cidr}`
+      );
+    });
 
     // Allow outbound to EC2 instances
     albSecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
       ec2.Port.tcp(80),
-      'Allow outbound HTTP to EC2 instances'
+      'Allow HTTP to EC2 instances'
     );
 
     const ec2SecurityGroup = new ec2.SecurityGroup(
@@ -211,24 +160,36 @@ export class SecureWebAppStack extends cdk.Stack {
       `tf-ec2-sg-${environment}`,
       {
         vpc,
-        securityGroupName: `tf-ec2-security-group-${environment}`,
+        securityGroupName: `tf-ec2-sg-${environment}`,
         description: 'Security group for EC2 instances',
-        allowAllOutbound: true, // Allow outbound for updates and SSM
+        allowAllOutbound: false,
       }
     );
 
-    // Allow traffic only from ALB
+    // Allow HTTP from ALB only
     ec2SecurityGroup.addIngressRule(
       albSecurityGroup,
       ec2.Port.tcp(80),
-      'Allow HTTP traffic from ALB only'
+      'Allow HTTP from ALB'
     );
 
-    // No SSH access - using SSM Session Manager instead
+    // Allow HTTPS outbound for package updates and SSM
+    ec2SecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS outbound'
+    );
+
+    // Allow HTTP outbound for package updates
+    ec2SecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP outbound'
+    );
 
     // 4. IAM Role for EC2 instances
     const ec2Role = new iam.Role(this, `tf-ec2-role-${environment}`, {
-      roleName: `tf-ec2-instance-role-${environment}`,
+      roleName: `tf-ec2-role-${environment}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -238,43 +199,46 @@ export class SecureWebAppStack extends cdk.Stack {
           'CloudWatchAgentServerPolicy'
         ),
       ],
+      inlinePolicies: {
+        S3Access: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                's3:GetObject',
+                's3:PutObject',
+                's3:DeleteObject',
+                's3:ListBucket',
+              ],
+              resources: [
+                `arn:aws:s3:::tf-backend-storage-${environment}`,
+                `arn:aws:s3:::tf-backend-storage-${environment}/*`,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: [kmsKey.keyArn],
+            }),
+          ],
+        }),
+      },
     });
 
-    // Add S3 access policy
-    ec2Role.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-        resources: [`arn:aws:s3:::tf-secure-storage-${environment}/*`],
-      })
-    );
-
-    ec2Role.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['s3:ListBucket'],
-        resources: [`arn:aws:s3:::tf-secure-storage-${environment}`],
-      })
-    );
-
-    // KMS permissions for EC2 instances
-    ec2Role.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
-        resources: [kmsKey.keyArn],
-      })
-    );
-
-    // 5. S3 Bucket with security configurations
-    const s3Bucket = new s3.Bucket(this, `tf-secure-storage-${environment}`, {
-      bucketName: `tf-secure-storage-${environment}`,
-      versioning: true,
+    // 5. S3 Bucket with security best practices
+    const s3Bucket = new s3.Bucket(this, `tf-backend-storage-${environment}`, {
+      bucketName: `tf-backend-storage-${environment}`,
+      versioned: true,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      serverAccessLogsPrefix: 'access-logs/',
       lifecycleRules: [
         {
           id: 'DeleteIncompleteMultipartUploads',
@@ -290,38 +254,30 @@ export class SecureWebAppStack extends cdk.Stack {
           ],
         },
       ],
+      serverAccessLogsPrefix: 'access-logs/',
+      notificationsHandlerRole: ec2Role,
     });
 
-    // S3 Bucket notification for security monitoring
-    s3Bucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED
-      // You can add SNS topic here for notifications
-    );
-
-    // 6. Launch Template for EC2 instances
+    // 6. User Data Script for EC2 bootstrapping
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       '#!/bin/bash',
       'yum update -y',
-      'yum install -y amazon-cloudwatch-agent',
-
-      // Install and configure Apache
       'yum install -y httpd',
+      'yum install -y amazon-cloudwatch-agent',
       'systemctl start httpd',
       'systemctl enable httpd',
 
-      // Create a simple health check page
-      'echo "<html><body><h1>Healthy</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/health.html',
-      'echo "<html><body><h1>Secure Web Application</h1><p>Environment: ' +
-        environment +
-        '</p></body></html>" > /var/www/html/index.html',
+      // Install and configure CloudWatch agent
+      'wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm',
+      'rpm -U ./amazon-cloudwatch-agent.rpm',
 
-      // Configure CloudWatch agent
+      // Create CloudWatch agent configuration
       'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
       JSON.stringify(
         {
           metrics: {
-            namespace: `SecureWebApp/${environment}`,
+            namespace: `tf-webapp-${environment}`,
             metrics_collected: {
               cpu: {
                 measurement: [
@@ -349,12 +305,12 @@ export class SecureWebAppStack extends cdk.Stack {
                 collect_list: [
                   {
                     file_path: '/var/log/httpd/access_log',
-                    log_group_name: `/aws/ec2/httpd/access-${environment}`,
+                    log_group_name: `/aws/ec2/httpd-access-${environment}`,
                     log_stream_name: '{instance_id}',
                   },
                   {
                     file_path: '/var/log/httpd/error_log',
-                    log_group_name: `/aws/ec2/httpd/error-${environment}`,
+                    log_group_name: `/aws/ec2/httpd-error-${environment}`,
                     log_stream_name: '{instance_id}',
                   },
                 ],
@@ -368,25 +324,47 @@ export class SecureWebAppStack extends cdk.Stack {
       'EOF',
 
       // Start CloudWatch agent
-      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json',
+      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s',
 
-      // Signal CloudFormation that the instance is ready
-      `/opt/aws/bin/cfn-signal -e $? --stack ${this.stackName} --resource AutoScalingGroup --region ${this.region}`
+      // Create a simple index page
+      'echo "<h1>Secure Web Application - ' +
+        environment +
+        '</h1>" > /var/www/html/index.html',
+      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html',
+      'echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html',
+
+      // Configure log rotation
+      'cat > /etc/logrotate.d/httpd << EOF',
+      '/var/log/httpd/*log {',
+      '    daily',
+      '    missingok',
+      '    rotate 52',
+      '    compress',
+      '    delaycompress',
+      '    notifempty',
+      '    create 640 apache apache',
+      '    sharedscripts',
+      '    postrotate',
+      '        systemctl reload httpd',
+      '    endscript',
+      '}',
+      'EOF'
     );
 
+    // 7. Launch Template
     const launchTemplate = new ec2.LaunchTemplate(
       this,
       `tf-launch-template-${environment}`,
       {
-        launchTemplateName: `tf-secure-launch-template-${environment}`,
+        launchTemplateName: `tf-launch-template-${environment}`,
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
-          ec2.InstanceSize.MICRO
+          ec2.InstanceSize.MEDIUM
         ),
         machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-        securityGroup: ec2SecurityGroup,
-        role: ec2Role,
         userData: userData,
+        role: ec2Role,
+        securityGroup: ec2SecurityGroup,
         blockDevices: [
           {
             deviceName: '/dev/xvda',
@@ -397,31 +375,33 @@ export class SecureWebAppStack extends cdk.Stack {
             }),
           },
         ],
-        requireImdsv2: true, // Enforce IMDSv2 for security
+        requireImdsv2: true, // Require IMDSv2 for security
       }
     );
 
-    // 7. Application Load Balancer
+    // 8. Application Load Balancer
     const alb = new elbv2.ApplicationLoadBalancer(
       this,
       `tf-alb-${environment}`,
       {
-        loadBalancerName: `tf-secure-alb-${environment}`,
+        loadBalancerName: `tf-alb-${environment}`,
         vpc,
         internetFacing: true,
         securityGroup: albSecurityGroup,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PUBLIC,
         },
+        deletionProtection: true,
       }
     );
 
-    // ALB Access Logs
+    // Enable access logging for ALB
     const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
-      bucketName: `tf-alb-access-logs-${environment}`,
+      bucketName: `tf-alb-logs-${environment}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
       lifecycleRules: [
         {
           id: 'DeleteOldLogs',
@@ -430,76 +410,68 @@ export class SecureWebAppStack extends cdk.Stack {
       ],
     });
 
-    alb.logAccessLogs(albLogsBucket, 'alb-access-logs');
+    alb.setAttribute('access_logs.s3.enabled', 'true');
+    alb.setAttribute('access_logs.s3.bucket', albLogsBucket.bucketName);
 
-    // Target Group
+    // 9. Auto Scaling Group
+    const asg = new autoscaling.AutoScalingGroup(
+      this,
+      `tf-asg-${environment}`,
+      {
+        autoScalingGroupName: `tf-asg-${environment}`,
+        vpc,
+        launchTemplate,
+        minCapacity: 2,
+        maxCapacity: 6,
+        desiredCapacity: 2,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        healthCheck: autoscaling.HealthCheck.elb({
+          grace: cdk.Duration.minutes(5),
+        }),
+        updatePolicy: autoscaling.UpdatePolicy.rollingUpdatePolicy({
+          maxBatchSize: 1,
+          minInstancesInService: 1,
+        }),
+      }
+    );
+
+    // 10. Target Group and Listener
     const targetGroup = new elbv2.ApplicationTargetGroup(
       this,
       `tf-target-group-${environment}`,
       {
-        targetGroupName: `tf-secure-tg-${environment}`,
+        targetGroupName: `tf-target-group-${environment}`,
         port: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
         vpc,
+        targets: [asg],
         healthCheck: {
           enabled: true,
           healthyHttpCodes: '200',
-          path: '/health.html',
-          protocol: elbv2.Protocol.HTTP,
           interval: cdk.Duration.seconds(30),
+          path: '/',
+          protocol: elbv2.Protocol.HTTP,
           timeout: cdk.Duration.seconds(5),
-          healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
+          healthyThresholdCount: 2,
         },
-        targetType: elbv2.TargetType.INSTANCE,
       }
     );
 
-    // ALB Listener
     const listener = alb.addListener(`tf-listener-${environment}`, {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [targetGroup],
     });
 
-    // 8. Auto Scaling Group
-    const asg = new autoscaling.AutoScalingGroup(
-      this,
-      `tf-asg-${environment}`,
-      {
-        autoScalingGroupName: `tf-secure-asg-${environment}`,
-        vpc,
-        launchTemplate,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        minCapacity: 2,
-        maxCapacity: 10,
-        desiredCapacity: 2,
-        healthCheck: autoscaling.HealthCheck.elb({
-          grace: cdk.Duration.minutes(5),
-        }),
-        signals: autoscaling.Signals.waitForAll({
-          timeout: cdk.Duration.minutes(10),
-        }),
-      }
-    );
-
-    // Attach ASG to Target Group
-    asg.attachToApplicationTargetGroup(targetGroup);
-
-    // Auto Scaling Policies
-    asg.scaleOnCpuUtilization(`tf-cpu-scaling-${environment}`, {
-      targetUtilizationPercent: 70,
-      scaleInCooldown: cdk.Duration.minutes(5),
-      scaleOutCooldown: cdk.Duration.minutes(5),
-    });
-
-    // 9. WAF v2 Configuration
+    // 11. WAFv2 Web ACL
     const webAcl = new wafv2.CfnWebACL(this, `tf-waf-${environment}`, {
-      name: `tf-secure-waf-${environment}`,
+      name: `tf-waf-${environment}`,
       scope: 'REGIONAL',
       defaultAction: { allow: {} },
+      description: `WAF for ALB in ${environment} environment`,
       rules: [
         {
           name: 'AWSManagedRulesCommonRuleSet',
@@ -546,14 +518,14 @@ export class SecureWebAppStack extends cdk.Stack {
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudWatchMetricsEnabled: true,
-            metricName: 'RateLimitRule',
+            metricName: 'RateLimitRuleMetric',
           },
         },
       ],
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudWatchMetricsEnabled: true,
-        metricName: `tf-waf-metric-${environment}`,
+        metricName: `tf-waf-${environment}`,
       },
     });
 
@@ -563,204 +535,204 @@ export class SecureWebAppStack extends cdk.Stack {
       webAclArn: webAcl.attrArn,
     });
 
-    // 10. CloudWatch Alarms and Monitoring
-    const httpCodeTarget4xxAlarm = new cloudwatch.Alarm(
+    // 12. CloudWatch Log Groups for application logs
+    new logs.LogGroup(this, `tf-httpd-access-logs-${environment}`, {
+      logGroupName: `/aws/ec2/httpd-access-${environment}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      encryptionKey: kmsKey,
+    });
+
+    new logs.LogGroup(this, `tf-httpd-error-logs-${environment}`, {
+      logGroupName: `/aws/ec2/httpd-error-${environment}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      encryptionKey: kmsKey,
+    });
+
+    // 13. SNS Topic for Alerts
+    const alertsTopic = new sns.Topic(this, `tf-alerts-${environment}`, {
+      topicName: `tf-alerts-${environment}`,
+      displayName: `Alerts for ${environment} environment`,
+      masterKey: kmsKey,
+    });
+
+    // 14. CloudWatch Alarms
+    const highCpuAlarm = new cloudwatch.Alarm(
       this,
-      `tf-4xx-alarm-${environment}`,
+      `tf-high-cpu-alarm-${environment}`,
       {
-        alarmName: `tf-ALB-4xx-errors-${environment}`,
-        metric: targetGroup.metricHttpCodeTarget(
-          elbv2.HttpCodeTarget.TARGET_4XX_COUNT
-        ),
-        threshold: 10,
+        alarmName: `tf-high-cpu-alarm-${environment}`,
+        metric: asg.metricCpuUtilization({
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 80,
         evaluationPeriods: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        alarmDescription: 'High CPU utilization in ASG',
       }
     );
 
-    const httpCodeTarget5xxAlarm = new cloudwatch.Alarm(
+    highCpuAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertsTopic));
+
+    const unhealthyHostsAlarm = new cloudwatch.Alarm(
       this,
-      `tf-5xx-alarm-${environment}`,
+      `tf-unhealthy-hosts-alarm-${environment}`,
       {
-        alarmName: `tf-ALB-5xx-errors-${environment}`,
-        metric: targetGroup.metricHttpCodeTarget(
-          elbv2.HttpCodeTarget.TARGET_5XX_COUNT
-        ),
-        threshold: 5,
+        alarmName: `tf-unhealthy-hosts-alarm-${environment}`,
+        metric: targetGroup.metricUnhealthyHostCount({
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
         evaluationPeriods: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        alarmDescription: 'Unhealthy hosts detected in target group',
       }
     );
 
-    const responseTimeAlarm = new cloudwatch.Alarm(
-      this,
-      `tf-response-time-alarm-${environment}`,
+    unhealthyHostsAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(alertsTopic)
+    );
+
+    // 15. Auto Scaling Policies
+    const scaleUpPolicy = asg.scaleOnMetric(
+      `tf-scale-up-policy-${environment}`,
       {
-        alarmName: `tf-ALB-response-time-${environment}`,
-        metric: targetGroup.metricTargetResponseTime(),
-        threshold: 1, // 1 second
-        evaluationPeriods: 3,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        metric: asg.metricCpuUtilization({
+          period: cdk.Duration.minutes(5),
+        }),
+        scalingSteps: [
+          { upper: 70, change: +1 },
+          { lower: 85, change: +2 },
+        ],
+        adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+        cooldown: cdk.Duration.minutes(5),
       }
     );
 
-    // 11. Outputs
+    const scaleDownPolicy = asg.scaleOnMetric(
+      `tf-scale-down-policy-${environment}`,
+      {
+        metric: asg.metricCpuUtilization({
+          period: cdk.Duration.minutes(5),
+        }),
+        scalingSteps: [{ upper: 30, change: -1 }],
+        adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+        cooldown: cdk.Duration.minutes(10),
+      }
+    );
+
+    // 16. Outputs
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
       description: 'DNS name of the load balancer',
+      exportName: `tf-alb-dns-${environment}`,
     });
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: s3Bucket.bucketName,
       description: 'Name of the S3 bucket',
+      exportName: `tf-s3-bucket-${environment}`,
     });
 
     new cdk.CfnOutput(this, 'KMSKeyId', {
       value: kmsKey.keyId,
-      description: 'KMS Key ID for encryption',
+      description: 'KMS Key ID',
+      exportName: `tf-kms-key-${environment}`,
     });
 
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID',
+      exportName: `tf-vpc-id-${environment}`,
     });
 
     new cdk.CfnOutput(this, 'WAFWebACLArn', {
       value: webAcl.attrArn,
       description: 'WAF Web ACL ARN',
+      exportName: `tf-waf-arn-${environment}`,
     });
   }
 }
 ```
 
-## 3. Package Configuration
+## Main Application File (`bin/app.ts`)
 
-**package.json**
+```typescript
+#!/usr/bin/env node
+import 'source-map-support/register';
+import * as cdk from 'aws-cdk-lib';
+import { SecureWebAppStack } from '../lib/secure-web-app-stack';
 
-```json
-{
-  "name": "secure-web-app-cdk",
-  "version": "0.1.0",
-  "bin": {
-    "secure-web-app-cdk": "bin/app.js"
+const app = new cdk.App();
+
+// Get environment from context or default to 'dev'
+const environment = app.node.tryGetContext('environment') || 'dev';
+
+// Get allowed CIDR blocks from context or use default
+const allowedCidrBlocks = app.node.tryGetContext('allowedCidrBlocks') || [
+  '0.0.0.0/0',
+];
+
+new SecureWebAppStack(app, `SecureWebAppStack-${environment}`, {
+  environment,
+  allowedCidrBlocks,
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: 'us-west-2',
   },
-  "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
-    "test": "jest",
-    "cdk": "cdk",
-    "deploy": "cdk deploy",
-    "deploy-prod": "cdk deploy --context environment=prod",
-    "deploy-staging": "cdk deploy --context environment=staging"
-  },
-  "devDependencies": {
-    "@types/jest": "^29.4.0",
-    "@types/node": "18.14.6",
-    "jest": "^29.5.0",
-    "ts-jest": "^29.0.5",
-    "aws-cdk": "2.87.0",
-    "ts-node": "^10.9.1",
-    "typescript": "~4.9.5"
-  },
-  "dependencies": {
-    "aws-cdk-lib": "2.87.0",
-    "constructs": "^10.0.0",
-    "source-map-support": "^0.5.21"
-  }
-}
+  description: `Secure web application infrastructure for ${environment} environment`,
+});
 ```
 
-**tsconfig.json**
+## Key Security Features Implemented:
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["es2020"],
-    "declaration": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": false,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "strictPropertyInitialization": false,
-    "typeRoots": ["./node_modules/@types"]
-  },
-  "exclude": ["node_modules", "cdk.out"]
-}
-```
+### 🔒 **Network Security**
 
-**cdk.json**
+- VPC with proper subnet isolation (public/private)
+- Security groups with least privilege access
+- No SSH access - SSM Session Manager only
+- NAT Gateways for secure outbound internet access
+- VPC Flow Logs for network monitoring
 
-```json
-{
-  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
-  "watch": {
-    "include": ["**"],
-    "exclude": [
-      "README.md",
-      "cdk*.json",
-      "**/*.d.ts",
-      "**/*.js",
-      "tsconfig.json",
-      "package*.json",
-      "yarn.lock",
-      "node_modules",
-      "test"
-    ]
-  },
-  "context": {
-    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
-    "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
-    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
-    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
-    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
-    "@aws-cdk/aws-iam:minimizePolicies": true,
-    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
-    "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
-    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
-    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
-    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
-    "@aws-cdk/core:enablePartitionLiterals": true,
-    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
-    "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
-    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
-    "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": true,
-    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
-    "@aws-cdk/aws-route53-patters:useCertificate": true,
-    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
-    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
-    "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": true,
-    "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
-    "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
-    "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
-    "@aws-cdk/aws-redshift:columnId": true,
-    "@aws-cdk/aws-stepfunctions-tasks:enableLogging": true,
-    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
-    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
-    "@aws-cdk/aws-kms:aliasNameRef": true,
-    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
-    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
-    "@aws-cdk/aws-efs:denyAnonymousAccess": true,
-    "@aws-cdk/aws-opensearchservice:enableLogging": true,
-    "@aws-cdk/aws-normlizedkeys:props": true,
-    "@aws-cdk/aws-lambda:recognizeVersionProps": true,
-    "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": true,
-    "@aws-cdk/core:stackRelativeExports": true
-  }
-}
-```
+### 🛡️ **Encryption & Key Management**
 
-## 4. Deployment Instructions
+- KMS key with automatic rotation (365 days)
+- S3 bucket encryption with customer-managed KMS keys
+- EBS volume encryption
+- CloudWatch Logs encryption
+- Secure key policies with least privilege
+
+### 🌐 **Web Application Firewall**
+
+- AWS WAFv2 with managed rule sets
+- Rate limiting (2000 requests per 5 minutes per IP)
+- Protection against common attacks (OWASP Top 10)
+- Real-time monitoring and logging
+
+### 📊 **Monitoring & Alerting**
+
+- CloudWatch metrics and alarms
+- SNS notifications for critical events
+- Application and access logs
+- Auto Scaling based on CPU utilization
+- Health checks and automated recovery
+
+### 🔐 **Access Control**
+
+- IAM roles with least privilege
+- No hardcoded credentials
+- IMDSv2 enforcement on EC2 instances
+- S3 bucket policies blocking public access
+
+### 📦 **Storage Security**
+
+- S3 versioning enabled
+- Lifecycle policies for cost optimization
+- Server-side encryption with KMS
+- Access logging enabled
+
+## Deployment Instructions:
 
 1. **Install dependencies:**
 
@@ -768,87 +740,22 @@ export class SecureWebAppStack extends cdk.Stack {
 npm install
 ```
 
-2. **Build the project:**
-
-```bash
-npm run build
-```
-
-3. **Bootstrap CDK (if not done before):**
-
-```bash
-cdk bootstrap aws://ACCOUNT-NUMBER/us-west-2
-```
-
-4. **Deploy the stack:**
+2. **Deploy with environment parameter:**
 
 ```bash
 # For production environment
-npm run deploy-prod
+cdk deploy --context environment=prod
 
-# Or for staging environment
-npm run deploy-staging
-
-# Or with custom environment
+# For development environment
 cdk deploy --context environment=dev
+
+# With custom allowed CIDR blocks
+cdk deploy --context environment=prod --context allowedCidrBlocks='["203.0.113.0/24","198.51.100.0/24"]'
 ```
 
-## 5. Security Features Implemented
+3. **Access the application:**
 
-### ✅ **Network Security:**
+- The load balancer DNS name will be output after deployment
+- Access via HTTP (you can add HTTPS with ACM certificates later)
 
-- VPC with proper subnet isolation
-- Security groups with least privilege access
-- VPC Flow Logs for monitoring
-- NAT Gateways for outbound internet access from private subnets
-
-### ✅ **Compute Security:**
-
-- No SSH access - SSM Session Manager only
-- IMDSv2 enforcement
-- Encrypted EBS volumes
-- Latest Amazon Linux 2023 AMI
-- Proper IAM roles with minimal permissions
-
-### ✅ **Data Security:**
-
-- S3 bucket with KMS encryption
-- Versioning enabled
-- Block public access
-- SSL enforcement
-- Access logging
-
-### ✅ **Application Security:**
-
-- WAF v2 with managed rule sets
-- Rate limiting
-- ALB with security groups
-- Health checks
-
-### ✅ **Monitoring & Logging:**
-
-- CloudWatch alarms for key metrics
-- VPC Flow Logs
-- ALB access logs
-- Application logs via CloudWatch agent
-
-### ✅ **Encryption:**
-
-- KMS key with automatic rotation
-- Encrypted storage (S3, EBS)
-- Secure key policies
-
-## 6. Post-Deployment Steps
-
-1. **Verify the deployment:**
-
-```bash
-# Check the ALB DNS name from outputs
-curl http://ALB-DNS-NAME/health.html
-```
-
-2. **Access instances via SSM:**
-
-```bash
-aws ssm start-
-```
+This infrastructure provides enterprise-grade security with defense in depth, comprehensive monitoring, and follows AWS Well-Architected Framework principles for security, reliability, and cost optimization.

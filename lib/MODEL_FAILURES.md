@@ -1,16 +1,25 @@
-# Model Failures and Fixes
+# Model Response Implementation Issues
 
-## Infrastructure Issues Fixed
+## Build Errors (TypeScript Compilation)
 
-### 1. CDK Property Name Error - KMS Key Policy
+### 1. KMS Key Policy Property Error
 
-**Issue**: The model used `keyPolicy` instead of the correct property name `policy` for the KMS key configuration.
+**Issue**: The model used `keyPolicy` property which doesn't exist in the CDK `KeyProps` interface. The correct property is `policy`.
 
 **Original Code**:
 
 ```typescript
 const kmsKey = new kms.Key(this, `tf-encryption-key-${environment}`, {
-  keyPolicy: new iam.PolicyDocument({...})  // Incorrect property name
+  alias: `tf-encryption-key-${environment}`,
+  description: `KMS key for encrypting resources in ${environment} environment`,
+  enableKeyRotation: true,
+  rotationPeriod: cdk.Duration.days(365),
+  keyPolicy: new iam.PolicyDocument({
+    // Invalid property name
+    statements: [
+      // ... policy statements
+    ],
+  }),
 });
 ```
 
@@ -18,680 +27,805 @@ const kmsKey = new kms.Key(this, `tf-encryption-key-${environment}`, {
 
 ```typescript
 const kmsKey = new kms.Key(this, `tf-encryption-key-${environment}`, {
-  policy: new iam.PolicyDocument({...})  // Correct property name
+  alias: `tf-encryption-key-${environment}`,
+  description: `KMS key for encrypting resources in ${environment} environment`,
+  enableKeyRotation: true,
+  rotationPeriod: cdk.Duration.days(365),
+  policy: new iam.PolicyDocument({
+    // Changed from keyPolicy to policy
+    statements: [
+      // ... policy statements
+    ],
+  }),
 });
 ```
 
-### 2. S3 Bucket Property Error - Versioning Configuration
+### 2. CDK UpdatePolicy Method Error - Rolling Update Configuration
 
-**Issue**: The model used `versioning: true` instead of the correct property name `versioned: true` for S3 bucket versioning.
+**Issue**: The model used `rollingUpdatePolicy` which doesn't exist in the CDK AutoScaling UpdatePolicy class. The correct method is `rollingUpdate`.
 
 **Original Code**:
 
 ```typescript
-const s3Bucket = new s3.Bucket(this, `tf-secure-storage-${environment}`, {
-  versioning: true, // Incorrect property name
-});
-```
-
-**Fixed Code**:
-
-```typescript
-const s3Bucket = new s3.Bucket(this, `tf-secure-storage-${environment}`, {
-  versioned: true, // Correct property name
-});
-```
-
-### 3. S3 Event Notification Missing Target
-
-**Issue**: The model called `addEventNotification` with only the event type but missing the required notification target parameter.
-
-**Original Code**:
-
-```typescript
-s3Bucket.addEventNotification(
-  s3.EventType.OBJECT_CREATED
-  // Missing notification target
-);
-```
-
-**Fixed Code**:
-
-```typescript
-// Created SNS topic for security monitoring
-const securityNotificationsTopic = new sns.Topic(
-  this,
-  `tf-security-notifications-${environment}`,
-  {
-    topicName: `tf-security-notifications-${environment}`,
-    displayName: `Security Notifications - ${environment}`,
-    masterKey: kmsKey,
-  }
-);
-
-// S3 Bucket notification for security monitoring
-s3Bucket.addEventNotification(
-  s3.EventType.OBJECT_CREATED,
-  new s3n.SnsDestination(securityNotificationsTopic)
-);
-```
-
-### 4. Auto Scaling Policy Property Error
-
-**Issue**: The model used `scaleInCooldown` and `scaleOutCooldown` properties which don't exist in the `CpuUtilizationScalingProps` interface.
-
-**Original Code**:
-
-```typescript
-asg.scaleOnCpuUtilization(`tf-cpu-scaling-${environment}`, {
-  targetUtilizationPercent: 70,
-  scaleInCooldown: cdk.Duration.minutes(5), // Invalid property
-  scaleOutCooldown: cdk.Duration.minutes(5), // Invalid property
-});
-```
-
-**Fixed Code**:
-
-```typescript
-asg.scaleOnCpuUtilization(`tf-cpu-scaling-${environment}`, {
-  targetUtilizationPercent: 70,
-  cooldown: cdk.Duration.minutes(5), // Correct property
-});
-```
-
-### 5. Test File Property Error
-
-**Issue**: The test file included `domainName` and `hostedZoneId` properties that don't exist in the `SecureWebAppStackProps` interface.
-
-**Original Code**:
-
-```typescript
-const httpsStack = new SecureWebAppStack(httpsApp, 'HttpsSecureWebAppStack', {
-  environment: 'prod',
-  domainName: 'example.com', // Property doesn't exist
-  hostedZoneId: 'Z123456789', // Property doesn't exist
-});
-```
-
-**Fixed Code**:
-
-```typescript
-const httpsStack = new SecureWebAppStack(httpsApp, 'HttpsSecureWebAppStack', {
-  environment: 'prod',
-  // Removed non-existent properties
-});
-```
-
-### 6. ALB Access Logs KMS Encryption Issue
-
-**Issue**: The model attempted to use KMS encryption for ALB access logs, which is not supported. ALB access logs only support S3-managed encryption.
-
-**Original Code**:
-
-```typescript
-const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
-  encryption: s3.BucketEncryption.KMS, // Not supported for ALB logs
-  encryptionKey: kmsKey,
-});
-```
-
-**Fixed Code**:
-
-```typescript
-const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
-  encryption: s3.BucketEncryption.S3_MANAGED, // Correct encryption type
-});
-```
-
-### 7. Deprecated VPC CIDR Property
-
-**Issue**: The model used the deprecated `cidr` property instead of the newer `ipAddresses` property for VPC configuration.
-
-**Original Code**:
-
-```typescript
-const vpc = new ec2.Vpc(this, `tf-vpc-${environment}`, {
-  cidr: '10.0.0.0/16', // Deprecated property
-});
-```
-
-**Fixed Code**:
-
-```typescript
-const vpc = new ec2.Vpc(this, `tf-vpc-${environment}`, {
-  ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'), // Current property
-});
-```
-
-### 8. Code Quality Issues - Unused Variables
-
-**Issue**: The model created several variables that were assigned but never used, causing linting errors.
-
-**Issues Fixed**:
-
-- Removed unused `commonTags` variable
-- Removed unused `listener` variable assignment
-- Removed unused alarm variable assignments (`httpCodeTarget4xxAlarm`, `httpCodeTarget5xxAlarm`, `responseTimeAlarm`)
-
-### 9. Deprecated CloudWatch Metrics Methods
-
-**Issue**: The model used deprecated metric methods on the target group.
-
-**Original Code**:
-
-```typescript
-metric: targetGroup.metricHttpCodeTarget(elbv2.HttpCodeTarget.TARGET_4XX_COUNT);
-metric: targetGroup.metricTargetResponseTime();
-```
-
-**Fixed Code**:
-
-```typescript
-metric: targetGroup.metrics.httpCodeTarget(
-  elbv2.HttpCodeTarget.TARGET_4XX_COUNT
-);
-metric: targetGroup.metrics.targetResponseTime();
-```
-
-### 10. Missing Required Imports
-
-**Issue**: The model failed to include necessary imports for S3 notifications and SNS services.
-
-**Added Imports**:
-
-```typescript
-import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
-import * as sns from 'aws-cdk-lib/aws-sns';
-```
-
-### 11. Deprecated Auto Scaling Health Check API - FIXED
-
-**Issue**: The model used deprecated health check APIs that will be removed in future CDK versions.
-
-**Deprecation Warnings Observed**:
-
-```
-[WARNING] aws-cdk-lib.aws_autoscaling.HealthCheck#elb is deprecated.
-  Use HealthChecks instead
-[WARNING] aws-cdk-lib.aws_autoscaling.ElbHealthCheckOptions#grace is deprecated.
-  Use AdditionalHealthChecksOptions instead
-[WARNING] aws-cdk-lib.aws_autoscaling.CommonAutoScalingGroupProps#healthCheck is deprecated.
-  Use `healthChecks` instead
-```
-
-**Original Code** (deprecated):
-
-```typescript
-healthCheck: autoscaling.HealthCheck.elb({
-  grace: cdk.Duration.minutes(5),
-}),
-```
-
-**Fixed Code**:
-
-```typescript
-// Create ASG without deprecated health check property
 const asg = new autoscaling.AutoScalingGroup(this, `tf-asg-${environment}`, {
   // ... other properties
-  // Removed deprecated healthCheck property
+  updatePolicy: autoscaling.UpdatePolicy.rollingUpdatePolicy({
+    // Invalid method name
+    maxBatchSize: 1,
+    minInstancesInService: 1,
+  }),
 });
-
-// Configure ELB health check using L1 construct to avoid deprecation warnings
-const cfnAsg = asg.node.defaultChild as autoscaling.CfnAutoScalingGroup;
-cfnAsg.healthCheckType = 'ELB';
-cfnAsg.healthCheckGracePeriod = 300;
 ```
-
-**Benefits**: Eliminates all deprecation warnings while maintaining the same functionality.
-
-### 12. Auto Scaling Group Desired Capacity Warning
-
-**Issue**: The model configured `desiredCapacity` which causes the ASG size to reset on every deployment.
-
-**Warning Observed**:
-
-```
-[Warning] desiredCapacity has been configured. Be aware this will reset the size of your AutoScalingGroup on every deployment.
-```
-
-**Current Code**:
-
-```typescript
-desiredCapacity: 2,  // Causes reset on each deployment
-```
-
-**Recommendation**: Remove `desiredCapacity` and let Auto Scaling manage the capacity based on scaling policies.
-
-## Security Issues Identified and Recommendations
-
-### 13. KMS Key Policy - Overly Permissive (CRITICAL SECURITY ISSUE) - FIXED
-
-**Issue**: The model used wildcard permissions in KMS key policy, violating the principle of least privilege.
-
-**Original Code**:
-
-```typescript
-new iam.PolicyStatement({
-  effect: iam.Effect.ALLOW,
-  principals: [new iam.AccountRootPrincipal()],
-  actions: ['kms:*'],  // TOO PERMISSIVE
-  resources: ['*'],    // TOO PERMISSIVE
-}),
-```
-
-**Security Risk**: Allows unlimited KMS operations on any resource, complete compromise of encryption security.
 
 **Fixed Code**:
 
 ```typescript
-new iam.PolicyStatement({
-  effect: iam.Effect.ALLOW,
-  principals: [new iam.AccountRootPrincipal()],
-  actions: [
-    'kms:DescribeKey', 'kms:GetKeyPolicy', 'kms:PutKeyPolicy',
-    'kms:CreateGrant', 'kms:RevokeGrant', 'kms:EnableKeyRotation',
-    'kms:DisableKeyRotation', 'kms:GetKeyRotationStatus',
-    'kms:ScheduleKeyDeletion', 'kms:CancelKeyDeletion'
-  ],
-  resources: ['*'], // Still needed for key management operations
-  // Added conditions for service-specific access
-}),
+const asg = new autoscaling.AutoScalingGroup(this, `tf-asg-${environment}`, {
+  // ... other properties
+  updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
+    // Changed from rollingUpdatePolicy to rollingUpdate
+    maxBatchSize: 1,
+    minInstancesInService: 1,
+  }),
+});
 ```
 
-### 14. Missing HTTPS/TLS Encryption (HIGH SECURITY RISK)
+### 3. Auto Scaling Group Metric Method Error - CPU Utilization Alarm
 
-**Issue**: The model only implemented HTTP listener, no HTTPS encryption in transit.
+**Issue**: The model used `asg.metricCpuUtilization()` method which doesn't exist on the AutoScalingGroup class. CloudWatch metrics must be created explicitly.
 
-**Current Code**:
+**Original Code**:
+
+```typescript
+const highCpuAlarm = new cloudwatch.Alarm(
+  this,
+  `tf-high-cpu-alarm-${environment}`,
+  {
+    alarmName: `tf-high-cpu-alarm-${environment}`,
+    metric: asg.metricCpuUtilization({
+      // Invalid method - doesn't exist
+      period: cdk.Duration.minutes(5),
+    }),
+    threshold: 80,
+    evaluationPeriods: 2,
+    comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    alarmDescription: 'High CPU utilization in ASG',
+  }
+);
+```
+
+**Fixed Code**:
+
+```typescript
+const highCpuAlarm = new cloudwatch.Alarm(
+  this,
+  `tf-high-cpu-alarm-${environment}`,
+  {
+    alarmName: `tf-high-cpu-alarm-${environment}`,
+    metric: new cloudwatch.Metric({
+      // Changed to explicit CloudWatch Metric creation
+      namespace: 'AWS/EC2',
+      metricName: 'CPUUtilization',
+      dimensionsMap: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(5),
+    }),
+    threshold: 80,
+    evaluationPeriods: 2,
+    comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    alarmDescription: 'High CPU utilization in ASG',
+  }
+);
+```
+
+### 4. Auto Scaling Group Metric Method Error - Scale Up Policy
+
+**Issue**: The model used `asg.metricCpuUtilization()` method in scaling policies which doesn't exist on the AutoScalingGroup class.
+
+**Original Code**:
+
+```typescript
+const scaleUpPolicy = asg.scaleOnMetric(`tf-scale-up-policy-${environment}`, {
+  metric: asg.metricCpuUtilization({
+    // Invalid method - doesn't exist
+    period: cdk.Duration.minutes(5),
+  }),
+  scalingSteps: [
+    { upper: 70, change: +1 },
+    { lower: 85, change: +2 },
+  ],
+  adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+  cooldown: cdk.Duration.minutes(5),
+});
+```
+
+**Fixed Code**:
+
+```typescript
+asg.scaleOnMetric(`tf-scale-up-policy-${environment}`, {
+  // Removed unused variable assignment
+  metric: new cloudwatch.Metric({
+    // Changed to explicit CloudWatch Metric creation
+    namespace: 'AWS/EC2',
+    metricName: 'CPUUtilization',
+    dimensionsMap: {
+      AutoScalingGroupName: asg.autoScalingGroupName,
+    },
+    statistic: 'Average',
+    period: cdk.Duration.minutes(5),
+  }),
+  scalingSteps: [
+    { upper: 70, change: +1 },
+    { lower: 85, change: +2 },
+  ],
+  adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+  cooldown: cdk.Duration.minutes(5),
+});
+```
+
+### 5. Auto Scaling Group Metric Method Error - Scale Down Policy
+
+**Issue**: The model used `asg.metricCpuUtilization()` method in scaling policies which doesn't exist on the AutoScalingGroup class.
+
+**Original Code**:
+
+```typescript
+const scaleDownPolicy = asg.scaleOnMetric(
+  `tf-scale-down-policy-${environment}`,
+  {
+    metric: asg.metricCpuUtilization({
+      // Invalid method - doesn't exist
+      period: cdk.Duration.minutes(5),
+    }),
+    scalingSteps: [{ upper: 30, change: -1 }],
+    adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+    cooldown: cdk.Duration.minutes(10),
+  }
+);
+```
+
+**Fixed Code**:
+
+```typescript
+asg.scaleOnMetric(`tf-scale-down-policy-${environment}`, {
+  // Removed unused variable assignment
+  metric: new cloudwatch.Metric({
+    // Changed to explicit CloudWatch Metric creation
+    namespace: 'AWS/EC2',
+    metricName: 'CPUUtilization',
+    dimensionsMap: {
+      AutoScalingGroupName: asg.autoScalingGroupName,
+    },
+    statistic: 'Average',
+    period: cdk.Duration.minutes(5),
+  }),
+  scalingSteps: [{ upper: 30, change: -1 }],
+  adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+  cooldown: cdk.Duration.minutes(10),
+});
+```
+
+## Lint Errors (ESLint) - ALL RESOLVED
+
+### 6. Missing Dependency Error
+
+**Issue**: The model imported 'source-map-support' which is not listed in the project's dependencies and is not necessary for this implementation.
+
+**Original Code**:
+
+```typescript
+#!/usr/bin/env node
+import 'source-map-support/register'; // Unnecessary import causing lint error
+import * as cdk from 'aws-cdk-lib';
+import { SecureWebAppStack } from '../lib/secure-web-app-stack';
+```
+
+**Fixed Code**:
+
+```typescript
+#!/usr/bin/env node
+import * as cdk from 'aws-cdk-lib'; // Removed source-map-support import
+import { SecureWebAppStack } from '../lib/secure-web-app-stack';
+```
+
+### 7. Unused Variable Error - Common Tags
+
+**Issue**: The model defined `commonTags` variable but never used it in the code.
+
+**Original Code**:
+
+```typescript
+const { environment } = props;
+const allowedCidrBlocks = props.allowedCidrBlocks || ['10.0.0.0/8'];
+
+// Common tags
+const commonTags = {
+  // Variable defined but never used
+  Environment: 'Production',
+  Project: 'SecureWebApp',
+  ManagedBy: 'CDK',
+};
+
+// Apply tags to the stack
+cdk.Tags.of(this).add('Environment', 'Production');
+```
+
+**Fixed Code**:
+
+```typescript
+const { environment } = props;
+const allowedCidrBlocks = props.allowedCidrBlocks || ['10.0.0.0/8'];
+
+// Apply tags to the stack  // Removed unused commonTags variable
+cdk.Tags.of(this).add('Environment', 'Production');
+```
+
+### 8. Unused Parameter Error - ForEach Index
+
+**Issue**: The model used `index` parameter in forEach callback but never referenced it.
+
+**Original Code**:
+
+```typescript
+// Allow HTTP and HTTPS from allowed CIDR blocks
+allowedCidrBlocks.forEach((cidr, index) => {
+  // index parameter unused
+  albSecurityGroup.addIngressRule(
+    ec2.Peer.ipv4(cidr),
+    ec2.Port.tcp(80),
+    `Allow HTTP from ${cidr}`
+  );
+  // ... more rules
+});
+```
+
+**Fixed Code**:
+
+```typescript
+// Allow HTTP and HTTPS from allowed CIDR blocks
+allowedCidrBlocks.forEach(cidr => {
+  // Removed unused index parameter
+  albSecurityGroup.addIngressRule(
+    ec2.Peer.ipv4(cidr),
+    ec2.Port.tcp(80),
+    `Allow HTTP from ${cidr}`
+  );
+  // ... more rules
+});
+```
+
+### 9. Unused Variable Error - ALB Listener
+
+**Issue**: The model assigned the ALB listener to a variable but never used it.
+
+**Original Code**:
+
+```typescript
+const listener = alb.addListener(`tf-listener-${environment}`, {
+  // Variable assigned but never used
+  port: 80,
+  protocol: elbv2.ApplicationProtocol.HTTP,
+  defaultTargetGroups: [targetGroup],
+});
+```
+
+**Fixed Code**:
 
 ```typescript
 alb.addListener(`tf-listener-${environment}`, {
+  // Removed unused variable assignment
   port: 80,
-  protocol: elbv2.ApplicationProtocol.HTTP, // NO ENCRYPTION
+  protocol: elbv2.ApplicationProtocol.HTTP,
+  defaultTargetGroups: [targetGroup],
 });
 ```
 
-**Security Risk**: All data transmitted in plain text, vulnerable to man-in-the-middle attacks.
+### 10. Unused Variable Error - Scale Up Policy
 
-**Recommended Implementation**: Add HTTPS listener with SSL certificate and redirect HTTP to HTTPS.
-
-### 15. EC2 Security Group - Unrestricted Outbound Access (HIGH SECURITY RISK) - FIXED
-
-**Issue**: The model allowed unrestricted outbound access from EC2 instances.
+**Issue**: The model assigned the scale up policy to a variable but never used it.
 
 **Original Code**:
 
 ```typescript
-const ec2SecurityGroup = new ec2.SecurityGroup(
-  this,
-  `tf-ec2-sg-${environment}`,
+const scaleUpPolicy = asg.scaleOnMetric(
+  // Variable assigned but never used
+  `tf-scale-up-policy-${environment}`,
   {
-    allowAllOutbound: true, // TOO PERMISSIVE
+    // ... scaling configuration
   }
-);
-```
-
-**Security Risk**: Instances can communicate with any external service, potential for data exfiltration.
-
-**Fixed Code**:
-
-```typescript
-const ec2SecurityGroup = new ec2.SecurityGroup(
-  this,
-  `tf-ec2-sg-${environment}`,
-  {
-    allowAllOutbound: false,
-  }
-);
-
-// Add specific egress rules
-ec2SecurityGroup.addEgressRule(
-  ec2.Peer.anyIpv4(),
-  ec2.Port.tcp(443),
-  'HTTPS for AWS services'
-);
-ec2SecurityGroup.addEgressRule(
-  ec2.Peer.anyIpv4(),
-  ec2.Port.tcp(80),
-  'HTTP for package updates'
-);
-ec2SecurityGroup.addEgressRule(
-  ec2.Peer.anyIpv4(),
-  ec2.Port.tcp(53),
-  'DNS resolution'
-);
-ec2SecurityGroup.addEgressRule(
-  ec2.Peer.anyIpv4(),
-  ec2.Port.udp(53),
-  'DNS resolution'
-);
-```
-
-### 16. ALB Security Group - Overly Permissive Egress (MEDIUM SECURITY RISK) - FIXED
-
-**Issue**: ALB security group allows outbound to any IPv4 address.
-
-**Original Code**:
-
-```typescript
-albSecurityGroup.addEgressRule(
-  ec2.Peer.anyIpv4(), // TOO PERMISSIVE
-  ec2.Port.tcp(80),
-  'Allow outbound HTTP to EC2 instances'
 );
 ```
 
 **Fixed Code**:
 
 ```typescript
-albSecurityGroup.addEgressRule(
-  ec2SecurityGroup, // Only to EC2 security group
-  ec2.Port.tcp(80),
-  'Allow outbound HTTP to EC2 instances only'
-);
-```
-
-### 17. Missing VPC Endpoints (MEDIUM SECURITY RISK)
-
-**Issue**: The model didn't implement VPC endpoints, causing AWS service communications to go over public internet.
-
-**Security Risk**: Data exposure, higher costs, dependency on internet gateway.
-
-**Recommended Implementation**:
-
-```typescript
-vpc.addGatewayEndpoint('S3Endpoint', {
-  service: ec2.GatewayVpcEndpointAwsService.S3,
-});
-
-vpc.addInterfaceEndpoint('SSMEndpoint', {
-  service: ec2.InterfaceVpcEndpointAwsService.SSM,
+asg.scaleOnMetric(`tf-scale-up-policy-${environment}`, {
+  // Removed unused variable assignment
+  // ... scaling configuration
 });
 ```
 
-### 18. SNS Topic Missing Access Policy (MEDIUM SECURITY RISK) - FIXED
+### 11. Unused Variable Error - Scale Down Policy
 
-**Issue**: SNS topic lacks explicit access policy, relies on default permissions.
-
-**Fixed Implementation**:
-
-```typescript
-securityNotificationsTopic.addToResourcePolicy(
-  new iam.PolicyStatement({
-    effect: iam.Effect.ALLOW,
-    principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
-    actions: ['sns:Publish'],
-    resources: [securityNotificationsTopic.topicArn],
-    conditions: {
-      StringEquals: { 'aws:SourceAccount': this.account },
-      ArnLike: {
-        'aws:SourceArn': `arn:aws:s3:::tf-secure-storage-${environment}`,
-      },
-    },
-  })
-);
-```
-
-### 19. VPC Flow Logs Role - Invalid Managed Policy (MEDIUM SECURITY RISK) - FIXED
-
-**Issue**: The model used invalid managed policy `VPCFlowLogsDeliveryRolePolicy`.
+**Issue**: The model assigned the scale down policy to a variable but never used it.
 
 **Original Code**:
 
 ```typescript
-managedPolicies: [
-  iam.ManagedPolicy.fromAwsManagedPolicyName(
-    'service-role/VPCFlowLogsDeliveryRolePolicy'  // INVALID POLICY
-  ),
+const scaleDownPolicy = asg.scaleOnMetric(
+  // Variable assigned but never used
+  `tf-scale-down-policy-${environment}`,
+  {
+    // ... scaling configuration
+  }
+);
+```
+
+**Fixed Code**:
+
+```typescript
+asg.scaleOnMetric(`tf-scale-down-policy-${environment}`, {
+  // Removed unused variable assignment
+  // ... scaling configuration
+});
+```
+
+## Formatting Issues (Prettier) - ALL RESOLVED
+
+### 12. Code Formatting Errors
+
+**Issue**: Multiple prettier/prettier formatting errors including incorrect indentation, spacing, and line breaks.
+
+**Fix Applied**: Used `npm run lint -- --fix` to automatically resolve all 32 formatting issues.
+
+## Security Issues Fixed
+
+### 13. Open Internet Access - Default CIDR Configuration
+
+**Issue**: The model response defaulted to allowing access from the entire internet (`0.0.0.0/0`) to the Application Load Balancer.
+
+**Original Code**:
+
+```typescript
+// Get allowed CIDR blocks from context or use default
+const allowedCidrBlocks = app.node.tryGetContext('allowedCidrBlocks') || [
+  '0.0.0.0/0', // Allows entire internet access - major security risk
+];
+```
+
+**Fixed Code**:
+
+```typescript
+// Get allowed CIDR blocks from context or use restrictive default
+const allowedCidrBlocks = app.node.tryGetContext('allowedCidrBlocks') || [
+  '10.0.0.0/8', // Changed from 0.0.0.0/0 to private network range
+  '172.16.0.0/12', // RFC 1918 private ranges only
+  '192.168.0.0/16',
+];
+```
+
+### 14. Overprivileged EC2 Role - S3 Permissions
+
+**Issue**: The model gave EC2 instances unnecessary delete permissions and access to all objects in the S3 bucket.
+
+**Original Code**:
+
+```typescript
+actions: [
+  's3:GetObject',
+  's3:PutObject',
+  's3:DeleteObject',  // Unnecessary delete permission
+  's3:ListBucket',
+],
+resources: [
+  `arn:aws:s3:::tf-backend-storage-${environment}`,
+  `arn:aws:s3:::tf-backend-storage-${environment}/*`,  // Access to all objects
 ],
 ```
 
 **Fixed Code**:
 
 ```typescript
-inlinePolicies: {
-  FlowLogDeliveryPolicy: new iam.PolicyDocument({
-    statements: [
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'logs:CreateLogGroup',
-          'logs:CreateLogStream',
-          'logs:PutLogEvents',
-          'logs:DescribeLogGroups',
-          'logs:DescribeLogStreams',
-        ],
-        resources: [
-          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/vpc/flowlogs-${environment}:*`,
-        ],
-      }),
-    ],
-  });
-}
+actions: [
+  's3:GetObject',
+  's3:PutObject',
+  's3:ListBucket',
+  // Removed s3:DeleteObject - not needed for typical web app operations
+],
+resources: [
+  `arn:aws:s3:::tf-backend-storage-${environment}`,
+  `arn:aws:s3:::tf-backend-storage-${environment}/logs/*`, // Restricted to logs path only
+],
+conditions: {
+  StringEquals: {
+    's3:ExistingObjectTag/Environment': environment, // Added condition for tagged objects only
+  },
+},
 ```
 
-### 20. EC2 Role - Overly Permissive S3 Access (MEDIUM SECURITY RISK) - FIXED
+### 15. Broad Outbound Internet Access - EC2 Security Group
 
-**Issue**: EC2 role had broad S3 permissions including DeleteObject on entire bucket.
+**Issue**: The model allowed EC2 instances to connect to any destination on the internet.
 
 **Original Code**:
 
 ```typescript
-actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-resources: [`arn:aws:s3:::tf-secure-storage-${environment}/*`],  // TOO BROAD
-```
+// Allow HTTPS outbound for package updates and SSM
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(), // Allows connection to any IP address
+  ec2.Port.tcp(443),
+  'Allow HTTPS outbound'
+);
 
-**Fixed Code**:
-
-```typescript
-inlinePolicies: {
-  S3AccessPolicy: new iam.PolicyDocument({
-    statements: [
-      new iam.PolicyStatement({
-        actions: ['s3:GetObject', 's3:PutObject'],
-        resources: [`arn:aws:s3:::tf-secure-storage-${environment}/logs/*`], // SPECIFIC PREFIX
-      }),
-      new iam.PolicyStatement({
-        actions: ['s3:ListBucket'],
-        resources: [`arn:aws:s3:::tf-secure-storage-${environment}`],
-        conditions: { StringLike: { 's3:prefix': ['logs/*'] } }, // RESTRICTED PREFIX
-      }),
-    ],
-  });
-}
-```
-
-### 21. S3 Bucket - Missing SSL Enforcement Policy (MEDIUM SECURITY RISK) - FIXED
-
-**Issue**: S3 bucket relied only on `enforceSSL: true` property without explicit bucket policy.
-
-**Fixed Implementation**:
-
-```typescript
-s3Bucket.addToResourcePolicy(
-  new iam.PolicyStatement({
-    sid: 'DenyInsecureConnections',
-    effect: iam.Effect.DENY,
-    principals: [new iam.AnyPrincipal()],
-    actions: ['s3:*'],
-    resources: [s3Bucket.bucketArn, s3Bucket.arnForObjects('*')],
-    conditions: { Bool: { 'aws:SecureTransport': 'false' } },
-  })
+// Allow HTTP outbound for package updates
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(), // Allows connection to any IP address
+  ec2.Port.tcp(80),
+  'Allow HTTP outbound'
 );
 ```
 
-### 22. UserData Security - Insecure Configuration Files (LOW SECURITY RISK) - FIXED
+**Fixed Code**:
 
-**Issue**: CloudWatch agent configuration written to disk without proper permissions.
+```typescript
+// Allow HTTPS outbound for package updates and SSM - restricted to specific endpoints
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.prefixList('pl-63a5400a'), // S3 prefix list for us-west-2
+  ec2.Port.tcp(443),
+  'Allow HTTPS to S3 endpoints'
+);
+
+// Allow HTTPS to AWS service endpoints only
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.ipv4('169.254.169.254/32'), // EC2 metadata service
+  ec2.Port.tcp(80),
+  'Allow HTTP to EC2 metadata service'
+);
+
+// Allow DNS resolution
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(),
+  ec2.Port.udp(53),
+  'Allow DNS resolution'
+);
+```
+
+### 16. Inappropriate Role Assignment - S3 Notifications
+
+**Issue**: The model incorrectly assigned the EC2 role to handle S3 notifications, which violates service principal boundaries.
 
 **Original Code**:
 
-```bash
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
-# Configuration content
-EOF
+```typescript
+const s3Bucket = new s3.Bucket(this, `tf-backend-storage-${environment}`, {
+  // ... other properties
+  serverAccessLogsPrefix: 'access-logs/',
+  notificationsHandlerRole: ec2Role, // Wrong role for S3 notifications
+});
 ```
 
 **Fixed Code**:
 
-```bash
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
-# Configuration content
-EOF
-chmod 600 /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-chown root:root /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+```typescript
+const s3Bucket = new s3.Bucket(this, `tf-backend-storage-${environment}`, {
+  // ... other properties
+  serverAccessLogsPrefix: 'access-logs/',
+  // Removed notificationsHandlerRole: ec2Role - inappropriate role assignment
+});
 ```
 
-### 23. UserData Security - Unrestricted Package Updates (LOW SECURITY RISK) - FIXED
+### 17. Excessive KMS Permissions - EC2 Role
 
-**Issue**: Used `yum update -y` which updates all packages, not just security updates.
+**Issue**: The model granted overprivileged KMS permissions with wildcards and unnecessary actions.
 
 **Original Code**:
 
-```bash
-yum update -y
+```typescript
+new iam.PolicyStatement({
+  effect: iam.Effect.ALLOW,
+  actions: [
+    'kms:Encrypt',
+    'kms:Decrypt',
+    'kms:ReEncrypt*',      // Unnecessary re-encryption permissions
+    'kms:GenerateDataKey*', // Wildcard allows all variants
+    'kms:DescribeKey',
+  ],
+  resources: [kmsKey.keyArn],
+}),
 ```
 
 **Fixed Code**:
 
-```bash
-yum update -y --security  # Only security updates
+```typescript
+new iam.PolicyStatement({
+  effect: iam.Effect.ALLOW,
+  actions: [
+    'kms:Encrypt',
+    'kms:Decrypt',
+    'kms:GenerateDataKey', // Removed wildcard - only specific action needed
+    'kms:DescribeKey',
+    // Removed kms:ReEncrypt* - not needed for typical operations
+  ],
+  resources: [kmsKey.keyArn],
+  conditions: {
+    StringEquals: {
+      'kms:ViaService': [
+        `s3.${this.region}.amazonaws.com`,
+        `logs.${this.region}.amazonaws.com`,
+      ], // Added ViaService condition to restrict usage
+    },
+  },
+}),
 ```
 
-### 24. WAF Configuration - Insufficient Protection (MEDIUM SECURITY RISK) - FIXED
+### 18. Resource Naming Predictability
 
-**Issue**: WAF missing SQL injection and bot control rules, rate limit too high.
+**Issue**: The model used predictable resource names that could aid in reconnaissance attacks.
 
-**Original Configuration**:
-
-- Only Common Rules and Known Bad Inputs
-- Rate limit: 2000 requests per 5 minutes
-
-**Enhanced Configuration**:
+**Original Code**:
 
 ```typescript
-rules: [
-  // Existing rules...
-  {
-    name: 'AWSManagedRulesSQLiRuleSet', // ADDED
-    priority: 3,
-    overrideAction: { none: {} },
-    statement: {
-      managedRuleGroupStatement: {
-        vendorName: 'AWS',
-        name: 'AWSManagedRulesSQLiRuleSet',
-      },
-    },
-  },
-  {
-    name: 'AWSManagedRulesBotControlRuleSet', // ADDED
-    priority: 4,
-    overrideAction: { none: {} },
-    statement: {
-      managedRuleGroupStatement: {
-        vendorName: 'AWS',
-        name: 'AWSManagedRulesBotControlRuleSet',
-      },
-    },
-  },
-  {
-    name: 'RateLimitRule',
-    statement: {
-      rateBasedStatement: {
-        limit: 1000, // REDUCED from 2000
-      },
-    },
-  },
-];
-```
-
-### 25. Missing Security Monitoring Alarms (MEDIUM SECURITY RISK) - FIXED
-
-**Issue**: No alarms for WAF blocked requests or EC2 resource utilization.
-
-**Added Alarms**:
-
-```typescript
-// WAF blocked requests alarm
-new cloudwatch.Alarm(this, `tf-waf-blocked-requests-alarm-${environment}`, {
-  alarmName: `tf-WAF-blocked-requests-${environment}`,
-  metric: new cloudwatch.Metric({
-    namespace: 'AWS/WAFV2',
-    metricName: 'BlockedRequests',
-    dimensionsMap: { WebACL: webAcl.name!, Region: this.region },
-  }),
-  threshold: 100,
+const s3Bucket = new s3.Bucket(this, `tf-backend-storage-${environment}`, {
+  bucketName: `tf-backend-storage-${environment}`, // Predictable name
+  // ... other properties
 });
 
-// EC2 CPU utilization alarm
-new cloudwatch.Alarm(this, `tf-ec2-cpu-alarm-${environment}`, {
-  alarmName: `tf-EC2-high-cpu-${environment}`,
-  metric: new cloudwatch.Metric({
-    namespace: 'AWS/EC2',
-    metricName: 'CPUUtilization',
-    dimensionsMap: { AutoScalingGroupName: asg.autoScalingGroupName },
-  }),
-  threshold: 80,
+const ec2Role = new iam.Role(this, `tf-ec2-role-${environment}`, {
+  roleName: `tf-ec2-role-${environment}`, // Predictable name
+  // ... other properties
 });
 ```
 
-## Enhancements Made
-
-### SNS Topic for Security Monitoring
-
-**Enhancement**: Created a dedicated SNS topic for security notifications with KMS encryption.
-
-**Implementation**:
+**Fixed Code**:
 
 ```typescript
-const securityNotificationsTopic = new sns.Topic(
+const s3Bucket = new s3.Bucket(this, `tf-backend-storage-${environment}`, {
+  bucketName: `tf-backend-storage-${environment}-${cdk.Aws.ACCOUNT_ID}`, // Added account ID for uniqueness
+  // ... other properties
+});
+
+const ec2Role = new iam.Role(this, `tf-ec2-role-${environment}`, {
+  roleName: `tf-ec2-role-${environment}-${cdk.Aws.ACCOUNT_ID}`, // Added account ID for uniqueness
+  // ... other properties
+});
+```
+
+## Security Issues NOT Fixed (As Requested)
+
+### 19. KMS Key Policy Wildcard Permissions - NOT FIXED
+
+**Issue**: The model response grants the root account wildcard permissions (`kms:*`) on all resources (`*`), which violates the principle of least privilege.
+
+**Current Code (Unchanged)**:
+
+```typescript
+new iam.PolicyStatement({
+  sid: 'Enable IAM User Permissions',
+  effect: iam.Effect.ALLOW,
+  principals: [new iam.AccountRootPrincipal()],
+  actions: ['kms:*'],  // Still allows ALL KMS permissions - CRITICAL VULNERABILITY
+  resources: ['*'],    // Still allows ALL resources - NO RESTRICTIONS
+}),
+```
+
+**Risk Level**: CRITICAL - This remains the most significant security vulnerability in the infrastructure.
+
+## Security Issues That Should Have Been Included
+
+### Missing Security Controls in Model Response
+
+#### 1. Missing HTTPS/TLS Configuration - NOT IMPLEMENTED
+
+**Issue**: The model response only configured HTTP (port 80) without HTTPS/TLS encryption.
+
+**What Should Have Been Added**:
+
+```typescript
+// SSL Certificate for HTTPS
+const certificate = new acm.Certificate(this, `tf-ssl-cert-${environment}`, {
+  domainName: `app-${environment}.example.com`,
+  validation: acm.CertificateValidation.fromDns(),
+});
+
+// HTTPS Listener
+alb.addListener(`tf-https-listener-${environment}`, {
+  port: 443,
+  protocol: elbv2.ApplicationProtocol.HTTPS,
+  certificates: [certificate],
+  defaultTargetGroups: [targetGroup],
+});
+
+// Redirect HTTP to HTTPS
+alb.addRedirect({
+  sourceProtocol: elbv2.ApplicationProtocol.HTTP,
+  sourcePort: 80,
+  targetProtocol: elbv2.ApplicationProtocol.HTTPS,
+  targetPort: 443,
+});
+```
+
+#### 2. Missing VPC Endpoints for AWS Services - NOT IMPLEMENTED
+
+**Issue**: EC2 instances communicate with AWS services over the internet instead of private VPC endpoints.
+
+**What Should Have Been Added**:
+
+```typescript
+// VPC Endpoints for secure AWS service communication
+const s3Endpoint = vpc.addGatewayEndpoint('S3Endpoint', {
+  service: ec2.GatewayVpcEndpointAwsService.S3,
+});
+
+const ssmEndpoint = vpc.addInterfaceEndpoint('SSMEndpoint', {
+  service: ec2.InterfaceVpcEndpointAwsService.SSM,
+  privateDnsEnabled: true,
+});
+
+const cloudwatchEndpoint = vpc.addInterfaceEndpoint('CloudWatchEndpoint', {
+  service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+  privateDnsEnabled: true,
+});
+```
+
+#### 3. Missing Network ACLs for Defense in Depth - NOT IMPLEMENTED
+
+**Issue**: Only security groups were configured, missing network-level access control lists.
+
+**What Should Have Been Added**:
+
+```typescript
+// Network ACLs for additional network security
+const privateNetworkAcl = new ec2.NetworkAcl(
   this,
-  `tf-security-notifications-${environment}`,
+  `tf-private-nacl-${environment}`,
   {
-    topicName: `tf-security-notifications-${environment}`,
-    displayName: `Security Notifications - ${environment}`,
-    masterKey: kmsKey,
+    vpc,
+    networkAclName: `tf-private-nacl-${environment}`,
+  }
+);
+
+// Allow inbound HTTP from ALB subnets only
+privateNetworkAcl.addEntry('AllowHttpFromALB', {
+  ruleNumber: 100,
+  protocol: ec2.AclProtocol.tcp(),
+  ruleAction: ec2.AclTrafficDirection.INGRESS,
+  cidr: ec2.AclCidr.ipv4('10.0.0.0/24'), // ALB subnet CIDR
+  portRange: { from: 80, to: 80 },
+});
+```
+
+#### 4. Missing WAF Geo-blocking and IP Reputation Rules - NOT IMPLEMENTED
+
+**Issue**: WAF configuration lacks geographic restrictions and IP reputation filtering.
+
+**What Should Have Been Added**:
+
+```typescript
+// Geo-blocking rule
+{
+  name: 'GeoBlockingRule',
+  priority: 4,
+  action: { block: {} },
+  statement: {
+    geoMatchStatement: {
+      countryCodes: ['CN', 'RU', 'KP'], // Block high-risk countries
+    },
+  },
+  visibilityConfig: {
+    sampledRequestsEnabled: true,
+    cloudWatchMetricsEnabled: true,
+    metricName: 'GeoBlockingRule',
+  },
+},
+
+// IP Reputation rule
+{
+  name: 'AWSManagedRulesAmazonIpReputationList',
+  priority: 5,
+  overrideAction: { none: {} },
+  statement: {
+    managedRuleGroupStatement: {
+      vendorName: 'AWS',
+      name: 'AWSManagedRulesAmazonIpReputationList',
+    },
+  },
+  visibilityConfig: {
+    sampledRequestsEnabled: true,
+    cloudWatchMetricsEnabled: true,
+    metricName: 'IpReputationRule',
+  },
+},
+```
+
+#### 5. Missing Secrets Manager for Sensitive Configuration - NOT IMPLEMENTED
+
+**Issue**: No secure storage mechanism for application secrets and configuration.
+
+**What Should Have Been Added**:
+
+```typescript
+// Secrets Manager for application secrets
+const appSecrets = new secretsmanager.Secret(
+  this,
+  `tf-app-secrets-${environment}`,
+  {
+    secretName: `tf-app-secrets-${environment}`,
+    description: 'Application secrets and configuration',
+    encryptionKey: kmsKey,
+    generateSecretString: {
+      secretStringTemplate: JSON.stringify({ username: 'admin' }),
+      generateStringKey: 'password',
+      excludeCharacters: '"@/\\',
+    },
+  }
+);
+
+// Grant EC2 role access to secrets
+appSecrets.grantRead(ec2Role);
+```
+
+#### 6. Missing CloudTrail for Audit Logging - NOT IMPLEMENTED
+
+**Issue**: No audit trail for API calls and resource access.
+
+**What Should Have Been Added**:
+
+```typescript
+// CloudTrail for audit logging
+const cloudTrail = new cloudtrail.Trail(this, `tf-cloudtrail-${environment}`, {
+  trailName: `tf-cloudtrail-${environment}`,
+  bucket: new s3.Bucket(this, `tf-cloudtrail-logs-${environment}`, {
+    bucketName: `tf-cloudtrail-logs-${environment}`,
+    encryption: s3.BucketEncryption.KMS,
+    encryptionKey: kmsKey,
+    blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+  }),
+  includeGlobalServiceEvents: true,
+  isMultiRegionTrail: true,
+  enableFileValidation: true,
+});
+```
+
+#### 7. Missing GuardDuty for Threat Detection - NOT IMPLEMENTED
+
+**Issue**: No threat detection and monitoring service configured.
+
+**What Should Have Been Added**:
+
+```typescript
+// GuardDuty for threat detection
+const guardDuty = new guardduty.CfnDetector(
+  this,
+  `tf-guardduty-${environment}`,
+  {
+    enable: true,
+    findingPublishingFrequency: 'FIFTEEN_MINUTES',
+    dataSources: {
+      s3Logs: { enable: true },
+      kubernetesAuditLogs: { enable: true },
+      malwareProtection: { enable: true },
+    },
   }
 );
 ```
 
-**Benefits**:
+#### 8. Missing Config Rules for Compliance Monitoring - NOT IMPLEMENTED
 
-- Enables real-time security monitoring
-- Encrypted notifications using the same KMS key
-- Can be extended to send notifications to email, SMS, or other endpoints
-- Provides audit trail for S3 object creation events
+**Issue**: No automated compliance checking and configuration monitoring.
 
-### 27. S3 Bucket Naming Conflict - FIXED
-**Issue**: ALB access logs bucket name conflicts with existing bucket in AWS account.
+**What Should Have Been Added**:
 
-**Error Observed**:
-```
-The bucket tf-alb-access-logs-pr806 already exists
-```
-
-**Root Cause**: Hard-coded bucket names can conflict with existing buckets in the same region.
-
-**Original Code**:
 ```typescript
-const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
-  bucketName: `tf-alb-access-logs-${environment}`,  // Hard-coded name causes conflict
-  // ...
-});
+// Config rules for compliance
+const configRule = new config.ManagedRule(
+  this,
+  `tf-config-rule-${environment}`,
+  {
+    identifier:
+      config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_ACCESS_PROHIBITED,
+    description: 'Ensure S3 buckets do not allow public access',
+  }
+);
 ```
-
-**Fixed Code**:
-```typescript
-const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
-  // Remove explicit bucketName to let CDK auto-generate unique name
-  encryption: s3.BucketEncryption.S3_MANAGED,
-  // ...
-});
-```
-
-**Benefits**: 
-- Eliminates bucket naming conflicts
-- CDK generates unique bucket names automatically
-- Maintains all original functionality
-- Bucket can still be referenced programmatically via `albLogsBucket.bucketName`
-- Reduces required IAM permissions for deployment
