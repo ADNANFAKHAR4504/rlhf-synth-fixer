@@ -26,7 +26,7 @@ export class DatabaseConstruct extends Construct {
       vpc,
       securityGroup,
       alertTopic,
-      databasePort = 3306,
+      // databasePort = 3306, // Unused variable - removed to fix linting
     } = props;
 
     // Create DB subnet group

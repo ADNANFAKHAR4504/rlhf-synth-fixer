@@ -46,13 +46,11 @@ export class MonitoringConstruct extends Construct {
     );
 
     // Use provided CloudTrail log group or create a default one
-    const cloudTrailLogGroupToUse = cloudTrailLogGroup || new logs.LogGroup(
-      this,
-      `CloudTrailLogGroup-${environment}`,
-      {
+    const cloudTrailLogGroupToUse =
+      cloudTrailLogGroup ||
+      new logs.LogGroup(this, `CloudTrailLogGroup-${environment}`, {
         retention: logs.RetentionDays.ONE_YEAR,
-      }
-    );
+      });
 
     // Metric filter for failed login attempts
     new logs.MetricFilter(this, `FailedLoginFilter-${environment}`, {

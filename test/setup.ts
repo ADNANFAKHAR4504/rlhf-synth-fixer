@@ -12,19 +12,19 @@ const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
 
 // Only show console output for errors in tests
-console.log = (...args: any[]) => {
+console.log = (...args: unknown[]) => {
   if (process.env.TEST_VERBOSE === 'true') {
     originalConsoleLog(...args);
   }
 };
 
-console.warn = (...args: any[]) => {
+console.warn = (...args: unknown[]) => {
   if (process.env.TEST_VERBOSE === 'true') {
     originalConsoleWarn(...args);
   }
 };
 
-console.error = (...args: any[]) => {
+console.error = (...args: unknown[]) => {
   originalConsoleError(...args);
 };
 
@@ -45,7 +45,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Handle uncaught exceptions in tests
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   console.error('Uncaught Exception:', error);
   process.exit(1);
 });

@@ -44,9 +44,13 @@ export class SecureInfrastructureStack extends cdk.Stack {
     );
 
     // CloudTrail for comprehensive logging
-    const cloudTrailConstruct = new CloudTrailConstruct(this, 'CloudTrailConstruct', {
-      environment,
-    });
+    const cloudTrailConstruct = new CloudTrailConstruct(
+      this,
+      'CloudTrailConstruct',
+      {
+        environment,
+      }
+    );
 
     // Database Infrastructure
     const databaseConstruct = new DatabaseConstruct(this, 'DatabaseConstruct', {

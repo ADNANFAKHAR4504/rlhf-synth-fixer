@@ -18,33 +18,41 @@ export class CloudTrailConstruct extends Construct {
     const { environment } = props;
 
     // Create S3 bucket for CloudTrail logs
-    const cloudTrailBucket = new s3.Bucket(this, `CloudTrailBucket-${environment}`, {
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      lifecycleRules: [
-        {
-          id: 'CloudTrailLogRetention',
-          enabled: true,
-          transitions: [
-            {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30),
-            },
-            {
-              storageClass: s3.StorageClass.GLACIER,
-              transitionAfter: cdk.Duration.days(90),
-            },
-          ],
-          expiration: cdk.Duration.days(2555), // 7 years
-        },
-      ],
-    });
+    const cloudTrailBucket = new s3.Bucket(
+      this,
+      `CloudTrailBucket-${environment}`,
+      {
+        versioned: true,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        lifecycleRules: [
+          {
+            id: 'CloudTrailLogRetention',
+            enabled: true,
+            transitions: [
+              {
+                storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+                transitionAfter: cdk.Duration.days(30),
+              },
+              {
+                storageClass: s3.StorageClass.GLACIER,
+                transitionAfter: cdk.Duration.days(90),
+              },
+            ],
+            expiration: cdk.Duration.days(2555), // 7 years
+          },
+        ],
+      }
+    );
 
     // Create CloudWatch Log Group for CloudTrail
-    this.cloudTrailLogGroup = new logs.LogGroup(this, `CloudTrailLogGroup-${environment}`, {
-      retention: logs.RetentionDays.ONE_YEAR,
-    });
+    this.cloudTrailLogGroup = new logs.LogGroup(
+      this,
+      `CloudTrailLogGroup-${environment}`,
+      {
+        retention: logs.RetentionDays.ONE_YEAR,
+      }
+    );
 
     // Create CloudTrail with comprehensive logging
     this.trail = new cloudtrail.Trail(this, `CloudTrail-${environment}`, {
@@ -57,7 +65,6 @@ export class CloudTrailConstruct extends Construct {
       isMultiRegionTrail: true,
       sendToCloudWatchLogs: true,
       managementEvents: cloudtrail.ReadWriteType.ALL,
-
     });
 
     // Tag CloudTrail resources

@@ -40,7 +40,9 @@ export async function getAWSTestConfig(): Promise<AWSTestConfig> {
 // Validate AWS credentials
 export async function validateAWSCredentials(): Promise<boolean> {
   try {
-    const stsClient = new STSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+    const stsClient = new STSClient({
+      region: process.env.AWS_REGION || 'us-east-1',
+    });
     const command = new GetCallerIdentityCommand({});
     await stsClient.send(command);
     return true;
@@ -69,7 +71,10 @@ export function skipIfNoAWSValidation(testName: string) {
 }
 
 // Generate test resource names
-export function getTestResourceName(baseName: string, environment: string): string {
+export function getTestResourceName(
+  baseName: string,
+  environment: string
+): string {
   return `${baseName}-${environment}-test`;
 }
 
@@ -92,4 +97,3 @@ export function validateResourceID(id: string, type: string): boolean {
   const pattern = patterns[type];
   return pattern ? pattern.test(id) : true;
 }
-

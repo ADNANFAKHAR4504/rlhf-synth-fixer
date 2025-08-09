@@ -1,6 +1,6 @@
 import {
   CloudTrailClient,
-  DescribeTrailsCommand
+  DescribeTrailsCommand,
 } from '@aws-sdk/client-cloudtrail';
 import {
   CloudWatchClient,
@@ -12,12 +12,12 @@ import {
   DescribeSubnetsCommand,
   DescribeVpcAttributeCommand,
   DescribeVpcsCommand,
-  EC2Client
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
   GetRoleCommand,
   IAMClient,
-  ListAttachedRolePoliciesCommand
+  ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
 import {
   DescribeDBInstancesCommand,
@@ -40,7 +40,7 @@ import {
 import {
   GetLoggingConfigurationCommand,
   ListWebACLsCommand,
-  WAFV2Client
+  WAFV2Client,
 } from '@aws-sdk/client-wafv2';
 import fs from 'fs';
 
@@ -77,15 +77,17 @@ describe('AWS Resource Validation Tests', () => {
         return;
       }
 
-      const vpcId = outputs.VpcId || outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
+      const vpcId =
+        outputs.VpcId ||
+        outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
       expect(vpcId).toBeDefined();
 
       const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
-      
+
       // Validate VPC configuration
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBeDefined();
@@ -93,7 +95,7 @@ describe('AWS Resource Validation Tests', () => {
       // These properties are in Vpc.VpcAttributes, so we need to describe VPC attributes
       const vpcAttrCommand = new DescribeVpcAttributeCommand({
         VpcId: vpc.VpcId!,
-        Attribute: 'enableDnsHostnames'
+        Attribute: 'enableDnsHostnames',
       });
       const vpcDnsHostnamesAttr = await ec2Client.send(vpcAttrCommand);
       if (vpcDnsHostnamesAttr.EnableDnsHostnames !== undefined) {
@@ -102,7 +104,7 @@ describe('AWS Resource Validation Tests', () => {
 
       const vpcDnsSupportAttrCommand = new DescribeVpcAttributeCommand({
         VpcId: vpc.VpcId!,
-        Attribute: 'enableDnsSupport'
+        Attribute: 'enableDnsSupport',
       });
       const vpcDnsSupportAttr = await ec2Client.send(vpcDnsSupportAttrCommand);
       if (vpcDnsSupportAttr.EnableDnsSupport !== undefined) {
@@ -116,21 +118,23 @@ describe('AWS Resource Validation Tests', () => {
         return;
       }
 
-      const vpcId = outputs.VpcId || outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
+      const vpcId =
+        outputs.VpcId ||
+        outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
       const command = new DescribeSubnetsCommand({
         Filters: [
           { Name: 'vpc-id', Values: [vpcId] },
           { Name: 'state', Values: ['available'] },
         ],
       });
-      
+
       const response = await ec2Client.send(command);
       const privateSubnets = response.Subnets!.filter(
         subnet => !subnet.MapPublicIpOnLaunch
       );
-      
+
       expect(privateSubnets.length).toBeGreaterThan(0);
-      
+
       // Validate private subnet configuration
       privateSubnets.forEach(subnet => {
         expect(subnet.State).toBe('available');
@@ -145,17 +149,19 @@ describe('AWS Resource Validation Tests', () => {
         return;
       }
 
-      const vpcId = outputs.VpcId || outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
+      const vpcId =
+        outputs.VpcId ||
+        outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
       const command = new DescribeNatGatewaysCommand({
         Filter: [
           { Name: 'vpc-id', Values: [vpcId] },
           { Name: 'state', Values: ['available', 'pending'] },
         ],
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.NatGateways!.length).toBeGreaterThan(0);
-      
+
       // Validate NAT gateway configuration
       response.NatGateways!.forEach(natGateway => {
         expect(natGateway.State).toMatch(/available|pending/);
@@ -169,25 +175,27 @@ describe('AWS Resource Validation Tests', () => {
         return;
       }
 
-      const vpcId = outputs.VpcId || outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
+      const vpcId =
+        outputs.VpcId ||
+        outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
       const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [vpcId] },
-        ],
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.SecurityGroups!.length).toBeGreaterThan(0);
-      
+
       // Validate security group configuration
       response.SecurityGroups!.forEach(sg => {
         expect(sg.GroupName).toBeDefined();
         expect(sg.Description).toBeDefined();
-        
+
         // Check for database security group
         if (sg.Description?.includes('database')) {
-          const dbRules = sg.IpPermissions?.filter(rule => 
-            rule.FromPort === 3306 || rule.FromPort === parseInt(process.env.DATABASE_PORT || '3306')
+          const dbRules = sg.IpPermissions?.filter(
+            rule =>
+              rule.FromPort === 3306 ||
+              rule.FromPort === parseInt(process.env.DATABASE_PORT || '3306')
           );
           expect(dbRules!.length).toBeGreaterThan(0);
         }
@@ -202,17 +210,20 @@ describe('AWS Resource Validation Tests', () => {
         return;
       }
 
-      const dbEndpoint = outputs.DatabaseEndpoint || 
-                        outputs['TapStackdevSecureInfrastructureStack5A42B300.DatabaseEndpoint'];
+      const dbEndpoint =
+        outputs.DatabaseEndpoint ||
+        outputs[
+          'TapStackdevSecureInfrastructureStack5A42B300.DatabaseEndpoint'
+        ];
       expect(dbEndpoint).toBeDefined();
 
       const command = new DescribeDBInstancesCommand({});
       const response = await rdsClient.send(command);
-      
-      const dbInstance = response.DBInstances!.find(db => 
-        db.Endpoint?.Address === dbEndpoint
+
+      const dbInstance = response.DBInstances!.find(
+        db => db.Endpoint?.Address === dbEndpoint
       );
-      
+
       expect(dbInstance).toBeDefined();
       expect(dbInstance!.StorageEncrypted).toBe(true);
       expect(dbInstance!.BackupRetentionPeriod).toBeGreaterThan(0);
@@ -223,14 +234,14 @@ describe('AWS Resource Validation Tests', () => {
     test('should have database subnet group in private subnets', async () => {
       const command = new DescribeDBSubnetGroupsCommand({});
       const response = await rdsClient.send(command);
-      
-      const dbSubnetGroup = response.DBSubnetGroups!.find(group => 
+
+      const dbSubnetGroup = response.DBSubnetGroups!.find(group =>
         group.DBSubnetGroupName?.includes(environment)
       );
-      
+
       expect(dbSubnetGroup).toBeDefined();
       expect(dbSubnetGroup!.Subnets!.length).toBeGreaterThan(1);
-      
+
       // Validate subnet group configuration
       dbSubnetGroup!.Subnets!.forEach(subnet => {
         expect(subnet.SubnetAvailabilityZone).toBeDefined();
@@ -242,36 +253,43 @@ describe('AWS Resource Validation Tests', () => {
   describe('Storage Security', () => {
     test('should have S3 bucket with encryption enabled', async () => {
       const bucketName = `app-storage-${environment}-${process.env.CDK_DEFAULT_ACCOUNT}`;
-      
+
       try {
         const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
         const response = await s3Client.send(command);
-        
+
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-        const encryptionRule = response.ServerSideEncryptionConfiguration!.Rules![0];
+        const encryptionRule =
+          response.ServerSideEncryptionConfiguration!.Rules![0];
         expect(encryptionRule.ApplyServerSideEncryptionByDefault).toBeDefined();
-        expect(encryptionRule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
+        expect(
+          encryptionRule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm
+        ).toBe('AES256');
       } catch (error) {
-        console.log(`S3 bucket ${bucketName} not found or encryption not configured`);
+        console.log(
+          `S3 bucket ${bucketName} not found or encryption not configured`
+        );
       }
     });
 
     test('should have S3 bucket with versioning enabled', async () => {
       const bucketName = `app-storage-${environment}-${process.env.CDK_DEFAULT_ACCOUNT}`;
-      
+
       try {
         const command = new GetBucketVersioningCommand({ Bucket: bucketName });
         const response = await s3Client.send(command);
-        
+
         expect(response.Status).toBe('Enabled');
       } catch (error) {
-        console.log(`S3 bucket ${bucketName} not found or versioning not configured`);
+        console.log(
+          `S3 bucket ${bucketName} not found or versioning not configured`
+        );
       }
     });
 
     test('should have S3 bucket with public access blocked', async () => {
       const bucketName = `app-storage-${environment}-${process.env.CDK_DEFAULT_ACCOUNT}`;
-      
+
       try {
         const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
         const response = await s3Client.send(command);
@@ -283,26 +301,32 @@ describe('AWS Resource Validation Tests', () => {
         expect(config.IgnorePublicAcls).toBe(true);
         expect(config.RestrictPublicBuckets).toBe(true);
       } catch (error) {
-        console.log(`S3 bucket ${bucketName} not found or public access block not configured`);
+        console.log(
+          `S3 bucket ${bucketName} not found or public access block not configured`
+        );
       }
     });
 
     test('should have S3 bucket with lifecycle policies', async () => {
       const bucketName = `app-storage-${environment}-${process.env.CDK_DEFAULT_ACCOUNT}`;
-      
+
       try {
-        const command = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
+        const command = new GetBucketLifecycleConfigurationCommand({
+          Bucket: bucketName,
+        });
         const response = await s3Client.send(command);
-        
+
         expect(response.Rules!.length).toBeGreaterThan(0);
-        
+
         // Validate lifecycle rules
         response.Rules!.forEach(rule => {
           expect(rule.Status).toBe('Enabled');
           expect(rule.ID).toBeDefined();
         });
       } catch (error) {
-        console.log(`S3 bucket ${bucketName} not found or lifecycle policies not configured`);
+        console.log(
+          `S3 bucket ${bucketName} not found or lifecycle policies not configured`
+        );
       }
     });
   });
@@ -310,11 +334,11 @@ describe('AWS Resource Validation Tests', () => {
   describe('IAM Security and MFA', () => {
     test('should have admin role with MFA requirements', async () => {
       const roleName = `AdminRole-${environment}`;
-      
+
       try {
         const command = new GetRoleCommand({ RoleName: roleName });
         const response = await iamClient.send(command);
-        
+
         expect(response.Role).toBeDefined();
         expect(response.Role!.RoleName).toBe(roleName);
         expect(response.Role!.Description).toContain('MFA requirement');
@@ -325,20 +349,22 @@ describe('AWS Resource Validation Tests', () => {
 
     test('should have EC2 role with proper permissions', async () => {
       const roleName = `EC2Role-${environment}`;
-      
+
       try {
         const command = new GetRoleCommand({ RoleName: roleName });
         const response = await iamClient.send(command);
-        
+
         expect(response.Role).toBeDefined();
         expect(response.Role!.RoleName).toBe(roleName);
-        
+
         // Check for SSM managed policy
-        const attachedPoliciesCommand = new ListAttachedRolePoliciesCommand({ RoleName: roleName });
+        const attachedPoliciesCommand = new ListAttachedRolePoliciesCommand({
+          RoleName: roleName,
+        });
         const policiesResponse = await iamClient.send(attachedPoliciesCommand);
-        
-        const hasSSMPolicy = policiesResponse.AttachedPolicies!.some(policy => 
-          policy.PolicyName === 'AmazonSSMManagedInstanceCore'
+
+        const hasSSMPolicy = policiesResponse.AttachedPolicies!.some(
+          policy => policy.PolicyName === 'AmazonSSMManagedInstanceCore'
         );
         expect(hasSSMPolicy).toBe(true);
       } catch (error) {
@@ -354,24 +380,25 @@ describe('AWS Resource Validation Tests', () => {
         return;
       }
 
-      const wafArn = outputs.WafAclArn || 
-                    outputs['TapStackdevSecureInfrastructureStack5A42B300.WafAclArn'];
+      const wafArn =
+        outputs.WafAclArn ||
+        outputs['TapStackdevSecureInfrastructureStack5A42B300.WafAclArn'];
       expect(wafArn).toBeDefined();
 
       // Use ListWebACLs to verify the WAF exists
-      const command = new ListWebACLsCommand({ 
-        Scope: 'CLOUDFRONT'
+      const command = new ListWebACLsCommand({
+        Scope: 'CLOUDFRONT',
       });
       const response = await wafv2Client.send(command);
-      
+
       expect(response.WebACLs).toBeDefined();
       expect(response.WebACLs!.length).toBeGreaterThan(0);
-      
+
       // Find our WAF by matching the ARN
       const waf = response.WebACLs!.find(webAcl => webAcl.ARN === wafArn);
       expect(waf).toBeDefined();
       expect(waf!.Name).toContain(environment);
-      
+
       // Verify the WAF has rules (basic validation without detailed API calls)
       expect(waf!.ARN).toBe(wafArn);
     });
@@ -382,15 +409,20 @@ describe('AWS Resource Validation Tests', () => {
         return;
       }
 
-      const wafArn = outputs.WafAclArn || 
-                    outputs['TapStackdevSecureInfrastructureStack5A42B300.WafAclArn'];
-      
+      const wafArn =
+        outputs.WafAclArn ||
+        outputs['TapStackdevSecureInfrastructureStack5A42B300.WafAclArn'];
+
       try {
-        const command = new GetLoggingConfigurationCommand({ ResourceArn: wafArn });
+        const command = new GetLoggingConfigurationCommand({
+          ResourceArn: wafArn,
+        });
         const response = await wafv2Client.send(command);
-        
+
         expect(response.LoggingConfiguration).toBeDefined();
-        expect(response.LoggingConfiguration!.LogDestinationConfigs!.length).toBeGreaterThan(0);
+        expect(
+          response.LoggingConfiguration!.LogDestinationConfigs!.length
+        ).toBeGreaterThan(0);
       } catch (error) {
         console.log('WAF logging not configured or WAF not found');
       }
@@ -400,14 +432,16 @@ describe('AWS Resource Validation Tests', () => {
   describe('CloudTrail and Monitoring', () => {
     test('should have CloudTrail with comprehensive logging', async () => {
       const trailName = `CloudTrail-${environment}`;
-      
+
       try {
-        const command = new DescribeTrailsCommand({ trailNameList: [trailName] });
+        const command = new DescribeTrailsCommand({
+          trailNameList: [trailName],
+        });
         const response = await cloudTrailClient.send(command);
-        
+
         expect(response.trailList!.length).toBeGreaterThan(0);
         const trail = response.trailList![0];
-        
+
         expect(trail.Name).toBe(trailName);
         expect(trail.S3BucketName).toBeDefined();
         expect(trail.CloudWatchLogsLogGroupArn).toBeDefined();
@@ -421,17 +455,18 @@ describe('AWS Resource Validation Tests', () => {
     test('should have CloudWatch alarms for monitoring', async () => {
       const command = new DescribeAlarmsCommand({});
       const response = await cloudWatchClient.send(command);
-      
+
       // Look for security-related alarms
-      const securityAlarms = response.MetricAlarms!.filter(alarm => 
-        alarm.AlarmName?.includes(environment) && 
-        (alarm.AlarmDescription?.includes('security') || 
-         alarm.AlarmDescription?.includes('failed') ||
-         alarm.AlarmDescription?.includes('patch'))
+      const securityAlarms = response.MetricAlarms!.filter(
+        alarm =>
+          alarm.AlarmName?.includes(environment) &&
+          (alarm.AlarmDescription?.includes('security') ||
+            alarm.AlarmDescription?.includes('failed') ||
+            alarm.AlarmDescription?.includes('patch'))
       );
-      
+
       expect(securityAlarms.length).toBeGreaterThan(0);
-      
+
       // Validate alarm configuration
       securityAlarms.forEach(alarm => {
         expect(alarm.AlarmName).toBeDefined();
@@ -444,15 +479,15 @@ describe('AWS Resource Validation Tests', () => {
   describe('Systems Manager Patch Manager', () => {
     test('should have patch baseline configured', async () => {
       const baselineName = `SecurityPatchBaseline-${environment}`;
-      
+
       try {
         const command = new DescribePatchBaselinesCommand({});
         const response = await ssmClient.send(command);
-        
-        const baseline = response.BaselineIdentities!.find(b => 
-          b.BaselineName === baselineName
+
+        const baseline = response.BaselineIdentities!.find(
+          b => b.BaselineName === baselineName
         );
-        
+
         expect(baseline).toBeDefined();
         expect(baseline!.BaselineName).toBe(baselineName);
         expect(baseline!.OperatingSystem).toBe('AMAZON_LINUX_2');
@@ -463,15 +498,15 @@ describe('AWS Resource Validation Tests', () => {
 
     test('should have maintenance windows for patching', async () => {
       const windowName = `PatchMaintenanceWindow-${environment}`;
-      
+
       try {
         const command = new DescribeMaintenanceWindowsCommand({});
         const response = await ssmClient.send(command);
-        
-        const maintenanceWindow = response.WindowIdentities!.find(w => 
-          w.Name === windowName
+
+        const maintenanceWindow = response.WindowIdentities!.find(
+          w => w.Name === windowName
         );
-        
+
         expect(maintenanceWindow).toBeDefined();
         expect(maintenanceWindow!.Name).toBe(windowName);
         expect(maintenanceWindow!.Schedule).toBeDefined();
@@ -486,9 +521,10 @@ describe('AWS Resource Validation Tests', () => {
     test('should have appropriate instance types for environment', () => {
       // Ensure 'environment' is defined in the test scope
       const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || '';
-      const isDevEnvironment = environment === 'dev' || environment.startsWith('pr');
+      const isDevEnvironment =
+        environment === 'dev' || environment.startsWith('pr');
       const isProdEnvironment = environment === 'prod';
-      
+
       if (isDevEnvironment) {
         // Dev environment should use smaller instances
         expect(environment).toMatch(/^(dev|pr\d+)$/);
@@ -496,20 +532,21 @@ describe('AWS Resource Validation Tests', () => {
         // Prod environment should have production configuration
         expect(environment).toBe('prod');
       }
-    // (Fixed: removed duplicate/erroneous code block)
+      // (Fixed: removed duplicate/erroneous code block)
 
-    test('should have appropriate backup retention for environment', () => {
-      const isDevEnvironment = environment === 'dev' || environment.startsWith('pr');
-      const isProdEnvironment = environment === 'prod';
-      
-      if (isDevEnvironment) {
-        // Dev environment might have shorter retention
-        expect(environment).toMatch(/^(dev|pr\d+)$/);
-      } else if (isProdEnvironment) {
-        // Prod environment should have longer retention
-        expect(environment).toBe('prod');
-      }
-    });
+      test('should have appropriate backup retention for environment', () => {
+        const isDevEnvironment =
+          environment === 'dev' || environment.startsWith('pr');
+        const isProdEnvironment = environment === 'prod';
+
+        if (isDevEnvironment) {
+          // Dev environment might have shorter retention
+          expect(environment).toMatch(/^(dev|pr\d+)$/);
+        } else if (isProdEnvironment) {
+          // Prod environment should have longer retention
+          expect(environment).toBe('prod');
+        }
+      });
 
       test('should have deletion protection for production', async () => {
         // Ensure 'environment' is defined in the test scope
@@ -519,7 +556,9 @@ describe('AWS Resource Validation Tests', () => {
           // This is a placeholder example; replace with your actual resource and client
           const dbInstanceIdentifier = process.env.DB_INSTANCE_IDENTIFIER!;
           const { DBInstances } = await rdsClient.send(
-            new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceIdentifier })
+            new DescribeDBInstancesCommand({
+              DBInstanceIdentifier: dbInstanceIdentifier,
+            })
           );
           expect(DBInstances).toBeDefined();
           expect(Array.isArray(DBInstances)).toBe(true);
