@@ -171,17 +171,7 @@ describe('ProductionInfrastructureStack', () => {
   describe('S3 Bucket Configuration', () => {
     test('creates S3 bucket with security features', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.objectLike({
-          'Fn::Join': Match.arrayWith([
-            '',
-            Match.arrayWith([
-              'secure-webapp-artifacts-test-',
-              Match.objectLike({
-                Ref: 'AWS::AccountId',
-              }),
-            ]),
-          ]),
-        }),
+        BucketName: 'secure-webapp-artifacts-test',
         VersioningConfiguration: {
           Status: 'Enabled',
         },
