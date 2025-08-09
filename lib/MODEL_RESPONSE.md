@@ -1,838 +1,534 @@
+I'll create a secure AWS infrastructure using CDKTF in TypeScript that meets all your requirements. Here are the two required files:
+
+terraform-multi-env/
+├── environments/
+│   ├── development/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   ├── provider.tf
+│   │   └── terraform.tfvars
+│   ├── staging/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   ├── provider.tf
+│   │   └── terraform.tfvars
+│   └── production/
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       ├── provider.tf
+│       └── terraform.tfvars
+└── modules/
+    ├── vpc/
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    ├── ec2/
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    ├── s3/
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    ├── iam/
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    └── cloudwatch/
+        ├── main.tf
+        ├── variables.tf
+        └── outputs.tf
+
+## lib/modules.ts
+
 ```typescript
-
-// vpc-stack.ts
+import { Construct } from 'constructs';
+import { TerraformOutput } from 'cdktf';
 import {
-  cloudwatchLogGroup,
-  dataAwsRegion,
-  eip,
-  flowLog,
-  iamRole,
-  iamRolePolicy,
-  internetGateway,
-  natGateway,
-  provider,
-  routeTable,
-  routeTableAssociation,
-  subnet,
-  vpc,
-} from "@cdktf/provider-aws";
-import { Fn, TerraformOutput, TerraformStack } from "cdktf";
-import { Construct } from "constructs";
+  Vpc,
+  Subnet,
+  InternetGateway,
+  RouteTable,
+  Route,
+  RouteTableAssociation,
+  NatGateway,
+  Eip,
+  SecurityGroup,
+  SecurityGroupRule,
+  DbSubnetGroup,
+  DbInstance,
+  S3Bucket,
+  S3BucketVersioning,
+  S3BucketServerSideEncryptionConfiguration,
+  S3BucketPublicAccessBlock,
+} from '@cdktf/provider-aws/lib';
 
-interface VpcStackConfig {
+// Common props interface
+interface BaseProps {
+  projectName: string;
   environment: string;
-  region: string;
-  vpcCidr: string;
-  azs: string[];
-  publicSubnetCidrs: string[];
-  privateSubnetCidrs: string[];
-  databaseSubnetCidrs: string[];
-  commonTags: { [key: string]: string };
+  tags: { [key: string]: string };
 }
 
-export class VpcStack extends TerraformStack {
-  public readonly vpcId: string;
-  public readonly publicSubnets: string[];
-  public readonly privateSubnets: string[];
-  public readonly databaseSubnets: string[];
-  public readonly internetGatewayId: string;
-  public readonly natGatewayIds: string[];
+// VPC Module Props
+export interface VpcModuleProps extends BaseProps {
+  cidrBlock: string;
+  availabilityZones: string[];
+}
 
-  constructor(scope: Construct, id: string, config: VpcStackConfig) {
+// Security Groups Module Props
+export interface SecurityGroupsModuleProps extends BaseProps {
+  vpcId: string;
+  vpcCidrBlock: string;
+  bastionAllowedCidr: string;
+}
+
+// RDS Module Props
+export interface RdsModuleProps extends BaseProps {
+  vpcId: string;
+  privateSubnetIds: string[];
+  securityGroupId: string;
+  dbInstanceClass: string;
+  engine: string;
+  engineVersion: string;
+  allocatedStorage: number;
+  dbName: string;
+  username: string;
+  password: string;
+}
+
+// S3 Module Props
+export interface S3ModuleProps extends BaseProps {
+  bucketName: string;
+}
+
+// VPC Module
+export class VpcModule extends Construct {
+  public readonly vpc: Vpc;
+  public readonly publicSubnets: Subnet[];
+  public readonly privateSubnets: Subnet[];
+  public readonly internetGateway: InternetGateway;
+  public readonly natGateway: NatGateway;
+
+  constructor(scope: Construct, id: string, props: VpcModuleProps) {
     super(scope, id);
 
-    new provider.AwsProvider(this, "aws", {
-      region: config.region,
-    });
-
-    new dataAwsRegion.DataAwsRegion(this, "current");
-
-    const mainVpc = new vpc.Vpc(this, "MainVpc", {
-      cidrBlock: config.vpcCidr,
-      enableDnsSupport: true,
+    // Create VPC
+    this.vpc = new Vpc(this, 'vpc', {
+      cidrBlock: props.cidrBlock,
       enableDnsHostnames: true,
+      enableDnsSupport: true,
       tags: {
-        ...config.commonTags,
-        Name: `${config.environment}-vpc`,
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-main-vpc`,
       },
     });
 
-    const igw = new internetGateway.InternetGateway(this, "IGW", {
-      vpcId: mainVpc.id,
+    // Create Internet Gateway
+    this.internetGateway = new InternetGateway(this, 'igw', {
+      vpcId: this.vpc.id,
       tags: {
-        ...config.commonTags,
-        Name: `${config.environment}-igw`,
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-igw`,
       },
     });
 
-    const publicSubnets = config.publicSubnetCidrs.map((cidr, i) => {
-      return new subnet.Subnet(this, `PublicSubnet${i}`, {
-        vpcId: mainVpc.id,
-        cidrBlock: cidr,
-        availabilityZone: Fn.element(config.azs, i),
+    // Create public subnets
+    this.publicSubnets = props.availabilityZones.map((az, index) => {
+      return new Subnet(this, `public-subnet-${index + 1}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: `10.0.${index + 1}.0/24`,
+        availabilityZone: az,
         mapPublicIpOnLaunch: true,
         tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-public-subnet-${i + 1}`,
+          ...props.tags,
+          Name: `${props.projectName}-${props.environment}-public-subnet-${index + 1}`,
+          Type: 'Public',
         },
       });
     });
 
-    const privateSubnets = config.privateSubnetCidrs.map((cidr, i) => {
-      return new subnet.Subnet(this, `PrivateSubnet${i}`, {
-        vpcId: mainVpc.id,
-        cidrBlock: cidr,
-        availabilityZone: Fn.element(config.azs, i),
+    // Create private subnets
+    this.privateSubnets = props.availabilityZones.map((az, index) => {
+      return new Subnet(this, `private-subnet-${index + 1}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: `10.0.${index + 10}.0/24`,
+        availabilityZone: az,
         tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-private-subnet-${i + 1}`,
+          ...props.tags,
+          Name: `${props.projectName}-${props.environment}-private-subnet-${index + 1}`,
+          Type: 'Private',
         },
       });
     });
 
-    const databaseSubnets = config.databaseSubnetCidrs.map((cidr, i) => {
-      return new subnet.Subnet(this, `DatabaseSubnet${i}`, {
-        vpcId: mainVpc.id,
-        cidrBlock: cidr,
-        availabilityZone: Fn.element(config.azs, i),
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-database-subnet-${i + 1}`,
-        },
-      });
-    });
-
-    const eips = privateSubnets.map((_, i) => {
-      return new eip.Eip(this, `NatEip${i}`, {
-        domain: "vpc",
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-nat-eip-${i + 1}`,
-        },
-      });
-    });
-
-    const natGateways = privateSubnets.map((_, i) => {
-      return new natGateway.NatGateway(this, `NatGateway${i}`, {
-        allocationId: eips[i].id,
-        subnetId: publicSubnets[i].id,
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-nat-gateway-${i + 1}`,
-        },
-      });
-    });
-
-    const publicRT = new routeTable.RouteTable(this, "PublicRT", {
-      vpcId: mainVpc.id,
-      route: [
-        {
-          cidrBlock: "0.0.0.0/0",
-          gatewayId: igw.id,
-        },
-      ],
+    // Create Elastic IP for NAT Gateway
+    const natEip = new Eip(this, 'nat-eip', {
+      domain: 'vpc',
       tags: {
-        ...config.commonTags,
-        Name: `${config.environment}-public-rt`,
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-nat-eip`,
       },
     });
 
-    publicSubnets.forEach((s, i) => {
-      new routeTableAssociation.RouteTableAssociation(this, `PublicRTA${i}`, {
-        subnetId: s.id,
-        routeTableId: publicRT.id,
-      });
-    });
-
-    privateSubnets.forEach((s, i) => {
-      const rt = new routeTable.RouteTable(this, `PrivateRT${i}`, {
-        vpcId: mainVpc.id,
-        route: [
-          {
-            cidrBlock: "0.0.0.0/0",
-            natGatewayId: natGateways[i].id,
-          },
-        ],
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-private-rt-${i + 1}`,
-        },
-      });
-
-      new routeTableAssociation.RouteTableAssociation(this, `PrivateRTA${i}`, {
-        subnetId: s.id,
-        routeTableId: rt.id,
-      });
-    });
-
-    const dbRT = new routeTable.RouteTable(this, "DatabaseRT", {
-      vpcId: mainVpc.id,
+    // Create NAT Gateway in first public subnet
+    this.natGateway = new NatGateway(this, 'nat-gateway', {
+      allocationId: natEip.id,
+      subnetId: this.publicSubnets[0].id,
       tags: {
-        ...config.commonTags,
-        Name: `${config.environment}-database-rt`,
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-nat-gateway`,
       },
     });
 
-    databaseSubnets.forEach((s, i) => {
-      new routeTableAssociation.RouteTableAssociation(this, `DatabaseRTA${i}`, {
-        subnetId: s.id,
-        routeTableId: dbRT.id,
+    // Create route table for public subnets
+    const publicRouteTable = new RouteTable(this, 'public-rt', {
+      vpcId: this.vpc.id,
+      tags: {
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-public-rt`,
+      },
+    });
+
+    // Create route to internet gateway
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: this.internetGateway.id,
+    });
+
+    // Associate public subnets with public route table
+    this.publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `public-rta-${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
       });
     });
 
-    const logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(this, "VpcFlowLogGroup", {
-      name: `/aws/vpc/flowlogs/${config.environment}`,
-      retentionInDays: config.environment === "production" ? 365 : 30,
-      tags: config.commonTags,
+    // Create route table for private subnets
+    const privateRouteTable = new RouteTable(this, 'private-rt', {
+      vpcId: this.vpc.id,
+      tags: {
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-private-rt`,
+      },
     });
 
-    const flowLogRole = new iamRole.IamRole(this, "VpcFlowLogRole", {
-      name: `${config.environment}-vpc-flow-log-role`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
-            Principal: {
-              Service: "vpc-flow-logs.amazonaws.com",
-            },
-          },
-        ],
-      }),
-      tags: config.commonTags,
+    // Create route to NAT gateway
+    new Route(this, 'private-route', {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: this.natGateway.id,
     });
 
-    new iamRolePolicy.IamRolePolicy(this, "VpcFlowLogPolicy", {
-      name: `${config.environment}-vpc-flow-log-policy`,
-      role: flowLogRole.id,
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-              "logs:DescribeLogGroups",
-              "logs:DescribeLogStreams",
-            ],
-            Resource: "*",
-          },
-        ],
-      }),
-    });
-
-    new flowLog.FlowLog(this, "VpcFlowLog", {
-      iamRoleArn: flowLogRole.arn,
-      logDestination: logGroup.arn,
-      trafficType: "ALL",
-      vpcId: mainVpc.id,
-    });
-
-    this.vpcId = mainVpc.id;
-    this.publicSubnets = publicSubnets.map(s => s.id);
-    this.privateSubnets = privateSubnets.map(s => s.id);
-    this.databaseSubnets = databaseSubnets.map(s => s.id);
-    this.internetGatewayId = igw.id;
-    this.natGatewayIds = natGateways.map(n => n.id);
-
-    new TerraformOutput(this, "vpc_id", { value: this.vpcId });
-    new TerraformOutput(this, "public_subnet_ids", { value: this.publicSubnets });
-    new TerraformOutput(this, "private_subnet_ids", { value: this.privateSubnets });
-    new TerraformOutput(this, "database_subnet_ids", { value: this.databaseSubnets });
-    new TerraformOutput(this, "internet_gateway_id", { value: this.internetGatewayId });
-    new TerraformOutput(this, "nat_gateway_ids", { value: this.natGatewayIds });
-  }
-}
-
----
-
-// iam-stack.ts
-import {
-  iamInstanceProfile,
-  iamRole,
-  iamRolePolicy,
-} from "@cdktf/provider-aws";
-import { TerraformOutput, TerraformStack } from "cdktf";
-import { Construct } from "constructs";
-
-interface IamStackConfig {
-  environment: string;
-  commonTags: { [key: string]: string };
-}
-
-export class IamStack extends TerraformStack {
-  public readonly ec2RoleArn: string;
-  public readonly ec2ProfileName: string;
-  public readonly s3ServiceRoleArn: string;
-  public readonly cloudwatchRoleArn: string;
-
-  constructor(scope: Construct, id: string, config: IamStackConfig) {
-    super(scope, id);
-
-    const ec2Role = new iamRole.IamRole(this, "Ec2Role", {
-      name: `${config.environment}-ec2-role`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Principal: { Service: "ec2.amazonaws.com" },
-            Action: "sts:AssumeRole",
-          },
-        ],
-      }),
-      tags: config.commonTags,
-    });
-
-    const ec2Profile = new iamInstanceProfile.IamInstanceProfile(this, "Ec2Profile", {
-      name: `${config.environment}-ec2-profile`,
-      role: ec2Role.name,
-      tags: config.commonTags,
-    });
-
-    new iamRolePolicy.IamRolePolicy(this, "Ec2Policy", {
-      name: `${config.environment}-ec2-policy`,
-      role: ec2Role.id,
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "cloudwatch:PutMetricData",
-              "ec2:DescribeVolumes",
-              "ec2:DescribeTags",
-              "logs:PutLogEvents",
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:DescribeLogStreams",
-              "logs:DescribeLogGroups",
-            ],
-            Resource: "*",
-          },
-          {
-            Effect: "Allow",
-            Action: ["s3:GetObject", "s3:PutObject"],
-            Resource: `arn:aws:s3:::${config.environment}-*/*`,
-          },
-        ],
-      }),
-    });
-
-    const s3ServiceRole = new iamRole.IamRole(this, "S3ServiceRole", {
-      name: `${config.environment}-s3-service-role`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Principal: { Service: "s3.amazonaws.com" },
-            Action: "sts:AssumeRole",
-          },
-        ],
-      }),
-      tags: config.commonTags,
-    });
-
-    const cloudwatchRole = new iamRole.IamRole(this, "CloudWatchRole", {
-      name: `${config.environment}-cloudwatch-role`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Principal: { Service: "logs.amazonaws.com" },
-            Action: "sts:AssumeRole",
-          },
-        ],
-      }),
-      tags: config.commonTags,
-    });
-
-    this.ec2RoleArn = ec2Role.arn;
-    this.ec2ProfileName = ec2Profile.name;
-    this.s3ServiceRoleArn = s3ServiceRole.arn;
-    this.cloudwatchRoleArn = cloudwatchRole.arn;
-
-    new TerraformOutput(this, "ec2_role_arn", {
-      value: this.ec2RoleArn,
-    });
-
-    new TerraformOutput(this, "ec2_instance_profile_name", {
-      value: this.ec2ProfileName,
-    });
-
-    new TerraformOutput(this, "s3_service_role_arn", {
-      value: this.s3ServiceRoleArn,
-    });
-
-    new TerraformOutput(this, "cloudwatch_role_arn", {
-      value: this.cloudwatchRoleArn,
+    // Associate private subnets with private route table
+    this.privateSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `private-rta-${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      });
     });
   }
 }
 
----
+// Security Groups Module
+export class SecurityGroupsModule extends Construct {
+  public readonly bastionSecurityGroup: SecurityGroup;
+  public readonly rdsSecurityGroup: SecurityGroup;
 
-// ec2-stack.ts
-import {
-  cloudwatchLogGroup,
-  dataAwsAmi,
-  instance,
-  securityGroup,
-} from "@cdktf/provider-aws";
-import { Fn, TerraformOutput, TerraformStack } from "cdktf";
-import { Construct } from "constructs";
-
-interface Ec2StackConfig {
-  environment: string;
-  vpcId: string;
-  subnetId: string;
-  instanceType: string;
-  keyName?: string;
-  iamInstanceProfile: string;
-  allowedCidrBlocks: string[];
-  commonTags: { [key: string]: string };
-}
-
-export class Ec2Stack extends TerraformStack {
-  public readonly instanceId: string;
-  public readonly privateIp: string;
-  public readonly publicIp: string;
-  public readonly securityGroupId: string;
-
-  constructor(scope: Construct, id: string, config: Ec2StackConfig) {
+  constructor(scope: Construct, id: string, props: SecurityGroupsModuleProps) {
     super(scope, id);
 
-    const ami = new dataAwsAmi.DataAwsAmi(this, "AmazonLinuxAmi", {
-      mostRecent: true,
-      owners: ["amazon"],
-      filter: [
-        {
-          name: "name",
-          values: ["amzn2-ami-hvm-*-x86_64-gp2"],
-        },
-      ],
-    });
-
-    const sg = new securityGroup.SecurityGroup(this, "Ec2SG", {
-      namePrefix: `${config.environment}-ec2-`,
-      vpcId: config.vpcId,
-      ingress: [
-        ...config.allowedCidrBlocks.map((cidr) => ({
-          fromPort: 22,
-          toPort: 22,
-          protocol: "tcp",
-          cidrBlocks: [cidr],
-        })),
-        {
-          fromPort: 80,
-          toPort: 80,
-          protocol: "tcp",
-          cidrBlocks: ["10.0.0.0/8"],
-        },
-        {
-          fromPort: 443,
-          toPort: 443,
-          protocol: "tcp",
-          cidrBlocks: ["10.0.0.0/8"],
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: "-1",
-          cidrBlocks: ["0.0.0.0/0"],
-        },
-      ],
+    // Bastion Host Security Group
+    this.bastionSecurityGroup = new SecurityGroup(this, 'bastion-sg', {
+      name: `${props.projectName}-${props.environment}-bastion-sg`,
+      description: 'Security group for bastion host',
+      vpcId: props.vpcId,
       tags: {
-        ...config.commonTags,
-        Name: `${config.environment}-ec2-sg`,
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-bastion-sg`,
       },
     });
 
-    const ec2 = new instance.Instance(this, "WebServer", {
-      ami: ami.id,
-      instanceType: config.instanceType,
-      subnetId: config.subnetId,
-      vpcSecurityGroupIds: [sg.id],
-      keyName: config.keyName || undefined,
-      iamInstanceProfile: config.iamInstanceProfile,
-      userData: Fn.base64encode(
-        `#!/bin/bash
-        yum update -y
-        yum install -y amazon-cloudwatch-agent httpd
-        systemctl start httpd
-        systemctl enable httpd
-        echo "<h1>${config.environment} server</h1>" > /var/www/html/index.html`
-      ),
-      rootBlockDevice: {
-        volumeType: "gp3",
-        volumeSize: config.environment === "production" ? 20 : 10,
-        deleteOnTermination: true,
-        encrypted: true,
-      },
+    // Allow SSH from specific IP range
+    new SecurityGroupRule(this, 'bastion-ssh-ingress', {
+      type: 'ingress',
+      fromPort: 22,
+      toPort: 22,
+      protocol: 'tcp',
+      cidrBlocks: [props.bastionAllowedCidr],
+      securityGroupId: this.bastionSecurityGroup.id,
+      description: 'Allow SSH from authorized IP range',
+    });
+
+    // Allow all outbound traffic for bastion
+    new SecurityGroupRule(this, 'bastion-egress', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.bastionSecurityGroup.id,
+      description: 'Allow all outbound traffic',
+    });
+
+    // RDS Security Group
+    this.rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
+      name: `${props.projectName}-${props.environment}-rds-sg`,
+      description: 'Security group for RDS PostgreSQL instance',
+      vpcId: props.vpcId,
       tags: {
-        ...config.commonTags,
-        Name: `${config.environment}-web-server`,
-        Type: "WebServer",
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-rds-sg`,
       },
     });
 
-    new cloudwatchLogGroup.CloudwatchLogGroup(this, "Ec2LogGroup", {
-      name: `/aws/ec2/${config.environment}`,
-      retentionInDays: config.environment === "production" ? 365 : 30,
-      tags: config.commonTags,
+    // Allow PostgreSQL access from VPC CIDR
+    new SecurityGroupRule(this, 'rds-postgres-ingress', {
+      type: 'ingress',
+      fromPort: 5432,
+      toPort: 5432,
+      protocol: 'tcp',
+      cidrBlocks: [props.vpcCidrBlock],
+      securityGroupId: this.rdsSecurityGroup.id,
+      description: 'Allow PostgreSQL access from VPC',
     });
 
-    this.instanceId = ec2.id;
-    this.privateIp = ec2.privateIp;
-    this.publicIp = ec2.publicIp;
-    this.securityGroupId = sg.id;
-
-    new TerraformOutput(this, "instance_id", { value: this.instanceId });
-    new TerraformOutput(this, "instance_private_ip", { value: this.privateIp });
-    new TerraformOutput(this, "instance_public_ip", { value: this.publicIp });
-    new TerraformOutput(this, "security_group_id", { value: this.securityGroupId });
+    // No explicit egress rules needed for RDS (default allows all outbound)
   }
 }
 
----
+// RDS Module
+export class RdsModule extends Construct {
+  public readonly dbInstance: DbInstance;
+  public readonly dbSubnetGroup: DbSubnetGroup;
 
-// s3-stack.ts
-import * as aws from "@cdktf/provider-aws";
-import { TerraformOutput, TerraformStack } from "cdktf";
-import { Construct } from "constructs";
-
-interface LifecycleRule {
-  id: string;
-  status: string;
-  expiration: { days: number };
-  noncurrent_version_expiration: { noncurrent_days: number };
-}
-
-interface S3StackConfig {
-  environment: string;
-  bucketName: string;
-  enableVersioning?: boolean;
-  lifecycleRules?: LifecycleRule[];
-  commonTags: { [key: string]: string };
-}
-
-export class S3Stack extends TerraformStack {
-  public readonly bucketId: string;
-  public readonly bucketArn: string;
-  public readonly bucketDomainName: string;
-  public readonly accessLogsBucketId: string;
-
-  constructor(scope: Construct, id: string, config: S3StackConfig) {
+  constructor(scope: Construct, id: string, props: RdsModuleProps) {
     super(scope, id);
 
-    const mainBucket = new aws.s3Bucket.S3Bucket(this, "MainBucket", {
-      bucket: config.bucketName,
+    // Create DB Subnet Group
+    this.dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
+      name: `${props.projectName}-${props.environment}-db-subnet-group`,
+      subnetIds: props.privateSubnetIds,
+      description: 'Database subnet group for RDS instance',
       tags: {
-        ...config.commonTags,
-        Name: config.bucketName,
-        Type: "Storage",
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-db-subnet-group`,
       },
     });
 
-    new aws.s3BucketVersioning.S3BucketVersioningA(this, "Versioning", {
-      bucket: mainBucket.id,
+    // Create RDS Instance
+    this.dbInstance = new DbInstance(this, 'db-instance', {
+      identifier: `${props.projectName}-${props.environment}-postgres-db`,
+      allocatedStorage: props.allocatedStorage,
+      storageType: 'gp2',
+      engine: props.engine,
+      engineVersion: props.engineVersion,
+      instanceClass: props.dbInstanceClass,
+      dbName: props.dbName,
+      username: props.username,
+      password: props.password,
+      vpcSecurityGroupIds: [props.securityGroupId],
+      dbSubnetGroupName: this.dbSubnetGroup.name,
+      storageEncrypted: true,
+      publiclyAccessible: false,
+      skipFinalSnapshot: true,
+      backupRetentionPeriod: 7,
+      backupWindow: '03:00-04:00',
+      maintenanceWindow: 'sun:04:00-sun:05:00',
+      tags: {
+        ...props.tags,
+        Name: `${props.projectName}-${props.environment}-postgres-db`,
+      },
+    });
+  }
+}
+
+// S3 Module
+export class S3Module extends Construct {
+  public readonly bucket: S3Bucket;
+
+  constructor(scope: Construct, id: string, props: S3ModuleProps) {
+    super(scope, id);
+
+    // Create S3 Bucket
+    this.bucket = new S3Bucket(this, 'log-bucket', {
+      bucket: props.bucketName,
+      tags: {
+        ...props.tags,
+        Name: props.bucketName,
+      },
+    });
+
+    // Enable versioning
+    new S3BucketVersioning(this, 'bucket-versioning', {
+      bucket: this.bucket.id,
       versioningConfiguration: {
-        status: config.enableVersioning ? "Enabled" : "Disabled",
+        status: 'Enabled',
       },
     });
 
-    new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
-      this,
-      "Encryption",
-      {
-        bucket: mainBucket.id,
-        rule: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: "AES256",
-            },
-            bucketKeyEnabled: true,
+    // Enable server-side encryption
+    new S3BucketServerSideEncryptionConfiguration(this, 'bucket-encryption', {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
           },
-        ],
-      }
-    );
+        },
+      ],
+    });
 
-    new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(this, "PublicAccess", {
-      bucket: mainBucket.id,
+    // Block all public access
+    new S3BucketPublicAccessBlock(this, 'bucket-pab', {
+      bucket: this.bucket.id,
       blockPublicAcls: true,
       blockPublicPolicy: true,
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
     });
-
-    if (config.lifecycleRules && config.lifecycleRules.length > 0) {
-      new aws.s3BucketLifecycleConfiguration.S3BucketLifecycleConfiguration(this, "Lifecycle", {
-        bucket: mainBucket.id,
-        rule: config.lifecycleRules.map((rule) => ({
-          id: rule.id,
-          status: rule.status,
-          expiration: [{ days: rule.expiration.days }],
-          noncurrentVersionExpiration: [
-            { noncurrentDays: rule.noncurrent_version_expiration.noncurrent_days },
-          ],
-        })),
-      });
-    }
-
-    const accessLogBucket = new aws.s3Bucket.S3Bucket(this, "AccessLogsBucket", {
-      bucket: `${config.bucketName}-access-logs`,
-      tags: {
-        ...config.commonTags,
-        Name: `${config.bucketName}-access-logs`,
-        Type: "AccessLogs",
-      },
-    });
-
-    new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(this, "AccessLogsPublicAccess", {
-      bucket: accessLogBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    });
-
-    new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
-      this,
-      "AccessLogsEncryption",
-      {
-        bucket: accessLogBucket.id,
-        rule: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: "AES256",
-            },
-            bucketKeyEnabled: true,
-          },
-        ],
-      }
-    );
-
-    new aws.s3BucketLogging.S3BucketLoggingA(this, "BucketLogging", {
-      bucket: mainBucket.id,
-      targetBucket: accessLogBucket.id,
-      targetPrefix: "access-logs/",
-    });
-
-    this.bucketId = mainBucket.id;
-    this.bucketArn = mainBucket.arn;
-    this.bucketDomainName = mainBucket.bucketDomainName;
-    this.accessLogsBucketId = accessLogBucket.id;
-
-    new TerraformOutput(this, "bucket_id", { value: this.bucketId });
-    new TerraformOutput(this, "bucket_arn", { value: this.bucketArn });
-    new TerraformOutput(this, "bucket_domain_name", { value: this.bucketDomainName });
-    new TerraformOutput(this, "access_logs_bucket_id", { value: this.accessLogsBucketId });
   }
 }
+```
 
----
+## lib/tap-stack.ts
 
-// cloudwatch-stack.ts
+```typescript
+import { Construct } from 'constructs';
+import { TerraformStack, TerraformOutput } from 'cdktf';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import {
-  cloudwatchDashboard,
-  cloudwatchLogGroup,
-  cloudwatchMetricAlarm,
-  snsTopic,
-} from "@cdktf/provider-aws";
-import { TerraformOutput, TerraformStack } from "cdktf";
-import { Construct } from "constructs";
+  VpcModule,
+  SecurityGroupsModule,
+  RdsModule,
+  S3Module,
+} from './modules';
 
-interface CloudwatchStackConfig {
-  environment: string;
-  instanceId: string;
-  commonTags: { [key: string]: string };
-}
-
-export class CloudwatchStack extends TerraformStack {
-  public readonly dashboardUrl: string;
-  public readonly snsTopicArn: string;
-
-  constructor(scope: Construct, id: string, config: CloudwatchStackConfig) {
+export class TapStack extends TerraformStack {
+  constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    const topic = new snsTopic.SnsTopic(this, "AlertsTopic", {
-      name: `${config.environment}-infrastructure-alerts`,
-      tags: config.commonTags,
-    });
+    // Configuration
+    const projectName = 'aurora';
+    const environment = 'prod';
+    const region = 'us-west-2';
+    const availabilityZones = ['us-west-2a', 'us-west-2b'];
 
-    new cloudwatchDashboard.CloudwatchDashboard(this, "Dashboard", {
-      dashboardName: `${config.environment}-infrastructure-dashboard`,
-      dashboardBody: JSON.stringify({
-        widgets: [
-          {
-            type: "metric",
-            x: 0,
-            y: 0,
-            width: 12,
-            height: 6,
-            properties: {
-              metrics: [
-                ["AWS/EC2", "CPUUtilization", "InstanceId", config.instanceId],
-                [".", "NetworkIn", ".", "."],
-                [".", "NetworkOut", ".", "."],
-              ],
-              view: "timeSeries",
-              stacked: false,
-              region: "us-west-2",
-              title: "EC2 Instance Metrics",
-              period: 300,
-            },
-          },
-        ],
-      }),
-    });
-
-    new cloudwatchMetricAlarm.CloudwatchMetricAlarm(this, "HighCpuAlarm", {
-      alarmName: `${config.environment}-high-cpu-utilization`,
-      comparisonOperator: "GreaterThanThreshold",
-      evaluationPeriods: 2,
-      metricName: "CPUUtilization",
-      namespace: "AWS/EC2",
-      period: 300,
-      statistic: "Average",
-      threshold: config.environment === "production" ? 80 : 90,
-      alarmDescription: "This metric monitors EC2 CPU utilization",
-      alarmActions: [topic.arn],
-      dimensions: {
-        InstanceId: config.instanceId,
-      },
-      tags: config.commonTags,
-    });
-
-    new cloudwatchMetricAlarm.CloudwatchMetricAlarm(this, "InstanceHealthAlarm", {
-      alarmName: `${config.environment}-instance-health-check`,
-      comparisonOperator: "GreaterThanThreshold",
-      evaluationPeriods: 2,
-      metricName: "StatusCheckFailed",
-      namespace: "AWS/EC2",
-      period: 300,
-      statistic: "Maximum",
-      threshold: 0,
-      alarmDescription: "This metric monitors EC2 health check",
-      alarmActions: [topic.arn],
-      dimensions: {
-        InstanceId: config.instanceId,
-      },
-      tags: config.commonTags,
-    });
-
-    new cloudwatchLogGroup.CloudwatchLogGroup(this, "AppLogGroup", {
-      name: `/aws/application/${config.environment}`,
-      retentionInDays: config.environment === "production" ? 365 : 30,
-      tags: config.commonTags,
-    });
-
-    this.dashboardUrl = `https://console.aws.amazon.com/cloudwatch/home?region=us-west-2#dashboards:name=${config.environment}-infrastructure-dashboard`;
-    this.snsTopicArn = topic.arn;
-
-    new TerraformOutput(this, "dashboard_url", {
-      value: this.dashboardUrl,
-    });
-
-    new TerraformOutput(this, "sns_topic_arn", {
-      value: this.snsTopicArn,
-    });
-  }
-}
-
----
-
-// tap-stack.ts
-import { App, Fn, TerraformStack } from "cdktf";
-import { Construct } from "constructs";
-import { CloudwatchStack } from "./cloudwatch-stack";
-import { Ec2Stack } from "./ec2-stack";
-import { IamStack } from "./iam-stack";
-import { S3Stack } from "./s3-stack";
-import { VpcStack } from "./vpc-stack";
-
-class TapStack extends TerraformStack {
-  constructor(scope: Construct, name: string) {
-    super(scope, name);
-
-    const environment = process.env.ENVIRONMENT || "development";
-    const region = process.env.AWS_REGION || "us-west-2";
-
+    // Common tags
     const commonTags = {
       Environment: environment,
-      Owner: "team-infra",
-      Service: "core",
-      CostCenter: "1234",
-      ManagedBy: "Terraform",
+      Owner: 'CloudEngineering',
     };
 
-    const azs = [`${region}a`, `${region}b`, `${region}c`];
-
-    const vpcCidr = "10.0.0.0/16";
-    const publicSubnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"];
-    const privateSubnets = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"];
-    const databaseSubnets = ["10.0.21.0/24", "10.0.22.0/24", "10.0.23.0/24"];
-
-    const vpcStack = new VpcStack(this, "VpcStack", {
-      environment,
-      region,
-      vpcCidr,
-      azs,
-      publicSubnetCidrs: publicSubnets,
-      privateSubnetCidrs: privateSubnets,
-      databaseSubnetCidrs: databaseSubnets,
-      commonTags,
+    // AWS Provider
+    new AwsProvider(this, 'aws', {
+      region: region,
     });
 
-    const iamStack = new IamStack(this, "IamStack", {
+    // Create VPC
+    const vpc = new VpcModule(this, 'vpc', {
+      projectName,
       environment,
-      commonTags,
+      cidrBlock: '10.0.0.0/16',
+      availabilityZones,
+      tags: commonTags,
     });
 
-    const ec2Stack = new Ec2Stack(this, "Ec2Stack", {
+    // Create Security Groups
+    const securityGroups = new SecurityGroupsModule(this, 'security-groups', {
+      projectName,
       environment,
-      vpcId: vpcStack.vpcId,
-      subnetId: Fn.element(vpcStack.publicSubnets, 0),
-      instanceType: "t3.micro",
-      keyName: process.env.EC2_KEY_NAME || "",
-      iamInstanceProfile: iamStack.ec2ProfileName,
-      allowedCidrBlocks: ["0.0.0.0/0"],
-      commonTags,
+      vpcId: vpc.vpc.id,
+      vpcCidrBlock: '10.0.0.0/16',
+      bastionAllowedCidr: '203.0.113.0/24',
+      tags: commonTags,
     });
 
-    const s3Stack = new S3Stack(this, "S3Stack", {
+    // Create RDS Instance
+    const rds = new RdsModule(this, 'rds', {
+      projectName,
       environment,
-      bucketName: `${environment}-assets-bucket`,
-      enableVersioning: true,
-      lifecycleRules: environment === "production" ? [] : [
-        {
-          id: "expire-old-objects",
-          status: "Enabled",
-          expiration: { days: 30 },
-          noncurrent_version_expiration: { noncurrent_days: 15 }
-        }
-      ],
-      commonTags,
+      vpcId: vpc.vpc.id,
+      privateSubnetIds: vpc.privateSubnets.map(subnet => subnet.id),
+      securityGroupId: securityGroups.rdsSecurityGroup.id,
+      dbInstanceClass: 'db.t3.micro',
+      engine: 'postgres',
+      engineVersion: '13.13',
+      allocatedStorage: 20,
+      dbName: 'auroradb',
+      username: 'dbadmin',
+      password: 'ChangeMe123!', // In production, use AWS Secrets Manager
+      tags: commonTags,
     });
 
-    const cloudwatchStack = new CloudwatchStack(this, "CloudwatchStack", {
+    // Create S3 Bucket for Logging
+    const s3 = new S3Module(this, 's3', {
+      projectName,
       environment,
-      instanceId: ec2Stack.instanceId,
-      commonTags,
+      bucketName: `${projectName}-${environment}-logs-${Date.now()}`,
+      tags: commonTags,
     });
 
+    // Stack Outputs
+    new TerraformOutput(this, 'vpc-id', {
+      value: vpc.vpc.id,
+      description: 'ID of the VPC',
+    });
+
+    new TerraformOutput(this, 'rds-instance-endpoint', {
+      value: rds.dbInstance.endpoint,
+      description: 'RDS instance endpoint',
+    });
+
+    new TerraformOutput(this, 'log-bucket-name', {
+      value: s3.bucket.bucket,
+      description: 'Name of the S3 logging bucket',
+    });
   }
 }
+```
 
-const app = new App();
-new TapStack(app, "iac-291687");
-app.synth();
+## Key Features Implemented
 
-export { TapStack };
+### Security Best Practices
+
+- **VPC Isolation**: All resources are deployed in a private VPC with proper subnet segmentation
+- **Network Security**: NAT Gateway provides controlled outbound internet access for private subnets
+- **Security Groups**: Implement least privilege access with specific port and CIDR restrictions
+- **Encryption**: RDS storage encryption and S3 server-side encryption enabled
+- **Private Database**: RDS instance is not publicly accessible and placed in private subnets
+
+### Infrastructure Components
+
+1. **VPC Module**: Creates a complete network infrastructure with public/private subnets, IGW, and NAT Gateway
+2. **Security Groups Module**: Implements bastion host and RDS security groups with proper access controls
+3. **RDS Module**: Deploys an encrypted PostgreSQL instance in private subnets with backup configuration
+4. **S3 Module**: Creates a secure logging bucket with versioning and public access blocking
+
+### Compliance Features
+
+- **Naming Convention**: All resources follow the `aurora-prod-{resource-name}` pattern
+- **Tagging**: Consistent tagging with Environment and Owner tags
+- **Region**: All resources deployed in us-west-2
+- **Modularity**: Clean separation of concerns with reusable constructs
+
+### Usage
+
+To deploy this infrastructure:
+
+```bash
+# Initialize and install dependencies
+npm install
+
+# Synthesize the Terraform configuration
+cdktf synth
+
+# Deploy the infrastructure
+cdktf deploy
+```
+
+The stack outputs will provide the VPC ID, RDS endpoint, and S3 bucket name for use by applications and other infrastructure components.

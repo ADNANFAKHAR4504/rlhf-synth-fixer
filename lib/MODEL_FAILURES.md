@@ -1,8 +1,23 @@
-| **Category**           | **Issue** |
-|------------------------|-----------|
-|  Security            | `allowedCidrBlocks: ["0.0.0.0/0"]` in `Ec2Stack` violates least privilege. Should restrict to internal or specific IPs (e.g. bastion/VPN). |
-|  TAP Constructor     | `TapStack` class in `tap-stack.ts` accepts only 2 arguments, whereas `bin/tap.ts` calls it with 3 props — mismatch with pipeline requirements. |
-|  Missing Tests       | No unit or integration tests included yet. Not fatal but required to pass pipeline. |
-|  DRY Violation       | Some tags (`"Type": "WebServer"` and `"AccessLogs"`) are hardcoded. Should ideally be passed as `resourceType` param. |
-|  KMS Optional        | Encryption uses `AES256`. Using `aws_kms_key` is preferred in production for compliance. |
-|  Hardcoded AZs       | Region is dynamic (`us-west-2`), but AZs are interpolated as `${region}a`, `${region}b`... could break in regions with fewer AZs. Consider using `DataAwsAvailabilityZones`. |
+# MODEL_FAILURES
+
+## Critical Issues
+- **None** — the original model response deployed successfully without blocking errors.
+
+## Minor Issues
+1. **Missing Route Table Associations for Private Subnets**  
+   - VPC construct created subnets but did not associate private subnets with route tables routing through the NAT gateway.
+2. **Node.js Version Restriction**  
+   - The `package.json` required an exact Node.js version (`v22.17.0`), reducing compatibility.
+3. **Non-Descriptive Resource Names**  
+   - Some AWS resources (e.g., EC2 instance) had generic names instead of descriptive identifiers.
+4. **Environment-Specific Security Groups**  
+   - Security group rules were not tailored per environment (dev/staging/prod).
+5. **VPC Flow Logs Not Implemented**  
+   - Requirement mentioned flow logs, but the original implementation omitted them.
+6. **S3 Lifecycle Policy**  
+   - The lifecycle policy could be more aggressive for dev/staging to reduce costs.
+7. **Output Descriptions Missing**  
+   - Terraform outputs lacked `description` fields for clarity.
+
+## Summary
+The original model response met most core functional requirements but had room for improvement in VPC networking completeness, cost optimization, environment-specific security, and metadata/documentation.

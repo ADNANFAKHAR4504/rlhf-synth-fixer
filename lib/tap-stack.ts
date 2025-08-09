@@ -53,6 +53,25 @@ export class TapStack extends TerraformStack {
     const environment =
       process.env.ENVIRONMENT || props?.environmentSuffix || 'development';
 
+    // Allowed SSH CIDRs (comma-separated). Prod requires explicit restrictive list.
+    const sshCidrsEnv = (process.env.ALLOWED_SSH_CIDRS || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const allowedSshCidrs =
+      environment === 'production'
+        ? sshCidrsEnv.length
+          ? sshCidrsEnv
+          : (() => {
+              throw new Error(
+                'In production, set ALLOWED_SSH_CIDRS with restrictive CIDRs for SSH (e.g., 203.0.113.0/24)'
+              );
+            })()
+        : sshCidrsEnv.length
+          ? sshCidrsEnv
+          : ['0.0.0.0/0'];
+
     // ── 2) Per-commit suffix: avoids "already exists" if last run had no state ─
     const ciSha =
       (process.env.GITHUB_SHA ||
@@ -98,7 +117,7 @@ export class TapStack extends TerraformStack {
       instanceType: 't3.micro',
       keyName: process.env.EC2_KEY_NAME || '',
       iamInstanceProfile: iam.ec2ProfileName,
-      allowedCidrBlocks: ['0.0.0.0/0'],
+      allowedCidrBlocks: allowedSshCidrs,
       logGroupName: `/aws/ec2/${environment}-${uniqueSuffix}`,
       resourceSuffix: uniqueSuffix as unknown as string,
       commonTags,
@@ -116,8 +135,8 @@ export class TapStack extends TerraformStack {
               {
                 id: 'expire-old-objects',
                 status: 'Enabled',
-                expiration: { days: 30 },
-                noncurrent_version_expiration: { noncurrent_days: 15 },
+                expiration: { days: 14 }, // tightened from 30
+                noncurrent_version_expiration: { noncurrent_days: 7 }, // tightened from 15
               },
             ],
       commonTags,

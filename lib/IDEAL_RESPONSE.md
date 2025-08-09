@@ -1,16 +1,18 @@
-// language: typescript
+# IDEAL_RESPONSE
 
-// Includes modular CDKTF stacks for:
-// - VPC: CIDR-based layout with public/private/db subnets, NAT, IGW, flow logs
-// - IAM: EC2, S3, CloudWatch roles with least privilege
-// - EC2: instance with dynamic AMI, secure SG, log groups, and user_data
-// - S3: two buckets (main + access logs) with encryption, versioning, lifecycle
-// - CloudWatch: dashboard, metric alarms, log group
-// - TAP Stack: Orchestrates the above across a dynamic environment
+## Overview
+Includes modular CDKTF stacks for:
 
-// Compliant with constraints:
-// - No hardcoding (uses env variables and Fn)
-// - Separate stacks
-// - DRY design
-// - Lifecycle rules in dev/staging only
-// - Logging, tagging, IAM, subnet/zones, encryption: ✅
+- **VPC**: CIDR-based layout with public, private, and database subnets, NAT Gateway, Internet Gateway, and VPC Flow Logs.
+- **IAM**: EC2, S3, and CloudWatch roles with least privilege.
+- **EC2**: Instance with dynamic AMI, secure security group, log groups, and user data.
+- **S3**: Two buckets (main + access logs) with encryption, versioning, and lifecycle policies.
+- **CloudWatch**: Dashboard, metric alarms, and log group.
+- **TAP Stack**: Orchestrates the above across a dynamic environment.
+
+## Compliance with Constraints
+- **No hardcoding**: Uses environment variables and `Fn` functions.
+- **Separate stacks** for each service.
+- **DRY design** to avoid duplication.
+- **Lifecycle rules** applied only in development and staging environments.
+- **Logging, tagging, IAM policies, subnet/zone assignments, encryption** implemented according to requirements.
