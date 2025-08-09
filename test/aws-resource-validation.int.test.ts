@@ -532,40 +532,40 @@ describe('AWS Resource Validation Tests', () => {
         // Prod environment should have production configuration
         expect(environment).toBe('prod');
       }
-      // (Fixed: removed duplicate/erroneous code block)
+    });
 
-      test('should have appropriate backup retention for environment', () => {
-        const isDevEnvironment =
-          environment === 'dev' || environment.startsWith('pr');
-        const isProdEnvironment = environment === 'prod';
+    test('should have appropriate backup retention for environment', () => {
+      const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || '';
+      const isDevEnvironment =
+        environment === 'dev' || environment.startsWith('pr');
+      const isProdEnvironment = environment === 'prod';
 
-        if (isDevEnvironment) {
-          // Dev environment might have shorter retention
-          expect(environment).toMatch(/^(dev|pr\d+)$/);
-        } else if (isProdEnvironment) {
-          // Prod environment should have longer retention
-          expect(environment).toBe('prod');
-        }
-      });
+      if (isDevEnvironment) {
+        // Dev environment might have shorter retention
+        expect(environment).toMatch(/^(dev|pr\d+)$/);
+      } else if (isProdEnvironment) {
+        // Prod environment should have longer retention
+        expect(environment).toBe('prod');
+      }
+    });
 
-      test('should have deletion protection for production', async () => {
-        // Ensure 'environment' is defined in the test scope
-        const env = process.env.ENVIRONMENT || process.env.NODE_ENV || '';
-        if (env === 'prod') {
-          // Replace with actual check for deletion protection, e.g. for an RDS instance
-          // This is a placeholder example; replace with your actual resource and client
-          const dbInstanceIdentifier = process.env.DB_INSTANCE_IDENTIFIER!;
-          const { DBInstances } = await rdsClient.send(
-            new DescribeDBInstancesCommand({
-              DBInstanceIdentifier: dbInstanceIdentifier,
-            })
-          );
-          expect(DBInstances).toBeDefined();
-          expect(Array.isArray(DBInstances)).toBe(true);
-          expect(DBInstances!.length).toBeGreaterThan(0);
-          expect(DBInstances![0].DeletionProtection).toBe(true);
-        }
-      });
+    test('should have deletion protection for production', async () => {
+      // Ensure 'environment' is defined in the test scope
+      const env = process.env.ENVIRONMENT || process.env.NODE_ENV || '';
+      if (env === 'prod') {
+        // Replace with actual check for deletion protection, e.g. for an RDS instance
+        // This is a placeholder example; replace with your actual resource and client
+        const dbInstanceIdentifier = process.env.DB_INSTANCE_IDENTIFIER!;
+        const { DBInstances } = await rdsClient.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbInstanceIdentifier,
+          })
+        );
+        expect(DBInstances).toBeDefined();
+        expect(Array.isArray(DBInstances)).toBe(true);
+        expect(DBInstances!.length).toBeGreaterThan(0);
+        expect(DBInstances![0].DeletionProtection).toBe(true);
+      }
     });
   });
 });

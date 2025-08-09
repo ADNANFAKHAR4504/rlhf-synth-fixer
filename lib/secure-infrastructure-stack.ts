@@ -43,12 +43,19 @@ export class SecureInfrastructureStack extends cdk.Stack {
       }
     );
 
-    // CloudTrail for comprehensive logging
+    // Storage Infrastructure (create first to get S3 bucket)
+    const storageConstruct = new StorageConstruct(this, 'StorageConstruct', {
+      environment,
+      alertTopic: monitoringConstruct.alertTopic,
+    });
+
+    // CloudTrail for comprehensive logging (with S3 bucket monitoring)
     const cloudTrailConstruct = new CloudTrailConstruct(
       this,
       'CloudTrailConstruct',
       {
         environment,
+        s3BucketsToMonitor: [storageConstruct.secureS3Bucket],
       }
     );
 
@@ -63,12 +70,6 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // WAF Protection
     const wafConstruct = new WafConstruct(this, 'WafConstruct', {
       environment,
-    });
-
-    // Storage Infrastructure
-    new StorageConstruct(this, 'StorageConstruct', {
-      environment,
-      alertTopic: monitoringConstruct.alertTopic,
     });
 
     // Patch Manager for automated patching

@@ -1,5 +1,4 @@
 import * as cdk from 'aws-cdk-lib';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
@@ -14,7 +13,6 @@ export interface StorageConstructProps {
 export class StorageConstruct extends Construct {
   public readonly secureS3Bucket: s3.Bucket;
   public readonly secureS3BucketPolicy: iam.Policy;
-  public readonly secureS3BucketCloudTrail: cloudtrail.Trail;
 
   constructor(scope: Construct, id: string, props: StorageConstructProps) {
     super(scope, id);
@@ -58,17 +56,6 @@ export class StorageConstruct extends Construct {
     this.secureS3Bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
       new s3n.SnsDestination(alertTopic)
-    );
-
-    // Create CloudTrail for S3 bucket monitoring
-    this.secureS3BucketCloudTrail = new cloudtrail.Trail(
-      this,
-      `S3CloudTrail-${environment}`,
-      {
-        trailName: `s3-monitoring-trail-${environment}`,
-        includeGlobalServiceEvents: false,
-        isMultiRegionTrail: false,
-      }
     );
 
     // Tag resources

@@ -142,26 +142,6 @@ describe('StorageConstruct Unit Tests', () => {
     });
   });
 
-  describe('CloudTrail Configuration', () => {
-    test('should create CloudTrail for S3 monitoring', () => {
-      template.hasResource('AWS::CloudTrail::Trail', {
-        Properties: {
-          TrailName: Match.stringLikeRegexp('.*s3-monitoring-trail.*'),
-          IncludeGlobalServiceEvents: false,
-          IsMultiRegionTrail: false,
-        },
-      });
-    });
-
-    test('should create CloudTrail with correct configuration', () => {
-      template.hasResource('AWS::CloudTrail::Trail', {
-        Properties: {
-          S3BucketName: Match.anyValue(),
-        },
-      });
-    });
-  });
-
   describe('Storage Properties', () => {
     test('should expose S3 bucket property', () => {
       expect(storageConstruct.secureS3Bucket).toBeDefined();
@@ -170,10 +150,6 @@ describe('StorageConstruct Unit Tests', () => {
 
     test('should expose IAM policy property', () => {
       expect(storageConstruct.secureS3BucketPolicy).toBeDefined();
-    });
-
-    test('should expose CloudTrail property', () => {
-      expect(storageConstruct.secureS3BucketCloudTrail).toBeDefined();
     });
   });
 
@@ -254,14 +230,6 @@ describe('StorageConstruct Unit Tests', () => {
         },
       });
     });
-
-    test('should create CloudTrail for audit logging', () => {
-      template.hasResource('AWS::CloudTrail::Trail', {
-        Properties: {
-          TrailName: Match.stringLikeRegexp('.*s3-monitoring-trail.*'),
-        },
-      });
-    });
   });
 
   describe('Resource Dependencies', () => {
@@ -269,7 +237,6 @@ describe('StorageConstruct Unit Tests', () => {
       // Check that required resources exist
       template.hasResource('AWS::S3::Bucket', {});
       template.hasResource('AWS::IAM::Policy', {});
-      template.hasResource('AWS::CloudTrail::Trail', {});
       template.hasResource('AWS::SNS::Topic', {});
     });
 

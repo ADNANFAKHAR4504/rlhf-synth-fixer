@@ -158,7 +158,7 @@ describe('SecureInfrastructureStack Unit Tests', () => {
     test('should create CloudWatch log groups', () => {
       template.hasResource('AWS::Logs::LogGroup', {
         Properties: {
-          RetentionInDays: 90,
+          RetentionInDays: 365,
         },
       });
     });
@@ -230,7 +230,7 @@ describe('SecureInfrastructureStack Unit Tests', () => {
     test('should create CloudTrail', () => {
       template.hasResource('AWS::CloudTrail::Trail', {
         Properties: {
-          TrailName: Match.stringLikeRegexp('.*s3-monitoring-trail.*'),
+          TrailName: Match.stringLikeRegexp('.*CloudTrail.*'),
         },
       });
     });

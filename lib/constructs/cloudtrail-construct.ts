@@ -6,6 +6,7 @@ import { Construct } from 'constructs';
 
 export interface CloudTrailConstructProps {
   environment: string;
+  s3BucketsToMonitor?: s3.Bucket[];
 }
 
 export class CloudTrailConstruct extends Construct {
@@ -15,7 +16,7 @@ export class CloudTrailConstruct extends Construct {
   constructor(scope: Construct, id: string, props: CloudTrailConstructProps) {
     super(scope, id);
 
-    const { environment } = props;
+    const { environment, s3BucketsToMonitor = [] } = props;
 
     // Create S3 bucket for CloudTrail logs
     const cloudTrailBucket = new s3.Bucket(
@@ -65,6 +66,22 @@ export class CloudTrailConstruct extends Construct {
       isMultiRegionTrail: true,
       sendToCloudWatchLogs: true,
       managementEvents: cloudtrail.ReadWriteType.ALL,
+    });
+
+    // Add S3 data event selectors for monitoring specific buckets
+    s3BucketsToMonitor.forEach((bucket, index) => {
+      this.trail.addS3EventSelector(
+        [
+          {
+            bucket: bucket,
+            objectPrefix: '',
+          },
+        ],
+        {
+          readWriteType: cloudtrail.ReadWriteType.ALL,
+          includeManagementEvents: true,
+        }
+      );
     });
 
     // Tag CloudTrail resources
