@@ -132,3 +132,21 @@ def health_check():
     "timestamp": datetime.utcnow().isoformat() + "Z",
     "service": "serverless-web-app"
   }
+# Handler for OPTIONS requests (CORS preflight)
+def handle_options():
+  """
+  Handle CORS preflight OPTIONS requests
+
+  Returns:
+      dict: CORS response
+  """
+  return {
+      "statusCode": 200,
+      "headers": {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Max-Age": "86400"
+      },
+      "body": ""
+  }

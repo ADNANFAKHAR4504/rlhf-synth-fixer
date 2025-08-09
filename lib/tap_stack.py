@@ -100,32 +100,35 @@ class TapStack(pulumi.ComponentResource):
 
     # Create CloudWatch Log Group for Lambda function
     log_group = aws.cloudwatch.LogGroup(
-      f"{environment}-lambda-logs",
-      name=f"/aws/lambda/{environment}-api-handler",
-      retention_in_days=14,  # Cost-effective retention period
-      tags=common_tags
+        f"{environment}-lambda-logs",
+        name=f"/aws/lambda/{environment}-api-handler",
+        retention_in_days=14,
+        tags=common_tags
     )
 
-    # Create Lambda function
+    # Create Lambda function (CORRECTED)
     lambda_function = aws.lambda_.Function(
-      f"{environment}-api-handler",
-      name=f"{environment}-api-handler",
-      runtime="python3.9",
-      handler="lambda_function.lambda_handler",
-      role=lambda_role.arn,
-      code=pulumi.AssetArchive({
-        "lambda_function.py": pulumi.FileAsset("lambda_function.py")
-      }),
-      timeout=30,  # 30 seconds timeout
-      memory_size=128,  # Minimum memory for cost efficiency
-      environment={
-        "variables": {
-          "ENVIRONMENT": environment,
-          "LOG_LEVEL": "INFO"
-        }
-      },
-      depends_on=[log_group],
-      tags=common_tags
+        f"{environment}-api-handler",
+        name=f"{environment}-api-handler",
+        runtime="python3.9",
+        handler="lambda_function.lambda_handler",
+        role=lambda_role.arn,
+        code=pulumi.AssetArchive({
+            "lambda_function.py": pulumi.FileAsset("lambda_function.py")
+        }),
+        timeout=30,
+        memory_size=128,
+        environment={
+            "variables": {
+                "ENVIRONMENT": environment,
+                "LOG_LEVEL": "INFO"
+            }
+        },
+        tags=common_tags,
+        opts=ResourceOptions(
+          parent=self,
+          depends_on=[log_group]
+        )  # ✅ Fixed: moved to opts
     )
 
     # Create API Gateway REST API
