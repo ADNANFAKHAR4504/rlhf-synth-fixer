@@ -9,6 +9,7 @@ and manages environment-specific configurations.
 """
 
 import json
+import os
 from typing import Optional
 
 import pulumi
@@ -114,7 +115,9 @@ class TapStack(pulumi.ComponentResource):
         handler="lambda_function.lambda_handler",
         role=lambda_role.arn,
         code=pulumi.AssetArchive({
-            "lambda_function.py": pulumi.FileAsset("lambda_function.py")
+            "lambda_function.py": pulumi.FileAsset(
+                os.path.join(os.path.dirname(__file__), "lambda_function.py")
+            )
         }),
         timeout=30,
         memory_size=128,
