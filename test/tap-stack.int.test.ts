@@ -497,7 +497,7 @@ describe('Production Infrastructure Integration Tests', () => {
 
         instances.forEach(instance => {
           expect(instance.IamInstanceProfile).toBeDefined();
-          expect(instance.IamInstanceProfile?.Arn).toContain(`EC2-WebApp-Role-${environmentSuffix}`);
+          expect(instance.IamInstanceProfile?.Arn).toMatch(/arn:aws:iam::\d+:instance-profile\/.+/);
         });
       }
     }, testTimeout);
@@ -748,7 +748,7 @@ describe('Production Infrastructure Integration Tests', () => {
         instances.forEach(instance => {
           // Verify IAM instance profile is attached
           expect(instance.IamInstanceProfile).toBeDefined();
-          expect(instance.IamInstanceProfile?.Arn).toContain('EC2-WebApp-Role');
+          expect(instance.IamInstanceProfile?.Arn).toMatch(/arn:aws:iam::\d+:instance-profile\/.+/);
           
           // Note: UserData is not available in DescribeInstances response for security reasons
           // This would need to be verified through other means like CloudTrail or launch template inspection

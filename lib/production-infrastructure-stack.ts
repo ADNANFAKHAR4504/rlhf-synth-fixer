@@ -40,10 +40,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
     this.createCloudTrail(envSuffix, kmsKey);
 
     // 4. Create IAM role for EC2 instances
-    const { instanceProfile } = this.createEC2IAMRole(
-      envSuffix,
-      artifactsBucket
-    );
+    const ec2Role = this.createEC2IAMRole(envSuffix, artifactsBucket);
 
     // 5. Create security groups
     const securityGroups = this.createSecurityGroups(vpc, envSuffix);
@@ -57,7 +54,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
     // 8. Create Launch Template
     const launchTemplate = this.createLaunchTemplate(
       vpc,
-      instanceProfile,
+      ec2Role,
       securityGroups,
       logGroup,
       envSuffix
@@ -284,7 +281,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
   private createEC2IAMRole(
     envSuffix: string,
     bucket: s3.Bucket
-  ): { role: iam.Role; instanceProfile: iam.IInstanceProfile } {
+  ): iam.Role {
     const role = new iam.Role(this, `EC2Role-${envSuffix}`, {
       roleName: `EC2-WebApp-Role-${envSuffix}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -297,23 +294,6 @@ export class ProductionInfrastructureStack extends cdk.Stack {
         ),
       ],
     });
-
-    // Create explicit instance profile with expected name
-    const cfnInstanceProfile = new iam.CfnInstanceProfile(
-      this,
-      `InstanceProfile-${envSuffix}`,
-      {
-        instanceProfileName: `EC2-WebApp-Role-${envSuffix}`,
-        roles: [role.roleName],
-      }
-    );
-
-    // Create IInstanceProfile from CfnInstanceProfile
-    const instanceProfile = iam.InstanceProfile.fromInstanceProfileName(
-      this,
-      `InstanceProfileRef-${envSuffix}`,
-      cfnInstanceProfile.instanceProfileName!
-    );
 
     // Add custom policy for S3 bucket access with least privilege
     role.attachInlinePolicy(
@@ -361,7 +341,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
       })
     );
 
-    return { role, instanceProfile };
+    return role;
   }
 
   private createSecurityGroups(vpc: ec2.Vpc, envSuffix: string) {
@@ -437,7 +417,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
 
   private createLaunchTemplate(
     vpc: ec2.Vpc,
-    instanceProfile: iam.IInstanceProfile,
+    role: iam.Role,
     securityGroups: { webSecurityGroup: ec2.SecurityGroup },
     logGroup: logs.LogGroup,
     envSuffix: string
@@ -523,7 +503,7 @@ EOF`,
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       userData,
       securityGroup: securityGroups.webSecurityGroup,
-      instanceProfile: instanceProfile,
+      role: role,
       requireImdsv2: true, // Security best practice
       detailedMonitoring: true,
       blockDevices: [
