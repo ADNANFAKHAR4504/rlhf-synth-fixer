@@ -337,23 +337,27 @@ describe('Production Infrastructure Integration Tests', () => {
         const statements = policyDocument.Statement || [];
 
         // Look for S3 permissions
-        const s3Statement = statements.find((stmt: any) => 
-          stmt.Action?.some((action: string) => action.startsWith('s3:'))
-        );
+        const s3Statement = statements.find((stmt: any) => {
+          const actions = Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action];
+          return actions?.some((action: string) => action.startsWith('s3:'));
+        });
         if (s3Statement) {
           expect(s3Statement.Effect).toBe('Allow');
-          expect(s3Statement.Action).toContain('s3:GetObject');
-          expect(s3Statement.Action).toContain('s3:PutObject');
+          const s3Actions = Array.isArray(s3Statement.Action) ? s3Statement.Action : [s3Statement.Action];
+          expect(s3Actions).toContain('s3:GetObject');
+          expect(s3Actions).toContain('s3:PutObject');
         }
 
         // Look for CloudWatch Logs permissions
-        const logsStatement = statements.find((stmt: any) => 
-          stmt.Action?.some((action: string) => action.startsWith('logs:'))
-        );
+        const logsStatement = statements.find((stmt: any) => {
+          const actions = Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action];
+          return actions?.some((action: string) => action.startsWith('logs:'));
+        });
         if (logsStatement) {
           expect(logsStatement.Effect).toBe('Allow');
-          expect(logsStatement.Action).toContain('logs:CreateLogGroup');
-          expect(logsStatement.Action).toContain('logs:PutLogEvents');
+          const logsActions = Array.isArray(logsStatement.Action) ? logsStatement.Action : [logsStatement.Action];
+          expect(logsActions).toContain('logs:CreateLogGroup');
+          expect(logsActions).toContain('logs:PutLogEvents');
         }
       }
     }, testTimeout);
