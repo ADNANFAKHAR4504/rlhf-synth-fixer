@@ -14,7 +14,7 @@ export interface VpcConstructProps {
   commonTags: { [key: string]: string };
   /** Optional override. Defaults: production=per-az, others=single */
   natMode?: NatMode;
-  resourceSuffix?: string; 
+  resourceSuffix?: string;
 }
 
 export class VpcConstruct extends Construct {
