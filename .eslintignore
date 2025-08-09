@@ -1,0 +1,12 @@
+# Ignore archived and generated content
+archive/
+cdk.out/
+cdktf.out/
+coverage/
+dist/
+worktree/
+templates/
+**/*.d.ts
+lib/*.yml
+lib/*.yaml
+lib/*.json
