@@ -99,7 +99,7 @@ describe('TapStack CloudFormation Template', () => {
       if (skipIfNoTemplate()) return;
       const param = template.Parameters.StackVersion;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('v1');
+      expect(param.Default).toBe('v2');
       expect(param.Description).toContain('Stack version suffix');
       expect(param.AllowedPattern).toBe('^[a-z0-9-]+$');
     });

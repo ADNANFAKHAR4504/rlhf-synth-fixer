@@ -97,7 +97,7 @@ describe('TapStack Live Infrastructure Integration Tests', () => {
         console.log('    "VpcId": "vpc-12345678",');
         console.log('    "ALBDNSName": "TapStack-dev-123456789.us-east-1.elb.amazonaws.com",');
         console.log('    "ASGName": "TapStack-dev-WebAutoScalingGroup-123456789",');
-        console.log('    "LogBucketOutput": "tapstack-dev-v1-logs-123456789-us-east-1"');
+        console.log('    "LogBucketOutput": "tapstack-dev-v2-logs-123456789-us-east-1"');
         console.log('  }');
         console.log('');
         console.log('Example with environment variables:');
