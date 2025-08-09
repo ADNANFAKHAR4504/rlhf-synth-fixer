@@ -103,4 +103,5 @@ bin/tfplan
 
 
 build
-tasks.csv
+lib/constructs/*js
+lib/*js
