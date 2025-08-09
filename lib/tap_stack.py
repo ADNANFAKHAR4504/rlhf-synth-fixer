@@ -36,11 +36,16 @@ def create_vpc_and_networking() -> Dict[str, Any]:
   vpc = aws.ec2.Vpc(
     f"{project_name}-vpc",
     cidr_block="10.0.0.0/16",
-    assign_generated_ipv6_cidr_block=True,
-    ipv6_cidr_block="2600:1f18:642c:c900::/56",
+    assign_generated_ipv6_cidr_block=False,
     enable_dns_hostnames=True,
     enable_dns_support=True,
     tags={**common_tags, "Name": f"{project_name}-vpc"}
+  )
+
+  ipv6_cidr = aws.ec2.VpcIpv6CidrBlockAssociation(
+      f"{project_name}-ipv6-cidr",
+      vpc_id=vpc.id,
+      ipv6_cidr_block="2600:1f18:642c:c900::/56"
   )
 
   azs = sorted(aws.get_availability_zones(state="available").names[:2])
@@ -63,7 +68,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       vpc_id=vpc.id,
       availability_zone=az,
       cidr_block=f"10.0.{i+1}.0/24",
-      ipv6_cidr_block=pulumi.Output.from_input(vpc.ipv6_cidr_block).apply(
+      ipv6_cidr_block=pulumi.Output.from_input(ipv6_cidr.ipv6_cidr_block).apply(
           lambda cidr: pulumi.cidrsubnet(cidr, 8, i)
       ),
       assign_ipv6_address_on_creation=True,
@@ -107,7 +112,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       vpc_id=vpc.id,
       availability_zone=az,
       cidr_block=f"10.0.{100+i+1}.0/24",
-      ipv6_cidr_block=pulumi.Output.from_input(vpc.ipv6_cidr_block).apply(
+      ipv6_cidr_block=pulumi.Output.from_input(ipv6_cidr.ipv6_cidr_block).apply(
           lambda cidr: pulumi.cidrsubnet(cidr, 8, 100 + i)
       ),
       assign_ipv6_address_on_creation=True,
