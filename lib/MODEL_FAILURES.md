@@ -829,3 +829,42 @@ const configRule = new config.ManagedRule(
   }
 );
 ```
+
+## Initial Model Response (Suboptimal)
+
+```typescript
+// Allow HTTPS outbound for package updates and AWS services
+ec2SecurityGroup.addEgressRule(
+  ec2.Peer.anyIpv4(),
+  ec2.Port.tcp(443),
+  'Allow HTTPS outbound for AWS services and package updates'
+);
+```
+
+**Problems with this approach:**
+
+- Opens broad internet access (security risk)
+- Requires NAT Gateway for internet connectivity (cost)
+- Traffic goes over public internet (performance/security)
+- Doesn't follow AWS Well-Architected principles
+
+## Better Solution (Implemented)
+
+**This is much better than the initial response:**
+
+```typescript
+// ✅ BETTER SOLUTION - VPC Endpoints (Best Practice)
+// VPC Gateway Endpoint for S3 (best practice for secure S3 access)
+vpc.addGatewayEndpoint('S3Endpoint', {
+  service: ec2.GatewayVpcEndpointAwsService.S3,
+  subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+});
+
+// VPC Interface Endpoint for SSM (for EC2 management)
+vpc.addInterfaceEndpoint('SSMEndpoint', {
+  service: ec2.InterfaceVpcEndpointAwsService.SSM,
+  subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+});
+
+// No broad HTTPS egress rule needed!
+```

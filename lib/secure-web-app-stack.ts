@@ -21,8 +21,9 @@ export class SecureWebAppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: SecureWebAppStackProps) {
     super(scope, id, props);
 
-    const { environment } = props;
+    const { environment, env } = props;
     const allowedCidrBlocks = props.allowedCidrBlocks || ['10.0.0.0/8'];
+    const accountId = env?.account;
 
     // Apply tags to the stack
     cdk.Tags.of(this).add('Environment', 'Production');
@@ -110,6 +111,18 @@ export class SecureWebAppStack extends cdk.Stack {
       },
     });
 
+    // VPC Gateway Endpoint for S3 (best practice for secure S3 access)
+    vpc.addGatewayEndpoint('S3Endpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+    });
+
+    // VPC Interface Endpoint for SSM (for EC2 management)
+    vpc.addInterfaceEndpoint('SSMEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.SSM,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
     // 3. Security Groups
     const albSecurityGroup = new ec2.SecurityGroup(
       this,
@@ -161,13 +174,6 @@ export class SecureWebAppStack extends cdk.Stack {
       'Allow HTTP from ALB'
     );
 
-    // Allow HTTPS outbound for package updates and SSM
-    ec2SecurityGroup.addEgressRule(
-      ec2.Peer.prefixList('pl-63a5400a'),
-      ec2.Port.tcp(443),
-      'Allow HTTPS to S3 endpoints'
-    );
-
     // Allow HTTPS to AWS service endpoints only
     ec2SecurityGroup.addEgressRule(
       ec2.Peer.ipv4('169.254.169.254/32'),
@@ -184,7 +190,7 @@ export class SecureWebAppStack extends cdk.Stack {
 
     // 4. IAM Role for EC2 instances
     const ec2Role = new iam.Role(this, `tf-ec2-role-${environment}`, {
-      roleName: `tf-ec2-role-${environment}-${cdk.Aws.ACCOUNT_ID}`,
+      roleName: `tf-ec2-role-${environment}-${accountId}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -235,7 +241,7 @@ export class SecureWebAppStack extends cdk.Stack {
 
     // 5. S3 Bucket with security best practices
     const s3Bucket = new s3.Bucket(this, `tf-backend-storage-${environment}`, {
-      bucketName: `tf-backend-storage-${environment}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `tf-backend-storage-${environment}-${accountId}`,
       versioned: true,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
@@ -398,7 +404,7 @@ export class SecureWebAppStack extends cdk.Stack {
 
     // Enable access logging for ALB
     const albLogsBucket = new s3.Bucket(this, `tf-alb-logs-${environment}`, {
-      bucketName: `tf-alb-logs-${environment}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `tf-alb-logs-${environment}-${accountId}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,

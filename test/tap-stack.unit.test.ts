@@ -119,6 +119,18 @@ describe('SecureWebAppStack', () => {
         RetentionInDays: 30,
       });
     });
+
+    test('creates VPC endpoints for secure AWS service access', () => {
+      // S3 Gateway Endpoint
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        VpcEndpointType: 'Gateway',
+      });
+
+      // SSM Interface Endpoint
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        VpcEndpointType: 'Interface',
+      });
+    });
   });
 
   describe('Security Groups', () => {
@@ -256,14 +268,7 @@ describe('SecureWebAppStack', () => {
   describe('S3 Buckets', () => {
     test('creates main S3 bucket with security features', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.objectLike({
-          'Fn::Join': Match.arrayWith([
-            '',
-            Match.arrayWith([
-              'tf-backend-storage-test-',
-            ]),
-          ]),
-        }),
+        BucketName: 'tf-backend-storage-test-123456789012',
         VersioningConfiguration: {
           Status: 'Enabled',
         },
@@ -308,14 +313,7 @@ describe('SecureWebAppStack', () => {
 
     test('creates ALB logs bucket', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.objectLike({
-          'Fn::Join': Match.arrayWith([
-            '',
-            Match.arrayWith([
-              'tf-alb-logs-test-',
-            ]),
-          ]),
-        }),
+        BucketName: 'tf-alb-logs-test-123456789012',
         BucketEncryption: {
           ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
@@ -541,7 +539,8 @@ describe('SecureWebAppStack', () => {
       template.resourceCountIs('AWS::KMS::Key', 1);
       template.resourceCountIs('AWS::KMS::Alias', 1);
       template.resourceCountIs('AWS::EC2::VPC', 1);
-      template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 3); // ALB SG + EC2 SG + VPC Endpoint SG
+      template.resourceCountIs('AWS::EC2::VPCEndpoint', 2); // S3 Gateway + SSM Interface endpoints
       // Note: CDK creates additional IAM roles for VPC flow logs
       const iamRoles = template.findResources('AWS::IAM::Role');
       expect(Object.keys(iamRoles).length).toBeGreaterThanOrEqual(1);
