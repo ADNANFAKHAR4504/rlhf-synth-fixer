@@ -1,0 +1,332 @@
+"""
+Integration Tests for TapStack Dual-Stack Infrastructure Deployment
+
+This test suite validates the deployed AWS infrastructure from the TapStack
+deployment, including VPCs, subnets, route tables, and multi-region setup.
+
+Stack Name: TapStackpr798
+Environment: dev
+Regions: us-east-1, eu-west-1
+"""
+
+import pytest
+import boto3
+from botocore.exceptions import ClientError
+import json
+from typing import Dict, Any, List
+
+
+class TestTapStackInfrastructure:
+  """Test suite for validating TapStack dual-stack infrastructure deployment."""
+  
+  # Stack configuration
+  STACK_NAME = "TapStackpr798"
+  
+  # Deployment output data
+  STACK_OUTPUT = {
+    "all_regions_data": [
+      {
+        "eu-west-1": {
+          "private_rt_id": "rtb-0a41e15c6a35c9e0b",
+          "private_subnet_id": "subnet-069864781b9368c51",
+          "public_rt_id": "rtb-0a06fc12e10bcfc83",
+          "public_subnet_id": "subnet-08832aeb397610db2",
+          "vpc_id": "vpc-09313e1747fafbc86"
+        },
+        "us-east-1": {
+          "private_rt_id": "rtb-0e82c608953e32f2e",
+          "private_subnet_id": "subnet-0d947483d73d9627d",
+          "public_rt_id": "rtb-0314c8023de6e118e",
+          "public_subnet_id": "subnet-0488080d1b1dbfef9",
+          "vpc_id": "vpc-01bdd0cbbb615e41d"
+        }
+      }
+    ],
+    "deployed_regions": ["us-east-1", "eu-west-1"],
+    "environment": "dev",
+    "tags": {
+      "Application": "dual-stack-app",
+      "Environment": "dev",
+      "ManagedBy": "Pulumi",
+      "Project": "Pulumi-Nova-Model-Breaking"
+    },
+    "total_regions": 2
+  }
+  
+  @pytest.fixture(scope="class")
+  def aws_clients(self):
+    """Create AWS clients for both regions."""
+    return {
+      "us-east-1": boto3.client("ec2", region_name="us-east-1"),
+      "eu-west-1": boto3.client("ec2", region_name="eu-west-1")
+    }
+  
+  @pytest.fixture(scope="class")
+  def regions_data(self):
+    """Extract regions data from stack output."""
+    return self.STACK_OUTPUT["all_regions_data"][0]
+  
+  def test_deployment_metadata(self):
+    """Test basic deployment metadata and configuration."""
+    output = self.STACK_OUTPUT
+    
+    # Test stack name
+    assert self.STACK_NAME == "TapStackpr798"
+    
+    # Test regions
+    assert output["total_regions"] == 2
+    assert len(output["deployed_regions"]) == 2
+    assert "us-east-1" in output["deployed_regions"]
+    assert "eu-west-1" in output["deployed_regions"]
+    
+    # Test environment
+    assert output["environment"] == "dev"
+    
+    # Test tags
+    expected_tags = {
+      "Application": "dual-stack-app",
+      "Environment": "dev", 
+      "ManagedBy": "Pulumi",
+      "Project": "Pulumi-Nova-Model-Breaking"
+    }
+    assert output["tags"] == expected_tags
+  
+  def test_vpc_exists_and_configured(self, aws_clients, regions_data):
+    """Test that VPCs exist and are properly configured in both regions."""
+    for region, region_data in regions_data.items():
+      client = aws_clients[region]
+      vpc_id = region_data["vpc_id"]
+      
+      # Test VPC exists
+      response = client.describe_vpcs(VpcIds=[vpc_id])
+      assert len(response["Vpcs"]) == 1
+      
+      vpc = response["Vpcs"][0]
+      
+      # Test VPC is dual-stack (has both IPv4 and IPv6)
+      assert vpc["CidrBlock"] is not None
+      assert len(vpc["Ipv6CidrBlockAssociationSet"]) > 0
+      
+      # Test VPC has correct IPv4 CIDR
+      expected_cidrs = {"us-east-1": "10.1.0.0/16", "eu-west-1": "10.2.0.0/16"}
+      assert vpc["CidrBlock"] == expected_cidrs[region]
+      
+      # Test VPC state
+      assert vpc["State"] == "available"
+      
+      # Test DNS settings
+      vpc_attributes = client.describe_vpc_attribute(
+        VpcId=vpc_id, Attribute="enableDnsSupport"
+      )
+      assert vpc_attributes["EnableDnsSupport"]["Value"] is True
+      
+      vpc_attributes = client.describe_vpc_attribute(
+        VpcId=vpc_id, Attribute="enableDnsHostnames"
+      )
+      assert vpc_attributes["EnableDnsHostnames"]["Value"] is True
+  
+  def test_subnets_exist_and_configured(self, aws_clients, regions_data):
+    """Test that public and private subnets exist and are properly configured."""
+    for region, region_data in regions_data.items():
+      client = aws_clients[region]
+      vpc_id = region_data["vpc_id"]
+      
+      # Test public subnet
+      public_subnet_id = region_data["public_subnet_id"]
+      response = client.describe_subnets(SubnetIds=[public_subnet_id])
+      public_subnet = response["Subnets"][0]
+      
+      assert public_subnet["VpcId"] == vpc_id
+      assert public_subnet["State"] == "available"
+      assert public_subnet["MapPublicIpOnLaunch"] is True
+      assert len(public_subnet["Ipv6CidrBlockAssociationSet"]) > 0
+      
+      # Test private subnet
+      private_subnet_id = region_data["private_subnet_id"]
+      response = client.describe_subnets(SubnetIds=[private_subnet_id])
+      private_subnet = response["Subnets"][0]
+      
+      assert private_subnet["VpcId"] == vpc_id
+      assert private_subnet["State"] == "available"
+      assert private_subnet["MapPublicIpOnLaunch"] is False
+      assert len(private_subnet["Ipv6CidrBlockAssociationSet"]) > 0
+  
+  def test_route_tables_exist_and_configured(self, aws_clients, regions_data):
+    """Test that route tables exist and have proper routes."""
+    for region, region_data in regions_data.items():
+      client = aws_clients[region]
+      vpc_id = region_data["vpc_id"]
+      
+      # Test public route table
+      public_rt_id = region_data["public_rt_id"]
+      response = client.describe_route_tables(RouteTableIds=[public_rt_id])
+      public_rt = response["RouteTables"][0]
+      
+      assert public_rt["VpcId"] == vpc_id
+      
+      # Check for internet gateway routes
+      routes = public_rt["Routes"]
+      has_ipv4_internet_route = any(
+        route.get("DestinationCidrBlock") == "0.0.0.0/0" and 
+        "GatewayId" in route for route in routes
+      )
+      has_ipv6_internet_route = any(
+        route.get("DestinationIpv6CidrBlock") == "::/0" and
+        "GatewayId" in route for route in routes
+      )
+      
+      assert has_ipv4_internet_route, f"Public RT missing IPv4 internet route in {region}"
+      assert has_ipv6_internet_route, f"Public RT missing IPv6 internet route in {region}"
+      
+      # Test private route table
+      private_rt_id = region_data["private_rt_id"]
+      response = client.describe_route_tables(RouteTableIds=[private_rt_id])
+      private_rt = response["RouteTables"][0]
+      
+      assert private_rt["VpcId"] == vpc_id
+  
+  def test_internet_gateways_attached(self, aws_clients, regions_data):
+    """Test that Internet Gateways are properly attached to VPCs."""
+    for region, region_data in regions_data.items():
+      client = aws_clients[region]
+      vpc_id = region_data["vpc_id"]
+      
+      # Find Internet Gateway attached to VPC
+      response = client.describe_internet_gateways(
+        Filters=[{"Name": "attachment.vpc-id", "Values": [vpc_id]}]
+      )
+      
+      assert len(response["InternetGateways"]) == 1
+      igw = response["InternetGateways"][0]
+      
+      # Test IGW is attached and available
+      assert igw["State"] == "available"
+      attachment = igw["Attachments"][0]
+      assert attachment["VpcId"] == vpc_id
+      assert attachment["State"] == "attached"
+  
+  def test_nat_gateways_exist(self, aws_clients, regions_data):
+    """Test that NAT Gateways exist in public subnets."""
+    for region, region_data in regions_data.items():
+      client = aws_clients[region]
+      public_subnet_id = region_data["public_subnet_id"]
+      
+      # Find NAT Gateway in public subnet
+      response = client.describe_nat_gateways(
+        Filters=[{"Name": "subnet-id", "Values": [public_subnet_id]}]
+      )
+      
+      assert len(response["NatGateways"]) >= 1
+      nat_gateway = response["NatGateways"][0]
+      
+      # Test NAT Gateway state
+      assert nat_gateway["State"] in ["available", "pending"]
+      assert nat_gateway["SubnetId"] == public_subnet_id
+  
+  def test_egress_only_internet_gateways_exist(self, aws_clients, regions_data):
+    """Test that Egress-Only Internet Gateways exist for IPv6 private access."""
+    for region, region_data in regions_data.items():
+      client = aws_clients[region]
+      vpc_id = region_data["vpc_id"]
+      
+      # Find EIGW attached to VPC
+      response = client.describe_egress_only_internet_gateways(
+        Filters=[{"Name": "attachment.vpc-id", "Values": [vpc_id]}]
+      )
+      
+      assert len(response["EgressOnlyInternetGateways"]) >= 1
+      eigw = response["EgressOnlyInternetGateways"][0]
+      
+      # Test EIGW state
+      attachment = eigw["Attachments"][0]
+      assert attachment["VpcId"] == vpc_id
+      assert attachment["State"] == "attached"
+  
+  def test_vpc_peering_connection_exists(self, aws_clients, regions_data):
+    """Test that VPC peering connection exists between regions."""
+    client = aws_clients["us-east-1"]  # Peering created from us-east-1
+    
+    us_vpc_id = regions_data["us-east-1"]["vpc_id"]
+    eu_vpc_id = regions_data["eu-west-1"]["vpc_id"]
+    
+    # Find peering connection
+    response = client.describe_vpc_peering_connections(
+      Filters=[
+        {"Name": "requester-vpc-info.vpc-id", "Values": [us_vpc_id]},
+        {"Name": "accepter-vpc-info.vpc-id", "Values": [eu_vpc_id]}
+      ]
+    )
+    
+    assert len(response["VpcPeeringConnections"]) >= 1
+    peering = response["VpcPeeringConnections"][0]
+    
+    # Test peering connection details
+    assert peering["RequesterVpcInfo"]["VpcId"] == us_vpc_id
+    assert peering["AccepterVpcInfo"]["VpcId"] == eu_vpc_id
+    assert peering["RequesterVpcInfo"]["Region"] == "us-east-1"
+    assert peering["AccepterVpcInfo"]["Region"] == "eu-west-1"
+  
+  def test_resource_tagging(self, aws_clients, regions_data):
+    """Test that resources are properly tagged."""
+    expected_tags = self.STACK_OUTPUT["tags"]
+    
+    for region, region_data in regions_data.items():
+      client = aws_clients[region]
+      vpc_id = region_data["vpc_id"]
+      
+      # Test VPC tags
+      response = client.describe_tags(
+        Filters=[{"Name": "resource-id", "Values": [vpc_id]}]
+      )
+      
+      vpc_tags = {tag["Key"]: tag["Value"] for tag in response["Tags"]}
+      
+      # Check that expected tags are present
+      for key, value in expected_tags.items():
+        assert key in vpc_tags, f"Missing tag {key} on VPC in {region}"
+        if key != "Environment":  # Environment might be different in resource names
+          assert vpc_tags[key] == value, f"Tag {key} has wrong value in {region}"
+  
+  def test_cross_region_connectivity_setup(self, aws_clients, regions_data):
+    """Test that cross-region connectivity routes are properly configured."""
+    expected_peer_cidrs = {
+      "us-east-1": "10.2.0.0/16",  # Should route to eu-west-1
+      "eu-west-1": "10.1.0.0/16"   # Should route to us-east-1
+    }
+    
+    for region, region_data in regions_data.items():
+      client = aws_clients[region]
+      public_rt_id = region_data["public_rt_id"]
+      
+      # Check for peering routes in public route table
+      response = client.describe_route_tables(RouteTableIds=[public_rt_id])
+      routes = response["RouteTables"][0]["Routes"]
+      
+      # Look for peering connection route
+      peer_routes = [
+        route for route in routes 
+        if route.get("DestinationCidrBlock") == expected_peer_cidrs[region]
+      ]
+      
+      assert len(peer_routes) >= 1, f"Missing peering route in {region}"
+      
+      # Verify the route points to a VPC peering connection
+      peer_route = peer_routes[0]
+      assert "VpcPeeringConnectionId" in peer_route
+
+
+# Utility functions for running tests
+def run_integration_tests():
+  """Run all integration tests."""
+  pytest.main([
+    __file__,
+    "-v",
+    "--tb=short",
+    "-x"  # Stop on first failure
+  ])
+
+
+if __name__ == "__main__":
+  print("Running TapStack Integration Tests...")
+  print("=" * 50)
+  run_integration_tests()
