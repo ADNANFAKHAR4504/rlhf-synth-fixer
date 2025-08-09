@@ -37,6 +37,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
     f"{project_name}-vpc",
     cidr_block="10.0.0.0/16",
     assign_generated_ipv6_cidr_block=True,
+    ipv6_cidr_block="2600:1f18:642c:c900::/56",
     enable_dns_hostnames=True,
     enable_dns_support=True,
     tags={**common_tags, "Name": f"{project_name}-vpc"}
