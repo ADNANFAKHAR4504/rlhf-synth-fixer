@@ -7,7 +7,7 @@ describe('Full Infrastructure Integration Test', () => {
   beforeAll(() => {
     const app = new App();
 
-    // ✅ ensure TapStack can resolve the DB password during synth
+    //  ensure TapStack can resolve the DB password during synth
     process.env.DB_PASSWORD = 'testpass123!';
 
     const stack = new TapStack(app, 'TapStackTest', {
@@ -18,7 +18,7 @@ describe('Full Infrastructure Integration Test', () => {
     });
 
     const json = Testing.synth(stack);
-    console.log('🧪 Synth Output Preview:', json.slice(0, 500));
+    console.log(' Synth Output Preview:', json.slice(0, 500));
 
     synthOutput = JSON.parse(json);
   });

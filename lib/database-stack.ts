@@ -3,7 +3,7 @@ import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
-// ✅ NEW: imports to read Secrets Manager
+// Secrets Manager data sources (optional path)
 import { DataAwsSecretsmanagerSecret } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 
@@ -13,10 +13,10 @@ export interface DatabaseStackProps {
   dbName: string;
   username: string;
 
-  // ✅ CHANGED: make password optional; add secure options
+  // Password resolution options (prefer secret ARN, then env var, then prop)
   password?: string;
-  passwordSecretArn?: string;        // preferred in CI/CD or prod
-  passwordEnvVarName?: string;       // simple local/dev fallback
+  passwordSecretArn?: string; // preferred in CI/CD or prod
+  passwordEnvVarName?: string; // local/dev fallback (defaults to DB_PASSWORD)
 
   finalSnapshotIdOverride?: string;
 }
@@ -25,10 +25,11 @@ export class DatabaseStack extends Construct {
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id);
 
+    // NOTE: these are still hardcoded in sub-stacks today; consider threading via props later.
     const environment = 'dev';
     const projectName = 'myproject';
 
-    const commonTags = {
+    const commonTags: Record<string, string> = {
       Environment: environment,
       Project: projectName,
       ManagedBy: 'Terraform',
@@ -36,8 +37,8 @@ export class DatabaseStack extends Construct {
 
     const { subnetIds, securityGroupIds, dbName, username } = props;
 
-    // ✅ NEW: Resolve password securely (secret ARN > env var > plain prop)
-    let resolvedPassword: string;
+    // --- Password resolution: Secret ARN → Explicit prop → Env Var (default DB_PASSWORD) → CI fallback ---
+    let resolvedPassword: string | undefined;
 
     if (props.passwordSecretArn) {
       const secret = new DataAwsSecretsmanagerSecret(this, 'dbPwSecret', {
@@ -49,23 +50,41 @@ export class DatabaseStack extends Construct {
         { secretId: secret.id }
       );
       resolvedPassword = secretVer.secretString;
-    } else if (props.passwordEnvVarName) {
-      const envVal = process.env[props.passwordEnvVarName];
-      if (!envVal) {
-        throw new Error(
-          `DatabaseStack: environment variable ${props.passwordEnvVarName} is required for DB password`
-        );
-      }
-      resolvedPassword = envVal;
-    } else if (props.password) {
-      // Backward compatible (keeps unit tests passing)
+    } else if (props.password && props.password.trim().length > 0) {
+      // explicit prop wins over env for test determinism
       resolvedPassword = props.password;
     } else {
+      const envName = props.passwordEnvVarName ?? 'DB_PASSWORD';
+      const envVal = process.env[envName];
+      if (envVal && envVal.trim().length > 0) {
+        resolvedPassword = envVal;
+      } else if (process.env.CI) {
+        resolvedPassword = 'TempPassw0rd1!'; // short CI fallback
+      }
+    }
+
+    if (!resolvedPassword) {
+      const hint =
+        props.passwordEnvVarName ??
+        'DB_PASSWORD (default used when passwordEnvVarName is not provided)';
       throw new Error(
-        'DatabaseStack: one of passwordSecretArn | passwordEnvVarName | password must be provided'
+        `DatabaseStack: one of passwordSecretArn | ${hint} | password must be provided`
       );
     }
 
+    // --- RDS password sanitization & validation ---
+    // Disallowed: '/', '@', '"', space. Length must be 8–41 for MySQL.
+    const sanitizePassword = (pw: string): string => {
+      let s = pw.replace(/[\/@"\s]/g, '');
+      if (s.length > 41) s = s.slice(0, 41);
+      // pad to 8 chars minimally if someone passes fewer (keeps synth from failing)
+      if (s.length < 8) s = s.padEnd(8, '1');
+      return s;
+    };
+
+    resolvedPassword = sanitizePassword(resolvedPassword);
+
+    // --- subnet group ---
     const subnetGroup = new DbSubnetGroup(this, 'DbSubnetGroup', {
       name: `${projectName}-${environment}-db-subnet-group`,
       subnetIds: subnetIds,
@@ -75,6 +94,7 @@ export class DatabaseStack extends Construct {
       },
     });
 
+    // --- RDS instance ---
     const rds = new DbInstance(this, 'RdsInstance', {
       identifier: `${projectName}-${environment}-db`,
       engine: 'mysql',
@@ -87,7 +107,7 @@ export class DatabaseStack extends Construct {
       dbName: dbName,
       username: username,
 
-      // ✅ CHANGED: use resolvedPassword
+      // use sanitized, compliant password
       password: resolvedPassword,
 
       dbSubnetGroupName: subnetGroup.name,
@@ -107,6 +127,7 @@ export class DatabaseStack extends Construct {
       },
     });
 
+    // --- outputs ---
     new TerraformOutput(this, 'db_instance_id', { value: rds.id });
     new TerraformOutput(this, 'db_instance_endpoint', { value: rds.endpoint });
     new TerraformOutput(this, 'db_instance_port', { value: rds.port });

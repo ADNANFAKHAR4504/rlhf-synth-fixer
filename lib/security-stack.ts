@@ -60,7 +60,7 @@ export class SecurityStack extends Construct {
       securityGroupId: webSg.id,
     });
 
-    new SecurityGroupRule(this, 'web_egress', {
+    new SecurityGroupRule(this, 'web_egress_https', {
       type: 'egress',
       fromPort: 443,
       toPort: 443,
@@ -69,6 +69,24 @@ export class SecurityStack extends Construct {
       securityGroupId: webSg.id,
     });
 
+    new SecurityGroupRule(this, 'web_egress_http', {
+      type: 'egress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: webSg.id,
+    });
+
+    // allow web -> app on 8080 (to VPC)
+    new SecurityGroupRule(this, 'web_egress_app_8080', {
+      type: 'egress',
+      fromPort: 8080,
+      toPort: 8080,
+      protocol: 'tcp',
+      cidrBlocks: [vpcCidr],
+      securityGroupId: webSg.id,
+    });
 
     // === App SG
     const appSg = new SecurityGroup(this, 'app_sg', {
@@ -100,12 +118,41 @@ export class SecurityStack extends Construct {
       securityGroupId: appSg.id,
     });
 
-    new SecurityGroupRule(this, 'app_egress', {
+    new SecurityGroupRule(this, 'app_egress_https', {
       type: 'egress',
       fromPort: 443,
       toPort: 443,
       protocol: 'tcp',
       cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: appSg.id,
+    });
+
+    new SecurityGroupRule(this, 'app_egress_http', {
+      type: 'egress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: appSg.id,
+    });
+
+    // app -> db MySQL
+    new SecurityGroupRule(this, 'app_egress_db_mysql', {
+      type: 'egress',
+      fromPort: 3306,
+      toPort: 3306,
+      protocol: 'tcp',
+      cidrBlocks: [vpcCidr],
+      securityGroupId: appSg.id,
+    });
+
+    // app -> db Postgres
+    new SecurityGroupRule(this, 'app_egress_db_pg', {
+      type: 'egress',
+      fromPort: 5432,
+      toPort: 5432,
+      protocol: 'tcp',
+      cidrBlocks: [vpcCidr],
       securityGroupId: appSg.id,
     });
 
@@ -144,7 +191,7 @@ export class SecurityStack extends Construct {
       fromPort: 443,
       toPort: 443,
       protocol: 'tcp',
-      cidrBlocks: [vpcCidr],  // keep DB traffic inside VPC unless needed
+      cidrBlocks: [vpcCidr], // keep DB traffic inside VPC unless needed
       securityGroupId: dbSg.id,
     });
 

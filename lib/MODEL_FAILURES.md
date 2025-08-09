@@ -1,41 +1,91 @@
-# MODEL_FAILURES.md
-This document briefly notes minor gaps between **MODEL_RESPONSE.md** and **PROMPT.md**, using the current TypeScript implementation as the reference. The solution is largely aligned; the items below are improvement opportunities rather than blockers.
+# MODEL\_FAILURES.md
+
+This document records discrepancies between **MODEL\_RESPONSE.md** and **PROMPT.md**, with concrete evidence and impact. The evaluated response is **Terraform HCL**; the prompt explicitly requires **Terraform CDK (CDKTF) in TypeScript**.
+
+---
+
+## Repro (what was evaluated)
+
+* Reviewed `lib/MODEL_RESPONSE.md` against `lib/PROMPT.md`.
+* No synth/deploy attempted because there is **no CDKTF app** (no `bin/`, no TS constructs, no `cdktf.json`, no `package.json`).
+
+> Observed structure in MODEL\_RESPONSE: `modules/*/*.tf`, `environments/*/*.tf`, `backend/*.tf`. No TypeScript files present.
+
+---
+
+## Findings
+
+**Technology mismatch**
+
+* **Violates:** “All code must be written using **Terraform CDK (TypeScript)**.”
+* **Evidence:** Response consists entirely of `*.tf` (HCL). No TypeScript, no CDKTF.
+* **Impact:** Cannot run `cdktf synth`/`cdktf deploy`. Fails core requirement.
+
+**Missing CDKTF application scaffolding**
+
+* **Violates:** “Directory structure should include `bin/` (entrypoint), `modules/` or `lib/` (reusable stacks), `test/`,.”
+* **Evidence:** No `bin/`, no `lib/` TS constructs, no `cdktf.json`, no `package.json`, no tests.
+* **Impact:** No executable CDKTF app; cannot synthesize or test.
+
+**Secrets handling not per prompt**
+
+* **Violates:** “Database credentials must not be hardcoded. Use `passwordSecretArn` or `passwordEnvVarName` at synth.”
+* **Evidence:** RDS module expects a plain `password` variable; no Secrets Manager or synth-time env handling.
+* **Impact:** Security requirement unmet.
+
+**Multi-environment validation not demonstrated**
+
+* **Violates:** “Validate that the configuration is deployable in all environments without changing logic.”
+* **Evidence:** No CDKTF workspaces or commands; no tests proving dev/staging/prod deployability.
+* **Impact:** Cannot prove environment portability.
+
+**Testing absent**
+
+* **Violates:** “`test/` for unit and integration tests.”
+* **Evidence:** No test framework or tests.
+* **Impact:** No automated verification of DRY constraints or cross-stack wiring.
+
+**Version pinning incomplete for CDKTF toolchain**
+
+* **Violates:** “Provider and module version pinning.”
+* **Evidence:** AWS provider is pinned in HCL, but no CDKTF/TypeScript dependency pins (no `package.json`).
+* **Impact:** Non-deterministic builds even if later ported.
+
+**Backend/state isolation shown in HCL, not in CDKTF**
+
+* **Violates:** “Configure a remote S3 + DynamoDB backend for state isolation” (within the CDKTF solution).
+* **Evidence:** HCL `backend "s3"` blocks exist; CDKTF-native backend/workspace config absent.
+* **Impact:** Doesn’t satisfy state isolation requirement for a CDKTF app.
+
+**Separation of concerns only partial in naming**
+
+* **Violates:** “Use environment suffixes and workspace-specific variables/overrides.”
+* **Evidence:** Naming uses `${environment}`; CDKTF workspace/override mechanics not present.
+* **Impact:** Partially met; needs CDKTF implementation.
 
 ---
 
 ## Summary
-The architecture is modular (VPC, Security, Compute, Database, Storage) and follows good practices (S3 backend, secrets via Secrets Manager/env vars, tagging). To fully match the PROMPT’s “multi-environment + DRY” intent, a few parameters and docs can be tightened.
+
+The provided response is a reasonable **HCL modular design**, but it **does not implement the required CDKTF TypeScript solution** and therefore cannot be synthesized, tested, or deployed per the prompt.
 
 ---
 
-## Minor Deviations vs PROMPT
+## Remediation plan (for IDEAL\_RESPONSE.md)
 
-1) **Parameterization Scope (VPC & RDS)**
-- *Observation:* Some values are still fixed in code (e.g., VPC CIDR/subnet CIDRs; RDS engine/version/instance class).
-- *Why it matters:* PROMPT requests environment-reusable modules.
-- *Light fix:* Expose these as props with sensible defaults.
+1. **Port to CDKTF (TypeScript):** Implement `VpcStack`, `SecurityStack`, `Ec2Stack`, `RdsStack`, `S3Stack` in `lib/` with shared props for DRY.
+2. **Scaffold app:** Add `bin/app.ts`, `cdktf.json`, `package.json` with pinned CDKTF & providers; include `README.md`.
+3. **Secrets:** Support both `passwordSecretArn` (AWS Secrets Manager) and `passwordEnvVarName` (`process.env.DB_PASSWORD` at synth).
+4. **State & envs:** Configure remote **S3 + DynamoDB** backend and CDKTF workspaces for `dev/staging/prod`; ensure no code changes per env.
+5. **Tests:**
 
-2) **Environment Threading**
-- *Observation:* `environment`/`projectName` are set internally in stacks.
-- *Why it matters:* PROMPT asks for no-code changes across `dev/staging/prod`.
-- *Light fix:* Pass them from `TapStack` into each stack (keep current defaults).
+   * Unit: synth and assert resources in `cdk.tf.json`.
+   * Integration: assert cross-stack outputs (e.g., VPC ID consumed by EC2/RDS; S3 naming policy).
+6. **Runbook:** Provide commands:
 
-3) **Remote State Note**
-- *Observation:* S3 backend is configured; DynamoDB locking table isn’t documented.
-- *Why it matters:* PROMPT mentions “S3+DynamoDB backend for state isolation.”
-- *Light fix:* Add a short note or optional toggle for DynamoDB locking.
-
-4) **DRY Call-outs in Documentation**
-- *Observation:* MODEL_RESPONSE.md describes modularity but doesn’t list specific DRY wins.
-- *Why it matters:* Reviewer clarity.
-- *Light fix:* Add a short bullet list (shared tags, AZ discovery with `Fn.element`, reusable subnet/route patterns).
-
-5) **Version Pinning & Repo Handoff**
-- *Observation:* Pinning and a minimal deploy snippet aren’t spelled out in MODEL_RESPONSE.md.
-- *Why it matters:* PROMPT requests best practices & handoff clarity.
-- *Light fix:* Mention provider/npm pins and include short synth/test/deploy commands.
-
----
-
-## Conclusion
-The current implementation already meets the spirit of the PROMPT. Applying the light touches above (parameter props, env threading, brief state-locking note, DRY bullets, and a minimal runbook section) will make **MODEL_RESPONSE.md** fully aligned without any structural rewrites.
+   ```bash
+   npm ci && npm run build
+   npx cdktf synth
+   npx cdktf deploy --app "node bin/app.js" --auto-approve
+   npm test
+   ```

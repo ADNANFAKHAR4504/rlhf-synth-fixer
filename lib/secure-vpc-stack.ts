@@ -35,92 +35,90 @@ export class SecureVpcStack extends Construct {
       cidrBlock: '10.0.0.0/16',
       enableDnsSupport: true,
       enableDnsHostnames: true,
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-vpc`,
-      },
+      tags: { ...commonTags, Name: `${projectName}-${environment}-vpc` },
     });
 
     // IGW
     const igw = new InternetGateway(this, 'Igw', {
       vpcId: mainVpc.id,
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-igw`,
-      },
+      tags: { ...commonTags, Name: `${projectName}-${environment}-igw` },
     });
 
-    // Dynamically discover AZs in the current provider region
+    // Availability Zones (dynamic)
     const azs = new DataAwsAvailabilityZones(this, 'availableAzs', {
       state: 'available',
     });
-    // Pick first two AZs safely using Fn.element to avoid token list issues
     const selectedAzs = [Fn.element(azs.names, 0), Fn.element(azs.names, 1)];
 
-    // Public Subnets
-    const publicSubnets = ['10.0.1.0/24', '10.0.2.0/24'].map((cidr, i) => {
-      return new Subnet(this, `PublicSubnet${i + 1}`, {
-        vpcId: mainVpc.id,
-        cidrBlock: cidr,
-        availabilityZone: selectedAzs[i],
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...commonTags,
-          Name: `${projectName}-${environment}-public-subnet-${i + 1}`,
-          Type: 'Public',
-        },
-      });
-    });
+    // CIDRs
+    const publicCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
+    const privateCidrs = ['10.0.11.0/24', '10.0.12.0/24'];
 
-    // Private Subnets
-    const privateSubnets = ['10.0.11.0/24', '10.0.12.0/24'].map((cidr, i) => {
-      return new Subnet(this, `PrivateSubnet${i + 1}`, {
-        vpcId: mainVpc.id,
-        cidrBlock: cidr,
-        availabilityZone: selectedAzs[i],
-        tags: {
-          ...commonTags,
-          Name: `${projectName}-${environment}-private-subnet-${i + 1}`,
-          Type: 'Private',
-        },
-      });
-    });
+    // Public subnets
+    const publicSubnets: Subnet[] = publicCidrs.map(
+      (cidr, i) =>
+        new Subnet(this, `PublicSubnet${i + 1}`, {
+          vpcId: mainVpc.id,
+          cidrBlock: cidr,
+          availabilityZone: selectedAzs[i],
+          mapPublicIpOnLaunch: true,
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-public-subnet-${i + 1}`,
+            Type: 'Public',
+          },
+          lifecycle: { createBeforeDestroy: true },
+        })
+    );
 
-    // NAT EIPs
-    const eips = publicSubnets.map((_, i) => {
-      return new Eip(this, `NatEip${i + 1}`, {
-        tags: {
-          ...commonTags,
-          Name: `${projectName}-${environment}-nat-eip-${i + 1}`,
-        },
-      });
-    });
+    // Private subnets
+    const privateSubnets: Subnet[] = privateCidrs.map(
+      (cidr, i) =>
+        new Subnet(this, `PrivateSubnet${i + 1}`, {
+          vpcId: mainVpc.id,
+          cidrBlock: cidr,
+          availabilityZone: selectedAzs[i],
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-private-subnet-${i + 1}`,
+            Type: 'Private',
+          },
+          lifecycle: { createBeforeDestroy: true },
+        })
+    );
+
+    // EIPs for NATs
+    const eips: Eip[] = publicSubnets.map(
+      (_, i) =>
+        new Eip(this, `NatEip${i + 1}`, {
+          domain: 'vpc', // ✅ correct field
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-nat-eip-${i + 1}`,
+          },
+          lifecycle: { createBeforeDestroy: true },
+        })
+    );
 
     // NAT Gateways
-    const natGateways = eips.map((eip, i) => {
-      return new NatGateway(this, `NatGateway${i + 1}`, {
-        allocationId: eip.id,
-        subnetId: publicSubnets[i].id,
-        tags: {
-          ...commonTags,
-          Name: `${projectName}-${environment}-nat-gateway-${i + 1}`,
-        },
-      });
-    });
+    const natGateways: NatGateway[] = eips.map(
+      (eip, i) =>
+        new NatGateway(this, `NatGateway${i + 1}`, {
+          allocationId: eip.id,
+          subnetId: publicSubnets[i].id,
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-nat-gateway-${i + 1}`,
+          },
+          lifecycle: { createBeforeDestroy: true },
+        })
+    );
 
-    // Public RT
+    // Public route table + associations
     const publicRouteTable = new RouteTable(this, 'PublicRT', {
       vpcId: mainVpc.id,
-      route: [
-        {
-          cidrBlock: '0.0.0.0/0',
-          gatewayId: igw.id,
-        },
-      ],
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-public-rt`,
-      },
+      route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
+      tags: { ...commonTags, Name: `${projectName}-${environment}-public-rt` },
     });
 
     publicSubnets.forEach((subnet, i) => {
@@ -130,16 +128,11 @@ export class SecureVpcStack extends Construct {
       });
     });
 
-    // Private RTs
+    // Private route tables + associations
     privateSubnets.forEach((subnet, i) => {
       const rt = new RouteTable(this, `PrivateRT${i + 1}`, {
         vpcId: mainVpc.id,
-        route: [
-          {
-            cidrBlock: '0.0.0.0/0',
-            natGatewayId: natGateways[i].id,
-          },
-        ],
+        route: [{ cidrBlock: '0.0.0.0/0', natGatewayId: natGateways[i].id }],
         tags: {
           ...commonTags,
           Name: `${projectName}-${environment}-private-rt-${i + 1}`,
@@ -152,23 +145,15 @@ export class SecureVpcStack extends Construct {
       });
     });
 
-    // Terraform Outputs
-    new TerraformOutput(this, 'vpc_id', {
-      value: mainVpc.id,
-    });
-
+    // Outputs
+    new TerraformOutput(this, 'vpc_id', { value: mainVpc.id });
     new TerraformOutput(this, 'public_subnet_ids', {
       value: publicSubnets.map(s => s.id),
     });
-
     new TerraformOutput(this, 'private_subnet_ids', {
       value: privateSubnets.map(s => s.id),
     });
-
-    new TerraformOutput(this, 'internet_gateway_id', {
-      value: igw.id,
-    });
-
+    new TerraformOutput(this, 'internet_gateway_id', { value: igw.id });
     new TerraformOutput(this, 'nat_gateway_ids', {
       value: natGateways.map(n => n.id),
     });
