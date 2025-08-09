@@ -40,7 +40,10 @@ export class ProductionInfrastructureStack extends cdk.Stack {
     this.createCloudTrail(envSuffix, kmsKey);
 
     // 4. Create IAM role for EC2 instances
-    const ec2Role = this.createEC2IAMRole(envSuffix, artifactsBucket);
+    const { instanceProfile } = this.createEC2IAMRole(
+      envSuffix,
+      artifactsBucket
+    );
 
     // 5. Create security groups
     const securityGroups = this.createSecurityGroups(vpc, envSuffix);
@@ -54,7 +57,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
     // 8. Create Launch Template
     const launchTemplate = this.createLaunchTemplate(
       vpc,
-      ec2Role,
+      instanceProfile,
       securityGroups,
       logGroup,
       envSuffix
@@ -214,13 +217,12 @@ export class ProductionInfrastructureStack extends cdk.Stack {
     return vpc;
   }
 
-  private createSecureS3Bucket(envSuffix: string, kmsKey: kms.Key): s3.Bucket {
+  private createSecureS3Bucket(envSuffix: string, _kmsKey: kms.Key): s3.Bucket {
     const bucketName = `secure-webapp-artifacts-${envSuffix}`;
     const bucket = new s3.Bucket(this, `ArtifactsBucket-${envSuffix}`, {
       bucketName: bucketName,
       versioned: true,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: kmsKey,
+      encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       lifecycleRules: [
@@ -270,7 +272,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
         resources: [`${bucket.bucketArn}/*`],
         conditions: {
           StringNotEquals: {
-            's3:x-amz-server-side-encryption': 'aws:kms',
+            's3:x-amz-server-side-encryption': 'AES256',
           },
         },
       })
@@ -279,7 +281,10 @@ export class ProductionInfrastructureStack extends cdk.Stack {
     return bucket;
   }
 
-  private createEC2IAMRole(envSuffix: string, bucket: s3.Bucket): iam.Role {
+  private createEC2IAMRole(
+    envSuffix: string,
+    bucket: s3.Bucket
+  ): { role: iam.Role; instanceProfile: iam.IInstanceProfile } {
     const role = new iam.Role(this, `EC2Role-${envSuffix}`, {
       roleName: `EC2-WebApp-Role-${envSuffix}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -293,47 +298,70 @@ export class ProductionInfrastructureStack extends cdk.Stack {
       ],
     });
 
-    // Add custom policy for S3 bucket access with least privilege
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-        resources: [`${bucket.bucketArn}/*`],
-        conditions: {
-          StringEquals: {
-            's3:x-amz-server-side-encryption': 'aws:kms',
-          },
-        },
-      })
+    // Create explicit instance profile with expected name
+    const cfnInstanceProfile = new iam.CfnInstanceProfile(
+      this,
+      `InstanceProfile-${envSuffix}`,
+      {
+        instanceProfileName: `EC2-WebApp-Role-${envSuffix}`,
+        roles: [role.roleName],
+      }
     );
 
-    // Add policy for listing bucket contents (separate from object access)
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['s3:ListBucket'],
-        resources: [bucket.bucketArn],
+    // Create IInstanceProfile from CfnInstanceProfile
+    const instanceProfile = iam.InstanceProfile.fromInstanceProfileName(
+      this,
+      `InstanceProfileRef-${envSuffix}`,
+      cfnInstanceProfile.instanceProfileName!
+    );
+
+    // Add custom policy for S3 bucket access with least privilege
+    role.attachInlinePolicy(
+      new iam.Policy(this, `S3AccessPolicy-${envSuffix}`, {
+        policyName: `S3AccessPolicy-${envSuffix}`,
+        statements: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+            resources: [`${bucket.bucketArn}/*`],
+            conditions: {
+              StringEquals: {
+                's3:x-amz-server-side-encryption': 'AES256',
+              },
+            },
+          }),
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ['s3:ListBucket'],
+            resources: [bucket.bucketArn],
+          }),
+        ],
       })
     );
 
     // Add policy for CloudWatch Logs with least privilege - specific log group only
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'logs:CreateLogGroup',
-          'logs:CreateLogStream',
-          'logs:PutLogEvents',
-          'logs:DescribeLogStreams',
-        ],
-        resources: [
-          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/webapp-${envSuffix}:*`,
-          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/webapp-${envSuffix}`,
+    role.attachInlinePolicy(
+      new iam.Policy(this, `CloudWatchLogsPolicy-${envSuffix}`, {
+        policyName: `CloudWatchLogsPolicy-${envSuffix}`,
+        statements: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogStreams',
+            ],
+            resources: [
+              `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/webapp-${envSuffix}:*`,
+              `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/webapp-${envSuffix}`,
+            ],
+          }),
         ],
       })
     );
 
-    return role;
+    return { role, instanceProfile };
   }
 
   private createSecurityGroups(vpc: ec2.Vpc, envSuffix: string) {
@@ -409,7 +437,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
 
   private createLaunchTemplate(
     vpc: ec2.Vpc,
-    role: iam.Role,
+    instanceProfile: iam.IInstanceProfile,
     securityGroups: { webSecurityGroup: ec2.SecurityGroup },
     logGroup: logs.LogGroup,
     envSuffix: string
@@ -495,7 +523,7 @@ EOF`,
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       userData,
       securityGroup: securityGroups.webSecurityGroup,
-      role,
+      instanceProfile: instanceProfile,
       requireImdsv2: true, // Security best practice
       detailedMonitoring: true,
       blockDevices: [

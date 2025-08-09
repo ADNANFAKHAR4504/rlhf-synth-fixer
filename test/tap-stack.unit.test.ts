@@ -179,8 +179,7 @@ describe('ProductionInfrastructureStack', () => {
           ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
               ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'aws:kms',
-                KMSMasterKeyID: Match.anyValue(),
+                SSEAlgorithm: 'AES256',
               },
             }),
           ]),
@@ -297,7 +296,7 @@ describe('ProductionInfrastructureStack', () => {
               ]),
               Condition: Match.objectLike({
                 StringEquals: {
-                  's3:x-amz-server-side-encryption': 'aws:kms',
+                  's3:x-amz-server-side-encryption': 'AES256',
                 },
               }),
             }),
