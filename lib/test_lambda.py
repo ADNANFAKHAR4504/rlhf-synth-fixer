@@ -9,7 +9,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock
 
-import lambda_function
+from . import lambda_function
 
 # Add the current directory to Python path to import lambda_function
 sys.path.insert(0, os.path.dirname(__file__))
