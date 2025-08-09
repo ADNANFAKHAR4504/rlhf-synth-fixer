@@ -59,7 +59,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Define the CIDR blocks for each region
     ipv4_cidrs = {'us-east-1': '10.1.0.0/16', 'eu-west-1': '10.2.0.0/16'}
-    ipv6_cidrs = {'us-east-1': 'fd00:10:1::/56', 'eu-west-1': 'fd00:10:2::/56'}
+    # ipv6_cidrs = {'us-east-1': 'fd00:10:1::/56', 'eu-west-1': 'fd00:10:2::/56'}
     
     # Deploy to each region with proper multi-region setup
     for i, region in enumerate(self.regions):
@@ -85,7 +85,7 @@ class TapStack(pulumi.ComponentResource):
         name=f"dual-stack-{region_suffix}-{self.environment_suffix}",
         region=region,
         ipv4_cidr=ipv4_cidrs[region],
-        ipv6_cidr=ipv6_cidrs[region],
+        # The ipv6_cidr argument has been removed to match the updated DualStackInfrastructure component.
         opts=provider_opts()
       )
 
@@ -99,7 +99,7 @@ class TapStack(pulumi.ComponentResource):
       "vpc-peering",
       peer_vpc_id=eu_west_1_infra.vpc.id,
       vpc_id=us_east_1_infra.vpc.id,
-      auto_accept=True,
+    #   auto_accept=True,
       peer_region="eu-west-1",
       tags={
         "Name": "us-east-1-to-eu-west-1-peering",
@@ -119,7 +119,7 @@ class TapStack(pulumi.ComponentResource):
     aws.ec2.Route(
       "us-east-1-peering-route-ipv6",
       route_table_id=us_east_1_infra.public_rt.id,
-      destination_ipv6_cidr_block="fd00:10:2::/56",
+      destination_ipv6_cidr_block=eu_west_1_infra.vpc.ipv6_cidr_block,
       vpc_peering_connection_id=peer_connection.id,
       opts=ResourceOptions(provider=self.providers['us-east-1'], parent=self)
     )
@@ -134,7 +134,7 @@ class TapStack(pulumi.ComponentResource):
     aws.ec2.Route(
       "eu-west-1-peering-route-ipv6",
       route_table_id=eu_west_1_infra.public_rt.id,
-      destination_ipv6_cidr_block="fd00:10:1::/56",
+      destination_ipv6_cidr_block=us_east_1_infra.vpc.ipv6_cidr_block,
       vpc_peering_connection_id=peer_connection.id,
       opts=ResourceOptions(provider=self.providers['eu-west-1'], parent=self)
     )
