@@ -10,6 +10,7 @@ import {
   DescribeNatGatewaysCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
   DescribeVpcsCommand,
   EC2Client
 } from '@aws-sdk/client-ec2';
@@ -26,8 +27,9 @@ import {
 import {
   GetBucketEncryptionCommand,
   GetBucketLifecycleConfigurationCommand,
-  GetBucketPublicAccessBlockCommand,
+  // GetBucketPublicAccessBlockCommand,
   GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
@@ -87,13 +89,24 @@ describe('AWS Resource Validation Tests', () => {
       // Validate VPC configuration
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBeDefined();
-      
       // DNS settings might not be returned in all cases, so we'll check if they exist
-      if (vpc.EnableDnsHostnames !== undefined) {
-        expect(vpc.EnableDnsHostnames).toBe(true);
+      // These properties are in Vpc.VpcAttributes, so we need to describe VPC attributes
+      const vpcAttrCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId!,
+        Attribute: 'enableDnsHostnames'
+      });
+      const vpcDnsHostnamesAttr = await ec2Client.send(vpcAttrCommand);
+      if (vpcDnsHostnamesAttr.EnableDnsHostnames !== undefined) {
+        expect(vpcDnsHostnamesAttr.EnableDnsHostnames.Value).toBe(true);
       }
-      if (vpc.EnableDnsSupport !== undefined) {
-        expect(vpc.EnableDnsSupport).toBe(true);
+
+      const vpcDnsSupportAttrCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId!,
+        Attribute: 'enableDnsSupport'
+      });
+      const vpcDnsSupportAttr = await ec2Client.send(vpcDnsSupportAttrCommand);
+      if (vpcDnsSupportAttr.EnableDnsSupport !== undefined) {
+        expect(vpcDnsSupportAttr.EnableDnsSupport.Value).toBe(true);
       }
     });
 
@@ -134,7 +147,7 @@ describe('AWS Resource Validation Tests', () => {
 
       const vpcId = outputs.VpcId || outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
       const command = new DescribeNatGatewaysCommand({
-        Filters: [
+        Filter: [
           { Name: 'vpc-id', Values: [vpcId] },
           { Name: 'state', Values: ['available', 'pending'] },
         ],
@@ -260,9 +273,9 @@ describe('AWS Resource Validation Tests', () => {
       const bucketName = `app-storage-${environment}-${process.env.CDK_DEFAULT_ACCOUNT}`;
       
       try {
-        const command = new GetBucketPublicAccessBlockCommand({ Bucket: bucketName });
+        const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
         const response = await s3Client.send(command);
-        
+
         expect(response.PublicAccessBlockConfiguration).toBeDefined();
         const config = response.PublicAccessBlockConfiguration!;
         expect(config.BlockPublicAcls).toBe(true);
@@ -286,7 +299,7 @@ describe('AWS Resource Validation Tests', () => {
         // Validate lifecycle rules
         response.Rules!.forEach(rule => {
           expect(rule.Status).toBe('Enabled');
-          expect(rule.Id).toBeDefined();
+          expect(rule.ID).toBeDefined();
         });
       } catch (error) {
         console.log(`S3 bucket ${bucketName} not found or lifecycle policies not configured`);
@@ -389,7 +402,7 @@ describe('AWS Resource Validation Tests', () => {
       const trailName = `CloudTrail-${environment}`;
       
       try {
-        const command = new DescribeTrailsCommand({ TrailNameList: [trailName] });
+        const command = new DescribeTrailsCommand({ trailNameList: [trailName] });
         const response = await cloudTrailClient.send(command);
         
         expect(response.trailList!.length).toBeGreaterThan(0);
@@ -471,6 +484,8 @@ describe('AWS Resource Validation Tests', () => {
 
   describe('Environment-Specific Configuration', () => {
     test('should have appropriate instance types for environment', () => {
+      // Ensure 'environment' is defined in the test scope
+      const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || '';
       const isDevEnvironment = environment === 'dev' || environment.startsWith('pr');
       const isProdEnvironment = environment === 'prod';
       
@@ -481,7 +496,7 @@ describe('AWS Resource Validation Tests', () => {
         // Prod environment should have production configuration
         expect(environment).toBe('prod');
       }
-    });
+    // (Fixed: removed duplicate/erroneous code block)
 
     test('should have appropriate backup retention for environment', () => {
       const isDevEnvironment = environment === 'dev' || environment.startsWith('pr');
@@ -496,12 +511,22 @@ describe('AWS Resource Validation Tests', () => {
       }
     });
 
-    test('should have deletion protection for production', () => {
-      if (environment === 'prod') {
-        // Production should have deletion protection
-        expect(environment).toBe('prod');
-      }
+      test('should have deletion protection for production', async () => {
+        // Ensure 'environment' is defined in the test scope
+        const env = process.env.ENVIRONMENT || process.env.NODE_ENV || '';
+        if (env === 'prod') {
+          // Replace with actual check for deletion protection, e.g. for an RDS instance
+          // This is a placeholder example; replace with your actual resource and client
+          const dbInstanceIdentifier = process.env.DB_INSTANCE_IDENTIFIER!;
+          const { DBInstances } = await rdsClient.send(
+            new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceIdentifier })
+          );
+          expect(DBInstances).toBeDefined();
+          expect(Array.isArray(DBInstances)).toBe(true);
+          expect(DBInstances!.length).toBeGreaterThan(0);
+          expect(DBInstances![0].DeletionProtection).toBe(true);
+        }
+      });
     });
   });
 });
-
