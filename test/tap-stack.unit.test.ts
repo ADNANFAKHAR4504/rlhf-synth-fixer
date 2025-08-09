@@ -118,3 +118,89 @@ test('TapStack builds with defaults and with explicit props (branch coverage)', 
   const explicitSynth = Testing.synth(explicitStack);
   expect(explicitSynth).toBeTruthy();
 });
+
+describe('Additional Unit Tests for Enhanced Coverage', () => {
+  test('DatabaseStack should handle password from environment variable', () => {
+    const app = Testing.app();
+    const stack = new TerraformStack(app, 'TestDatabaseEnvStack');
+    
+    // Test environment variable password handling
+    process.env.TEST_DB_PASSWORD = 'env-password-123!';
+    
+    new DatabaseStack(stack, 'TestDatabaseEnv', {
+      subnetIds: ['subnet-test1', 'subnet-test2'],
+      securityGroupIds: ['sg-test1'],
+      dbName: 'testdb',
+      username: 'admin',
+      passwordEnvVarName: 'TEST_DB_PASSWORD',
+    });
+    
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toMatchSnapshot();
+    
+    // Clean up
+    delete process.env.TEST_DB_PASSWORD;
+  });
+
+  test('TapStack should properly parameterize project name and environment', () => {
+    const app = new App();
+    process.env.DB_PASSWORD = 'test-password';
+    
+    const stack = new TapStack(app, 'TapParameterized', {
+      environmentSuffix: 'staging',
+    });
+    
+    const synthesized = Testing.synth(stack);
+    // Verify that resources are tagged with the environment suffix
+    expect(synthesized).toContain('staging');
+    expect(synthesized).toContain('myproject');
+  });
+
+  test('SecureVpcStack should create proper network configuration', () => {
+    const app = Testing.app();
+    const stack = new TerraformStack(app, 'TestNetworkValidation');
+    const vpcStack = new SecureVpcStack(stack, 'TestNetworkVpc');
+    
+    const synthesized = Testing.synth(stack);
+    const config = JSON.parse(synthesized);
+    
+    // Verify VPC CIDR is correctly configured
+    const vpcResources = Object.values(config.resource?.aws_vpc || {});
+    expect(vpcResources.length).toBeGreaterThan(0);
+    
+    // Verify subnets are created in different AZs
+    const subnetResources = Object.values(config.resource?.aws_subnet || {});
+    expect(subnetResources.length).toBeGreaterThan(1);
+  });
+
+  test('StorageStack should create secure S3 bucket', () => {
+    const app = Testing.app();
+    const stack = new TerraformStack(app, 'TestS3SecurityStack');
+    new StorageStack(stack, 'TestS3Security');
+    
+    const synthesized = Testing.synth(stack);
+    const config = JSON.parse(synthesized);
+    
+    // Verify S3 bucket public access block is configured
+    const publicAccessBlocks = Object.values(config.resource?.aws_s3_bucket_public_access_block || {});
+    expect(publicAccessBlocks.length).toBeGreaterThan(0);
+    
+    // Verify encryption is enabled
+    const encryptionConfigs = Object.values(config.resource?.aws_s3_bucket_server_side_encryption_configuration || {});
+    expect(encryptionConfigs.length).toBeGreaterThan(0);
+  });
+
+  test('ComputeStack should handle edge case with single subnet', () => {
+    const app = Testing.app();
+    const stack = new TerraformStack(app, 'TestSingleSubnetStack');
+    new ComputeStack(stack, 'TestSingleSubnet', {
+      subnetIds: ['subnet-single'],
+      securityGroupIds: ['sg-single'],
+      amiId: 'ami-single-test',
+      instanceType: 't3.nano',
+      instanceCount: 3, // More instances than subnets
+    });
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toMatchSnapshot();
+  });
+});

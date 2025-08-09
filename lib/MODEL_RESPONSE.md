@@ -1,6 +1,6 @@
 # Terraform Infrastructure Refactoring - DRY Principle Implementation
 
-I'll provide a comprehensive refactoring of your AWS infrastructure following DRY principles with modular, reusable components.
+This document provides a comprehensive refactoring of AWS infrastructure following DRY principles with modular, reusable components.
 
 ## Directory Structure
 
@@ -61,6 +61,7 @@ terraform-infrastructure/
 ### 1. VPC Module (`modules/vpc/`)
 
 **`modules/vpc/versions.tf`**
+
 ```hcl
 terraform {
   required_version = ">= 1.0"
@@ -74,6 +75,7 @@ terraform {
 ```
 
 **`modules/vpc/variables.tf`**
+
 ```hcl
 variable "environment" {
   description = "Environment name"
@@ -126,6 +128,7 @@ variable "tags" {
 ```
 
 **`modules/vpc/main.tf`**
+
 ```hcl
 locals {
   common_tags = merge(
@@ -264,6 +267,7 @@ resource "aws_route_table_association" "private" {
 ```
 
 **`modules/vpc/outputs.tf`**
+
 ```hcl
 output "vpc_id" {
   description = "ID of the VPC"
@@ -299,6 +303,7 @@ output "nat_gateway_ids" {
 ### 2. Security Groups Module (`modules/security-groups/`)
 
 **`modules/security-groups/versions.tf`**
+
 ```hcl
 terraform {
   required_version = ">= 1.0"
@@ -312,6 +317,7 @@ terraform {
 ```
 
 **`modules/security-groups/variables.tf`**
+
 ```hcl
 variable "environment" {
   description = "Environment name"
@@ -341,6 +347,7 @@ variable "tags" {
 ```
 
 **`modules/security-groups/main.tf`**
+
 ```hcl
 locals {
   common_tags = merge(
@@ -467,6 +474,7 @@ resource "aws_security_group" "db" {
 ```
 
 **`modules/security-groups/outputs.tf`**
+
 ```hcl
 output "web_security_group_id" {
   description = "ID of the web security group"
@@ -487,6 +495,7 @@ output "db_security_group_id" {
 ### 3. EC2 Module (`modules/ec2/`)
 
 **`modules/ec2/versions.tf`**
+
 ```hcl
 terraform {
   required_version = ">= 1.0"
@@ -500,6 +509,7 @@ terraform {
 ```
 
 **`modules/ec2/variables.tf`**
+
 ```hcl
 variable "environment" {
   description = "Environment name"
@@ -575,6 +585,7 @@ variable "tags" {
 ```
 
 **`modules/ec2/main.tf`**
+
 ```hcl
 locals {
   common_tags = merge(
@@ -616,6 +627,7 @@ resource "aws_instance" "main" {
 ```
 
 **`modules/ec2/outputs.tf`**
+
 ```hcl
 output "instance_ids" {
   description = "IDs of the EC2 instances"
@@ -636,6 +648,7 @@ output "instance_private_ips" {
 ### 4. RDS Module (`modules/rds/`)
 
 **`modules/rds/versions.tf`**
+
 ```hcl
 terraform {
   required_version = ">= 1.0"
@@ -649,6 +662,7 @@ terraform {
 ```
 
 **`modules/rds/variables.tf`**
+
 ```hcl
 variable "environment" {
   description = "Environment name"
@@ -772,6 +786,7 @@ variable "tags" {
 ```
 
 **`modules/rds/main.tf`**
+
 ```hcl
 locals {
   common_tags = merge(
@@ -830,6 +845,7 @@ resource "aws_db_instance" "main" {
 ```
 
 **`modules/rds/outputs.tf`**
+
 ```hcl
 output "db_instance_id" {
   description = "RDS instance ID"
@@ -855,6 +871,7 @@ output "db_subnet_group_id" {
 ### 5. S3 Module (`modules/s3/`)
 
 **`modules/s3/versions.tf`**
+
 ```hcl
 terraform {
   required_version = ">= 1.0"
@@ -868,6 +885,7 @@ terraform {
 ```
 
 **`modules/s3/variables.tf`**
+
 ```hcl
 variable "environment" {
   description = "Environment name"
@@ -948,6 +966,7 @@ variable "tags" {
 ```
 
 **`modules/s3/main.tf`**
+
 ```hcl
 locals {
   common_tags = merge(
@@ -1031,6 +1050,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
 ```
 
 **`modules/s3/outputs.tf`**
+
 ```hcl
 output "bucket_id" {
   description = "S3 bucket ID"
@@ -1058,6 +1078,7 @@ output "bucket_regional_domain_name" {
 ### Development Environment (`environments/dev/`)
 
 **`environments/dev/versions.tf`**
+
 ```hcl
 terraform {
   required_version = ">= 1.0"
@@ -1071,6 +1092,7 @@ terraform {
 ```
 
 **`environments/dev/backend.tf`**
+
 ```hcl
 terraform {
   backend "s3" {
@@ -1084,6 +1106,7 @@ terraform {
 ```
 
 **`environments/dev/variables.tf`**
+
 ```hcl
 variable "aws_region" {
   description = "AWS region"
