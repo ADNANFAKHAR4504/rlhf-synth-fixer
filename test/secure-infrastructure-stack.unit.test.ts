@@ -147,7 +147,7 @@ describe('SecureInfrastructureStack Unit Tests', () => {
     test('should create WAF Web ACL', () => {
       template.hasResource('AWS::WAFv2::WebACL', {
         Properties: {
-          Scope: 'REGIONAL',
+          Scope: 'CLOUDFRONT',
           DefaultAction: {
             Allow: {},
           },

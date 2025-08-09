@@ -10,6 +10,7 @@ import { Construct } from 'constructs';
 
 export interface MonitoringConstructProps {
   environment: string;
+  cloudTrailLogGroup?: logs.LogGroup;
 }
 
 export class MonitoringConstruct extends Construct {
@@ -19,7 +20,7 @@ export class MonitoringConstruct extends Construct {
   constructor(scope: Construct, id: string, props: MonitoringConstructProps) {
     super(scope, id);
 
-    const { environment } = props;
+    const { environment, cloudTrailLogGroup } = props;
 
     // SNS Topic for alerts
     this.alertTopic = new sns.Topic(this, `AlertTopic-${environment}`, {
@@ -44,8 +45,8 @@ export class MonitoringConstruct extends Construct {
       }
     );
 
-    // CloudTrail Log Group
-    const cloudTrailLogGroup = new logs.LogGroup(
+    // Use provided CloudTrail log group or create a default one
+    const cloudTrailLogGroupToUse = cloudTrailLogGroup || new logs.LogGroup(
       this,
       `CloudTrailLogGroup-${environment}`,
       {
@@ -55,7 +56,7 @@ export class MonitoringConstruct extends Construct {
 
     // Metric filter for failed login attempts
     new logs.MetricFilter(this, `FailedLoginFilter-${environment}`, {
-      logGroup: cloudTrailLogGroup,
+      logGroup: cloudTrailLogGroupToUse,
       metricNamespace: 'Security',
       metricName: 'FailedLogins',
       filterPattern: logs.FilterPattern.literal(
@@ -85,7 +86,7 @@ export class MonitoringConstruct extends Construct {
 
     // Metric filter for root account usage
     new logs.MetricFilter(this, `RootUsageFilter-${environment}`, {
-      logGroup: cloudTrailLogGroup,
+      logGroup: cloudTrailLogGroupToUse,
       metricNamespace: 'Security',
       metricName: 'RootAccountUsage',
       filterPattern: logs.FilterPattern.literal(

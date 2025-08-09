@@ -1,27 +1,53 @@
-// Test setup file for Jest
+import { setupTestEnvironment } from './aws-test-config';
 
-// Set up environment variables for testing
-process.env.ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'test';
-process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+// Setup test environment
+setupTestEnvironment();
 
-// Global test timeout
-jest.setTimeout(30000);
+// Configure AWS SDK for testing
+process.env.AWS_SDK_JS_SUPPRESS_MAINTENANCE_MODE_MESSAGE = '1';
 
-// Suppress console output during tests unless there's an error
+// Mock console methods to reduce noise in tests
 const originalConsoleLog = console.log;
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
 
+// Only show console output for errors in tests
+console.log = (...args: any[]) => {
+  if (process.env.TEST_VERBOSE === 'true') {
+    originalConsoleLog(...args);
+  }
+};
+
+console.warn = (...args: any[]) => {
+  if (process.env.TEST_VERBOSE === 'true') {
+    originalConsoleWarn(...args);
+  }
+};
+
+console.error = (...args: any[]) => {
+  originalConsoleError(...args);
+};
+
+// Global test configuration
 beforeAll(() => {
-  console.log = jest.fn();
-  console.warn = jest.fn();
-  console.error = originalConsoleError; // Keep error logging
+  // Set up any global test configuration
+  jest.setTimeout(30000); // 30 seconds timeout for all tests
 });
 
 afterAll(() => {
-  console.log = originalConsoleLog;
-  console.warn = originalConsoleWarn;
-  console.error = originalConsoleError;
+  // Clean up any global test resources
+});
+
+// Handle unhandled promise rejections in tests
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+// Handle uncaught exceptions in tests
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
 });
 
 // Clean up after each test

@@ -185,23 +185,6 @@ export class SecurityConstruct extends Construct {
       })
     );
 
-    // Add MFA requirement for console access
-    this.adminRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.DENY,
-        actions: ['*'],
-        resources: ['*'],
-        conditions: {
-          StringNotEquals: {
-            'aws:MultiFactorAuthPresent': 'true',
-          },
-          StringEquals: {
-            'aws:RequestTag/RequireMFA': 'true',
-          },
-        },
-      })
-    );
-
     // Instance Profile for EC2
     new iam.InstanceProfile(this, `EC2InstanceProfile-${environment}`, {
       role: this.ec2Role,

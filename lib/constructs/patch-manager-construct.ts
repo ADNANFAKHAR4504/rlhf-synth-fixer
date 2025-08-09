@@ -109,12 +109,6 @@ export class PatchManagerConstruct extends Construct {
         Operation: {
           Values: ['Install'],
         },
-        SnapshotId: {
-          Values: [''],
-        },
-        InstallOverrideList: {
-          Values: [''],
-        },
         RebootOption: {
           Values: ['RebootIfNeeded'],
         },
@@ -131,6 +125,9 @@ export class PatchManagerConstruct extends Construct {
           metricName: 'PatchCompliance',
           statistic: 'Average',
           period: cdk.Duration.hours(24),
+          dimensionsMap: {
+            PatchGroup: `${environment}-servers`,
+          },
         }),
         threshold: 90, // Alert if compliance drops below 90%
         evaluationPeriods: 2,
@@ -151,6 +148,9 @@ export class PatchManagerConstruct extends Construct {
           metricName: 'FailedPatchOperations',
           statistic: 'Sum',
           period: cdk.Duration.hours(1),
+          dimensionsMap: {
+            PatchGroup: `${environment}-servers`,
+          },
         }),
         threshold: 1, // Alert if any patch operations fail
         evaluationPeriods: 1,

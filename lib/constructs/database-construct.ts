@@ -99,7 +99,7 @@ export class DatabaseConstruct extends Construct {
       allowMajorVersionUpgrade: false,
 
       databaseName: 'appdb',
-      port: databasePort, // Use the configurable port
+      // port: databasePort, // Use the configurable port - commented out to avoid replacement
     });
 
     // CloudWatch Alarms for database monitoring
