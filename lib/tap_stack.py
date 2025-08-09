@@ -65,9 +65,9 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       ipv6_cidr_block=pulumi.Output.all(
         vpc.ipv6_cidr_block, random_offset.result
       ).apply(
-          lambda args: str(list(
+          lambda args, index=i: str(list(
             ipaddress.IPv6Network(args[0]).subnets(new_prefix=64)
-          )[args[1] + i])
+          )[args[1] + index])
       ),
       assign_ipv6_address_on_creation=True,
       map_public_ip_on_launch=True,
@@ -109,9 +109,9 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       ipv6_cidr_block=pulumi.Output.all(
         vpc.ipv6_cidr_block, random_offset.result
       ).apply(
-          lambda args: str(list(
+          lambda args, index=i: str(list(
             ipaddress.IPv6Network(args[0]).subnets(new_prefix=64)
-          )[args[1] + 100 + i])
+          )[args[1] + 100 + index])
       ),
       assign_ipv6_address_on_creation=True,
       tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}
