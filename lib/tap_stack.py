@@ -16,7 +16,7 @@ import pulumi_aws as aws
 import pulumi_random as random
 
 config = pulumi.Config()
-project_name = "dual-stack-app-final"
+project_name = "prod-dual-stack-app"
 domain_name = config.get("domain_name")
 environment = config.get("environment") or "prod"
 aws_region = config.get("aws:region") or "us-east-1"
@@ -65,9 +65,9 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       ipv6_cidr_block=pulumi.Output.all(
         vpc.ipv6_cidr_block, random_offset.result
       ).apply(
-          lambda args, index=i: str(list(
+          lambda args: str(list(
             ipaddress.IPv6Network(args[0]).subnets(new_prefix=64)
-          )[args[1] + index])
+          )[args[1] + i])
       ),
       assign_ipv6_address_on_creation=True,
       map_public_ip_on_launch=True,
@@ -109,9 +109,9 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       ipv6_cidr_block=pulumi.Output.all(
         vpc.ipv6_cidr_block, random_offset.result
       ).apply(
-          lambda args, index=i: str(list(
+          lambda args: str(list(
             ipaddress.IPv6Network(args[0]).subnets(new_prefix=64)
-          )[args[1] + 100 + index])
+          )[args[1] + 100 + i])
       ),
       assign_ipv6_address_on_creation=True,
       tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}

@@ -5,6 +5,7 @@ and Pulumi's testing utilities.
 import pulumi
 from moto import mock_aws
 import pulumi_aws as aws
+import pulumi_random as random
 
 from lib import tap_stack
 
@@ -18,6 +19,7 @@ class MyMocks(pulumi.runtime.Mocks):
       outputs['arn'] = f"arn:aws:iam::123456789012:role/{args.name}"
     if args.typ == "aws:iam/instanceProfile:InstanceProfile":
       outputs['arn'] = f"arn:aws:iam::123456789012:instance-profile/{args.name}"
+    # Jab test RandomInteger resource banaye, to 'result' mein 150 return karein
     if args.typ == "random:index/randomInteger:RandomInteger":
       outputs['result'] = 150
     return [f"{args.name}_id", outputs]
