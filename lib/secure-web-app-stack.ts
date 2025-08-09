@@ -29,7 +29,6 @@ export class SecureWebAppStack extends cdk.Stack {
 
     // 1. KMS Key for encryption with improved least privilege policy
     const kmsKey = new kms.Key(this, `tf-encryption-key-${environment}`, {
-      alias: `tf-secure-web-app-key-${environment}`,
       description: `Encryption key for secure web app - ${environment}`,
       enableKeyRotation: true,
       policy: new iam.PolicyDocument({

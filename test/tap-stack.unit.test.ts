@@ -128,12 +128,6 @@ describe('SecureWebAppStack', () => {
         }),
       });
     });
-
-    test('creates KMS alias', () => {
-      template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: 'alias/tf-secure-web-app-key-test',
-      });
-    });
   });
 
   describe('Security Groups', () => {

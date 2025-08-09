@@ -661,3 +661,4 @@ const securityNotificationsTopic = new sns.Topic(
 - Encrypted notifications using the same KMS key
 - Can be extended to send notifications to email, SMS, or other endpoints
 - Provides audit trail for S3 object creation events
+- Reduces required IAM permissions for deployment
