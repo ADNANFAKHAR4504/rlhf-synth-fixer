@@ -105,3 +105,5 @@ bin/tfplan
 build
 lib/constructs/*js
 lib/*js
+test/setup.js
+test/constructs/*.unit.test.js

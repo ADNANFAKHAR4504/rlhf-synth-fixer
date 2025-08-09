@@ -35,25 +35,30 @@ global.testUtils = {
   createMockOutputs: () => ({
     VpcId: 'vpc-test123',
     DatabaseEndpoint: 'test-db.region.rds.amazonaws.com',
-    WafAclArn: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/test/12345678-1234-1234-1234-123456789012',
+    WafAclArn:
+      'arn:aws:wafv2:us-east-1:123456789012:global/webacl/test/12345678-1234-1234-1234-123456789012',
   }),
-  
+
   // Helper function to validate resource properties
-  validateResourceProperties: (resource: any, expectedProperties: any) => {
+  validateResourceProperties: (
+    resource: { Properties: Record<string, unknown> },
+    expectedProperties: Record<string, unknown>
+  ) => {
     Object.entries(expectedProperties).forEach(([key, value]) => {
       expect(resource.Properties[key]).toEqual(value);
     });
   },
-  
+
   // Helper function to check if resource has required tags
-  hasRequiredTags: (resource: any, environment: string) => {
+  hasRequiredTags: (
+    resource: { Properties?: { Tags?: Array<{ Key: string; Value: string }> } },
+    environment: string
+  ) => {
     const tags = resource.Properties?.Tags || [];
-    const hasEnvironmentTag = tags.some((tag: any) => 
-      tag.Key === 'Environment' && tag.Value === environment
+    const hasEnvironmentTag = tags.some(
+      tag => tag.Key === 'Environment' && tag.Value === environment
     );
-    const hasNameTag = tags.some((tag: any) => 
-      tag.Key === 'Name'
-    );
+    const hasNameTag = tags.some(tag => tag.Key === 'Name');
     return hasEnvironmentTag && hasNameTag;
   },
 };
@@ -61,8 +66,20 @@ global.testUtils = {
 // Type definitions for global test utilities
 declare global {
   var testUtils: {
-    createMockOutputs: () => any;
-    validateResourceProperties: (resource: any, expectedProperties: any) => void;
-    hasRequiredTags: (resource: any, environment: string) => boolean;
+    createMockOutputs: () => {
+      VpcId: string;
+      DatabaseEndpoint: string;
+      WafAclArn: string;
+    };
+    validateResourceProperties: (
+      resource: { Properties: Record<string, unknown> },
+      expectedProperties: Record<string, unknown>
+    ) => void;
+    hasRequiredTags: (
+      resource: {
+        Properties?: { Tags?: Array<{ Key: string; Value: string }> };
+      },
+      environment: string
+    ) => boolean;
   };
 }

@@ -13,7 +13,7 @@ describe('StorageConstruct Unit Tests', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new cdk.Stack(app, 'TestStack');
-    
+
     alertTopic = new sns.Topic(stack, 'TestAlertTopic', {
       topicName: 'test-alerts',
     });
@@ -22,7 +22,7 @@ describe('StorageConstruct Unit Tests', () => {
       environment: 'test',
       alertTopic,
     });
-    
+
     template = Template.fromStack(stack);
   });
 
@@ -277,7 +277,7 @@ describe('StorageConstruct Unit Tests', () => {
       // S3 bucket should be referenced by IAM policy
       const policies = template.findResources('AWS::IAM::Policy');
       const buckets = template.findResources('AWS::S3::Bucket');
-      
+
       Object.values(policies).forEach((policy: any) => {
         if (policy.Properties.PolicyName.includes('secure-bucket-policy')) {
           const statements = policy.Properties.PolicyDocument.Statement;

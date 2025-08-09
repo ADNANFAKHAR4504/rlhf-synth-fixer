@@ -16,17 +16,17 @@ describe('DatabaseConstruct Unit Tests', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new cdk.Stack(app, 'TestStack');
-    
+
     // Create dependencies
     vpc = new ec2.Vpc(stack, 'TestVpc', {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
     });
-    
+
     securityGroup = new ec2.SecurityGroup(stack, 'TestSecurityGroup', {
       vpc,
       description: 'Test security group',
     });
-    
+
     alertTopic = new sns.Topic(stack, 'TestAlertTopic', {
       topicName: 'test-alerts',
     });
@@ -37,7 +37,7 @@ describe('DatabaseConstruct Unit Tests', () => {
       securityGroup,
       alertTopic,
     });
-    
+
     template = Template.fromStack(stack);
   });
 
@@ -137,9 +137,9 @@ describe('DatabaseConstruct Unit Tests', () => {
         Properties: {
           Family: Match.stringLikeRegexp('mysql8\\.0'),
           Parameters: {
-            'slow_query_log': '1',
-            'general_log': '1',
-            'log_queries_not_using_indexes': '1',
+            slow_query_log: '1',
+            general_log: '1',
+            log_queries_not_using_indexes: '1',
           },
         },
       });

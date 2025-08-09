@@ -37,19 +37,22 @@ export class StorageConstruct extends Construct {
     });
 
     // Create IAM policy for S3 bucket access
-    this.secureS3BucketPolicy = new iam.Policy(this, `S3AccessPolicy-${environment}`, {
-      policyName: `secure-bucket-policy-${environment}-001`,
-      statements: [
-        new iam.PolicyStatement({
-          actions: [
-            's3:GetObject',
-            's3:PutObject',
-            's3:DeleteObject',
-          ],
-          resources: [this.secureS3Bucket.bucketArn, `${this.secureS3Bucket.bucketArn}/*`],
-        }),
-      ],
-    });
+    this.secureS3BucketPolicy = new iam.Policy(
+      this,
+      `S3AccessPolicy-${environment}`,
+      {
+        policyName: `secure-bucket-policy-${environment}-001`,
+        statements: [
+          new iam.PolicyStatement({
+            actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+            resources: [
+              this.secureS3Bucket.bucketArn,
+              `${this.secureS3Bucket.bucketArn}/*`,
+            ],
+          }),
+        ],
+      }
+    );
 
     // Add S3 bucket notification for security monitoring
     this.secureS3Bucket.addEventNotification(
@@ -58,11 +61,15 @@ export class StorageConstruct extends Construct {
     );
 
     // Create CloudTrail for S3 bucket monitoring
-    this.secureS3BucketCloudTrail = new cloudtrail.Trail(this, `S3CloudTrail-${environment}`, {
-      trailName: `s3-monitoring-trail-${environment}`,
-      includeGlobalServiceEvents: false,
-      isMultiRegionTrail: false,
-    });
+    this.secureS3BucketCloudTrail = new cloudtrail.Trail(
+      this,
+      `S3CloudTrail-${environment}`,
+      {
+        trailName: `s3-monitoring-trail-${environment}`,
+        includeGlobalServiceEvents: false,
+        isMultiRegionTrail: false,
+      }
+    );
 
     // Tag resources
     cdk.Tags.of(this.secureS3Bucket).add('Name', `SecureBucket-${environment}`);

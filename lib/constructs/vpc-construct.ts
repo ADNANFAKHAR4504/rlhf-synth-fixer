@@ -36,10 +36,14 @@ export class VpcConstruct extends Construct {
     });
 
     // Create Network ACLs for additional security
-    const privateNetworkAcl = new ec2.NetworkAcl(this, `PrivateNetworkAcl-${environment}`, {
-      vpc: this.vpc,
-      subnetSelection: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-    });
+    const privateNetworkAcl = new ec2.NetworkAcl(
+      this,
+      `PrivateNetworkAcl-${environment}`,
+      {
+        vpc: this.vpc,
+        subnetSelection: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      }
+    );
 
     // Allow HTTPS outbound for private subnets
     privateNetworkAcl.addEntry(`AllowHTTPSOutbound-${environment}`, {

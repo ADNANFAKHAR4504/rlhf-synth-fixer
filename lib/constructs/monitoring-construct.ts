@@ -33,17 +33,25 @@ export class MonitoringConstruct extends Construct {
     );
 
     // CloudWatch Log Group for security events
-    this.securityLogGroup = new logs.LogGroup(this, `SecurityLogGroup-${environment}`, {
-      retention: logs.RetentionDays.ONE_YEAR,
-    });
+    this.securityLogGroup = new logs.LogGroup(
+      this,
+      `SecurityLogGroup-${environment}`,
+      {
+        retention: logs.RetentionDays.ONE_YEAR,
+      }
+    );
 
     // CloudTrail Log Group
-    const cloudTrailLogGroup = new logs.LogGroup(this, `CloudTrailLogGroup-${environment}`, {
-      retention: logs.RetentionDays.ONE_YEAR,
-    });
+    const cloudTrailLogGroup = new logs.LogGroup(
+      this,
+      `CloudTrailLogGroup-${environment}`,
+      {
+        retention: logs.RetentionDays.ONE_YEAR,
+      }
+    );
 
     // Metric filter for failed login attempts
-    const failedLoginFilter = new logs.MetricFilter(this, `FailedLoginFilter-${environment}`, {
+    new logs.MetricFilter(this, `FailedLoginFilter-${environment}`, {
       logGroup: cloudTrailLogGroup,
       metricNamespace: 'Security',
       metricName: 'FailedLogins',
@@ -54,85 +62,106 @@ export class MonitoringConstruct extends Construct {
     });
 
     // Alarm for failed login attempts
-    const failedLoginAlarm = new cloudwatch.Alarm(this, `FailedLoginAlarm-${environment}`, {
-      metric: new cloudwatch.Metric({
-        namespace: 'Security',
-        metricName: 'FailedLogins',
-        statistic: 'Sum',
-      }),
-      threshold: 5,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Alert on multiple failed login attempts',
-    });
+    const failedLoginAlarm = new cloudwatch.Alarm(
+      this,
+      `FailedLoginAlarm-${environment}`,
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'Security',
+          metricName: 'FailedLogins',
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Alert on multiple failed login attempts',
+      }
+    );
 
     failedLoginAlarm.addAlarmAction(new actions.SnsAction(this.alertTopic));
 
     // Metric filter for root account usage
-    const rootUsageFilter = new logs.MetricFilter(this, `RootUsageFilter-${environment}`, {
+    new logs.MetricFilter(this, `RootUsageFilter-${environment}`, {
       logGroup: cloudTrailLogGroup,
       metricNamespace: 'Security',
       metricName: 'RootAccountUsage',
-      filterPattern: logs.FilterPattern.literal('{ $.userIdentity.type = "Root" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != "AwsServiceEvent" }'),
+      filterPattern: logs.FilterPattern.literal(
+        '{ $.userIdentity.type = "Root" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != "AwsServiceEvent" }'
+      ),
       metricValue: '1',
     });
 
     // Alarm for root account usage
-    const rootUsageAlarm = new cloudwatch.Alarm(this, `RootUsageAlarm-${environment}`, {
-      metric: new cloudwatch.Metric({
-        namespace: 'Security',
-        metricName: 'RootAccountUsage',
-        statistic: 'Sum',
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Alert on root account usage',
-    });
+    const rootUsageAlarm = new cloudwatch.Alarm(
+      this,
+      `RootUsageAlarm-${environment}`,
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'Security',
+          metricName: 'RootAccountUsage',
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Alert on root account usage',
+      }
+    );
 
     rootUsageAlarm.addAlarmAction(new actions.SnsAction(this.alertTopic));
 
     // EventBridge rule for security events
-    const securityEventRule = new events.Rule(this, `SecurityEventRule-${environment}`, {
-      eventPattern: {
-        source: ['aws.signin'],
-        detailType: ['AWS Console Sign In via CloudTrail'],
-        detail: {
-          responseElements: {
-            ConsoleLogin: ['Failure'],
+    const securityEventRule = new events.Rule(
+      this,
+      `SecurityEventRule-${environment}`,
+      {
+        eventPattern: {
+          source: ['aws.signin'],
+          detailType: ['AWS Console Sign In via CloudTrail'],
+          detail: {
+            responseElements: {
+              ConsoleLogin: ['Failure'],
+            },
           },
         },
-      },
-    });
+      }
+    );
 
     securityEventRule.addTarget(new targets.SnsTopic(this.alertTopic));
 
     // IAM policy for unauthorized access detection
-    const unauthorizedAccessRule = new events.Rule(this, `UnauthorizedAccessRule-${environment}`, {
-      eventPattern: {
-        source: ['aws.iam'],
-        detailType: ['AWS API Call via CloudTrail'],
-        detail: {
-          eventName: [
-            'CreateUser',
-            'DeleteUser',
-            'CreateRole',
-            'DeleteRole',
-            'AttachUserPolicy',
-            'DetachUserPolicy',
-            'AttachRolePolicy',
-            'DetachRolePolicy',
-          ],
+    const unauthorizedAccessRule = new events.Rule(
+      this,
+      `UnauthorizedAccessRule-${environment}`,
+      {
+        eventPattern: {
+          source: ['aws.iam'],
+          detailType: ['AWS API Call via CloudTrail'],
+          detail: {
+            eventName: [
+              'CreateUser',
+              'DeleteUser',
+              'CreateRole',
+              'DeleteRole',
+              'AttachUserPolicy',
+              'DetachUserPolicy',
+              'AttachRolePolicy',
+              'DetachRolePolicy',
+            ],
+          },
         },
-      },
-    });
+      }
+    );
 
     unauthorizedAccessRule.addTarget(new targets.SnsTopic(this.alertTopic));
 
     // Tag monitoring resources
     cdk.Tags.of(this.alertTopic).add('Name', `AlertTopic-${environment}`);
     cdk.Tags.of(this.alertTopic).add('Component', 'Monitoring');
-    cdk.Tags.of(this.securityLogGroup).add('Name', `SecurityLogGroup-${environment}`);
+    cdk.Tags.of(this.securityLogGroup).add(
+      'Name',
+      `SecurityLogGroup-${environment}`
+    );
     cdk.Tags.of(this.securityLogGroup).add('Component', 'Monitoring');
   }
 }

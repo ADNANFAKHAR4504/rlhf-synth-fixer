@@ -180,10 +180,10 @@ describe('VpcConstruct Unit Tests', () => {
     test('should create expected number of resources', () => {
       // Should have at least one VPC
       template.hasResource('AWS::EC2::VPC', {});
-      
+
       // Should have subnets
       template.hasResource('AWS::EC2::Subnet', {});
-      
+
       // Should have NAT gateways
       template.hasResource('AWS::EC2::NatGateway', {});
     });

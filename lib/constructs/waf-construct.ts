@@ -16,7 +16,7 @@ export class WafConstruct extends Construct {
     const { environment } = props;
 
     // CloudWatch Log Group for WAF logs
-    const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
+    new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
       retention: logs.RetentionDays.THREE_MONTHS,
     });
 
@@ -26,7 +26,7 @@ export class WafConstruct extends Construct {
       defaultAction: { allow: {} },
       name: `WebACL-${environment}`,
       description: `WAF Web ACL for ${environment} environment`,
-      
+
       rules: [
         // AWS Managed Rule - Core Rule Set
         {
@@ -45,7 +45,7 @@ export class WafConstruct extends Construct {
             metricName: 'CommonRuleSetMetric',
           },
         },
-        
+
         // AWS Managed Rule - SQL Injection
         {
           name: 'AWSManagedRulesSQLiRuleSet',
@@ -63,7 +63,7 @@ export class WafConstruct extends Construct {
             metricName: 'SQLiRuleSetMetric',
           },
         },
-        
+
         // AWS Managed Rule - Known Bad Inputs
         {
           name: 'AWSManagedRulesKnownBadInputsRuleSet',
@@ -81,7 +81,7 @@ export class WafConstruct extends Construct {
             metricName: 'KnownBadInputsMetric',
           },
         },
-        
+
         // Rate limiting rule
         {
           name: 'RateLimitRule',
@@ -99,7 +99,7 @@ export class WafConstruct extends Construct {
             metricName: 'RateLimitMetric',
           },
         },
-        
+
         // Custom XSS protection rule
         {
           name: 'XSSProtectionRule',
@@ -129,7 +129,7 @@ export class WafConstruct extends Construct {
           },
         },
       ],
-      
+
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudWatchMetricsEnabled: true,

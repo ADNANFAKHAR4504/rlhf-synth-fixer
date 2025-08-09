@@ -1,18 +1,22 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { VpcConstruct } from './constructs/vpc-construct';
-import { SecurityConstruct } from './constructs/security-construct';
 import { DatabaseConstruct } from './constructs/database-construct';
 import { MonitoringConstruct } from './constructs/monitoring-construct';
-import { WafConstruct } from './constructs/waf-construct';
+import { SecurityConstruct } from './constructs/security-construct';
 import { StorageConstruct } from './constructs/storage-construct';
+import { VpcConstruct } from './constructs/vpc-construct';
+import { WafConstruct } from './constructs/waf-construct';
 
 export interface SecureInfrastructureStackProps extends cdk.StackProps {
   environment: string;
 }
 
 export class SecureInfrastructureStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: SecureInfrastructureStackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: SecureInfrastructureStackProps
+  ) {
     super(scope, id, props);
 
     const { environment } = props;
@@ -29,9 +33,13 @@ export class SecureInfrastructureStack extends cdk.Stack {
     });
 
     // Monitoring and Alerting
-    const monitoringConstruct = new MonitoringConstruct(this, 'MonitoringConstruct', {
-      environment,
-    });
+    const monitoringConstruct = new MonitoringConstruct(
+      this,
+      'MonitoringConstruct',
+      {
+        environment,
+      }
+    );
 
     // Database Infrastructure
     const databaseConstruct = new DatabaseConstruct(this, 'DatabaseConstruct', {
@@ -47,7 +55,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     });
 
     // Storage Infrastructure
-    const storageConstruct = new StorageConstruct(this, 'StorageConstruct', {
+    new StorageConstruct(this, 'StorageConstruct', {
       environment,
       alertTopic: monitoringConstruct.alertTopic,
     });

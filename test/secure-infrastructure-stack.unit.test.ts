@@ -9,9 +9,13 @@ describe('SecureInfrastructureStack Unit Tests', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new SecureInfrastructureStack(app, 'TestSecureInfrastructureStack', {
-      environment: 'test',
-    });
+    stack = new SecureInfrastructureStack(
+      app,
+      'TestSecureInfrastructureStack',
+      {
+        environment: 'test',
+      }
+    );
     template = Template.fromStack(stack);
   });
 
@@ -263,8 +267,8 @@ describe('SecureInfrastructureStack Unit Tests', () => {
       const resources = template.findResources('*');
       Object.values(resources).forEach((resource: any) => {
         if (resource.Properties?.Tags) {
-          const hasEnvironmentTag = resource.Properties.Tags.some((tag: any) => 
-            tag.Key === 'Environment' && tag.Value === 'test'
+          const hasEnvironmentTag = resource.Properties.Tags.some(
+            (tag: any) => tag.Key === 'Environment' && tag.Value === 'test'
           );
           expect(hasEnvironmentTag).toBe(true);
         }

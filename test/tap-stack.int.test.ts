@@ -45,7 +45,9 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should have VPC ID output', () => {
       if (outputs) {
-        const vpcId = outputs.VpcId || outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
+        const vpcId =
+          outputs.VpcId ||
+          outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
         expect(vpcId).toBeDefined();
         expect(typeof vpcId).toBe('string');
         expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
@@ -54,7 +56,11 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should have database endpoint output', () => {
       if (outputs) {
-        const dbEndpoint = outputs.DatabaseEndpoint || outputs['TapStackdevSecureInfrastructureStack5A42B300.DatabaseEndpoint'];
+        const dbEndpoint =
+          outputs.DatabaseEndpoint ||
+          outputs[
+            'TapStackdevSecureInfrastructureStack5A42B300.DatabaseEndpoint'
+          ];
         expect(dbEndpoint).toBeDefined();
         expect(typeof dbEndpoint).toBe('string');
         expect(dbEndpoint).toMatch(/^[a-zA-Z0-9.-]+\.rds\.amazonaws\.com$/);
@@ -63,10 +69,14 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should have WAF ACL ARN output', () => {
       if (outputs) {
-        const wafArn = outputs.WafAclArn || outputs['TapStackdevSecureInfrastructureStack5A42B300.WafAclArn'];
+        const wafArn =
+          outputs.WafAclArn ||
+          outputs['TapStackdevSecureInfrastructureStack5A42B300.WafAclArn'];
         expect(wafArn).toBeDefined();
         expect(typeof wafArn).toBe('string');
-        expect(wafArn).toMatch(/^arn:aws:wafv2:[a-z0-9-]+:[0-9]+:global\/webacl\/[a-zA-Z0-9-]+\/[a-f0-9-]+$/);
+        expect(wafArn).toMatch(
+          /^arn:aws:wafv2:[a-z0-9-]+:[0-9]+:global\/webacl\/[a-zA-Z0-9-]+\/[a-f0-9-]+$/
+        );
       }
     });
   });
@@ -74,7 +84,9 @@ describe('Infrastructure Integration Tests', () => {
   describe('Infrastructure Security', () => {
     test('should have secure VPC configuration', () => {
       if (outputs) {
-        const vpcId = outputs.VpcId || outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
+        const vpcId =
+          outputs.VpcId ||
+          outputs['TapStackdevSecureInfrastructureStack5A42B300.VpcId'];
         expect(vpcId).toBeDefined();
         // Additional VPC security checks could be added here
       }
@@ -82,7 +94,11 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should have encrypted database', () => {
       if (outputs) {
-        const dbEndpoint = outputs.DatabaseEndpoint || outputs['TapStackdevSecureInfrastructureStack5A42B300.DatabaseEndpoint'];
+        const dbEndpoint =
+          outputs.DatabaseEndpoint ||
+          outputs[
+            'TapStackdevSecureInfrastructureStack5A42B300.DatabaseEndpoint'
+          ];
         expect(dbEndpoint).toBeDefined();
         // Database encryption is configured in the CDK construct
       }
@@ -90,7 +106,9 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should have WAF protection configured', () => {
       if (outputs) {
-        const wafArn = outputs.WafAclArn || outputs['TapStackdevSecureInfrastructureStack5A42B300.WafAclArn'];
+        const wafArn =
+          outputs.WafAclArn ||
+          outputs['TapStackdevSecureInfrastructureStack5A42B300.WafAclArn'];
         expect(wafArn).toBeDefined();
         // WAF rules are configured in the CDK construct
       }
@@ -136,7 +154,11 @@ describe('Infrastructure Integration Tests', () => {
   describe('Database Configuration', () => {
     test('should have RDS instance with proper configuration', () => {
       if (outputs) {
-        const dbEndpoint = outputs.DatabaseEndpoint || outputs['TapStackdevSecureInfrastructureStack5A42B300.DatabaseEndpoint'];
+        const dbEndpoint =
+          outputs.DatabaseEndpoint ||
+          outputs[
+            'TapStackdevSecureInfrastructureStack5A42B300.DatabaseEndpoint'
+          ];
         expect(dbEndpoint).toBeDefined();
         // Additional RDS configuration checks could be added here
       }
@@ -175,7 +197,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('Cost Optimization', () => {
     test('should use appropriate instance types for environment', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      
+
       if (environmentSuffix === 'dev') {
         // Dev environment should use smaller instances
         expect(true).toBe(true);
@@ -187,7 +209,7 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should have appropriate backup retention periods', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      
+
       if (environmentSuffix === 'dev') {
         // Dev environment might have shorter retention
         expect(true).toBe(true);
@@ -201,7 +223,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('High Availability', () => {
     test('should have Multi-AZ configuration for production', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      
+
       if (environmentSuffix === 'prod') {
         // Production should have Multi-AZ enabled
         expect(true).toBe(true);
@@ -230,7 +252,7 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should have deletion protection for production', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      
+
       if (environmentSuffix === 'prod') {
         // Production should have deletion protection
         expect(true).toBe(true);

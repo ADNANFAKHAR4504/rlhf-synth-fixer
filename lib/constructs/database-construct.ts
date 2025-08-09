@@ -23,25 +23,33 @@ export class DatabaseConstruct extends Construct {
     const { environment, vpc, securityGroup, alertTopic } = props;
 
     // Create DB subnet group
-    const dbSubnetGroup = new rds.SubnetGroup(this, `DBSubnetGroup-${environment}`, {
-      vpc,
-      description: 'Subnet group for RDS database',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-    });
+    const dbSubnetGroup = new rds.SubnetGroup(
+      this,
+      `DBSubnetGroup-${environment}`,
+      {
+        vpc,
+        description: 'Subnet group for RDS database',
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      }
+    );
 
     // Create parameter group for encryption and security
-    const parameterGroup = new rds.ParameterGroup(this, `DBParameterGroup-${environment}`, {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
-      }),
-      parameters: {
-        'slow_query_log': '1',
-        'general_log': '1',
-        'log_queries_not_using_indexes': '1',
-      },
-    });
+    const parameterGroup = new rds.ParameterGroup(
+      this,
+      `DBParameterGroup-${environment}`,
+      {
+        engine: rds.DatabaseInstanceEngine.mysql({
+          version: rds.MysqlEngineVersion.VER_8_0,
+        }),
+        parameters: {
+          slow_query_log: '1',
+          general_log: '1',
+          log_queries_not_using_indexes: '1',
+        },
+      }
+    );
 
     // Generate random password and store in SSM Parameter Store
     const dbPassword = new rds.DatabaseSecret(this, `DBSecret-${environment}`, {
@@ -53,33 +61,36 @@ export class DatabaseConstruct extends Construct {
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [securityGroup],
       credentials: rds.Credentials.fromSecret(dbPassword),
       parameterGroup,
-      
+
       // Security settings
       storageEncrypted: true,
       storageEncryptionKey: undefined, // Use AWS managed key
       deletionProtection: environment === 'prod',
-      
+
       // Backup settings
       backupRetention: cdk.Duration.days(7),
       deleteAutomatedBackups: false,
-      
+
       // Monitoring
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: false,
-      
+
       // Multi-AZ for production
       multiAz: environment === 'prod',
-      
+
       // Maintenance
       autoMinorVersionUpgrade: true,
       allowMajorVersionUpgrade: false,
-      
+
       databaseName: 'appdb',
     });
 
@@ -93,12 +104,16 @@ export class DatabaseConstruct extends Construct {
 
     cpuAlarm.addAlarmAction(new actions.SnsAction(alertTopic));
 
-    const connectionAlarm = new cloudwatch.Alarm(this, `DBConnectionAlarm-${environment}`, {
-      metric: this.database.metricDatabaseConnections(),
-      threshold: 80,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    const connectionAlarm = new cloudwatch.Alarm(
+      this,
+      `DBConnectionAlarm-${environment}`,
+      {
+        metric: this.database.metricDatabaseConnections(),
+        threshold: 80,
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
 
     connectionAlarm.addAlarmAction(new actions.SnsAction(alertTopic));
 

@@ -40,7 +40,9 @@ describe('TapStack Unit Tests', () => {
 
     test('should use custom environment suffix when provided', () => {
       const testEnvironment = 'test-env';
-      const customStack = new TapStack(app, 'CustomStack', { environmentSuffix: testEnvironment });
+      const customStack = new TapStack(app, 'CustomStack', {
+        environmentSuffix: testEnvironment,
+      });
       expect(customStack).toBeDefined();
     });
 

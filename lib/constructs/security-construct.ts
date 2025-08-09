@@ -21,11 +21,15 @@ export class SecurityConstruct extends Construct {
     const { environment, vpc } = props;
 
     // Web tier security group (ALB/CloudFront)
-    this.webSecurityGroup = new ec2.SecurityGroup(this, `WebSecurityGroup-${environment}`, {
-      vpc,
-      description: 'Security group for web tier',
-      allowAllOutbound: false,
-    });
+    this.webSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `WebSecurityGroup-${environment}`,
+      {
+        vpc,
+        description: 'Security group for web tier',
+        allowAllOutbound: false,
+      }
+    );
 
     // Only allow HTTPS inbound
     this.webSecurityGroup.addIngressRule(
@@ -42,11 +46,15 @@ export class SecurityConstruct extends Construct {
     );
 
     // Application tier security group
-    this.appSecurityGroup = new ec2.SecurityGroup(this, `AppSecurityGroup-${environment}`, {
-      vpc,
-      description: 'Security group for application tier',
-      allowAllOutbound: false,
-    });
+    this.appSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `AppSecurityGroup-${environment}`,
+      {
+        vpc,
+        description: 'Security group for application tier',
+        allowAllOutbound: false,
+      }
+    );
 
     // Allow traffic from web tier
     this.appSecurityGroup.addIngressRule(
@@ -63,11 +71,15 @@ export class SecurityConstruct extends Construct {
     );
 
     // Database security group
-    this.databaseSecurityGroup = new ec2.SecurityGroup(this, `DatabaseSecurityGroup-${environment}`, {
-      vpc,
-      description: 'Security group for database tier',
-      allowAllOutbound: false,
-    });
+    this.databaseSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `DatabaseSecurityGroup-${environment}`,
+      {
+        vpc,
+        description: 'Security group for database tier',
+        allowAllOutbound: false,
+      }
+    );
 
     // Only allow access from application tier
     this.databaseSecurityGroup.addIngressRule(
@@ -81,33 +93,39 @@ export class SecurityConstruct extends Construct {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
     // Add CloudWatch permissions
-    this.ec2Role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'cloudwatch:PutMetricData',
-        'logs:PutLogEvents',
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-      ],
-      resources: ['*'],
-      conditions: {
-        StringEquals: {
-          'aws:RequestedRegion': cdk.Stack.of(this).region,
+    this.ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'cloudwatch:PutMetricData',
+          'logs:PutLogEvents',
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+        ],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'aws:RequestedRegion': cdk.Stack.of(this).region,
+          },
         },
-      },
-    }));
+      })
+    );
 
     // RDS IAM Role
     this.rdsRole = new iam.Role(this, `RDSRole-${environment}`, {
       assumedBy: new iam.ServicePrincipal('rds.amazonaws.com'),
       description: 'IAM role for RDS enhanced monitoring',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonRDSEnhancedMonitoringRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonRDSEnhancedMonitoringRole'
+        ),
       ],
     });
 
@@ -117,11 +135,20 @@ export class SecurityConstruct extends Construct {
     });
 
     // Tag security groups
-    cdk.Tags.of(this.webSecurityGroup).add('Name', `WebSecurityGroup-${environment}`);
+    cdk.Tags.of(this.webSecurityGroup).add(
+      'Name',
+      `WebSecurityGroup-${environment}`
+    );
     cdk.Tags.of(this.webSecurityGroup).add('Component', 'Security');
-    cdk.Tags.of(this.appSecurityGroup).add('Name', `AppSecurityGroup-${environment}`);
+    cdk.Tags.of(this.appSecurityGroup).add(
+      'Name',
+      `AppSecurityGroup-${environment}`
+    );
     cdk.Tags.of(this.appSecurityGroup).add('Component', 'Security');
-    cdk.Tags.of(this.databaseSecurityGroup).add('Name', `DatabaseSecurityGroup-${environment}`);
+    cdk.Tags.of(this.databaseSecurityGroup).add(
+      'Name',
+      `DatabaseSecurityGroup-${environment}`
+    );
     cdk.Tags.of(this.databaseSecurityGroup).add('Component', 'Security');
   }
 }
