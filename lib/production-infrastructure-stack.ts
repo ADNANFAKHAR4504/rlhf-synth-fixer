@@ -128,7 +128,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
       this,
       `CloudTrailBucket-${envSuffix}`,
       {
-        bucketName: `webapp-cloudtrail-${envSuffix}-${this.account}`,
+        bucketName: `webapp-cloudtrail-${envSuffix}`,
         versioned: true,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: kmsKey,
@@ -169,6 +169,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
 
   private createSecureVPC(envSuffix: string): ec2.Vpc {
     const vpc = new ec2.Vpc(this, `SecureVPC-${envSuffix}`, {
+      vpcName: `secure-webapp-vpc-${envSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
       enableDnsHostnames: true,
@@ -214,8 +215,9 @@ export class ProductionInfrastructureStack extends cdk.Stack {
   }
 
   private createSecureS3Bucket(envSuffix: string, kmsKey: kms.Key): s3.Bucket {
+    const bucketName = `secure-webapp-artifacts-${envSuffix}`;
     const bucket = new s3.Bucket(this, `ArtifactsBucket-${envSuffix}`, {
-      bucketName: `secure-webapp-artifacts-${envSuffix}-${this.account}`,
+      bucketName: bucketName,
       versioned: true,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,

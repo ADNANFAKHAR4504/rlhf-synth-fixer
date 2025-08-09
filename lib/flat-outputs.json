@@ -1,6 +1,6 @@
 {
   "AutoScalingGroupName": "webapp-asg-pr805",
   "Region": "us-west-2",
-  "S3BucketName": "secure-webapp-artifacts-pr805-***",
+  "S3BucketName": "secure-webapp-artifacts-pr805",
   "VPCId": "vpc-0e278ea2d6274af1e"
 }

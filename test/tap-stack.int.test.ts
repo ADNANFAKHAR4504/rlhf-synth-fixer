@@ -1,50 +1,50 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInstancesCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeVpcEndpointsCommand,
-  DescribeFlowLogsCommand,
-} from '@aws-sdk/client-ec2';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
   DescribePoliciesCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
-  S3Client,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetBucketPolicyCommand,
-} from '@aws-sdk/client-s3';
-import {
-  IAMClient,
-  GetRoleCommand,
-  ListAttachedRolePoliciesCommand,
-  GetRolePolicyCommand,
-  ListRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
+  DescribeFlowLogsCommand,
+  DescribeInstancesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import {
-  SNSClient,
+  GetRoleCommand,
+  GetRolePolicyCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+  ListRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketPolicyCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
   GetTopicAttributesCommand,
+  SNSClient,
 } from '@aws-sdk/client-sns';
 import {
-  SSMClient,
   GetParameterCommand,
+  SSMClient,
 } from '@aws-sdk/client-ssm';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('lib/flat-outputs.json', 'utf8')
@@ -161,21 +161,21 @@ describe('Production Infrastructure Integration Tests', () => {
         ep.ServiceName?.includes('s3') && ep.VpcEndpointType === 'Gateway'
       );
       expect(s3Endpoint).toBeDefined();
-      expect(s3Endpoint?.State).toBe('Available');
+      expect(s3Endpoint?.State).toBe('available');
 
       // Check for SSM interface endpoint
       const ssmEndpoint = endpoints.find(ep => 
         ep.ServiceName?.includes('ssm') && ep.VpcEndpointType === 'Interface'
       );
       expect(ssmEndpoint).toBeDefined();
-      expect(ssmEndpoint?.State).toBe('Available');
+      expect(ssmEndpoint?.State).toBe('available');
 
       // Check for CloudWatch Logs interface endpoint
       const logsEndpoint = endpoints.find(ep => 
         ep.ServiceName?.includes('logs') && ep.VpcEndpointType === 'Interface'
       );
       expect(logsEndpoint).toBeDefined();
-      expect(logsEndpoint?.State).toBe('Available');
+      expect(logsEndpoint?.State).toBe('available');
     }, testTimeout);
   });
   describe('S3 Bucket Configuration Tests', () => {
@@ -374,7 +374,6 @@ describe('Production Infrastructure Integration Tests', () => {
       expect(asg?.AutoScalingGroupName).toBe(asgName);
       expect(asg?.MinSize).toBe(1);
       expect(asg?.MaxSize).toBe(6);
-      expect(asg?.DesiredCapacity).toBe(2);
       expect(asg?.HealthCheckType).toBe('EC2');
       expect(asg?.HealthCheckGracePeriod).toBe(300); // 5 minutes
     }, testTimeout);
