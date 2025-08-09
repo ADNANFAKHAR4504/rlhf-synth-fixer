@@ -1,8 +1,3 @@
-"""
-Pulumi component for creating a dual-stack VPC infrastructure.
-This component encapsulates the VPC, subnets, gateways, and
-route tables for a single AWS region.
-"""
 import pulumi
 import pulumi_aws as aws
 
@@ -11,7 +6,7 @@ class DualStackInfrastructure(pulumi.ComponentResource):
   A Pulumi component that provisions a complete dual-stack
   (IPv4 and IPv6) network infrastructure.
   """
-  def __init__(self, name: str, region: str, ipv4_cidr: str, ipv6_cidr: str, opts: pulumi.ResourceOptions = None):
+  def __init__(self, name: str, region: str, ipv4_cidr: str, opts: pulumi.ResourceOptions = None):
     super().__init__("custom:x:DualStackInfrastructure", name, None, opts)
 
     base_name = f"{name}-{region}"
@@ -32,7 +27,6 @@ class DualStackInfrastructure(pulumi.ComponentResource):
       instance_tenancy="default",
       enable_dns_support=True,
       enable_dns_hostnames=True,
-      ipv6_cidr_block=ipv6_cidr,
       assign_generated_ipv6_cidr_block=True,
       tags={**tags, "Name": f"{base_name}-vpc"},
       opts=resource_opts
@@ -161,4 +155,3 @@ class DualStackInfrastructure(pulumi.ComponentResource):
       "public_rt": self.public_rt,
       "private_rt": self.private_rt
     })
-

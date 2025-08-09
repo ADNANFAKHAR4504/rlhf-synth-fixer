@@ -84,7 +84,7 @@ class TapStack(pulumi.ComponentResource):
         name=f"dual-stack-{region_suffix}-{self.environment_suffix}",
         region=region,
         ipv4_cidr=ipv4_cidrs[region],
-        ipv6_cidr=ipv6_cidrs[region],
+        # The ipv6_cidr argument has been removed to match the updated DualStackInfrastructure component.
         opts=provider_opts()
       )
 

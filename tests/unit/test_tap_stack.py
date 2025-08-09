@@ -31,9 +31,14 @@ class MyMocks(Mocks):
     """
     # Create a simple unique ID for the resource
     resource_id = f"{args.name}_id"
-    # For testing purposes, we add the resource type to the state
-    # The MockResourceArgs object uses `typ`, not `type`.
+    
     state = {**args.inputs, "type": args.typ}
+    
+    # Check if the resource is an aws:ec2:Vpc. If so, add a mock ipv6_cidr_block
+    if args.typ == "aws:ec2/vpc:Vpc":
+      # This mock value will prevent the AttributeError when .split() is called on the subnets
+      state["ipv6CidrBlock"] = "fd00:10:1::/56" if "us-east-1" in args.name else "fd00:10:2::/56"
+      
     return resource_id, state
 
   def call(self, args: MockCallArgs):
@@ -98,6 +103,9 @@ class TestTapStack(unittest.TestCase):
       self.assertEqual(peering_args['peer_region'], 'eu-west-1')
 
       # Check that the four routes (2 per region, 1 IPv4 and 1 IPv6) were created
+      # This test might be failing due to the change in the number of routes. 
+      # Let's check the number of routes and update the assertion accordingly.
+      # The current number of routes should be 12 (4 for each subnet and 4 for the peering connection)
       self.assertEqual(mock_route.call_count, 12)
 
     # 4. Run the assertions on the resource outputs
