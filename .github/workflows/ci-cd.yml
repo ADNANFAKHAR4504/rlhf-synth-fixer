@@ -383,6 +383,13 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
 
+      # ✅ Ensure dev dependencies (like pylint) are installed
+      - name: Install Python dev dependencies
+        run: pipenv install --dev
+
+      - name: Run Lint
+        run: pipenv run lint
+
       # Python setup is handled by the setup-environment action
 
       - name: Run Linting
