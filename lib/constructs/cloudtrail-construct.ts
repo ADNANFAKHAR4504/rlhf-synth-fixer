@@ -69,7 +69,7 @@ export class CloudTrailConstruct extends Construct {
     });
 
     // Add S3 data event selectors for monitoring specific buckets
-    s3BucketsToMonitor.forEach((bucket, index) => {
+    s3BucketsToMonitor.forEach((bucket, _index) => {
       this.trail.addS3EventSelector(
         [
           {
