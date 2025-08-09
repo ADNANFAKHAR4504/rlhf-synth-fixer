@@ -27,10 +27,13 @@ export class MonitoringConstruct extends Construct {
       topicName: `security-alerts-${environment}`,
     });
 
-    // Add email subscription (you can modify this)
-    this.alertTopic.addSubscription(
-      new subs.EmailSubscription('security-team@company.com')
-    );
+    // Add email subscription with configurable email address
+    const alertEmail =
+      process.env.ALERT_EMAIL ||
+      cdk.Stack.of(this).node.tryGetContext('alertEmail') ||
+      'security-team@company.com';
+
+    this.alertTopic.addSubscription(new subs.EmailSubscription(alertEmail));
 
     // CloudWatch Log Group for security events
     this.securityLogGroup = new logs.LogGroup(

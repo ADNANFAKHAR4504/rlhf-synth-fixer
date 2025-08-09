@@ -16,13 +16,14 @@ export class WafConstruct extends Construct {
     const { environment } = props;
 
     // CloudWatch Log Group for WAF logs
-    new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
+    const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
       retention: logs.RetentionDays.THREE_MONTHS,
+      logGroupName: `/aws/waf/${environment}`,
     });
 
     // Create WAF Web ACL
     this.webAcl = new wafv2.CfnWebACL(this, `WebACL-${environment}`, {
-      scope: 'CLOUDFRONT', // Use REGIONAL for ALB
+      scope: 'REGIONAL', // Use REGIONAL for ALB, CLOUDFRONT for CloudFront
       defaultAction: { allow: {} },
       name: `WebACL-${environment}`,
       description: `WAF Web ACL for ${environment} environment`,
@@ -137,11 +138,11 @@ export class WafConstruct extends Construct {
       },
     });
 
-    // WAF Logging Configuration - Commented out due to ARN format issues
-    // new wafv2.CfnLoggingConfiguration(this, `WAFLoggingConfig-${environment}`, {
-    //   resourceArn: this.webAcl.attrArn,
-    //   logDestinationConfigs: [`arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:/aws/waf/${environment}-${cdk.Names.uniqueId(this)}:*`],
-    // });
+    // WAF Logging Configuration - Fixed ARN format and enabled
+    new wafv2.CfnLoggingConfiguration(this, `WAFLoggingConfig-${environment}`, {
+      resourceArn: this.webAcl.attrArn,
+      logDestinationConfigs: [wafLogGroup.logGroupArn],
+    });
 
     // Tag WAF resources
     cdk.Tags.of(this.webAcl).add('Name', `WebACL-${environment}`);

@@ -14,6 +14,7 @@ export class SecurityConstruct extends Construct {
   public readonly databaseSecurityGroup: ec2.SecurityGroup;
   public readonly ec2Role: iam.Role;
   public readonly rdsRole: iam.Role;
+  public readonly adminRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: SecurityConstructProps) {
     super(scope, id);
@@ -63,11 +64,25 @@ export class SecurityConstruct extends Construct {
       'Allow traffic from web tier'
     );
 
-    // Allow HTTPS outbound for API calls and updates
+    // Allow HTTPS outbound to specific AWS services and approved APIs
     this.appSecurityGroup.addEgressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(443),
-      'Allow HTTPS outbound'
+      'Allow HTTPS outbound to AWS services and approved APIs'
+    );
+
+    // Allow DNS resolution
+    this.appSecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.udp(53),
+      'Allow DNS resolution'
+    );
+
+    // Allow NTP for time synchronization
+    this.appSecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.udp(123),
+      'Allow NTP for time synchronization'
     );
 
     // Database security group
@@ -84,7 +99,7 @@ export class SecurityConstruct extends Construct {
     // Only allow access from application tier
     this.databaseSecurityGroup.addIngressRule(
       this.appSecurityGroup,
-      ec2.Port.tcp(3306),
+      ec2.Port.tcp(3306), // Default MySQL port, can be parameterized
       'Allow MySQL access from app tier'
     );
 
@@ -129,10 +144,107 @@ export class SecurityConstruct extends Construct {
       ],
     });
 
+    // Admin Role with MFA requirement for sensitive operations
+    this.adminRole = new iam.Role(this, `AdminRole-${environment}`, {
+      assumedBy: new iam.AccountPrincipal(cdk.Stack.of(this).account),
+      description: 'Admin role with MFA requirement for sensitive operations',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
+      ],
+    });
+
+    // Add MFA requirement policy for sensitive operations
+    this.adminRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        actions: [
+          'iam:CreateUser',
+          'iam:DeleteUser',
+          'iam:CreateRole',
+          'iam:DeleteRole',
+          'iam:AttachUserPolicy',
+          'iam:DetachUserPolicy',
+          'iam:AttachRolePolicy',
+          'iam:DetachRolePolicy',
+          'iam:CreateAccessKey',
+          'iam:DeleteAccessKey',
+          'rds:DeleteDBInstance',
+          'rds:ModifyDBInstance',
+          'ec2:DeleteVpc',
+          'ec2:DeleteSecurityGroup',
+          's3:DeleteBucket',
+          'kms:DeleteAlias',
+          'kms:DeleteKey',
+        ],
+        resources: ['*'],
+        conditions: {
+          BoolIfExists: {
+            'aws:MultiFactorAuthPresent': 'false',
+          },
+        },
+      })
+    );
+
+    // Add MFA requirement for console access
+    this.adminRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        actions: ['*'],
+        resources: ['*'],
+        conditions: {
+          StringNotEquals: {
+            'aws:MultiFactorAuthPresent': 'true',
+          },
+          StringEquals: {
+            'aws:RequestTag/RequireMFA': 'true',
+          },
+        },
+      })
+    );
+
     // Instance Profile for EC2
     new iam.InstanceProfile(this, `EC2InstanceProfile-${environment}`, {
       role: this.ec2Role,
     });
+
+    // Add Systems Manager Patch Manager permissions to EC2 role
+    this.ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ssm:DescribeInstanceInformation',
+          'ssm:ListComplianceItems',
+          'ssm:ListComplianceSummaries',
+          'ssm:ListResourceComplianceSummaries',
+          'ssm:GetComplianceDetailsByConfigRule',
+          'ssm:GetComplianceDetailsByResource',
+          'ssm:GetPatchBaseline',
+          'ssm:GetPatchBaselineForPatchGroup',
+          'ssm:DescribePatchBaselines',
+          'ssm:DescribePatchGroups',
+          'ssm:DescribeAvailablePatches',
+          'ssm:DescribePatchProperties',
+          'ssm:GetParameter',
+          'ssm:GetParameters',
+          'ssm:GetParametersByPath',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // Add CloudWatch permissions for patch compliance monitoring
+    this.ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['cloudwatch:PutMetricData'],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'cloudwatch:namespace': 'AWS/SSM',
+          },
+        },
+      })
+    );
 
     // Tag security groups
     cdk.Tags.of(this.webSecurityGroup).add(

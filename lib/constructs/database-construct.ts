@@ -12,6 +12,7 @@ export interface DatabaseConstructProps {
   vpc: ec2.Vpc;
   securityGroup: ec2.SecurityGroup;
   alertTopic: sns.Topic;
+  databasePort?: number;
 }
 
 export class DatabaseConstruct extends Construct {
@@ -20,7 +21,13 @@ export class DatabaseConstruct extends Construct {
   constructor(scope: Construct, id: string, props: DatabaseConstructProps) {
     super(scope, id);
 
-    const { environment, vpc, securityGroup, alertTopic } = props;
+    const {
+      environment,
+      vpc,
+      securityGroup,
+      alertTopic,
+      databasePort = 3306,
+    } = props;
 
     // Create DB subnet group
     const dbSubnetGroup = new rds.SubnetGroup(
@@ -92,6 +99,7 @@ export class DatabaseConstruct extends Construct {
       allowMajorVersionUpgrade: false,
 
       databaseName: 'appdb',
+      port: databasePort, // Use the configurable port
     });
 
     // CloudWatch Alarms for database monitoring

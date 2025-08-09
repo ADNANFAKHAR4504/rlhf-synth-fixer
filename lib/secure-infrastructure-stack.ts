@@ -1,7 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { CloudTrailConstruct } from './constructs/cloudtrail-construct';
 import { DatabaseConstruct } from './constructs/database-construct';
 import { MonitoringConstruct } from './constructs/monitoring-construct';
+import { PatchManagerConstruct } from './constructs/patch-manager-construct';
 import { SecurityConstruct } from './constructs/security-construct';
 import { StorageConstruct } from './constructs/storage-construct';
 import { VpcConstruct } from './constructs/vpc-construct';
@@ -60,6 +62,21 @@ export class SecureInfrastructureStack extends cdk.Stack {
       alertTopic: monitoringConstruct.alertTopic,
     });
 
+    // Patch Manager for automated patching
+    new PatchManagerConstruct(this, 'PatchManagerConstruct', {
+      environment,
+      alertTopic: monitoringConstruct.alertTopic,
+    });
+
+    // CloudTrail for comprehensive logging
+    const cloudTrailConstruct = new CloudTrailConstruct(
+      this,
+      'CloudTrailConstruct',
+      {
+        environment,
+      }
+    );
+
     // Outputs
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpcConstruct.vpc.vpcId,
@@ -74,6 +91,11 @@ export class SecureInfrastructureStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'WafAclArn', {
       value: wafConstruct.webAcl.attrArn,
       description: 'WAF Web ACL ARN',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailArn', {
+      value: cloudTrailConstruct.trail.trailArn,
+      description: 'CloudTrail ARN',
     });
   }
 }
