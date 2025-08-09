@@ -118,7 +118,7 @@ class TapStack(pulumi.ComponentResource):
     aws.ec2.Route(
       "us-east-1-peering-route-ipv6",
       route_table_id=us_east_1_infra.public_rt.id,
-      destination_ipv6_cidr_block="fd00:10:2::/56",
+      destination_ipv6_cidr_block=eu_west_1_infra.vpc.ipv6_cidr_block,
       vpc_peering_connection_id=peer_connection.id,
       opts=ResourceOptions(provider=self.providers['us-east-1'], parent=self)
     )
@@ -133,7 +133,7 @@ class TapStack(pulumi.ComponentResource):
     aws.ec2.Route(
       "eu-west-1-peering-route-ipv6",
       route_table_id=eu_west_1_infra.public_rt.id,
-      destination_ipv6_cidr_block="fd00:10:1::/56",
+      destination_ipv6_cidr_block=us_east_1_infra.vpc.ipv6_cidr_block,
       vpc_peering_connection_id=peer_connection.id,
       opts=ResourceOptions(provider=self.providers['eu-west-1'], parent=self)
     )
