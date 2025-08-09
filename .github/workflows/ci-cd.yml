@@ -393,6 +393,9 @@ jobs:
       - name: Run Lint
         run: pipenv run lint
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       # Python setup is handled by the setup-environment action
 
       - name: Run Linting
