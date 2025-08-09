@@ -66,7 +66,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
           lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[i])
       ),
-      assign_ipv6_address_on_creation=True,
+      assign_ipv6_address_on_creation=False,
       map_public_ip_on_launch=True,
       tags={**common_tags, "Name": f"{project_name}-public-{i+1}"}
     )
@@ -110,7 +110,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
           lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[100 + i])
       ),
-      assign_ipv6_address_on_creation=True,
+      assign_ipv6_address_on_creation=False,
       tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}
     )
     private_subnets.append(subnet)
