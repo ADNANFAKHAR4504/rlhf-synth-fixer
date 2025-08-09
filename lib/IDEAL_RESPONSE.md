@@ -379,8 +379,6 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${LogBucketNamePrefix}-${EnvironmentSuffix}-${StackVersion}-logs-${AWS::AccountId}-${AWS::Region}"
-      VersioningConfiguration:
-        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true

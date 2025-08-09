@@ -692,9 +692,6 @@
                 "BucketName": {
                     "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-${StackVersion}-logs-${AWS::AccountId}-${AWS::Region}"
                 },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "BlockPublicPolicy": true,

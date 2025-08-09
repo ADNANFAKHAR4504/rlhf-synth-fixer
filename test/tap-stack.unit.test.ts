@@ -456,10 +456,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
     });
 
-    test('S3 bucket should have versioning enabled', () => {
+    test('S3 bucket should not have versioning configured', () => {
       if (skipIfNoTemplate()) return;
       const bucket = template.Resources.LogBucket;
-      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      expect(bucket.Properties.VersioningConfiguration).toBeUndefined();
     });
 
     test('IAM role should have least privilege policies', () => {
