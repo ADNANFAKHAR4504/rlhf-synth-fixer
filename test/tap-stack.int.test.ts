@@ -19,7 +19,12 @@ describe('Infrastructure Integration Tests', () => {
       expect(environmentSuffix).toBeDefined();
       expect(typeof environmentSuffix).toBe('string');
       expect(environmentSuffix.length).toBeGreaterThan(0);
-      expect(['dev', 'staging', 'prod', 'test']).toContain(environmentSuffix);
+      
+      // Accept traditional environment names or pull request-based names
+      const isValidTraditionalEnv = ['dev', 'staging', 'prod', 'test'].includes(environmentSuffix);
+      const isValidPrEnv = environmentSuffix.startsWith('pr') && /^pr\d+$/.test(environmentSuffix);
+      
+      expect(isValidTraditionalEnv || isValidPrEnv).toBe(true);
     });
 
     test('should have AWS region configured', () => {
@@ -198,10 +203,14 @@ describe('Infrastructure Integration Tests', () => {
     test('should use appropriate instance types for environment', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-      if (environmentSuffix === 'dev') {
+      // Handle both traditional environment names and pull request-based names
+      const isDevEnvironment = environmentSuffix === 'dev' || environmentSuffix.startsWith('pr');
+      const isProdEnvironment = environmentSuffix === 'prod';
+
+      if (isDevEnvironment) {
         // Dev environment should use smaller instances
         expect(true).toBe(true);
-      } else if (environmentSuffix === 'prod') {
+      } else if (isProdEnvironment) {
         // Prod environment should use appropriate production instances
         expect(true).toBe(true);
       }
@@ -210,10 +219,14 @@ describe('Infrastructure Integration Tests', () => {
     test('should have appropriate backup retention periods', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-      if (environmentSuffix === 'dev') {
+      // Handle both traditional environment names and pull request-based names
+      const isDevEnvironment = environmentSuffix === 'dev' || environmentSuffix.startsWith('pr');
+      const isProdEnvironment = environmentSuffix === 'prod';
+
+      if (isDevEnvironment) {
         // Dev environment might have shorter retention
         expect(true).toBe(true);
-      } else if (environmentSuffix === 'prod') {
+      } else if (isProdEnvironment) {
         // Prod environment should have longer retention
         expect(true).toBe(true);
       }
@@ -224,7 +237,10 @@ describe('Infrastructure Integration Tests', () => {
     test('should have Multi-AZ configuration for production', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-      if (environmentSuffix === 'prod') {
+      // Handle both traditional environment names and pull request-based names
+      const isProdEnvironment = environmentSuffix === 'prod';
+
+      if (isProdEnvironment) {
         // Production should have Multi-AZ enabled
         expect(true).toBe(true);
       } else {
@@ -253,7 +269,10 @@ describe('Infrastructure Integration Tests', () => {
     test('should have deletion protection for production', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-      if (environmentSuffix === 'prod') {
+      // Handle both traditional environment names and pull request-based names
+      const isProdEnvironment = environmentSuffix === 'prod';
+
+      if (isProdEnvironment) {
         // Production should have deletion protection
         expect(true).toBe(true);
       }
