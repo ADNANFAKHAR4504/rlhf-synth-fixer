@@ -41,24 +41,43 @@ export class Ec2Construct extends Construct {
       namePrefix: `${config.environment}-ec2-`,
       vpcId: config.vpcId,
       ingress: [
+        // Always allow SSH from allowed CIDRs
         ...config.allowedCidrBlocks.map(cidr => ({
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
           cidrBlocks: [cidr],
         })),
-        {
-          fromPort: 80,
-          toPort: 80,
-          protocol: 'tcp',
-          cidrBlocks: ['10.0.0.0/8'],
-        },
-        {
-          fromPort: 443,
-          toPort: 443,
-          protocol: 'tcp',
-          cidrBlocks: ['10.0.0.0/8'],
-        },
+        // HTTP/HTTPS rules vary per environment
+        ...(config.environment === 'production'
+          ? [
+              {
+                fromPort: 80,
+                toPort: 80,
+                protocol: 'tcp',
+                cidrBlocks: config.allowedCidrBlocks, // restrictive
+              },
+              {
+                fromPort: 443,
+                toPort: 443,
+                protocol: 'tcp',
+                cidrBlocks: config.allowedCidrBlocks, // restrictive
+              },
+            ]
+          : [
+              {
+                fromPort: 80,
+                toPort: 80,
+                protocol: 'tcp',
+                cidrBlocks: ['0.0.0.0/0'], // dev/staging open
+              },
+              {
+                fromPort: 443,
+                toPort: 443,
+                protocol: 'tcp',
+                cidrBlocks: ['0.0.0.0/0'], // dev/staging open
+              },
+            ]),
       ],
       egress: [
         {
@@ -70,7 +89,7 @@ export class Ec2Construct extends Construct {
       ],
       tags: {
         ...config.commonTags,
-        Name: `${config.environment}-ec2-sg${suffix}`, // ✅ CHANGED
+        Name: `${config.environment}-ec2-sg${suffix}`,
       },
     });
 
