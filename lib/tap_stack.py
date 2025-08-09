@@ -98,7 +98,7 @@ class TapStack(pulumi.ComponentResource):
       "vpc-peering",
       peer_vpc_id=eu_west_1_infra.vpc.id,
       vpc_id=us_east_1_infra.vpc.id,
-      auto_accept=True,
+    #   auto_accept=True,
       peer_region="eu-west-1",
       tags={
         "Name": "us-east-1-to-eu-west-1-peering",
