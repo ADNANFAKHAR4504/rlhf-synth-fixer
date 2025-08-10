@@ -133,24 +133,13 @@ describe('TapStack unit', () => {
     template.resourceCountIs('AWS::Logs::LogGroup', 2);
   });
 
-  test('throws when region is not us-east-1 (resolved env)', () => {
+  test('stack can be created in any region (no region restriction)', () => {
     const app = new cdk.App();
     expect(
       () =>
-        new TapStack(app, 'BadRegionStack', {
+        new TapStack(app, 'AnyRegionStack', {
           environmentSuffix,
           env: { account: '123456789012', region: 'us-west-2' },
-        })
-    ).toThrow(/us-east-1/);
-  });
-
-  test('does not throw when region is us-east-1 (resolved env)', () => {
-    const app = new cdk.App();
-    expect(
-      () =>
-        new TapStack(app, 'GoodRegionStack', {
-          environmentSuffix,
-          env: { account: '123456789012', region: 'us-east-1' },
         })
     ).not.toThrow();
   });

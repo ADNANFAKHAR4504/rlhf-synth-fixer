@@ -23,13 +23,6 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    const region = cdk.Stack.of(this).region;
-    if (!cdk.Token.isUnresolved(region) && region !== 'us-east-1') {
-      throw new Error(
-        'Stack must be deployed to us-east-1 as per requirements.'
-      );
-    }
-
     const companyNameParam = new cdk.CfnParameter(this, 'CompanyName', {
       type: 'String',
       default: 'companyname',
