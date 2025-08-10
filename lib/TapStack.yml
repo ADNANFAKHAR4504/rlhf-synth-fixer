@@ -248,7 +248,6 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "${ApplicationName}-${EnvironmentSuffix}-patient-data-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -276,7 +275,6 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "${ApplicationName}-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -534,6 +532,12 @@ Outputs:
     Value: !Ref HealthcareDataBucket
     Export:
       Name: !Sub "${AWS::StackName}-Patient-Data-Bucket"
+
+  LogsBucket:
+    Description: "S3 bucket for application logs"
+    Value: !Ref HealthcareLogsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-Logs-Bucket"
 
   DatabaseSecretArn:
     Description: "ARN of the database secret in Secrets Manager"
