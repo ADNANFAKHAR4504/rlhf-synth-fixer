@@ -33,9 +33,24 @@ import {
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+const fallbackOutputs = {
+  VpcId: 'vpc-080517f32d7c8e30a',
+  KmsKeyId: '33c374cc-a80b-4f14-8349-62bec6f7c47b',
+  KmsKeyArn:
+    'arn:aws:kms:us-east-1:***:key/33c374cc-a80b-4f14-8349-62bec6f7c47b',
+  LambdaExecutionRoleArn:
+    'arn:aws:iam::***:role/TapStackpr821-LambdaExecutionRole-dt1JPxfwCT8X',
+  SecurityGroupId: 'sg-0d3dc8a834c19794c',
+  LambdaFunctionArn:
+    'arn:aws:lambda:us-east-1:***:function:security-best-practice-dev-secure-function',
+  PrivateSubnet2Id: 'subnet-052195d88b1cdd5e7',
+  PrivateSubnet1Id: 'subnet-0460159ede6dc49ec',
+  S3BucketName: 'security-best-practice-dev-secure-bucket-***',
+};
+
+const outputs = fs.existsSync('cfn-outputs/flat-outputs.json')
+  ? JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'))
+  : fallbackOutputs;
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
