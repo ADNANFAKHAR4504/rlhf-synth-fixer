@@ -275,13 +275,14 @@ Resources:
     Properties:
       Bucket: !Ref SecureS3Bucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: AllowCloudFrontServicePrincipal
             Effect: Allow
             Principal:
               Service: cloudfront.amazonaws.com
             Action: s3:GetObject
-            Resource: !Sub '${SecureS3Bucket}/*'
+            Resource: !Sub '${SecureS3Bucket.Arn}/*'
             Condition:
               StringEquals:
                 'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'

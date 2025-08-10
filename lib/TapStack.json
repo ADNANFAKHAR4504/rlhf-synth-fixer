@@ -465,6 +465,7 @@
                     "Ref": "SecureS3Bucket"
                 },
                 "PolicyDocument": {
+                    "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Sid": "AllowCloudFrontServicePrincipal",
@@ -474,7 +475,7 @@
                             },
                             "Action": "s3:GetObject",
                             "Resource": {
-                                "Fn::Sub": "${SecureS3Bucket}/*"
+                                "Fn::Sub": "${SecureS3Bucket.Arn}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
