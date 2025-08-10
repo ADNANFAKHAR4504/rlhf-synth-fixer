@@ -21,12 +21,18 @@ export class TapStack extends cdk.Stack {
   constructor(
     scope: Construct,
     id: string,
-    props?: cdk.StackProps & { environmentSuffix?: string }
+    props?: cdk.StackProps & {
+      environmentSuffix?: string;
+      enableCloudTrail?: boolean;
+    }
   ) {
     super(scope, id, props);
 
     // Get environment suffix from props (for future use if needed)
     // const environmentSuffix = props?.environmentSuffix || 'dev';
+
+    // Get CloudTrail configuration from props (default to true for backward compatibility)
+    const enableCloudTrail = props?.enableCloudTrail ?? true;
 
     // Common tags applied to all resources
     const commonTags = {
@@ -322,30 +328,43 @@ export class TapStack extends cdk.Stack {
       ec2Instances.push(instance);
     });
 
-    // 8. OBSERVABILITY: Enable CloudTrail for audit logging
+    // 8. OBSERVABILITY: Enable CloudTrail for audit logging (optional due to limit per region constraint)
 
-    const cloudTrail = new cloudtrail.Trail(this, 'ApplicationCloudTrail', {
-      // Trail configuration
-      trailName: 'application-management-events',
+    let cloudTrail: cloudtrail.Trail | undefined;
+    let cloudTrailLogsBucket: s3.Bucket | undefined;
 
-      // S3 configuration for log storage
-      bucket: new s3.Bucket(this, 'CloudTrailLogsBucket', {
+    if (enableCloudTrail) {
+      // Create S3 bucket for CloudTrail logs
+      cloudTrailLogsBucket = new s3.Bucket(this, 'CloudTrailLogsBucket', {
         encryption: s3.BucketEncryption.S3_MANAGED,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         removalPolicy: cdk.RemovalPolicy.RETAIN,
-      }),
+      });
 
-      // Event configuration
-      includeGlobalServiceEvents: true, // Include global services like IAM
-      isMultiRegionTrail: true, // Log events from all regions
-      enableFileValidation: true, // Enable log file validation
+      // Create CloudTrail for audit logging
+      cloudTrail = new cloudtrail.Trail(this, 'ApplicationCloudTrail', {
+        // Trail configuration
+        trailName: 'application-management-events',
 
-      // Event types to log
-      managementEvents: cloudtrail.ReadWriteType.ALL, // Log all management events
-    });
+        // S3 configuration for log storage
+        bucket: cloudTrailLogsBucket,
 
-    // Apply tags to CloudTrail
-    cdk.Tags.of(cloudTrail).add('Environment', commonTags.Environment);
+        // Event configuration
+        includeGlobalServiceEvents: true, // Include global services like IAM
+        isMultiRegionTrail: true, // Log events from all regions
+        enableFileValidation: true, // Enable log file validation
+
+        // Event types to log
+        managementEvents: cloudtrail.ReadWriteType.ALL, // Log all management events
+      });
+
+      // Apply tags to CloudTrail
+      cdk.Tags.of(cloudTrail).add('Environment', commonTags.Environment);
+      cdk.Tags.of(cloudTrailLogsBucket).add(
+        'Environment',
+        commonTags.Environment
+      );
+    }
 
     // OUTPUT: Provide important connection information
 
@@ -378,5 +397,18 @@ export class TapStack extends cdk.Stack {
       description: 'VPC ID',
       value: vpc.vpcId,
     });
+
+    // CloudTrail status (if enabled)
+    if (cloudTrail) {
+      new cdk.CfnOutput(this, 'CloudTrailEnabled', {
+        description: 'CloudTrail audit logging status',
+        value: 'Enabled',
+      });
+    } else {
+      new cdk.CfnOutput(this, 'CloudTrailEnabled', {
+        description: 'CloudTrail audit logging status',
+        value: 'Disabled (trail limit reached or explicitly disabled)',
+      });
+    }
   }
 }

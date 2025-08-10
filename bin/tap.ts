@@ -9,6 +9,9 @@ const app = new cdk.App();
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
+// Get CloudTrail configuration from context (default to true for backward compatibility)
+const enableCloudTrail = app.node.tryGetContext('enableCloudTrail') !== false;
+
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
@@ -20,6 +23,7 @@ Tags.of(app).add('Author', commitAuthor);
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
+  enableCloudTrail: enableCloudTrail, // Pass CloudTrail configuration
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
