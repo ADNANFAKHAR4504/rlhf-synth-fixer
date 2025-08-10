@@ -3,9 +3,11 @@ Unit tests for the serverless Lambda function
 Tests Lambda handler functionality and API Gateway integration simulation
 """
 
+import gc
 import json
 import os
 import sys
+import time
 import unittest
 from datetime import datetime
 from unittest.mock import patch
@@ -437,8 +439,6 @@ class TestLambdaPerformance(unittest.TestCase):
 
   def test_response_time_consistency(self):
     """Test that response time is consistent across multiple calls"""
-    import time
-
     event = {
       "httpMethod": "GET",
       "path": "/",
@@ -460,8 +460,6 @@ class TestLambdaPerformance(unittest.TestCase):
 
   def test_memory_usage_patterns(self):
     """Test that function doesn't consume excessive memory"""
-    import gc
-
     # Force garbage collection before test
     gc.collect()
 
@@ -483,7 +481,6 @@ class TestLambdaPerformance(unittest.TestCase):
     gc.collect()
 
     # If we get here without memory issues, test passes
-    self.assertTrue(True)
 
 
 if __name__ == '__main__':

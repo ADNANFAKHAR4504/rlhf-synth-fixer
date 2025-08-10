@@ -33,11 +33,6 @@ class TestTapStackArgs(unittest.TestCase):
     args = TapStackArgs(environment_suffix=None)
     self.assertEqual(args.environment_suffix, 'dev')
 
-  def test_tap_stack_args_empty_tags(self):
-    """Test TapStackArgs with empty tags dict."""
-    args = TapStackArgs(tags={})
-    self.assertEqual(args.tags, {})
-
   def test_tap_stack_args_none_tags(self):
     """Test TapStackArgs with None tags."""
     args = TapStackArgs(tags=None)

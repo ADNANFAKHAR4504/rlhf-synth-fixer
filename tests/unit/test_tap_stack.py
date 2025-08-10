@@ -77,23 +77,7 @@ class TestTapStack(unittest.TestCase):
     self.mock_resources = {}
 
   @patch('pulumi.Config')
-  @patch('pulumi.ComponentResource.__init__')
-  @patch('pulumi_aws.iam.Role')
-  @patch('pulumi_aws.iam.RolePolicyAttachment')
-  @patch('pulumi_aws.cloudwatch.LogGroup')
-  @patch('pulumi_aws.lambda_.Function')
-  @patch('pulumi_aws.apigateway.RestApi')
-  @patch('pulumi_aws.apigateway.Resource')
-  @patch('pulumi_aws.apigateway.Method')
-  @patch('pulumi_aws.apigateway.Integration')
-  @patch('pulumi_aws.lambda_.Permission')
-  @patch('pulumi_aws.apigateway.Deployment')
-  @patch('pulumi_aws.apigateway.Stage')
-  @patch('pulumi.export')
-  def test_tap_stack_initialization(
-    self, mock_export, mock_api, mock_lambda_func, mock_log_group, mock_policy_attach, mock_role,
-    mock_component_init, mock_config
-  ):
+  def test_tap_stack_initialization(self, mock_config):
     """Test TapStack initialization creates all necessary resources."""
 
     # Mock Pulumi config
@@ -101,63 +85,81 @@ class TestTapStack(unittest.TestCase):
     mock_config_instance.get.return_value = 'test'
     mock_config.return_value = mock_config_instance
 
-    # Mock all AWS resources
-    mock_role_instance = Mock()
-    mock_role_instance.name = 'test-lambda-execution-role'
-    mock_role_instance.arn = (
-      'arn:aws:iam::123456789012:role/test-lambda-execution-role'
-    )
-    mock_role.return_value = mock_role_instance
+    with patch('pulumi.ComponentResource.__init__') as mock_component_init, \
+      patch.multiple('pulumi_aws.iam',
+                    Role=Mock(),
+                    RolePolicyAttachment=Mock()) as mock_iam, \
+      patch.multiple('pulumi_aws.cloudwatch',
+                    LogGroup=Mock()) as mock_cw, \
+      patch.multiple('pulumi_aws.lambda_',
+                    Function=Mock(),
+                    Permission=Mock()) as mock_lambda, \
+      patch.multiple('pulumi_aws.apigateway',
+                    RestApi=Mock(),
+                    Resource=Mock(),
+                    Method=Mock(),
+                    Integration=Mock(),
+                    Deployment=Mock(),
+                    Stage=Mock()) as mock_api, \
+      patch('pulumi.export') as mock_export:
 
-    mock_log_group_instance = Mock()
-    mock_log_group_instance.name = '/aws/lambda/test-api-handler'
-    mock_log_group.return_value = mock_log_group_instance
+      # Create mock instances
+      mock_role_instance = Mock()
+      mock_role_instance.name = 'test-lambda-execution-role'
+      mock_role_instance.arn = (
+          'arn:aws:iam::123456789012:role/test-lambda-execution-role'
+      )
+      mock_iam['Role'].return_value = mock_role_instance
 
-    mock_lambda_instance = Mock()
-    mock_lambda_instance.name = 'test-api-handler'
-    mock_lambda_instance.arn = (
-      'arn:aws:lambda:us-west-2:123456789012:function:test-api-handler'
-    )
-    mock_lambda_instance.invoke_arn = (
-      'arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/'
-      'arn:aws:lambda:us-west-2:123456789012:function:test-api-handler/'
-      'invocations'
-    )
-    mock_lambda_func.return_value = mock_lambda_instance
+      mock_log_group_instance = Mock()
+      mock_log_group_instance.name = '/aws/lambda/test-api-handler'
+      mock_cw['LogGroup'].return_value = mock_log_group_instance
 
-    mock_api_instance = Mock()
-    mock_api_instance.id = 'test-api-id'
-    mock_api_instance.root_resource_id = 'root-resource-id'
-    mock_api_instance.execution_arn = (
-      'arn:aws:execute-api:us-west-2:123456789012:test-api-id'
-    )
-    mock_api.return_value = mock_api_instance
+      mock_lambda_instance = Mock()
+      mock_lambda_instance.name = 'test-api-handler'
+      mock_lambda_instance.arn = (
+          'arn:aws:lambda:us-west-2:123456789012:function:test-api-handler'
+      )
+      mock_lambda_instance.invoke_arn = (
+          'arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/'
+          'arn:aws:lambda:us-west-2:123456789012:function:test-api-handler/'
+          'invocations'
+      )
+      mock_lambda['Function'].return_value = mock_lambda_instance
 
-    # Create the stack
-    TapStack('test-stack', self.test_args)
+      mock_api_instance = Mock()
+      mock_api_instance.id = 'test-api-id'
+      mock_api_instance.root_resource_id = 'root-resource-id'
+      mock_api_instance.execution_arn = (
+          'arn:aws:execute-api:us-west-2:123456789012:test-api-id'
+      )
+      mock_api['RestApi'].return_value = mock_api_instance
 
-    # Verify component initialization
-    mock_component_init.assert_called_once()
+      # Create the stack
+      TapStack('test-stack', self.test_args)
 
-    # Verify IAM role creation
-    mock_role.assert_called_once()
-    role_call_args = mock_role.call_args
-    self.assertEqual(role_call_args[0][0], 'test-lambda-execution-role')
+      # Verify component initialization
+      mock_component_init.assert_called_once()
 
-    # Verify policy attachment
-    mock_policy_attach.assert_called_once()
+      # Verify IAM role creation
+      mock_iam['Role'].assert_called_once()
+      role_call_args = mock_iam['Role'].call_args
+      self.assertEqual(role_call_args[0][0], 'test-lambda-execution-role')
 
-    # Verify CloudWatch log group creation
-    mock_log_group.assert_called_once()
+      # Verify policy attachment
+      mock_iam['RolePolicyAttachment'].assert_called_once()
 
-    # Verify Lambda function creation
-    mock_lambda_func.assert_called_once()
+      # Verify CloudWatch log group creation
+      mock_cw['LogGroup'].assert_called_once()
 
-    # Verify API Gateway creation
-    mock_api.assert_called_once()
+      # Verify Lambda function creation
+      mock_lambda['Function'].assert_called_once()
 
-    # Verify exports are called
-    self.assertEqual(mock_export.call_count, 5)  # 5 exports in the stack
+      # Verify API Gateway creation
+      mock_api['RestApi'].assert_called_once()
+
+      # Verify exports are called
+      self.assertEqual(mock_export.call_count, 5)  # 5 exports in the stack
 
   def test_stack_attributes_assignment(self):
     """Test that TapStack properly assigns attributes from args."""
