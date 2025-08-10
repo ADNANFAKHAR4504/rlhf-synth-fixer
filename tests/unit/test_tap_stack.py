@@ -9,6 +9,8 @@ import os
 import unittest
 from unittest.mock import Mock, patch
 
+import pulumi
+
 # Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
 
@@ -66,9 +68,10 @@ class MockResource:
   """Mock class that properly inherits Resource-like behavior for depends_on validation."""
   
   def __init__(self, name_prefix="mock"):
-    import pulumi
+
     # Inherit from Resource to pass depends_on validation
-    self.__class__ = type(self.__class__.__name__, (pulumi.Resource,), dict(self.__class__.__dict__))
+    self.__class__ = type(self.__class__.__name__, (pulumi.Resource,), 
+                          dict(self.__class__.__dict__))
     
     self._is_resource = True
     self.name = f"{name_prefix}-resource"
@@ -147,13 +150,15 @@ class TestTapStack(unittest.TestCase):
       'api_method': patch('pulumi_aws.apigateway.Method', 
                          side_effect=[mock_resources['method'], mock_resources['root_method']]),
       'api_integration': patch('pulumi_aws.apigateway.Integration', 
-                              side_effect=[mock_resources['integration'], mock_resources['root_integration']]),
+                              side_effect=[mock_resources['integration'], 
+                                           mock_resources['root_integration']]),
       'api_deployment': patch('pulumi_aws.apigateway.Deployment', 
                              return_value=mock_resources['deployment']),
       'api_stage': patch('pulumi_aws.apigateway.Stage', 
                         return_value=mock_resources['stage']),
       'path_dirname': patch('os.path.dirname', return_value=os.path.join(os.getcwd(), 'lib')),
-      'path_join': patch('os.path.join', return_value=os.path.join(os.getcwd(), 'lib', 'lambda_function.py'))
+      'path_join': patch('os.path.join', 
+                         return_value=os.path.join(os.getcwd(), 'lib', 'lambda_function.py'))
     }
 
     return patches
