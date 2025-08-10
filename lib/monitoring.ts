@@ -1,0 +1,69 @@
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+import { Construct } from 'constructs';
+
+export interface MonitoringProps {
+  provider: any;
+  environment: string;
+  asgName: string;
+  dbIdentifier: string;
+}
+
+export class Monitoring extends Construct {
+  constructor(scope: Construct, id: string, props: MonitoringProps) {
+    super(scope, id);
+
+    // SNS Topic for alerts
+    const topic = new SnsTopic(this, `${id}-alerts`, {
+      provider: props.provider,
+      name: `${props.environment}-alerts`,
+    });
+
+    // Log group for application
+    new CloudwatchLogGroup(this, `${id}-app-logs`, {
+      provider: props.provider,
+      name: `/app/${props.environment}`,
+      retentionInDays: 30,
+    });
+
+    // Log group for database
+    new CloudwatchLogGroup(this, `${id}-db-logs`, {
+      provider: props.provider,
+      name: `/db/${props.environment}`,
+      retentionInDays: 30,
+    });
+
+    // CPU Utilization Alarm for ASG
+    new CloudwatchMetricAlarm(this, `${id}-cpu-alarm`, {
+      provider: props.provider,
+      alarmName: `${props.environment}-high-cpu`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: 300,
+      statistic: 'Average',
+      threshold: 80,
+      alarmDescription: 'High CPU usage detected',
+      dimensions: { AutoScalingGroupName: props.asgName },
+      alarmActions: [topic.arn],
+    });
+
+    // FreeStorageSpace Alarm for RDS
+    new CloudwatchMetricAlarm(this, `${id}-db-storage-alarm`, {
+      provider: props.provider,
+      alarmName: `${props.environment}-low-storage`,
+      comparisonOperator: 'LessThanThreshold',
+      evaluationPeriods: 1,
+      metricName: 'FreeStorageSpace',
+      namespace: 'AWS/RDS',
+      period: 300,
+      statistic: 'Average',
+      threshold: 2000000000, // 2 GB
+      alarmDescription: 'Low RDS storage space detected',
+      dimensions: { DBInstanceIdentifier: props.dbIdentifier },
+      alarmActions: [topic.arn],
+    });
+  }
+}

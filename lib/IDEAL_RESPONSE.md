@@ -1,0 +1,1269 @@
+# IDEAL\_RESPONSE.md
+
+## Overview
+
+Validated CDKTF (TypeScript) implementation for a multi-region AWS environment (**us-east-1**, **eu-west-1**) with high availability, Route53 latency routing, RDS (Postgres) Multi-AZ, ASG+ALB (HTTPS), CloudWatch alarms, Secrets Manager, and workspace-aware remote state (S3 + DynamoDB). Naming follows `<environment>-<service>-<region>`. Tags include `environment`, `project`, `owner`, `cost_center` via provider default tags.
+
+## What’s included
+
+* Reusable constructs: **VPC**, **Security**, **Compute**, **Database**, **Monitoring**, **DNS**, plus a **TapStack** that composes both regions.
+* Jest unit & integration tests that assert the synthesized Terraform JSON contains key resources.
+* Workspace-aware S3 backend path: `infrastructure/<workspace>/<stack>.tfstate`.
+
+> Notes:
+>
+> * Ensure your state bucket and DynamoDB lock table exist (or provision them separately).
+> * Provide ACM certificate ARNs per region and (optionally) Route53 hosted zone inputs via env vars.
+
+---
+
+## How to run
+
+```bash
+# 1) Install deps
+npm ci
+
+# 2) Select/create workspace (dev|test|prod)
+cdktf get
+terraform workspace new dev || terraform workspace select dev
+
+# 3) Set required env vars
+export TERRAFORM_STATE_BUCKET=iac-rlhf-tf-states
+export TERRAFORM_STATE_BUCKET_REGION=us-east-1
+export TF_LOCK_TABLE=iac-rlhf-tf-locks
+export AWS_REGION_PRIMARY=us-east-1
+export AWS_REGION_SECONDARY=eu-west-1
+export ACM_CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/primary
+export ACM_CERT_ARN_SECONDARY=arn:aws:acm:eu-west-1:123456789012:certificate/secondary
+# Optional Route53
+# export DNS_HOSTED_ZONE_ID=ZXXXXXXXXXXX
+# export DNS_RECORD_NAME=app.example.com
+
+# 4) Lint, build, synth, test (using your existing scripts)
+npm run lint
+npm run build
+npm run synth
+npm test
+
+# 5) Deploy (same workspace)
+cdktf deploy
+```
+
+---
+
+## Files and code
+
+### `lib/utils/naming.ts`
+
+```ts
+// lib/utils/naming.ts
+export function name(
+  env: string,
+  piece: string,
+  region: string,
+  index?: number
+): string {
+  const suffix = typeof index === 'number' ? `-${index + 1}` : '';
+  return `${env}-${piece}${suffix}-${region}`;
+}
+```
+
+### `lib/secure-vpc.ts`
+
+```ts
+// lib/secure-vpc.ts
+import { Construct } from 'constructs';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { Fn, TerraformOutput } from 'cdktf';
+import { name } from './utils/naming';
+
+export interface SecureVpcProps {
+  provider: AwsProvider;
+  environment: string;
+  region: string;
+  /** CIDR like 10.0.0.0/16 */
+  vpcCidr: string;
+  /** 1–3 recommended (default 2) */
+  azCount?: number;
+  /** true = NAT per AZ; false = single NAT in first public subnet. Default: true in prod, else false */
+  natPerAz?: boolean;
+}
+
+export class SecureVpc extends Construct {
+  public readonly vpcId: string;
+  public readonly publicSubnetIds: string[];
+  public readonly privateSubnetIds: string[];
+  public readonly internetGatewayId: string;
+  public readonly natGatewayIds: string[];
+
+  constructor(scope: Construct, id: string, props: SecureVpcProps) {
+    super(scope, id);
+
+    const env = props.environment;
+    const region = props.region;
+    const azCount = props.azCount ?? 2;
+    const natPerAz = props.natPerAz ?? (env === 'prod');
+
+    const azs = new DataAwsAvailabilityZones(this, 'azs', {
+      state: 'available',
+      provider: props.provider,
+    });
+
+    const vpc = new Vpc(this, 'vpc', {
+      cidrBlock: props.vpcCidr,
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      provider: props.provider,
+      tags: { Name: name(env, 'vpc', region) },
+    });
+
+    const igw = new InternetGateway(this, 'igw', {
+      vpcId: vpc.id,
+      provider: props.provider,
+      tags: { Name: name(env, 'igw', region) },
+    });
+
+    const publicRt = new RouteTable(this, 'publicRt', {
+      vpcId: vpc.id,
+      route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
+      provider: props.provider,
+      tags: { Name: name(env, 'public-rt', region) },
+    });
+
+    const publicSubnets: Subnet[] = [];
+    const privateSubnets: Subnet[] = [];
+
+    for (let i = 0; i < azCount; i++) {
+      const pub = new Subnet(this, `public-${i}`, {
+        vpcId: vpc.id,
+        cidrBlock: Fn.cidrsubnet(props.vpcCidr, 8, i),
+        availabilityZone: Fn.element(azs.names, i),
+        mapPublicIpOnLaunch: true,
+        provider: props.provider,
+        tags: { Name: name(env, 'public-subnet', region, i), Type: 'Public' },
+      });
+      publicSubnets.push(pub);
+
+      const priv = new Subnet(this, `private-${i}`, {
+        vpcId: vpc.id,
+        cidrBlock: Fn.cidrsubnet(props.vpcCidr, 8, i + 10),
+        availabilityZone: Fn.element(azs.names, i),
+        provider: props.provider,
+        tags: { Name: name(env, 'private-subnet', region, i), Type: 'Private' },
+      });
+      privateSubnets.push(priv);
+
+      new RouteTableAssociation(this, `pub-assoc-${i}`, {
+        subnetId: pub.id,
+        routeTableId: publicRt.id,
+        provider: props.provider,
+      });
+    }
+
+    const eips: Eip[] = [];
+    const nats: NatGateway[] = [];
+    const natLoops = natPerAz ? azCount : 1;
+
+    for (let i = 0; i < natLoops; i++) {
+      const eip = new Eip(this, `nat-eip-${i}`, {
+        domain: 'vpc',
+        provider: props.provider,
+        tags: { Name: name(env, 'nat-eip', region, i) },
+      });
+      eips.push(eip);
+
+      const nat = new NatGateway(this, `nat-${i}`, {
+        allocationId: eip.id,
+        subnetId: publicSubnets[i].id,
+        provider: props.provider,
+        tags: { Name: name(env, 'nat', region, i) },
+        dependsOn: [igw],
+      });
+      nats.push(nat);
+    }
+
+    for (let i = 0; i < azCount; i++) {
+      const natIndex = natPerAz ? i : 0;
+      const privateRt = new RouteTable(this, `private-rt-${i}`, {
+        vpcId: vpc.id,
+        route: [{ cidrBlock: '0.0.0.0/0', natGatewayId: nats[natIndex].id }],
+        provider: props.provider,
+        tags: { Name: name(env, 'private-rt', region, i) },
+      });
+
+      new RouteTableAssociation(this, `priv-assoc-${i}`, {
+        subnetId: privateSubnets[i].id,
+        routeTableId: privateRt.id,
+        provider: props.provider,
+      });
+    }
+
+    this.vpcId = vpc.id;
+    this.internetGatewayId = igw.id;
+    this.publicSubnetIds = publicSubnets.map((s) => s.id);
+    this.privateSubnetIds = privateSubnets.map((s) => s.id);
+    this.natGatewayIds = nats.map((n) => n.id);
+
+    new TerraformOutput(this, 'vpc_id', { value: this.vpcId });
+    new TerraformOutput(this, 'public_subnet_ids', { value: this.publicSubnetIds });
+    new TerraformOutput(this, 'private_subnet_ids', { value: this.privateSubnetIds });
+    new TerraformOutput(this, 'internet_gateway_id', { value: this.internetGatewayId });
+    new TerraformOutput(this, 'nat_gateway_ids', { value: this.natGatewayIds });
+  }
+}
+```
+
+### `lib/security.ts`
+
+```ts
+// lib/security.ts
+import { Construct } from 'constructs';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { TerraformOutput } from 'cdktf';
+import { name } from './utils/naming';
+
+export interface SecurityProps {
+  provider: AwsProvider;
+  environment: string;
+  region: string;
+  vpcId: string;
+
+  openAlbHttp?: boolean;   // default true
+  openAlbHttps?: boolean;  // default true
+  adminCidr?: string;      // e.g., "203.0.113.0/24"
+  appPort?: number;        // default 80
+  enableSshToApp?: boolean; // default false
+}
+
+export class Security extends Construct {
+  public readonly albSgId: string;
+  public readonly appSgId: string;
+  public readonly rdsSgId: string;
+
+  constructor(scope: Construct, id: string, props: SecurityProps) {
+    super(scope, id);
+
+    const env = props.environment;
+    const region = props.region;
+    const appPort = props.appPort ?? 80;
+    const openAlbHttp = props.openAlbHttp ?? true;
+    const openAlbHttps = props.openAlbHttps ?? true;
+    const enableSshToApp = props.enableSshToApp ?? false;
+
+    const albSg = new SecurityGroup(this, 'alb-sg', {
+      name: name(env, 'alb-sg', region),
+      description: 'Security group for Application Load Balancer',
+      vpcId: props.vpcId,
+      egress: [{ fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] }],
+      ingress: [
+        ...(openAlbHttp ? [{ fromPort: 80, toPort: 80, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] }] : []),
+        ...(openAlbHttps ? [{ fromPort: 443, toPort: 443, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] }] : []),
+      ] as any[],
+      provider: props.provider,
+      tags: { Name: name(env, 'alb-sg', region) },
+    });
+
+    const appIngress: any[] = [
+      { fromPort: appPort, toPort: appPort, protocol: 'tcp', securityGroups: [albSg.id] },
+    ];
+
+    if (enableSshToApp) {
+      const adminCidr = props.adminCidr || process.env.ADMIN_CIDR || '';
+      if (adminCidr.trim().length > 0) {
+        appIngress.push({ fromPort: 22, toPort: 22, protocol: 'tcp', cidrBlocks: [adminCidr] });
+      }
+    }
+
+    const appSg = new SecurityGroup(this, 'app-sg', {
+      name: name(env, 'app-sg', region),
+      description: 'Security group for application instances',
+      vpcId: props.vpcId,
+      ingress: appIngress,
+      egress: [{ fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] }],
+      provider: props.provider,
+      tags: { Name: name(env, 'app-sg', region) },
+    });
+
+    const rdsSg = new SecurityGroup(this, 'rds-sg', {
+      name: name(env, 'rds-sg', region),
+      description: 'Security group for RDS Postgres',
+      vpcId: props.vpcId,
+      ingress: [{ fromPort: 5432, toPort: 5432, protocol: 'tcp', securityGroups: [appSg.id] }] as any[],
+      egress: [{ fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] }],
+      provider: props.provider,
+      tags: { Name: name(env, 'rds-sg', region) },
+    });
+
+    this.albSgId = albSg.id;
+    this.appSgId = appSg.id;
+    this.rdsSgId = rdsSg.id;
+
+    new TerraformOutput(this, 'alb_sg_id', { value: this.albSgId });
+    new TerraformOutput(this, 'app_sg_id', { value: this.appSgId });
+    new TerraformOutput(this, 'rds_sg_id', { value: this.rdsSgId });
+  }
+}
+```
+
+### `lib/compute.ts`
+
+```ts
+// lib/compute.ts
+import { Construct } from 'constructs';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
+import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
+import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { DataAwsSsmParameter } from '@cdktf/provider-aws/lib/data-aws-ssm-parameter';
+import { TerraformOutput, Fn } from 'cdktf';
+import { name } from './utils/naming';
+
+export interface ComputeProps {
+  provider: AwsProvider;
+  environment: string;
+  region: string;
+  vpcId: string;
+  publicSubnets: string[];
+  privateSubnets: string[];
+  albSgId: string;
+  appSgId: string;
+  instanceType?: string;
+  desiredCapacity?: number;
+  minSize?: number;
+  maxSize?: number;
+  acmCertArn: string; // HTTPS cert
+}
+
+export class Compute extends Construct {
+  public readonly albDns: string;
+  public readonly albZoneId: string;
+  public readonly asgName: string;
+  public readonly tgArn: string;
+
+  constructor(scope: Construct, id: string, props: ComputeProps) {
+    super(scope, id);
+
+    const env = props.environment;
+    const region = props.region;
+
+    const ec2Role = new IamRole(this, 'ec2Role', {
+      name: name(env, 'ec2-role', region),
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [{ Action: 'sts:AssumeRole', Effect: 'Allow', Principal: { Service: 'ec2.amazonaws.com' } }],
+      }),
+      provider: props.provider,
+    });
+
+    new IamRolePolicy(this, 'ec2Policy', {
+      name: name(env, 'ec2-cw-ssm-policy', region),
+      role: ec2Role.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'ssm:DescribeAssociation','ssm:GetDeployablePatchSnapshotForInstance','ssm:GetDocument',
+              'ssm:DescribeDocument','ssm:GetParameters','ssm:ListAssociations','ssm:ListInstanceAssociations',
+              'ssm:UpdateInstanceInformation','ec2messages:AcknowledgeMessage','ec2messages:DeleteMessage',
+              'ec2messages:FailMessage','ec2messages:GetEndpoint','ec2messages:GetMessages','ec2messages:SendReply',
+              'cloudwatch:PutMetricData','logs:CreateLogGroup','logs:CreateLogStream','logs:PutLogEvents'
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
+      provider: props.provider,
+    });
+
+    const ec2Profile = new IamInstanceProfile(this, 'ec2Profile', {
+      name: name(env, 'ec2-profile', region),
+      role: ec2Role.name,
+      provider: props.provider,
+    });
+
+    const ssmAmi = new DataAwsSsmParameter(this, 'amiParam', {
+      name: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64',
+      provider: props.provider,
+    });
+
+    const alb = new Lb(this, 'alb', {
+      name: name(env, 'alb', region),
+      internal: false,
+      loadBalancerType: 'application',
+      securityGroups: [props.albSgId],
+      subnets: props.publicSubnets,
+      provider: props.provider,
+    });
+
+    const tg = new LbTargetGroup(this, 'tg', {
+      name: name(env, 'tg', region),
+      port: 80,
+      protocol: 'HTTP',
+      vpcId: props.vpcId,
+      healthCheck: { path: '/', protocol: 'HTTP' },
+      provider: props.provider,
+    });
+
+    new LbListener(this, 'httpListener', {
+      loadBalancerArn: alb.arn,
+      port: 80,
+      protocol: 'HTTP',
+      defaultAction: [{ type: 'redirect', redirect: { port: '443', protocol: 'HTTPS', statusCode: 'HTTP_301' } }],
+      provider: props.provider,
+    });
+
+    new LbListener(this, 'httpsListener', {
+      loadBalancerArn: alb.arn,
+      port: 443,
+      protocol: 'HTTPS',
+      sslPolicy: 'ELBSecurityPolicy-2016-08',
+      certificateArn: props.acmCertArn,
+      defaultAction: [{ type: 'forward', targetGroupArn: tg.arn }],
+      provider: props.provider,
+    });
+
+    const userData = Fn.base64encode(`#!/bin/bash
+yum update -y
+yum install -y amazon-cloudwatch-agent
+systemctl enable amazon-cloudwatch-agent
+systemctl start amazon-cloudwatch-agent
+`);
+
+    const lt = new LaunchTemplate(this, 'lt', {
+      namePrefix: name(env, 'lt', region),
+      imageId: ssmAmi.value,
+      instanceType: props.instanceType || 't3.micro',
+      vpcSecurityGroupIds: [props.appSgId],
+      iamInstanceProfile: { name: ec2Profile.name },
+      userData,
+      provider: props.provider,
+    });
+
+    const asg = new AutoscalingGroup(this, 'asg', {
+      name: name(env, 'asg', region),
+      minSize: props.minSize ?? 1,
+      maxSize: props.maxSize ?? 3,
+      desiredCapacity: props.desiredCapacity ?? 1,
+      vpcZoneIdentifier: props.privateSubnets,
+      launchTemplate: { id: lt.id, version: '$Latest' },
+      targetGroupArns: [tg.arn],
+      provider: props.provider,
+    });
+
+    new AutoscalingPolicy(this, 'scaleUp', {
+      name: name(env, 'scale-up', region),
+      scalingAdjustment: 1,
+      adjustmentType: 'ChangeInCapacity',
+      cooldown: 300,
+      autoscalingGroupName: asg.name,
+      provider: props.provider,
+    });
+
+    new AutoscalingPolicy(this, 'scaleDown', {
+      name: name(env, 'scale-down', region),
+      scalingAdjustment: -1,
+      adjustmentType: 'ChangeInCapacity',
+      cooldown: 300,
+      autoscalingGroupName: asg.name,
+      provider: props.provider,
+    });
+
+    this.albDns = alb.dnsName;
+    this.albZoneId = alb.zoneId;
+    this.asgName = asg.name;
+    this.tgArn = tg.arn;
+
+    new TerraformOutput(this, 'alb_dns', { value: this.albDns });
+    new TerraformOutput(this, 'asg_name', { value: this.asgName });
+  }
+}
+```
+
+### `lib/database.ts`
+
+```ts
+// lib/database.ts
+import { Construct } from 'constructs';
+import { TerraformOutput } from 'cdktf';
+
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { DbParameterGroup } from '@cdktf/provider-aws/lib/db-parameter-group';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { Password } from '@cdktf/provider-random/lib/password';
+
+import { name } from './utils/naming';
+
+export interface DatabaseProps {
+  provider: AwsProvider;
+  environment: string;
+  region: string;
+  privateSubnets: string[];
+  rdsSgId: string;
+  instanceClass?: string;      // default: db.t3.micro
+  allocatedStorage?: number;   // default: 20
+  multiAz?: boolean;           // default: true in prod, false otherwise
+}
+
+export class Database extends Construct {
+  public readonly endpoint: string;
+  public readonly secretArn: string;
+  public readonly dbIdentifier: string;
+
+  constructor(scope: Construct, id: string, props: DatabaseProps) {
+    super(scope, id);
+
+    const env = props.environment;
+    const region = props.region;
+
+    const dbPassword = new Password(this, 'dbPassword', {
+      length: 16,
+      special: true,
+    });
+
+    const secret = new SecretsmanagerSecret(this, 'dbSecret', {
+      name: name(env, 'db-password', region),
+      description: `Database password for ${env} in ${region}`,
+      recoveryWindowInDays: 7,
+      provider: props.provider,
+    });
+
+    new SecretsmanagerSecretVersion(this, 'dbSecretVersion', {
+      secretId: secret.id,
+      secretString: dbPassword.result,
+      provider: props.provider,
+    });
+
+    const subnetGroup = new DbSubnetGroup(this, 'dbSubnetGroup', {
+      name: name(env, 'db-subnet-group', region),
+      subnetIds: props.privateSubnets,
+      provider: props.provider,
+    });
+
+    const paramGroup = new DbParameterGroup(this, 'dbParamGroup', {
+      name: name(env, 'db-params', region),
+      family: 'postgres14',
+      parameter: [
+        { name: 'log_statement', value: 'all' },
+        { name: 'log_min_duration_statement', value: '500' },
+      ],
+      provider: props.provider,
+    });
+
+    const db = new DbInstance(this, 'dbInstance', {
+      identifier: name(env, 'db', region),
+      engine: 'postgres',
+      engineVersion: '14.9',
+      instanceClass: props.instanceClass || 'db.t3.micro',
+      allocatedStorage: props.allocatedStorage || 20,
+      dbSubnetGroupName: subnetGroup.name,
+      vpcSecurityGroupIds: [props.rdsSgId],
+      username: 'admin',
+      password: dbPassword.result,
+      multiAz: props.multiAz ?? (env === 'prod'),
+      deletionProtection: env === 'prod',
+      skipFinalSnapshot: true,
+      publiclyAccessible: false,
+      storageEncrypted: true,
+      parameterGroupName: paramGroup.name,
+      provider: props.provider,
+    });
+
+    this.endpoint = db.address;
+    this.secretArn = secret.arn;
+    this.dbIdentifier = db.id;
+
+    new TerraformOutput(this, 'db_endpoint', { value: this.endpoint });
+    new TerraformOutput(this, 'db_secret_arn', { value: this.secretArn });
+  }
+}
+```
+
+### `lib/monitoring.ts`
+
+```ts
+// lib/monitoring.ts
+import { Construct } from 'constructs';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+
+export interface MonitoringProps {
+  provider: any;
+  environment: string;
+  asgName: string;
+  dbIdentifier: string;
+}
+
+export class Monitoring extends Construct {
+  constructor(scope: Construct, id: string, props: MonitoringProps) {
+    super(scope, id);
+
+    const topic = new SnsTopic(this, `${id}-alerts`, {
+      provider: props.provider,
+      name: `${props.environment}-alerts`,
+    });
+
+    new CloudwatchLogGroup(this, `${id}-app-logs`, {
+      provider: props.provider,
+      name: `/app/${props.environment}`,
+      retentionInDays: 30,
+    });
+
+    new CloudwatchLogGroup(this, `${id}-db-logs`, {
+      provider: props.provider,
+      name: `/db/${props.environment}`,
+      retentionInDays: 30,
+    });
+
+    new CloudwatchMetricAlarm(this, `${id}-cpu-alarm`, {
+      provider: props.provider,
+      alarmName: `${props.environment}-high-cpu`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: 300,
+      statistic: 'Average',
+      threshold: 80,
+      alarmDescription: 'High CPU usage detected',
+      dimensions: { AutoScalingGroupName: props.asgName },
+      alarmActions: [topic.arn],
+    });
+
+    new CloudwatchMetricAlarm(this, `${id}-db-storage-alarm`, {
+      provider: props.provider,
+      alarmName: `${props.environment}-low-storage`,
+      comparisonOperator: 'LessThanThreshold',
+      evaluationPeriods: 1,
+      metricName: 'FreeStorageSpace',
+      namespace: 'AWS/RDS',
+      period: 300,
+      statistic: 'Average',
+      threshold: 2_000_000_000, // 2 GB
+      alarmDescription: 'Low RDS storage space detected',
+      dimensions: { DBInstanceIdentifier: props.dbIdentifier },
+      alarmActions: [topic.arn],
+    });
+  }
+}
+```
+
+### `lib/dns.ts`
+
+```ts
+// lib/dns.ts
+import { Construct } from 'constructs';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
+
+export interface DnsProps {
+  hostedZoneId: string;
+  recordName: string;
+
+  primaryAlbDns: string;
+  primaryAlbZoneId: string;
+
+  secondaryAlbDns: string;
+  secondaryAlbZoneId: string;
+
+  healthCheckPath?: string;
+
+  primaryProvider: AwsProvider;
+  secondaryProvider: AwsProvider;
+
+  environment: string;
+}
+
+export class Dns extends Construct {
+  constructor(scope: Construct, id: string, props: DnsProps) {
+    super(scope, id);
+
+    const path = props.healthCheckPath ?? '/';
+
+    const primaryHc = new Route53HealthCheck(this, 'primaryHc', {
+      type: 'HTTPS',
+      fqdn: props.primaryAlbDns,
+      resourcePath: path,
+      requestInterval: 30,
+      failureThreshold: 3,
+      tags: { Name: `${props.environment}-hc-primary` },
+      provider: props.primaryProvider,
+    });
+
+    const secondaryHc = new Route53HealthCheck(this, 'secondaryHc', {
+      type: 'HTTPS',
+      fqdn: props.secondaryAlbDns,
+      resourcePath: path,
+      requestInterval: 30,
+      failureThreshold: 3,
+      tags: { Name: `${props.environment}-hc-secondary` },
+      provider: props.secondaryProvider,
+    });
+
+    new Route53Record(this, 'primaryLatencyRec', {
+      zoneId: props.hostedZoneId,
+      name: props.recordName,
+      type: 'A',
+      setIdentifier: 'primary',
+      alias: {
+        name: props.primaryAlbDns,
+        zoneId: props.primaryAlbZoneId,
+        evaluateTargetHealth: true,
+      },
+      latencyRoutingPolicy: { region: props.primaryProvider.region! },
+      healthCheckId: primaryHc.id,
+      provider: props.primaryProvider,
+    });
+
+    new Route53Record(this, 'secondaryLatencyRec', {
+      zoneId: props.hostedZoneId,
+      name: props.recordName,
+      type: 'A',
+      setIdentifier: 'secondary',
+      alias: {
+        name: props.secondaryAlbDns,
+        zoneId: props.secondaryAlbZoneId,
+        evaluateTargetHealth: true,
+      },
+      latencyRoutingPolicy: { region: props.secondaryProvider.region! },
+      healthCheckId: secondaryHc.id,
+      provider: props.secondaryProvider,
+    });
+  }
+}
+```
+
+### `lib/tap-stack.ts`
+
+```ts
+// lib/tap-stack.ts
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
+import { IResolvable, S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
+
+import { SecureVpc } from './secure-vpc';
+import { Security } from './security';
+import { Compute } from './compute';
+import { Database } from './database';
+import { Monitoring } from './monitoring';
+import { Dns } from './dns';
+
+export interface TapStackProps {
+  environment?: string;
+  project?: string;
+  owner?: string;
+  costCenter?: string;
+
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  dynamoLockTable?: string;
+
+  primaryRegion?: string;
+  secondaryRegion?: string;
+
+  // Back-compat
+  environmentSuffix?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags;
+}
+
+function toProviderDefaultTagsArray(
+  tags: AwsProviderDefaultTags | undefined
+): IResolvable | AwsProviderDefaultTags[] | undefined {
+  if (!tags) return undefined;
+  return [tags];
+}
+
+export class TapStack extends TerraformStack {
+  public readonly primary: AwsProvider;
+  public readonly secondary: AwsProvider;
+  public readonly environment: string;
+
+  constructor(scope: Construct, id: string, props: TapStackProps = {}) {
+    super(scope, id);
+
+    const environment =
+      props.environment ??
+      props.environmentSuffix ??
+      process.env.CDKTF_WORKSPACE ??
+      process.env.TF_WORKSPACE ??
+      process.env.ENVIRONMENT_SUFFIX ??
+      'dev';
+    this.environment = environment;
+
+    const project = props.project ?? process.env.PROJECT ?? 'multi-region-app';
+    const owner = props.owner ?? process.env.OWNER ?? 'DevOps Team';
+    const costCenter =
+      props.costCenter ?? process.env.COST_CENTER ?? 'Engineering';
+
+    const baseTagMap: Record<string, string> = {
+      environment,
+      project,
+      owner,
+      cost_center: costCenter,
+      ManagedBy: 'CDKTF',
+      ...(props.defaultTags?.tags ?? {}),
+    };
+    const mergedDefaultTags: AwsProviderDefaultTags = { tags: baseTagMap };
+
+    this.addOverride('terraform.required_version', '>= 1.6');
+    this.addOverride('terraform.required_providers.aws', {
+      source: 'hashicorp/aws',
+      version: '~> 5.0',
+    });
+
+    const primaryRegion =
+      props.primaryRegion || process.env.AWS_REGION_PRIMARY || 'us-east-1';
+    const secondaryRegion =
+      props.secondaryRegion || process.env.AWS_REGION_SECONDARY || 'eu-west-1';
+
+    this.primary = new AwsProvider(this, 'awsPrimary', {
+      region: primaryRegion,
+      alias: 'primary',
+      defaultTags: toProviderDefaultTagsArray(mergedDefaultTags),
+    });
+
+    this.secondary = new AwsProvider(this, 'awsSecondary', {
+      region: secondaryRegion,
+      alias: 'secondary',
+      defaultTags: toProviderDefaultTagsArray(mergedDefaultTags),
+    });
+
+    new RandomProvider(this, 'random', {});
+
+    const stateBucket =
+      props.stateBucket ||
+      process.env.TERRAFORM_STATE_BUCKET ||
+      'iac-rlhf-tf-states';
+    const stateBucketRegion =
+      props.stateBucketRegion ||
+      process.env.TERRAFORM_STATE_BUCKET_REGION ||
+      'us-east-1';
+    const dynamoLockTable =
+      props.dynamoLockTable || process.env.TF_LOCK_TABLE || 'iac-rlhf-tf-locks';
+
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `infrastructure/${environment}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
+    this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
+
+    new TerraformOutput(this, 'workspace', { value: environment });
+    new TerraformOutput(this, 'primary_region', { value: primaryRegion });
+    new TerraformOutput(this, 'secondary_region', { value: secondaryRegion });
+
+    const vpcCidrPrimary = process.env.VPC_CIDR_PRIMARY || '10.0.0.0/16';
+    const vpcCidrSecondary = process.env.VPC_CIDR_SECONDARY || '10.1.0.0/16';
+    const azCount = parseInt(process.env.AZ_COUNT || '2', 10);
+    const natPerAz =
+      process.env.NAT_PER_AZ === 'true'
+        ? true
+        : process.env.NAT_PER_AZ === 'false'
+        ? false
+        : this.environment === 'prod';
+
+    const primaryVpc = new SecureVpc(this, 'PrimaryVpc', {
+      provider: this.primary,
+      environment: this.environment,
+      region: (this as any).primary['region'] || 'us-east-1',
+      vpcCidr: vpcCidrPrimary,
+      azCount,
+      natPerAz,
+    });
+
+    const secondaryVpc = new SecureVpc(this, 'SecondaryVpc', {
+      provider: this.secondary,
+      environment: this.environment,
+      region: (this as any).secondary['region'] || 'eu-west-1',
+      vpcCidr: vpcCidrSecondary,
+      azCount,
+      natPerAz,
+    });
+
+    new TerraformOutput(this, 'primary_vpc_id', { value: primaryVpc.vpcId });
+    new TerraformOutput(this, 'primary_public_subnets', { value: primaryVpc.publicSubnetIds });
+    new TerraformOutput(this, 'primary_private_subnets', { value: primaryVpc.privateSubnetIds });
+
+    new TerraformOutput(this, 'secondary_vpc_id', { value: secondaryVpc.vpcId });
+    new TerraformOutput(this, 'secondary_public_subnets', { value: secondaryVpc.publicSubnetIds });
+    new TerraformOutput(this, 'secondary_private_subnets', { value: secondaryVpc.privateSubnetIds });
+
+    const adminCidr = process.env.ADMIN_CIDR || '';
+    const appPort = parseInt(process.env.APP_PORT || '80', 10);
+    const enableSshToApp = process.env.ENABLE_SSH_TO_APP === 'true';
+
+    const primarySec = new Security(this, 'PrimarySecurity', {
+      provider: this.primary,
+      environment: this.environment,
+      region: (this as any).primary['region'] || 'us-east-1',
+      vpcId: primaryVpc.vpcId,
+      adminCidr,
+      appPort,
+      enableSshToApp,
+    });
+
+    const secondarySec = new Security(this, 'SecondarySecurity', {
+      provider: this.secondary,
+      environment: this.environment,
+      region: (this as any).secondary['region'] || 'eu-west-1',
+      vpcId: secondaryVpc.vpcId,
+      adminCidr,
+      appPort,
+      enableSshToApp,
+    });
+
+    new TerraformOutput(this, 'primary_alb_sg', { value: primarySec.albSgId });
+    new TerraformOutput(this, 'primary_app_sg', { value: primarySec.appSgId });
+    new TerraformOutput(this, 'primary_rds_sg', { value: primarySec.rdsSgId });
+
+    new TerraformOutput(this, 'secondary_alb_sg', { value: secondarySec.albSgId });
+    new TerraformOutput(this, 'secondary_app_sg', { value: secondarySec.appSgId });
+    new TerraformOutput(this, 'secondary_rds_sg', { value: secondarySec.rdsSgId });
+
+    const primaryCompute = new Compute(this, 'PrimaryCompute', {
+      provider: this.primary,
+      environment: this.environment,
+      region: (this as any).primary['region'] || 'us-east-1',
+      vpcId: primaryVpc.vpcId,
+      publicSubnets: primaryVpc.publicSubnetIds,
+      privateSubnets: primaryVpc.privateSubnetIds,
+      albSgId: primarySec.albSgId,
+      appSgId: primarySec.appSgId,
+      instanceType: 't3.micro',
+      acmCertArn: process.env.ACM_CERT_ARN || 'arn:aws:acm:us-east-1:123456789012:certificate/placeholder',
+    });
+
+    new TerraformOutput(this, 'primary_alb_dns', { value: primaryCompute.albDns });
+    new TerraformOutput(this, 'primary_asg_name', { value: primaryCompute.asgName });
+
+    const secondaryCompute = new Compute(this, 'SecondaryCompute', {
+      provider: this.secondary,
+      environment: this.environment,
+      region: (this as any).secondary['region'] || 'eu-west-1',
+      vpcId: secondaryVpc.vpcId,
+      publicSubnets: secondaryVpc.publicSubnetIds,
+      privateSubnets: secondaryVpc.privateSubnetIds,
+      albSgId: secondarySec.albSgId,
+      appSgId: secondarySec.appSgId,
+      instanceType: 't3.micro',
+      acmCertArn: process.env.ACM_CERT_ARN_SECONDARY || 'arn:aws:acm:eu-west-1:123456789012:certificate/placeholder',
+    });
+
+    new TerraformOutput(this, 'secondary_alb_dns', { value: secondaryCompute.albDns });
+    new TerraformOutput(this, 'secondary_asg_name', { value: secondaryCompute.asgName });
+
+    const primaryDb = new Database(this, 'PrimaryDatabase', {
+      provider: this.primary,
+      environment: this.environment,
+      region: (this as any).primary['region'] || 'us-east-1',
+      privateSubnets: primaryVpc.privateSubnetIds,
+      rdsSgId: primarySec.rdsSgId,
+    });
+
+    new TerraformOutput(this, 'primary_db_endpoint', { value: primaryDb.endpoint });
+    new TerraformOutput(this, 'primary_db_secret', { value: primaryDb.secretArn });
+
+    const secondaryDb = new Database(this, 'SecondaryDatabase', {
+      provider: this.secondary,
+      environment: this.environment,
+      region: (this as any).secondary['region'] || 'eu-west-1',
+      privateSubnets: secondaryVpc.privateSubnetIds,
+      rdsSgId: secondarySec.rdsSgId,
+    });
+
+    new TerraformOutput(this, 'secondary_db_endpoint', { value: secondaryDb.endpoint });
+    new TerraformOutput(this, 'secondary_db_secret', { value: secondaryDb.secretArn });
+
+    new Monitoring(this, 'PrimaryMonitoring', {
+      provider: this.primary,
+      environment: this.environment,
+      asgName: primaryCompute.asgName,
+      dbIdentifier: primaryDb.dbIdentifier,
+    });
+
+    new Monitoring(this, 'SecondaryMonitoring', {
+      provider: this.secondary,
+      environment: this.environment,
+      asgName: secondaryCompute.asgName,
+      dbIdentifier: secondaryDb.dbIdentifier,
+    });
+
+    // ---- DNS (latency) - only if env vars provided ----
+    const hostedZoneId = process.env.DNS_HOSTED_ZONE_ID || '';
+    const recordName = process.env.DNS_RECORD_NAME || '';
+    if (hostedZoneId && recordName) {
+      new Dns(this, 'LatencyDns', {
+        hostedZoneId,
+        recordName,
+        primaryAlbDns: primaryCompute.albDns,
+        primaryAlbZoneId: primaryCompute.albZoneId,
+        secondaryAlbDns: secondaryCompute.albDns,
+        secondaryAlbZoneId: secondaryCompute.albZoneId,
+        healthCheckPath: process.env.DNS_HEALTHCHECK_PATH || '/',
+        primaryProvider: this.primary,
+        secondaryProvider: this.secondary,
+        environment: this.environment,
+      });
+    }
+  }
+}
+```
+
+### `test/unit.test.ts`
+
+```ts
+// test/tap-stack.unit.test.ts
+import { App, Testing } from 'cdktf';
+import { TapStack } from '../lib/tap-stack';
+
+describe('TapStack — unit coverage', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = { ...originalEnv };
+    jest.clearAllMocks();
+
+    process.env.ENVIRONMENT_SUFFIX = 'dev';
+    process.env.TERRAFORM_STATE_BUCKET = 'iac-rlhf-tf-states';
+    process.env.TERRAFORM_STATE_BUCKET_REGION = 'us-east-1';
+    process.env.AWS_REGION_PRIMARY = 'us-east-1';
+    process.env.AWS_REGION_SECONDARY = 'eu-west-1';
+    process.env.ACM_CERT_ARN =
+      'arn:aws:acm:us-east-1:123456789012:certificate/test-primary';
+    process.env.ACM_CERT_ARN_SECONDARY =
+      'arn:aws:acm:eu-west-1:123456789012:certificate/test-secondary';
+    process.env.VPC_CIDR_PRIMARY = '10.0.0.0/16';
+    process.env.VPC_CIDR_SECONDARY = '10.1.0.0/16';
+    process.env.AZ_COUNT = '2';
+    process.env.NAT_PER_AZ = 'false';
+    process.env.ENABLE_SSH_TO_APP = 'false';
+    delete process.env.DNS_HOSTED_ZONE_ID;
+    delete process.env.DNS_RECORD_NAME;
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  test('instantiates with overrides via props (back-compat keys) and synthesizes', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestTapStackWithProps', {
+      environmentSuffix: 'prod',
+      stateBucket: 'custom-state-bucket',
+      stateBucketRegion: 'us-west-2',
+      awsRegion: 'us-west-2',
+    });
+    const synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    expect(synthesized).toMatch(/"provider":\s*{\s*"aws":/);
+
+    expect(synthesized).toMatch(/"aws_vpc"/);
+    expect(synthesized).toMatch(/"aws_security_group"/);
+    expect(synthesized).toMatch(/"aws_lb"/);
+    expect(synthesized).toMatch(/"aws_autoscaling_group"/);
+    expect(synthesized).toMatch(/"aws_db_instance"/);
+    expect(synthesized).toMatch(/"random_password"/);
+    expect(synthesized).toMatch(/"aws_secretsmanager_secret"/);
+    expect(synthesized).toMatch(/"aws_cloudwatch_metric_alarm"/);
+    expect(synthesized).toMatch(/"aws_sns_topic"/);
+
+    expect(synthesized).toMatch(/"primary_vpc_id"/);
+    expect(synthesized).toMatch(/"secondary_vpc_id"/);
+  });
+
+  test('uses defaults with no props and still synthesizes full infra (without DNS)', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestTapStackDefault');
+    const synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    expect(synthesized).toMatch(/"aws_vpc"/);
+    expect(synthesized).toMatch(/"aws_lb"/);
+    expect(synthesized).toMatch(/"aws_db_instance"/);
+
+    expect(synthesized).not.toMatch(/"aws_route53_record"/);
+    expect(synthesized).not.toMatch(/"aws_route53_health_check"/);
+  });
+
+  test('enables DNS when hosted zone + record env vars are provided', () => {
+    process.env.DNS_HOSTED_ZONE_ID = 'ZHOSTED123456';
+    process.env.DNS_RECORD_NAME = 'app.example.com';
+
+    const app = new App();
+    const stack = new TapStack(app, 'TestTapStackWithDns');
+    const synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    expect(synthesized).toMatch(/"aws_route53_record"/);
+    expect(synthesized).toMatch(/"aws_route53_health_check"/);
+  });
+});
+```
+
+### `test/tap-stack.int.test.ts`
+
+```ts
+// test/tap-stack.int.test.ts
+import { App, Testing } from 'cdktf';
+import { TapStack } from '../lib/tap-stack';
+
+describe('TapStack — integration', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = { ...originalEnv };
+
+    process.env.ENVIRONMENT_SUFFIX = 'test';
+    process.env.TERRAFORM_STATE_BUCKET = 'iac-rlhf-tf-states';
+    process.env.TERRAFORM_STATE_BUCKET_REGION = 'us-east-1';
+    process.env.TF_LOCK_TABLE = 'iac-rlhf-tf-locks';
+    process.env.AWS_REGION_PRIMARY = 'us-east-1';
+    process.env.AWS_REGION_SECONDARY = 'eu-west-1';
+
+    process.env.VPC_CIDR_PRIMARY = '10.0.0.0/16';
+    process.env.VPC_CIDR_SECONDARY = '10.1.0.0/16';
+    process.env.AZ_COUNT = '2';
+    process.env.NAT_PER_AZ = 'false';
+    process.env.ENABLE_SSH_TO_APP = 'false';
+    process.env.APP_PORT = '80';
+
+    process.env.ACM_CERT_ARN =
+      'arn:aws:acm:us-east-1:123456789012:certificate/integration-primary';
+    process.env.ACM_CERT_ARN_SECONDARY =
+      'arn:aws:acm:eu-west-1:123456789012:certificate/integration-secondary';
+
+    process.env.DNS_HOSTED_ZONE_ID = 'ZTESTHOSTEDZONE123';
+    process.env.DNS_RECORD_NAME = 'app.example.com';
+    process.env.DNS_HEALTHCHECK_PATH = '/';
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  test('synth produces expected cross-cutting resources and backend path', () => {
+    const app = new App();
+    const stackId = 'TapStackIntegration';
+    const stack = new TapStack(app, stackId);
+    const synthesized = Testing.synth(stack);
+
+    expect(synthesized).toBeDefined();
+
+    expect(synthesized).toMatch(
+      new RegExp(`infrastructure/test/${stackId}\\.tfstate`)
+    );
+
+    expect(synthesized).toMatch(/"aws_vpc"/);
+    expect(synthesized).toMatch(/"aws_subnet"/);
+    expect(synthesized).toMatch(/"aws_internet_gateway"/);
+
+    expect(synthesized).toMatch(/"aws_security_group"/);
+
+    expect(synthesized).toMatch(/"aws_lb"/);
+    expect(synthesized).toMatch(/"aws_lb_target_group"/);
+    expect(synthesized).toMatch(/"aws_lb_listener"/);
+    expect(synthesized).toMatch(/"aws_launch_template"/);
+    expect(synthesized).toMatch(/"aws_autoscaling_group"/);
+
+    expect(synthesized).toMatch(/"random_password"/);
+    expect(synthesized).toMatch(/"aws_secretsmanager_secret"/);
+    expect(synthesized).toMatch(/"aws_db_instance"/);
+    expect(synthesized).toMatch(/"aws_db_subnet_group"/);
+    expect(synthesized).toMatch(/"aws_db_parameter_group"/);
+
+    expect(synthesized).toMatch(/"aws_sns_topic"/);
+    expect(synthesized).toMatch(/"aws_cloudwatch_metric_alarm"/);
+
+    expect(synthesized).toMatch(/"aws_route53_record"/);
+    expect(synthesized).toMatch(/"aws_route53_health_check"/);
+
+    expect(synthesized).toMatch(/"primary_vpc_id"/);
+    expect(synthesized).toMatch(/"secondary_vpc_id"/);
+  });
+});
+```
+
+### `bin/tap.ts`
+
+```ts
+#!/usr/bin/env node
+import { App } from 'cdktf';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new App();
+
+const environment = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
+const stateBucketRegion =
+  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
+const repositoryName = process.env.REPOSITORY || 'unknown';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+
+const stackName = `TapStack${environment}`;
+
+new TapStack(app, stackName, {
+  // new prop names (environment instead of environmentSuffix)
+  environment,
+  stateBucket,
+  stateBucketRegion,
+  // optional: provider default tags supplement
+  defaultTags: {
+    tags: {
+      Repository: repositoryName,
+      CommitAuthor: commitAuthor,
+    },
+  },
+  // optional: set regions here or rely on env vars
+  primaryRegion: process.env.AWS_REGION_PRIMARY || 'us-east-1',
+  secondaryRegion: process.env.AWS_REGION_SECONDARY || 'eu-west-1',
+});
+
+app.synth();
+```
+
+---
+
+## Additional notes
+
+* Reference your existing `cdktf.json` and any `metadata.json` as used in your pipeline.
+* Ensure your CI role/user has permission to read/write the S3 backend bucket and DynamoDB lock table.
+* Set `ADMIN_CIDR` only when you want SSH to app instances (otherwise disabled).
+* For dev/test, consider `NAT_PER_AZ=false` to cut cost.
+
+---
