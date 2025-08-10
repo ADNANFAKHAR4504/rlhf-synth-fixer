@@ -127,7 +127,6 @@ export class TapStack extends TerraformStack {
       this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
     }
 
-
     // ---- Quick sanity outputs ----
     new TerraformOutput(this, 'workspace', { value: environment });
     new TerraformOutput(this, 'primary_region', { value: primaryRegion });
