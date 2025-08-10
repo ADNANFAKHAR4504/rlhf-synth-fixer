@@ -113,8 +113,7 @@ export class TapStack extends TerraformStack {
       props.stateBucketRegion ||
       process.env.TERRAFORM_STATE_BUCKET_REGION ||
       'us-east-1';
-    const dynamoLockTable =
-      props.dynamoLockTable || process.env.TF_LOCK_TABLE || 'iac-rlhf-tf-locks';
+    const dynamoLockTable = props.dynamoLockTable || process.env.TF_LOCK_TABLE;
 
     new S3Backend(this, {
       bucket: stateBucket,
@@ -122,7 +121,12 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
+
+    // Only set a lock table if provided; otherwise, skip locking to avoid CI errors
+    if (dynamoLockTable && dynamoLockTable.trim().length > 0) {
+      this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
+    }
+
 
     // ---- Quick sanity outputs ----
     new TerraformOutput(this, 'workspace', { value: environment });

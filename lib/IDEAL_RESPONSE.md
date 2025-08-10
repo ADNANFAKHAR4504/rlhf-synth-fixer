@@ -864,16 +864,20 @@ export class TapStack extends TerraformStack {
       props.stateBucketRegion ||
       process.env.TERRAFORM_STATE_BUCKET_REGION ||
       'us-east-1';
-    const dynamoLockTable =
-      props.dynamoLockTable || process.env.TF_LOCK_TABLE || 'iac-rlhf-tf-locks';
 
+    const dynamoLockTable = props.dynamoLockTable || process.env.TF_LOCK_TABLE;
     new S3Backend(this, {
       bucket: stateBucket,
       key: `infrastructure/${environment}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
     });
-    this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
+
+    // Only set a lock table if provided; otherwise, skip locking to avoid CI errors
+    if (dynamoLockTable && dynamoLockTable.trim().length > 0) {
+      this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
+    }
+
 
     new TerraformOutput(this, 'workspace', { value: environment });
     new TerraformOutput(this, 'primary_region', { value: primaryRegion });
@@ -1225,49 +1229,40 @@ describe('TapStack — integration', () => {
 #!/usr/bin/env node
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
+import { BootstrapBackendStack } from '../lib/bootstrap-backend-stack';
 
 const app = new App();
 
 const environment = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-const stateBucketRegion =
-  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
+const stateBucketRegion = process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
 const stackName = `TapStack${environment}`;
 
-// 1. Bootstrap backend infra
-new BootstrapBackendStack(app, 'BootstrapBackend');
+// Only create the bootstrap stack if explicitly requested.
+// Default is OFF so CI sees exactly one stack.
+if (process.env.BOOTSTRAP_BACKEND === 'true') {
+  new BootstrapBackendStack(app, 'BootstrapBackend');
+}
 
+// Main application stack (always created)
 new TapStack(app, stackName, {
-  // new prop names (environment instead of environmentSuffix)
   environment,
   stateBucket,
   stateBucketRegion,
-  // optional: provider default tags supplement
   defaultTags: {
     tags: {
+      Environment: environment,
       Repository: repositoryName,
       CommitAuthor: commitAuthor,
     },
   },
-  // optional: set regions here or rely on env vars
-  primaryRegion: process.env.AWS_REGION_PRIMARY || 'us-east-1',
-  secondaryRegion: process.env.AWS_REGION_SECONDARY || 'eu-west-1',
 });
 
 app.synth();
 ```
-
----
-
-## Additional notes
-
-* Reference your existing `cdktf.json` and any `metadata.json` as used in your pipeline.
-* Ensure your CI role/user has permission to read/write the S3 backend bucket and DynamoDB lock table.
-* Set `ADMIN_CIDR` only when you want SSH to app instances (otherwise disabled).
-* For dev/test, consider `NAT_PER_AZ=false` to cut cost.
 
 ### `lib/bootstrap-backend-stack.ts`
 
@@ -1322,5 +1317,13 @@ export class BootstrapBackendStack extends TerraformStack {
   }
 }
 ```
+---
+
+## Additional notes
+
+* Reference your existing `cdktf.json` and any `metadata.json` as used in your pipeline.
+* Ensure your CI role/user has permission to read/write the S3 backend bucket and DynamoDB lock table.
+* Set `ADMIN_CIDR` only when you want SSH to app instances (otherwise disabled).
+* For dev/test, consider `NAT_PER_AZ=false` to cut cost.
 
 ---
