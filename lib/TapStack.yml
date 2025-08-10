@@ -276,7 +276,6 @@ Resources:
     Type: AWS::Logs::LogGroup
     Condition: EnableFlowLogs
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}'
       RetentionInDays: 30
 
   VPCFlowLog:
@@ -436,9 +435,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+              AWS: 'arn:aws:iam::797873946194:root'
             Action: s3:PutObject
-            Resource: !Sub '${ALBAccessLogsBucket}/AWSLogs/${AWS::AccountId}/*'
+            Resource: !Sub '${ALBAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
 
   # IAM ROLE FOR EC2
   Ec2InstanceRole:

@@ -544,9 +544,6 @@
             "Type": "AWS::Logs::LogGroup",
             "Condition": "EnableFlowLogs",
             "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs/${AWS::StackName}"
-                },
                 "RetentionInDays": 30
             }
         },
@@ -827,13 +824,11 @@
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
+                                "AWS": "arn:aws:iam::797873946194:root"
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${ALBAccessLogsBucket}/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "${ALBAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
                             }
                         }
                     ]
