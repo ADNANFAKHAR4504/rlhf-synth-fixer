@@ -60,7 +60,7 @@ Parameters:
 
   SSHAllowedCidr:
     Type: String
-    Default: '10.0.0.0/16'
+    Default: '0.0.0.0/0'
     Description: 'CIDR block allowed for SSH access (only used if KeyPairName is provided)'
 
   EnableNatGateway:
@@ -74,7 +74,35 @@ Conditions:
   EnableNat: !Equals [!Ref EnableNatGateway, 'true']
 
 Resources:
-  # KMS Key - Created first as other resources depend on it
+  # Auto Scaling Service-Linked Role
+  AutoScalingServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Properties:
+      AWSServiceName: autoscaling.amazonaws.com
+      Description: Service-linked role for Auto Scaling
+
+  # IAM Roles and Policies
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Project}-${Environment}-ec2-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -94,20 +122,75 @@ Resources:
             Principal:
               Service: cloudformation.amazonaws.com
             Action:
+              - kms:CreateGrant
               - kms:Decrypt
               - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
             Resource: '*'
           - Sid: Allow EC2 Service
             Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
             Action:
+              - kms:CreateGrant
               - kms:Decrypt
               - kms:DescribeKey
               - kms:Encrypt
               - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
               - kms:ReEncrypt*
             Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+          - Sid: Allow Auto Scaling Service Enhanced
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+          - Sid: Allow Auto Scaling Service Direct Access
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+          - Sid: Allow EBS Service
+            Effect: Allow
+            Principal:
+              Service: ebs.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
           - Sid: Allow S3 Service
             Effect: Allow
             Principal:
@@ -130,9 +213,42 @@ Resources:
               - kms:GenerateDataKey
               - kms:ReEncrypt*
             Resource: '*'
-          # Removed the explicit 'Allow EC2 Instance Role' statement from the KMS Key Policy
-          # to resolve the circular dependency. The EC2InstanceRole's inline policy
-          # named 'KMSAccess' already grants it the necessary permissions.
+          - Sid: Allow EC2 Instance Role
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+            Resource: '*'
+          - Sid: Allow Auto Scaling to use grants
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                'kms:GrantIsForAWSResource': true
+          - Sid: Allow Service Linked Role
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -146,6 +262,75 @@ Resources:
     Properties:
       AliasName: !Sub 'alias/${Project}-${Environment}-key'
       TargetKeyId: !Ref KMSKey
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${Project}-${Environment}-ec2-profile'
+      Roles:
+        - !Ref EC2InstanceRole
+
+  EC2KMSAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: KMSAccess
+      Roles:
+        - !Ref EC2InstanceRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+              - kms:ListGrants
+            Resource: !GetAtt KMSKey.Arn
+          - Effect: Allow
+            Action:
+              - kms:DescribeKey
+            Resource: !GetAtt KMSKey.Arn
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+
+  EC2S3AccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: S3Access
+      Roles:
+        - !Ref EC2InstanceRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub '${S3Bucket.Arn}/*'
+          - Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt S3Bucket.Arn
+
+  EC2SecretsManagerAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: SecretsManagerAccess
+      Roles:
+        - !Ref EC2InstanceRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+            Resource: !Ref DatabaseSecret
 
   # VPC and Networking
   VPC:
@@ -183,7 +368,6 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
 
-  # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -218,7 +402,6 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -253,7 +436,6 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # NAT Gateways
   NatGateway1EIP:
     Type: AWS::EC2::EIP
     Condition: EnableNat
@@ -318,7 +500,6 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -409,7 +590,6 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  # Security Groups
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -445,7 +625,6 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # S3 Bucket
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -454,7 +633,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
+              KMSMasterKeyID: !GetAtt KMSKey.Arn
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -504,7 +683,6 @@ Resources:
             Action: 's3:ListBucket'
             Resource: !GetAtt S3Bucket.Arn
 
-  # Secrets Manager
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -515,7 +693,7 @@ Resources:
         GenerateStringKey: 'password'
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
-      KmsKeyId: !Ref KMSKey
+      KmsKeyId: !GetAtt KMSKey.Arn
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -524,83 +702,17 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # IAM Roles and Policies
-  EC2InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${Project}-${Environment}-ec2-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      Policies:
-        - PolicyName: KMSAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                  - kms:DescribeKey
-                  - kms:Encrypt
-                  - kms:GenerateDataKey
-                  - kms:ReEncrypt*
-                Resource: !GetAtt KMSKey.Arn
-        - PolicyName: S3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                Resource: !Sub '${S3Bucket.Arn}/*'
-              - Effect: Allow
-                Action: s3:ListBucket
-                Resource: !GetAtt S3Bucket.Arn
-        - PolicyName: SecretsManagerAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                  - secretsmanager:DescribeSecret
-                Resource: !Ref DatabaseSecret
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
-
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      InstanceProfileName: !Sub '${Project}-${Environment}-ec2-profile'
-      Roles:
-        - !Ref EC2InstanceRole
-
-  # Launch Template
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+      - EC2KMSAccessPolicy
+      - EC2S3AccessPolicy
+      - EC2SecretsManagerAccessPolicy
+      - AutoScalingServiceLinkedRole
     Properties:
       LaunchTemplateName: !Sub '${Project}-${Environment}-launch-template'
       LaunchTemplateData:
-        ImageId:
-          !Join [
-            '',
-            [
-              '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}',
-            ],
-          ]
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
@@ -613,15 +725,21 @@ Resources:
               VolumeType: gp3
               VolumeSize: 20
               Encrypted: true
-              KmsKeyId: !Ref KMSKey
+              KmsKeyId: !GetAtt KMSKey.Arn
               DeleteOnTermination: true
         UserData:
-          Fn::Base64: |
+          Fn::Base64: !Sub |
             #!/bin/bash
+            # Wait for KMS key to be fully available
+            sleep 30
             yum update -y
             yum install -y amazon-ssm-agent
             systemctl enable amazon-ssm-agent
             systemctl start amazon-ssm-agent
+
+            # Additional logging for troubleshooting
+            echo "Instance launched successfully at $(date)" > /var/log/user-data.log
+            echo "KMS Key ARN: ${KMSKey.Arn}" >> /var/log/user-data.log
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -644,9 +762,11 @@ Resources:
               - Key: Owner
                 Value: !Ref Owner
 
-  # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - EC2KMSAccessPolicy
+      - AutoScalingServiceLinkedRole
     Properties:
       AutoScalingGroupName: !Sub '${Project}-${Environment}-asg'
       VPCZoneIdentifier:
@@ -704,6 +824,12 @@ Outputs:
     Value: !GetAtt KMSKey.Arn
     Export:
       Name: !Sub '${AWS::StackName}-KmsKeyArn'
+
+  KmsKeyAlias:
+    Description: 'KMS Key Alias'
+    Value: !Ref KMSKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KmsKeyAlias'
 
   S3BucketName:
     Description: 'S3 Bucket Name'
