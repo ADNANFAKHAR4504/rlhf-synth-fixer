@@ -6,7 +6,7 @@ and Pulumi's testing utilities.
 """
 
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 # Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
