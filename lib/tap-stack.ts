@@ -32,7 +32,7 @@ export class TapStack extends cdk.Stack {
     // const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Get CloudTrail configuration from props (default to true for backward compatibility)
-    const enableCloudTrail = props?.enableCloudTrail ?? true;
+    const enableCloudTrail = props?.enableCloudTrail ?? false;
 
     // Common tags applied to all resources
     const commonTags = {

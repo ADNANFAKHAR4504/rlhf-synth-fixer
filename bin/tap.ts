@@ -10,7 +10,7 @@ const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
 // Get CloudTrail configuration from context (default to true for backward compatibility)
-const enableCloudTrail = app.node.tryGetContext('enableCloudTrail') !== false;
+const enableCloudTrail = app.node.tryGetContext('enableCloudTrail') === true;
 
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
