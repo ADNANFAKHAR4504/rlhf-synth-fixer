@@ -244,7 +244,7 @@ jobs:
             
             # Clean Terraform directory
             echo "Cleaning Terraform directory..."
-            cd bin
+            cd lib
             rm -rf .terraform .terraform.lock.hcl tfplan
             
             # Set up backend configuration with PR-specific settings
@@ -343,7 +343,7 @@ jobs:
             echo "Using state key: $STATE_KEY"
             
             # Change to bin directory where Terraform files are located
-            cd bin
+            cd lib
             
             # Check if plan file exists
             if [ -f "tfplan" ]; then
@@ -491,7 +491,7 @@ jobs:
             touch cfn-outputs/flat-outputs.json
             
             # Change to bin directory where Terraform files are located
-            cd bin
+            cd lib
             
             # Get structured outputs (JSON)
             terraform output -json > ../cfn-outputs/all-outputs.json
@@ -831,7 +831,7 @@ jobs:
             echo "Using state key: $STATE_KEY"
             
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
-            cd bin
+            cd lib
             # Check if terraform is initialized
             if [ -d ".terraform" ]; then
               echo "Terraform is initialized, proceeding with destroy..."
@@ -1175,7 +1175,7 @@ jobs:
             echo "Using state key: $STATE_KEY"
             
             # Try to destroy resources, but don't fail if they don't exist
-            cd bin
+            cd lib
             # Check if terraform is initialized
             if [ -d ".terraform" ]; then
               echo "Terraform is initialized, proceeding with destroy..."
