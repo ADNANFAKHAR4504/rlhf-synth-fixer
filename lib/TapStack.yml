@@ -458,7 +458,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref HealthcareDataBucket
+                Resource: !Sub "arn:aws:s3:::${HealthcareDataBucket}"
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
