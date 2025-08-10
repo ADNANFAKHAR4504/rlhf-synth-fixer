@@ -42,9 +42,7 @@ Model Response Issue:
 Ideal Response (Correct):
 
 - Template acknowledges this limitation with a clear note: "The template doesn't register EC2 instances with the Target Group automatically."
-- Suggests using Auto Scaling Group or manual registration.
-
-Impact: ALB cannot route traffic to EC2 instances, making the web application non-functional.
+- Created Auto Scaling group to register the target to the Loab Balancer
 
 # ❌ 3. Inconsistent Parameter Design
 

@@ -27,6 +27,24 @@
                 "t3.medium"
             ],
             "Description": "EC2 instance type"
+        },
+        "EnableVPCFlowLogs": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable VPC Flow Logs for network monitoring"
+        },
+        "EnableALBAccessLogs": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable ALB access logs to S3"
         }
     },
     "Conditions": {
@@ -40,6 +58,22 @@
                         ""
                     ]
                 }
+            ]
+        },
+        "EnableFlowLogs": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableVPCFlowLogs"
+                },
+                "true"
+            ]
+        },
+        "EnableAccessLogs": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableALBAccessLogs"
+                },
+                "true"
             ]
         }
     },
@@ -467,6 +501,90 @@
                 }
             }
         },
+        "VPCFlowLogRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "EnableFlowLogs",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "FlowLogDeliveryRolePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Condition": "EnableFlowLogs",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/flowlogs/${AWS::StackName}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "VPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Condition": "EnableFlowLogs",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "VPC"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "cloud-watch-logs",
+                "LogGroupName": {
+                    "Ref": "VPCFlowLogGroup"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-VPCFlowLog"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
         "DefaultSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -588,6 +706,148 @@
                 }
             }
         },
+        "S3KMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS Key for ${AWS::StackName} S3 bucket encryption"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-S3-KMS-Key"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3KMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-s3-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "S3KMSKey"
+                }
+            }
+        },
+        "ALBAccessLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Condition": "EnableAccessLogs",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3KMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "ALBAccessLogsLifecycle",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 30
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-ALB-AccessLogs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBAccessLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Condition": "EnableAccessLogs",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ALBAccessLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": [
+                                        "arn:aws:iam::${ElbAccountId}:root",
+                                        {
+                                            "ElbAccountId": "797873946194"
+                                        }
+                                    ]
+                                }
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ALBAccessLogsBucket}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "Ec2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -604,7 +864,8 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/ReadOnlyAccess"
+                    "arn:aws:iam::aws:policy/ReadOnlyAccess",
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
                 ],
                 "Tags": [
                     {
@@ -632,110 +893,238 @@
                 ]
             }
         },
-        "EC2Instance1": {
-            "Type": "AWS::EC2::Instance",
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "ImageId": {
-                    "Ref": "AmiId"
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${AWS::StackName}-LaunchTemplate"
                 },
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
-                "KeyName": {
-                    "Fn::If": [
-                        "HasKeyPair",
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "AmiId"
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "KeyName": {
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "SecurityGroupIds": [
                         {
-                            "Ref": "KeyPairName"
+                            "Ref": "DefaultSecurityGroup"
                         },
                         {
-                            "Ref": "AWS::NoValue"
+                            "Ref": "EC2SecurityGroup"
+                        }
+                    ],
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd amazon-cloudwatch-agent\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Welcome to the secure webapp - Auto Scaled Instance</h1>\" > /var/www/html/index.html\n\n# Configure CloudWatch Agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"metrics\": {\n    \"namespace\": \"TapStack/EC2\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 300\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 300,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 300\n      }\n    }\n  }\n}\nEOF\n\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n"
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${AWS::StackName}-AutoScaled-Instance"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "Environment"
+                                    }
+                                }
+                            ]
                         }
                     ]
-                },
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1"
-                },
-                "SecurityGroupIds": [
-                    {
-                        "Ref": "DefaultSecurityGroup"
-                    },
-                    {
-                        "Ref": "EC2SecurityGroup"
-                    }
-                ],
-                "IamInstanceProfile": {
-                    "Ref": "EC2InstanceProfile"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-EC2Instance1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ],
-                "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Welcome to the secure webapp - Instance 1</h1>\" > /var/www/html/index.html\n"
                 }
             }
         },
-        "EC2Instance2": {
-            "Type": "AWS::EC2::Instance",
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "ImageId": {
-                    "Ref": "AmiId"
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-ASG"
                 },
-                "InstanceType": {
-                    "Ref": "InstanceType"
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
-                "KeyName": {
-                    "Fn::If": [
-                        "HasKeyPair",
-                        {
-                            "Ref": "KeyPairName"
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PrivateSubnet2"
-                },
-                "SecurityGroupIds": [
+                "MinSize": 2,
+                "MaxSize": 6,
+                "DesiredCapacity": 2,
+                "VPCZoneIdentifier": [
                     {
-                        "Ref": "DefaultSecurityGroup"
+                        "Ref": "PrivateSubnet1"
                     },
                     {
-                        "Ref": "EC2SecurityGroup"
+                        "Ref": "PrivateSubnet2"
                     }
                 ],
-                "IamInstanceProfile": {
-                    "Ref": "EC2InstanceProfile"
-                },
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "TargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-EC2Instance2"
-                        }
+                            "Fn::Sub": "${AWS::StackName}-ASG"
+                        },
+                        "PropagateAtLaunch": false
                     },
                     {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "Environment"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "Cooldown": 300,
+                "ScalingAdjustment": 1
+            }
+        },
+        "ScaleDownPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "Cooldown": 300,
+                "ScalingAdjustment": -1
+            }
+        },
+        "CPUHighAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-CPU-High"
+                },
+                "AlarmDescription": "Scale up on high CPU",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 70,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
                         }
                     }
                 ],
-                "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Welcome to the secure webapp - Instance 2</h1>\" > /var/www/html/index.html\n"
-                }
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleUpPolicy"
+                    }
+                ]
+            }
+        },
+        "CPULowAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-CPU-Low"
+                },
+                "AlarmDescription": "Scale down on low CPU",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 20,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleDownPolicy"
+                    }
+                ]
+            }
+        },
+        "ALBUnhealthyHostsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-ALB-UnhealthyHosts"
+                },
+                "AlarmDescription": "Alert on unhealthy ALB targets",
+                "MetricName": "UnHealthyHostCount",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 0,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TargetGroup",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "TargetGroup",
+                                "TargetGroupFullName"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "LoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    }
+                ]
             }
         },
         "S3Bucket": {
@@ -745,10 +1134,53 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3KMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
                         }
                     ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteIncompleteMultipartUploads",
+                            "Status": "Enabled",
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 7
+                            }
+                        },
+                        {
+                            "Id": "TransitionToIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "TransitionInDays": 90,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ]
+                        },
+                        {
+                            "Id": "ExpireNoncurrentVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 365
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
                 },
                 "Tags": [
                     {
@@ -786,6 +1218,40 @@
                         "Ref": "ApplicationLoadBalancerSG"
                     }
                 ],
+                "LoadBalancerAttributes": [
+                    {
+                        "Key": "access_logs.s3.enabled",
+                        "Value": {
+                            "Fn::If": [
+                                "EnableAccessLogs",
+                                "true",
+                                "false"
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "access_logs.s3.bucket",
+                        "Value": {
+                            "Fn::If": [
+                                "EnableAccessLogs",
+                                {
+                                    "Ref": "ALBAccessLogsBucket"
+                                },
+                                {
+                                    "Ref": "AWS::NoValue"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "idle_timeout.timeout_seconds",
+                        "Value": "60"
+                    },
+                    {
+                        "Key": "deletion_protection.enabled",
+                        "Value": "false"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -818,6 +1284,16 @@
                 "HealthCheckTimeoutSeconds": 5,
                 "HealthyThresholdCount": 2,
                 "UnhealthyThresholdCount": 3,
+                "TargetGroupAttributes": [
+                    {
+                        "Key": "deregistration_delay.timeout_seconds",
+                        "Value": "30"
+                    },
+                    {
+                        "Key": "stickiness.enabled",
+                        "Value": "false"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -880,6 +1356,51 @@
             "Description": "URL of the Application Load Balancer",
             "Value": {
                 "Fn::Sub": "http://${LoadBalancer.DNSName}"
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ASG-Name"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "Main S3 Bucket Name",
+            "Value": {
+                "Ref": "S3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3Bucket-Name"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID for S3 encryption",
+            "Value": {
+                "Ref": "S3KMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMS-Key-ID"
+                }
+            }
+        },
+        "VPCFlowLogGroup": {
+            "Condition": "EnableFlowLogs",
+            "Description": "VPC Flow Log Group Name",
+            "Value": {
+                "Ref": "VPCFlowLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FlowLog-Group"
+                }
             }
         }
     }
