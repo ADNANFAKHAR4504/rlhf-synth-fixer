@@ -3,12 +3,14 @@ Description: 'Secure and compliant AWS infrastructure with EC2 instances, securi
 
 Parameters:
   VpcId:
-    Type: AWS::EC2::VPC::Id
+    Type: String
     Description: 'VPC ID where EC2 instances will be launched'
+    Default: ''
   
   PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
+    Type: CommaDelimitedList
     Description: 'Private subnet IDs for EC2 instances'
+    Default: ''
   
   AllowedCidrBlocks:
     Type: CommaDelimitedList
@@ -16,8 +18,9 @@ Parameters:
     Default: '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'
   
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
+    Type: String
     Description: 'EC2 Key Pair for SSH access'
+    Default: ''
   
   InstanceType:
     Type: String
@@ -47,12 +50,96 @@ Parameters:
     Default: 'Infrastructure'
     Description: 'Owner for tagging'
 
+Conditions:
+  UseDefaultVpc: !Equals [!Ref VpcId, '']
+  UseDefaultSubnets: !Equals [!Join ['', !Ref PrivateSubnetIds], '']
+  UseDefaultKeyPair: !Equals [!Ref KeyPairName, '']
+
 Mappings:
   RegionMap:
     us-west-2:
       AMI: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
 
 Resources:
+  # Default VPC (only created if VpcId is not provided)
+  DefaultVpc:
+    Type: AWS::EC2::VPC
+    Condition: UseDefaultVpc
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Default-VPC'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Internet Gateway for default VPC
+  DefaultInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: UseDefaultVpc
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Default-IGW'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Attach Internet Gateway to VPC
+  DefaultVpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: UseDefaultVpc
+    Properties:
+      VpcId: !Ref DefaultVpc
+      InternetGatewayId: !Ref DefaultInternetGateway
+
+  # Default private subnet 1
+  DefaultPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: UseDefaultSubnets
+    Properties:
+      VpcId: !If [UseDefaultVpc, !Ref DefaultVpc, !Ref VpcId]
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Default-Private-Subnet-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Default private subnet 2
+  DefaultPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: UseDefaultSubnets
+    Properties:
+      VpcId: !If [UseDefaultVpc, !Ref DefaultVpc, !Ref VpcId]
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Default-Private-Subnet-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
   # S3 Bucket with encryption
   SecureS3Bucket:
     Type: AWS::S3::Bucket
@@ -192,7 +279,7 @@ Resources:
     Properties:
       GroupName: !Sub '${ProjectName}-EC2-SecurityGroup'
       GroupDescription: 'Security group for EC2 instances with restricted access'
-      VpcId: !Ref VpcId
+      VpcId: !If [UseDefaultVpc, !Ref DefaultVpc, !Ref VpcId]
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -246,7 +333,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If [UseDefaultKeyPair, !Ref 'AWS::NoValue', !Ref KeyPairName]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -339,7 +426,7 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
-      SubnetId: !Select [0, !Ref PrivateSubnetIds]
+      SubnetId: !If [UseDefaultSubnets, !Ref DefaultPrivateSubnet1, !Select [0, !Ref PrivateSubnetIds]]
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Instance-1'
@@ -357,7 +444,7 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
-      SubnetId: !Select [1, !Ref PrivateSubnetIds]
+      SubnetId: !If [UseDefaultSubnets, !Ref DefaultPrivateSubnet2, !Select [1, !Ref PrivateSubnetIds]]
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Instance-2'
@@ -418,7 +505,7 @@ Resources:
 Outputs:
   VpcId:
     Description: 'VPC ID used for deployment'
-    Value: !Ref VpcId
+    Value: !If [UseDefaultVpc, !Ref DefaultVpc, !Ref VpcId]
     Export:
       Name: !Sub '${AWS::StackName}-VpcId'
 

@@ -3,12 +3,14 @@
     "Description": "Secure and compliant AWS infrastructure with EC2 instances, security groups, IAM roles, and S3 buckets",
     "Parameters": {
         "VpcId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "VPC ID where EC2 instances will be launched"
+            "Type": "String",
+            "Description": "VPC ID where EC2 instances will be launched",
+            "Default": ""
         },
         "PrivateSubnetIds": {
-            "Type": "List<AWS::EC2::Subnet::Id>",
-            "Description": "Private subnet IDs for EC2 instances"
+            "Type": "CommaDelimitedList",
+            "Description": "Private subnet IDs for EC2 instances",
+            "Default": ""
         },
         "AllowedCidrBlocks": {
             "Type": "CommaDelimitedList",
@@ -16,8 +18,9 @@
             "Default": "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 Key Pair for SSH access"
+            "Type": "String",
+            "Description": "EC2 Key Pair for SSH access",
+            "Default": ""
         },
         "InstanceType": {
             "Type": "String",
@@ -50,14 +53,231 @@
             "Description": "Owner for tagging"
         }
     },
+    "Conditions": {
+        "UseDefaultVpc": {
+            "Fn::Equals": [
+                {
+                    "Ref": "VpcId"
+                },
+                ""
+            ]
+        },
+        "UseDefaultSubnets": {
+            "Fn::Equals": [
+                {
+                    "Fn::Join": [
+                        "",
+                        {
+                            "Ref": "PrivateSubnetIds"
+                        }
+                    ]
+                },
+                ""
+            ]
+        },
+        "UseDefaultKeyPair": {
+            "Fn::Equals": [
+                {
+                    "Ref": "KeyPairName"
+                },
+                ""
+            ]
+        }
+    },
     "Mappings": {
         "RegionMap": {
             "us-west-2": {
+                "AMI": "ami-0c02fb55956c7d316"
+            },
+            "us-east-1": {
                 "AMI": "ami-0c02fb55956c7d316"
             }
         }
     },
     "Resources": {
+        "DefaultVpc": {
+            "Type": "AWS::EC2::VPC",
+            "Condition": "UseDefaultVpc",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Default-VPC"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Condition": "UseDefaultVpc",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Default-IGW"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultVpcGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Condition": "UseDefaultVpc",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DefaultVpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "DefaultInternetGateway"
+                }
+            }
+        },
+        "DefaultPrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "UseDefaultSubnets",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "UseDefaultVpc",
+                        {
+                            "Ref": "DefaultVpc"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Default-Private-Subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "UseDefaultSubnets",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "UseDefaultVpc",
+                        {
+                            "Ref": "DefaultVpc"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Default-Private-Subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
         "SecureS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
@@ -326,7 +546,15 @@
                 },
                 "GroupDescription": "Security group for EC2 instances with restricted access",
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Fn::If": [
+                        "UseDefaultVpc",
+                        {
+                            "Ref": "DefaultVpc"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
                 },
                 "SecurityGroupIngress": [
                     {
@@ -444,7 +672,15 @@
                         "Ref": "InstanceType"
                     },
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Fn::If": [
+                            "UseDefaultKeyPair",
+                            {
+                                "Ref": "AWS::NoValue"
+                            },
+                            {
+                                "Ref": "KeyPairName"
+                            }
+                        ]
                     },
                     "IamInstanceProfile": {
                         "Arn": {
@@ -541,10 +777,18 @@
                     }
                 },
                 "SubnetId": {
-                    "Fn::Select": [
-                        0,
+                    "Fn::If": [
+                        "UseDefaultSubnets",
                         {
-                            "Ref": "PrivateSubnetIds"
+                            "Ref": "DefaultPrivateSubnet1"
+                        },
+                        {
+                            "Fn::Select": [
+                                0,
+                                {
+                                    "Ref": "PrivateSubnetIds"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -591,10 +835,18 @@
                     }
                 },
                 "SubnetId": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "UseDefaultSubnets",
                         {
-                            "Ref": "PrivateSubnetIds"
+                            "Ref": "DefaultPrivateSubnet2"
+                        },
+                        {
+                            "Fn::Select": [
+                                1,
+                                {
+                                    "Ref": "PrivateSubnetIds"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -719,7 +971,15 @@
         "VpcId": {
             "Description": "VPC ID used for deployment",
             "Value": {
-                "Ref": "VpcId"
+                "Fn::If": [
+                    "UseDefaultVpc",
+                    {
+                        "Ref": "DefaultVpc"
+                    },
+                    {
+                        "Ref": "VpcId"
+                    }
+                ]
             },
             "Export": {
                 "Name": {
