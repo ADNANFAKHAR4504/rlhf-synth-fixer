@@ -91,9 +91,7 @@ class TestTapStack(unittest.TestCase):
   @patch('pulumi_aws.apigateway.Stage')
   @patch('pulumi.export')
   def test_tap_stack_initialization(
-    self, mock_export, mock_stage, mock_deployment, mock_permission,
-    mock_integration, mock_method, mock_resource, mock_api, 
-    mock_lambda_func, mock_log_group, mock_policy_attach, mock_role,
+    self, mock_export, mock_api, mock_lambda_func, mock_log_group, mock_policy_attach, mock_role,
     mock_component_init, mock_config
   ):
     """Test TapStack initialization creates all necessary resources."""
