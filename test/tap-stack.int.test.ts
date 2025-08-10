@@ -470,7 +470,7 @@ describe('TapStack Integration Tests', () => {
   describe('Application Load Balancer', () => {
     test('should create ALB with proper configuration', async () => {
       const command = new DescribeLoadBalancersCommand({
-        Names: [`TapALB-${environmentSuffix}`],
+        Names: [`TapALB-229157-${environmentSuffix}`],
       });
       const response = await elbv2Client.send(command);
       const albs = response.LoadBalancers || [];
@@ -641,7 +641,7 @@ describe('TapStack Integration Tests', () => {
       const response = await secretsManagerClient.send(command);
       const secret = response;
 
-      expect(secret.Name).toContain(`tap-db-secret-${environmentSuffix}`);
+      expect(secret.Name).toContain(`tap-db-secret-229157-${environmentSuffix}`);
       expect(secret.KmsKeyId).toBeDefined();
       // This template doesn't configure automatic rotation
       expect(secret.RotationEnabled).toBeFalsy();
@@ -672,7 +672,7 @@ describe('TapStack Integration Tests', () => {
   describe('RDS Database', () => {
     test('should create RDS instance with proper configuration', async () => {
       const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: `tap-database-${environmentSuffix}`,
+        DBInstanceIdentifier: `tap-database-229157-${environmentSuffix}`,
       });
       const response = await rdsClient.send(command);
       const dbInstances = response.DBInstances || [];
@@ -702,7 +702,7 @@ describe('TapStack Integration Tests', () => {
 
     test('should create DB parameter group with SSL enforcement', async () => {
       const command = new DescribeDBParameterGroupsCommand({
-        DBParameterGroupName: `tap-mysql-params-${environmentSuffix}`,
+        DBParameterGroupName: `tap-mysql-params-229157-${environmentSuffix}`,
       });
       const response = await rdsClient.send(command);
       const paramGroups = response.DBParameterGroups || [];
@@ -714,7 +714,7 @@ describe('TapStack Integration Tests', () => {
 
     test('should create DB subnet group in private subnets', async () => {
       const command = new DescribeDBSubnetGroupsCommand({
-        DBSubnetGroupName: `tap-db-subnet-group-${environmentSuffix}`,
+        DBSubnetGroupName: `tap-db-subnet-group-229157-${environmentSuffix}`,
       });
       const response = await rdsClient.send(command);
       const subnetGroups = response.DBSubnetGroups || [];
@@ -750,7 +750,7 @@ describe('TapStack Integration Tests', () => {
       const response = await kmsClient.send(command);
       const aliases = response.Aliases || [];
 
-      const expectedAlias = `alias/tapstack-${environmentSuffix}`;
+      const expectedAlias = `alias/tapstack-229157-${environmentSuffix}`;
       const alias = aliases.find((a: any) => a.AliasName === expectedAlias);
       expect(alias).toBeDefined();
     });
@@ -919,8 +919,8 @@ describe('TapStack Integration Tests', () => {
     test('should create CloudWatch alarms', async () => {
       const command = new DescribeAlarmsCommand({
         AlarmNames: [
-          `TapHighCPU-${environmentSuffix}`,
-          `TapRDSHighCPU-${environmentSuffix}`,
+          `TapHighCPU-229157-${environmentSuffix}`,
+          `TapRDSHighCPU-229157-${environmentSuffix}`,
         ],
       });
       const response = await cloudWatchClient.send(command);
@@ -963,7 +963,7 @@ describe('TapStack Integration Tests', () => {
 
     test('should create CloudWatch log groups', async () => {
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/vpc/flowlogs-${environmentSuffix}`,
+        logGroupNamePrefix: `/aws/vpc/flowlogs-229157-${environmentSuffix}`,
       });
       const response = await logsClient.send(command);
       const logGroups = response.logGroups || [];
@@ -1071,7 +1071,7 @@ describe('TapStack Integration Tests', () => {
 
     test('should create Config S3 bucket for compliance monitoring', async () => {
       // Test that the Config bucket exists (we don't test ConfigurationRecorder due to account-level conflicts)
-      const configBucketName = `tap-config-229157-${environmentSuffix}-${accountId}`;
+      const configBucketName = `tap-config-229157-229157-${environmentSuffix}-${accountId}`;
       
       const command = new HeadBucketCommand({
         Bucket: configBucketName,
@@ -1131,7 +1131,7 @@ describe('TapStack Integration Tests', () => {
 
     test('should have Multi-AZ RDS deployment', async () => {
       const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: `tap-database-${environmentSuffix}`,
+        DBInstanceIdentifier: `tap-database-229157-${environmentSuffix}`,
       });
       const response = await rdsClient.send(command);
       const dbInstances = response.DBInstances || [];
@@ -1686,7 +1686,7 @@ describe('TapStack Integration Tests', () => {
   describe('Compliance and Governance', () => {
     test('should validate Config S3 bucket exists for compliance monitoring', async () => {
       // Validate that Config bucket exists (avoiding ConfigurationRecorder due to account-level conflicts)
-      const configBucketName = `tap-config-229157-${environmentSuffix}-${accountId}`;
+      const configBucketName = `tap-config-229157-229157-${environmentSuffix}-${accountId}`;
       
       const headBucketCommand = new HeadBucketCommand({
         Bucket: configBucketName,
@@ -1861,7 +1861,7 @@ describe('TapStack Integration Tests', () => {
         Dimensions: [
           {
             Name: 'DBInstanceIdentifier',
-            Value: `tap-database-${environmentSuffix}`
+            Value: `tap-database-229157-${environmentSuffix}`
           }
         ]
       }));
