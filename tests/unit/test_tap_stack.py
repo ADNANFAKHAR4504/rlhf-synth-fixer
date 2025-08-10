@@ -6,7 +6,7 @@ and Pulumi's testing utilities.
 """
 
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 # Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
@@ -60,6 +60,21 @@ class MockPulumiResource:
       )
 
 
+def create_mock_resource(name_prefix="mock"):
+  """Create a properly mocked Pulumi resource."""
+  mock = MagicMock()
+  mock.name = f"{name_prefix}-resource"
+  mock.arn = f"arn:aws:mock:us-west-2:123456789012:resource/{name_prefix}"
+  mock.id = f"mock-{name_prefix}-id"
+  mock.invoke_arn = (
+    f"arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/"
+    f"functions/{mock.arn}/invocations"
+  )
+  mock.root_resource_id = "mock-root-resource-id"
+  mock.execution_arn = f"arn:aws:execute-api:us-west-2:123456789012:{mock.id}"
+  return mock
+
+
 class TestTapStack(unittest.TestCase):
   """Comprehensive test cases for TapStack Pulumi component."""
 
@@ -72,7 +87,10 @@ class TestTapStack(unittest.TestCase):
     self.mock_resources = {}
 
   @patch('pulumi.Config')
-  def test_tap_stack_initialization(self, mock_config):
+  @patch('pulumi.ComponentResource.__init__')
+  @patch('pulumi.export')
+  def test_tap_stack_initialization(self, mock_export, mock_component_init,
+                                    mock_config):
     """Test TapStack initialization creates all necessary resources."""
 
     # Mock Pulumi config
@@ -80,55 +98,36 @@ class TestTapStack(unittest.TestCase):
     mock_config_instance.get.return_value = 'test'
     mock_config.return_value = mock_config_instance
 
-    with patch('pulumi.ComponentResource.__init__') as mock_component_init, \
-      patch.multiple('pulumi_aws.iam',
-                    Role=Mock(),
-                    RolePolicyAttachment=Mock()) as mock_iam, \
-      patch.multiple('pulumi_aws.cloudwatch',
-                    LogGroup=Mock()) as mock_cw, \
-      patch.multiple('pulumi_aws.lambda_',
-                    Function=Mock(),
-                    Permission=Mock()) as mock_lambda, \
-      patch.multiple('pulumi_aws.apigateway',
-                    RestApi=Mock(),
-                    Resource=Mock(),
-                    Method=Mock(),
-                    Integration=Mock(),
-                    Deployment=Mock(),
-                    Stage=Mock()) as mock_api, \
-      patch('pulumi.export') as mock_export:
+    # Create mock resources
+    mock_role = create_mock_resource("role")
+    mock_log_group = create_mock_resource("log-group")
+    mock_lambda_function = create_mock_resource("lambda")
+    mock_api = create_mock_resource("api")
+    mock_resource = create_mock_resource("resource")
+    mock_method = create_mock_resource("method")
+    mock_integration = create_mock_resource("integration")
+    mock_deployment = create_mock_resource("deployment")
+    mock_stage = create_mock_resource("stage")
+    mock_permission = create_mock_resource("permission")
+    mock_policy_attachment = create_mock_resource("policy")
 
-      # Create mock instances
-      mock_role_instance = Mock()
-      mock_role_instance.name = 'test-lambda-execution-role'
-      mock_role_instance.arn = (
-          'arn:aws:iam::123456789012:role/test-lambda-execution-role'
-      )
-      mock_iam['Role'].return_value = mock_role_instance
-
-      mock_log_group_instance = Mock()
-      mock_log_group_instance.name = '/aws/lambda/test-api-handler'
-      mock_cw['LogGroup'].return_value = mock_log_group_instance
-
-      mock_lambda_instance = Mock()
-      mock_lambda_instance.name = 'test-api-handler'
-      mock_lambda_instance.arn = (
-          'arn:aws:lambda:us-west-2:123456789012:function:test-api-handler'
-      )
-      mock_lambda_instance.invoke_arn = (
-          'arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/'
-          'arn:aws:lambda:us-west-2:123456789012:function:test-api-handler/'
-          'invocations'
-      )
-      mock_lambda['Function'].return_value = mock_lambda_instance
-
-      mock_api_instance = Mock()
-      mock_api_instance.id = 'test-api-id'
-      mock_api_instance.root_resource_id = 'root-resource-id'
-      mock_api_instance.execution_arn = (
-          'arn:aws:execute-api:us-west-2:123456789012:test-api-id'
-      )
-      mock_api['RestApi'].return_value = mock_api_instance
+    with patch('pulumi_aws.iam.Role', return_value=mock_role) as mock_iam_role, \
+         patch('pulumi_aws.iam.RolePolicyAttachment',
+               return_value=mock_policy_attachment), \
+         patch('pulumi_aws.cloudwatch.LogGroup', return_value=mock_log_group), \
+         patch('pulumi_aws.lambda_.Function',
+               return_value=mock_lambda_function), \
+         patch('pulumi_aws.lambda_.Permission',
+               return_value=mock_permission), \
+         patch('pulumi_aws.apigateway.RestApi', return_value=mock_api), \
+         patch('pulumi_aws.apigateway.Resource',
+               return_value=mock_resource), \
+         patch('pulumi_aws.apigateway.Method', return_value=mock_method), \
+         patch('pulumi_aws.apigateway.Integration',
+               return_value=mock_integration), \
+         patch('pulumi_aws.apigateway.Deployment',
+               return_value=mock_deployment), \
+         patch('pulumi_aws.apigateway.Stage', return_value=mock_stage):
 
       # Create the stack
       TapStack('test-stack', self.test_args)
@@ -137,190 +136,326 @@ class TestTapStack(unittest.TestCase):
       mock_component_init.assert_called_once()
 
       # Verify IAM role creation
-      mock_iam['Role'].assert_called_once()
-      role_call_args = mock_iam['Role'].call_args
+      mock_iam_role.assert_called_once()
+      role_call_args = mock_iam_role.call_args
       self.assertEqual(role_call_args[0][0], 'test-lambda-execution-role')
 
-      # Verify policy attachment
-      mock_iam['RolePolicyAttachment'].assert_called_once()
-
-      # Verify CloudWatch log group creation
-      mock_cw['LogGroup'].assert_called_once()
-
-      # Verify Lambda function creation
-      mock_lambda['Function'].assert_called_once()
-
-      # Verify API Gateway creation
-      mock_api['RestApi'].assert_called_once()
-
       # Verify exports are called
-      self.assertEqual(mock_export.call_count, 5)  # 5 exports in the stack
+      # 5 exports in the stack
+      self.assertEqual(mock_export.call_count, 5)
 
-  def test_stack_attributes_assignment(self):
+  @patch('pulumi.ComponentResource.__init__')
+  @patch('pulumi.Config')
+  @patch('pulumi.export')
+  def test_stack_attributes_assignment(self, mock_config):
     """Test that TapStack properly assigns attributes from args."""
-    with patch('pulumi.ComponentResource.__init__'):
-      with patch.multiple(
-        'pulumi_aws.iam', Role=Mock(), RolePolicyAttachment=Mock()
-      ):
-        with patch.multiple('pulumi_aws.cloudwatch', LogGroup=Mock()):
-          with patch.multiple(
-            'pulumi_aws.lambda_', Function=Mock(), Permission=Mock()
-          ):
-            with patch.multiple(
-              'pulumi_aws.apigateway',
-              RestApi=Mock(), Resource=Mock(), Method=Mock(),
-              Integration=Mock(), Deployment=Mock(), Stage=Mock()
-            ):
-              with patch('pulumi.Config'):
-                with patch('pulumi.export'):
-                  stack = TapStack('test-stack', self.test_args)
 
-                  self.assertEqual(stack.environment_suffix, 'test')
-                  self.assertEqual(
-                    stack.tags, 
-                    {'Environment': 'test', 'Project': 'serverless-test'}
-                  )
+    # Mock Pulumi config
+    mock_config_instance = Mock()
+    mock_config_instance.get.return_value = 'test'
+    mock_config.return_value = mock_config_instance
+
+    # Create mock resources
+    mock_resources = {
+      'role': create_mock_resource("role"),
+      'log_group': create_mock_resource("log-group"),
+      'lambda_function': create_mock_resource("lambda"),
+      'api': create_mock_resource("api"),
+      'resource': create_mock_resource("resource"),
+      'method': create_mock_resource("method"),
+      'integration': create_mock_resource("integration"),
+      'deployment': create_mock_resource("deployment"),
+      'stage': create_mock_resource("stage"),
+      'permission': create_mock_resource("permission"),
+      'policy_attachment': create_mock_resource("policy")
+    }
+
+    with patch('pulumi_aws.iam.Role',
+               return_value=mock_resources['role']), \
+         patch('pulumi_aws.iam.RolePolicyAttachment',
+               return_value=mock_resources['policy_attachment']), \
+         patch('pulumi_aws.cloudwatch.LogGroup',
+               return_value=mock_resources['log_group']), \
+         patch('pulumi_aws.lambda_.Function',
+               return_value=mock_resources['lambda_function']), \
+         patch('pulumi_aws.lambda_.Permission',
+               return_value=mock_resources['permission']), \
+         patch('pulumi_aws.apigateway.RestApi',
+               return_value=mock_resources['api']), \
+         patch('pulumi_aws.apigateway.Resource',
+               return_value=mock_resources['resource']), \
+         patch('pulumi_aws.apigateway.Method',
+               return_value=mock_resources['method']), \
+         patch('pulumi_aws.apigateway.Integration',
+               return_value=mock_resources['integration']), \
+         patch('pulumi_aws.apigateway.Deployment',
+               return_value=mock_resources['deployment']), \
+         patch('pulumi_aws.apigateway.Stage',
+               return_value=mock_resources['stage']):
+
+      stack = TapStack('test-stack', self.test_args)
+
+      self.assertEqual(stack.environment_suffix, 'test')
+      self.assertEqual(
+        stack.tags,
+        {'Environment': 'test', 'Project': 'serverless-test'}
+      )
 
   @patch('os.path.dirname')
   @patch('os.path.join')
-  def test_lambda_code_path_construction(self, mock_join, mock_dirname):
+  @patch('pulumi.ComponentResource.__init__')
+  @patch('pulumi.Config')
+  @patch('pulumi.export')
+  def test_lambda_code_path_construction(self, mock_config, mock_join, mock_dirname):
     """Test that Lambda code path is constructed correctly."""
     mock_dirname.return_value = '/mock/lib/path'
     mock_join.return_value = '/mock/lib/path/lambda_function.py'
 
-    with patch('pulumi.ComponentResource.__init__'):
-      with patch('pulumi.Config'):
-        with patch.multiple(
-          'pulumi_aws.iam', Role=Mock(), RolePolicyAttachment=Mock()
-        ):
-          with patch.multiple('pulumi_aws.cloudwatch', LogGroup=Mock()):
-            with patch.multiple(
-              'pulumi_aws.lambda_', Function=Mock(), Permission=Mock()
-            ):
-              with patch.multiple(
-                'pulumi_aws.apigateway',
-                RestApi=Mock(), Resource=Mock(), Method=Mock(),
-                Integration=Mock(), Deployment=Mock(), Stage=Mock()
-              ):
-                with patch('pulumi.export'):
-                  TapStack('test-stack', self.test_args)
+    # Mock Pulumi config
+    mock_config_instance = Mock()
+    mock_config_instance.get.return_value = 'test'
+    mock_config.return_value = mock_config_instance
 
-                  # Verify path construction was called
-                  mock_dirname.assert_called()
-                  mock_join.assert_called_with(
-                    mock_dirname.return_value, "lambda_function.py"
-                  )
+    # Create mock resources
+    mock_resources = {
+      'role': create_mock_resource("role"),
+      'log_group': create_mock_resource("log-group"),
+      'lambda_function': create_mock_resource("lambda"),
+      'api': create_mock_resource("api"),
+      'resource': create_mock_resource("resource"),
+      'method': create_mock_resource("method"),
+      'integration': create_mock_resource("integration"),
+      'deployment': create_mock_resource("deployment"),
+      'stage': create_mock_resource("stage"),
+      'permission': create_mock_resource("permission"),
+      'policy_attachment': create_mock_resource("policy")
+    }
 
-  def test_common_tags_structure(self):
+    with patch('pulumi_aws.iam.Role',
+               return_value=mock_resources['role']), \
+         patch('pulumi_aws.iam.RolePolicyAttachment',
+               return_value=mock_resources['policy_attachment']), \
+         patch('pulumi_aws.cloudwatch.LogGroup',
+               return_value=mock_resources['log_group']), \
+         patch('pulumi_aws.lambda_.Function',
+               return_value=mock_resources['lambda_function']), \
+         patch('pulumi_aws.lambda_.Permission',
+               return_value=mock_resources['permission']), \
+         patch('pulumi_aws.apigateway.RestApi',
+               return_value=mock_resources['api']), \
+         patch('pulumi_aws.apigateway.Resource',
+               return_value=mock_resources['resource']), \
+         patch('pulumi_aws.apigateway.Method',
+               return_value=mock_resources['method']), \
+         patch('pulumi_aws.apigateway.Integration',
+               return_value=mock_resources['integration']), \
+         patch('pulumi_aws.apigateway.Deployment',
+               return_value=mock_resources['deployment']), \
+         patch('pulumi_aws.apigateway.Stage',
+               return_value=mock_resources['stage']):
+
+      TapStack('test-stack', self.test_args)
+
+      # Verify path construction was called
+      mock_dirname.assert_called()
+      mock_join.assert_called_with(
+        mock_dirname.return_value, "lambda_function.py"
+      )
+
+  @patch('pulumi.ComponentResource.__init__')
+  @patch('pulumi.Config')
+  @patch('pulumi.export')
+  def test_common_tags_structure(self, mock_config):
     """Test that common tags are properly structured."""
-    with patch('pulumi.ComponentResource.__init__'):
-      with patch('pulumi.Config') as mock_config:
-        mock_config_instance = Mock()
-        mock_config_instance.get.return_value = 'test'
-        mock_config.return_value = mock_config_instance
 
-        with patch.multiple(
-          'pulumi_aws.iam', Role=Mock(), RolePolicyAttachment=Mock()
-        ) as mock_iam:
-          with patch.multiple('pulumi_aws.cloudwatch', LogGroup=Mock()):
-            with patch.multiple(
-              'pulumi_aws.lambda_', Function=Mock(), Permission=Mock()
-            ):
-              with patch.multiple(
-                'pulumi_aws.apigateway',
-                RestApi=Mock(), Resource=Mock(), Method=Mock(),
-                Integration=Mock(), Deployment=Mock(), Stage=Mock()
-              ):
-                with patch('pulumi.export'):
-                  TapStack('test-stack', self.test_args)
+    # Mock Pulumi config
+    mock_config_instance = Mock()
+    mock_config_instance.get.return_value = 'test'
+    mock_config.return_value = mock_config_instance
 
-                  # Get the tags from the IAM role call
-                  role_call_kwargs = mock_iam['Role'].call_args[1]
-                  tags = role_call_kwargs['tags']
+    # Create mock resources
+    mock_resources = {
+      'role': create_mock_resource("role"),
+      'log_group': create_mock_resource("log-group"),
+      'lambda_function': create_mock_resource("lambda"),
+      'api': create_mock_resource("api"),
+      'resource': create_mock_resource("resource"),
+      'method': create_mock_resource("method"),
+      'integration': create_mock_resource("integration"),
+      'deployment': create_mock_resource("deployment"),
+      'stage': create_mock_resource("stage"),
+      'permission': create_mock_resource("permission"),
+      'policy_attachment': create_mock_resource("policy")
+    }
 
-                  # Verify common tags structure
-                  self.assertIn('project', tags)
-                  self.assertIn('environment', tags)
-                  self.assertIn('managed-by', tags)
-                  self.assertEqual(
-                    tags['project'], 'serverless-infra-pulumi'
-                  )
-                  self.assertEqual(tags['environment'], 'test')
-                  self.assertEqual(tags['managed-by'], 'pulumi')
+    with patch('pulumi_aws.iam.Role',
+               return_value=mock_resources['role']) as mock_iam_role, \
+         patch('pulumi_aws.iam.RolePolicyAttachment',
+               return_value=mock_resources['policy_attachment']), \
+         patch('pulumi_aws.cloudwatch.LogGroup',
+               return_value=mock_resources['log_group']), \
+         patch('pulumi_aws.lambda_.Function',
+               return_value=mock_resources['lambda_function']), \
+         patch('pulumi_aws.lambda_.Permission',
+               return_value=mock_resources['permission']), \
+         patch('pulumi_aws.apigateway.RestApi',
+               return_value=mock_resources['api']), \
+         patch('pulumi_aws.apigateway.Resource',
+               return_value=mock_resources['resource']), \
+         patch('pulumi_aws.apigateway.Method',
+               return_value=mock_resources['method']), \
+         patch('pulumi_aws.apigateway.Integration',
+               return_value=mock_resources['integration']), \
+         patch('pulumi_aws.apigateway.Deployment',
+               return_value=mock_resources['deployment']), \
+         patch('pulumi_aws.apigateway.Stage',
+               return_value=mock_resources['stage']):
 
-  def test_lambda_function_configuration(self):
+      TapStack('test-stack', self.test_args)
+
+      # Get the tags from the IAM role call
+      role_call_kwargs = mock_iam_role.call_args[1]
+      tags = role_call_kwargs['tags']
+
+      # Verify common tags structure
+      self.assertIn('project', tags)
+      self.assertIn('environment', tags)
+      self.assertIn('managed-by', tags)
+      self.assertEqual(tags['project'], 'serverless-infra-pulumi')
+      self.assertEqual(tags['environment'], 'test')
+      self.assertEqual(tags['managed-by'], 'pulumi')
+
+  @patch('pulumi.ComponentResource.__init__')
+  @patch('pulumi.Config')
+  @patch('pulumi.export')
+  def test_lambda_function_configuration(self, mock_config):
     """Test Lambda function configuration parameters."""
-    with patch('pulumi.ComponentResource.__init__'):
-      with patch('pulumi.Config'):
-        with patch.multiple(
-          'pulumi_aws.iam', Role=Mock(), RolePolicyAttachment=Mock()
-        ):
-          with patch.multiple('pulumi_aws.cloudwatch', LogGroup=Mock()):
-            with patch.multiple(
-              'pulumi_aws.lambda_', Function=Mock(), Permission=Mock()
-            ) as mock_lambda:
-              with patch.multiple(
-                'pulumi_aws.apigateway',
-                RestApi=Mock(), Resource=Mock(), Method=Mock(),
-                Integration=Mock(), Deployment=Mock(), Stage=Mock()
-              ):
-                with patch('pulumi.export'):
-                  TapStack('test-stack', self.test_args)
 
-                  # Get Lambda function call arguments
-                  lambda_call_kwargs = mock_lambda['Function'].call_args[1]
+    # Mock Pulumi config
+    mock_config_instance = Mock()
+    mock_config_instance.get.return_value = 'test'
+    mock_config.return_value = mock_config_instance
 
-                  # Verify Lambda configuration
-                  self.assertEqual(
-                    lambda_call_kwargs['runtime'], 'python3.9'
-                  )
-                  self.assertEqual(
-                    lambda_call_kwargs['handler'], 
-                    'lambda_function.lambda_handler'
-                  )
-                  self.assertEqual(lambda_call_kwargs['timeout'], 30)
-                  self.assertEqual(lambda_call_kwargs['memory_size'], 128)
+    # Create mock resources
+    mock_resources = {
+      'role': create_mock_resource("role"),
+      'log_group': create_mock_resource("log-group"),
+      'lambda_function': create_mock_resource("lambda"),
+      'api': create_mock_resource("api"),
+      'resource': create_mock_resource("resource"),
+      'method': create_mock_resource("method"),
+      'integration': create_mock_resource("integration"),
+      'deployment': create_mock_resource("deployment"),
+      'stage': create_mock_resource("stage"),
+      'permission': create_mock_resource("permission"),
+      'policy_attachment': create_mock_resource("policy")
+    }
 
-                  # Verify environment variables
-                  env_vars = lambda_call_kwargs['environment']['variables']
-                  self.assertIn('ENVIRONMENT', env_vars)
-                  self.assertIn('LOG_LEVEL', env_vars)
-                  self.assertEqual(env_vars['LOG_LEVEL'], 'INFO')
+    with patch('pulumi_aws.iam.Role',
+               return_value=mock_resources['role']), \
+         patch('pulumi_aws.iam.RolePolicyAttachment',
+               return_value=mock_resources['policy_attachment']), \
+         patch('pulumi_aws.cloudwatch.LogGroup',
+               return_value=mock_resources['log_group']), \
+         patch('pulumi_aws.lambda_.Function',
+               return_value=mock_resources['lambda_function']) as mock_lambda_func, \
+         patch('pulumi_aws.lambda_.Permission',
+               return_value=mock_resources['permission']), \
+         patch('pulumi_aws.apigateway.RestApi',
+               return_value=mock_resources['api']), \
+         patch('pulumi_aws.apigateway.Resource',
+               return_value=mock_resources['resource']), \
+         patch('pulumi_aws.apigateway.Method',
+               return_value=mock_resources['method']), \
+         patch('pulumi_aws.apigateway.Integration',
+               return_value=mock_resources['integration']), \
+         patch('pulumi_aws.apigateway.Deployment',
+               return_value=mock_resources['deployment']), \
+         patch('pulumi_aws.apigateway.Stage',
+               return_value=mock_resources['stage']):
 
-  def test_api_gateway_configuration(self):
+      TapStack('test-stack', self.test_args)
+
+      # Get Lambda function call arguments
+      lambda_call_kwargs = mock_lambda_func.call_args[1]
+
+      # Verify Lambda configuration
+      self.assertEqual(lambda_call_kwargs['runtime'], 'python3.9')
+      self.assertEqual(
+        lambda_call_kwargs['handler'], 'lambda_function.lambda_handler'
+      )
+      self.assertEqual(lambda_call_kwargs['timeout'], 30)
+      self.assertEqual(lambda_call_kwargs['memory_size'], 128)
+
+      # Verify environment variables
+      env_vars = lambda_call_kwargs['environment']['variables']
+      self.assertIn('ENVIRONMENT', env_vars)
+      self.assertIn('LOG_LEVEL', env_vars)
+      self.assertEqual(env_vars['LOG_LEVEL'], 'INFO')
+
+  @patch('pulumi.ComponentResource.__init__')
+  @patch('pulumi.Config')
+  @patch('pulumi.export')
+  def test_api_gateway_configuration(self, mock_config):
     """Test API Gateway configuration parameters."""
-    with patch('pulumi.ComponentResource.__init__'):
-      with patch('pulumi.Config'):
-        with patch.multiple(
-          'pulumi_aws.iam', Role=Mock(), RolePolicyAttachment=Mock()
-        ):
-          with patch.multiple('pulumi_aws.cloudwatch', LogGroup=Mock()):
-            with patch.multiple(
-              'pulumi_aws.lambda_', Function=Mock(), Permission=Mock()
-            ):
-              with patch.multiple(
-                'pulumi_aws.apigateway',
-                RestApi=Mock(), Resource=Mock(), Method=Mock(),
-                Integration=Mock(), Deployment=Mock(), Stage=Mock()
-              ) as mock_api:
-                with patch('pulumi.export'):
-                  TapStack('test-stack', self.test_args)
 
-                  # Get API Gateway call arguments
-                  api_call_kwargs = mock_api['RestApi'].call_args[1]
+    # Mock Pulumi config
+    mock_config_instance = Mock()
+    mock_config_instance.get.return_value = 'test'
+    mock_config.return_value = mock_config_instance
 
-                  # Verify API Gateway configuration
-                  self.assertEqual(
-                    api_call_kwargs['name'], 'test-serverless-api'
-                  )
-                  self.assertIn(
-                    'Serverless API for test environment', 
-                    api_call_kwargs['description']
-                  )
-                  self.assertEqual(
-                    api_call_kwargs['endpoint_configuration']['types'], 
-                    'REGIONAL'
-                  )
+    # Create mock resources
+    mock_resources = {
+      'role': create_mock_resource("role"),
+      'log_group': create_mock_resource("log-group"),
+      'lambda_function': create_mock_resource("lambda"),
+      'api': create_mock_resource("api"),
+      'resource': create_mock_resource("resource"),
+      'method': create_mock_resource("method"),
+      'integration': create_mock_resource("integration"),
+      'deployment': create_mock_resource("deployment"),
+      'stage': create_mock_resource("stage"),
+      'permission': create_mock_resource("permission"),
+      'policy_attachment': create_mock_resource("policy")
+    }
+
+    with patch('pulumi_aws.iam.Role',
+               return_value=mock_resources['role']), \
+         patch('pulumi_aws.iam.RolePolicyAttachment',
+               return_value=mock_resources['policy_attachment']), \
+         patch('pulumi_aws.cloudwatch.LogGroup',
+               return_value=mock_resources['log_group']), \
+         patch('pulumi_aws.lambda_.Function',
+               return_value=mock_resources['lambda_function']), \
+         patch('pulumi_aws.lambda_.Permission',
+               return_value=mock_resources['permission']), \
+         patch('pulumi_aws.apigateway.RestApi',
+               return_value=mock_resources['api']) as mock_api_gateway, \
+         patch('pulumi_aws.apigateway.Resource',
+               return_value=mock_resources['resource']), \
+         patch('pulumi_aws.apigateway.Method',
+               return_value=mock_resources['method']), \
+         patch('pulumi_aws.apigateway.Integration',
+               return_value=mock_resources['integration']), \
+         patch('pulumi_aws.apigateway.Deployment',
+               return_value=mock_resources['deployment']), \
+         patch('pulumi_aws.apigateway.Stage',
+               return_value=mock_resources['stage']):
+
+      TapStack('test-stack', self.test_args)
+
+      # Get API Gateway call arguments
+      api_call_kwargs = mock_api_gateway.call_args[1]
+
+      # Verify API Gateway configuration
+      self.assertEqual(api_call_kwargs['name'], 'test-serverless-api')
+      self.assertIn(
+        'Serverless API for test environment',
+        api_call_kwargs['description']
+      )
+      self.assertEqual(
+        api_call_kwargs['endpoint_configuration']['types'], 'REGIONAL'
+      )
 
 
 if __name__ == '__main__':
