@@ -1,6 +1,6 @@
 # Ideal Response: Production-Grade AWS Infrastructure with CDKTF Python
 
-This solution addresses all the critical failures by providing a simple, focused ASG + ELB + NAT Gateway architecture with proper multi-AZ deployment, state management, and documentation.
+This solution addresses all the critical failures by providing a simple, focused ASG + ELB + NAT Gateway architecture with proper multi-AZ deployment, state management and documentation.
 
 ## Complete CDKTF Python Solution
 
