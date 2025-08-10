@@ -4,7 +4,8 @@ import {
   DescribeInstancesCommand, 
   DescribeSecurityGroupsCommand, 
   DescribeVpcsCommand,
-  DescribeSubnetsCommand 
+  DescribeSubnetsCommand,
+  DescribeVolumesCommand 
 } from '@aws-sdk/client-ec2';
 import { 
   S3Client, 
@@ -171,9 +172,16 @@ describe('TapStack Infrastructure Integration Tests', () => {
         
         expect(ebsVolumes?.length).toBeGreaterThan(0);
         
-        // Check that each EBS volume is encrypted
+        // Check that each EBS volume is encrypted by getting volume details
         for (const volume of ebsVolumes || []) {
-          expect(volume.Ebs?.Encrypted).toBe(true);
+          if (volume.Ebs?.VolumeId) {
+            const volumeResponse = await ec2Client.send(
+              new DescribeVolumesCommand({ VolumeIds: [volume.Ebs.VolumeId] })
+            );
+            
+            const volumeDetails = volumeResponse.Volumes?.[0];
+            expect(volumeDetails?.Encrypted).toBe(true);
+          }
         }
       }
     }, timeout);
