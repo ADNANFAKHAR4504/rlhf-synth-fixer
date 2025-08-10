@@ -253,12 +253,13 @@ describe('TapStack integration (live outputs)', () => {
       let ListDetectorsCommandDyn: any;
       let GetDetectorCommandDyn: any;
       try {
-        const m = await import('@aws-sdk/client-guardduty');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const m = require('@aws-sdk/client-guardduty');
         GuardDutyClientDyn = m.GuardDutyClient;
         ListDetectorsCommandDyn = m.ListDetectorsCommand;
         GetDetectorCommandDyn = m.GetDetectorCommand;
-      } catch (e) {
-        // Module not available locally; skip body to keep test non-failing
+      } catch {
+        // Module not available locally; skip this check
         return;
       }
       const gd = new GuardDutyClientDyn({ region });
@@ -274,19 +275,19 @@ describe('TapStack integration (live outputs)', () => {
 
   itIf(
     hasOutputs &&
-      (maybeOutputs['WafAssociationResourceArn'] ||
-        maybeOutputs['WafAssociationArnOutput'])
+      (outputs['WafAssociationResourceArn'] ||
+        outputs['WafAssociationArnOutput'])
   )(
     'WAF WebACL is associated to the resource when ARN provided',
     async () => {
       const waf = new WAFV2Client({ region });
       const assocArn =
-        maybeOutputs['WafAssociationResourceArn'] ||
-        maybeOutputs['WafAssociationArnOutput'];
+        outputs['WafAssociationResourceArn'] ||
+        outputs['WafAssociationArnOutput'];
       const web = await waf.send(
         new GetWebACLForResourceCommand({ ResourceArn: assocArn })
       );
-      expect(web.WebACL?.ARN).toBe(maybeOutputs['WebAclArn']);
+      expect(web.WebACL?.ARN).toBe(outputs['WebAclArn']);
     },
     20000
   );
