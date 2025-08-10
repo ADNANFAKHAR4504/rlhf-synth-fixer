@@ -62,25 +62,30 @@ class MockPulumiResource:
       )
 
 
+class MockResource:
+  """Mock class that properly inherits Resource-like behavior for depends_on validation."""
+  
+  def __init__(self, name_prefix="mock"):
+    import pulumi
+    # Inherit from Resource to pass depends_on validation
+    self.__class__ = type(self.__class__.__name__, (pulumi.Resource,), dict(self.__class__.__dict__))
+    
+    self._is_resource = True
+    self.name = f"{name_prefix}-resource"
+    self.arn = f"arn:aws:mock:us-west-2:123456789012:resource/{name_prefix}"
+    self.id = f"mock-{name_prefix}-id"
+    self.invoke_arn = (
+      f"arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/"
+      f"functions/{self.arn}/invocations"
+    )
+    self.root_resource_id = "mock-root-resource-id"
+    self.execution_arn = f"arn:aws:execute-api:us-west-2:123456789012:{self.id}"
+    self.http_method = "ANY"
+
+
 def create_mock_resource(name_prefix="mock"):
   """Create a properly mocked Pulumi resource."""
-  from unittest.mock import MagicMock
-  import pulumi
-  
-  # Create a mock that passes isinstance checks for Pulumi Resource
-  mock_resource = MagicMock(spec=pulumi.Resource)
-  mock_resource._is_resource = True
-  mock_resource.name = f"{name_prefix}-resource"
-  mock_resource.arn = f"arn:aws:mock:us-west-2:123456789012:resource/{name_prefix}"
-  mock_resource.id = f"mock-{name_prefix}-id"
-  mock_resource.invoke_arn = (
-    f"arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/"
-    f"functions/{mock_resource.arn}/invocations"
-  )
-  mock_resource.root_resource_id = "mock-root-resource-id"
-  mock_resource.execution_arn = f"arn:aws:execute-api:us-west-2:123456789012:{mock_resource.id}"
-  
-  return mock_resource
+  return MockResource(name_prefix)
 
 
 class TestTapStack(unittest.TestCase):
