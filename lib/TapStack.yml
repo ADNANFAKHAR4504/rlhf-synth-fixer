@@ -343,7 +343,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref HealthcareKMSKey
       MasterUsername: "healthapp_admin"
-      MasterUserPassword: !Join ["", [!Ref DatabaseSecret, ":password"]]
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup

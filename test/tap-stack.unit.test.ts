@@ -121,7 +121,7 @@ describe('TapStack CloudFormation Template - Unit Tests (YAML validation)', () =
       expectMatch(/StorageEncrypted:\s*true/);
       expectMatch(/KmsKeyId:\s*!Ref\s*HealthcareKMSKey/);
       expectMatch(/MasterUsername:\s*"healthapp_admin"/);
-      expectMatch(/MasterUserPassword:\s*!Join\s*\["",\s*\[\s*!Ref\s*DatabaseSecret/);
+      expectMatch(/MasterUserPassword:\s*!Sub\s*"\{\{resolve:secretsmanager:\$\{DatabaseSecret\}:SecretString:password\}\}"/);
       expectMatch(/VPCSecurityGroups:[\s\S]*!Ref\s*DatabaseSecurityGroup/);
       expectMatch(/DBSubnetGroupName:\s*!Ref\s*DatabaseSubnetGroup/);
       expectMatch(/BackupRetentionPeriod:\s*30/);
