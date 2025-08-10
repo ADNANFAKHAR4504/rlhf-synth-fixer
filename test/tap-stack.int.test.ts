@@ -74,13 +74,23 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const bucketName = outputs.S3BucketName;
       if (!bucketName) return;
       
-      const response = await s3Client.send(
-        new GetBucketPolicyStatusCommand({ Bucket: bucketName })
-      );
-      
-      // If bucket policy status exists, it should not be public
-      if (response.PolicyStatus) {
-        expect(response.PolicyStatus.IsPublic).toBe(false);
+      try {
+        const response = await s3Client.send(
+          new GetBucketPolicyStatusCommand({ Bucket: bucketName })
+        );
+        
+        // If bucket policy status exists, it should not be public
+        if (response.PolicyStatus) {
+          expect(response.PolicyStatus.IsPublic).toBe(false);
+        }
+      } catch (error: any) {
+        // NoSuchBucketPolicy error means no bucket policy exists, which is secure by default
+        if (error.name === 'NoSuchBucketPolicy') {
+          // This is expected and secure - no bucket policy means no public access via policy
+          expect(true).toBe(true); // Pass the test
+        } else {
+          throw error; // Re-throw any other errors
+        }
       }
     }, timeout);
   });
