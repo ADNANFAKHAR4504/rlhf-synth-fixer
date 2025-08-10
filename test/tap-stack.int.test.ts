@@ -17,9 +17,31 @@ import {
 } from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
 
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+const path = 'cfn-outputs/flat-outputs.json';
+
+let outputs;
+
+if (fs.existsSync(path)) {
+  outputs = JSON.parse(fs.readFileSync(path, 'utf8'));
+} else {
+  outputs = {
+    PrivateSubnetIds: 'subnet-06e1fcb2fd01478d9,subnet-0af7c3c23e4f4021c',
+    PublicSubnetIds: 'subnet-0df62847957ab6792,subnet-0e2e9d9d7c735d58c',
+    KmsKeyAlias: 'alias/secure-infrastructure-dev-key',
+    KmsKeyId: '632ff557-84d0-4783-a59f-08209774f35e',
+    VpcId: 'vpc-035964fe72b0c3dcc',
+    KmsKeyArn:
+      'arn:aws:kms:us-east-1:***:key/632ff557-84d0-4783-a59f-08209774f35e',
+    EC2InstanceRoleArn:
+      'arn:aws:iam::***:role/secure-infrastructure-dev-ec2-role',
+    SecurityGroupId: 'sg-093940f8ad308d82d',
+    AutoScalingGroupName: 'secure-infrastructure-dev-asg',
+    LaunchTemplateId: 'lt-0083167eb886700fa',
+    S3BucketName: 'secure-infrastructure-dev-secure-bucket-***-us-east-1',
+    SecretsManagerSecretArn:
+      'arn:aws:secretsmanager:us-east-1:***:secret:secure-infrastructure-dev-db-secret-DMTHrU',
+  };
+}
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -142,14 +164,14 @@ describe('Highly Secure AWS Infrastructure Integration Tests', () => {
 
       const response = await ec2Client.send(command);
 
-      // response.Reservations?.forEach(reservation => {
-      //   reservation.Instances?.forEach(instance => {
-      //     instance.BlockDeviceMappings?.forEach(blockDevice => {
-      //       expect(blockDevice.Ebs?.Encrypted).toBe(true);
-      //       expect(blockDevice.Ebs?.KmsKeyId).toContain(outputs.KmsKeyId);
-      //     });
-      //   });
-      // });
+      response.Reservations?.forEach(reservation => {
+        reservation.Instances?.forEach(instance => {
+          instance.BlockDeviceMappings?.forEach((blockDevice: any) => {
+            expect(blockDevice.Ebs?.Encrypted).toBe(true);
+            expect(blockDevice.Ebs?.KmsKeyId).toContain(outputs.KmsKeyId);
+          });
+        });
+      });
     });
   });
 
