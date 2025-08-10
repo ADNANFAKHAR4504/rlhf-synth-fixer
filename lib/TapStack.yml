@@ -75,11 +75,6 @@ Conditions:
 
 Resources:
   # Auto Scaling Service-Linked Role
-  AutoScalingServiceLinkedRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: autoscaling.amazonaws.com
-      Description: Service-linked role for Auto Scaling
 
   # IAM Roles and Policies
   EC2InstanceRole:
@@ -708,7 +703,6 @@ Resources:
       - EC2KMSAccessPolicy
       - EC2S3AccessPolicy
       - EC2SecretsManagerAccessPolicy
-      - AutoScalingServiceLinkedRole
     Properties:
       LaunchTemplateName: !Sub '${Project}-${Environment}-launch-template'
       LaunchTemplateData:
@@ -766,7 +760,6 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
       - EC2KMSAccessPolicy
-      - AutoScalingServiceLinkedRole
     Properties:
       AutoScalingGroupName: !Sub '${Project}-${Environment}-asg'
       VPCZoneIdentifier:
