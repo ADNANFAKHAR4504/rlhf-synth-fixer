@@ -38,8 +38,8 @@ async function getAccountId(): Promise<string> {
   return id.Account as string;
 }
 
-function expectOutputKeys(keys: string[]) {
-  const missing = keys.filter(k => !(k in outputs));
+function expectOutputKeys(out: Record<string, string>, keys: string[]) {
+  const missing = keys.filter(k => !(k in out));
   if (missing.length) {
     throw new Error(`Missing outputs in cfn-outputs/flat-outputs.json: ${missing.join(', ')}`);
   }
@@ -55,7 +55,7 @@ describe('TapStack - Live Integration Tests', () => {
     }
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8')) as Record<string, string>;
 
-    expectOutputKeys([
+    expectOutputKeys(outputs, [
       'VPCId',
       'PrivateSubnetIds',
       'PublicSubnetIds',
