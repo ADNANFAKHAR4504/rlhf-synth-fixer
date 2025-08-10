@@ -1,229 +1,137 @@
-// test/terraform.int.test.ts
-import { execSync } from 'child_process';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+// tests/live-s3-from-outputs.test.ts
+// Live verification using Terraform structured outputs (cfn-outputs/all-outputs.json)
+// No Terraform CLI; requires AWS creds with read on S3.
 
-// Configuration
-const WORKING_DIR = join(__dirname, '../bin');
-const BACKEND_CONF_PATH = join(WORKING_DIR, 'backend.conf');
-const TERRAFORM_BINARY = 'terraform';
-const TIMEOUT = 300000; // 5 minutes
+import {
+  GetBucketAclCommand,
+  GetBucketLocationCommand,
+  GetBucketPolicyStatusCommand,
+  GetBucketTaggingCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import * as fs from "fs";
+import * as path from "path";
 
-// Custom backend.conf parser that only extracts bucket and key
-const parseBackendConfig = (): { bucket: string; key: string } => {
-  if (!existsSync(BACKEND_CONF_PATH)) {
-    throw new Error(`Backend config file not found at ${BACKEND_CONF_PATH}`);
-  }
-
-  const config: { bucket?: string; key?: string } = {};
-  const content = readFileSync(BACKEND_CONF_PATH, 'utf-8');
-
-  content.split('\n').forEach(line => {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const equalIndex = trimmed.indexOf('=');
-      if (equalIndex > 0) {
-        const key = trimmed.substring(0, equalIndex).trim();
-        const value = trimmed.substring(equalIndex + 1).trim().replace(/^["']|["']$/g, '');
-        if (key === 'bucket' || key === 'key') {
-          config[key] = value;
-        }
-      }
-    }
-  });
-
-  if (!config.bucket || !config.key) {
-    throw new Error('backend.conf must contain both bucket and key');
-  }
-
-  return { bucket: config.bucket, key: config.key };
+type TfOutputValue<T> = {
+  sensitive: boolean;
+  type: any;
+  value: T;
 };
 
-// Get backend configuration with environment overrides
-const getBackendConfig = () => {
-  const { bucket, key } = parseBackendConfig();
-  
-  return {
-    bucket: process.env.TF_STATE_BUCKET || bucket,
-    key: process.env.TF_STATE_KEY || `${key.replace('.tfstate', '')}-${Date.now()}.tfstate`,
-    encrypt: 'true' // Always enable encryption
-  };
+type StructuredOutputs = {
+  bucket_name?: TfOutputValue<string>;
+  bucket_tags?: TfOutputValue<Record<string, string>>;
 };
 
-const runTerraformCommand = (command: string): string => {
-  try {
-    console.log(`Running: terraform ${command}`);
-    return execSync(`${TERRAFORM_BINARY} ${command}`, {
-      cwd: WORKING_DIR,
-      encoding: 'utf-8',
-      stdio: 'pipe'
-    });
-  } catch (error: any) {
-    console.error(`Command failed: terraform ${command}`);
-    console.error('Error:', error.message);
-    console.error('stdout:', error.stdout);
-    console.error('stderr:', error.stderr);
-    throw error;
+function readStructuredOutputs() {
+  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+  if (!fs.existsSync(p)) {
+    throw new Error(`Outputs file not found at ${p}`);
   }
-};
+  const out = JSON.parse(fs.readFileSync(p, "utf8")) as StructuredOutputs;
 
-const initializeTerraform = () => {
-  const backend = getBackendConfig();
-  console.log('Initializing Terraform with:', {
-    bucket: backend.bucket,
-    key: backend.key,
-    encrypt: backend.encrypt
-  });
-
-  return runTerraformCommand(
-    `init -input=false -reconfigure ` +
-    `-backend-config="bucket=${backend.bucket}" ` +
-    `-backend-config="key=${backend.key}" ` +
-    `-backend-config="encrypt=${backend.encrypt}"`
-  );
-};
-
-const getTerraformState = (): any => {
-  const state = JSON.parse(runTerraformCommand('show -json'));
-  writeFileSync(join(__dirname, 'state-debug.json'), JSON.stringify(state, null, 2));
-  return state;
-};
-
-const getAllResources = (state: any): any[] => {
-  const resources: any[] = [];
-
-  if (state.values?.root_module?.resources) {
-    resources.push(...state.values.root_module.resources);
+  if (!out.bucket_name?.value) {
+    throw new Error("bucket_name.value missing in cfn-outputs/all-outputs.json");
   }
-  if (state.resources) {
-    resources.push(...state.resources);
-  }
-  if (state.values?.root_module?.child_modules) {
-    state.values.root_module.child_modules.forEach((module: any) => {
-      if (module.resources) {
-        resources.push(...module.resources);
-      }
-    });
-  }
+  const bucket = out.bucket_name.value;
+  const tags = out.bucket_tags?.value ?? {};
 
-  return resources;
-};
+  return { bucket, expectedTags: tags };
+}
 
-describe('VPC Module Integration Tests', () => {
-  let terraformState: any;
-  let allResources: any[];
+function normalizeRegion(v?: string): string {
+  // S3 returns null/"" for us-east-1
+  if (!v || v === "") return "us-east-1";
+  return v;
+}
 
-  beforeAll(async () => {
-    console.log('Setting up test environment...');
-    initializeTerraform();
-    
-    console.log('Applying configuration...');
-    runTerraformCommand('apply -auto-approve -input=false');
-    
-    console.log('Fetching state...');
-    terraformState = getTerraformState();
-    allResources = getAllResources(terraformState);
-    console.log(`Found ${allResources.length} resources`);
-  }, TIMEOUT);
-
-  afterAll(async () => {
-    console.log('Cleaning up...');
+async function retry<T>(fn: () => Promise<T>, attempts = 8, baseMs = 800): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
     try {
-      runTerraformCommand('destroy -auto-approve -input=false');
-    } catch (error) {
-      console.error('Cleanup failed:', error);
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const wait = baseMs * Math.pow(1.7, i) + Math.floor(Math.random() * 200);
+      await new Promise((r) => setTimeout(r, wait));
     }
-  }, TIMEOUT);
+  }
+  throw lastErr;
+}
 
-  describe('VPC Validation', () => {
-    let vpc: any;
+const { bucket: BUCKET_NAME, expectedTags: EXPECTED_TAGS } = readStructuredOutputs();
+const s3 = new S3Client({
+  region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1",
+});
 
-    beforeAll(() => {
-      vpc = allResources.find(r => r.type === 'aws_vpc' && r.name === 'main');
-    });
-
-    it('should create exactly one VPC', () => {
-      expect(allResources.filter(r => r.type === 'aws_vpc').length).toBe(1);
-    });
-
-    it('should have valid CIDR block format', () => {
-      expect(vpc.values.cidr_block).toMatch(/^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\/[0-9]{1,2}$/);
-    });
-
-    it('should have DNS support enabled', () => {
-      expect(vpc.values.enable_dns_support).toBe(true);
-    });
-
-    it('should have proper environment tag', () => {
-      expect(vpc.values.tags.Name).toMatch(/.+-vpc$/);
-    });
+describe("LIVE: S3 verification from Terraform structured outputs", () => {
+  test("bucket exists (HeadBucket)", async () => {
+    await expect(retry(() => s3.send(new HeadBucketCommand({ Bucket: BUCKET_NAME })))).resolves.toBeTruthy();
   });
 
-  describe('Subnet Validation', () => {
-    let publicSubnets: any[];
-    let privateSubnets: any[];
-
-    beforeAll(() => {
-      publicSubnets = allResources.filter(r => r.type === 'aws_subnet' && r.name === 'public');
-      privateSubnets = allResources.filter(r => r.type === 'aws_subnet' && r.name === 'private');
-    });
-
-    it('should create public and private subnets', () => {
-      expect(publicSubnets.length).toBeGreaterThan(0);
-      expect(privateSubnets.length).toBeGreaterThan(0);
-    });
-
-    it('should have correct public IP mapping', () => {
-      publicSubnets.forEach(s => expect(s.values.map_public_ip_on_launch).toBe(true));
-      privateSubnets.forEach(s => expect(s.values.map_public_ip_on_launch).toBe(false));
-    });
-
-    it('should have valid naming conventions', () => {
-      publicSubnets.forEach((s, i) => {
-        expect(s.values.tags.Name).toMatch(new RegExp(`^.+public-${i}$`));
-      });
-      privateSubnets.forEach((s, i) => {
-        expect(s.values.tags.Name).toMatch(new RegExp(`^.+private-${i}$`));
-      });
-    });
+  test("bucket region is discoverable", async () => {
+    const out = await retry(() => s3.send(new GetBucketLocationCommand({ Bucket: BUCKET_NAME })));
+    const region = normalizeRegion(out.LocationConstraint as string | undefined);
+    expect(region).toBeTruthy();
   });
 
-  describe('Security Group Validation', () => {
-    let webSg: any;
-    let dbSg: any;
-
-    beforeAll(() => {
-      webSg = allResources.find(r => r.type === 'aws_security_group' && r.name === 'web');
-      dbSg = allResources.find(r => r.type === 'aws_security_group' && r.name === 'db');
-    });
-
-    it('should have web SG with HTTP access', () => {
-      const rule = webSg.values.ingress.find((r: any) => r.from_port === 80 && r.to_port === 80);
-      expect(rule).toBeDefined();
-      expect(rule.protocol).toBe('tcp');
-      expect(rule.cidr_blocks).toContain('0.0.0.0/0');
-    });
-
-    it('should have DB SG with restricted access', () => {
-      const rule = dbSg.values.ingress.find((r: any) => r.from_port === 3306 && r.to_port === 3306);
-      expect(rule).toBeDefined();
-      expect(rule.security_groups).toContain(webSg.values.id);
-    });
+  test("versioning is Enabled", async () => {
+    const vr = await retry(() => s3.send(new GetBucketVersioningCommand({ Bucket: BUCKET_NAME })));
+    expect(vr.Status).toBe("Enabled");
   });
 
-  describe('Edge Cases', () => {
-    it('should not have overlapping CIDR blocks', () => {
-      const subnets = allResources.filter(r => r.type === 'aws_subnet');
-      const cidrs = subnets.map(s => s.values.cidr_block);
-      expect(new Set(cidrs).size).toBe(cidrs.length);
-    });
+  test("public access block fully enabled", async () => {
+    const pab = await retry(() => s3.send(new GetPublicAccessBlockCommand({ Bucket: BUCKET_NAME })));
+    const c = pab.PublicAccessBlockConfiguration!;
+    expect(c.BlockPublicAcls).toBe(true);
+    expect(c.IgnorePublicAcls).toBe(true);
+    expect(c.BlockPublicPolicy).toBe(true);
+    expect(c.RestrictPublicBuckets).toBe(true);
+  });
 
-    it('should have all subnets associated with the VPC', () => {
-      const vpc = allResources.find(r => r.type === 'aws_vpc');
-      const subnets = allResources.filter(r => r.type === 'aws_subnet');
-      subnets.forEach(subnet => {
-        expect(subnet.values.vpc_id).toBe(vpc.values.id);
-      });
+  test("bucket is not public by policy", async () => {
+    try {
+      const ps = await s3.send(new GetBucketPolicyStatusCommand({ Bucket: BUCKET_NAME }));
+      expect(ps.PolicyStatus?.IsPublic).toBe(false);
+    } catch (err: any) {
+      const code = err?.name || err?.Code || err?.code;
+      if (code === "NoSuchBucketPolicy" || code === "NoSuchBucket" || code === "NotFound") {
+        expect(true).toBe(true);
+      } else {
+        throw err;
+      }
+    }
+  });
+
+  test("ACLs do not grant AllUsers/AuthUsers", async () => {
+    const acl = await s3.send(new GetBucketAclCommand({ Bucket: BUCKET_NAME }));
+    const hasPublic = (acl.Grants || []).some((g) => {
+      const uri = g.Grantee?.URI || "";
+      return uri.includes("AllUsers") || uri.includes("AuthenticatedUsers");
     });
+    expect(hasPublic).toBe(false);
+  });
+
+  test("expected tags are present", async () => {
+    // If no tags exist, AWS throws NoSuchTagSet
+    try {
+      const tg = await s3.send(new GetBucketTaggingCommand({ Bucket: BUCKET_NAME }));
+      const actual: Record<string, string> = {};
+      for (const t of tg.TagSet || []) {
+        if (t.Key && typeof t.Value === "string") actual[t.Key] = t.Value;
+      }
+      for (const [k, v] of Object.entries(EXPECTED_TAGS)) {
+        expect(actual[k]).toBe(v);
+      }
+    } catch (err: any) {
+      const code = err?.name || err?.Code || err?.code;
+      if (code === "NoSuchTagSet") {
+        throw new Error(`Bucket has no tags; expected at least: ${JSON.stringify(EXPECTED_TAGS)}`);
+      }
+      throw err;
+    }
   });
 });
