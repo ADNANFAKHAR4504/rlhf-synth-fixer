@@ -9,13 +9,13 @@ variable "aws_region" {
 variable "bucket_region" {
   description = "Region for the S3 bucket"
   type        = string
-  default     = "ap-southeast-2"
+  default     = "us-west-2"
 }
 
 variable "bucket_name" {
   description = "Name of the S3 bucket"
   type        = string
-  default     = "dev-s3-bucket"
+  default     = "devs3-bucket"
 }
 
 variable "bucket_tags" {
@@ -32,7 +32,7 @@ variable "bucket_tags" {
 # S3 Bucket
 ########################
 
-resource "aws_s3_bucket" "this" {
+/* resource "aws_s3_bucket" "this" {
   bucket = var.bucket_name
   tags   = var.bucket_tags
 }
@@ -64,3 +64,4 @@ output "bucket_name" {
 output "bucket_tags" {
   value = aws_s3_bucket.this.tags
 }
+*/
