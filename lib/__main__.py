@@ -3,7 +3,8 @@ Main entry point for the Pulumi program
 """
 
 import pulumi
-from tap_stack import TapStack, TapStackArgs
+
+from .tap_stack import TapStack, TapStackArgs
 
 # Get configuration
 config = pulumi.Config()

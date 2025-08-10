@@ -206,7 +206,10 @@ class TapStack(pulumi.ComponentResource):
     # Deploy API Gateway
     api_deployment = aws.apigateway.Deployment(
       f"{environment}-api-deployment",
-      depends_on=[api_integration, root_integration],
+      opts=ResourceOptions(
+          parent=self,
+          depends_on=[api_integration, root_integration]
+        ),
       rest_api=api_gateway.id,
       stage_name=environment
     )
