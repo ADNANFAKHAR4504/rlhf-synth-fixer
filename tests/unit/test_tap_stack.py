@@ -5,6 +5,7 @@ Comprehensive unit tests for the TapStack Pulumi component using moto for AWS mo
 and Pulumi's testing utilities.
 """
 
+import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -63,21 +64,23 @@ class MockPulumiResource:
 
 def create_mock_resource(name_prefix="mock"):
   """Create a properly mocked Pulumi resource."""
-  # Create a mock that inherits from a base class to satisfy isinstance checks
-  class MockResource:
-    def __init__(self):
-      self._is_resource = True
-      self.name = f"{name_prefix}-resource"
-      self.arn = f"arn:aws:mock:us-west-2:123456789012:resource/{name_prefix}"
-      self.id = f"mock-{name_prefix}-id"
-      self.invoke_arn = (
-        f"arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/"
-        f"functions/{self.arn}/invocations"
-      )
-      self.root_resource_id = "mock-root-resource-id"
-      self.execution_arn = f"arn:aws:execute-api:us-west-2:123456789012:{self.id}"
-
-  return MockResource()
+  from unittest.mock import MagicMock
+  import pulumi
+  
+  # Create a mock that passes isinstance checks for Pulumi Resource
+  mock_resource = MagicMock(spec=pulumi.Resource)
+  mock_resource._is_resource = True
+  mock_resource.name = f"{name_prefix}-resource"
+  mock_resource.arn = f"arn:aws:mock:us-west-2:123456789012:resource/{name_prefix}"
+  mock_resource.id = f"mock-{name_prefix}-id"
+  mock_resource.invoke_arn = (
+    f"arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/"
+    f"functions/{mock_resource.arn}/invocations"
+  )
+  mock_resource.root_resource_id = "mock-root-resource-id"
+  mock_resource.execution_arn = f"arn:aws:execute-api:us-west-2:123456789012:{mock_resource.id}"
+  
+  return mock_resource
 
 
 class TestTapStack(unittest.TestCase):
@@ -101,12 +104,18 @@ class TestTapStack(unittest.TestCase):
       'api': create_mock_resource("api"),
       'resource': create_mock_resource("resource"),
       'method': create_mock_resource("method"),
+      'root_method': create_mock_resource("root-method"),
       'integration': create_mock_resource("integration"),
+      'root_integration': create_mock_resource("root-integration"),
       'deployment': create_mock_resource("deployment"),
       'stage': create_mock_resource("stage"),
       'permission': create_mock_resource("permission"),
       'policy_attachment': create_mock_resource("policy")
     }
+    
+    # Add specific attributes for API Gateway method resources
+    mock_resources['method'].http_method = "ANY"
+    mock_resources['root_method'].http_method = "ANY"
 
     # Mock Pulumi config
     mock_config_instance = Mock()
@@ -115,6 +124,7 @@ class TestTapStack(unittest.TestCase):
     patches = {
       'config': patch('pulumi.Config', return_value=mock_config_instance),
       'component_init': patch('pulumi.ComponentResource.__init__', return_value=None),
+      'resource_options': patch('pulumi.ResourceOptions'),
       'export': patch('pulumi.export'),
       'iam_role': patch('pulumi_aws.iam.Role', return_value=mock_resources['role']),
       'policy_attachment': patch('pulumi_aws.iam.RolePolicyAttachment', 
@@ -130,15 +140,15 @@ class TestTapStack(unittest.TestCase):
       'api_resource': patch('pulumi_aws.apigateway.Resource', 
                            return_value=mock_resources['resource']),
       'api_method': patch('pulumi_aws.apigateway.Method', 
-                         return_value=mock_resources['method']),
+                         side_effect=[mock_resources['method'], mock_resources['root_method']]),
       'api_integration': patch('pulumi_aws.apigateway.Integration', 
-                              return_value=mock_resources['integration']),
+                              side_effect=[mock_resources['integration'], mock_resources['root_integration']]),
       'api_deployment': patch('pulumi_aws.apigateway.Deployment', 
                              return_value=mock_resources['deployment']),
       'api_stage': patch('pulumi_aws.apigateway.Stage', 
                         return_value=mock_resources['stage']),
-      'path_dirname': patch('os.path.dirname', return_value='/mock/lib/path'),
-      'path_join': patch('os.path.join', return_value='/mock/lib/path/lambda_function.py')
+      'path_dirname': patch('os.path.dirname', return_value=os.path.join(os.getcwd(), 'lib')),
+      'path_join': patch('os.path.join', return_value=os.path.join(os.getcwd(), 'lib', 'lambda_function.py'))
     }
 
     return patches
