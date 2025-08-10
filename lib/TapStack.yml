@@ -311,9 +311,6 @@ Resources:
       DataSources:
         S3Logs:
           Enable: true
-        KubernetesConfiguration:
-          AuditLogs:
-            Enable: true
         MalwareProtection:
           ScanEc2InstanceWithFindings:
             EbsVolumes: true
@@ -504,6 +501,7 @@ Resources:
   SecureRDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-secure-db'
       DBInstanceClass: db.t3.micro
