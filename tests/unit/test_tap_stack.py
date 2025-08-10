@@ -7,20 +7,17 @@ Tests both infrastructure components and Lambda handler functionality
 
 import gc
 import json
+import os
 import sys
 import time
-from datetime import datetime
-from unittest.mock import patch
-
-import os
 import unittest
-from unittest.mock import Mock, patch
+from datetime import datetime
 
 import pulumi
 
+from lib import lambda_function
 # Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
-from lib import lambda_function
 
 # Add the current directory to Python path to import lambda_function
 sys.path.insert(0, os.path.dirname(__file__))
