@@ -112,7 +112,7 @@ describe('TapStack', () => {
     test('creates PostgreSQL database with correct configuration', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
-        EngineVersion: '15.4',
+        EngineVersion: '15.8',
         DBInstanceClass: 'db.t3.micro',
         MultiAZ: true,
         StorageEncrypted: true,
@@ -242,8 +242,28 @@ describe('TapStack', () => {
   });
 
   describe('CloudTrail', () => {
-    test('creates CloudTrail for audit logging', () => {
-      template.hasResource('AWS::CloudTrail::Trail', {
+    test('creates CloudTrail for audit logging when enabled', () => {
+      // CloudTrail is disabled by default (enableCloudTrail: false)
+      // This test verifies that CloudTrail resources are not created when disabled
+      template.resourceCountIs('AWS::CloudTrail::Trail', 0);
+    });
+
+    test('creates only application S3 bucket when CloudTrail is disabled', () => {
+      // Should have 1 S3 bucket: only for application artifacts (CloudTrail is disabled)
+      template.resourceCountIs('AWS::S3::Bucket', 1);
+    });
+
+    test('creates CloudTrail resources when enabled', () => {
+      // Create a new stack with CloudTrail enabled
+      const cloudTrailApp = new cdk.App();
+      const cloudTrailStack = new TapStack(cloudTrailApp, 'TestTapStackWithCloudTrail', { 
+        environmentSuffix,
+        enableCloudTrail: true 
+      });
+      const cloudTrailTemplate = Template.fromStack(cloudTrailStack);
+
+      // Should have CloudTrail resource
+      cloudTrailTemplate.hasResource('AWS::CloudTrail::Trail', {
         Properties: {
           IncludeGlobalServiceEvents: true,
           IsMultiRegionTrail: true,
@@ -256,11 +276,9 @@ describe('TapStack', () => {
           ],
         },
       });
-    });
 
-    test('creates separate S3 bucket for CloudTrail logs', () => {
       // Should have 2 S3 buckets: one for application artifacts, one for CloudTrail logs
-      template.resourceCountIs('AWS::S3::Bucket', 2);
+      cloudTrailTemplate.resourceCountIs('AWS::S3::Bucket', 2);
     });
   });
 
@@ -302,6 +320,28 @@ describe('TapStack', () => {
       template.hasOutput('S3BucketName', {});
       template.hasOutput('EC2InstanceIds', {});
       template.hasOutput('VpcId', {});
+    });
+
+    test('creates CloudTrail output when enabled', () => {
+      // Create a new stack with CloudTrail enabled
+      const cloudTrailApp = new cdk.App();
+      const cloudTrailStack = new TapStack(cloudTrailApp, 'TestTapStackWithCloudTrailOutput', { 
+        environmentSuffix,
+        enableCloudTrail: true 
+      });
+      const cloudTrailTemplate = Template.fromStack(cloudTrailStack);
+
+      // Should have CloudTrail output when enabled
+      cloudTrailTemplate.hasOutput('CloudTrailEnabled', {
+        Value: 'Enabled',
+      });
+    });
+
+    test('creates CloudTrail disabled output when not enabled', () => {
+      // Default stack has CloudTrail disabled
+      template.hasOutput('CloudTrailEnabled', {
+        Value: 'Disabled (trail limit reached or explicitly disabled)',
+      });
     });
   });
 

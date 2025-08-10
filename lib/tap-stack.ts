@@ -41,8 +41,8 @@ export class TapStack extends cdk.Stack {
 
     // 1. NETWORKING: Create VPC with high availability configuration
     const vpc = new ec2.Vpc(this, 'ApplicationVPC', {
-      // CIDR block for the VPC
-      cidr: '10.0.0.0/16',
+      // IP address configuration for the VPC
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
 
       // Maximum 2 AZs for cost optimization while maintaining HA
       maxAzs: 2,
@@ -141,7 +141,7 @@ export class TapStack extends cdk.Stack {
     const database = new rds.DatabaseInstance(this, 'PostgreSQLDatabase', {
       // PostgreSQL engine version 13 or higher as requested
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4, // Latest stable version
+        version: rds.PostgresEngineVersion.VER_15_8, // Latest available stable version
       }),
 
       // Instance configuration
@@ -259,14 +259,12 @@ export class TapStack extends cdk.Stack {
     // 7. APPLICATION TIER: Launch EC2 instances in public subnets
 
     // Create EC2 key pair for SSH access
-    const keyPair = new ec2.CfnKeyPair(this, 'EC2KeyPair', {
-      keyName: `app-keypair-${cdk.Aws.STACK_NAME}`,
+    const keyPair = new ec2.KeyPair(this, 'EC2KeyPair', {
+      keyPairName: `app-keypair-${cdk.Aws.STACK_NAME}`,
     });
 
     // Get the latest Amazon Linux 2 AMI
-    const amazonLinuxAmi = ec2.MachineImage.latestAmazonLinux({
-      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-    });
+    const amazonLinuxAmi = ec2.MachineImage.latestAmazonLinux2();
 
     // User data script for EC2 initialization
     const userData = ec2.UserData.forLinux();
@@ -317,7 +315,7 @@ export class TapStack extends cdk.Stack {
           userData,
 
           // Key pair for SSH access
-          keyName: keyPair.keyName,
+          keyPair: keyPair,
         }
       );
 
