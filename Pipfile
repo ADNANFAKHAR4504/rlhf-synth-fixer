@@ -23,6 +23,7 @@ pytest-env = "*"
 pylint = "*"
 pytest = "*"
 requests = "*"
+cfn-lint = "*"
 
 [requires]
 python_version = "3.12.11"
