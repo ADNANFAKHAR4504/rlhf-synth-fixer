@@ -210,8 +210,7 @@ class TapStack(pulumi.ComponentResource):
           parent=self,
           depends_on=[api_integration, root_integration]
         ),
-      rest_api=api_gateway.id,
-      stage_name=environment
+      rest_api=api_gateway.id
     )
 
     # Create API Gateway stage
@@ -220,7 +219,8 @@ class TapStack(pulumi.ComponentResource):
       deployment=api_deployment.id,
       rest_api=api_gateway.id,
       stage_name=environment,
-      tags=common_tags
+      tags=common_tags,
+      opts=ResourceOptions(parent=self, depends_on=[api_deployment])
     )
 
     # Export important values
