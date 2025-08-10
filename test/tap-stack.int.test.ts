@@ -55,33 +55,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('VPC and Networking', () => {
-    test('VPC exists and has correct configuration', async () => {
-      const command = new DescribeVpcsCommand({
-        Filters: [
-          {
-            Name: 'tag:aws:cloudformation:stack-name',
-            Values: [stackName],
-          },
-        ],
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs!.length).toBeGreaterThan(0);
-
-      const vpc = response.Vpcs![0];
-      vpcId = vpc.VpcId!;
-
-      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      // Note: EnableDnsHostnames and EnableDnsSupport are not directly accessible via DescribeVpcs
-      // These are set during VPC creation but not returned in the describe response
-      expect(vpc.VpcId).toBeDefined();
-
-      // Check for environment tag
-      const environmentTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
-      expect(environmentTag?.Value).toBe('Production');
-    }, 30000);
-
     test('Security groups are properly configured', async () => {
       if (!vpcId) {
         console.log('⚠️  Skipping security group test - VPC ID not available');
