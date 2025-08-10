@@ -10,27 +10,27 @@ Parameters:
     Default: dev
     AllowedValues: [dev, test, stage, prod]
     Description: 'Target deployment environment'
-  
+
   ProjectName:
     Type: String
     Default: 'MyApp'
     Description: 'Project name for resource naming and tagging'
-  
+
   Owner:
     Type: String
     Default: 'DevOps-Team'
     Description: 'Resource owner for tagging'
-  
+
   CostCenter:
     Type: String
     Default: 'Engineering'
     Description: 'Cost center for billing allocation'
-  
+
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: Latest Amazon Linux 2 AMI ID
-  
+
   # Removed DBPassword parameter - will use Secrets Manager instead
 
 # ============================================================================
@@ -91,7 +91,6 @@ Mappings:
       DBAllocatedStorage: 100
       MultiAZ: true
 
-
 # ============================================================================
 # RESOURCES - Infrastructure components
 # ============================================================================
@@ -136,7 +135,8 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnet1Cidr]
+      CidrBlock:
+        !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnet1Cidr]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -149,7 +149,8 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnet2Cidr]
+      CidrBlock:
+        !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnet2Cidr]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -163,7 +164,8 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnet1Cidr]
+      CidrBlock:
+        !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnet1Cidr]
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Private-Subnet-AZ1-${Environment}'
@@ -175,7 +177,8 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnet2Cidr]
+      CidrBlock:
+        !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnet2Cidr]
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Private-Subnet-AZ2-${Environment}'
@@ -381,7 +384,8 @@ Resources:
       LaunchTemplateName: !Sub '${ProjectName}-LaunchTemplate-${Environment}'
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
-        InstanceType: !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
+        InstanceType:
+          !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
@@ -420,7 +424,8 @@ Resources:
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: !FindInMap [EnvironmentConfig, !Ref Environment, MinSize]
       MaxSize: !FindInMap [EnvironmentConfig, !Ref Environment, MaxSize]
-      DesiredCapacity: !FindInMap [EnvironmentConfig, !Ref Environment, DesiredCapacity]
+      DesiredCapacity:
+        !FindInMap [EnvironmentConfig, !Ref Environment, DesiredCapacity]
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
@@ -465,7 +470,7 @@ Resources:
       Description: !Sub 'Database credentials for ${ProjectName} ${Environment} environment'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
-        GenerateStringKey: "password"
+        GenerateStringKey: 'password'
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
       Tags:
@@ -487,10 +492,12 @@ Resources:
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
-      DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
+      DBInstanceClass:
+        !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
       Engine: mysql
       EngineVersion: '8.0.35'
-      AllocatedStorage: !FindInMap [EnvironmentConfig, !Ref Environment, DBAllocatedStorage]
+      AllocatedStorage:
+        !FindInMap [EnvironmentConfig, !Ref Environment, DBAllocatedStorage]
       StorageType: gp2
       DBName: !Sub '${ProjectName}${Environment}'
       MasterUsername: admin
@@ -546,19 +553,3 @@ Outputs:
   Environment:
     Description: 'Deployed Environment'
     Value: !Ref Environment
-
-# ============================================================================
-# DEPLOYMENT COMMANDS (as YAML comments):
-# 
-# Development:
-# aws cloudformation deploy --template-file template.yaml --stack-name myapp-dev --parameter-overrides Environment=dev ProjectName=MyApp Owner=DevTeam CostCenter=Engineering --capabilities CAPABILITY_IAM
-#
-# Testing:
-# aws cloudformation deploy --template-file template.yaml --stack-name myapp-test --parameter-overrides Environment=test ProjectName=MyApp Owner=QATeam CostCenter=Engineering --capabilities CAPABILITY_IAM
-#
-# Staging:
-# aws cloudformation deploy --template-file template.yaml --stack-name myapp-stage --parameter-overrides Environment=stage ProjectName=MyApp Owner=DevOps CostCenter=Engineering --capabilities CAPABILITY_IAM
-#
-# Production:
-# aws cloudformation deploy --template-file template.yaml --stack-name myapp-prod --parameter-overrides Environment=prod ProjectName=MyApp Owner=DevOps CostCenter=Engineering --capabilities CAPABILITY_IAM
-# ============================================================================
