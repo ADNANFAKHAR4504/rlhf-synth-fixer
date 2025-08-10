@@ -115,7 +115,7 @@ describe('TapStack CloudFormation Template - Unit Tests (YAML validation)', () =
       expectMatch(/HealthcareDatabase:[\s\S]*DeletionPolicy:\s*Snapshot/);
       expectMatch(/UpdateReplacePolicy:\s*Snapshot/);
       expectMatch(/Engine:\s*postgres/);
-      expectMatch(/EngineVersion:\s*13\.7/);
+      expectMatch(/EngineVersion:\s*13\.21/);
       expectMatch(/AllocatedStorage:\s*100/);
       expectMatch(/StorageType:\s*gp2/);
       expectMatch(/StorageEncrypted:\s*true/);
@@ -165,7 +165,7 @@ describe('TapStack CloudFormation Template - Unit Tests (YAML validation)', () =
     test('Instance profile and log group with KMS + retention', () => {
       expectMatch(/ApplicationInstanceProfile:[\s\S]*Type:\s*AWS::IAM::InstanceProfile/);
       expectMatch(/ApplicationLogGroup:[\s\S]*Type:\s*AWS::Logs::LogGroup/);
-      expectMatch(/ApplicationLogGroup:[\s\S]*RetentionInDays:\s*2555/);
+      expectMatch(/ApplicationLogGroup:[\s\S]*RetentionInDays:\s*!If\s*\[\s*IsProd\s*,\s*2557\s*,\s*365\s*\]/);
       expectMatch(/ApplicationLogGroup:[\s\S]*KmsKeyId:\s*!GetAtt\s*HealthcareKMSKey\.Arn/);
     });
   });

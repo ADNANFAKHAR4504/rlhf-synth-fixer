@@ -230,7 +230,8 @@ describe('TapStack - Live Integration Tests', () => {
       throw new Error(`CloudWatch Log Group ${logGroupName} not found. Ensure stack created it.`);
     }
 
-    expect(found.retentionInDays).toBe(2555);
+    const expectedRetention = (process.env.ENVIRONMENT_SUFFIX || 'prod') === 'prod' ? 2557 : 365;
+    expect(found.retentionInDays).toBe(expectedRetention);
     // kmsKeyId property should be present when KMS is associated
     expect(found.kmsKeyId).toBeDefined();
   });

@@ -126,7 +126,7 @@ Resources:
     Properties:
       VpcId: !Ref HealthcareVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-private-subnet-1"
@@ -140,7 +140,7 @@ Resources:
     Properties:
       VpcId: !Ref HealthcareVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-private-subnet-2"
@@ -154,7 +154,7 @@ Resources:
     Properties:
       VpcId: !Ref HealthcareVPC
       CidrBlock: 10.0.10.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -169,7 +169,7 @@ Resources:
     Properties:
       VpcId: !Ref HealthcareVPC
       CidrBlock: 10.0.11.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -325,7 +325,7 @@ Resources:
       DBInstanceIdentifier: !Sub "${ApplicationName}-${EnvironmentSuffix}-database"
       DBInstanceClass: !Ref DatabaseInstanceClass
       Engine: postgres
-      EngineVersion: 13.7
+      EngineVersion: 13.21
       AllocatedStorage: 100
       StorageType: gp2
       StorageEncrypted: true
@@ -385,7 +385,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-        CidrIp: 0.0.0.0/0
+          CidrIp: 0.0.0.0/0
           Description: "HTTPS from internet"
         - IpProtocol: tcp
           FromPort: 80
@@ -475,7 +475,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/healthcare/${ApplicationName}-${EnvironmentSuffix}"
-      RetentionInDays: 2555 # 7 years retention for HIPAA compliance
+      RetentionInDays: !If [IsProd, 2557, 365] # 7 years retention for HIPAA compliance
       KmsKeyId: !GetAtt HealthcareKMSKey.Arn
       Tags:
         - Key: Project
