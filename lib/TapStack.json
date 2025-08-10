@@ -508,7 +508,7 @@
                             ],
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${SecureS3Bucket}/*"
+                                    "Fn::Sub": "${SecureS3Bucket.Arn}/*"
                                 },
                                 {
                                     "Fn::GetAtt": [
@@ -517,7 +517,7 @@
                                     ]
                                 },
                                 {
-                                    "Fn::Sub": "${SecureS3BucketTwo}/*"
+                                    "Fn::Sub": "${SecureS3BucketTwo.Arn}/*"
                                 },
                                 {
                                     "Fn::GetAtt": [

@@ -302,9 +302,9 @@ Resources:
               - s3:PutObject
               - s3:ListBucket
             Resource:
-              - !Sub '${SecureS3Bucket}/*'
+              - !Sub '${SecureS3Bucket.Arn}/*'
               - !GetAtt SecureS3Bucket.Arn
-              - !Sub '${SecureS3BucketTwo}/*'
+              - !Sub '${SecureS3BucketTwo.Arn}/*'
               - !GetAtt SecureS3BucketTwo.Arn
             Condition:
               IpAddressIfExists:
