@@ -404,8 +404,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3KMSKey
+              SSEAlgorithm: AES256
             BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
@@ -437,11 +436,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub 
-                - 'arn:aws:iam::${ElbAccountId}:root'
-                - ElbAccountId: '797873946194'  # us-west-2 ELB account ID
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: s3:PutObject
-            Resource: !Sub '${ALBAccessLogsBucket}/*'
+            Resource: !Sub '${ALBAccessLogsBucket}/AWSLogs/${AWS::AccountId}/*'
 
   # IAM ROLE FOR EC2
   Ec2InstanceRole:

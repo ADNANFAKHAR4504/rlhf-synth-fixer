@@ -773,10 +773,7 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "S3KMSKey"
-                                }
+                                "SSEAlgorithm": "AES256"
                             },
                             "BucketKeyEnabled": true
                         }
@@ -831,17 +828,12 @@
                             "Effect": "Allow",
                             "Principal": {
                                 "AWS": {
-                                    "Fn::Sub": [
-                                        "arn:aws:iam::${ElbAccountId}:root",
-                                        {
-                                            "ElbAccountId": "797873946194"
-                                        }
-                                    ]
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                                 }
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${ALBAccessLogsBucket}/*"
+                                "Fn::Sub": "${ALBAccessLogsBucket}/AWSLogs/${AWS::AccountId}/*"
                             }
                         }
                     ]
