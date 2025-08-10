@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { App } from 'cdktf';
+import { BootstrapBackendStack } from '../lib/bootstrap-backend-stack';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new App();
@@ -12,6 +13,9 @@ const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
 const stackName = `TapStack${environment}`;
+
+// 1. Bootstrap backend infra
+new BootstrapBackendStack(app, 'BootstrapBackend');
 
 new TapStack(app, stackName, {
   // new prop names (environment instead of environmentSuffix)
