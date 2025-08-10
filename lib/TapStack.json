@@ -2385,18 +2385,6 @@
                 }
             }
         },
-        "ConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "DependsOn": "ConfigBucketPolicy",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "TapConfigDeliveryChannel-229157-${EnvironmentSuffix}"
-                },
-                "S3BucketName": {
-                    "Ref": "ConfigBucket"
-                }
-            }
-        },
         "ConfigServiceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -2501,25 +2489,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "ConfigurationRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "DependsOn": "ConfigBucketPolicy",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "TapConfigRecorder-229157-${EnvironmentSuffix}"
-                },
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigServiceRole",
-                        "Arn"
-                    ]
-                },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                }
             }
         }
     },

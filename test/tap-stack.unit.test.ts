@@ -496,16 +496,13 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(detector.Properties.FindingPublishingFrequency).toBe('FIFTEEN_MINUTES');
     });
 
-    test('should create AWS Config resources', () => {
+    test('should create AWS Config S3 bucket and service role', () => {
       const bucket = template.Resources.ConfigBucket;
-      const channel = template.Resources.ConfigDeliveryChannel;
-      const recorder = template.Resources.ConfigurationRecorder;
       const role = template.Resources.ConfigServiceRole;
 
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(channel.Type).toBe('AWS::Config::DeliveryChannel');
-      expect(recorder.Type).toBe('AWS::Config::ConfigurationRecorder');
       expect(role.Type).toBe('AWS::IAM::Role');
+      // Note: ConfigurationRecorder and ConfigDeliveryChannel removed to avoid account-level conflicts
     });
   });
 
@@ -598,10 +595,11 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(guardDuty.Properties.Enable).toBe(true);
     });
 
-    test('should have Config enabled', () => {
-      const configRecorder = template.Resources.ConfigurationRecorder;
-      expect(configRecorder).toBeDefined();
-      expect(configRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+    test('should have Config S3 bucket for compliance monitoring', () => {
+      const configBucket = template.Resources.ConfigBucket;
+      expect(configBucket).toBeDefined();
+      expect(configBucket.Type).toBe('AWS::S3::Bucket');
+      // Note: ConfigurationRecorder omitted to avoid account-level conflicts
     });
 
     test('should have CloudTrail enabled with log file validation', () => {
@@ -824,10 +822,11 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(guardDuty.Properties.Enable).toBe(true);
       expect(guardDuty.Properties.DataSources.S3Logs.Enable).toBe(true);
 
-      // Config should be enabled
-      const configRecorder = template.Resources.ConfigurationRecorder;
-      expect(configRecorder.Properties.RecordingGroup.AllSupported).toBe(true);
-      expect(configRecorder.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
+      // Config S3 bucket should be available for compliance monitoring
+      const configBucket = template.Resources.ConfigBucket;
+      expect(configBucket).toBeDefined();
+      expect(configBucket.Type).toBe('AWS::S3::Bucket');
+      // Note: ConfigurationRecorder omitted to avoid account-level conflicts
     });
 
     test('should have CloudWatch alarms configured', () => {
