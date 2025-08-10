@@ -26,7 +26,6 @@ from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup
 from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
 from cdktf_cdktf_provider_aws.instance import Instance
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 from constructs import Construct
 
 
@@ -90,7 +89,6 @@ class TapStack(TerraformStack):
 
     # Initialize infrastructure components
     self._setup_provider(default_tags)
-    self._create_dynamodb_table(create_tags)
     self._create_vpc(create_tags)
     self._create_internet_gateway(create_tags)
     self._create_subnets(create_tags)
@@ -115,21 +113,6 @@ class TapStack(TerraformStack):
       "aws",
       region=self.config["aws_region"],
       default_tags=[provider_default_tags]
-    )
-
-  def _create_dynamodb_table(self, create_tags) -> None:
-    """Create DynamoDB table for Terraform state locking."""
-    self.dynamodb_table = DynamodbTable(
-      self,
-      "TerraformStateLock",
-      name="terraform-state-lock",
-      billing_mode="PAY_PER_REQUEST",
-      hash_key="LockID",
-      attribute=[{
-        "name": "LockID",
-        "type": "S"
-      }],
-      tags=create_tags("state-lock-table")
     )
 
   def _create_vpc(self, create_tags) -> None:
@@ -424,14 +407,6 @@ class TapStack(TerraformStack):
       "private_instance_ip",
       value=self.private_instance.private_ip,
       description="Private IP address of the private instance"
-    )
-
-    # DynamoDB state lock table
-    TerraformOutput(
-      self,
-      "dynamodb_table_name",
-      value=self.dynamodb_table.name,
-      description="Name of the DynamoDB table for state locking"
     )
 
   @property
