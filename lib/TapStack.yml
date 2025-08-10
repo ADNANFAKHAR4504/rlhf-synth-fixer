@@ -351,6 +351,7 @@ Resources:
       PreferredBackupWindow: 03:00-04:00
       PreferredMaintenanceWindow: sun:04:00-sun:05:00
       MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
       EnablePerformanceInsights: true
       PerformanceInsightsKMSKeyId: !Ref HealthcareKMSKey
       DeletionProtection: true
