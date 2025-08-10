@@ -15,7 +15,7 @@ variable "bucket_region" {
 variable "bucket_name" {
   description = "Name of the S3 bucket"
   type        = string
-  default     = "turing-dev-s3-bucket-01"
+  default     = "turing-dev-s3-bucket-02"
 }
 
 variable "bucket_tags" {
