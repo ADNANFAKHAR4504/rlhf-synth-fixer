@@ -62,6 +62,7 @@ describe('TapStack - Live Integration Tests', () => {
       'DatabaseEndpoint',
       'KMSKeyId',
       'PatientDataBucket',
+      'LogsBucket',
       'DatabaseSecretArn',
       'ApplicationRoleArn',
       'ApplicationSecurityGroupId',
@@ -107,8 +108,7 @@ describe('TapStack - Live Integration Tests', () => {
 
   it('validates S3 Logs bucket encryption and public access block', async () => {
     if (!outputs) return; // skip
-    const accountId = await getAccountId();
-    const logsBucket = `${applicationName}-${environmentSuffix}-logs-${accountId}-${region}`;
+    const logsBucket = outputs['LogsBucket'];
 
     // Ensure bucket exists
     await s3.send(new HeadBucketCommand({ Bucket: logsBucket }));
