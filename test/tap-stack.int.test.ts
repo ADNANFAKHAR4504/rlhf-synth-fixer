@@ -4,7 +4,6 @@ import {
   DescribeInstancesCommand, 
   DescribeSecurityGroupsCommand, 
   DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeVolumesCommand 
 } from '@aws-sdk/client-ec2';
 import { 
@@ -37,7 +36,6 @@ try {
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
 
 // AWS Clients
 const ec2Client = new EC2Client({});
