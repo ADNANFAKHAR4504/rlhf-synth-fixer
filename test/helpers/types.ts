@@ -1,11 +1,14 @@
-import * as AWS from 'aws-sdk';
-
 export interface CloudFormationStack {
   StackName: string;
   StackStatus: string;
   CreationTime: Date;
   Outputs: { [key: string]: string };
-  Tags: AWS.CloudFormation.Tag[];
+  Tags: CloudFormationTag[];
+}
+
+export interface CloudFormationTag {
+  Key?: string;
+  Value?: string;
 }
 
 export interface TestConfiguration {

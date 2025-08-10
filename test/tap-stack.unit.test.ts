@@ -446,7 +446,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        const expectedExportName = expectedMappings[outputKey];
+        const expectedExportName = expectedMappings[outputKey as keyof typeof expectedMappings];
         expect(output.Export.Name).toEqual({
           'Fn::Sub': expectedExportName
         });

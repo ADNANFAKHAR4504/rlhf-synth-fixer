@@ -145,8 +145,8 @@ export class SecurityValidator {
       severity: 'MEDIUM' as const
     });
 
-    const failedChecks = checks.filter(c => c.status === 'FAIL').length;
-    const overallStatus = failedChecks === 0 ? 'SECURE' as const : 'NEEDS_REVIEW' as const;
+    const warningChecks = checks.filter(c => c.status === 'WARNING').length;
+    const overallStatus = warningChecks === 0 ? 'SECURE' as const : 'NEEDS_REVIEW' as const;
 
     return {
       resourceType: 'AWS::EC2::VPC',
@@ -249,7 +249,9 @@ export class SecurityValidator {
     });
 
     const failedChecks = checks.filter(c => c.status === 'FAIL').length;
-    const overallStatus = failedChecks === 0 ? 'SECURE' as const : 'NEEDS_REVIEW' as const;
+    const warningChecks = checks.filter(c => c.status === 'WARNING').length;
+    const overallStatus = failedChecks > 0 ? 'VULNERABLE' as const : 
+                         warningChecks === 0 ? 'SECURE' as const : 'NEEDS_REVIEW' as const;
 
     return {
       resourceType: 'AWS::GuardDuty::Detector',
