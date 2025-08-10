@@ -37,6 +37,9 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 // Get AWS region from environment or use default
 const awsRegion = process.env.AWS_REGION || 'us-east-1';
 
@@ -73,13 +76,13 @@ describe('Security Infrastructure Integration Tests', () => {
       );
 
       expect(encryptionConfig.ServerSideEncryptionConfiguration).toBeDefined();
-      const rules: any =
-        encryptionConfig.ServerSideEncryptionConfiguration?.Rules;
-      expect(rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe(
+      const rules = encryptionConfig.ServerSideEncryptionConfiguration?.Rules;
+      expect(rules).toBeDefined();
+      expect(rules![0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
         'aws:kms'
       );
       expect(
-        rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID
+        rules![0].ApplyServerSideEncryptionByDefault?.KMSMasterKeyID
       ).toBeDefined();
     });
 
@@ -109,13 +112,13 @@ describe('Security Infrastructure Integration Tests', () => {
     test('S3 bucket should enforce encryption via bucket policy', async () => {
       const bucketName = outputs.S3BucketName;
 
-      const bucketPolicy: any = await s3Client.send(
+      const bucketPolicy = await s3Client.send(
         new GetBucketPolicyCommand({
           Bucket: bucketName,
         })
       );
 
-      const policy = JSON.parse(bucketPolicy.Policy);
+      const policy = JSON.parse(bucketPolicy.Policy!);
 
       // Check for denial of unencrypted uploads
       const denyUnencryptedStmt = policy.Statement.find(
@@ -197,7 +200,7 @@ describe('Security Infrastructure Integration Tests', () => {
         })
       );
 
-      const policy = JSON.parse(<string>keyPolicy.Policy);
+      const policy = JSON.parse(keyPolicy.Policy!);
 
       // Should allow S3 and Lambda services
       const s3Statement = policy.Statement.find(
@@ -217,14 +220,16 @@ describe('Security Infrastructure Integration Tests', () => {
       const vpcId = outputs.VpcId;
       expect(vpcId).toBeDefined();
 
-      const vpcInfo: any = await ec2Client.send(
+      const vpcInfo = await ec2Client.send(
         new DescribeVpcsCommand({
           VpcIds: [vpcId],
         })
       );
 
-      expect(vpcInfo.Vpcs[0].State).toBe('available');
-      expect(vpcInfo.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
+      expect(vpcInfo.Vpcs).toBeDefined();
+      expect(vpcInfo.Vpcs!.length).toBeGreaterThan(0);
+      expect(vpcInfo.Vpcs![0].State).toBe('available');
+      expect(vpcInfo.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
     });
 
     test('private subnets should exist and be private', async () => {
@@ -234,13 +239,14 @@ describe('Security Infrastructure Integration Tests', () => {
       expect(subnet1Id).toBeDefined();
       expect(subnet2Id).toBeDefined();
 
-      const subnetsInfo: any = await ec2Client.send(
+      const subnetsInfo = await ec2Client.send(
         new DescribeSubnetsCommand({
           SubnetIds: [subnet1Id, subnet2Id],
         })
       );
 
-      subnetsInfo.Subnets.forEach((subnet: any) => {
+      expect(subnetsInfo.Subnets).toBeDefined();
+      subnetsInfo.Subnets!.forEach((subnet: any) => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(subnet.State).toBe('available');
       });
@@ -250,13 +256,15 @@ describe('Security Infrastructure Integration Tests', () => {
       const securityGroupId = outputs.SecurityGroupId;
       expect(securityGroupId).toBeDefined();
 
-      const sgInfo: any = await ec2Client.send(
+      const sgInfo = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
           GroupIds: [securityGroupId],
         })
       );
 
-      const sg = sgInfo.SecurityGroups[0];
+      expect(sgInfo.SecurityGroups).toBeDefined();
+      expect(sgInfo.SecurityGroups!.length).toBeGreaterThan(0);
+      const sg = sgInfo.SecurityGroups![0];
 
       // Should have no inbound rules
       expect(sg.IpPermissions).toHaveLength(0);
@@ -264,10 +272,10 @@ describe('Security Infrastructure Integration Tests', () => {
       // Should have only HTTPS and DNS outbound rules
       expect(sg.IpPermissionsEgress).toHaveLength(2);
 
-      const httpsRule = sg.IpPermissionsEgress.find(
+      const httpsRule = sg.IpPermissionsEgress!.find(
         (rule: any) => rule.FromPort === 443 && rule.ToPort === 443
       );
-      const dnsRule = sg.IpPermissionsEgress.find(
+      const dnsRule = sg.IpPermissionsEgress!.find(
         (rule: any) => rule.FromPort === 53 && rule.ToPort === 53
       );
 
@@ -282,24 +290,24 @@ describe('Security Infrastructure Integration Tests', () => {
       expect(lambdaArn).toBeDefined();
 
       const functionName = lambdaArn.split(':')[6];
-      const functionInfo: any = await lambdaClient.send(
+      const functionInfo = await lambdaClient.send(
         new GetFunctionCommand({
           FunctionName: functionName,
         })
       );
 
       // Should be in VPC
-      expect(functionInfo.Configuration.VpcConfig).toBeDefined();
-      expect(functionInfo.Configuration.VpcConfig.VpcId).toBe(outputs.VpcId);
+      expect(functionInfo.Configuration?.VpcConfig).toBeDefined();
+      expect(functionInfo.Configuration?.VpcConfig?.VpcId).toBe(outputs.VpcId);
 
       // Should have correct subnets and security groups
-      expect(functionInfo.Configuration.VpcConfig.SubnetIds).toContain(
+      expect(functionInfo.Configuration?.VpcConfig?.SubnetIds).toContain(
         outputs.PrivateSubnet1Id
       );
-      expect(functionInfo.Configuration.VpcConfig.SubnetIds).toContain(
+      expect(functionInfo.Configuration?.VpcConfig?.SubnetIds).toContain(
         outputs.PrivateSubnet2Id
       );
-      expect(functionInfo.Configuration.VpcConfig.SecurityGroupIds).toContain(
+      expect(functionInfo.Configuration?.VpcConfig?.SecurityGroupIds).toContain(
         outputs.SecurityGroupId
       );
     });
@@ -316,6 +324,7 @@ describe('Security Infrastructure Integration Tests', () => {
       );
 
       expect(invokeResult.StatusCode).toBe(200);
+      expect(invokeResult.Payload).toBeDefined();
 
       const responsePayload = new TextDecoder().decode(invokeResult.Payload);
       const response = JSON.parse(responsePayload);
@@ -334,17 +343,18 @@ describe('Security Infrastructure Integration Tests', () => {
       // Role should exist and be assumable by Lambda service
       const roleName = roleArn.split('/')[1];
 
-      const roleInfo: any = await iamClient.send(
+      const roleInfo = await iamClient.send(
         new GetRoleCommand({
           RoleName: roleName,
         })
       );
 
+      expect(roleInfo.Role?.AssumeRolePolicyDocument).toBeDefined();
       const assumeRolePolicy = JSON.parse(
-        decodeURIComponent(roleInfo.Role.AssumeRolePolicyDocument)
+        decodeURIComponent(roleInfo.Role!.AssumeRolePolicyDocument!)
       );
       const lambdaAssumeStmt = assumeRolePolicy.Statement.find(
-        (stmt: any) => stmt.Principal.Service === 'lambda.amazonaws.com'
+        (stmt: any) => stmt.Principal?.Service === 'lambda.amazonaws.com'
       );
 
       expect(lambdaAssumeStmt).toBeDefined();
@@ -358,15 +368,16 @@ describe('Security Infrastructure Integration Tests', () => {
       const functionName = lambdaArn.split(':')[6];
       const expectedLogGroup = `/aws/lambda/${functionName}`;
 
-      const logGroups: any = await cloudwatchLogsClient.send(
+      const logGroups = await cloudwatchLogsClient.send(
         new DescribeLogGroupsCommand({
           logGroupNamePrefix: expectedLogGroup,
         })
       );
 
-      expect(logGroups.logGroups.length).toBeGreaterThan(0);
+      expect(logGroups.logGroups).toBeDefined();
+      expect(logGroups.logGroups!.length).toBeGreaterThan(0);
 
-      const logGroup = logGroups.logGroups[0];
+      const logGroup = logGroups.logGroups![0];
       expect(logGroup.kmsKeyId).toBeDefined();
       expect(logGroup.retentionInDays).toBe(14);
     });
@@ -376,7 +387,7 @@ describe('Security Infrastructure Integration Tests', () => {
     test('VPC endpoint for S3 should exist and be functional', async () => {
       const vpcId = outputs.VpcId;
 
-      const vpcEndpoints: any = await ec2Client.send(
+      const vpcEndpoints = await ec2Client.send(
         new DescribeVpcEndpointsCommand({
           Filters: [
             {
@@ -391,9 +402,10 @@ describe('Security Infrastructure Integration Tests', () => {
         })
       );
 
-      expect(vpcEndpoints.VpcEndpoints.length).toBeGreaterThan(0);
-      expect(vpcEndpoints.VpcEndpoints[0].State).toBe('Available');
-      expect(vpcEndpoints.VpcEndpoints[0].VpcEndpointType).toBe('Gateway');
+      expect(vpcEndpoints.VpcEndpoints).toBeDefined();
+      expect(vpcEndpoints.VpcEndpoints!.length).toBeGreaterThan(0);
+      expect(vpcEndpoints.VpcEndpoints![0].State).toBe('Available');
+      expect(vpcEndpoints.VpcEndpoints![0].VpcEndpointType).toBe('Gateway');
     });
   });
 
@@ -402,7 +414,7 @@ describe('Security Infrastructure Integration Tests', () => {
       const vpcId = outputs.VpcId;
 
       // Check VPC tags
-      const vpcTags: any = await ec2Client.send(
+      const vpcTags = await ec2Client.send(
         new DescribeTagsCommand({
           Filters: [
             {
@@ -413,11 +425,12 @@ describe('Security Infrastructure Integration Tests', () => {
         })
       );
 
+      expect(vpcTags.Tags).toBeDefined();
       const requiredTags = ['Environment', 'Owner', 'Project'];
       requiredTags.forEach(tagKey => {
-        const tag = vpcTags.Tags.find((t: any) => t.Key === tagKey);
+        const tag = vpcTags.Tags!.find((t: any) => t.Key === tagKey);
         expect(tag).toBeDefined();
-        expect(tag.Value).toBeTruthy();
+        expect(tag?.Value).toBeTruthy();
       });
     });
   });
