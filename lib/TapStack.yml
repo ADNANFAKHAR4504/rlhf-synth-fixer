@@ -269,6 +269,23 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
+  # S3 Bucket Policy for CloudFront OAC access
+  SecureS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureS3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${SecureS3Bucket}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+
   # IAM Policy for IP-based access restriction
   IPRestrictedPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -278,17 +295,8 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: RestrictByIPAddress
+          - Sid: DenyFromNonAllowedIPs
             Effect: Deny
-            Action: '*'
-            Resource: '*'
-            Condition:
-              IpAddressIfExists:
-                'aws:SourceIp': !Ref AllowedIPRanges
-              Bool:
-                'aws:ViaAWSService': 'false'
-          - Sid: AllowFromAllowedIPs
-            Effect: Allow
             Action:
               - s3:GetObject
               - s3:PutObject
@@ -299,8 +307,10 @@ Resources:
               - !Sub '${SecureS3BucketTwo}/*'
               - !GetAtt SecureS3BucketTwo.Arn
             Condition:
-              IpAddress:
+              IpAddressIfExists:
                 'aws:SourceIp': !Ref AllowedIPRanges
+              Bool:
+                'aws:ViaAWSService': 'false'
 
   # GuardDuty Detector for continuous threat detection
   GuardDutyDetector:
@@ -390,8 +400,8 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Network ACL Entry to deny suspicious IPs
-  NetworkAclEntryDenySuspicious:
+  # Network ACL Entry to deny first suspicious IP range
+  NetworkAclEntryDenySuspicious1:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref SecureNetworkAcl
@@ -399,6 +409,16 @@ Resources:
       Protocol: -1
       RuleAction: deny
       CidrBlock: !Select [0, !Ref SuspiciousIPRanges]
+
+  # Network ACL Entry to deny second suspicious IP range
+  NetworkAclEntryDenySuspicious2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref SecureNetworkAcl
+      RuleNumber: 101
+      Protocol: -1
+      RuleAction: deny
+      CidrBlock: !Select [1, !Ref SuspiciousIPRanges]
 
   # Network ACL Entry to allow all other traffic
   NetworkAclEntryAllowAll:
@@ -520,7 +540,6 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: false
       DeletionProtection: true
-      EnablePerformanceInsights: true
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
       Tags:

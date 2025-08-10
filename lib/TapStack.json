@@ -458,6 +458,36 @@
                 ]
             }
         },
+        "SecureS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudFrontServicePrincipal",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureS3Bucket}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "IPRestrictedPolicy": {
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
@@ -469,24 +499,8 @@
                     "Version": "2012-10-17",
                     "Statement": [
                         {
-                            "Sid": "RestrictByIPAddress",
+                            "Sid": "DenyFromNonAllowedIPs",
                             "Effect": "Deny",
-                            "Action": "*",
-                            "Resource": "*",
-                            "Condition": {
-                                "IpAddressIfExists": {
-                                    "aws:SourceIp": {
-                                        "Ref": "AllowedIPRanges"
-                                    }
-                                },
-                                "Bool": {
-                                    "aws:ViaAWSService": "false"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AllowFromAllowedIPs",
-                            "Effect": "Allow",
                             "Action": [
                                 "s3:GetObject",
                                 "s3:PutObject",
@@ -513,10 +527,13 @@
                                 }
                             ],
                             "Condition": {
-                                "IpAddress": {
+                                "IpAddressIfExists": {
                                     "aws:SourceIp": {
                                         "Ref": "AllowedIPRanges"
                                     }
+                                },
+                                "Bool": {
+                                    "aws:ViaAWSService": "false"
                                 }
                             }
                         }
@@ -717,7 +734,7 @@
                 ]
             }
         },
-        "NetworkAclEntryDenySuspicious": {
+        "NetworkAclEntryDenySuspicious1": {
             "Type": "AWS::EC2::NetworkAclEntry",
             "Properties": {
                 "NetworkAclId": {
@@ -729,6 +746,25 @@
                 "CidrBlock": {
                     "Fn::Select": [
                         0,
+                        {
+                            "Ref": "SuspiciousIPRanges"
+                        }
+                    ]
+                }
+            }
+        },
+        "NetworkAclEntryDenySuspicious2": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "SecureNetworkAcl"
+                },
+                "RuleNumber": 101,
+                "Protocol": -1,
+                "RuleAction": "deny",
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
                         {
                             "Ref": "SuspiciousIPRanges"
                         }
@@ -947,7 +983,6 @@
                 "BackupRetentionPeriod": 7,
                 "MultiAZ": false,
                 "DeletionProtection": true,
-                "EnablePerformanceInsights": true,
                 "MonitoringInterval": 60,
                 "MonitoringRoleArn": {
                     "Fn::GetAtt": [
