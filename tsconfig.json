@@ -29,8 +29,6 @@
     "cdk.out",
     "templates",
     "archive",
-    "test",
-    "**/*.test.ts",
     "worktree"
   ]
 }
