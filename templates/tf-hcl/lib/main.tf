@@ -6,6 +6,11 @@ variable "aws_region" {
   type        = string
   default     = "us-east-1"
 }
+variable "bucket_region" {
+  description = "Region for the S3 bucket"
+  type        = string
+  default     = "ap-southeast-2"
+}
 
 variable "bucket_name" {
   description = "Name of the S3 bucket"

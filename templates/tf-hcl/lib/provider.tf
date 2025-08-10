@@ -11,3 +11,7 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
+provider "aws" {
+  alias  = "bucket"
+  region = var.bucket_region
+}
