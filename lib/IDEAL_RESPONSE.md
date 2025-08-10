@@ -13,6 +13,7 @@ The implementation creates a production-ready AWS infrastructure stack with:
 - Comprehensive resource tagging strategy
 - Full CDKTF Python implementation following best practices
 
+
 ## Architecture Diagram
 
 ```
