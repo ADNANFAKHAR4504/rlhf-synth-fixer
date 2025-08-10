@@ -1,354 +1,423 @@
-// Configuration - These are coming from cfn-outputs after infrastructure deploy
+// Configuration - These are coming from cfn-outputs after deployment
 import {
-  DescribeInstancesCommand,
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
+  DescribeTagsCommand,
+  DescribeVpcEndpointsCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
-import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 import {
+  DescribeKeyCommand,
+  GetKeyPolicyCommand,
+  KMSClient,
+} from '@aws-sdk/client-kms';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DeleteObjectCommand,
   GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
   GetPublicAccessBlockCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import {
-  DescribeSecretCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
 
-const path = 'cfn-outputs/flat-outputs.json';
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
-let outputs;
+// Get AWS region from environment or use default
+const awsRegion = process.env.AWS_REGION || 'us-east-1';
 
-if (fs.existsSync(path)) {
-  outputs = JSON.parse(fs.readFileSync(path, 'utf8'));
-} else {
-  outputs = {
-    PrivateSubnetIds: 'subnet-06e1fcb2fd01478d9,subnet-0af7c3c23e4f4021c',
-    PublicSubnetIds: 'subnet-0df62847957ab6792,subnet-0e2e9d9d7c735d58c',
-    KmsKeyAlias: 'alias/secure-infrastructure-dev-key',
-    KmsKeyId: '632ff557-84d0-4783-a59f-08209774f35e',
-    VpcId: 'vpc-035964fe72b0c3dcc',
-    KmsKeyArn:
-      'arn:aws:kms:us-east-1:***:key/632ff557-84d0-4783-a59f-08209774f35e',
-    EC2InstanceRoleArn:
-      'arn:aws:iam::***:role/secure-infrastructure-dev-ec2-role',
-    SecurityGroupId: 'sg-093940f8ad308d82d',
-    AutoScalingGroupName: 'secure-infrastructure-dev-asg',
-    LaunchTemplateId: 'lt-0083167eb886700fa',
-    S3BucketName: 'secure-infrastructure-dev-secure-bucket-***-us-east-1',
-    SecretsManagerSecretArn:
-      'arn:aws:secretsmanager:us-east-1:***:secret:secure-infrastructure-dev-db-secret-DMTHrU',
-  };
-}
+describe('Security Infrastructure Integration Tests', () => {
+  let s3Client: S3Client;
+  let lambdaClient: LambdaClient;
+  let kmsClient: KMSClient;
+  let ec2Client: EC2Client;
+  let iamClient: IAMClient;
+  let cloudwatchLogsClient: CloudWatchLogsClient;
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+  beforeAll(() => {
+    // Initialize AWS SDK v3 clients
+    const clientConfig = { region: awsRegion };
 
-// AWS clients
-const ec2Client = new EC2Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-});
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-});
-const kmsClient = new KMSClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-});
-const secretsClient = new SecretsManagerClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-});
+    s3Client = new S3Client(clientConfig);
+    lambdaClient = new LambdaClient(clientConfig);
+    kmsClient = new KMSClient(clientConfig);
+    ec2Client = new EC2Client(clientConfig);
+    iamClient = new IAMClient(clientConfig);
+    cloudwatchLogsClient = new CloudWatchLogsClient(clientConfig);
+  });
 
-describe('Highly Secure AWS Infrastructure Integration Tests', () => {
-  describe('VPC and Networking Validation', () => {
-    test('should have VPC with correct CIDR and DNS settings', async () => {
+  describe('S3 Bucket Security Tests', () => {
+    test('S3 bucket should exist and be encrypted', async () => {
+      const bucketName = outputs.S3BucketName;
+      expect(bucketName).toBeDefined();
+
+      // Test bucket encryption configuration
+      const encryptionConfig = await s3Client.send(
+        new GetBucketEncryptionCommand({
+          Bucket: bucketName,
+        })
+      );
+
+      expect(encryptionConfig.ServerSideEncryptionConfiguration).toBeDefined();
+      const rules: any =
+        encryptionConfig.ServerSideEncryptionConfiguration?.Rules;
+      expect(rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe(
+        'aws:kms'
+      );
+      expect(
+        rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID
+      ).toBeDefined();
+    });
+
+    test('S3 bucket should have public access blocked', async () => {
+      const bucketName = outputs.S3BucketName;
+
+      const publicAccessBlock = await s3Client.send(
+        new GetPublicAccessBlockCommand({
+          Bucket: bucketName,
+        })
+      );
+
+      expect(
+        publicAccessBlock.PublicAccessBlockConfiguration?.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        publicAccessBlock.PublicAccessBlockConfiguration?.BlockPublicPolicy
+      ).toBe(true);
+      expect(
+        publicAccessBlock.PublicAccessBlockConfiguration?.IgnorePublicAcls
+      ).toBe(true);
+      expect(
+        publicAccessBlock.PublicAccessBlockConfiguration?.RestrictPublicBuckets
+      ).toBe(true);
+    });
+
+    test('S3 bucket should enforce encryption via bucket policy', async () => {
+      const bucketName = outputs.S3BucketName;
+
+      const bucketPolicy: any = await s3Client.send(
+        new GetBucketPolicyCommand({
+          Bucket: bucketName,
+        })
+      );
+
+      const policy = JSON.parse(bucketPolicy.Policy);
+
+      // Check for denial of unencrypted uploads
+      const denyUnencryptedStmt = policy.Statement.find(
+        (stmt: any) => stmt.Sid === 'DenyUnencryptedUploads'
+      );
+      expect(denyUnencryptedStmt).toBeDefined();
+      expect(denyUnencryptedStmt.Effect).toBe('Deny');
+
+      // Check for HTTPS enforcement
+      const denyInsecureStmt = policy.Statement.find(
+        (stmt: any) => stmt.Sid === 'DenyInsecureConnections'
+      );
+      expect(denyInsecureStmt).toBeDefined();
+      expect(denyInsecureStmt.Effect).toBe('Deny');
+    });
+
+    test('should be able to upload encrypted objects only', async () => {
+      const bucketName = outputs.S3BucketName;
+      const kmsKeyId = outputs.KmsKeyId;
+      const testKey = `test-encrypted-${Date.now()}.txt`;
+
+      // Upload with encryption should succeed
+      await expect(
+        s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: testKey,
+            Body: 'test content',
+            ServerSideEncryption: 'aws:kms',
+            SSEKMSKeyId: kmsKeyId,
+          })
+        )
+      ).resolves.toBeDefined();
+
+      // Verify object is encrypted
+      const headObject = await s3Client.send(
+        new HeadObjectCommand({
+          Bucket: bucketName,
+          Key: testKey,
+        })
+      );
+
+      expect(headObject.ServerSideEncryption).toBe('aws:kms');
+      expect(headObject.SSEKMSKeyId).toBeDefined();
+
+      // Clean up
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: testKey,
+        })
+      );
+    });
+  });
+
+  describe('KMS Key Security Tests', () => {
+    test('KMS key should exist and be customer-managed', async () => {
+      const kmsKeyId = outputs.KmsKeyId;
+      expect(kmsKeyId).toBeDefined();
+
+      const keyInfo = await kmsClient.send(
+        new DescribeKeyCommand({
+          KeyId: kmsKeyId,
+        })
+      );
+
+      expect(keyInfo.KeyMetadata?.KeyManager).toBe('CUSTOMER');
+      expect(keyInfo.KeyMetadata?.KeyState).toBe('Enabled');
+      expect(keyInfo.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
+    });
+
+    test('KMS key should have appropriate policies', async () => {
+      const kmsKeyId = outputs.KmsKeyId;
+
+      const keyPolicy = await kmsClient.send(
+        new GetKeyPolicyCommand({
+          KeyId: kmsKeyId,
+          PolicyName: 'default',
+        })
+      );
+
+      const policy = JSON.parse(<string>keyPolicy.Policy);
+
+      // Should allow S3 and Lambda services
+      const s3Statement = policy.Statement.find(
+        (stmt: any) => stmt.Sid === 'Allow S3 Service'
+      );
+      const lambdaStatement = policy.Statement.find(
+        (stmt: any) => stmt.Sid === 'Allow Lambda Service'
+      );
+
+      expect(s3Statement).toBeDefined();
+      expect(lambdaStatement).toBeDefined();
+    });
+  });
+
+  describe('VPC Security Tests', () => {
+    test('VPC should exist with correct configuration', async () => {
       const vpcId = outputs.VpcId;
       expect(vpcId).toBeDefined();
 
-      const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId],
-      });
+      const vpcInfo: any = await ec2Client.send(
+        new DescribeVpcsCommand({
+          VpcIds: [vpcId],
+        })
+      );
 
-      const response = await ec2Client.send(command);
-      const vpc = response.Vpcs?.[0];
-
-      expect(vpc).toBeDefined();
-      expect(vpc?.State).toBe('available');
+      expect(vpcInfo.Vpcs[0].State).toBe('available');
+      expect(vpcInfo.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
     });
 
-    test('should have private subnets without public IP assignment', async () => {
-      const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
-      expect(privateSubnetIds.length).toBe(2);
+    test('private subnets should exist and be private', async () => {
+      const subnet1Id = outputs.PrivateSubnet1Id;
+      const subnet2Id = outputs.PrivateSubnet2Id;
 
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: privateSubnetIds,
-      });
+      expect(subnet1Id).toBeDefined();
+      expect(subnet2Id).toBeDefined();
 
-      const response = await ec2Client.send(command);
+      const subnetsInfo: any = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: [subnet1Id, subnet2Id],
+        })
+      );
 
-      response.Subnets?.forEach(subnet => {
+      subnetsInfo.Subnets.forEach((subnet: any) => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(subnet.State).toBe('available');
       });
     });
 
-    test('should have public subnets with public IP assignment', async () => {
-      const publicSubnetIds = outputs.PublicSubnetIds.split(',');
-      expect(publicSubnetIds.length).toBe(2);
+    test('Lambda security group should have restrictive rules', async () => {
+      const securityGroupId = outputs.SecurityGroupId;
+      expect(securityGroupId).toBeDefined();
 
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: publicSubnetIds,
-      });
-
-      const response = await ec2Client.send(command);
-
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.State).toBe('available');
-      });
-    });
-
-    test('should have instances only in private subnets', async () => {
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId],
-          },
-          {
-            Name: 'instance-state-name',
-            Values: ['running', 'pending'],
-          },
-        ],
-      });
-
-      const response = await ec2Client.send(command);
-      const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
-
-      response.Reservations?.forEach(reservation => {
-        reservation.Instances?.forEach(instance => {
-          expect(privateSubnetIds).toContain(instance.SubnetId);
-          expect(instance.PublicIpAddress).toBeUndefined();
-        });
-      });
-    });
-  });
-
-  describe('KMS Encryption Validation', () => {
-    test('should have KMS key with rotation enabled', async () => {
-      const kmsKeyId = outputs.KmsKeyId;
-      expect(kmsKeyId).toBeDefined();
-
-      const command = new DescribeKeyCommand({
-        KeyId: kmsKeyId,
-      });
-
-      const response = await kmsClient.send(command);
-      const keyMetadata = response.KeyMetadata;
-
-      expect(keyMetadata).toBeDefined();
-      expect(keyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
-      expect(keyMetadata?.KeyState).toBe('Enabled');
-    });
-
-    test('should have EBS volumes encrypted with KMS key', async () => {
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId],
-          },
-        ],
-      });
-
-      const response = await ec2Client.send(command);
-
-      response.Reservations?.forEach(reservation => {
-        reservation.Instances?.forEach(instance => {
-          instance.BlockDeviceMappings?.forEach((blockDevice: any) => {
-            expect(blockDevice.Ebs?.Encrypted).toBe(true);
-            expect(blockDevice.Ebs?.KmsKeyId).toContain(outputs.KmsKeyId);
-          });
-        });
-      });
-    });
-  });
-
-  describe('S3 Security Validation', () => {
-    test('should have S3 bucket with KMS encryption', async () => {
-      const bucketName = outputs.S3BucketName;
-      expect(bucketName).toBeDefined();
-
-      const command = new GetBucketEncryptionCommand({
-        Bucket: bucketName,
-      });
-
-      const response = await s3Client.send(command);
-      const encryption = response.ServerSideEncryptionConfiguration?.Rules?.[0];
-
-      expect(encryption?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
-        'aws:kms'
+      const sgInfo: any = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [securityGroupId],
+        })
       );
-      expect(
-        encryption?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID
-      ).toContain(outputs.KmsKeyId);
-    });
 
-    test('should have S3 bucket with public access blocked', async () => {
-      const bucketName = outputs.S3BucketName;
+      const sg = sgInfo.SecurityGroups[0];
 
-      const command = new GetPublicAccessBlockCommand({
-        Bucket: bucketName,
-      });
+      // Should have no inbound rules
+      expect(sg.IpPermissions).toHaveLength(0);
 
-      const response = await s3Client.send(command);
-      const publicAccessBlock = response.PublicAccessBlockConfiguration;
+      // Should have only HTTPS and DNS outbound rules
+      expect(sg.IpPermissionsEgress).toHaveLength(2);
 
-      expect(publicAccessBlock?.BlockPublicAcls).toBe(true);
-      expect(publicAccessBlock?.BlockPublicPolicy).toBe(true);
-      expect(publicAccessBlock?.IgnorePublicAcls).toBe(true);
-      expect(publicAccessBlock?.RestrictPublicBuckets).toBe(true);
-    });
-  });
+      const httpsRule = sg.IpPermissionsEgress.find(
+        (rule: any) => rule.FromPort === 443 && rule.ToPort === 443
+      );
+      const dnsRule = sg.IpPermissionsEgress.find(
+        (rule: any) => rule.FromPort === 53 && rule.ToPort === 53
+      );
 
-  describe('Secrets Manager Validation', () => {
-    test('should have secrets encrypted with KMS key', async () => {
-      const secretArn = outputs.SecretsManagerSecretArn;
-      expect(secretArn).toBeDefined();
-
-      const command = new DescribeSecretCommand({
-        SecretId: secretArn,
-      });
-
-      const response = await secretsClient.send(command);
-
-      expect(response.KmsKeyId).toContain(outputs.KmsKeyId);
-      expect(response.Name).toContain('secure-infrastructure');
+      expect(httpsRule).toBeDefined();
+      expect(dnsRule).toBeDefined();
     });
   });
 
-  describe('Auto Scaling Group Validation', () => {
-    test('should have instances running in private subnets', async () => {
-      const asgName = outputs.AutoScalingGroupName;
-      expect(asgName).toBeDefined();
+  describe('Lambda Function Security Tests', () => {
+    test('Lambda function should exist and be in VPC', async () => {
+      const lambdaArn = outputs.LambdaFunctionArn;
+      expect(lambdaArn).toBeDefined();
 
-      // Get instances from VPC to verify they're in correct subnets
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId],
-          },
-          {
-            Name: 'instance-state-name',
-            Values: ['running', 'pending'],
-          },
-        ],
-      });
+      const functionName = lambdaArn.split(':')[6];
+      const functionInfo: any = await lambdaClient.send(
+        new GetFunctionCommand({
+          FunctionName: functionName,
+        })
+      );
 
-      const response = await ec2Client.send(command);
-      const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
+      // Should be in VPC
+      expect(functionInfo.Configuration.VpcConfig).toBeDefined();
+      expect(functionInfo.Configuration.VpcConfig.VpcId).toBe(outputs.VpcId);
 
-      expect(response.Reservations?.length).toBeGreaterThan(0);
+      // Should have correct subnets and security groups
+      expect(functionInfo.Configuration.VpcConfig.SubnetIds).toContain(
+        outputs.PrivateSubnet1Id
+      );
+      expect(functionInfo.Configuration.VpcConfig.SubnetIds).toContain(
+        outputs.PrivateSubnet2Id
+      );
+      expect(functionInfo.Configuration.VpcConfig.SecurityGroupIds).toContain(
+        outputs.SecurityGroupId
+      );
+    });
 
-      response.Reservations?.forEach(reservation => {
-        reservation.Instances?.forEach(instance => {
-          expect(privateSubnetIds).toContain(instance.SubnetId);
+    test('Lambda function should be able to execute', async () => {
+      const lambdaArn = outputs.LambdaFunctionArn;
+      const functionName = lambdaArn.split(':')[6];
 
-          // Verify tags
-          const tags = instance.Tags || [];
-          const tagMap = tags.reduce(
-            (acc, tag) => {
-              acc[tag.Key || ''] = tag.Value || '';
-              return acc;
+      const invokeResult = await lambdaClient.send(
+        new InvokeCommand({
+          FunctionName: functionName,
+          Payload: new TextEncoder().encode(JSON.stringify({})),
+        })
+      );
+
+      expect(invokeResult.StatusCode).toBe(200);
+
+      const responsePayload = new TextDecoder().decode(invokeResult.Payload);
+      const response = JSON.parse(responsePayload);
+      expect(response.statusCode).toBe(200);
+
+      const body = JSON.parse(response.body);
+      expect(body.message).toContain(
+        'Secure Lambda function executed successfully'
+      );
+    });
+
+    test('Lambda execution role should have least privilege permissions', async () => {
+      const roleArn = outputs.LambdaExecutionRoleArn;
+      expect(roleArn).toBeDefined();
+
+      // Role should exist and be assumable by Lambda service
+      const roleName = roleArn.split('/')[1];
+
+      const roleInfo: any = await iamClient.send(
+        new GetRoleCommand({
+          RoleName: roleName,
+        })
+      );
+
+      const assumeRolePolicy = JSON.parse(
+        decodeURIComponent(roleInfo.Role.AssumeRolePolicyDocument)
+      );
+      const lambdaAssumeStmt = assumeRolePolicy.Statement.find(
+        (stmt: any) => stmt.Principal.Service === 'lambda.amazonaws.com'
+      );
+
+      expect(lambdaAssumeStmt).toBeDefined();
+      expect(lambdaAssumeStmt.Action).toBe('sts:AssumeRole');
+    });
+  });
+
+  describe('CloudWatch Logs Security Tests', () => {
+    test('Lambda logs should be encrypted', async () => {
+      const lambdaArn = outputs.LambdaFunctionArn;
+      const functionName = lambdaArn.split(':')[6];
+      const expectedLogGroup = `/aws/lambda/${functionName}`;
+
+      const logGroups: any = await cloudwatchLogsClient.send(
+        new DescribeLogGroupsCommand({
+          logGroupNamePrefix: expectedLogGroup,
+        })
+      );
+
+      expect(logGroups.logGroups.length).toBeGreaterThan(0);
+
+      const logGroup = logGroups.logGroups[0];
+      expect(logGroup.kmsKeyId).toBeDefined();
+      expect(logGroup.retentionInDays).toBe(14);
+    });
+  });
+
+  describe('Network Connectivity Tests', () => {
+    test('VPC endpoint for S3 should exist and be functional', async () => {
+      const vpcId = outputs.VpcId;
+
+      const vpcEndpoints: any = await ec2Client.send(
+        new DescribeVpcEndpointsCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
             },
-            {} as Record<string, string>
-          );
-
-          expect(tagMap['Environment']).toBeDefined();
-          expect(tagMap['Project']).toBeDefined();
-          expect(tagMap['Owner']).toBeDefined();
-        });
-      });
-    });
-  });
-
-  describe('Security Group Validation', () => {
-    test('should have no open SSH access to 0.0.0.0/0', async () => {
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId],
-          },
-        ],
-      });
-
-      const response = await ec2Client.send(command);
-
-      response.Reservations?.forEach(reservation => {
-        reservation.Instances?.forEach(instance => {
-          instance.SecurityGroups?.forEach(sg => {
-            // This would require additional API call to describe security group rules
-            // For now, we verify that instances exist and have security groups
-            expect(sg.GroupId).toBeDefined();
-          });
-        });
-      });
-    });
-  });
-
-  describe('High Availability Validation', () => {
-    test('should have resources distributed across multiple AZs', async () => {
-      const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
-      const publicSubnetIds = outputs.PublicSubnetIds.split(',');
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: [...privateSubnetIds, ...publicSubnetIds],
-      });
-
-      const response = await ec2Client.send(command);
-      const availabilityZones = new Set(
-        response.Subnets?.map(subnet => subnet.AvailabilityZone)
+            {
+              Name: 'service-name',
+              Values: [`com.amazonaws.${awsRegion}.s3`],
+            },
+          ],
+        })
       );
 
-      expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
+      expect(vpcEndpoints.VpcEndpoints.length).toBeGreaterThan(0);
+      expect(vpcEndpoints.VpcEndpoints[0].State).toBe('Available');
+      expect(vpcEndpoints.VpcEndpoints[0].VpcEndpointType).toBe('Gateway');
     });
   });
 
-  describe('Resource Outputs Validation', () => {
-    test('should have all required outputs populated', () => {
-      const requiredOutputs = [
-        'VpcId',
-        'PublicSubnetIds',
-        'PrivateSubnetIds',
-        'KmsKeyId',
-        'KmsKeyArn',
-        'S3BucketName',
-        'AutoScalingGroupName',
-        'EC2InstanceRoleArn',
-        'SecretsManagerSecretArn',
-        'LaunchTemplateId',
-        'SecurityGroupId',
-      ];
+  describe('Resource Tagging Validation', () => {
+    test('all resources should have consistent tags', async () => {
+      const vpcId = outputs.VpcId;
 
-      requiredOutputs.forEach(outputKey => {
-        expect(outputs[outputKey]).toBeDefined();
-        expect(outputs[outputKey]).not.toBe('');
-      });
-    });
+      // Check VPC tags
+      const vpcTags: any = await ec2Client.send(
+        new DescribeTagsCommand({
+          Filters: [
+            {
+              Name: 'resource-id',
+              Values: [vpcId],
+            },
+          ],
+        })
+      );
 
-    test('should have valid ARN formats', () => {
-      const arnOutputs = [
-        'KmsKeyArn',
-        'EC2InstanceRoleArn',
-        'SecretsManagerSecretArn',
-      ];
-
-      arnOutputs.forEach(outputKey => {
-        const arn = outputs[outputKey];
-        expect(arn).toMatch(/^arn:aws:/);
+      const requiredTags = ['Environment', 'Owner', 'Project'];
+      requiredTags.forEach(tagKey => {
+        const tag = vpcTags.Tags.find((t: any) => t.Key === tagKey);
+        expect(tag).toBeDefined();
+        expect(tag.Value).toBeTruthy();
       });
     });
   });
