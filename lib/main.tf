@@ -33,7 +33,6 @@ variable "bucket_tags" {
 ########################
 
 resource "aws_s3_bucket" "this" {
-  provider = aws.bucket
   bucket   = var.bucket_name
   tags     = var.bucket_tags
 }
