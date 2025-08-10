@@ -269,7 +269,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "KMSKey-${EnvironmentSuffix}"
+                            "Fn::Sub": "KMSKey-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -305,7 +305,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/tapstack-${EnvironmentSuffix}"
+                    "Fn::Sub": "alias/tapstack-229157-${EnvironmentSuffix}"
                 },
                 "TargetKeyId": {
                     "Ref": "KMSKey"
@@ -316,7 +316,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "tap-db-secret-${EnvironmentSuffix}"
+                    "Fn::Sub": "tap-db-secret-229157-${EnvironmentSuffix}"
                 },
                 "Description": "Database password for RDS instance with automatic rotation",
                 "GenerateSecretString": {
@@ -333,7 +333,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapDBSecret-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapDBSecret-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -367,7 +367,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapVPC-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapVPC-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -386,7 +386,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapIGW-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapIGW-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -429,7 +429,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPublicSubnet1-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPublicSubnet1-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -461,7 +461,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPublicSubnet2-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPublicSubnet2-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -492,7 +492,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPrivateSubnet1-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPrivateSubnet1-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -523,7 +523,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPrivateSubnet2-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPrivateSubnet2-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -544,7 +544,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapNatGW1EIP-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapNatGW1EIP-229157-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -566,7 +566,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapNatGW1-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapNatGW1-229157-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -582,7 +582,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPublicRoutes-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPublicRoutes-229157-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -633,7 +633,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPrivateRoutes1-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPrivateRoutes1-229157-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -672,7 +672,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPrivateRoutes2-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPrivateRoutes2-229157-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -711,7 +711,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPublicNetworkACL-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPublicNetworkACL-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -816,7 +816,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapPrivateNetworkACL-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapPrivateNetworkACL-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -879,7 +879,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "TapALBSecurityGroup-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapALBSecurityGroup-229157-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
@@ -889,7 +889,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapALBSecurityGroup-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapALBSecurityGroup-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -945,7 +945,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "TapEC2SecurityGroup-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapEC2SecurityGroup-229157-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for EC2 instances",
                 "VpcId": {
@@ -971,7 +971,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapEC2SecurityGroup-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapEC2SecurityGroup-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -987,7 +987,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "TapRDSSecurityGroup-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapRDSSecurityGroup-229157-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for RDS database",
                 "VpcId": {
@@ -997,7 +997,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapRDSSecurityGroup-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapRDSSecurityGroup-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1191,7 +1191,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapEC2Role-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapEC2Role-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1218,7 +1218,7 @@
             "DependsOn": "KMSKey",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "TapLaunchTemplate-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapLaunchTemplate-229157-${EnvironmentSuffix}"
                 },
                 "LaunchTemplateData": {
                     "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
@@ -1261,7 +1261,7 @@
                                 {
                                     "Key": "Name",
                                     "Value": {
-                                        "Fn::Sub": "TapEC2Instance-${EnvironmentSuffix}"
+                                        "Fn::Sub": "TapEC2Instance-229157-${EnvironmentSuffix}"
                                     }
                                 },
                                 {
@@ -1288,7 +1288,7 @@
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
                 "AutoScalingGroupName": {
-                    "Fn::Sub": "TapASG-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapASG-229157-${EnvironmentSuffix}"
                 },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
@@ -1329,7 +1329,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapASG-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapASG-229157-${EnvironmentSuffix}"
                         },
                         "PropagateAtLaunch": false
                     },
@@ -1370,7 +1370,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapRDSMonitoringRole-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapRDSMonitoringRole-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1386,7 +1386,7 @@
             "Type": "AWS::RDS::DBParameterGroup",
             "Properties": {
                 "DBParameterGroupName": {
-                    "Fn::Sub": "tap-mysql-params-${EnvironmentSuffix}"
+                    "Fn::Sub": "tap-mysql-params-229157-${EnvironmentSuffix}"
                 },
                 "Description": "Parameter group for MySQL with SSL enforcement",
                 "Family": "mysql8.0",
@@ -1400,7 +1400,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapDBParameterGroup-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapDBParameterGroup-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1416,7 +1416,7 @@
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "tap-db-subnet-group-${EnvironmentSuffix}"
+                    "Fn::Sub": "tap-db-subnet-group-229157-${EnvironmentSuffix}"
                 },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
@@ -1431,7 +1431,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapDBSubnetGroup-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapDBSubnetGroup-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1448,7 +1448,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "tap-database-${EnvironmentSuffix}"
+                    "Fn::Sub": "tap-database-229157-${EnvironmentSuffix}"
                 },
                 "DBInstanceClass": {
                     "Ref": "DBInstanceClass"
@@ -1524,7 +1524,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapRDSInstance-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapRDSInstance-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1540,7 +1540,7 @@
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "TapWAF-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapWAF-229157-${EnvironmentSuffix}"
                 },
                 "Description": "WAF for secure web application protection",
                 "Scope": "REGIONAL",
@@ -1630,7 +1630,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapWAF-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapWAF-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1660,7 +1660,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "TapALB-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapALB-229157-${EnvironmentSuffix}"
                 },
                 "Scheme": "internet-facing",
                 "Type": "application",
@@ -1699,7 +1699,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapALB-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapALB-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1715,7 +1715,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "TapTargetGroup-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapTargetGroup-229157-${EnvironmentSuffix}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -1733,7 +1733,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapTargetGroup-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapTargetGroup-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1858,7 +1858,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs-${EnvironmentSuffix}"
+                    "Fn::Sub": "/aws/vpc/flowlogs-229157-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 14,
                 "KmsKeyId": {
@@ -1891,7 +1891,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapVPCFlowLogs-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapVPCFlowLogs-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1911,7 +1911,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "TapHighCPU-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapHighCPU-229157-${EnvironmentSuffix}"
                 },
                 "AlarmDescription": "High CPU utilization alarm for EC2 instances",
                 "MetricName": "CPUUtilization",
@@ -1940,7 +1940,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "TapRDSHighCPU-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapRDSHighCPU-229157-${EnvironmentSuffix}"
                 },
                 "AlarmDescription": "High CPU utilization alarm for RDS instance",
                 "MetricName": "CPUUtilization",
@@ -1969,7 +1969,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "TapWAFBlockedRequests-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapWAFBlockedRequests-229157-${EnvironmentSuffix}"
                 },
                 "AlarmDescription": "High number of blocked requests by WAF",
                 "MetricName": "BlockedRequests",
@@ -1983,7 +1983,7 @@
                     {
                         "Name": "WebACL",
                         "Value": {
-                            "Fn::Sub": "TapWAF-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapWAF-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -2004,7 +2004,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "TapALBHighResponseTime-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapALBHighResponseTime-229157-${EnvironmentSuffix}"
                 },
                 "AlarmDescription": "High response time from ALB targets",
                 "MetricName": "TargetResponseTime",
@@ -2036,7 +2036,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "TapUnhealthyTargets-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapUnhealthyTargets-229157-${EnvironmentSuffix}"
                 },
                 "AlarmDescription": "Unhealthy targets detected",
                 "MetricName": "UnHealthyHostCount",
@@ -2068,7 +2068,7 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "TapAlerts-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapAlerts-229157-${EnvironmentSuffix}"
                 },
                 "DisplayName": {
                     "Fn::Sub": "TapStack Alerts - ${EnvironmentSuffix}"
@@ -2080,7 +2080,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapSNSTopic-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapSNSTopic-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -2101,7 +2101,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "tap-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "tap-cloudtrail-229157-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -2155,7 +2155,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapCloudTrailBucket-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapCloudTrailBucket-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -2212,7 +2212,7 @@
             "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "TapCloudTrail-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapCloudTrail-229157-${EnvironmentSuffix}"
                 },
                 "S3BucketName": {
                     "Ref": "CloudTrailBucket"
@@ -2228,7 +2228,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapCloudTrail-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapCloudTrail-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -2259,7 +2259,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapGuardDuty-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapGuardDuty-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -2276,7 +2276,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "tap-config-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "tap-config-229157-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -2330,7 +2330,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TapConfigBucket-${EnvironmentSuffix}"
+                            "Fn::Sub": "TapConfigBucket-229157-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -2390,7 +2390,7 @@
             "DependsOn": "ConfigBucketPolicy",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "TapConfigDeliveryChannel-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapConfigDeliveryChannel-229157-${EnvironmentSuffix}"
                 },
                 "S3BucketName": {
                     "Ref": "ConfigBucket"
@@ -2508,7 +2508,7 @@
             "DependsOn": "ConfigBucketPolicy",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "TapConfigRecorder-${EnvironmentSuffix}"
+                    "Fn::Sub": "TapConfigRecorder-229157-${EnvironmentSuffix}"
                 },
                 "RoleARN": {
                     "Fn::GetAtt": [
