@@ -191,48 +191,9 @@ artifacts:
             opts=ResourceOptions(parent=self)
         )
         
-        # CodePipeline Policy - Least privilege access
-        def create_pipeline_policy(bucket_arn):
-            return json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:GetBucketVersioning",
-                            "s3:GetObject",
-                            "s3:GetObjectVersion",
-                            "s3:PutObject"
-                        ],
-                        "Resource": [
-                            bucket_arn,
-                            f"{bucket_arn}/*"
-                        ]
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "codebuild:BatchGetBuilds",
-                            "codebuild:StartBuild"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "codestar-connections:UseConnection"
-                        ],
-                        "Resource": "*"
-                    }
-                ]
-            })
-        
-        aws.iam.RolePolicy(
-            f"{self.resource_name_prefix}-codepipeline-policy",
-            role=self.pipeline_role.id,
-            policy=self.artifacts_bucket.arn.apply(create_pipeline_policy),
-            opts=ResourceOptions(parent=self)
-        )
+        # Store the policy creation for later after CodeStar connection is created
+        self._pipeline_policy_bucket_arn = self.artifacts_bucket.arn
+        self._pipeline_policy_role = self.pipeline_role
         
         # CodeBuild Service Role
         codebuild_assume_role_policy = {
@@ -306,7 +267,7 @@ artifacts:
                         "Action": [
                             "secretsmanager:GetSecretValue"
                         ],
-                        "Resource": "*",
+                        "Resource": f"arn:aws:secretsmanager:{self.target_region}:*:secret:*",
                         "Condition": {
                             "StringEquals": {
                                 "secretsmanager:ResourceTag/Project": "IaC - AWS Nova Model Breaking"
@@ -365,6 +326,52 @@ artifacts:
                 opts=ResourceOptions(parent=self)
             )
             self.codestar_connection_arn = self.codestar_connection.arn
+        
+        # Now create the pipeline policy with the CodeStar connection ARN
+        def create_pipeline_policy(bucket_arn):
+            return json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetBucketVersioning",
+                            "s3:GetObject",
+                            "s3:GetObjectVersion",
+                            "s3:PutObject"
+                        ],
+                        "Resource": [
+                            bucket_arn,
+                            f"{bucket_arn}/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "codebuild:BatchGetBuilds",
+                            "codebuild:StartBuild"
+                        ],
+                        "Resource": [
+                            f"arn:aws:codebuild:{self.target_region}:*:project/{self.resource_name_prefix}-*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "codestar-connections:UseConnection"
+                        ],
+                        "Resource": self.codestar_connection_arn
+                    }
+                ]
+            })
+        
+        # Create the pipeline policy now that we have the connection ARN
+        aws.iam.RolePolicy(
+            f"{self.resource_name_prefix}-codepipeline-policy",
+            role=self._pipeline_policy_role.id,
+            policy=self._pipeline_policy_bucket_arn.apply(create_pipeline_policy),
+            opts=ResourceOptions(parent=self)
+        )
 
     def _create_codebuild_project(self) -> None:
         """Create CodeBuild projects for build and deploy stages"""
