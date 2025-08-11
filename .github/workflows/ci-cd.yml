@@ -62,6 +62,12 @@ jobs:
             exit 1
           fi
 
+          # If PO_ID is empty, raise error
+          if [ -z "$PO_ID" ]; then
+            echo "❌ PO_ID is required but not found in metadata.json"
+            exit 1
+          fi
+
           echo "Detected platform: $PLATFORM, language: $LANGUAGE"
 
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
