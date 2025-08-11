@@ -115,12 +115,11 @@ describe('TapStack.yml - Unit Tests', () => {
   });
 
   describe('Conditions', () => {
-    test('defines UseExampleALB, UseNatGateways, IsProdEnv, UseDefaultBucketSuffix', () => {
+    test('defines UseExampleALB, UseNatGateways, IsProdEnv', () => {
       expect(yaml).toMatch(/Conditions:/);
       expect(yaml).toMatch(/UseExampleALB: \!Equals \[ \!Ref EnableExampleALB, 'true' \]/);
       expect(yaml).toMatch(/UseNatGateways: \!Equals \[ \!Ref CreateNatGateways, 'true' \]/);
       expect(yaml).toMatch(/IsProdEnv: \!Equals \[ \!Ref Environment, 'prod' \]/);
-      expect(yaml).toMatch(/UseDefaultBucketSuffix: \!Equals \[ \!Ref BucketSuffix, '' \]/);
     });
   });
 
@@ -448,6 +447,7 @@ describe('TapStack.yml - Unit Tests', () => {
         'ALBDNS',
         'AdminCIDROut',
         'AvailabilityZonesToUseOut',
+        'BucketSuffixOut',
       ];
       outputs.forEach(o => {
         const pattern = new RegExp(`(?:^|\\r?\\n)\\s*${o}:`);
