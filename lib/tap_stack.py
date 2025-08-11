@@ -800,10 +800,3 @@ phases:
       policy_arn=self.rbac_policy.arn,
       opts=ResourceOptions(parent=self)
     )
-
-
-    
-    # Note: In a real-world scenario, you would need to add the specified
-    # IAM users/roles to this group or directly attach the policy to them.
-    # This implementation creates the infrastructure; the actual assignment
-    # of principals should be done through additional IAM operations.
