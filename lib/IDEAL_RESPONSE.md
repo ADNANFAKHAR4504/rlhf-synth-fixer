@@ -1291,6 +1291,8 @@ describe('TapStack — unit coverage', () => {
 import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2'; // AWS SDK for EC2
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds'; // AWS SDK for RDS
 import { App, Testing } from 'cdktf';
+import * as fs from 'fs';
+import * as path from 'path';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack — Integration Coverage', () => {
@@ -1357,8 +1359,9 @@ describe('TapStack — Integration Coverage', () => {
     expect(synthesized).toMatch(/"secondary_vpc_id"/);
   });
 
-  // Real Integration Test: Deploy infrastructure and verify live resources
+  // New: True Integration Test — Deploy infrastructure, get outputs, and verify live resources
   test('deploys live resources and verifies DB connectivity', async () => {
+    // Deploy infrastructure using cdktf deploy (or terraform apply)
     const app = new App();
     const stack = new TapStack(app, 'TestLiveEnvironmentDeployment');
     const synthesized = Testing.synth(stack);
@@ -1366,22 +1369,30 @@ describe('TapStack — Integration Coverage', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
 
-    // Ensure that resources are synthesized with appropriate values
-    expect(synthesized).toMatch(/"aws_vpc"/);
-    expect(synthesized).toMatch(/"aws_db_instance"/);
+    // Read the Terraform outputs (you can replace this with the actual location of your state file)
+    const terraformStateFile = path.join(__dirname, '..', 'cdktf.out', 'terraform.tfstate');
+    const state = JSON.parse(fs.readFileSync(terraformStateFile, 'utf8'));
 
-    // Real AWS checks using AWS SDK (simulate AWS SDK call)
+    // Extract resource IDs from Terraform state outputs
+    const vpcId = state.resources.find((r: any) => r.type === 'aws_vpc' && r.name === 'primaryVpc')?.instances[0]?.attributes?.id;
+    const dbInstanceId = state.resources.find((r: any) => r.type === 'aws_db_instance')?.instances[0]?.attributes?.id;
+
+    expect(vpcId).toBeDefined();
+    expect(dbInstanceId).toBeDefined();
+
+    // Real AWS SDK checks (check live resources)
     const vpcClient = new EC2Client({ region: 'us-east-1' });
     const dbClient = new RDSClient({ region: 'us-east-1' });
 
-    const vpcResponse = await vpcClient.send(new DescribeVpcsCommand({}));
+    // Verify VPC existence
+    const vpcResponse = await vpcClient.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
     expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);  // Check if VPC is deployed
 
-    const dbResponse = await dbClient.send(new DescribeDBInstancesCommand({}));
+    // Verify DB instance existence
+    const dbResponse = await dbClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId }));
     expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);  // Check if DB instance exists
   });
 });
-
 ```
 
 ### `bin/tap.ts`
