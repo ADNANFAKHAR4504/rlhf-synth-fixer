@@ -983,7 +983,7 @@ EOF
                 id=launch_template.id,
                 version="$Latest"
             ),
-            tag=[
+            tags=[
                 aws.autoscaling.GroupTagArgs(
                     key="Name",
                     value=f"tap-asg-{region}-{self.args.environment_suffix}",
