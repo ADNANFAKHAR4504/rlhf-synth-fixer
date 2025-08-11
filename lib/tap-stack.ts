@@ -19,6 +19,8 @@ import {
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 // import { MyStack } from './my-stack';
 
 interface TapStackProps {
@@ -142,17 +144,50 @@ export class TapStack extends TerraformStack {
     // Create S3 bucket for logs
     const s3Module = new S3Module(this, 's3', config);
 
-    // Flow logs for VPC
+    // CloudWatch Log Group
     const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
       name: `${config.projectName}-vpc-flow-logs`,
       retentionInDays: 90,
     });
 
+    // IAM Role for VPC Flow Logs
+    const flowLogRole = new IamRole(this, 'flow-log-role', {
+      name: `${config.projectName}-vpc-flow-log-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { Service: 'vpc-flow-logs.amazonaws.com' },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+    });
+
+    // IAM Policy for CloudWatch permissions
+    new IamRolePolicy(this, 'flow-log-policy', {
+      name: `${config.projectName}-vpc-flow-log-policy`,
+      role: flowLogRole.name,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+            Resource: `${flowLogGroup.arn}:*`,
+          },
+        ],
+      }),
+    });
+
+    // Flow Log Resource
     new FlowLog(this, 'vpc-flow-log', {
       vpcId: vpcModule.vpc.id,
       trafficType: 'ALL',
       logDestinationType: 'cloud-watch-logs',
       logDestination: flowLogGroup.arn,
+      iamRoleArn: flowLogRole.arn,
     });
 
     // Export important outputs for reference
