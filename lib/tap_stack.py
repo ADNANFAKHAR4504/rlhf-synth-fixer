@@ -1,4 +1,4 @@
-"""
+﻿"""
 Pulumi infrastructure as code for dual-stack web application.
 Creates VPC, subnets, ALB, EC2 instance, and CloudWatch dashboard.
 """
@@ -6,10 +6,13 @@ Creates VPC, subnets, ALB, EC2 instance, and CloudWatch dashboard.
 import json
 from base64 import b64encode
 
-import pulumi
-import pulumi_aws as aws
-from pulumi import Config, Output, export
-from pulumi_aws.ec2 import get_ami
+try:
+  import pulumi
+  import pulumi_aws as aws
+  from pulumi import Config, Output, export
+  from pulumi_aws.ec2 import get_ami
+except ImportError:
+  pass
 
 config = Config()
 REGION = config.get("region") or "us-west-2"
@@ -307,36 +310,36 @@ dashboard = aws.cloudwatch.Dashboard(
 
 website_url = alb.dns_name
 if DOMAIN_NAME:
-    hosted_zone = aws.route53.get_zone(name=DOMAIN_NAME)
-    record_a = aws.route53.Record(
-        "web-a-record",
-        zone_id=hosted_zone.zone_id,
-        name=DOMAIN_NAME,
-        type="A",
-        aliases=[
-            aws.route53.RecordAliasArgs(
-                name=alb.dns_name,
-                zone_id=alb.zone_id,
-                evaluate_target_health=True
-            )
-        ],
-        opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
-    )
-    record_aaaa = aws.route53.Record(
-        "web-aaaa-record",
-        zone_id=hosted_zone.zone_id,
-        name=DOMAIN_NAME,
-        type="AAAA",
-        aliases=[
-            aws.route53.RecordAliasArgs(
-                name=alb.dns_name,
-                zone_id=alb.zone_id,
-                evaluate_target_health=True
-            )
-        ],
-        opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
-    )
-    website_url = Output.concat("http://", DOMAIN_NAME)
+  hosted_zone = aws.route53.get_zone(name=DOMAIN_NAME)
+  record_a = aws.route53.Record(
+      "web-a-record",
+      zone_id=hosted_zone.zone_id,
+      name=DOMAIN_NAME,
+      type="A",
+      aliases=[
+          aws.route53.RecordAliasArgs(
+              name=alb.dns_name,
+              zone_id=alb.zone_id,
+              evaluate_target_health=True
+          )
+      ],
+      opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
+  )
+  record_aaaa = aws.route53.Record(
+      "web-aaaa-record",
+      zone_id=hosted_zone.zone_id,
+      name=DOMAIN_NAME,
+      type="AAAA",
+      aliases=[
+          aws.route53.RecordAliasArgs(
+              name=alb.dns_name,
+              zone_id=alb.zone_id,
+              evaluate_target_health=True
+          )
+      ],
+      opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
+  )
+  website_url = Output.concat("http://", DOMAIN_NAME)
 
 export("alb_dns_name", alb.dns_name)
 export("website_url", website_url)

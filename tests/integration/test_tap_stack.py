@@ -1,13 +1,14 @@
-import json
+﻿import json
 import subprocess
 import time
 import os
-import requests
-
-from lib import tap_stack
+try:
+  import requests
+except ImportError:
+  pass
 
 ENVIRONMENT_SUFFIX = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
-STACK_NAME = f"{tap_stack.project_name}-{ENVIRONMENT_SUFFIX}"
+STACK_NAME = f"TapStack-{ENVIRONMENT_SUFFIX}"
 
 def run_command(command):
   print(f"Running: {command}")
@@ -63,9 +64,9 @@ def test_integration():
 
         if len(healthy_targets) == 2:
           health_check_passed = True
-          print("✅ Both targets are healthy!")
+          print("âœ… Both targets are healthy!")
           break
-      except Exception as e:
+      except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError) as e:
         print(f"Health check command failed with error: {e}")
 
       if i < max_health_retries - 1:
@@ -78,7 +79,7 @@ def test_integration():
     assert response.status_code == 200
     assert "Hello from" in response.text
 
-    print("✅ Integration Test Passed!")
+    print("âœ… Integration Test Passed!")
 
   finally:
     print("--- Destroying Infrastructure ---")
