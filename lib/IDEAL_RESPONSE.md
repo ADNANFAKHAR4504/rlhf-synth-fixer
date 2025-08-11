@@ -8,13 +8,8 @@ Description: 'Secure web application infrastructure with ALB and Auto Scaling - 
 Parameters:
   Environment:
     Type: String
-    Default: 'production'
-    AllowedValues:
-      - 'development'
-      - 'staging'
-      - 'production'
+    Default: 'prod'
     Description: 'Environment name for resource tagging'
-    ConstraintDescription: 'Must be development, staging, or production'
 
   InstanceType:
     Type: String
@@ -61,7 +56,7 @@ Parameters:
 # =============================================================================
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
-  IsProduction: !Equals [!Ref Environment, 'production']
+  IsProduction: !Equals [!Ref Environment, 'prod']
 
 # =============================================================================
 # RESOURCES
