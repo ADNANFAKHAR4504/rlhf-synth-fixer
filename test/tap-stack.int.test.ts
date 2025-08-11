@@ -401,9 +401,9 @@ describe('Cloud Environment Integration Tests', () => {
       } finally {
         // Unsubscribe from SNS
         if (subscriptionArn && subscriptionArn !== 'pending confirmation') {
-          await snsClient.unsubscribe({
-            SubscriptionArn: subscriptionArn
-          });
+          // await snsClient.unsubscribe({
+          //   SubscriptionArn: subscriptionArn
+          // });
         }
       }
     }, testTimeout * 2);
