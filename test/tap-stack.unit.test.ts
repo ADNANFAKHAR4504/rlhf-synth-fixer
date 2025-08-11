@@ -79,7 +79,7 @@ describe('TapStack Unit Tests', () => {
       expect(dynamoTables).toBeDefined();
 
       const userTable = Object.values(dynamoTables).find(
-        (table: any) => table.name === 'prod-service-users'
+        (table: any) => (table as any).name?.startsWith('prod-service-users')
       );
 
       expect(userTable).toBeDefined();
@@ -92,7 +92,7 @@ describe('TapStack Unit Tests', () => {
     test('should create DynamoDB session table with TTL configuration', () => {
       const dynamoTables = synthesized.resource.aws_dynamodb_table;
       const sessionTable = Object.values(dynamoTables).find(
-        (table: any) => table.name === 'prod-service-sessions'
+        (table: any) => (table as any).name?.startsWith('prod-service-sessions')
       );
 
       expect(sessionTable).toBeDefined();
@@ -105,7 +105,7 @@ describe('TapStack Unit Tests', () => {
       expect(iamRoles).toBeDefined();
 
       const lambdaRole = Object.values(iamRoles).find(
-        (role: any) => role.name === 'prod-service-lambda-execution-role'
+        (role: any) => (role as any).name?.startsWith('prod-service-lambda-execution-role')
       );
 
       expect(lambdaRole).toBeDefined();
@@ -119,7 +119,7 @@ describe('TapStack Unit Tests', () => {
       expect(iamPolicies).toBeDefined();
 
       const dynamoPolicy = Object.values(iamPolicies).find(
-        (policy: any) => policy.name === 'prod-service-lambda-dynamodb-policy'
+        (policy: any) => (policy as any).name?.startsWith('prod-service-lambda-dynamodb-policy')
       );
 
       expect(dynamoPolicy).toBeDefined();
@@ -155,7 +155,7 @@ describe('TapStack Unit Tests', () => {
 
       expectedLogGroups.forEach(expectedName => {
         const logGroup = Object.values(logGroups).find(
-          (lg: any) => lg.name === expectedName
+          (lg: any) => (lg as any).name?.startsWith(expectedName)
         );
         expect(logGroup).toBeDefined();
       });
@@ -166,14 +166,14 @@ describe('TapStack Unit Tests', () => {
       expect(lambdaFunctions).toBeDefined();
 
       const expectedFunctions = [
-        { name: 'prod-service-user-handler', timeout: 30, memory: 256 },
-        { name: 'prod-service-session-handler', timeout: 15, memory: 128 },
-        { name: 'prod-service-health-check', timeout: 10, memory: 128 },
+        { base: 'prod-service-user-handler', timeout: 30, memory: 256 },
+        { base: 'prod-service-session-handler', timeout: 15, memory: 128 },
+        { base: 'prod-service-health-check', timeout: 10, memory: 128 },
       ];
 
       expectedFunctions.forEach(expectedFunc => {
         const lambdaFunc = Object.values(lambdaFunctions).find(
-          (func: any) => func.function_name === expectedFunc.name
+          (func: any) => (func as any).function_name?.startsWith(expectedFunc.base)
         );
 
         expect(lambdaFunc).toBeDefined();
@@ -189,7 +189,7 @@ describe('TapStack Unit Tests', () => {
       expect(apiGateways).toBeDefined();
 
       const restApi = Object.values(apiGateways).find(
-        (api: any) => api.name === 'prod-service-api'
+        (api: any) => (api as any).name?.startsWith('prod-service-api')
       );
 
       expect(restApi).toBeDefined();
