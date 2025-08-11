@@ -19,12 +19,10 @@ Develop a Python Pulumi program that sets up an AWS infrastructure environment d
 
 3) Deploy an Application Load Balancer (ALB) configured for dualstack IP address type. It should have an HTTP listener that forwards traffic to a target group containing the EC2 instance.
 
-4) DNS & Routing (Route 53 - Optional Bonus): As an optional enhancement, if a domain name (for a pre-existing hosted zone) is provided via Pulumi config, the program should create A (IPv4) and AAAA (IPv6) alias records pointing to the ALB. If no domain is provided, this step must be skipped without error.
+4) Security (IAM & Security Groups): Enforce least privilege with a dedicated IAM role for the EC2 instance. The ALB's security group must allow inbound port 80 traffic from the internet (0.0.0.0/0 and ::/0), while the EC2 security group must only allow port 80 traffic from the ALB's security group.
 
-5) Security (IAM & Security Groups): Enforce least privilege with a dedicated IAM role for the EC2 instance. The ALB's security group must allow inbound port 80 traffic from the internet (0.0.0.0/0 and ::/0), while the EC2 security group must only allow port 80 traffic from the ALB's security group.
+5) Monitoring & Logging (CloudWatch): Create a CloudWatch Dashboard to monitor key ALB metrics like Request Count, Healthy Host Count, and HTTP status codes. Enable detailed monitoring for the EC2 instance.
 
-6) Monitoring & Logging (CloudWatch): Create a CloudWatch Dashboard to monitor key ALB metrics like Request Count, Healthy Host Count, and HTTP status codes. Enable detailed monitoring for the EC2 instance.
+6) Pulumi Project & State Management: The project must use Pulumi's configuration system for environment-specific values (e.g., AWS region). All sensitive data should be managed as Pulumi secrets.
 
-7) Pulumi Project & State Management: The project must use Pulumi's configuration system for environment-specific values (e.g., AWS region, optional domain name). All sensitive data should be managed as Pulumi secrets.
-
-Expected output: A complete Python script (__main__.py) that successfully provisions the described dual-stack infrastructure on AWS. The script must be well-commented, use Pulumi's configuration system, and export key outputs like the ALB's public DNS name (for direct access) and the final website URL (if a custom domain is configured). The result must be verifiable via pulumi up and by accessing the ALB's DNS name in a web browser.
+Expected output: A complete Python script (__main__.py) that successfully provisions the described dual-stack infrastructure on AWS. The script must be well-commented, use Pulumi's configuration system, and export key outputs like the ALB's public DNS name for direct access. The result must be verifiable via pulumi up and by accessing the ALB's DNS name in a web browser.

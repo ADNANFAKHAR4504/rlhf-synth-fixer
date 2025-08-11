@@ -38,8 +38,6 @@ class MyMocks(pulumi.runtime.Mocks):
       return {"names": ["us-west-2a", "us-west-2b"]}
     if args.token == "aws:ec2/getAmi:getAmi":
       return {"id": "ami-12345678"}
-    if args.token == "aws:route53/getZone:getZone":
-      return {"zone_id": "Z123456789", "name": "example.com"}
     return {}
 
 pulumi.runtime.set_mocks(MyMocks())

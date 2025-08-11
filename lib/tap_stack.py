@@ -18,7 +18,6 @@ def create_infrastructure():
   """Create the entire AWS infrastructure stack."""
   config = Config()
   region = config.get("region") or "us-west-2"
-  domain_name = config.get_secret("domainName")
 
   aws_provider = aws.Provider("aws", region=region)
 
@@ -309,42 +308,9 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
     opts=pulumi.ResourceOptions(provider=aws_provider)
   )
 
-  website_url = alb.dns_name
-  if domain_name:
-    hosted_zone = aws.route53.get_zone(name=domain_name)
-    aws.route53.Record(
-      "web-a-record",
-      zone_id=hosted_zone.zone_id,
-      name=domain_name,
-      type="A",
-      aliases=[
-        aws.route53.RecordAliasArgs(
-          name=alb.dns_name,
-          zone_id=alb.zone_id,
-          evaluate_target_health=True
-        )
-      ],
-      opts=pulumi.ResourceOptions(provider=aws_provider)
-    )
-    aws.route53.Record(
-      "web-aaaa-record",
-      zone_id=hosted_zone.zone_id,
-      name=domain_name,
-      type="AAAA",
-      aliases=[
-        aws.route53.RecordAliasArgs(
-          name=alb.dns_name,
-          zone_id=alb.zone_id,
-          evaluate_target_health=True
-        )
-      ],
-      opts=pulumi.ResourceOptions(provider=aws_provider)
-    )
-    website_url = Output.concat("http://", domain_name)
-
   # Export outputs
   export("alb_dns_name", alb.dns_name)
-  export("website_url", website_url)
+  export("website_url", Output.concat("http://", alb.dns_name))
   export("ec2_public_ip", ec2_instance.public_ip)
   export("ec2_ipv6", ec2_instance.ipv6_addresses[0])
 
