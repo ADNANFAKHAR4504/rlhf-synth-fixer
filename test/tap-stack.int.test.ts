@@ -14,9 +14,9 @@ const awsRegion =
 const ec2Client = new EC2Client({ region: awsRegion });
 
 describe("TapStack Integration Tests", () => {
-  let vpcId: string;
-  let publicSubnetId: string;
-  let privateSubnetId: string;
+  let vpcId: string | undefined;
+  let publicSubnetId: string | undefined;
+  let privateSubnetId: string | undefined;
 
   beforeAll(() => {
     const suffix = process.env.ENVIRONMENT_SUFFIX;
@@ -51,26 +51,26 @@ describe("TapStack Integration Tests", () => {
     }
   });
 
-  test(`VPC "${vpcId}" exists`, async () => {
+  test(`VPC exists`, async () => {
     const { Vpcs } = await ec2Client.send(
-      new DescribeVpcsCommand({ VpcIds: [vpcId] })
+      new DescribeVpcsCommand({ VpcIds: [vpcId!] })
     );
     expect(Vpcs?.length).toBe(1);
     expect(Vpcs?.[0].VpcId).toBe(vpcId);
     expect(Vpcs?.[0].State).toBe("available");
   }, 20000);
 
-  test(`Public Subnet "${publicSubnetId}" exists in VPC`, async () => {
+  test(`Public Subnet exists in VPC`, async () => {
     const { Subnets } = await ec2Client.send(
-      new DescribeSubnetsCommand({ SubnetIds: [publicSubnetId] })
+      new DescribeSubnetsCommand({ SubnetIds: [publicSubnetId!] })
     );
     expect(Subnets?.[0].SubnetId).toBe(publicSubnetId);
     expect(Subnets?.[0].VpcId).toBe(vpcId);
   }, 20000);
 
-  test(`Private Subnet "${privateSubnetId}" exists in VPC`, async () => {
+  test(`Private Subnet exists in VPC`, async () => {
     const { Subnets } = await ec2Client.send(
-      new DescribeSubnetsCommand({ SubnetIds: [privateSubnetId] })
+      new DescribeSubnetsCommand({ SubnetIds: [privateSubnetId!] })
     );
     expect(Subnets?.[0].SubnetId).toBe(privateSubnetId);
     expect(Subnets?.[0].VpcId).toBe(vpcId);
@@ -78,14 +78,18 @@ describe("TapStack Integration Tests", () => {
 
   test(`Route tables exist for VPC`, async () => {
     const { RouteTables } = await ec2Client.send(
-      new DescribeRouteTablesCommand({ Filters: [{ Name: "vpc-id", Values: [vpcId] }] })
+      new DescribeRouteTablesCommand({
+        Filters: [{ Name: "vpc-id", Values: [vpcId!] }],
+      })
     );
     expect(RouteTables?.length).toBeGreaterThanOrEqual(2);
   }, 20000);
 
   test(`NAT Gateway exists in VPC`, async () => {
     const { NatGateways } = await ec2Client.send(
-      new DescribeNatGatewaysCommand({ Filter: [{ Name: "vpc-id", Values: [vpcId] }] })
+      new DescribeNatGatewaysCommand({
+        Filter: [{ Name: "vpc-id", Values: [vpcId!] }],
+      })
     );
     expect(NatGateways?.length).toBeGreaterThanOrEqual(1);
   }, 20000);
