@@ -16,7 +16,7 @@ const outputs = JSON.parse(
 );
 
 // Set AWS region
-const region = 'us-west-2';
+const region = 'us-east-2';
 
 // Initialize AWS clients
 const ec2Client = new EC2Client({ region });
@@ -435,18 +435,18 @@ describe('Secure Enterprise Infrastructure Integration Tests', () => {
 
     test('Infrastructure follows security best practices', async () => {
       // Check S3 bucket naming includes account and region for uniqueness
-      expect(s3BucketName).toMatch(/secure-enterprise-data-\d+-us-west-2/);
+      expect(s3BucketName).toMatch(/secure-enterprise-data-\d+-us-east-2/);
       
       // Check database endpoint includes stack identifiers
       expect(databaseEndpoint.toLowerCase()).toContain('securedatabase');
       
       // Verify all ARNs are properly formatted and contain correct region
-      expect(kmsKeyArn).toContain('us-west-2');
-      expect(s3BucketArn).toContain('us-west-2');
-      expect(webAclArn).toContain('us-west-2');
-      expect(securityAlertTopicArn).toContain('us-west-2');
-      expect(keyRotationFunctionArn).toContain('us-west-2');
-      expect(databaseCredentialsSecretArn).toContain('us-west-2');
+      expect(kmsKeyArn).toContain('us-east-2');
+      expect(s3BucketArn).toContain('us-east-2');
+      expect(webAclArn).toContain('us-east-2');
+      expect(securityAlertTopicArn).toContain('us-east-2');
+      expect(keyRotationFunctionArn).toContain('us-east-2');
+      expect(databaseCredentialsSecretArn).toContain('us-east-2');
     });
   });
 });

@@ -14,7 +14,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
     stack = new SecureEnterpriseInfrastructureStack(app, 'TestSecureEnterpriseInfrastructureStack', { 
       env: {
         account: '123456789012',
-        region: 'us-west-2'
+        region: 'us-east-2'
       }
     });
     template = Template.fromStack(stack);
@@ -29,7 +29,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
           region: undefined // Explicitly test undefined region
         }
       });
-      // The fallback logic exists in the code: props?.env?.region || 'us-west-2'
+      // The fallback logic exists in the code: props?.env?.region || 'us-east-2'
       // But CDK context may resolve to current app configuration
       expect(stackNoRegion.region).toBeDefined();
       
@@ -44,7 +44,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
     });
 
     test('should use provided region when specified', () => {
-      expect(stack.region).toBe('us-west-2');
+      expect(stack.region).toBe('us-east-2');
     });
 
     test('should have proper tags configured', () => {
@@ -57,7 +57,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
           CreatedBy: 'CDK',
           Version: '1.0.0',
           Stack: 'TapStack',
-          Region: 'us-west-2'
+          Region: 'us-east-2'
         })
       );
       // Check that UpdateTrigger and LastUpdated are present (values will vary)
@@ -321,7 +321,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
       const stackWithGuardDuty = new SecureEnterpriseInfrastructureStack(appWithGuardDuty, 'TestStackWithGuardDuty', {
         env: {
           account: '123456789012',
-          region: 'us-west-2'
+          region: 'us-east-2'
         }
       });
       const templateWithGuardDuty = Template.fromStack(stackWithGuardDuty);
@@ -351,7 +351,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
       const stackWithGuardDuty = new SecureEnterpriseInfrastructureStack(appWithGuardDuty, 'TestStackWithGuardDuty', {
         env: {
           account: '123456789012',
-          region: 'us-west-2'
+          region: 'us-east-2'
         }
       });
       const templateWithGuardDuty = Template.fromStack(stackWithGuardDuty);
@@ -372,7 +372,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
       const stackWithoutGuardDuty = new SecureEnterpriseInfrastructureStack(appWithoutGuardDuty, 'TestStackWithoutGuardDuty', {
         env: {
           account: '123456789012',
-          region: 'us-west-2'
+          region: 'us-east-2'
         }
       });
       const templateWithoutGuardDuty = Template.fromStack(stackWithoutGuardDuty);
@@ -527,7 +527,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
       const stackWithGuardDuty = new SecureEnterpriseInfrastructureStack(appWithGuardDuty, 'TestStackWithGuardDuty', {
         env: {
           account: '123456789012',
-          region: 'us-west-2'
+          region: 'us-east-2'
         }
       });
       const templateWithGuardDuty = Template.fromStack(stackWithGuardDuty);
@@ -546,7 +546,7 @@ describe('SecureEnterpriseInfrastructureStack', () => {
       const stackWithoutGuardDuty = new SecureEnterpriseInfrastructureStack(appWithoutGuardDuty, 'TestStackWithoutGuardDuty', {
         env: {
           account: '123456789012',
-          region: 'us-west-2'
+          region: 'us-east-2'
         }
       });
       const templateWithoutGuardDuty = Template.fromStack(stackWithoutGuardDuty);
