@@ -88,7 +88,7 @@ describe('Cloud Environment Integration Tests', () => {
       const vpcId = outputs.VpcId;
       
       const natResponse = await ec2Client.describeNatGateways({
-        Filters: [
+        Filter: [
           { Name: 'vpc-id', Values: [vpcId] },
           { Name: 'state', Values: ['available'] }
         ]
