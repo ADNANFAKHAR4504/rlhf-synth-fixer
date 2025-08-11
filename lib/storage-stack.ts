@@ -28,6 +28,7 @@ export class StorageStack extends cdk.NestedStack {
       versioned: true,
       serverAccessLogsPrefix: 'access-logs/',
       enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
       lifecycleRules: [
         {
           id: 'DeleteIncompleteMultipartUploads',
@@ -107,6 +108,17 @@ export class StorageStack extends cdk.NestedStack {
             'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${this.distribution.distributionId}`,
           },
         },
+      })
+    );
+
+    // Allow CloudFront to write access logs
+    this.contentBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudFrontLogs',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [this.contentBucket.arnForObjects('cloudfront-logs/*')],
       })
     );
 
