@@ -1,1040 +1,839 @@
-# Multi-Region AWS Infrastructure with Terraform
+# CDKTF Multi-Region AWS Infrastructure
 
-I'll create a complete, robust, and scalable multi-region AWS infrastructure using Terraform. This solution follows all the specified constraints and requirements.
+I'll create a complete, robust CDKTF TypeScript infrastructure that meets all your requirements. This will be a production-ready, multi-region AWS setup with high availability, security, and scalability.
 
 ## Project Structure
 
 ```
-terraform-multi-region-aws/
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── terraform.tf
-├── providers.tf
-├── backend.tf
-├── modules/
-│   ├── vpc/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   ├── compute/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   ├── database/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   └── monitoring/
-│       ├── main.tf
-│       ├── variables.tf
-│       └── outputs.tf
-├── environments/
-│   ├── dev.tfvars
-│   ├── test.tfvars
-│   └── prod.tfvars
+cdktf-aws-infrastructure/
+├── src/
+│   ├── main.ts
+│   ├── stacks/
+│   │   ├── networking-stack.ts
+│   │   ├── compute-stack.ts
+│   │   ├── database-stack.ts
+│   │   └── monitoring-stack.ts
+│   ├── constructs/
+│   │   ├── vpc.ts
+│   │   ├── alb.ts
+│   │   ├── auto-scaling.ts
+│   │   ├── rds.ts
+│   │   └── cloudwatch.ts
+│   ├── config/
+│   │   └── environment.ts
+│   └── utils/
+│       ├── naming.ts
+│       └── tagging.ts
+├── cdktf.json
+├── package.json
+├── tsconfig.json
 └── README.md
 ```
 
 ## Core Configuration Files
 
-### 1. terraform.tf
-```hcl
-terraform {
-  required_version = ">= 1.6"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+### package.json
+```json
+{
+  "name": "cdktf-aws-infrastructure",
+  "version": "1.0.0",
+  "description": "Multi-region AWS infrastructure using CDKTF TypeScript",
+  "main": "src/main.ts",
+  "scripts": {
+    "get": "cdktf get",
+    "build": "tsc",
+    "synth": "cdktf synth",
+    "deploy": "cdktf deploy",
+    "destroy": "cdktf destroy",
+    "diff": "cdktf diff",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "dependencies": {
+    "@cdktf/provider-aws": "^19.0.0",
+    "cdktf": "^0.20.0",
+    "constructs": "^10.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  }
+}
+```
+
+### cdktf.json
+```json
+{
+  "language": "typescript",
+  "app": "npm run --silent compile && node src/main.js",
+  "projectId": "aws-multi-region-infrastructure",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
+```
+
+### tsconfig.json
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "declaration": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": false,
+    "inlineSourceMap": true,
+    "inlineSources": true,
+    "experimentalDecorators": true,
+    "strictPropertyInitialization": false,
+    "typeRoots": ["./node_modules/@types"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
+```
+
+## Utility Functions
+
+### src/utils/naming.ts
+```typescript
+export interface NamingConfig {
+  environment: string;
+  service: string;
+  region: string;
+}
+
+export class NamingConvention {
+  static generateResourceName(config: NamingConfig, resourceType?: string): string {
+    const baseName = `${config.environment}-${config.service}-${config.region}`;
+    return resourceType ? `${baseName}-${resourceType}` : baseName;
+  }
+
+  static generateSubnetName(config: NamingConfig, type: 'public' | 'private', az: string): string {
+    return `${config.environment}-${config.service}-${config.region}-${type}-${az}`;
+  }
+
+  static generateSecurityGroupName(config: NamingConfig, purpose: string): string {
+    return `${config.environment}-${config.service}-${config.region}-${purpose}-sg`;
+  }
+}
+```
+
+### src/utils/tagging.ts
+```typescript
+export interface TagConfig {
+  environment: string;
+  project: string;
+  owner: string;
+  costCenter: string;
+  region: string;
+}
+
+export class TaggingStrategy {
+  static getCommonTags(config: TagConfig): Record<string, string> {
+    return {
+      Environment: config.environment,
+      Project: config.project,
+      Owner: config.owner,
+      CostCenter: config.costCenter,
+      Region: config.region,
+      ManagedBy: 'CDKTF',
+      CreatedDate: new Date().toISOString().split('T')[0]
+    };
+  }
+
+  static getResourceTags(config: TagConfig, resourceType: string, additionalTags?: Record<string, string>): Record<string, string> {
+    const commonTags = this.getCommonTags(config);
+    return {
+      ...commonTags,
+      ResourceType: resourceType,
+      ...additionalTags
+    };
+  }
+}
+```
+
+## Configuration
+
+### src/config/environment.ts
+```typescript
+export interface EnvironmentConfig {
+  name: string;
+  regions: string[];
+  vpc: {
+    cidr: string;
+    enableDnsHostnames: boolean;
+    enableDnsSupport: boolean;
+  };
+  subnets: {
+    public: string[];
+    private: string[];
+  };
+  ec2: {
+    instanceType: string;
+    minSize: number;
+    maxSize: number;
+    desiredCapacity: number;
+    keyName?: string;
+  };
+  rds: {
+    instanceClass: string;
+    allocatedStorage: number;
+    engine: string;
+    engineVersion: string;
+    multiAz: boolean;
+    backupRetentionPeriod: number;
+  };
+  tags: {
+    project: string;
+    owner: string;
+    costCenter: string;
+  };
+}
+
+export const environments: Record<string, EnvironmentConfig> = {
+  development: {
+    name: 'dev',
+    regions: ['us-east-1', 'eu-west-1'],
+    vpc: {
+      cidr: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true
+    },
+    subnets: {
+      public: ['10.0.1.0/24', '10.0.2.0/24'],
+      private: ['10.0.10.0/24', '10.0.20.0/24']
+    },
+    ec2: {
+      instanceType: 't3.micro',
+      minSize: 1,
+      maxSize: 3,
+      desiredCapacity: 2
+    },
+    rds: {
+      instanceClass: 'db.t3.micro',
+      allocatedStorage: 20,
+      engine: 'postgres',
+      engineVersion: '15.4',
+      multiAz: false,
+      backupRetentionPeriod: 7
+    },
+    tags: {
+      project: 'multi-region-app',
+      owner: 'devops-team',
+      costCenter: 'engineering'
+    }
+  },
+  testing: {
+    name: 'test',
+    regions: ['us-east-1', 'eu-west-1'],
+    vpc: {
+      cidr: '10.1.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true
+    },
+    subnets: {
+      public: ['10.1.1.0/24', '10.1.2.0/24'],
+      private: ['10.1.10.0/24', '10.1.20.0/24']
+    },
+    ec2: {
+      instanceType: 't3.small',
+      minSize: 2,
+      maxSize: 6,
+      desiredCapacity: 3
+    },
+    rds: {
+      instanceClass: 'db.t3.small',
+      allocatedStorage: 50,
+      engine: 'postgres',
+      engineVersion: '15.4',
+      multiAz: true,
+      backupRetentionPeriod: 14
+    },
+    tags: {
+      project: 'multi-region-app',
+      owner: 'qa-team',
+      costCenter: 'quality-assurance'
+    }
+  },
+  production: {
+    name: 'prod',
+    regions: ['us-east-1', 'eu-west-1'],
+    vpc: {
+      cidr: '10.2.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true
+    },
+    subnets: {
+      public: ['10.2.1.0/24', '10.2.2.0/24'],
+      private: ['10.2.10.0/24', '10.2.20.0/24']
+    },
+    ec2: {
+      instanceType: 't3.medium',
+      minSize: 3,
+      maxSize: 10,
+      desiredCapacity: 5
+    },
+    rds: {
+      instanceClass: 'db.t3.medium',
+      allocatedStorage: 100,
+      engine: 'postgres',
+      engineVersion: '15.4',
+      multiAz: true,
+      backupRetentionPeriod: 30
+    },
+    tags: {
+      project: 'multi-region-app',
+      owner: 'platform-team',
+      costCenter: 'production'
     }
   }
+};
+```
+
+## Constructs
+
+### src/constructs/vpc.ts
+```typescript
+import { Construct } from 'constructs';
+import {
+  Vpc,
+  Subnet,
+  InternetGateway,
+  RouteTable,
+  Route,
+  RouteTableAssociation,
+  NatGateway,
+  Eip,
+  SecurityGroup,
+  SecurityGroupRule,
+  DataAwsAvailabilityZones
+} from '@cdktf/provider-aws/lib';
+import { NamingConvention, NamingConfig } from '../utils/naming';
+import { TaggingStrategy, TagConfig } from '../utils/tagging';
+
+export interface VpcConstructProps {
+  namingConfig: NamingConfig;
+  tagConfig: TagConfig;
+  vpcCidr: string;
+  publicSubnetCidrs: string[];
+  privateSubnetCidrs: string[];
+  enableDnsHostnames: boolean;
+  enableDnsSupport: boolean;
+}
+
+export class VpcConstruct extends Construct {
+  public readonly vpc: Vpc;
+  public readonly publicSubnets: Subnet[];
+  public readonly privateSubnets: Subnet[];
+  public readonly internetGateway: InternetGateway;
+  public readonly natGateways: NatGateway[];
+  public readonly albSecurityGroup: SecurityGroup;
+  public readonly ec2SecurityGroup: SecurityGroup;
+  public readonly rdsSecurityGroup: SecurityGroup;
+
+  constructor(scope: Construct, id: string, props: VpcConstructProps) {
+    super(scope, id);
+
+    // Get availability zones
+    const azs = new DataAwsAvailabilityZones(this, 'availability-zones', {
+      state: 'available'
+    });
+
+    // Create VPC
+    this.vpc = new Vpc(this, 'vpc', {
+      cidrBlock: props.vpcCidr,
+      enableDnsHostnames: props.enableDnsHostnames,
+      enableDnsSupport: props.enableDnsSupport,
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'VPC', {
+        Name: NamingConvention.generateResourceName(props.namingConfig, 'vpc')
+      })
+    });
+
+    // Create Internet Gateway
+    this.internetGateway = new InternetGateway(this, 'igw', {
+      vpcId: this.vpc.id,
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'InternetGateway', {
+        Name: NamingConvention.generateResourceName(props.namingConfig, 'igw')
+      })
+    });
+
+    // Create public subnets
+    this.publicSubnets = props.publicSubnetCidrs.map((cidr, index) => {
+      return new Subnet(this, `public-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: `\${${azs.fqn}.names[${index}]}`,
+        mapPublicIpOnLaunch: true,
+        tags: TaggingStrategy.getResourceTags(props.tagConfig, 'Subnet', {
+          Name: NamingConvention.generateSubnetName(props.namingConfig, 'public', `az${index + 1}`),
+          Type: 'Public'
+        })
+      });
+    });
+
+    // Create private subnets
+    this.privateSubnets = props.privateSubnetCidrs.map((cidr, index) => {
+      return new Subnet(this, `private-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: `\${${azs.fqn}.names[${index}]}`,
+        tags: TaggingStrategy.getResourceTags(props.tagConfig, 'Subnet', {
+          Name: NamingConvention.generateSubnetName(props.namingConfig, 'private', `az${index + 1}`),
+          Type: 'Private'
+        })
+      });
+    });
+
+    // Create Elastic IPs for NAT Gateways
+    const eips = this.publicSubnets.map((_, index) => {
+      return new Eip(this, `nat-eip-${index}`, {
+        domain: 'vpc',
+        tags: TaggingStrategy.getResourceTags(props.tagConfig, 'EIP', {
+          Name: NamingConvention.generateResourceName(props.namingConfig, `nat-eip-${index}`)
+        })
+      });
+    });
+
+    // Create NAT Gateways
+    this.natGateways = this.publicSubnets.map((subnet, index) => {
+      return new NatGateway(this, `nat-gateway-${index}`, {
+        allocationId: eips[index].id,
+        subnetId: subnet.id,
+        tags: TaggingStrategy.getResourceTags(props.tagConfig, 'NatGateway', {
+          Name: NamingConvention.generateResourceName(props.namingConfig, `nat-${index}`)
+        })
+      });
+    });
+
+    // Create route tables
+    const publicRouteTable = new RouteTable(this, 'public-rt', {
+      vpcId: this.vpc.id,
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'RouteTable', {
+        Name: NamingConvention.generateResourceName(props.namingConfig, 'public-rt')
+      })
+    });
+
+    // Public route to Internet Gateway
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: this.internetGateway.id
+    });
+
+    // Associate public subnets with public route table
+    this.publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `public-rt-association-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id
+      });
+    });
+
+    // Create private route tables and routes
+    this.privateSubnets.forEach((subnet, index) => {
+      const privateRouteTable = new RouteTable(this, `private-rt-${index}`, {
+        vpcId: this.vpc.id,
+        tags: TaggingStrategy.getResourceTags(props.tagConfig, 'RouteTable', {
+          Name: NamingConvention.generateResourceName(props.namingConfig, `private-rt-${index}`)
+        })
+      });
+
+      new Route(this, `private-route-${index}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: this.natGateways[index].id
+      });
+
+      new RouteTableAssociation(this, `private-rt-association-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id
+      });
+    });
+
+    // Create Security Groups
+    this.albSecurityGroup = new SecurityGroup(this, 'alb-sg', {
+      name: NamingConvention.generateSecurityGroupName(props.namingConfig, 'alb'),
+      description: 'Security group for Application Load Balancer',
+      vpcId: this.vpc.id,
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'SecurityGroup', {
+        Name: NamingConvention.generateSecurityGroupName(props.namingConfig, 'alb')
+      })
+    });
+
+    // ALB Security Group Rules
+    new SecurityGroupRule(this, 'alb-ingress-http', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.albSecurityGroup.id
+    });
+
+    new SecurityGroupRule(this, 'alb-ingress-https', {
+      type: 'ingress',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.albSecurityGroup.id
+    });
+
+    new SecurityGroupRule(this, 'alb-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.albSecurityGroup.id
+    });
+
+    // EC2 Security Group
+    this.ec2SecurityGroup = new SecurityGroup(this, 'ec2-sg', {
+      name: NamingConvention.generateSecurityGroupName(props.namingConfig, 'ec2'),
+      description: 'Security group for EC2 instances',
+      vpcId: this.vpc.id,
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'SecurityGroup', {
+        Name: NamingConvention.generateSecurityGroupName(props.namingConfig, 'ec2')
+      })
+    });
+
+    // EC2 Security Group Rules
+    new SecurityGroupRule(this, 'ec2-ingress-alb', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      sourceSecurityGroupId: this.albSecurityGroup.id,
+      securityGroupId: this.ec2SecurityGroup.id
+    });
+
+    new SecurityGroupRule(this, 'ec2-ingress-ssh', {
+      type: 'ingress',
+      fromPort: 22,
+      toPort: 22,
+      protocol: 'tcp',
+      cidrBlocks: [props.vpcCidr],
+      securityGroupId: this.ec2SecurityGroup.id
+    });
+
+    new SecurityGroupRule(this, 'ec2-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.ec2SecurityGroup.id
+    });
+
+    // RDS Security Group
+    this.rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
+      name: NamingConvention.generateSecurityGroupName(props.namingConfig, 'rds'),
+      description: 'Security group for RDS database',
+      vpcId: this.vpc.id,
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'SecurityGroup', {
+        Name: NamingConvention.generateSecurityGroupName(props.namingConfig, 'rds')
+      })
+    });
+
+    // RDS Security Group Rules
+    new SecurityGroupRule(this, 'rds-ingress-ec2', {
+      type: 'ingress',
+      fromPort: 5432,
+      toPort: 5432,
+      protocol: 'tcp',
+      sourceSecurityGroupId: this.ec2SecurityGroup.id,
+      securityGroupId: this.rdsSecurityGroup.id
+    });
+  }
 }
 ```
 
-### 2. backend.tf
-```hcl
-terraform {
-  backend "s3" {
-    bucket         = "terraform-state-multi-region-infrastructure"
-    key            = "infrastructure/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "terraform-state-lock"
-    versioning     = true
-  }
-}
-```
+### src/constructs/alb.ts
+```typescript
+import { Construct } from 'constructs';
+import {
+  Lb,
+  LbTargetGroup,
+  LbListener,
+  LbTargetGroupAttachment
+} from '@cdktf/provider-aws/lib';
+import { NamingConvention, NamingConfig } from '../utils/naming';
+import { TaggingStrategy, TagConfig } from '../utils/tagging';
 
-### 3. providers.tf
-```hcl
-# Primary provider for us-east-1
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-
-  default_tags {
-    tags = {
-      Environment  = var.environment
-      Project      = var.project_name
-      Owner        = var.owner
-      CostCenter   = var.cost_center
-      ManagedBy    = "Terraform"
-      Region       = "us-east-1"
-    }
-  }
+export interface AlbConstructProps {
+  namingConfig: NamingConfig;
+  tagConfig: TagConfig;
+  vpcId: string;
+  subnetIds: string[];
+  securityGroupIds: string[];
 }
 
-# Secondary provider for eu-west-1
-provider "aws" {
-  alias  = "eu_west_1"
-  region = "eu-west-1"
-
-  default_tags {
-    tags = {
-      Environment  = var.environment
-      Project      = var.project_name
-      Owner        = var.owner
-      CostCenter   = var.cost_center
-      ManagedBy    = "Terraform"
-      Region       = "eu-west-1"
-    }
-  }
-}
-```
-
-### 4. variables.tf
-```hcl
-variable "environment" {
-  description = "Environment name (dev, test, prod)"
-  type        = string
-  validation {
-    condition     = contains(["dev", "test", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, test, prod."
-  }
-}
-
-variable "project_name" {
-  description = "Name of the project"
-  type        = string
-  default     = "multi-region-app"
-}
-
-variable "owner" {
-  description = "Owner of the resources"
-  type        = string
-  default     = "DevOps Team"
-}
-
-variable "cost_center" {
-  description = "Cost center for billing"
-  type        = string
-  default     = "Engineering"
-}
-
-variable "vpc_cidr_us_east_1" {
-  description = "CIDR block for VPC in us-east-1"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "vpc_cidr_eu_west_1" {
-  description = "CIDR block for VPC in eu-west-1"
-  type        = string
-  default     = "10.1.0.0/16"
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.medium"
-}
-
-variable "min_size" {
-  description = "Minimum number of instances in ASG"
-  type        = number
-  default     = 2
-}
-
-variable "max_size" {
-  description = "Maximum number of instances in ASG"
-  type        = number
-  default     = 10
-}
-
-variable "desired_capacity" {
-  description = "Desired number of instances in ASG"
-  type        = number
-  default     = 3
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
-variable "db_allocated_storage" {
-  description = "RDS allocated storage in GB"
-  type        = number
-  default     = 20
-}
-```
-
-### 5. main.tf
-```hcl
-# Data sources for availability zones
-data "aws_availability_zones" "us_east_1" {
-  provider = aws.us_east_1
-  state    = "available"
-}
-
-data "aws_availability_zones" "eu_west_1" {
-  provider = aws.eu_west_1
-  state    = "available"
-}
-
-# VPC Module - US East 1
-module "vpc_us_east_1" {
-  source = "./modules/vpc"
-  
-  providers = {
-    aws = aws.us_east_1
-  }
-
-  environment         = var.environment
-  region             = "us-east-1"
-  vpc_cidr           = var.vpc_cidr_us_east_1
-  availability_zones = data.aws_availability_zones.us_east_1.names
-  project_name       = var.project_name
-}
-
-# VPC Module - EU West 1
-module "vpc_eu_west_1" {
-  source = "./modules/vpc"
-  
-  providers = {
-    aws = aws.eu_west_1
-  }
-
-  environment         = var.environment
-  region             = "eu-west-1"
-  vpc_cidr           = var.vpc_cidr_eu_west_1
-  availability_zones = data.aws_availability_zones.eu_west_1.names
-  project_name       = var.project_name
-}
-
-# Compute Module - US East 1
-module "compute_us_east_1" {
-  source = "./modules/compute"
-  
-  providers = {
-    aws = aws.us_east_1
-  }
-
-  environment         = var.environment
-  region             = "us-east-1"
-  vpc_id             = module.vpc_us_east_1.vpc_id
-  public_subnet_ids  = module.vpc_us_east_1.public_subnet_ids
-  private_subnet_ids = module.vpc_us_east_1.private_subnet_ids
-  instance_type      = var.instance_type
-  min_size           = var.min_size
-  max_size           = var.max_size
-  desired_capacity   = var.desired_capacity
-  project_name       = var.project_name
-}
-
-# Compute Module - EU West 1
-module "compute_eu_west_1" {
-  source = "./modules/compute"
-  
-  providers = {
-    aws = aws.eu_west_1
-  }
-
-  environment         = var.environment
-  region             = "eu-west-1"
-  vpc_id             = module.vpc_eu_west_1.vpc_id
-  public_subnet_ids  = module.vpc_eu_west_1.public_subnet_ids
-  private_subnet_ids = module.vpc_eu_west_1.private_subnet_ids
-  instance_type      = var.instance_type
-  min_size           = var.min_size
-  max_size           = var.max_size
-  desired_capacity   = var.desired_capacity
-  project_name       = var.project_name
-}
-
-# Database Module - US East 1
-module "database_us_east_1" {
-  source = "./modules/database"
-  
-  providers = {
-    aws = aws.us_east_1
-  }
-
-  environment           = var.environment
-  region               = "us-east-1"
-  vpc_id               = module.vpc_us_east_1.vpc_id
-  private_subnet_ids   = module.vpc_us_east_1.private_subnet_ids
-  db_instance_class    = var.db_instance_class
-  db_allocated_storage = var.db_allocated_storage
-  project_name         = var.project_name
-}
-
-# Database Module - EU West 1
-module "database_eu_west_1" {
-  source = "./modules/database"
-  
-  providers = {
-    aws = aws.eu_west_1
-  }
-
-  environment           = var.environment
-  region               = "eu-west-1"
-  vpc_id               = module.vpc_eu_west_1.vpc_id
-  private_subnet_ids   = module.vpc_eu_west_1.private_subnet_ids
-  db_instance_class    = var.db_instance_class
-  db_allocated_storage = var.db_allocated_storage
-  project_name         = var.project_name
-}
-
-# Monitoring Module - US East 1
-module "monitoring_us_east_1" {
-  source = "./modules/monitoring"
-  
-  providers = {
-    aws = aws.us_east_1
-  }
-
-  environment           = var.environment
-  region               = "us-east-1"
-  autoscaling_group_name = module.compute_us_east_1.autoscaling_group_name
-  load_balancer_arn     = module.compute_us_east_1.load_balancer_arn
-  project_name          = var.project_name
-}
-
-# Monitoring Module - EU West 1
-module "monitoring_eu_west_1" {
-  source = "./modules/monitoring"
-  
-  providers = {
-    aws = aws.eu_west_1
-  }
-
-  environment           = var.environment
-  region               = "eu-west-1"
-  autoscaling_group_name = module.compute_eu_west_1.autoscaling_group_name
-  load_balancer_arn     = module.compute_eu_west_1.load_balancer_arn
-  project_name          = var.project_name
-}
-```
-
-## Module Definitions
-
-### VPC Module (modules/vpc/main.tf)
-```hcl
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-# VPC
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = {
-    Name = "${var.environment}-vpc-${var.region}"
-  }
-}
-
-# Internet Gateway
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.environment}-igw-${var.region}"
-  }
-}
-
-# Public Subnets
-resource "aws_subnet" "public" {
-  count = min(length(var.availability_zones), 3)
-
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = var.availability_zones[count.index]
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${var.environment}-public-subnet-${count.index + 1}-${var.region}"
-    Type = "Public"
-  }
-}
-
-# Private Subnets
-resource "aws_subnet" "private" {
-  count = min(length(var.availability_zones), 3)
-
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
-  availability_zone = var.availability_zones[count.index]
-
-  tags = {
-    Name = "${var.environment}-private-subnet-${count.index + 1}-${var.region}"
-    Type = "Private"
-  }
-}
-
-# NAT Gateways
-resource "aws_eip" "nat" {
-  count = min(length(var.availability_zones), 3)
-
-  domain = "vpc"
-  depends_on = [aws_internet_gateway.main]
-
-  tags = {
-    Name = "${var.environment}-nat-eip-${count.index + 1}-${var.region}"
-  }
-}
-
-resource "aws_nat_gateway" "main" {
-  count = min(length(var.availability_zones), 3)
-
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
-
-  tags = {
-    Name = "${var.environment}-nat-gateway-${count.index + 1}-${var.region}"
-  }
-
-  depends_on = [aws_internet_gateway.main]
-}
-
-# Route Tables
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = {
-    Name = "${var.environment}-public-rt-${var.region}"
-  }
-}
-
-resource "aws_route_table" "private" {
-  count = min(length(var.availability_zones), 3)
-
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
-  }
-
-  tags = {
-    Name = "${var.environment}-private-rt-${count.index + 1}-${var.region}"
-  }
-}
-
-# Route Table Associations
-resource "aws_route_table_association" "public" {
-  count = min(length(var.availability_zones), 3)
-
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  count = min(length(var.availability_zones), 3)
-
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
-}
-```
-
-### VPC Module Variables (modules/vpc/variables.tf)
-```hcl
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-variable "region" {
-  description = "AWS region"
-  type        = string
-}
-
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-}
-
-variable "availability_zones" {
-  description = "List of availability zones"
-  type        = list(string)
-}
-
-variable "project_name" {
-  description = "Name of the project"
-  type        = string
-}
-```
-
-### VPC Module Outputs (modules/vpc/outputs.tf)
-```hcl
-output "vpc_id" {
-  description = "ID of the VPC"
-  value       = aws_vpc.main.id
-}
-
-output "public_subnet_ids" {
-  description = "IDs of the public subnets"
-  value       = aws_subnet.public[*].id
-}
-
-output "private_subnet_ids" {
-  description = "IDs of the private subnets"
-  value       = aws_subnet.private[*].id
-}
-
-output "internet_gateway_id" {
-  description = "ID of the Internet Gateway"
-  value       = aws_internet_gateway.main.id
-}
-
-output "nat_gateway_ids" {
-  description = "IDs of the NAT Gateways"
-  value       = aws_nat_gateway.main[*].id
-}
-```
-
-### Compute Module (modules/compute/main.tf)
-```hcl
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-# Data source for latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-# IAM Role for EC2 instances
-resource "aws_iam_role" "ec2_role" {
-  name = "${var.environment}-ec2-role-${var.region}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
+export class AlbConstruct extends Construct {
+  public readonly alb: Lb;
+  public readonly targetGroup: LbTargetGroup;
+  public readonly listener: LbListener;
+
+  constructor(scope: Construct, id: string, props: AlbConstructProps) {
+    super(scope, id);
+
+    // Create Application Load Balancer
+    this.alb = new Lb(this, 'alb', {
+      name: NamingConvention.generateResourceName(props.namingConfig, 'alb'),
+      loadBalancerType: 'application',
+      subnets: props.subnetIds,
+      securityGroups: props.securityGroupIds,
+      enableDeletionProtection: false,
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'LoadBalancer', {
+        Name: NamingConvention.generateResourceName(props.namingConfig, 'alb')
+      })
+    });
+
+    // Create Target Group
+    this.targetGroup = new LbTargetGroup(this, 'target-group', {
+      name: NamingConvention.generateResourceName(props.namingConfig, 'tg'),
+      port: 80,
+      protocol: 'HTTP',
+      vpcId: props.vpcId,
+      targetType: 'instance',
+      healthCheck: {
+        enabled: true,
+        healthyThreshold: 2,
+        unhealthyThreshold: 2,
+        timeout: 5,
+        interval: 30,
+        path: '/health',
+        matcher: '200',
+        port: 'traffic-port',
+        protocol: 'HTTP'
+      },
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'TargetGroup', {
+        Name: NamingConvention.generateResourceName(props.namingConfig, 'tg')
+      })
+    });
+
+    // Create Listener
+    this.listener = new LbListener(this, 'listener', {
+      loadBalancerArn: this.alb.arn,
+      port: '80',
+      protocol: 'HTTP',
+      defaultAction: [
+        {
+          type: 'forward',
+          targetGroupArn: this.targetGroup.arn
         }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "${var.environment}-ec2-role-${var.region}"
+      ]
+    });
   }
 }
+```
 
-# IAM Instance Profile
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.environment}-ec2-profile-${var.region}"
-  role = aws_iam_role.ec2_role.name
+### src/constructs/auto-scaling.ts
+```typescript
+import { Construct } from 'constructs';
+import {
+  LaunchTemplate,
+  AutoscalingGroup,
+  AutoscalingPolicy,
+  DataAwsAmi,
+  IamRole,
+  IamRolePolicyAttachment,
+  IamInstanceProfile,
+  LbTargetGroupAttachment
+} from '@cdktf/provider-aws/lib';
+import { NamingConvention, NamingConfig } from '../utils/naming';
+import { TaggingStrategy, TagConfig } from '../utils/tagging';
+
+export interface AutoScalingConstructProps {
+  namingConfig: NamingConfig;
+  tagConfig: TagConfig;
+  instanceType: string;
+  minSize: number;
+  maxSize: number;
+  desiredCapacity: number;
+  subnetIds: string[];
+  securityGroupIds: string[];
+  targetGroupArn: string;
+  keyName?: string;
 }
 
-# IAM Policy for CloudWatch
-resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
-  name = "${var.environment}-ec2-cloudwatch-policy-${var.region}"
-  role = aws_iam_role.ec2_role.id
+export class AutoScalingConstruct extends Construct {
+  public readonly launchTemplate: LaunchTemplate;
+  public readonly autoScalingGroup: AutoscalingGroup;
+  public readonly scaleUpPolicy: AutoscalingPolicy;
+  public readonly scaleDownPolicy: AutoscalingPolicy;
+  public readonly instanceRole: IamRole;
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudwatch:PutMetricData",
-          "ec2:DescribeVolumes",
-          "ec2:DescribeTags",
-          "logs:PutLogEvents",
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
+  constructor(scope: Construct, id: string, props: AutoScalingConstructProps) {
+    super(scope, id);
 
-# Security Group for ALB
-resource "aws_security_group" "alb" {
-  name        = "${var.environment}-alb-sg-${var.region}"
-  description = "Security group for Application Load Balancer"
-  vpc_id      = var.vpc_id
+    // Get latest Amazon Linux 2 AMI
+    const ami = new DataAwsAmi(this, 'amazon-linux', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2']
+        }
+      ]
+    });
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.environment}-alb-sg-${var.region}"
-  }
-}
-
-# Security Group for EC2 instances
-resource "aws_security_group" "ec2" {
-  name        = "${var.environment}-ec2-sg-${var.region}"
-  description = "Security group for EC2 instances"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.environment}-ec2-sg-${var.region}"
-  }
-}
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.environment}-alb-${var.region}"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = var.public_subnet_ids
-
-  enable_deletion_protection = false
-
-  tags = {
-    Name = "${var.environment}-alb-${var.region}"
-  }
-}
-
-# Target Group
-resource "aws_lb_target_group" "main" {
-  name     = "${var.environment}-tg-${var.region}"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-
-  tags = {
-    Name = "${var.environment}-tg-${var.region}"
-  }
-}
-
-# Load Balancer Listener
-resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-}
-
-# Launch Template
-resource "aws_launch_template" "main" {
-  name_prefix   = "${var.environment}-lt-${var.region}-"
-  image_id      = data.aws_ami.amazon_linux.id
-  instance_type = var.instance_type
-
-  vpc_security_group_ids = [aws_security_group.ec2.id]
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
-  }
-
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Hello from ${var.environment} in ${var.region}</h1>" > /var/www/html/index.html
-    
-    # Install CloudWatch agent
-    wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-    rpm -U ./amazon-cloudwatch-agent.rpm
-    
-    # Configure CloudWatch agent
-    cat <<EOT > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-    {
-      "metrics": {
-        "namespace": "CWAgent",
-        "metrics_collected": {
-          "cpu": {
-            "measurement": [
-              "cpu_usage_idle",
-              "cpu_usage_iowait",
-              "cpu_usage_user",
-              "cpu_usage_system"
-            ],
-            "metrics_collection_interval": 60
-          },
-          "disk": {
-            "measurement": [
-              "used_percent"
-            ],
-            "metrics_collection_interval": 60,
-            "resources": [
-              "*"
-            ]
-          },
-          "mem": {
-            "measurement": [
-              "mem_used_percent"
-            ],
-            "metrics_collection_interval": 60
+    // Create IAM role for EC2 instances
+    this.instanceRole = new IamRole(this, 'instance-role', {
+      name: NamingConvention.generateResourceName(props.namingConfig, 'ec2-role'),
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com'
+            }
           }
+        ]
+      }),
+      tags: TaggingStrategy.getResourceTags(props.tagConfig, 'IAMRole')
+    });
+
+    // Attach necessary policies
+    new IamRolePolicyAttachment(this, 'ssm-policy', {
+      role: this.instanceRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+    });
+
+    new IamRolePolicyAttachment(this, 'cloudwatch-policy', {
+      role: this.instanceRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+    });
+
+    // Create instance profile
+    const instanceProfile = new IamInstanceProfile(this, 'instance-profile', {
+      name: NamingConvention.generateResourceName(props.namingConfig, 'ec2-profile'),
+      role: this.instanceRole.name
+    });
+
+    // User data script
+    const userData = Buffer.from(`#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Hello from ${props.namingConfig.environment}-${props.namingConfig.region}</h1>" > /var/www/html/index.html
+echo "OK" > /var/www/html/health
+
+# Install CloudWatch agent
+yum install -y amazon-cloudwatch-agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default
+`).toString('base64');
+
+    // Create Launch Template
+    this.launchTemplate = new LaunchTemplate(this, 'launch-template', {
+      name: NamingConvention.generateResourceName(props.namingConfig, 'lt'),
+      imageId: ami.id,
+      instanceType: props.instanceType,
+      keyName: props.keyName,
+      vpcSecurityGroupIds: props.securityGroupIds,
+      userData: userData,
+      iamInstanceProfile: {
+        name: instanceProfile.name
+      },
+      monitoring: {
+        enabled: true
+      },
+      tagSpecifications: [
+        {
+          resourceType: 'instance',
+          tags: TaggingStrategy.getResourceTags(props.tagConfig, 'EC2Instance', {
+            Name: NamingConvention.generateResourceName(props.namingConfig, 'instance')
+          })
         }
-      }
-    }
-EOT
-    
-    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-  EOF
-  )
+      ]
+    });
 
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "${var.environment}-instance-${var.region}"
-    }
-  }
+    // Create Auto Scaling Group
+    this.autoScalingGroup = new AutoscalingGroup(this, 'asg', {
+      name: NamingConvention.generateResourceName(props.namingConfig, 'asg'),
+      minSize: props.minSize,
+      maxSize: props.maxSize,
+      desiredCapacity: props.desiredCapacity,
+      vpcZoneIdentifier: props.subnetIds,
+      targetGroupArns: [props.targetGroupArn],
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
+      launchTemplate: {
+        id: this.launchTemplate.id,
+        version: '$Latest'
+      },
+      tag: [
+        {
+          key: 'Name',
+          value: NamingConvention.generateResourceName(props.namingConfig, 'asg'),
+          propagateAtLaunch: true
+        },
+        ...Object.entries(TaggingStrategy.getResourceTags(props.tagConfig, 'AutoScalingGroup')).map(([key, value]) => ({
+          key,
+          value,
+          propagateAtLaunch: true
+        }))
+      ]
+    });
 
-  lifecycle {
-    create_before_destroy = true
-  }
-}
+    // Create scaling policies
+    this.scaleUpPolicy = new AutoscalingPolicy(this, 'scale-up-policy', {
+      name: NamingConvention.generateResourceName(props.namingConfig, 'scale-up'),
+      scalingAdjustment: 1,
+      adjustmentType: 'ChangeInCapacity',
+      cooldown: 300,
+      autoscalingGroupName: this.autoScalingGroup.name
+    });
 
-# Auto Scaling Group
-resource "aws_autoscaling_group" "main" {
-  name                = "${var.environment}-asg-${var.region}"
-  vpc_zone_identifier = var.private_subnet_ids
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
-
-  min_size         = var.min_size
-  max_size         = var.max_size
-  desired_capacity = var.desired_capacity
-
-  launch_template {
-    id      = aws_launch_template.main.id
-    version = "$Latest"
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "${var.environment}-asg-${var.region}"
-    propagate_at_launch = false
-  }
-
-  tag {
-    key                 = "Environment"
-    value               = var.environment
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "Project"
-    value               = var.project_name
-    propagate_at_launch = true
-  }
-}
-
-# Auto Scaling Policies
-resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "${var.environment}-scale-up-${var.region}"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.main.name
-}
-
-resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "${var.environment}-scale-down-${var.region}"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.main.name
-}
-
-# CloudWatch Alarms
-resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "${var.environment}-cpu-high-${var.region}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "70"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.main.name
-  }
-
-  tags = {
-    Name = "${var.environment}-cpu-high-${var.region}"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-  alarm_name          = "${var.environment}-cpu-low-${var.region}"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "30"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.main.name
-  }
-
-  tags = {
-    Name = "${var.environment}-cpu-low-${var.region}"
+    this.scaleDownPolicy = new AutoscalingPolicy(this, 'scale-down-policy', {
+      name: NamingConvention.generateResourceName(props.namingConfig, 'scale-down'),
+      scalingAdjustment: -1,
+      adjustmentType: 'ChangeInCapacity',
+      cooldown: 300,
+      autoscalingGroupName: this.autoScalingGroup.name
+    });
   }
 }
 ```
 
-### Compute Module Variables (modules/compute/variables.tf)
-```hcl
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
+### src/constructs/rds.ts
+```typescript
+import { Construct } from 'constructs';
+import {
+  DbSubnetGroup,
+  DbInstance,
+  DbParameterGroup
+} from '@cdktf/provider-aws/lib';
+import { NamingConvention, NamingConfig } from '../utils/naming';
+import { TaggingStrategy, TagConfig } from '../utils/tagging';
 
-variable "region" {
-  description = "AWS region"
-  type        = string
-}
-
-variable "vpc_id" {
-  description = "VPC ID"
-  type        = string
-}
-
-variable "public_subnet_ids" {
-  description = "List of public subnet IDs"
-  type        = list(string)
-}
-
-variable "private_subnet_ids" {
-  description = "List of private subnet IDs"
-  type        = list(string)
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-}
-
-variable "min_size" {
-  description = "Minimum number of instances"
-  type        = number
-}
-
-variable "max_size" {
-  description = "Maximum number of instances"
-  type        = number
-}
-
-variable "desired_capacity" {
-  description = "Desired number of instances"
-  type        = number
-}
-
-variable "project_name" {
-  description = "Name of the project"
-  type        = string
-}
-```
-
-### Compute Module Outputs (modules/compute/outputs.tf)
-```hcl
-output "load_balancer_arn" {
-  description = "ARN of the load balancer"
-  value       = aws_lb.main.arn
-}
-
-output "load_balancer_dns_name" {
-  description = "DNS name of the load balancer"
-  value       = aws_lb.main.dns_name
-}
-
-output "autoscaling_group_name" {
-  description = "Name of the Auto Scaling Group"
-  value       = aws_autoscaling_group.main.name
-}
-
-output "target_group_arn" {
-  description = "ARN of the target group"
-  value       = aws_lb_target_group.main.arn
-}
-```
-
-### Database Module (modules/database/main.tf)
-```hcl
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-# Random password for RDS
-resource "random_password" "db_password" {
-  length  = 16
-  special = true
-}
-
-# AWS Secrets Manager secret for database password
-resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "${var.environment}-db-password-${var.region}"
-  description             = "Database password for ${var.environment} environment in ${var.region}"
-  recovery_window_in_days = 7
-
-  tags = {
-    Name = "${var.environment}-db-password-${var.region}"
-  }
-}
-
-resource "aws_secretsmanager_secret_version" "db_password" {
-  secret_id     = aws_secretsmanager_secret.db_password.id
-  secret_string = random_password.db_password.result
-}
-
-# DB Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.environment}-db-subnet-group-${var.region}"
-  subnet_ids = var.private_subnet_ids
-
-  tags = {
-    Name = "${var.environment}-db-subnet-group-${var.region}"
-  }
-}
-
-# Security Group for RDS
-resource "aws_security_group" "rds" {
-  name        = "${var.environment}-rds-sg-${var.region}"
-  description = "Security group for RDS database"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.environment}-rds-sg-${var.region}"
-  }
-}
-
-# RDS Parameter Group
-resource "aws_db_parameter_group" "main" {
-  family = "postgres14"
-  name   = "${var.environment}-db-params-${var.region}"
-
-  parameter {
-    name  = "log_statement"
-    value = "all"
-  }
-
-  parameter {
-    name  = "log_min
+export interface RdsConstructProps {
+  namingConfig: NamingConfig

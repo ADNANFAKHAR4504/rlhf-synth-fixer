@@ -1379,6 +1379,9 @@ describe('TapStack — Integration Coverage', () => {
 
     const state = JSON.parse(fs.readFileSync(terraformStateFile, 'utf8'));
 
+    // Log the state for debugging
+    console.log("State: ", state);
+
     // Extract resource IDs from Terraform state outputs
     const vpcId = state.TapStackpr824.PrimaryVpc_vpc_id_121F1BFC;
     const dbInstanceId = state.TapStackpr824.PrimaryDb_db_instance_765D70A7;
@@ -1399,7 +1402,6 @@ describe('TapStack — Integration Coverage', () => {
     expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);  // Check if DB instance exists
   });
 });
-
 ```
 
 ### `bin/tap.ts`
