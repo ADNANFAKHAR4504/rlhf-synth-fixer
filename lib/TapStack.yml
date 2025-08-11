@@ -81,6 +81,18 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
                 Resource: !GetAtt AppDynamoTable.Arn
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: 
+                  - "arn:aws:s3:::my-lambda-bucket/*"
+                  - !Sub "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*/*"
+                  - !Sub "arn:aws:s3:::${AWS::StackName}-*/*"
       Tags:
         - Key: Environment
           Value: !Ref Environment
