@@ -45,14 +45,22 @@ class TapStack(pulumi.ComponentResource):
         self._create_notifications()
         self._enforce_rbac()
 
-        self.register_outputs({
+        # Register outputs with proper handling of Output objects
+        outputs = {
             "pipelineName": self.pipeline_name,
             "artifactsBucket": self.artifacts_bucket.bucket,
             "buildProjectName": self.build_project.name,
             "notificationsTopicArn": self.notifications_topic.arn,
             "chatbotEnabled": self.slack_enabled,
-            "chatbotConfigName": self.chatbot_config.configuration_name if self.chatbot_config else "disabled",
-        })
+        }
+        
+        # Handle chatbot config conditionally
+        if self.chatbot_config:
+            outputs["chatbotConfigName"] = self.chatbot_config.configuration_name
+        else:
+            outputs["chatbotConfigName"] = "disabled"
+            
+        self.register_outputs(outputs)
 
     def _load_config(self) -> None:
         """Load all configuration values from Pulumi Config with safe defaults"""
@@ -73,14 +81,22 @@ class TapStack(pulumi.ComponentResource):
         self.github_connection_arn = self.config.get("github.connectionArn")
         
         # Deployment configuration
-        self.deploy_target_bucket = self.config.get("deploy.targetBucketName") or f"{self.resource_name_prefix}-deploy-target"
+        self.deploy_target_bucket = (
+            self.config.get("deploy.targetBucketName") or 
+            f"{self.resource_name_prefix}-deploy-target"
+        )
         
         # RBAC configuration with safe JSON parsing
         approver_arns_str = self.config.get("rbac.approverArns") or "[]"
         try:
-            self.rbac_approver_arns = json.loads(approver_arns_str) if isinstance(approver_arns_str, str) else (approver_arns_str or [])
+            if isinstance(approver_arns_str, str):
+                self.rbac_approver_arns = json.loads(approver_arns_str)
+            else:
+                self.rbac_approver_arns = approver_arns_str or []
         except json.JSONDecodeError:
-            pulumi.log.warn(f"Invalid JSON for rbac.approverArns: {approver_arns_str}, using empty list")
+            pulumi.log.warn(
+                f"Invalid JSON for rbac.approverArns: {approver_arns_str}, using empty list"
+            )
             self.rbac_approver_arns = []
         
         # Slack configuration with safe defaults
@@ -142,18 +158,19 @@ artifacts:
         )
       
         # Enable server-side encryption (using V2 for latest provider)
+        # Create encryption configuration
+        sse_default_cls = aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs
+        sse_default_args = sse_default_cls(
+            sse_algorithm="AES256"   # or "aws:kms"
+            # kms_master_key_id=kms_key.arn,  # uncomment if using KMS
+        )
+        encryption_rule = aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=sse_default_args
+        )
         aws.s3.BucketServerSideEncryptionConfigurationV2(
             f"{self.resource_name_prefix}-artifacts-bucket-encryption",
             bucket=self.artifacts_bucket.id,
-            rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                    apply_server_side_encryption_by_default=
-                        aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
-                            sse_algorithm="AES256"   # or "aws:kms"
-                            # kms_master_key_id=kms_key.arn,  # uncomment if using KMS
-                        )
-                )
-            ],
+            rules=[encryption_rule],
             opts=ResourceOptions(parent=self, depends_on=[self.artifacts_bucket]),
         )
 
@@ -328,7 +345,8 @@ artifacts:
             self.codestar_connection_arn = self.codestar_connection.arn
         
         # Now create the pipeline policy with the CodeStar connection ARN
-        def create_pipeline_policy(bucket_arn):
+        def create_pipeline_policy(args):
+            bucket_arn, connection_arn = args
             return json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -360,7 +378,7 @@ artifacts:
                         "Action": [
                             "codestar-connections:UseConnection"
                         ],
-                        "Resource": self.codestar_connection_arn
+                        "Resource": connection_arn
                     }
                 ]
             })
@@ -369,7 +387,7 @@ artifacts:
         aws.iam.RolePolicy(
             f"{self.resource_name_prefix}-codepipeline-policy",
             role=self._pipeline_policy_role.id,
-            policy=self._pipeline_policy_bucket_arn.apply(create_pipeline_policy),
+            policy=pulumi.Output.all(self._pipeline_policy_bucket_arn, self.codestar_connection_arn).apply(create_pipeline_policy),
             opts=ResourceOptions(parent=self)
         )
 
@@ -649,7 +667,8 @@ phases:
         )
         
         # SNS Topic Policy to allow CodeStar Notifications to publish
-        def create_topic_policy(topic_arn):
+        def create_topic_policy(args):
+            topic_arn, account_id = args
             return json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -661,7 +680,7 @@ phases:
                         "Resource": topic_arn,
                         "Condition": {
                             "StringEquals": {
-                                "aws:SourceAccount": aws.get_caller_identity().account_id
+                                "aws:SourceAccount": account_id
                             }
                         }
                     }
@@ -671,7 +690,7 @@ phases:
         aws.sns.TopicPolicy(
             f"{self.resource_name_prefix}-notifications-topic-policy",
             arn=self.notifications_topic.arn,
-            policy=self.notifications_topic.arn.apply(create_topic_policy),
+            policy=pulumi.Output.all(self.notifications_topic.arn, aws.get_caller_identity().account_id).apply(create_topic_policy),
             opts=ResourceOptions(parent=self)
         )
 
