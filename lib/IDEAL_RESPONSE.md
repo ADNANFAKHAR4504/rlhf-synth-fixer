@@ -753,7 +753,6 @@ export class Dns extends Construct {
 ### `lib/tap-stack.ts`
 
 ```ts
-// lib/tap-stack.ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -791,16 +790,14 @@ function toProviderDefaultTagsArray(
   return [tags];
 }
 
-/** Case-insensitive merge to avoid IAM “Duplicate tag keys” */
 function mergeTagsCaseInsensitive(
   base: Record<string, string>,
   extra?: Record<string, string>
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(base)) out[k.toLowerCase()] = v;
-  if (extra) {
+  if (extra)
     for (const [k, v] of Object.entries(extra)) out[k.toLowerCase()] = v;
-  }
   return out;
 }
 
@@ -822,24 +819,33 @@ export class TapStack extends TerraformStack {
       'dev';
     this.environment = environment;
 
-    // ---- Tag context (normalized to lowercase keys) ----
+    // STRICT PR detection: pr### only (won’t match "prod")
+    const isPrEnv = /^pr\d+$/i.test(this.environment);
+
+    // Feature gates
+    const enableSecondary =
+      !isPrEnv && (process.env.ENABLE_SECONDARY ?? 'true') !== 'false';
+    const enableDatabase =
+      !isPrEnv && (process.env.ENABLE_DATABASE ?? 'true') !== 'false';
+
+    // ---- Tags (lowercased keys to avoid “Duplicate tag keys”) ----
     const project = props.project ?? process.env.PROJECT ?? 'multi-region-app';
     const owner = props.owner ?? process.env.OWNER ?? 'DevOps Team';
     const costCenter =
       props.costCenter ?? process.env.COST_CENTER ?? 'Engineering';
 
-    const mergedLowerTags = mergeTagsCaseInsensitive(
-      {
-        environment,
-        project,
-        owner,
-        cost_center: costCenter,
-        managedby: 'cdktf',
-      },
-      props.defaultTags?.tags
-    );
-
-    const mergedDefaultTags: AwsProviderDefaultTags = { tags: mergedLowerTags };
+    const mergedDefaultTags: AwsProviderDefaultTags = {
+      tags: mergeTagsCaseInsensitive(
+        {
+          environment,
+          project,
+          owner,
+          cost_center: costCenter,
+          managedby: 'cdktf',
+        },
+        props.defaultTags?.tags
+      ),
+    };
 
     // ---- Provider constraints ----
     this.addOverride('terraform.required_version', '>= 1.6');
@@ -891,14 +897,13 @@ export class TapStack extends TerraformStack {
       this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
     }
 
-    // ---- Sanity outputs ----
+    // ---- Outputs ----
     new TerraformOutput(this, 'workspace', { value: environment });
     new TerraformOutput(this, 'primary_region', { value: primaryRegion });
     new TerraformOutput(this, 'secondary_region', { value: secondaryRegion });
 
     // ---- Secure VPCs ----
     const vpcCidrPrimary = process.env.VPC_CIDR_PRIMARY || '10.0.0.0/16';
-    const vpcCidrSecondary = process.env.VPC_CIDR_SECONDARY || '10.1.0.0/16';
     const azCount = parseInt(process.env.AZ_COUNT || '2', 10);
     const natPerAz = process.env.NAT_PER_AZ === 'true';
 
@@ -910,20 +915,23 @@ export class TapStack extends TerraformStack {
       azCount,
       natPerAz,
     });
-
-    const secondaryVpc = new SecureVpc(this, 'SecondaryVpc', {
-      provider: this.secondary,
-      environment: this.environment,
-      region: secondaryRegion,
-      vpcCidr: vpcCidrSecondary,
-      azCount,
-      natPerAz,
-    });
-
     new TerraformOutput(this, 'primary_vpc_id', { value: primaryVpc.vpcId });
-    new TerraformOutput(this, 'secondary_vpc_id', {
-      value: secondaryVpc.vpcId,
-    });
+
+    let secondaryVpc: SecureVpc | undefined;
+    if (enableSecondary) {
+      const vpcCidrSecondary = process.env.VPC_CIDR_SECONDARY || '10.1.0.0/16';
+      secondaryVpc = new SecureVpc(this, 'SecondaryVpc', {
+        provider: this.secondary,
+        environment: this.environment,
+        region: secondaryRegion,
+        vpcCidr: vpcCidrSecondary,
+        azCount,
+        natPerAz,
+      });
+      new TerraformOutput(this, 'secondary_vpc_id', {
+        value: secondaryVpc.vpcId,
+      });
+    }
 
     // ---- Security (SGs) ----
     const adminCidr = process.env.ADMIN_CIDR || '';
@@ -940,15 +948,18 @@ export class TapStack extends TerraformStack {
       enableSshToApp,
     });
 
-    const secondarySec = new Security(this, 'SecondarySecurity', {
-      provider: this.secondary,
-      environment: this.environment,
-      region: secondaryRegion,
-      vpcId: secondaryVpc.vpcId,
-      adminCidr,
-      appPort,
-      enableSshToApp,
-    });
+    let secondarySec: Security | undefined;
+    if (enableSecondary && secondaryVpc) {
+      secondarySec = new Security(this, 'SecondarySecurity', {
+        provider: this.secondary,
+        environment: this.environment,
+        region: secondaryRegion,
+        vpcId: secondaryVpc.vpcId,
+        adminCidr,
+        appPort,
+        enableSshToApp,
+      });
+    }
 
     // ---- Compute (ALB/ASG) ----
     const primaryCompute = new Compute(this, 'PrimaryCompute', {
@@ -964,55 +975,67 @@ export class TapStack extends TerraformStack {
       acmCertArn: process.env.ACM_CERT_ARN || '',
     });
 
-    const secondaryCompute = new Compute(this, 'SecondaryCompute', {
-      provider: this.secondary,
-      environment: this.environment,
-      region: secondaryRegion,
-      vpcId: secondaryVpc.vpcId,
-      publicSubnets: secondaryVpc.publicSubnetIds,
-      privateSubnets: secondaryVpc.privateSubnetIds,
-      albSgId: secondarySec.albSgId,
-      appSgId: secondarySec.appSgId,
-      instanceType: 't3.micro',
-      acmCertArn: process.env.ACM_CERT_ARN_SECONDARY || '',
-    });
+    let secondaryCompute: Compute | undefined;
+    if (enableSecondary && secondaryVpc && secondarySec) {
+      secondaryCompute = new Compute(this, 'SecondaryCompute', {
+        provider: this.secondary,
+        environment: this.environment,
+        region: secondaryRegion,
+        vpcId: secondaryVpc.vpcId,
+        publicSubnets: secondaryVpc.publicSubnetIds,
+        privateSubnets: secondaryVpc.privateSubnetIds,
+        albSgId: secondarySec.albSgId,
+        appSgId: secondarySec.appSgId,
+        instanceType: 't3.micro',
+        acmCertArn: process.env.ACM_CERT_ARN_SECONDARY || '',
+      });
+    }
 
     // ---- Database (RDS + Secrets) ----
-    const primaryDb = new Database(this, 'PrimaryDatabase', {
-      provider: this.primary,
-      environment: this.environment,
-      region: primaryRegion,
-      privateSubnets: primaryVpc.privateSubnetIds,
-      rdsSgId: primarySec.rdsSgId,
-    });
+    let primaryDb: Database | undefined;
+    let secondaryDb: Database | undefined;
 
-    const secondaryDb = new Database(this, 'SecondaryDatabase', {
-      provider: this.secondary,
-      environment: this.environment,
-      region: secondaryRegion,
-      privateSubnets: secondaryVpc.privateSubnetIds,
-      rdsSgId: secondarySec.rdsSgId,
-    });
+    if (enableDatabase) {
+      primaryDb = new Database(this, 'PrimaryDatabase', {
+        provider: this.primary,
+        environment: this.environment,
+        region: primaryRegion,
+        privateSubnets: primaryVpc.privateSubnetIds,
+        rdsSgId: primarySec.rdsSgId,
+      });
+
+      if (enableSecondary && secondaryVpc && secondarySec) {
+        secondaryDb = new Database(this, 'SecondaryDatabase', {
+          provider: this.secondary,
+          environment: this.environment,
+          region: secondaryRegion,
+          privateSubnets: secondaryVpc.privateSubnetIds,
+          rdsSgId: secondarySec.rdsSgId,
+        });
+      }
+    }
 
     // ---- Monitoring ----
     new Monitoring(this, 'PrimaryMonitoring', {
       provider: this.primary,
       environment: this.environment,
       asgName: primaryCompute.asgName,
-      dbIdentifier: primaryDb.dbIdentifier,
+      dbIdentifier: primaryDb?.dbIdentifier ?? '',
     });
 
-    new Monitoring(this, 'SecondaryMonitoring', {
-      provider: this.secondary,
-      environment: this.environment,
-      asgName: secondaryCompute.asgName,
-      dbIdentifier: secondaryDb.dbIdentifier,
-    });
+    if (secondaryCompute) {
+      new Monitoring(this, 'SecondaryMonitoring', {
+        provider: this.secondary,
+        environment: this.environment,
+        asgName: secondaryCompute.asgName,
+        dbIdentifier: secondaryDb?.dbIdentifier ?? '',
+      });
+    }
 
-    // ---- DNS (optional) ----
+    // ---- DNS (optional; only if both regions exist) ----
     const hostedZoneId = process.env.DNS_HOSTED_ZONE_ID || '';
     const recordName = process.env.DNS_RECORD_NAME || '';
-    if (hostedZoneId && recordName) {
+    if (hostedZoneId && recordName && secondaryCompute) {
       const primaryAlbZoneId = (primaryCompute as any).alb?.zoneId;
       const secondaryAlbZoneId = (secondaryCompute as any).alb?.zoneId;
 
