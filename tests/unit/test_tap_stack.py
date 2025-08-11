@@ -5,7 +5,7 @@ Unit tests for the IPv6 dual-stack VPC infrastructure.
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 # Mock AWS and Pulumi before importing
 mock_pulumi = Mock()
@@ -44,7 +44,7 @@ class TestTapStack(unittest.TestCase):
     @patch.dict(os.environ, {'ENVIRONMENT_SUFFIX': 'test'})
     def test_infrastructure_code_execution(self):
         """Test that infrastructure code can be executed without errors"""
-        import lib.tap_stack
+        import lib.tap_stack  # noqa: F401
         self.assertTrue(mock_aws.ec2.Vpc.called)
         self.assertTrue(mock_pulumi.export.called)
 
@@ -52,29 +52,29 @@ class TestTapStack(unittest.TestCase):
     def test_infrastructure_with_prod_suffix(self):
         """Test infrastructure with prod environment suffix"""
         import importlib
-
         import lib.tap_stack
         importlib.reload(lib.tap_stack)
         self.assertTrue(mock_aws.ec2.Vpc.called)
 
     def test_derive_ipv6_subnet_cidr_function(self):
         """Test the derive_ipv6_subnet_cidr helper function"""
+        import importlib.util
         # Import the function
         spec = importlib.util.spec_from_file_location("tap_stack", "lib/tap_stack.py")
         module = importlib.util.module_from_spec(spec)
-        
+
         # Mock the dependencies before execution
         module.pulumi = mock_pulumi
         module.aws = mock_aws
         module.os = Mock()
         module.os.environ.get = Mock(return_value='test')
-        
+
         with patch.dict('sys.modules', {'pulumi': mock_pulumi, 'pulumi_aws': mock_aws}):
             spec.loader.exec_module(module)
-            
+
         # Test the function exists
         self.assertTrue(hasattr(module, 'derive_ipv6_subnet_cidr'))
-        
+
         # Test the function logic
         result = module.derive_ipv6_subnet_cidr('2001:db8::/56', 1)
         self.assertIn('2001:db8', result)
@@ -185,6 +185,14 @@ class TestTapStack(unittest.TestCase):
         self.assertIn('replace_on_changes', source_code)
         self.assertIn('depends_on', source_code)
         self.assertIn('ResourceOptions', source_code)
+
+    def test_availability_zones_configuration(self):
+        """Test availability zones configuration"""
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
+            source_code = f.read()
+        
+        self.assertIn('availability_zone', source_code)
+        self.assertIn('get_availability_zones', source_code)
 
 
 if __name__ == '__main__':
