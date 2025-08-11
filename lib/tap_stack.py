@@ -26,10 +26,10 @@ class WebApplicationStack(Stack):
     # Retrieve an existing VPC using its VPC ID
     vpc = ec2.Vpc.from_lookup(
       self, "ExistingVPC",
-      vpc_id="vpc-0bafb9e75f087620"
+      vpc_id="vpc-1234567890abcdef0"
     )
 
-    # Select the private subnets from the VPC
+    # Select private subnets for ASG and RDS
     private_subnets = vpc.select_subnets(
       subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
     )
@@ -55,7 +55,7 @@ class WebApplicationStack(Stack):
     db_subnet_group = rds.SubnetGroup(
       self, "DBSubnetGroup",
       vpc=vpc,
-      vpc_subnets=private_subnets,
+      vpc_subnets=private_subnets.subnet_selection,
       description="Subnet group for the RDS database"
     )
 
@@ -65,7 +65,8 @@ class WebApplicationStack(Stack):
         version=rds.MysqlEngineVersion.VER_8_0_28
       ),
       instance_type=ec2.InstanceType.of(
-        ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.SMALL
+        ec2.InstanceClass.BURSTABLE3,
+        ec2.InstanceSize.SMALL
       ),
       vpc=vpc,
       multi_az=True,
@@ -82,7 +83,7 @@ class WebApplicationStack(Stack):
       "Allow web servers to access MySQL"
     )
 
-    # 3. IAM Roles
+    # 3. IAM Role
     web_server_role = iam.Role(
       self, "WebServerRole",
       assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
@@ -97,9 +98,10 @@ class WebApplicationStack(Stack):
     asg = autoscaling.AutoScalingGroup(
       self, "ASG",
       vpc=vpc,
-      vpc_subnets=private_subnets,
+      vpc_subnets=private_subnets.subnet_selection,
       instance_type=ec2.InstanceType.of(
-        ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.MICRO
+        ec2.InstanceClass.BURSTABLE2,
+        ec2.InstanceSize.MICRO
       ),
       machine_image=ec2.AmazonLinuxImage(
         generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
