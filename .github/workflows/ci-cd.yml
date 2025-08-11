@@ -209,7 +209,7 @@ jobs:
             echo "✅ Terraform project detected, setting up environment..."
             
             # Set up PR-specific state management
-            STATE_KEY="prs/pr${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
+            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
             echo "Using state key: $STATE_KEY"
             
             cd lib
@@ -276,7 +276,7 @@ jobs:
             echo "✅ Terraform HCL project detected, running Terraform deploy..."
             
             # Set up PR-specific state management
-            STATE_KEY="prs/pr${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
+            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
             echo "Using state key: $STATE_KEY"
             
             # Change to bin directory where Terraform files are located
@@ -759,7 +759,7 @@ jobs:
             echo "✅ Terraform HCL project detected, running Terraform destroy..."
             
             # Set up PR-specific state management
-            STATE_KEY="prs/pr${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
+            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
             echo "Using state key: $STATE_KEY"
             
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
@@ -1091,7 +1091,7 @@ jobs:
             echo "✅ Terraform project detected, running terraform destroy..."
             
             # Set up PR-specific state management
-            STATE_KEY="prs/pr${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
+            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
             echo "Using state key: $STATE_KEY"
             
             # Try to destroy resources, but don't fail if they don't exist
