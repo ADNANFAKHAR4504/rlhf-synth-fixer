@@ -27,7 +27,7 @@ export interface ComputeProps {
   desiredCapacity?: number;
   minSize?: number;
   maxSize?: number;
-  acmCertArn: string; // For HTTPS
+  acmCertArn?: string;
 }
 
 export class Compute extends Construct {
@@ -127,35 +127,21 @@ export class Compute extends Construct {
       provider: props.provider,
     });
 
-    // Listener HTTP → redirect to HTTPS
-    new LbListener(this, 'httpListener', {
-      loadBalancerArn: alb.arn,
-      port: 80,
-      protocol: 'HTTP',
-      defaultAction: [
-        {
-          type: 'redirect',
-          redirect: { port: '443', protocol: 'HTTPS', statusCode: 'HTTP_301' },
-        },
-      ],
-      provider: props.provider,
-    });
-
-    // Listener HTTPS → forward to TG
-    new LbListener(this, 'httpsListener', {
-      loadBalancerArn: alb.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-2016-08',
-      certificateArn: props.acmCertArn,
-      defaultAction: [
-        {
-          type: 'forward',
-          targetGroupArn: tg.arn,
-        },
-      ],
-      provider: props.provider,
-    });
+    // Create HTTPS listener only if a cert was provided
+    if (props.acmCertArn && props.acmCertArn.trim().length > 0) {
+      new LbListener(this, 'httpsListener', {
+        loadBalancerArn: alb.arn,
+        port: 443,
+        protocol: 'HTTPS',
+        certificateArn: props.acmCertArn,
+        defaultAction: [
+          {
+            type: 'forward',
+            targetGroupArn: tg.arn,
+          },
+        ],
+      });
+    }
 
     // Launch Template with CW Agent + SSM Agent
     const userData = Fn.base64encode(`#!/bin/bash

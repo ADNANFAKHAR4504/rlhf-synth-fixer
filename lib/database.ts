@@ -80,7 +80,7 @@ export class Database extends Construct {
     const db = new DbInstance(this, 'dbInstance', {
       identifier: name(env, 'db', region),
       engine: 'postgres',
-      engineVersion: '14.9',
+      engineVersion: '15.7',
       instanceClass: props.instanceClass || 'db.t3.micro',
       allocatedStorage: props.allocatedStorage || 20,
 
