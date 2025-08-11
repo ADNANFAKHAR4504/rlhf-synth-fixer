@@ -1,0 +1,27 @@
+[
+    {
+        "OutputKey": "DatabaseEndpointsynthtrainr83",
+        "OutputValue": "tapstacksynthtrainr83-databasesynthtrainr838b2eac2-zvjlnm0avwhy.c43eiskmcd0s.us-east-1.rds.amazonaws.com",
+        "Description": "Database endpoint for staging"
+    },
+    {
+        "OutputKey": "S3BucketNamesynthtrainr83",
+        "OutputValue": "app-bucket-synthtrainr83-718240086340-us-east-1",
+        "Description": "S3 bucket name for staging"
+    },
+    {
+        "OutputKey": "SNSTopicArnsynthtrainr83",
+        "OutputValue": "arn:aws:sns:us-east-1:718240086340:webapp-notifications-synthtrainr83",
+        "Description": "SNS topic ARN for staging"
+    },
+    {
+        "OutputKey": "WebServerInstanceIdsynthtrainr83",
+        "OutputValue": "i-0edfc36e373eea8bf",
+        "Description": "Web Server Instance ID for staging"
+    },
+    {
+        "OutputKey": "VPCIdsynthtrainr83",
+        "OutputValue": "vpc-098c9eb5aad0ef8b6",
+        "Description": "VPC ID for staging"
+    }
+]
