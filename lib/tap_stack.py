@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any
 import json
 import base64
 import re
+import uuid
 
 
 def sanitize_bucket_name(name: str) -> str:
@@ -26,6 +27,20 @@ def sanitize_bucket_name(name: str) -> str:
     # Ensure it doesn't end with invalid characters after truncation
     name = name.rstrip('-.')
     return name
+
+
+def get_regions_for_environment(env: str) -> List[str]:
+    """Select AWS regions based on environment to avoid VPC conflicts"""
+    region_map = {
+        'prod': ['us-east-1', 'eu-west-1'],
+        'production': ['us-east-1', 'eu-west-1'],
+        'staging': ['us-west-2', 'ap-southeast-2'],
+        'stage': ['us-west-2', 'ap-southeast-2'],
+        'dev': ['eu-central-1', 'ap-northeast-1'],
+        'test': ['us-west-1', 'ap-southeast-1'],
+        'pr811': ['eu-central-1', 'ap-northeast-1']  # Specific for this PR
+    }
+    return region_map.get(env.lower(), ['eu-central-1', 'ap-northeast-1'])
 
 
 class TapStackArgs:
@@ -53,9 +68,11 @@ class TapStackArgs:
         # Default project name
         self.project_name = f"tap-{self.environment_suffix}"
         
+        # Use environment-specific regions to avoid VPC conflicts
+        self.regions = get_regions_for_environment(self.environment_suffix)
+        
         # Environment-specific defaults
         if self.environment_suffix in ['prod', 'production']:
-            self.regions = ["us-east-1", "eu-west-1"]
             self.instance_type = "t3.small"
             self.min_size = 3
             self.max_size = 12
@@ -65,7 +82,6 @@ class TapStackArgs:
             self.enable_logging = True
             self.vpc_cidr = "10.0.0.0/16"
         elif self.environment_suffix in ['staging', 'stage']:
-            self.regions = ["us-east-1", "eu-west-1"]
             self.instance_type = "t3.small"
             self.min_size = 2
             self.max_size = 8
@@ -74,8 +90,7 @@ class TapStackArgs:
             self.enable_monitoring = True
             self.enable_logging = True
             self.vpc_cidr = "10.1.0.0/16"
-        else:  # dev, test, etc.
-            self.regions = ["us-east-1", "eu-west-1"]
+        else:  # dev, test, pr environments, etc.
             self.instance_type = "t3.micro"
             self.min_size = 1
             self.max_size = 6
@@ -158,7 +173,6 @@ class TapStackArgs:
     
     def get_bucket_name(self, bucket_type: str = "primary") -> str:
         """Generate S3 bucket names with proper formatting"""
-        import uuid
         stack_name = pulumi.get_stack()
         # Create unique suffix to avoid naming conflicts
         unique_id = str(uuid.uuid4())[:8]
@@ -475,10 +489,14 @@ class TapStack:
                 # Create VPC with unique CIDR per environment to avoid conflicts
                 vpc_cidr_base = {
                     'prod': '10.0.0.0/16',
+                    'production': '10.0.0.0/16',
                     'staging': '10.1.0.0/16', 
-                    'dev': '10.2.0.0/16'
+                    'stage': '10.1.0.0/16',
+                    'dev': '10.2.0.0/16',
+                    'test': '10.3.0.0/16',
+                    'pr811': '10.4.0.0/16'  # Specific CIDR for this PR
                 }
-                vpc_cidr = vpc_cidr_base.get(self.environment_suffix, '10.3.0.0/16')
+                vpc_cidr = vpc_cidr_base.get(self.environment_suffix, '10.5.0.0/16')
                 
                 vpc = aws.ec2.Vpc(
                     f"vpc-{region}-{self.environment_suffix}",
@@ -507,7 +525,15 @@ class TapStack:
                 subnets = []
                 max_subnets = min(3, len(azs.names))
                 
-                base_octet = {'prod': 0, 'staging': 1, 'dev': 2}.get(self.environment_suffix, 3)
+                # Use environment-specific base octets
+                base_octet_map = {
+                    'prod': 0, 'production': 0,
+                    'staging': 1, 'stage': 1,
+                    'dev': 2,
+                    'test': 3,
+                    'pr811': 4
+                }
+                base_octet = base_octet_map.get(self.environment_suffix, 5)
                 
                 for i in range(max_subnets):
                     subnet = aws.ec2.Subnet(
@@ -886,7 +912,7 @@ EOF
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
-                # Create CloudWatch alarms if monitoring is enabled - FIXED VERSION
+                # Create CloudWatch alarms if monitoring is enabled
                 cpu_high_alarm = None
                 cpu_low_alarm = None
                 
