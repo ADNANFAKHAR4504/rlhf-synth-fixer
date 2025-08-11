@@ -13,7 +13,7 @@ Parameters:
     Type: String
     Default: 'ServerlessApp'
     Description: 'Application name for resource naming'
-  
+
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
@@ -89,10 +89,10 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
-                Resource: 
-                  - "arn:aws:s3:::my-lambda-bucket/*"
-                  - !Sub "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*/*"
-                  - !Sub "arn:aws:s3:::${AWS::StackName}-*/*"
+                Resource:
+                  - 'arn:aws:s3:::my-lambda-bucket/*'
+                  - !Sub 'arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*/*'
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-*/*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -110,13 +110,13 @@ Resources:
         import os
         import logging
         from botocore.exceptions import ClientError
-        
+
         logger = logging.getLogger()
         logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
-        
+
         dynamodb = boto3.resource('dynamodb')
         table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
-        
+
         def lambda_handler(event, context):
             try:
                 http_method = event.get('requestContext', {}).get('http', {}).get('method')
@@ -138,7 +138,7 @@ Resources:
             except Exception as e:
                 logger.error(f"Error processing request: {str(e)}")
                 return create_response(500, {'error': 'Internal server error'})
-        
+
         def handle_get(event):
             path_params = event.get('pathParameters', {})
             
@@ -160,7 +160,7 @@ Resources:
                 except ClientError as e:
                     logger.error(f"DynamoDB error: {e}")
                     return create_response(500, {'error': 'Database error'})
-        
+
         def handle_post(event):
             try:
                 body = json.loads(event.get('body', '{}'))
@@ -175,7 +175,7 @@ Resources:
             except ClientError as e:
                 logger.error(f"DynamoDB error: {e}")
                 return create_response(500, {'error': 'Database error'})
-        
+
         def handle_put(event):
             path_params = event.get('pathParameters', {})
             
@@ -196,7 +196,7 @@ Resources:
             except ClientError as e:
                 logger.error(f"DynamoDB error: {e}")
                 return create_response(500, {'error': 'Database error'})
-        
+
         def handle_delete(event):
             path_params = event.get('pathParameters', {})
             
@@ -212,7 +212,7 @@ Resources:
             except ClientError as e:
                 logger.error(f"DynamoDB error: {e}")
                 return create_response(500, {'error': 'Database error'})
-        
+
         def create_response(status_code, body):
             return {
                 'statusCode': status_code,
@@ -296,3 +296,5 @@ Outputs:
     Value: !GetAtt AppDynamoTable.Arn
     Export:
       Name: !Sub '${AWS::StackName}-DynamoTableArn'
+
+      #abc
