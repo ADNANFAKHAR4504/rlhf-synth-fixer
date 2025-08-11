@@ -43,6 +43,8 @@ that can be deployed with the current configuration of the ci-cd pipelines.
   - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-east-1
   - If deployment fails, fix the code until it deploys succesfully.
   - If you are not able to deploy, report this error and finish your execution with an error message.
+  - If there are AWS Quota Limit issues while deploying. Report this to the user, and await for user
+  input to continue.
 - Important: Verify that the deployed resources are consistent with the `lib/PROMPT.md` requirements. If
 they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
 - Important: Every deployment should be self-sufficient. There should not be references to resources
