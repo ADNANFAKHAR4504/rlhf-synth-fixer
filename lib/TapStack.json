@@ -318,7 +318,6 @@
         },
         "ApiMethod": {
             "Type": "AWS::ApiGateway::Method",
-            "DependsOn": "LambdaAlias",
             "Properties": {
                 "RestApiId": {
                     "Ref": "RestApi"

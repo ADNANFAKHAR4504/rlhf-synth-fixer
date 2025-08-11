@@ -267,7 +267,6 @@ Resources:
   # API Gateway Method
   ApiMethod:
     Type: AWS::ApiGateway::Method
-    DependsOn: LambdaAlias
     Properties:
       RestApiId: !Ref RestApi
       ResourceId: !Ref ApiResource
