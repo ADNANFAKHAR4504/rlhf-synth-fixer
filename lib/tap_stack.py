@@ -53,7 +53,7 @@ def create_infrastructure():
   subnet1 = aws.ec2.Subnet(
     "public-subnet-1",
     vpc_id=vpc.id,
-    cidr_block="10.0.1.0/24",
+    cidr_block="10.0.101.0/24",
     availability_zone=f"{region}a",
     tags={"Name": "public-subnet-1"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
@@ -62,7 +62,7 @@ def create_infrastructure():
   subnet2 = aws.ec2.Subnet(
     "public-subnet-2",
     vpc_id=vpc.id,
-    cidr_block="10.0.2.0/24",
+    cidr_block="10.0.102.0/24",
     availability_zone=f"{region}b",
     tags={"Name": "public-subnet-2"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
