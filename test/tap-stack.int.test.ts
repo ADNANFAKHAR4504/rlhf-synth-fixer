@@ -131,8 +131,10 @@ async function expectDenyUnencryptedPut(s3: any, bucket: string) {
 async function getLogGroup(logGroupName: string) {
   const { CloudWatchLogsClient, DescribeLogGroupsCommand } = awsSdk();
   const cwl = client(CloudWatchLogsClient);
-  const res = await cwl.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName }));
-  return res.logGroups?.find((g: any) => g.logGroupName === logGroupName);
+  // CloudWatch Logs ARNs may include a trailing ':*' segment; strip it for API prefix constraints
+  const prefix = (logGroupName || '').replace(/:\*$/, '');
+  const res = await cwl.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: prefix }));
+  return res.logGroups?.find((g: any) => g.logGroupName === prefix);
 }
 
 async function expectLogGroupKmsKey(logGroupName: string) {
