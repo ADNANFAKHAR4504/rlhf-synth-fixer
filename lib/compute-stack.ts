@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Construct } from 'constructs';
 
 interface ComputeStackProps extends cdk.NestedStackProps {
@@ -112,7 +112,7 @@ export class ComputeStack extends cdk.NestedStack {
         timeout: cdk.Duration.seconds(5),
         unhealthyThresholdCount: 3,
       },
-      targetGroupName: `webapp-tg-${props.environmentSuffix}`,
+      targetGroupName: `webapp-tg-${props.environmentSuffix}-${this.node.addr.substring(0, 8)}`,
     });
 
     // HTTP Listener (Using HTTP for testing - in production use HTTPS with ACM certificate)
@@ -130,7 +130,7 @@ export class ComputeStack extends cdk.NestedStack {
 
     // CloudWatch Alarms for EC2
     new cloudwatch.Alarm(this, 'EC2CPUAlarm', {
-      alarmName: `EC2-CPU-${props.environmentSuffix}`,
+      alarmName: `EC2-CPU-${props.environmentSuffix}-${this.node.addr.substring(0, 8)}`,
       alarmDescription: 'EC2 CPU utilization is high',
       metric: new cloudwatch.Metric({
         namespace: 'AWS/EC2',
