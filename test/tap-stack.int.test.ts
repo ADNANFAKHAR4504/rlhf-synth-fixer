@@ -56,7 +56,7 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
   let lambdaFunctionArn: string;
   let lambdaFunctionName: string;
   let s3BucketName: string;
-  let actualEnvironment: string; // The actual environment used by the deployed resources
+  let actualEnvironment: string; 
 
   // Helper function to check if stack exists
   const checkStackExists = () => {
