@@ -2,6 +2,13 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure infrastructure with IAM roles, CloudTrail, VPC subnets, S3 encryption, and EC2 monitoring for compliance",
     "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix to avoid resource name conflicts",
+            "Default": "dev",
+            "MinLength": 1,
+            "MaxLength": 10
+        },
         "ExistingVPCId": {
             "Type": "AWS::EC2::VPC::Id",
             "Description": "Existing VPC ID with CIDR 10.0.0.0/16",
@@ -91,7 +98,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-s3-kms-key"
+                        "Value": {
+                            "Fn::Sub": "my-app-s3-kms-key-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -103,7 +112,9 @@
         "S3KMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
-                "AliasName": "alias/my-app/s3",
+                "AliasName": {
+                    "Fn::Sub": "alias/my-app/s3-${EnvironmentSuffix}"
+                },
                 "TargetKeyId": {
                     "Ref": "S3KMSKey"
                 }
@@ -113,7 +124,9 @@
             "Type": "AWS::S3::Bucket",
             "Condition": "CreateS3BucketCondition",
             "Properties": {
-                "BucketName": "my-app-bucket",
+                "BucketName": {
+                    "Fn::Sub": "my-app-bucket-${EnvironmentSuffix}"
+                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
@@ -139,7 +152,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-bucket"
+                        "Value": {
+                            "Fn::Sub": "my-app-bucket-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -185,7 +200,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "my-app-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "my-app-cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -212,7 +227,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-cloudtrail-logs"
+                        "Value": {
+                            "Fn::Sub": "my-app-cloudtrail-logs-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -283,7 +300,9 @@
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
             "Properties": {
-                "TrailName": "my-app-cloudtrail",
+                "TrailName": {
+                    "Fn::Sub": "my-app-cloudtrail-${EnvironmentSuffix}"
+                },
                 "S3BucketName": {
                     "Ref": "CloudTrailLogsBucket"
                 },
@@ -304,7 +323,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-cloudtrail"
+                        "Value": {
+                            "Fn::Sub": "my-app-cloudtrail-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -316,7 +337,9 @@
         "S3ReadOnlyRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": "my-app-Role-ReadS3",
+                "RoleName": {
+                    "Fn::Sub": "my-app-Role-ReadS3-${EnvironmentSuffix}"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -337,7 +360,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-Role-ReadS3"
+                        "Value": {
+                            "Fn::Sub": "my-app-Role-ReadS3-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -349,7 +374,9 @@
         "S3ReadOnlyPolicy": {
             "Type": "AWS::IAM::Policy",
             "Properties": {
-                "PolicyName": "my-app-S3ReadOnlyPolicy",
+                "PolicyName": {
+                    "Fn::Sub": "my-app-S3ReadOnlyPolicy-${EnvironmentSuffix}"
+                },
                 "Roles": [
                     {
                         "Ref": "S3ReadOnlyRole"
@@ -367,8 +394,12 @@
                                 "s3:GetBucketLocation"
                             ],
                             "Resource": [
-                                "arn:aws:s3:::my-app-bucket",
-                                "arn:aws:s3:::my-app-bucket/*"
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::my-app-bucket-${EnvironmentSuffix}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::my-app-bucket-${EnvironmentSuffix}/*"
+                                }
                             ],
                             "Condition": {
                                 "Bool": {
@@ -383,7 +414,9 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": "my-app-EC2InstanceProfile",
+                "InstanceProfileName": {
+                    "Fn::Sub": "my-app-EC2InstanceProfile-${EnvironmentSuffix}"
+                },
                 "Roles": [
                     {
                         "Ref": "S3ReadOnlyRole"
@@ -409,7 +442,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-Subnet-A"
+                        "Value": {
+                            "Fn::Sub": "my-app-Subnet-A-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -436,7 +471,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-Subnet-B"
+                        "Value": {
+                            "Fn::Sub": "my-app-Subnet-B-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -448,7 +485,9 @@
         "EC2SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "my-app-EC2SecurityGroup",
+                "GroupName": {
+                    "Fn::Sub": "my-app-EC2SecurityGroup-${EnvironmentSuffix}"
+                },
                 "GroupDescription": "Security group for EC2 instances",
                 "VpcId": {
                     "Ref": "ExistingVPCId"
@@ -465,7 +504,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-EC2SecurityGroup"
+                        "Value": {
+                            "Fn::Sub": "my-app-EC2SecurityGroup-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -497,7 +538,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "my-app-SampleEC2"
+                        "Value": {
+                            "Fn::Sub": "my-app-SampleEC2-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Purpose",
@@ -540,7 +583,9 @@
                     {
                         "Ref": "AppS3Bucket"
                     },
-                    "my-app-bucket (existing)"
+                    {
+                        "Fn::Sub": "my-app-bucket-${EnvironmentSuffix} (existing)"
+                    }
                 ]
             },
             "Export": {

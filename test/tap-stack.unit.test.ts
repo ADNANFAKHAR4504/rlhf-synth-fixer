@@ -105,7 +105,7 @@ describe('TapStack Unit Tests', () => {
     test('should have KMS alias with correct name', () => {
       const kmsAlias = templateJson.Resources.S3KMSKeyAlias;
       expect(kmsAlias.Type).toBe('AWS::KMS::Alias');
-      expect(kmsAlias.Properties.AliasName).toBe('alias/my-app/s3');
+      expect(kmsAlias.Properties.AliasName['Fn::Sub']).toContain('alias/my-app/s3-${EnvironmentSuffix}');
       expect(kmsAlias.Properties.TargetKeyId.Ref).toBe('S3KMSKey');
     });
   });
@@ -114,7 +114,7 @@ describe('TapStack Unit Tests', () => {
     test('should have application S3 bucket with encryption', () => {
       const appBucket = templateJson.Resources.AppS3Bucket;
       expect(appBucket.Type).toBe('AWS::S3::Bucket');
-      expect(appBucket.Properties.BucketName).toBe('my-app-bucket');
+      expect(appBucket.Properties.BucketName['Fn::Sub']).toContain('my-app-bucket-${EnvironmentSuffix}');
       expect(appBucket.Condition).toBe('CreateS3BucketCondition');
       
       const encryption = appBucket.Properties.BucketEncryption;
@@ -180,7 +180,7 @@ describe('TapStack Unit Tests', () => {
     test('should have CloudTrail with multi-region configuration', () => {
       const cloudTrail = templateJson.Resources.CloudTrail;
       expect(cloudTrail.Type).toBe('AWS::CloudTrail::Trail');
-      expect(cloudTrail.Properties.TrailName).toBe('my-app-cloudtrail');
+      expect(cloudTrail.Properties.TrailName['Fn::Sub']).toContain('my-app-cloudtrail-${EnvironmentSuffix}');
       expect(cloudTrail.Properties.IsMultiRegionTrail).toBe(true);
       expect(cloudTrail.Properties.IncludeGlobalServiceEvents).toBe(true);
       expect(cloudTrail.Properties.IsLogging).toBe(true);
@@ -205,7 +205,7 @@ describe('TapStack Unit Tests', () => {
     test('should have IAM role with proper trust policy', () => {
       const iamRole = templateJson.Resources.S3ReadOnlyRole;
       expect(iamRole.Type).toBe('AWS::IAM::Role');
-      expect(iamRole.Properties.RoleName).toBe('my-app-Role-ReadS3');
+      expect(iamRole.Properties.RoleName['Fn::Sub']).toContain('my-app-Role-ReadS3-${EnvironmentSuffix}');
       
       const trustPolicy = iamRole.Properties.AssumeRolePolicyDocument;
       expect(trustPolicy.Version).toBe('2012-10-17');
@@ -224,7 +224,7 @@ describe('TapStack Unit Tests', () => {
     test('should have IAM policy with minimal S3 permissions', () => {
       const iamPolicy = templateJson.Resources.S3ReadOnlyPolicy;
       expect(iamPolicy.Type).toBe('AWS::IAM::Policy');
-      expect(iamPolicy.Properties.PolicyName).toBe('my-app-S3ReadOnlyPolicy');
+      expect(iamPolicy.Properties.PolicyName['Fn::Sub']).toContain('my-app-S3ReadOnlyPolicy-${EnvironmentSuffix}');
       
       const policy = iamPolicy.Properties.PolicyDocument;
       const s3Statement = policy.Statement.find((s: any) => s.Sid === 'S3ReadOnlyAccess');
@@ -233,8 +233,8 @@ describe('TapStack Unit Tests', () => {
       expect(s3Statement.Action).toContain('s3:GetObject');
       expect(s3Statement.Action).toContain('s3:ListBucket');
       expect(s3Statement.Action).toContain('s3:GetBucketLocation');
-      expect(s3Statement.Resource).toContain('arn:aws:s3:::my-app-bucket');
-      expect(s3Statement.Resource).toContain('arn:aws:s3:::my-app-bucket/*');
+      expect(s3Statement.Resource[0]['Fn::Sub']).toContain('arn:aws:s3:::my-app-bucket-${EnvironmentSuffix}');
+      expect(s3Statement.Resource[1]['Fn::Sub']).toContain('arn:aws:s3:::my-app-bucket-${EnvironmentSuffix}');
     });
 
     test('should have IAM policy with TLS condition', () => {
@@ -247,7 +247,7 @@ describe('TapStack Unit Tests', () => {
     test('should have EC2 instance profile', () => {
       const instanceProfile = templateJson.Resources.EC2InstanceProfile;
       expect(instanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
-      expect(instanceProfile.Properties.InstanceProfileName).toBe('my-app-EC2InstanceProfile');
+      expect(instanceProfile.Properties.InstanceProfileName['Fn::Sub']).toContain('my-app-EC2InstanceProfile-${EnvironmentSuffix}');
       expect(instanceProfile.Properties.Roles).toHaveLength(1);
       expect(instanceProfile.Properties.Roles[0].Ref).toBe('S3ReadOnlyRole');
     });
@@ -275,7 +275,7 @@ describe('TapStack Unit Tests', () => {
     test('should have security group with SSH access', () => {
       const securityGroup = templateJson.Resources.EC2SecurityGroup;
       expect(securityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(securityGroup.Properties.GroupName).toBe('my-app-EC2SecurityGroup');
+      expect(securityGroup.Properties.GroupName['Fn::Sub']).toContain('my-app-EC2SecurityGroup-${EnvironmentSuffix}');
       expect(securityGroup.Properties.VpcId.Ref).toBe('ExistingVPCId');
       
       const ingress = securityGroup.Properties.SecurityGroupIngress;
@@ -324,33 +324,33 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Naming Convention', () => {
-    test('should follow my-app-* naming convention', () => {
+    test('should follow my-app-* naming convention with environment suffix', () => {
       const resources = templateJson.Resources;
       
       // Check KMS alias
-      expect(resources.S3KMSKeyAlias.Properties.AliasName).toMatch(/^alias\/my-app\//);
+      expect(resources.S3KMSKeyAlias.Properties.AliasName['Fn::Sub']).toContain('alias/my-app/s3-${EnvironmentSuffix}');
       
       // Check S3 buckets
-      expect(resources.AppS3Bucket.Properties.BucketName).toBe('my-app-bucket');
-      expect(resources.CloudTrailLogsBucket.Properties.BucketName['Fn::Sub']).toContain('my-app-cloudtrail-logs');
+      expect(resources.AppS3Bucket.Properties.BucketName['Fn::Sub']).toContain('my-app-bucket-${EnvironmentSuffix}');
+      expect(resources.CloudTrailLogsBucket.Properties.BucketName['Fn::Sub']).toContain('my-app-cloudtrail-logs-${EnvironmentSuffix}');
       
       // Check CloudTrail
-      expect(resources.CloudTrail.Properties.TrailName).toBe('my-app-cloudtrail');
+      expect(resources.CloudTrail.Properties.TrailName['Fn::Sub']).toContain('my-app-cloudtrail-${EnvironmentSuffix}');
       
       // Check IAM resources
-      expect(resources.S3ReadOnlyRole.Properties.RoleName).toBe('my-app-Role-ReadS3');
-      expect(resources.S3ReadOnlyPolicy.Properties.PolicyName).toBe('my-app-S3ReadOnlyPolicy');
-      expect(resources.EC2InstanceProfile.Properties.InstanceProfileName).toBe('my-app-EC2InstanceProfile');
+      expect(resources.S3ReadOnlyRole.Properties.RoleName['Fn::Sub']).toContain('my-app-Role-ReadS3-${EnvironmentSuffix}');
+      expect(resources.S3ReadOnlyPolicy.Properties.PolicyName['Fn::Sub']).toContain('my-app-S3ReadOnlyPolicy-${EnvironmentSuffix}');
+      expect(resources.EC2InstanceProfile.Properties.InstanceProfileName['Fn::Sub']).toContain('my-app-EC2InstanceProfile-${EnvironmentSuffix}');
       
       // Check subnets
-      expect(resources.SubnetA.Properties.Tags.find((t: any) => t.Key === 'Name').Value).toBe('my-app-Subnet-A');
-      expect(resources.SubnetB.Properties.Tags.find((t: any) => t.Key === 'Name').Value).toBe('my-app-Subnet-B');
+      expect(resources.SubnetA.Properties.Tags.find((t: any) => t.Key === 'Name').Value['Fn::Sub']).toContain('my-app-Subnet-A-${EnvironmentSuffix}');
+      expect(resources.SubnetB.Properties.Tags.find((t: any) => t.Key === 'Name').Value['Fn::Sub']).toContain('my-app-Subnet-B-${EnvironmentSuffix}');
       
       // Check security group
-      expect(resources.EC2SecurityGroup.Properties.GroupName).toBe('my-app-EC2SecurityGroup');
+      expect(resources.EC2SecurityGroup.Properties.GroupName['Fn::Sub']).toContain('my-app-EC2SecurityGroup-${EnvironmentSuffix}');
       
       // Check EC2 instance
-      expect(resources.SampleEC2Instance.Properties.Tags.find((t: any) => t.Key === 'Name').Value).toBe('my-app-SampleEC2');
+      expect(resources.SampleEC2Instance.Properties.Tags.find((t: any) => t.Key === 'Name').Value['Fn::Sub']).toContain('my-app-SampleEC2-${EnvironmentSuffix}');
     });
   });
 
