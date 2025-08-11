@@ -52,9 +52,9 @@ class TestTapStackIntegration(unittest.TestCase):
     cls.flow_logs_role_arn = (cls.outputs_dict.get('vpc_flow_logs_role_arn')
                               or cls.outputs_dict.get('flow_logs_role_arn'))
     cls.environment_suffix = cls.outputs_dict.get('environment_suffix', 'dev')
-    cls.region = cls.outputs_dict.get('region', 'us-east-1')
+    cls.region = cls.outputs_dict.get('region', 'us-west-1')
 
-    # Initialize AWS clients using region from outputs (default us-east-1)
+    # Initialize AWS clients using region from outputs (default us-west-1)
     cls.kms_client = boto3.client('kms', region_name=cls.region)
     cls.s3_client = boto3.client('s3', region_name=cls.region)
     cls.ec2_client = boto3.client('ec2', region_name=cls.region)
@@ -63,12 +63,12 @@ class TestTapStackIntegration(unittest.TestCase):
     cls.iam_client = boto3.client('iam', region_name=cls.region)
 
   # =============================================================================
-  # Requirement 1: Region Validation (us-east-1)
+  # Requirement 1: Region Validation (us-west-1)
   # =============================================================================
   def test_all_resources_in_us_east_1_region(self):
-    """Test that outputs specify us-east-1 region."""
-    self.assertEqual(self.region, 'us-east-1',
-                     "All resources must be deployed in us-east-1 region")
+    """Test that outputs specify us-west-1 region."""
+    self.assertEqual(self.region, 'us-west-1',
+                     "All resources must be deployed in us-west-1 region")
 
   # =============================================================================
   # Requirement 4: IAM Roles Least Privilege Validation
@@ -207,13 +207,13 @@ class TestTapStackIntegration(unittest.TestCase):
     self.assertIsNotNone(self.master_key_arn, "Master KMS key ARN required")
     self.assertIsNotNone(self.logging_key_arn, "Logging KMS key ARN required")
     self.assertIn(
-        'us-east-1',
+        'us-west-1',
         self.master_key_arn,
-        "Master key should be in us-east-1")
+        "Master key should be in us-west-1")
     self.assertIn(
-        'us-east-1',
+        'us-west-1',
         self.logging_key_arn,
-        "Logging key should be in us-east-1")
+        "Logging key should be in us-west-1")
 
   # =============================================================================
   # Requirement 9: Overall System Integration
