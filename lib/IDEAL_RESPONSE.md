@@ -13,8 +13,6 @@ Use an S3 bucket as the backend for storing Terraform state remotely.
 
 Enable encryption and versioning on the state bucket.
 
-Use a DynamoDB table to manage state locking and prevent concurrent modifications.
-
 Follow Infrastructure Best Practices
 
 Modular code structure for reusability.

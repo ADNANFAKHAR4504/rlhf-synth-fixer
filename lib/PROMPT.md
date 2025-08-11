@@ -11,7 +11,6 @@ Create a comprehensive AWS infrastructure setup using Terraform HCL that include
 
 2. **State Management**
    - Configure S3 backend for remote state storage
-   - Include DynamoDB table for state locking
    - Enable versioning and encryption
 3. **Best Practices**
    - Proper resource tagging
