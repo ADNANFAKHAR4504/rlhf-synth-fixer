@@ -8,22 +8,22 @@ environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
 
 # Create a VPC with both IPv4 and IPv6 CIDR blocks
 vpc = aws.ec2.Vpc(f"ipv6-vpc-{environment_suffix}",
-    cidr_block="10.0.0.0/16",
-    enable_dns_support=True,
-    enable_dns_hostnames=True,
-    assign_generated_ipv6_cidr_block=True,
-    tags={
-        "Environment": "Production",
-        "Project": "IPv6StaticTest"
-    })
+                  cidr_block="10.0.0.0/16",
+                  enable_dns_support=True,
+                  enable_dns_hostnames=True,
+                  assign_generated_ipv6_cidr_block=True,
+                  tags={
+                      "Environment": "Production",
+                      "Project": "IPv6StaticTest"
+                  })
 
 # Create an Internet Gateway
 igw = aws.ec2.InternetGateway(f"igw-{environment_suffix}",
-    vpc_id=vpc.id,
-    tags={
-        "Environment": "Production",
-        "Project": "IPv6StaticTest"
-    })
+                               vpc_id=vpc.id,
+                               tags={
+                                   "Environment": "Production",
+                                   "Project": "IPv6StaticTest"
+                               })
 
 # Helper function to derive IPv6 subnet CIDR from VPC CIDR
 def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number):
@@ -55,10 +55,12 @@ def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number):
 
 # Create a public subnet with IPv6 CIDR block
 # Force replacement when IPv6 CIDR block changes (AWS doesn't allow in-place updates)
-public_subnet = aws.ec2.Subnet(f"public-subnet-{environment_suffix}",
+public_subnet = aws.ec2.Subnet(
+    f"public-subnet-{environment_suffix}",
     vpc_id=vpc.id,
     cidr_block="10.0.11.0/24",
-    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: derive_ipv6_subnet_cidr(x, 1)),
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+        lambda x: derive_ipv6_subnet_cidr(x, 1)),
     availability_zone=aws.get_availability_zones().names[0],
     assign_ipv6_address_on_creation=True,
     map_public_ip_on_launch=True,
@@ -67,15 +69,18 @@ public_subnet = aws.ec2.Subnet(f"public-subnet-{environment_suffix}",
         "Project": "IPv6StaticTest"
     },
     opts=pulumi.ResourceOptions(
-        replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"]
+        replace_on_changes=["ipv6_cidr_block",
+                             "assign_ipv6_address_on_creation"]
     ))
 
 # Create a private subnet with IPv6 CIDR block
 # Force replacement when IPv6 CIDR block changes (AWS doesn't allow in-place updates)
-private_subnet = aws.ec2.Subnet(f"private-subnet-{environment_suffix}",
+private_subnet = aws.ec2.Subnet(
+    f"private-subnet-{environment_suffix}",
     vpc_id=vpc.id,
     cidr_block="10.0.12.0/24",
-    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: derive_ipv6_subnet_cidr(x, 2)),
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+        lambda x: derive_ipv6_subnet_cidr(x, 2)),
     availability_zone=aws.get_availability_zones().names[1],
     assign_ipv6_address_on_creation=True,
     tags={
@@ -83,11 +88,13 @@ private_subnet = aws.ec2.Subnet(f"private-subnet-{environment_suffix}",
         "Project": "IPv6StaticTest"
     },
     opts=pulumi.ResourceOptions(
-        replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"]
+        replace_on_changes=["ipv6_cidr_block",
+                             "assign_ipv6_address_on_creation"]
     ))
 
 # Create a route table for the public subnet
-public_rt = aws.ec2.RouteTable(f"public-rt-{environment_suffix}",
+public_rt = aws.ec2.RouteTable(
+    f"public-rt-{environment_suffix}",
     vpc_id=vpc.id,
     routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -105,19 +112,21 @@ public_rt = aws.ec2.RouteTable(f"public-rt-{environment_suffix}",
     })
 
 # Associate the public route table with the public subnet
-public_rta = aws.ec2.RouteTableAssociation(f"public-rta-{environment_suffix}",
+public_rta = aws.ec2.RouteTableAssociation(
+    f"public-rta-{environment_suffix}",
     subnet_id=public_subnet.id,
     route_table_id=public_rt.id)
 
 # Create a NAT Gateway for the private subnet
 eip = aws.ec2.Eip(f"nat-eip-{environment_suffix}",
-    vpc=True,
-    tags={
-        "Environment": "Production",
-        "Project": "IPv6StaticTest"
-    })
+                  vpc=True,
+                  tags={
+                      "Environment": "Production",
+                      "Project": "IPv6StaticTest"
+                  })
 
-nat_gateway = aws.ec2.NatGateway(f"nat-gateway-{environment_suffix}",
+nat_gateway = aws.ec2.NatGateway(
+    f"nat-gateway-{environment_suffix}",
     allocation_id=eip.id,
     subnet_id=public_subnet.id,
     tags={
@@ -126,7 +135,8 @@ nat_gateway = aws.ec2.NatGateway(f"nat-gateway-{environment_suffix}",
     })
 
 # Create an Egress-Only Internet Gateway for private subnet IPv6 access
-egress_igw = aws.ec2.EgressOnlyInternetGateway(f"egress-igw-{environment_suffix}",
+egress_igw = aws.ec2.EgressOnlyInternetGateway(
+    f"egress-igw-{environment_suffix}",
     vpc_id=vpc.id,
     tags={
         "Environment": "Production",
@@ -134,7 +144,8 @@ egress_igw = aws.ec2.EgressOnlyInternetGateway(f"egress-igw-{environment_suffix}
     })
 
 # Create a route table for the private subnet
-private_rt = aws.ec2.RouteTable(f"private-rt-{environment_suffix}",
+private_rt = aws.ec2.RouteTable(
+    f"private-rt-{environment_suffix}",
     vpc_id=vpc.id,
     routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -152,12 +163,14 @@ private_rt = aws.ec2.RouteTable(f"private-rt-{environment_suffix}",
     })
 
 # Associate the private route table with the private subnet
-private_rta = aws.ec2.RouteTableAssociation(f"private-rta-{environment_suffix}",
+private_rta = aws.ec2.RouteTableAssociation(
+    f"private-rta-{environment_suffix}",
     subnet_id=private_subnet.id,
     route_table_id=private_rt.id)
 
 # Create a security group allowing SSH access from specific IPv6 range
-security_group = aws.ec2.SecurityGroup(f"sec-group-{environment_suffix}",
+security_group = aws.ec2.SecurityGroup(
+    f"sec-group-{environment_suffix}",
     vpc_id=vpc.id,
     ingress=[aws.ec2.SecurityGroupIngressArgs(
         protocol="tcp",
@@ -178,7 +191,8 @@ security_group = aws.ec2.SecurityGroup(f"sec-group-{environment_suffix}",
     })
 
 # Create a launch template for the auto-scaling group
-ami = aws.ec2.get_ami(most_recent=True,
+ami = aws.ec2.get_ami(
+    most_recent=True,
     owners=["amazon"],
     filters=[{"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}])
 
@@ -187,11 +201,13 @@ echo "Hello, World!" > index.html
 nohup python3 -m http.server 80 &
 """
 
-launch_template = aws.ec2.LaunchTemplate(f"web-server-lt-{environment_suffix}",
+launch_template = aws.ec2.LaunchTemplate(
+    f"web-server-lt-{environment_suffix}",
     image_id=ami.id,
     instance_type="t3.micro",
     vpc_security_group_ids=[security_group.id],
-    user_data=pulumi.Output.from_input(user_data).apply(lambda x: __import__('base64').b64encode(x.encode()).decode()),
+    user_data=pulumi.Output.from_input(user_data).apply(
+        lambda x: __import__('base64').b64encode(x.encode()).decode()),
     tag_specifications=[
         aws.ec2.LaunchTemplateTagSpecificationArgs(
             resource_type="instance",
@@ -208,7 +224,8 @@ launch_template = aws.ec2.LaunchTemplate(f"web-server-lt-{environment_suffix}",
 
 # Create EC2 instances with static IPv6 addresses in public subnet
 # These will be automatically replaced when the subnet is replaced
-instance1 = aws.ec2.Instance(f"web-server-1-{environment_suffix}",
+instance1 = aws.ec2.Instance(
+    f"web-server-1-{environment_suffix}",
     ami=ami.id,
     instance_type="t3.micro",
     subnet_id=public_subnet.id,
@@ -225,7 +242,8 @@ instance1 = aws.ec2.Instance(f"web-server-1-{environment_suffix}",
         depends_on=[public_subnet]
     ))
 
-instance2 = aws.ec2.Instance(f"web-server-2-{environment_suffix}",
+instance2 = aws.ec2.Instance(
+    f"web-server-2-{environment_suffix}",
     ami=ami.id,
     instance_type="t3.micro",
     subnet_id=public_subnet.id,
@@ -244,7 +262,8 @@ instance2 = aws.ec2.Instance(f"web-server-2-{environment_suffix}",
 
 # Create an auto-scaling group for the public subnet
 # Force replacement when subnet changes (due to IPv6 CIDR changes)
-asg = aws.autoscaling.Group(f"web-server-asg-{environment_suffix}",
+asg = aws.autoscaling.Group(
+    f"web-server-asg-{environment_suffix}",
     launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
         id=launch_template.id,
         version="$Latest"
