@@ -255,7 +255,7 @@ class TapStack:
       self._create_load_balancers()
       
       # Step 6: Create auto scaling groups
-      self._create_auto_scaling_groups()
+      self._create_auto_scaling()
       
     except Exception as e:
       raise RuntimeError(f"Failed to create infrastructure: {str(e)}") from e
