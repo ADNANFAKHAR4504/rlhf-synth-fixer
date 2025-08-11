@@ -43,70 +43,101 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    // Corrected to expect 2 parameters as indicated by the test log.
-    test('should have exactly two parameters', () => {
+    test('should have exactly three parameters', () => {
         expect(template.Parameters).toBeDefined();
         const parameterCount = Object.keys(template.Parameters).length;
-        expect(parameterCount).toBe(2);
+        expect(parameterCount).toBe(3);
     });
 
-    // TODO: Add specific tests for your two parameters.
-    // For example, if you have a parameter named 'LambdaFunctionName':
-    /*
-    test('should have a LambdaFunctionName parameter with correct properties', () => {
-      const param = template.Parameters.LambdaFunctionName;
+    test('should have an Environment parameter with correct properties', () => {
+      const param = template.Parameters.Environment;
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
-      expect(param.Description).toBe('Name for the Lambda function');
+      expect(param.Default).toBe('prod');
+      expect(param.AllowedValues).toEqual(['dev', 'staging', 'prod']);
+      expect(param.Description).toBe('Environment name for resource tagging');
     });
-    */
+
+    test('should have an ApplicationName parameter with correct properties', () => {
+      const param = template.Parameters.ApplicationName;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('ServerlessApp');
+      expect(param.Description).toBe('Application name for resource naming');
+    });
+
+    test('should have an EnvironmentSuffix parameter with correct properties', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
+      expect(param.Description).toBe('Environment suffix for resource isolation');
+    });
   });
 
   describe('Resources', () => {
-    // Corrected to expect 5 resources as indicated by the test log.
     test('should have exactly five resources', () => {
         expect(template.Resources).toBeDefined();
         const resourceCount = Object.keys(template.Resources).length;
         expect(resourceCount).toBe(5);
     });
 
-    // TODO: Write tests for each of your 5 actual resources.
-    // The original tests for 'TurnAroundPromptTable' failed because it doesn't exist.
-    // Below are examples for common serverless resources.
-    // Please adapt them to your actual resource logical IDs and properties.
-
-    test.todo('should have a correctly configured Lambda Function');
-    /*
-    test('should have a correctly configured Lambda Function', () => {
-        const lambdaFunction = template.Resources.MyLambdaFunction; // Replace with your Lambda's logical ID
-        expect(lambdaFunction).toBeDefined();
-        expect(lambdaFunction.Type).toBe('AWS::Lambda::Function');
-        expect(lambdaFunction.Properties.Runtime).toBe('nodejs18.x'); // Or your runtime
-        expect(lambdaFunction.Properties.Handler).toBe('index.handler');
-    });
-    */
-
-    test.todo('should have a correctly configured IAM Role for Lambda');
-    /*
-    test('should have a correctly configured IAM Role', () => {
-        const iamRole = template.Resources.MyLambdaExecutionRole; // Replace with your Role's logical ID
-        expect(iamRole).toBeDefined();
-        expect(iamRole.Type).toBe('AWS::IAM::Role');
-        expect(iamRole.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
-    });
-    */
-
-    test.todo('should have a correctly configured DynamoDB Table');
-    /*
     test('should have a correctly configured DynamoDB Table', () => {
-        const dynamoTable = template.Resources.MyDynamoDBTable; // Replace with your Table's logical ID
+        const dynamoTable = template.Resources.AppDynamoTable;
         expect(dynamoTable).toBeDefined();
         expect(dynamoTable.Type).toBe('AWS::DynamoDB::Table');
         expect(dynamoTable.Properties.BillingMode).toBe('PAY_PER_REQUEST');
         expect(dynamoTable.Properties.AttributeDefinitions[0].AttributeName).toBe('id');
+        expect(dynamoTable.Properties.AttributeDefinitions[0].AttributeType).toBe('S');
         expect(dynamoTable.Properties.KeySchema[0].AttributeName).toBe('id');
+        expect(dynamoTable.Properties.KeySchema[0].KeyType).toBe('HASH');
+        expect(dynamoTable.Properties.SSESpecification.SSEEnabled).toBe(true);
     });
-    */
+
+    test('should have a correctly configured IAM Role for Lambda', () => {
+        const iamRole = template.Resources.AppLambdaExecutionRole;
+        expect(iamRole).toBeDefined();
+        expect(iamRole.Type).toBe('AWS::IAM::Role');
+        expect(iamRole.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+        expect(iamRole.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
+        
+        const dynamoPolicy = iamRole.Properties.Policies[0];
+        expect(dynamoPolicy.PolicyName).toBe('DynamoDBAccessPolicy');
+        expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:GetItem');
+        expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:PutItem');
+        expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:UpdateItem');
+        expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:DeleteItem');
+    });
+
+    test('should have a correctly configured Lambda Function', () => {
+        const lambdaFunction = template.Resources.AppLambdaFunction;
+        expect(lambdaFunction).toBeDefined();
+        expect(lambdaFunction.Type).toBe('AWS::Serverless::Function');
+        expect(lambdaFunction.Properties.Handler).toBe('app.lambda_handler');
+        expect(lambdaFunction.Properties.InlineCode).toBeDefined();
+        expect(lambdaFunction.Properties.InlineCode).toContain('def lambda_handler');
+        expect(lambdaFunction.Properties.Events.ApiEvent.Type).toBe('HttpApi');
+        expect(lambdaFunction.Properties.Events.ApiEvent.Properties.Method).toBe('ANY');
+    });
+
+    test('should have a correctly configured HTTP API Gateway', () => {
+        const httpApi = template.Resources.AppHttpApi;
+        expect(httpApi).toBeDefined();
+        expect(httpApi.Type).toBe('AWS::Serverless::HttpApi');
+        expect(httpApi.Properties.Description).toBe('HTTP API for serverless application');
+        expect(httpApi.Properties.CorsConfiguration.AllowMethods).toContain('GET');
+        expect(httpApi.Properties.CorsConfiguration.AllowMethods).toContain('POST');
+        expect(httpApi.Properties.CorsConfiguration.AllowMethods).toContain('PUT');
+        expect(httpApi.Properties.CorsConfiguration.AllowMethods).toContain('DELETE');
+    });
+
+    test('should have a correctly configured Lambda Permission', () => {
+        const permission = template.Resources.ApiGatewayLambdaPermission;
+        expect(permission).toBeDefined();
+        expect(permission.Type).toBe('AWS::Lambda::Permission');
+        expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+        expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
+    });
   });
 
   describe('Outputs', () => {
@@ -146,20 +177,33 @@ describe('TapStack CloudFormation Template', () => {
 });
 
 
-    // TODO: Add tests for your actual outputs, verifying their Description and Value.
-    /*
-    test('LambdaArn output should be correct', () => {
-        const output = template.Outputs.LambdaArn; // Replace with your output's logical ID
-        expect(output.Description).toBe('The ARN of the main Lambda function');
-        expect(output.Value).toEqual({ 'Fn::GetAtt': ['MyLambdaFunction', 'Arn'] }); // Replace with your Lambda's logical ID
-    });
-
-    test('ApiUrl output should be correct', () => {
-        const output = template.Outputs.ApiUrl; // Replace with your output's logical ID
-        expect(output.Description).toBe('The URL of the API Gateway endpoint');
+    test('ApiEndpoint output should be correct', () => {
+        const output = template.Outputs.ApiEndpoint;
+        expect(output).toBeDefined();
+        expect(output.Description).toBe('HTTP API Gateway endpoint URL');
         expect(output.Value).toBeDefined();
     });
-    */
+
+    test('LambdaFunctionArn output should be correct', () => {
+        const output = template.Outputs.LambdaFunctionArn;
+        expect(output).toBeDefined();
+        expect(output.Description).toBe('Lambda function ARN');
+        expect(output.Value).toEqual({ 'Fn::GetAtt': ['AppLambdaFunction', 'Arn'] });
+    });
+
+    test('DynamoTableName output should be correct', () => {
+        const output = template.Outputs.DynamoTableName;
+        expect(output).toBeDefined();
+        expect(output.Description).toBe('DynamoDB table name');
+        expect(output.Value).toEqual({ 'Ref': 'AppDynamoTable' });
+    });
+
+    test('DynamoTableArn output should be correct', () => {
+        const output = template.Outputs.DynamoTableArn;
+        expect(output).toBeDefined();
+        expect(output.Description).toBe('DynamoDB table ARN');
+        expect(output.Value).toEqual({ 'Fn::GetAtt': ['AppDynamoTable', 'Arn'] });
+    });
   });
 
   describe('Template Validation', () => {
