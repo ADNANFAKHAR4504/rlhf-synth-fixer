@@ -25,7 +25,7 @@ Deploy an RDS database in private subnets with a restricted security group that 
 
 Create an Elastic Load Balancer to distribute traffic to application servers.
 
-Use IAM roles with least privilege for EC2, RDS, and other resources.
+Use IAM roles withat at least privilege for EC2, RDS, and other resources.
 
 Store database credentials securely in AWS Secrets Manager and retrieve them for the RDS instance.
 
