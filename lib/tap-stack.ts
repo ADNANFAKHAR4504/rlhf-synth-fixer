@@ -110,11 +110,16 @@ export class TapStack extends cdk.Stack {
         POWERTOOLS_LOGGER_LOG_EVENT: 'true',
       },
       code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        const dynamodb = new AWS.DynamoDB.DocumentClient();
+        const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+        const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+
+        const client = new DynamoDBClient({ region: process.env.REGION });
+        const dynamodb = DynamoDBDocumentClient.from(client);
 
         exports.handler = async (event) => {
-          console.log('Processing user data stream records:', event.Records.length);
+          console.log('Processing user data stream records:', JSON.stringify(event, null, 2));
+          
+          const processedRecords = [];
           
           for (const record of event.Records) {
             try {
@@ -125,8 +130,7 @@ export class TapStack extends cdk.Stack {
                 
                 console.log('Processing user record:', { userId, eventType: record.eventName });
                 
-                // Process and store analytics
-                await dynamodb.put({
+                const putCommand = new PutCommand({
                   TableName: process.env.ANALYTICS_TABLE_NAME,
                   Item: {
                     dataType: 'USER_ACTIVITY',
@@ -136,16 +140,23 @@ export class TapStack extends cdk.Stack {
                     eventType: record.eventName,
                     processedBy: 'userDataProcessor'
                   }
-                }).promise();
+                });
+                
+                await dynamodb.send(putCommand);
+                processedRecords.push(userId);
                 
                 console.log('Successfully processed user data:', userId);
               }
             } catch (error) {
-              console.error('Error processing record:', error.message, record.dynamodb?.Keys?.userId?.S);
+              console.error('Error processing record:', error.message, {
+                userId: record.dynamodb?.Keys?.userId?.S,
+                eventName: record.eventName
+              });
               throw error;
             }
           }
           
+          console.log('Batch processing complete. Processed records:', processedRecords.length);
           return { statusCode: 200, body: 'Successfully processed user data stream' };
         };
       `),
@@ -207,11 +218,16 @@ export class TapStack extends cdk.Stack {
         POWERTOOLS_LOGGER_LOG_EVENT: 'true',
       },
       code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        const dynamodb = new AWS.DynamoDB.DocumentClient();
+        const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+        const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+
+        const client = new DynamoDBClient({ region: process.env.REGION });
+        const dynamodb = DynamoDBDocumentClient.from(client);
 
         exports.handler = async (event) => {
-          console.log('Processing order data stream records:', event.Records.length);
+          console.log('Processing order data stream records:', JSON.stringify(event, null, 2));
+          
+          const processedRecords = [];
           
           for (const record of event.Records) {
             try {
@@ -222,7 +238,7 @@ export class TapStack extends cdk.Stack {
                 
                 console.log('Processing order record:', { orderId, eventType: record.eventName });
                 
-                await dynamodb.put({
+                const putCommand = new PutCommand({
                   TableName: process.env.ANALYTICS_TABLE_NAME,
                   Item: {
                     dataType: 'ORDER_ACTIVITY',
@@ -232,16 +248,23 @@ export class TapStack extends cdk.Stack {
                     eventType: record.eventName,
                     processedBy: 'orderDataProcessor'
                   }
-                }).promise();
+                });
+                
+                await dynamodb.send(putCommand);
+                processedRecords.push(orderId);
                 
                 console.log('Successfully processed order data:', orderId);
               }
             } catch (error) {
-              console.error('Error storing analytics data:', error.message, record.dynamodb?.Keys?.orderId?.S);
+              console.error('Error storing analytics data:', error.message, {
+                orderId: record.dynamodb?.Keys?.orderId?.S,
+                eventName: record.eventName
+              });
               throw error;
             }
           }
           
+          console.log('Batch processing complete. Processed records:', processedRecords.length);
           return { statusCode: 200, body: 'Successfully processed order data stream' };
         };
       `),
@@ -289,22 +312,25 @@ export class TapStack extends cdk.Stack {
         LOG_LEVEL: 'INFO',
       },
       code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        const dynamodb = new AWS.DynamoDB.DocumentClient();
+        const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+        const { DynamoDBDocumentClient, ScanCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
+
+        const client = new DynamoDBClient({ region: process.env.REGION });
+        const dynamodb = DynamoDBDocumentClient.from(client);
 
         exports.handler = async (event) => {
           console.log('Running analytics processor with event:', JSON.stringify(event));
           
           try {
-            const params = {
+            const scanCommand = new ScanCommand({
               TableName: process.env.ANALYTICS_TABLE_NAME,
               FilterExpression: 'processedAt > :timestamp',
               ExpressionAttributeValues: {
                 ':timestamp': Date.now() - (24 * 60 * 60 * 1000)
               }
-            };
+            });
             
-            const result = await dynamodb.scan(params).promise();
+            const result = await dynamodb.send(scanCommand);
             console.log('Queried analytics data:', result.Items ? result.Items.length : 0);
             
             const items = result.Items || [];
@@ -320,19 +346,23 @@ export class TapStack extends cdk.Stack {
               processedBy: 'analyticsProcessor'
             };
             
-            await dynamodb.put({
+            const putCommand = new PutCommand({
               TableName: process.env.ANALYTICS_TABLE_NAME,
               Item: summary
-            }).promise();
+            });
+            
+            await dynamodb.send(putCommand);
             
             console.log('Analytics summary created:', summary);
             
             // Return proper response structure for both direct invocation and Step Functions
-            return { 
+            const response = { 
               statusCode: 200, 
               body: 'Successfully processed analytics',
               summary: summary
             };
+            console.log('Returning response:', response);
+            return response;
             
           } catch (error) {
             console.error('Error processing analytics:', error);
@@ -381,6 +411,8 @@ export class TapStack extends cdk.Stack {
           // Simulate validation logic
           const isValid = dataType && ['USER_DATA', 'ORDER_DATA', 'DAILY_ANALYTICS'].includes(dataType);
           const validBatchSize = batchSize >= 1 && batchSize <= 1000;
+          
+          console.log('Validation check:', { dataType, batchSize, isValid, validBatchSize });
           
           if (isValid && validBatchSize) {
             console.log('Data validation successful:', { dataType, batchSize });
