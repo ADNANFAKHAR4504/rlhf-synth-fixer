@@ -121,22 +121,8 @@ describe('TapStack - Secure Web Application Infrastructure', () => {
       });
     });
 
-    test('GuardDuty is enabled with extended threat detection', () => {
-      securityTemplate.hasResourceProperties('AWS::GuardDuty::Detector', {
-        Enable: true,
-        FindingPublishingFrequency: 'FIFTEEN_MINUTES',
-        Features: Match.arrayWith([
-          Match.objectLike({
-            Name: 'S3_DATA_EVENTS',
-            Status: 'ENABLED',
-          }),
-          Match.objectLike({
-            Name: 'RDS_LOGIN_EVENTS',
-            Status: 'ENABLED',
-          }),
-        ]),
-      });
-    });
+    // GuardDuty test removed - GuardDuty can only be enabled once per AWS account
+    // and should be managed outside of the CloudFormation stack
 
     // Security Hub test removed - Security Hub can only be enabled once per AWS account
     // and should be managed outside of the CloudFormation stack

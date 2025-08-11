@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -55,8 +54,12 @@ export class SecurityStack extends cdk.NestedStack {
     });
 
     // Grant CloudFormation execution role permission to use the KMS key
-    this.kmsKey.grantEncryptDecrypt(new iam.ServicePrincipal('cloudformation.amazonaws.com'));
-    this.kmsKey.grantEncryptDecrypt(new iam.ServicePrincipal('logs.amazonaws.com'));
+    this.kmsKey.grantEncryptDecrypt(
+      new iam.ServicePrincipal('cloudformation.amazonaws.com')
+    );
+    this.kmsKey.grantEncryptDecrypt(
+      new iam.ServicePrincipal('logs.amazonaws.com')
+    );
 
     // SNS Topic for alerts
     this.alertsTopic = new sns.Topic(this, 'AlertsTopic', {
@@ -84,33 +87,9 @@ export class SecurityStack extends cdk.NestedStack {
       description: 'Restricted S3 access role for web application',
     });
 
-    // Enable GuardDuty Extended Threat Detection (2025 feature)
-    new guardduty.CfnDetector(this, 'GuardDutyDetector', {
-      enable: true,
-      findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      features: [
-        {
-          name: 'S3_DATA_EVENTS',
-          status: 'ENABLED',
-        },
-        {
-          name: 'EKS_AUDIT_LOGS',
-          status: 'ENABLED',
-        },
-        {
-          name: 'EBS_MALWARE_PROTECTION',
-          status: 'ENABLED',
-        },
-        {
-          name: 'RDS_LOGIN_EVENTS',
-          status: 'ENABLED',
-        },
-        {
-          name: 'EKS_RUNTIME_MONITORING',
-          status: 'ENABLED',
-        },
-      ],
-    });
+    // Note: GuardDuty is removed as it can only be enabled once per AWS account
+    // If you need to enable GuardDuty, do it manually via AWS Console or CLI
+    // and ensure it's not included in subsequent deployments
 
     // Note: Security Hub is removed as it can only be enabled once per AWS account
     // If you need to enable Security Hub, do it manually via AWS Console or CLI
@@ -123,7 +102,7 @@ export class SecurityStack extends cdk.NestedStack {
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
     });
-    
+
     // Ensure the Log Group depends on the KMS key validator being completed
     logGroup.node.addDependency(kmsKeyValidator);
 
