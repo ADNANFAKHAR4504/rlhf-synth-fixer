@@ -125,6 +125,9 @@ class TapStackArgs:
       raise ValueError(f"Invalid environment suffix format: {self.environment_suffix}")
     
     # Validate regions
+    if not self.regions:
+      raise ValueError("Regions list cannot be empty")
+    
     valid_regions = [
       'us-east-1', 'us-west-1', 'us-west-2', 'us-east-2',
       'eu-west-1', 'eu-west-2', 'eu-central-1', 'eu-north-1',
