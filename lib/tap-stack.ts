@@ -115,7 +115,7 @@ export class TapStack extends TerraformStack {
       ],
       instanceProfile: iamModule.ec2InstanceProfile,
       instanceType: process.env.INSTANCE_TYPE || 't3.micro',
-      publicKeyMaterial: process.env.PUBLIC_KEY_MATERIAL || '', // Must be provided
+      keyName: 'nova-model-key',
     });
 
     // Create RDS instance in private subnets
