@@ -2,6 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Infrastructure Stack - TapStack with comprehensive security controls'
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    Description: 'Environment suffix for resource naming (e.g., dev, pr123)'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+  
   Environment:
     Type: String
     Default: 'prod'
@@ -62,7 +69,7 @@ Resources:
   TapS3KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${Environment}-tap-s3-key'
+      AliasName: !Sub 'alias/${Environment}-tap-s3-key-${EnvironmentSuffix}'
       TargetKeyId: !Ref TapS3KMSKey
 
   # KMS Key for RDS Encryption
@@ -96,14 +103,14 @@ Resources:
   TapRDSKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${Environment}-tap-rds-key'
+      AliasName: !Sub 'alias/${Environment}-tap-rds-key-${EnvironmentSuffix}'
       TargetKeyId: !Ref TapRDSKMSKey
 
   # S3 Bucket with KMS Encryption and Versioning
   TapSecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-tap-secure-bucket-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-tap-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -117,11 +124,11 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref TapS3LogGroup
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 7
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-tap-secure-bucket'
@@ -254,9 +261,9 @@ Resources:
   # RDS Instance with Encryption
   TapRDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
+    DeletionPolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-tap-database'
+      DBInstanceIdentifier: !Sub '${Environment}-tap-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
       EngineVersion: '8.0.35'
@@ -266,13 +273,13 @@ Resources:
       StorageType: 'gp2'
       StorageEncrypted: true
       KmsKeyId: !Ref TapRDSKMSKey
-      VpcSecurityGroups:
-        - !Ref TapRDSSecurityGroup
+      VPCSecurityGroups:
+        - !GetAtt TapRDSSecurityGroup.GroupId
       DBSubnetGroupName: !Ref TapDBSubnetGroup
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-tap-database'
@@ -283,7 +290,7 @@ Resources:
   TapEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-tap-ec2-role'
+      RoleName: !Sub '${Environment}-tap-ec2-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -302,11 +309,11 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
-                Resource: !Sub '${TapSecureS3Bucket}/*'
+                Resource: !Sub '${TapSecureS3Bucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
-                Resource: !Ref TapSecureS3Bucket
+                Resource: !GetAtt TapSecureS3Bucket.Arn
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-tap-ec2-role'
@@ -316,7 +323,7 @@ Resources:
   TapEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-tap-ec2-profile'
+      InstanceProfileName: !Sub '${Environment}-tap-ec2-profile-${EnvironmentSuffix}'
       Roles:
         - !Ref TapEC2Role
 
@@ -324,7 +331,7 @@ Resources:
   TapLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-tap-lambda-role'
+      RoleName: !Sub '${Environment}-tap-lambda-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -342,7 +349,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - 's3:GetObject'
-                Resource: !Sub '${TapSecureS3Bucket}/*'
+                Resource: !Sub '${TapSecureS3Bucket.Arn}/*'
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-tap-lambda-role'
@@ -353,20 +360,14 @@ Resources:
   TapLambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${Environment}-tap-function'
+      LogGroupName: !Sub '/aws/lambda/${Environment}-tap-function-${EnvironmentSuffix}'
       RetentionInDays: 14
-
-  TapS3LogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/s3/${Environment}-tap-bucket'
-      RetentionInDays: 30
 
   # Lambda Function with Logging
   TapLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${Environment}-tap-function'
+      FunctionName: !Sub '${Environment}-tap-function-${EnvironmentSuffix}'
       Runtime: 'python3.9'
       Handler: 'index.lambda_handler'
       Role: !GetAtt TapLambdaRole.Arn
@@ -399,12 +400,14 @@ Resources:
   TapCloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-tap-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-tap-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref TapS3KMSKey
+      VersioningConfiguration:
+        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -445,9 +448,10 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: TapCloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${Environment}-tap-cloudtrail'
+      TrailName: !Sub '${Environment}-tap-cloudtrail-${EnvironmentSuffix}'
       S3BucketName: !Ref TapCloudTrailBucket
       IncludeGlobalServiceEvents: true
+      IsLogging: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       Tags:
@@ -460,7 +464,7 @@ Resources:
   TapElasticsearchDomain:
     Type: AWS::Elasticsearch::Domain
     Properties:
-      DomainName: !Sub '${Environment}-tap-elasticsearch'
+      DomainName: !Sub '${Environment}-tap-es-${EnvironmentSuffix}'
       ElasticsearchVersion: '7.10'
       ElasticsearchClusterConfig:
         InstanceType: 't3.small.elasticsearch'
@@ -488,10 +492,10 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'es:*'
-            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${Environment}-tap-elasticsearch/*'
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${Environment}-tap-es-${EnvironmentSuffix}/*'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-tap-elasticsearch'
+          Value: !Sub '${Environment}-tap-es-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -517,7 +521,7 @@ Resources:
   TapWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${Environment}-tap-web-acl'
+      Name: !Sub '${Environment}-tap-web-acl-${EnvironmentSuffix}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -573,40 +577,58 @@ Outputs:
     Description: 'VPC ID'
     Value: !Ref TapVPC
     Export:
-      Name: !Sub '${Environment}-tap-vpc-id'
+      Name: !Sub '${AWS::StackName}-vpc-id'
 
   S3BucketName:
     Description: 'Secure S3 Bucket Name'
     Value: !Ref TapSecureS3Bucket
     Export:
-      Name: !Sub '${Environment}-tap-s3-bucket'
+      Name: !Sub '${AWS::StackName}-s3-bucket'
 
   RDSEndpoint:
     Description: 'RDS Database Endpoint'
     Value: !GetAtt TapRDSInstance.Endpoint.Address
     Export:
-      Name: !Sub '${Environment}-tap-rds-endpoint'
+      Name: !Sub '${AWS::StackName}-rds-endpoint'
 
   ElasticsearchDomainEndpoint:
     Description: 'Elasticsearch Domain Endpoint'
     Value: !GetAtt TapElasticsearchDomain.DomainEndpoint
     Export:
-      Name: !Sub '${Environment}-tap-elasticsearch-endpoint'
+      Name: !Sub '${AWS::StackName}-elasticsearch-endpoint'
 
   LambdaFunctionArn:
     Description: 'Lambda Function ARN'
     Value: !GetAtt TapLambdaFunction.Arn
     Export:
-      Name: !Sub '${Environment}-tap-lambda-arn'
+      Name: !Sub '${AWS::StackName}-lambda-arn'
 
   WebACLArn:
     Description: 'WAF Web ACL ARN'
     Value: !GetAtt TapWebACL.Arn
     Export:
-      Name: !Sub '${Environment}-tap-web-acl-arn'
+      Name: !Sub '${AWS::StackName}-web-acl-arn'
 
   CloudTrailArn:
     Description: 'CloudTrail ARN'
     Value: !GetAtt TapCloudTrail.Arn
     Export:
-      Name: !Sub '${Environment}-tap-cloudtrail-arn'
+      Name: !Sub '${AWS::StackName}-cloudtrail-arn'
+  
+  CloudTrailBucketName:
+    Description: 'CloudTrail Bucket Name'
+    Value: !Ref TapCloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-cloudtrail-bucket'
+  
+  StackName:
+    Description: 'CloudFormation Stack Name'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-stack-name'
+  
+  EnvironmentSuffix:
+    Description: 'Environment Suffix'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-environment-suffix'
