@@ -61,7 +61,7 @@
     },
     "SSHAllowedCidr": {
       "Type": "String",
-      "Default": "10.0.0.0/16",
+      "Default": "0.0.0.0/0",
       "Description": "CIDR block allowed for SSH access (only used if KeyPairName is provided)"
     },
     "EnableNatGateway": {
@@ -97,6 +97,49 @@
     }
   },
   "Resources": {
+    "EC2InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${Project}-${Environment}-ec2-role"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
     "KMSKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
@@ -123,8 +166,13 @@
                 "Service": "cloudformation.amazonaws.com"
               },
               "Action": [
+                "kms:CreateGrant",
                 "kms:Decrypt",
-                "kms:DescribeKey"
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:GenerateDataKey",
+                "kms:GenerateDataKeyWithoutPlainText",
+                "kms:ReEncrypt*"
               ],
               "Resource": "*"
             },
@@ -135,13 +183,87 @@
                 "Service": "ec2.amazonaws.com"
               },
               "Action": [
+                "kms:CreateGrant",
                 "kms:Decrypt",
                 "kms:DescribeKey",
                 "kms:Encrypt",
                 "kms:GenerateDataKey",
+                "kms:GenerateDataKeyWithoutPlainText",
                 "kms:ReEncrypt*"
               ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "Allow Auto Scaling Service Enhanced",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "autoscaling.amazonaws.com"
+              },
+              "Action": [
+                "kms:CreateGrant",
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:GenerateDataKey",
+                "kms:GenerateDataKeyWithoutPlainText",
+                "kms:ReEncrypt*",
+                "kms:ListGrants",
+                "kms:RevokeGrant"
+              ],
               "Resource": "*"
+            },
+            {
+              "Sid": "Allow Auto Scaling Service Direct Access",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "autoscaling.amazonaws.com"
+              },
+              "Action": [
+                "kms:CreateGrant",
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:GenerateDataKeyWithoutPlainText",
+                "kms:ReEncrypt*"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "Allow EBS Service",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ebs.amazonaws.com"
+              },
+              "Action": [
+                "kms:CreateGrant",
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:GenerateDataKey",
+                "kms:GenerateDataKeyWithoutPlainText",
+                "kms:ReEncrypt*"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
             },
             {
               "Sid": "Allow S3 Service",
@@ -169,6 +291,63 @@
                 "kms:DescribeKey",
                 "kms:Encrypt",
                 "kms:GenerateDataKey",
+                "kms:ReEncrypt*"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow EC2 Instance Role",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "EC2InstanceRole",
+                    "Arn"
+                  ]
+                }
+              },
+              "Action": [
+                "kms:CreateGrant",
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:GenerateDataKey",
+                "kms:GenerateDataKeyWithoutPlainText",
+                "kms:ReEncrypt*"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow Auto Scaling to use grants",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "autoscaling.amazonaws.com"
+              },
+              "Action": [
+                "kms:CreateGrant",
+                "kms:ListGrants",
+                "kms:RevokeGrant"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "Bool": {
+                  "kms:GrantIsForAWSResource": true
+                }
+              }
+            },
+            {
+              "Sid": "Allow Service Linked Role",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+                }
+              },
+              "Action": [
+                "kms:CreateGrant",
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:GenerateDataKeyWithoutPlainText",
                 "kms:ReEncrypt*"
               ],
               "Resource": "*"
@@ -205,6 +384,136 @@
         },
         "TargetKeyId": {
           "Ref": "KMSKey"
+        }
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Sub": "${Project}-${Environment}-ec2-profile"
+        },
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ]
+      }
+    },
+    "EC2KMSAccessPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "KMSAccess",
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "kms:CreateGrant",
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:GenerateDataKey",
+                "kms:GenerateDataKeyWithoutPlainText",
+                "kms:ReEncrypt*",
+                "kms:ListGrants"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "KMSKey",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "kms:DescribeKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "KMSKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "EC2S3AccessPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "S3Access",
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "${S3Bucket.Arn}/*"
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "S3Bucket",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "EC2SecretsManagerAccessPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "SecretsManagerAccess",
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": {
+                "Ref": "DatabaseSecret"
+              }
+            }
+          ]
         }
       }
     },
@@ -887,7 +1196,10 @@
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
                 "KMSMasterKeyID": {
-                  "Ref": "KMSKey"
+                  "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                  ]
                 }
               },
               "BucketKeyEnabled": true
@@ -941,10 +1253,13 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Fn::Sub": "${S3Bucket}/*"
+                  "Fn::Sub": "${S3Bucket.Arn}/*"
                 },
                 {
-                  "Ref": "S3Bucket"
+                  "Fn::GetAtt": [
+                    "S3Bucket",
+                    "Arn"
+                  ]
                 }
               ],
               "Condition": {
@@ -970,7 +1285,7 @@
                 "s3:DeleteObject"
               ],
               "Resource": {
-                "Fn::Sub": "${S3Bucket}/*"
+                "Fn::Sub": "${S3Bucket.Arn}/*"
               }
             },
             {
@@ -986,7 +1301,10 @@
               },
               "Action": "s3:ListBucket",
               "Resource": {
-                "Ref": "S3Bucket"
+                "Fn::GetAtt": [
+                  "S3Bucket",
+                  "Arn"
+                ]
               }
             }
           ]
@@ -1007,7 +1325,10 @@
           "ExcludeCharacters": "\"@/\\"
         },
         "KmsKeyId": {
-          "Ref": "KMSKey"
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
         },
         "Tags": [
           {
@@ -1029,252 +1350,21 @@
             }
           }
         ]
-      }
-    },
-    "EC2InstanceRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${Project}-${Environment}-ec2-role"
-        },
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "ec2.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-        ],
-        "Policies": [
-          {
-            "PolicyName": "KMSAccess",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "kms:Decrypt",
-                    "kms:DescribeKey",
-                    "kms:Encrypt",
-                    "kms:GenerateDataKey",
-                    "kms:ReEncrypt*"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "KMSKey",
-                      "Arn"
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "PolicyName": "S3Access",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:PutObject",
-                    "s3:DeleteObject"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "${S3Bucket}/*"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": "s3:ListBucket",
-                  "Resource": {
-                    "Ref": "S3Bucket"
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "PolicyName": "SecretsManagerAccess",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetSecretValue",
-                    "secretsmanager:DescribeSecret"
-                  ],
-                  "Resource": {
-                    "Ref": "DatabaseSecret"
-                  }
-                }
-              ]
-            }
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "Project"
-            }
-          },
-          {
-            "Key": "Owner",
-            "Value": {
-              "Ref": "Owner"
-            }
-          }
-        ]
-      }
-    },
-    "EC2InstanceProfile": {
-      "Type": "AWS::IAM::InstanceProfile",
-      "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${Project}-${Environment}-ec2-profile"
-        },
-        "Roles": [
-          {
-            "Ref": "EC2InstanceRole"
-          }
-        ]
-      }
-    },
-    "KMSKeyPolicyUpdate": {
-      "Type": "AWS::KMS::Key",
-      "Properties": {
-        "Description": "KMS Key for encrypting resources in secure infrastructure",
-        "EnableKeyRotation": true,
-        "KeyId": {
-          "Ref": "KMSKey"
-        },
-        "KeyPolicy": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Sid": "Enable IAM User Permissions",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {
-                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                }
-              },
-              "Action": "kms:*",
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow CloudFormation Service",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudformation.amazonaws.com"
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey"
-              ],
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow EC2 Service",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "ec2.amazonaws.com"
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey",
-                "kms:Encrypt",
-                "kms:GenerateDataKey",
-                "kms:ReEncrypt*"
-              ],
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow S3 Service",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "s3.amazonaws.com"
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey",
-                "kms:Encrypt",
-                "kms:GenerateDataKey",
-                "kms:ReEncrypt*"
-              ],
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow Secrets Manager Service",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "secretsmanager.amazonaws.com"
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey",
-                "kms:Encrypt",
-                "kms:GenerateDataKey",
-                "kms:ReEncrypt*"
-              ],
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow EC2 Instance Role",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {
-                  "Fn::GetAtt": [
-                    "EC2InstanceRole",
-                    "Arn"
-                  ]
-                }
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey",
-                "kms:Encrypt",
-                "kms:GenerateDataKey",
-                "kms:ReEncrypt*"
-              ],
-              "Resource": "*"
-            }
-          ]
-        }
       }
     },
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
+      "DependsOn": [
+        "EC2KMSAccessPolicy",
+        "EC2S3AccessPolicy",
+        "EC2SecretsManagerAccessPolicy"
+      ],
       "Properties": {
         "LaunchTemplateName": {
           "Fn::Sub": "${Project}-${Environment}-launch-template"
         },
         "LaunchTemplateData": {
-          "ImageId": {
-            "Fn::Join": [
-              "",
-              [
-                "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-              ]
-            ]
-          },
+          "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
           "InstanceType": {
             "Ref": "InstanceType"
           },
@@ -1310,14 +1400,19 @@
                 "VolumeSize": 20,
                 "Encrypted": true,
                 "KmsKeyId": {
-                  "Ref": "KMSKey"
+                  "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                  ]
                 },
                 "DeleteOnTermination": true
               }
             }
           ],
           "UserData": {
-            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
+            "Fn::Base64": {
+              "Fn::Sub": "#!/bin/bash\n# Wait for KMS key to be fully available\nsleep 30\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n\n# Additional logging for troubleshooting\necho \"Instance launched successfully at $(date)\" > /var/log/user-data.log\necho \"KMS Key ARN: ${KMSKey.Arn}\" >> /var/log/user-data.log\n"
+            }
           },
           "TagSpecifications": [
             {
@@ -1384,6 +1479,9 @@
     },
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "DependsOn": [
+        "EC2KMSAccessPolicy"
+      ],
       "Properties": {
         "AutoScalingGroupName": {
           "Fn::Sub": "${Project}-${Environment}-asg"
@@ -1504,10 +1602,21 @@
         }
       }
     },
+    "KmsKeyAlias": {
+      "Description": "KMS Key Alias",
+      "Value": {
+        "Ref": "KMSKeyAlias"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KmsKeyAlias"
+        }
+      }
+    },
     "S3BucketName": {
       "Description": "S3 Bucket Name",
       "Value": {
-        "Fn::Sub": "${Project}-${Environment}-secure-bucket-${AWS::AccountId}-${AWS::Region}"
+        "Ref": "S3Bucket"
       },
       "Export": {
         "Name": {

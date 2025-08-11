@@ -160,11 +160,12 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
           .ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault
           .SSEAlgorithm
       ).toBe('aws:kms');
+      // Fix: The template uses Fn::GetAtt, not Ref
       expect(
         s3Bucket.Properties.BucketEncryption
           .ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault
           .KMSMasterKeyID
-      ).toEqual({ Ref: 'KMSKey' });
+      ).toEqual({ 'Fn::GetAtt': ['KMSKey', 'Arn'] });
     });
 
     test('should have S3 bucket with public access blocked', () => {
@@ -199,7 +200,10 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
       const blockDevice =
         lt.Properties.LaunchTemplateData.BlockDeviceMappings[0];
       expect(blockDevice.Ebs.Encrypted).toBe(true);
-      expect(blockDevice.Ebs.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+      // Fix: The template uses Fn::GetAtt, not Ref
+      expect(blockDevice.Ebs.KmsKeyId).toEqual({
+        'Fn::GetAtt': ['KMSKey', 'Arn'],
+      });
     });
 
     test('should have auto scaling group in private subnets', () => {
@@ -232,17 +236,21 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     });
 
     test('EC2 role should have scoped policies', () => {
-      const role = template.Resources.EC2InstanceRole;
-      const policies = role.Properties.Policies;
-      expect(policies).toBeInstanceOf(Array);
-      expect(policies.length).toBeGreaterThan(0);
+      // Fix: The policies are separate resources, not inline policies
+      const kmsPolicy = template.Resources.EC2KMSAccessPolicy;
+      const s3Policy = template.Resources.EC2S3AccessPolicy;
+      const secretsPolicy = template.Resources.EC2SecretsManagerAccessPolicy;
 
-      // Check KMS policy
-      const kmsPolicy = policies.find((p: any) => p.PolicyName === 'KMSAccess');
-      expect(kmsPolicy).toBeDefined();
-      expect(kmsPolicy.PolicyDocument.Statement[0].Resource).toEqual({
-        'Fn::GetAtt': ['KMSKey', 'Arn'],
-      });
+      expect(kmsPolicy.Type).toBe('AWS::IAM::Policy');
+      expect(s3Policy.Type).toBe('AWS::IAM::Policy');
+      expect(secretsPolicy.Type).toBe('AWS::IAM::Policy');
+
+      // Check that KMS policy has specific resource
+      expect(kmsPolicy.Properties.PolicyDocument.Statement[0].Resource).toEqual(
+        {
+          'Fn::GetAtt': ['KMSKey', 'Arn'],
+        }
+      );
     });
   });
 
@@ -250,7 +258,10 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have secrets manager secret', () => {
       const secret = template.Resources.DatabaseSecret;
       expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-      expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+      // Fix: The template uses Fn::GetAtt, not Ref
+      expect(secret.Properties.KmsKeyId).toEqual({
+        'Fn::GetAtt': ['KMSKey', 'Arn'],
+      });
     });
 
     test('secret should generate password', () => {
@@ -268,6 +279,7 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
         'PrivateSubnetIds',
         'KmsKeyId',
         'KmsKeyArn',
+        'KmsKeyAlias', // Add missing output
         'S3BucketName',
         'AutoScalingGroupName',
         'EC2InstanceRoleArn',
@@ -304,15 +316,40 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     });
 
     test('should use resource-specific IAM policies', () => {
-      const role = template.Resources.EC2InstanceRole;
-      const policies = role.Properties.Policies;
+      // Fix: Check the separate policy resources instead of inline policies
+      const kmsPolicy = template.Resources.EC2KMSAccessPolicy;
+      const s3Policy = template.Resources.EC2S3AccessPolicy;
+      const secretsPolicy = template.Resources.EC2SecretsManagerAccessPolicy;
 
-      policies.forEach((policy: any) => {
-        policy.PolicyDocument.Statement.forEach((statement: any) => {
-          if (statement.Resource && statement.Resource !== '*') {
-            expect(statement.Resource).not.toBe('*');
-          }
-        });
+      // Check KMS policy has specific resource ARN
+      const kmsStatements = kmsPolicy.Properties.PolicyDocument.Statement;
+      kmsStatements.forEach((statement: any) => {
+        if (statement.Resource) {
+          expect(statement.Resource).not.toBe('*');
+          expect(statement.Resource).toEqual({
+            'Fn::GetAtt': ['KMSKey', 'Arn'],
+          });
+        }
+      });
+
+      // Check S3 policy has specific bucket ARN
+      const s3Statements = s3Policy.Properties.PolicyDocument.Statement;
+      s3Statements.forEach((statement: any) => {
+        if (statement.Resource) {
+          expect(statement.Resource).not.toBe('*');
+          // Should reference the specific S3 bucket
+          expect(typeof statement.Resource).toBe('object');
+        }
+      });
+
+      // Check Secrets Manager policy has specific secret ARN
+      const secretsStatements =
+        secretsPolicy.Properties.PolicyDocument.Statement;
+      secretsStatements.forEach((statement: any) => {
+        if (statement.Resource) {
+          expect(statement.Resource).not.toBe('*');
+          expect(statement.Resource).toEqual({ Ref: 'DatabaseSecret' });
+        }
       });
     });
 
@@ -321,8 +358,9 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
       const ingressRules = sg.Properties.SecurityGroupIngress || [];
 
       ingressRules.forEach((rule: any) => {
-        if (rule.FromPort === 22 && rule.ToPort === 22) {
-          expect(rule.CidrIp).not.toBe('0.0.0.0/0');
+        if (rule && rule.FromPort === 22 && rule.ToPort === 22) {
+          // SSH rule should be conditional and reference the parameter, not hardcoded
+          expect(rule.CidrIp).toEqual({ Ref: 'SSHAllowedCidr' });
         }
       });
     });
