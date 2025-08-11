@@ -344,7 +344,6 @@ Resources:
           HttpMethod: '*'
           MetricsEnabled: true
 
-
   # SNS Topic for CloudWatch Alarms
   AlertsTopic:
     Type: AWS::SNS::Topic
@@ -427,5 +426,4 @@ Outputs:
     Description: 'ID of the KMS key used for DynamoDB encryption'
     Value: !Ref DynamoDBKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyId'
       Name: !Sub '${AWS::StackName}-KMSKeyId'
