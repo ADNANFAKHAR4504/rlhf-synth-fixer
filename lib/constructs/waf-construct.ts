@@ -144,10 +144,10 @@ export class WafConstruct extends Construct {
     /* */
     new wafv2.CfnLoggingConfiguration(this, `WAFLoggingConfig-${environment}`, {
       resourceArn: this.webAcl.attrArn,
-      logDestinationConfigs: [`arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:/aws/waf/${environment}/web-acl-logs`],
+      logDestinationConfigs: [
+        `arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:/aws/waf/${environment}/web-acl-logs`,
+      ],
     });
-
-
     // Tag WAF resources
     cdk.Tags.of(this.webAcl).add('Name', `WebACL-${environment}`);
     cdk.Tags.of(this.webAcl).add('Component', 'Security');
