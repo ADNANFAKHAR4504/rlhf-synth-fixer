@@ -24,7 +24,6 @@ def create_infrastructure():
   vpc = aws.ec2.Vpc(
     "web-vpc",
     cidr_block="10.0.0.0/16",
-    assign_generated_ipv6_cidr_block=True,
     enable_dns_support=True,
     enable_dns_hostnames=True,
     tags={"Name": "web-vpc"},
@@ -45,10 +44,6 @@ def create_infrastructure():
       aws.ec2.RouteTableRouteArgs(
         cidr_block="0.0.0.0/0",
         gateway_id=igw.id
-      ),
-      aws.ec2.RouteTableRouteArgs(
-        ipv6_cidr_block="::/0",
-        gateway_id=igw.id
       )
     ],
     tags={"Name": "public-route-table"},
@@ -59,7 +54,6 @@ def create_infrastructure():
     "public-subnet-1",
     vpc_id=vpc.id,
     cidr_block="10.0.1.0/24",
-    assign_ipv6_address_on_creation=True,
     availability_zone=f"{region}a",
     tags={"Name": "public-subnet-1"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
@@ -69,7 +63,6 @@ def create_infrastructure():
     "public-subnet-2",
     vpc_id=vpc.id,
     cidr_block="10.0.2.0/24",
-    assign_ipv6_address_on_creation=True,
     availability_zone=f"{region}b",
     tags={"Name": "public-subnet-2"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
@@ -142,8 +135,7 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
         protocol="-1",
         from_port=0,
         to_port=0,
-        cidr_blocks=["0.0.0.0/0"],
-        ipv6_cidr_blocks=["::/0"]
+        cidr_blocks=["0.0.0.0/0"]
       )
     ],
     tags={"Name": "ec2-sg"},
@@ -160,7 +152,6 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
         from_port=80,
         to_port=80,
         cidr_blocks=["0.0.0.0/0"],
-        ipv6_cidr_blocks=["::/0"],
         description="Allow HTTP from anywhere"
       )
     ],
@@ -195,7 +186,6 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
     ami=ami.id,
     subnet_id=subnet1.id,
     associate_public_ip_address=True,
-    ipv6_address_count=1,
     security_groups=[ec2_sg.id],
     iam_instance_profile=instance_profile.name,
     user_data=b64encode(user_data.encode()).decode(),
@@ -210,7 +200,7 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
     load_balancer_type="application",
     security_groups=[alb_sg.id],
     subnets=[subnet1.id, subnet2.id],
-    ip_address_type="dualstack",
+    ip_address_type="ipv4",
     enable_deletion_protection=False,
     tags={"Name": "web-alb"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
@@ -310,7 +300,6 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
   export("alb_dns_name", alb.dns_name)
   export("website_url", Output.concat("http://", alb.dns_name))
   export("ec2_public_ip", ec2_instance.public_ip)
-  export("ec2_ipv6", ec2_instance.ipv6_addresses[0])
 
   # Return resources for testing
   return {
