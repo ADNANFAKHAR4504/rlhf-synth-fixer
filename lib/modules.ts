@@ -16,7 +16,6 @@ export interface VpcModuleProps {
   readonly availabilityZones: string[];
 }
 
-// FIX: Extend Construct, not TerraformModule
 export class VpcModule extends Construct {
   public readonly vpcId: string;
   public readonly publicSubnetId: string;

@@ -32,7 +32,6 @@ export class TapStack extends TerraformStack {
       : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    // const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
@@ -82,7 +81,6 @@ export class TapStack extends TerraformStack {
       description: 'The ID of the private subnet (with NAT Gateway access).',
     });
 
-    // FIX: Reference the public properties we exposed on our custom Construct
     new TerraformOutput(this, 'availability_zones_used', {
       value: [network.publicAz, network.privateAz],
       description: 'The availability zones used for the subnets.',
