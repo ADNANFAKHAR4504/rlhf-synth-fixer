@@ -85,8 +85,7 @@ export class RdsStack extends cdk.Stack {
 
       // Monitoring and logging
       monitoringInterval: cdk.Duration.minutes(1),
-      enablePerformanceInsights: true,
-      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+      enablePerformanceInsights: false,
       cloudwatchLogsExports: ['error', 'general', 'slowquery'],
 
       // Parameter group

@@ -534,12 +534,6 @@ describe('RdsStack', () => {
     });
   });
 
-  test('RDS has performance insights enabled', () => {
-    template.hasResourceProperties('AWS::RDS::DBInstance', {
-      EnablePerformanceInsights: true,
-    });
-  });
-
   test('RDS has CloudWatch logs exports', () => {
     template.hasResourceProperties('AWS::RDS::DBInstance', {
       EnableCloudwatchLogsExports: Match.arrayWith(['error', 'general', 'slowquery']),
