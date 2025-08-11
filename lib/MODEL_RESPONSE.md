@@ -38,15 +38,14 @@ from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
 import json
 
-
 class NetworkingModule:
-    """Modular networking component for VPC, subnets, and routing"""
-    
+"""Modular networking component for VPC, subnets, and routing"""
+
     def __init__(self, scope: Construct, vpc_cidr: str = "10.0.0.0/16"):
         self.scope = scope
         self.vpc_cidr = vpc_cidr
         self.common_tags = {"Environment": "Production"}
-        
+
         # Create VPC
         self.vpc = Vpc(
             scope, "vpc",
@@ -55,26 +54,26 @@ class NetworkingModule:
             enable_dns_support=True,
             tags={**self.common_tags, "Name": "production-vpc"}
         )
-        
+
         # Internet Gateway
         self.igw = InternetGateway(
             scope, "igw",
             vpc_id=self.vpc.id,
             tags={**self.common_tags, "Name": "production-igw"}
         )
-        
+
         # Create subnets
         self._create_subnets()
         self._create_nat_gateways()
         self._create_route_tables()
-    
+
     def _create_subnets(self):
         """Create public and private subnets across AZs"""
         self.public_subnets = []
         self.private_subnets = []
-        
+
         availability_zones = ["us-east-1a", "us-east-1b"]
-        
+
         for i, az in enumerate(availability_zones):
             # Public subnets
             public_subnet = Subnet(
@@ -86,7 +85,7 @@ class NetworkingModule:
                 tags={**self.common_tags, "Name": f"public-subnet-{i+1}", "Type": "Public"}
             )
             self.public_subnets.append(public_subnet)
-            
+
             # Private subnets
             private_subnet = Subnet(
                 self.scope, f"private-subnet-{i+1}",
@@ -96,11 +95,11 @@ class NetworkingModule:
                 tags={**self.common_tags, "Name": f"private-subnet-{i+1}", "Type": "Private"}
             )
             self.private_subnets.append(private_subnet)
-    
+
     def _create_nat_gateways(self):
         """Create NAT gateways for private subnet internet access"""
         self.nat_gateways = []
-        
+
         for i, public_subnet in enumerate(self.public_subnets):
             # Elastic IP for NAT Gateway
             eip = Eip(
@@ -108,7 +107,7 @@ class NetworkingModule:
                 domain="vpc",
                 tags={**self.common_tags, "Name": f"nat-eip-{i+1}"}
             )
-            
+
             # NAT Gateway
             nat_gw = NatGateway(
                 self.scope, f"nat-gateway-{i+1}",
@@ -117,7 +116,7 @@ class NetworkingModule:
                 tags={**self.common_tags, "Name": f"nat-gateway-{i+1}"}
             )
             self.nat_gateways.append(nat_gw)
-    
+
     def _create_route_tables(self):
         """Create and configure route tables"""
         # Public route table
@@ -126,7 +125,7 @@ class NetworkingModule:
             vpc_id=self.vpc.id,
             tags={**self.common_tags, "Name": "public-route-table"}
         )
-        
+
         # Route to Internet Gateway
         Route(
             self.scope, "public-route",
@@ -134,7 +133,7 @@ class NetworkingModule:
             destination_cidr_block="0.0.0.0/0",
             gateway_id=self.igw.id
         )
-        
+
         # Associate public subnets with public route table
         for i, subnet in enumerate(self.public_subnets):
             RouteTableAssociation(
@@ -142,7 +141,7 @@ class NetworkingModule:
                 subnet_id=subnet.id,
                 route_table_id=self.public_rt.id
             )
-        
+
         # Private route tables (one per AZ for high availability)
         self.private_rts = []
         for i, (subnet, nat_gw) in enumerate(zip(self.private_subnets, self.nat_gateways)):
@@ -151,7 +150,7 @@ class NetworkingModule:
                 vpc_id=self.vpc.id,
                 tags={**self.common_tags, "Name": f"private-route-table-{i+1}"}
             )
-            
+
             # Route to NAT Gateway
             Route(
                 self.scope, f"private-route-{i+1}",
@@ -159,28 +158,27 @@ class NetworkingModule:
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=nat_gw.id
             )
-            
+
             # Associate private subnet with private route table
             RouteTableAssociation(
                 self.scope, f"private-rt-association-{i+1}",
                 subnet_id=subnet.id,
                 route_table_id=private_rt.id
             )
-            
+
             self.private_rts.append(private_rt)
 
-
 class SecurityModule:
-    """Modular security component for security groups and IAM"""
-    
+"""Modular security component for security groups and IAM"""
+
     def __init__(self, scope: Construct, vpc_id: str):
         self.scope = scope
         self.vpc_id = vpc_id
         self.common_tags = {"Environment": "Production"}
-        
+
         self._create_security_groups()
         self._create_iam_roles()
-    
+
     def _create_security_groups(self):
         """Create security groups for different tiers"""
         # ALB Security Group
@@ -191,7 +189,7 @@ class SecurityModule:
             vpc_id=self.vpc_id,
             tags={**self.common_tags, "Name": "alb-security-group"}
         )
-        
+
         # ALB ingress rules
         SecurityGroupRule(
             self.scope, "alb-http-ingress",
@@ -202,7 +200,7 @@ class SecurityModule:
             cidr_blocks=["0.0.0.0/0"],
             security_group_id=self.alb_sg.id
         )
-        
+
         SecurityGroupRule(
             self.scope, "alb-https-ingress",
             type="ingress",
@@ -212,7 +210,7 @@ class SecurityModule:
             cidr_blocks=["0.0.0.0/0"],
             security_group_id=self.alb_sg.id
         )
-        
+
         # Fargate Security Group
         self.fargate_sg = SecurityGroup(
             self.scope, "fargate-sg",
@@ -221,7 +219,7 @@ class SecurityModule:
             vpc_id=self.vpc_id,
             tags={**self.common_tags, "Name": "fargate-security-group"}
         )
-        
+
         # Fargate ingress from ALB
         SecurityGroupRule(
             self.scope, "fargate-alb-ingress",
@@ -232,7 +230,7 @@ class SecurityModule:
             source_security_group_id=self.alb_sg.id,
             security_group_id=self.fargate_sg.id
         )
-        
+
         # RDS Security Group
         self.rds_sg = SecurityGroup(
             self.scope, "rds-sg",
@@ -241,7 +239,7 @@ class SecurityModule:
             vpc_id=self.vpc_id,
             tags={**self.common_tags, "Name": "rds-security-group"}
         )
-        
+
         # RDS ingress from Fargate
         SecurityGroupRule(
             self.scope, "rds-fargate-ingress",
@@ -252,7 +250,7 @@ class SecurityModule:
             source_security_group_id=self.fargate_sg.id,
             security_group_id=self.rds_sg.id
         )
-        
+
         # Egress rules (allow all outbound)
         for sg in [self.alb_sg, self.fargate_sg, self.rds_sg]:
             SecurityGroupRule(
@@ -264,7 +262,7 @@ class SecurityModule:
                 cidr_blocks=["0.0.0.0/0"],
                 security_group_id=sg.id
             )
-    
+
     def _create_iam_roles(self):
         """Create IAM roles following least privilege principle"""
         # ECS Task Execution Role
@@ -281,14 +279,14 @@ class SecurityModule:
             }),
             tags=self.common_tags
         )
-        
+
         # Attach managed policy for ECS task execution
         IamRolePolicyAttachment(
             self.scope, "ecs-execution-role-policy",
             role=self.ecs_execution_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
         )
-        
+
         # ECS Task Role (for application permissions)
         self.ecs_task_role = IamRole(
             self.scope, "ecs-task-role",
@@ -303,7 +301,7 @@ class SecurityModule:
             }),
             tags=self.common_tags
         )
-        
+
         # Custom policy for Secrets Manager access
         secrets_policy = IamPolicy(
             self.scope, "secrets-access-policy",
@@ -320,23 +318,22 @@ class SecurityModule:
                 }]
             })
         )
-        
+
         IamRolePolicyAttachment(
             self.scope, "ecs-task-secrets-policy",
             role=self.ecs_task_role.name,
             policy_arn=secrets_policy.arn
         )
 
-
 class SecretsModule:
-    """Modular secrets management component"""
-    
+"""Modular secrets management component"""
+
     def __init__(self, scope: Construct):
         self.scope = scope
         self.common_tags = {"Environment": "Production"}
-        
+
         self._create_secrets()
-    
+
     def _create_secrets(self):
         """Create secrets in AWS Secrets Manager"""
         # Database credentials
@@ -346,7 +343,7 @@ class SecretsModule:
             description="Database credentials for production RDS instance",
             tags=self.common_tags
         )
-        
+
         # Store database credentials
         SecretsmanagerSecretVersion(
             self.scope, "db-credentials-version",
@@ -360,7 +357,7 @@ class SecretsModule:
                 "dbname": "production"
             })
         )
-        
+
         # Application secrets
         self.app_secret = SecretsmanagerSecret(
             self.scope, "app-secrets",
@@ -368,7 +365,7 @@ class SecretsModule:
             description="Application secrets for production environment",
             tags=self.common_tags
         )
-        
+
         SecretsmanagerSecretVersion(
             self.scope, "app-secrets-version",
             secret_id=self.app_secret.id,
@@ -379,19 +376,18 @@ class SecretsModule:
             })
         )
 
-
 class DatabaseModule:
-    """Modular database component with RDS"""
-    
+"""Modular database component with RDS"""
+
     def __init__(self, scope: Construct, vpc_id: str, private_subnets: list, security_group_id: str):
         self.scope = scope
         self.vpc_id = vpc_id
         self.private_subnets = private_subnets
         self.security_group_id = security_group_id
         self.common_tags = {"Environment": "Production"}
-        
+
         self._create_database()
-    
+
     def _create_database(self):
         """Create RDS instance with high availability"""
         # DB Subnet Group
@@ -401,7 +397,7 @@ class DatabaseModule:
             subnet_ids=[subnet.id for subnet in self.private_subnets],
             tags={**self.common_tags, "Name": "production-db-subnet-group"}
         )
-        
+
         # RDS Instance
         self.rds_instance = DbInstance(
             self.scope, "rds-instance",
@@ -432,11 +428,10 @@ class DatabaseModule:
             tags={**self.common_tags, "Name": "production-postgres-db"}
         )
 
-
 class ComputeModule:
-    """Modular compute component with ECS Fargate"""
-    
-    def __init__(self, scope: Construct, vpc_id: str, public_subnets: list, private_subnets: list, 
+"""Modular compute component with ECS Fargate"""
+
+    def __init__(self, scope: Construct, vpc_id: str, public_subnets: list, private_subnets: list,
                  alb_sg_id: str, fargate_sg_id: str, execution_role_arn: str, task_role_arn: str):
         self.scope = scope
         self.vpc_id = vpc_id
@@ -447,9 +442,9 @@ class ComputeModule:
         self.execution_role_arn = execution_role_arn
         self.task_role_arn = task_role_arn
         self.common_tags = {"Environment": "Production"}
-        
+
         self._create_compute_resources()
-    
+
     def _create_compute_resources(self):
         """Create ECS cluster, ALB, and Fargate services"""
         # CloudWatch Log Group
@@ -459,7 +454,7 @@ class ComputeModule:
             retention_in_days=30,
             tags=self.common_tags
         )
-        
+
         # ECS Cluster
         self.ecs_cluster = EcsCluster(
             self.scope, "ecs-cluster",
@@ -470,7 +465,7 @@ class ComputeModule:
             }],
             tags={**self.common_tags, "Name": "production-ecs-cluster"}
         )
-        
+
         # Application Load Balancer
         self.alb = Lb(
             self.scope, "alb",
@@ -482,7 +477,7 @@ class ComputeModule:
             enable_deletion_protection=True,
             tags={**self.common_tags, "Name": "production-alb"}
         )
-        
+
         # Target Group
         self.target_group = LbTargetGroup(
             self.scope, "app-target-group",
@@ -504,7 +499,7 @@ class ComputeModule:
             },
             tags={**self.common_tags, "Name": "production-app-target-group"}
         )
-        
+
         # ALB Listener
         self.alb_listener = LbListener(
             self.scope, "alb-listener",
@@ -516,7 +511,7 @@ class ComputeModule:
                 "target_group_arn": self.target_group.arn
             }]
         )
-        
+
         # ECS Task Definition
         self.task_definition = EcsTaskDefinition(
             self.scope, "app-task-definition",
@@ -560,7 +555,7 @@ class ComputeModule:
             }]),
             tags={**self.common_tags, "Name": "production-app-task-definition"}
         )
-        
+
         # ECS Service
         self.ecs_service = EcsService(
             self.scope, "app-service",
@@ -593,11 +588,10 @@ class ComputeModule:
             depends_on=[self.alb_listener]
         )
 
-
 class MonitoringModule:
-    """Modular monitoring component with CloudWatch"""
-    
-    def __init__(self, scope: Construct, cluster_name: str, service_name: str, 
+"""Modular monitoring component with CloudWatch"""
+
+    def __init__(self, scope: Construct, cluster_name: str, service_name: str,
                  alb_arn: str, target_group_arn: str, db_instance_id: str):
         self.scope = scope
         self.cluster_name = cluster_name
@@ -606,9 +600,9 @@ class MonitoringModule:
         self.target_group_arn = target_group_arn
         self.db_instance_id = db_instance_id
         self.common_tags = {"Environment": "Production"}
-        
+
         self._create_monitoring()
-    
+
     def _create_monitoring(self):
         """Create CloudWatch alarms and SNS notifications"""
         # SNS Topic for alerts
@@ -617,7 +611,7 @@ class MonitoringModule:
             name="production-alerts",
             tags=self.common_tags
         )
-        
+
         # Email subscription (replace with actual email)
         SnsTopicSubscription(
             self.scope, "alert-email-subscription",
@@ -625,7 +619,7 @@ class MonitoringModule:
             protocol="email",
             endpoint="admin@yourcompany.com"  # Replace with actual email
         )
-        
+
         # ECS Service CPU Utilization Alarm
         CloudwatchMetricAlarm(
             self.scope, "ecs-cpu-alarm",
@@ -645,7 +639,7 @@ class MonitoringModule:
             },
             tags=self.common_tags
         )
-        
+
         # ECS Service Memory Utilization Alarm
         CloudwatchMetricAlarm(
             self.scope, "ecs-memory-alarm",
@@ -665,7 +659,7 @@ class MonitoringModule:
             },
             tags=self.common_tags
         )
-        
+
         # ALB Target Health Alarm
         CloudwatchMetricAlarm(
             self.scope, "alb-unhealthy-targets",
@@ -685,7 +679,7 @@ class MonitoringModule:
             },
             tags=self.common_tags
         )
-        
+
         # RDS CPU Utilization Alarm
         CloudwatchMetricAlarm(
             self.scope, "rds-cpu-alarm",
@@ -704,7 +698,7 @@ class MonitoringModule:
             },
             tags=self.common_tags
         )
-        
+
         # RDS Connection Count Alarm
         CloudwatchMetricAlarm(
             self.scope, "rds-connections-alarm",
@@ -724,28 +718,27 @@ class MonitoringModule:
             tags=self.common_tags
         )
 
-
 class ProductionInfrastructureStack(TerraformStack):
-    """Main infrastructure stack orchestrating all modules"""
-    
+"""Main infrastructure stack orchestrating all modules"""
+
     def __init__(self, scope: Construct, id: str):
         super().__init__(scope, id)
-        
+
         # AWS Provider
         AwsProvider(self, "aws", region="us-east-1")
-        
+
         # Initialize modules
         self.networking = NetworkingModule(self)
         self.security = SecurityModule(self, self.networking.vpc.id)
         self.secrets = SecretsModule(self)
-        
+
         self.database = DatabaseModule(
             self,
             self.networking.vpc.id,
             self.networking.private_subnets,
             self.security.rds_sg.id
         )
-        
+
         self.compute = ComputeModule(
             self,
             self.networking.vpc.id,
@@ -756,7 +749,7 @@ class ProductionInfrastructureStack(TerraformStack):
             self.security.ecs_execution_role.arn,
             self.security.ecs_task_role.arn
         )
-        
+
         self.monitoring = MonitoringModule(
             self,
             self.compute.ecs_cluster.name,
@@ -765,7 +758,7 @@ class ProductionInfrastructureStack(TerraformStack):
             self.compute.target_group.arn,
             self.database.rds_instance.id
         )
-        
+
         # Outputs
         TerraformOutput(
             self, "vpc_id",

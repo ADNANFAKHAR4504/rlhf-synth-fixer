@@ -38,6 +38,16 @@ The submitted single-file CDKTF solution is close, but it violates several promp
 - Hardcoded email in SNS subscription; should be parameterized.
 - Hardcoded CIDR blocks and AZs without parameters; acceptable for demo but reduces reusability.
 
+8. Incorrect ALB CloudWatch alarm dimensions
+
+- The `TargetGroup` dimension must be the full target group resource ID (`targetgroup/<name>/<hash>`), and `LoadBalancer` must be `app/<name>/<hash>`. The current implementation derives only partial segments from ARNs.
+- Impact: Alarm never evaluates correctly and won’t trigger on unhealthy targets.
+
+9. RDS credentials/endpoint not wired to ECS when using managed password
+
+- With `manage_master_user_password=True`, RDS stores the password in Secrets Manager and the endpoint is determined at runtime. The ECS task references a separate, hardcoded secret, so the application will not receive the actual credentials/host.
+- Impact: Runtime connection failures despite successful provisioning.
+
 Suggested remediations
 
 - Configure `RemoteBackend` with `organization` and `NamedRemoteWorkspace`, driven by env vars (e.g., `TF_CLOUD_ORG`, `TF_WORKSPACE`).
@@ -45,3 +55,5 @@ Suggested remediations
 - Reference ECS secrets via the actual secret ARN(s) created in this stack (no account wildcard) and correct `valueFrom` format.
 - Remove or properly create the RDS monitoring role; otherwise omit those fields.
 - Add richer `TerraformOutput`s for key resources.
+- For ALB alarms, compute CloudWatch dimensions using the full resource IDs obtained from the ALB/TG ARNs (parse to `app/<name>/<hash>` and `targetgroup/<name>/<hash>`), or use provider attributes exposing these directly.
+- If using `manage_master_user_password`, reference the generated secret for DB credentials from the RDS instance in ECS (via Secrets Manager/outputs), or consistently manage a single Secrets Manager secret used by both RDS initialization and ECS tasks.
