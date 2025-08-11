@@ -344,7 +344,7 @@ class TapStack:
                             "s3:ReplicateObject",
                             "s3:ReplicateDelete"
                         ],
-                        "Resource": f"{arns[1]}/*"
+                        "Resource": f"{arns[24]}/*"
                     }
                 ]
             }))
@@ -851,21 +851,21 @@ EOF
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
-                # Create CloudWatch alarms if monitoring is enabled
+                # Create CloudWatch alarms if monitoring is enabled - FIXED VERSION
                 cpu_high_alarm = None
                 cpu_low_alarm = None
                 
                 if self.args.enable_monitoring:
                     cpu_high_alarm = aws.cloudwatch.MetricAlarm(
                         f"cpu-high-{region}-{self.environment_suffix}",
-                        alarm_name=self.args.get_resource_name("cpu-high", region),
+                        name=self.args.get_resource_name("cpu-high", region),
                         comparison_operator="GreaterThanThreshold",
-                        evaluation_periods="2",
+                        evaluation_periods=2,
                         metric_name="CPUUtilization",
                         namespace="AWS/EC2",
-                        period="60",
+                        period=60,
                         statistic="Average",
-                        threshold=str(self.args.cpu_high_threshold),
+                        threshold=self.args.cpu_high_threshold,
                         alarm_description=f"High CPU utilization for TAP {self.environment_suffix} in {region}",
                         alarm_actions=[scale_up_policy.arn],
                         dimensions={"AutoScalingGroupName": asg.name},
@@ -875,14 +875,14 @@ EOF
                     
                     cpu_low_alarm = aws.cloudwatch.MetricAlarm(
                         f"cpu-low-{region}-{self.environment_suffix}",
-                        alarm_name=self.args.get_resource_name("cpu-low", region),
+                        name=self.args.get_resource_name("cpu-low", region),
                         comparison_operator="LessThanThreshold",
-                        evaluation_periods="2",
+                        evaluation_periods=2,
                         metric_name="CPUUtilization",
                         namespace="AWS/EC2",
-                        period="60",
+                        period=60,
                         statistic="Average",
-                        threshold=str(self.args.cpu_low_threshold),
+                        threshold=self.args.cpu_low_threshold,
                         alarm_description=f"Low CPU utilization for TAP {self.environment_suffix} in {region}",
                         alarm_actions=[scale_down_policy.arn],
                         dimensions={"AutoScalingGroupName": asg.name},
