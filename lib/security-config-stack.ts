@@ -23,7 +23,7 @@ export class SecurityConfigStack extends Stack {
   constructor(scope: Construct, id: string, props: SecurityConfigStackProps) {
     super(scope, id, {
       ...props,
-      env: { region: 'us-east-1' },
+      env: { region: 'us-west-2' },
     });
 
     // IAM Role for EC2 (Least Privilege)

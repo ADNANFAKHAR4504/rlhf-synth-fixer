@@ -14,7 +14,11 @@ describe('TapStack', () => {
     jest.clearAllMocks();
 
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    stack = new TapStack(app, 'TestTapStack', { 
+      environmentSuffix,
+      approvedSshCidr: '10.0.0.0/8',
+      alarmEmail: 'test@example.com'
+    });
     template = Template.fromStack(stack);
   });
 
@@ -24,30 +28,43 @@ describe('TapStack', () => {
       expect(stack.stackName).toBe('TestTapStack');
     });
 
-    test('should have correct environment suffix', () => {
-      const stackWithSuffix = new TapStack(app, 'TestStackWithSuffix', { 
-        environmentSuffix: 'test' 
-      });
-      expect(stackWithSuffix).toBeDefined();
+    test('should have production web app stack when required props provided', () => {
+      expect(stack.productionWebAppStack).toBeDefined();
     });
 
-    test('should accept additional props', () => {
-      const stackWithProps = new TapStack(app, 'TestStackWithProps', { 
+    test('should not create production stack when missing required props', () => {
+      const separateApp = new cdk.App();
+      const stackWithoutProps = new TapStack(separateApp, 'TestStackWithoutProps', {
+        environmentSuffix: 'test'
+      });
+      expect(stackWithoutProps.productionWebAppStack).toBeUndefined();
+    });
+
+    test('should accept certificate ARN parameter', () => {
+      const separateApp = new cdk.App();
+      const stackWithCert = new TapStack(separateApp, 'TestStackWithCert', { 
         environmentSuffix: 'test',
         approvedSshCidr: '10.0.0.0/8',
-        alarmEmail: 'test@example.com'
+        alarmEmail: 'test@example.com',
+        certificateArn: 'arn:aws:acm:us-west-2:123456789012:certificate/example'
       });
-      expect(stackWithProps).toBeDefined();
+      expect(stackWithCert.productionWebAppStack).toBeDefined();
     });
 
     test('should use default environment suffix when not provided', () => {
-      const stackWithoutSuffix = new TapStack(app, 'TestStackNoSuffix', {});
+      const separateApp = new cdk.App();
+      const stackWithoutSuffix = new TapStack(separateApp, 'TestStackNoSuffix', {
+        approvedSshCidr: '10.0.0.0/8',
+        alarmEmail: 'test@example.com'
+      });
       expect(stackWithoutSuffix).toBeDefined();
     });
 
     test('should work with minimal props', () => {
-      const minimalStack = new TapStack(app, 'TestStackMinimal');
+      const separateApp = new cdk.App();
+      const minimalStack = new TapStack(separateApp, 'TestStackMinimal');
       expect(minimalStack).toBeDefined();
+      expect(minimalStack.productionWebAppStack).toBeUndefined();
     });
   });
 

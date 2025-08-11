@@ -17,8 +17,9 @@ const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
 // Required parameters
-const approvedSshCidr = process.env.APPROVED_SSH_CIDR || '0.0.0.0/0';
+const approvedSshCidr = process.env.APPROVED_SSH_CIDR || '10.0.0.0/8'; // More restrictive default
 const alarmEmail = process.env.ALARM_EMAIL || 'test@example.com';
+const certificateArn = process.env.CERTIFICATE_ARN; // Optional for HTTPS
 
 // Tagging
 Tags.of(app).add('Environment', environmentSuffix);
@@ -31,9 +32,10 @@ new TapStack(app, stackName, {
   environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+    region: process.env.CDK_DEFAULT_REGION || 'us-west-2',
   },
   approvedSshCidr,
   alarmEmail,
+  certificateArn,
   // testing: true, // Uncomment if needed
 });
