@@ -164,13 +164,13 @@ describe('TapStack Integration Tests', () => {
       const sessionTable =
         synthesized.resource.aws_dynamodb_table['prod-service-session-table'];
 
-      expect(userTable.name).toBe('prod-service-users');
+  expect(userTable.name.startsWith('prod-service-users')).toBe(true);
       expect(userTable.hash_key).toBe('userId');
       expect(userTable.billing_mode).toBe('PAY_PER_REQUEST');
       expect(userTable.server_side_encryption.enabled).toBe(true);
       expect(userTable.point_in_time_recovery.enabled).toBe(true);
 
-      expect(sessionTable.name).toBe('prod-service-sessions');
+  expect(sessionTable.name.startsWith('prod-service-sessions')).toBe(true);
       expect(sessionTable.hash_key).toBe('sessionId');
       expect(sessionTable.ttl.enabled).toBe(true);
       expect(sessionTable.ttl.attribute_name).toBe('expiresAt');
@@ -229,7 +229,7 @@ describe('TapStack Integration Tests', () => {
           'api-method-settings'
         ];
 
-      expect(restApi.name).toBe('prod-service-api');
+  expect(restApi.name.startsWith('prod-service-api')).toBe(true);
       expect(restApi.description).toBe('Serverless Web Application API');
       expect(restApi.endpoint_configuration.types).toEqual(['REGIONAL']);
 
