@@ -441,67 +441,72 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
 
-      # Python setup is handled by the setup-environment action
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install CFN tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cfn-lint cfn-flip
 
       - name: Run Linting
+        env:
+          PLATFORM: ${{ needs.detect-metadata.outputs.platform }}
+          LANGUAGE: ${{ needs.detect-metadata.outputs.language }}
         run: |
-          # Enable shell debugging - prints each command before execution
-          set -x
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
+          set -euo pipefail
           echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
 
           if [ "$LANGUAGE" = "ts" ]; then
             echo "✅ TypeScript project detected, running ESLint..."
             npm run lint
-          elif [ "$LANGUAGE" = "py" ]; then
-            echo "Executing pipenv run lint..."
-            LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
-            LINT_EXIT_CODE=$?
-            echo "--- START PYLINT OUTPUT (Raw) ---"
-            echo "$LINT_OUTPUT"
-            echo "--- END PYLINT OUTPUT (Raw) ---"
-            echo "Pylint command raw exit code: $LINT_EXIT_CODE"
 
-            if [ "$LINT_EXIT_CODE" -ne 0 ]; then
-              echo "⚠️ Pylint command exited with non-zero status code: $LINT_EXIT_CODE."
-              # We will still attempt to parse the score, but this is a warning.
-              # If score parsing also fails, the next check will catch it.
-            fi
-            # Step 3: Extract the score from the Pylint output.
-            # This `sed` command looks for lines containing "rated at X/10" and extracts X.
-            # It handles both integer (e.g., 7) and float (e.g., 7.50) scores.
+          elif [ "$LANGUAGE" = "py" ]; then
+            echo "✅ Python project detected, running pylint via pipenv..."
+            LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
+            echo "$LINT_OUTPUT"
             SCORE=$(echo "$LINT_OUTPUT" | sed -n 's/.*rated at \([0-9.]*\)\/10.*/\1/p')
             if [[ -z "$SCORE" || ! "$SCORE" =~ ^[0-9.]+$ ]]; then
-              echo "❌ ERROR: Could not extract linting score from Pylint output."
-              echo "Please verify Pylint's output format or if it ran successfully enough to produce a score."
-              exit 1 # Fail the step if the score cannot be determined
+              echo "❌ Could not extract pylint score."; exit 1
             fi
-            echo "Detected Pylint Score: $SCORE/10"
-            # Step 5: Define the minimum acceptable score
             MIN_SCORE=7.0
-            # Step 6: Compare the extracted score with the minimum threshold.
-            # `bc -l` is used for floating-point arithmetic comparison in shell scripts.
-            if (( $(echo "$SCORE >= $MIN_SCORE" | bc -l) )); then
-              echo "✅ Linting score $SCORE/10 is greater than or equal to $MIN_SCORE. Linting passed."
-              exit 0 # Explicitly exit with 0 to indicate success for the step
+            python - <<PY
+            score=float("$SCORE")
+            assert score >= $MIN_SCORE, f"Pylint score {score}/10 is < $MIN_SCORE"
+            PY
+              echo "✅ Pylint score $SCORE/10 ≥ $MIN_SCORE"
+
+            elif [ "$PLATFORM" = "cfn" ]; then
+              echo "✅ CloudFormation project detected, running cfn-lint..."
+
+              if [ "$LANGUAGE" = "json" ]; then
+                # Lint JSON CloudFormation templates
+                shopt -s nullglob
+                FILES=(lib/**/*.json lib/*.json)
+                if [ ${#FILES[@]} -eq 0 ]; then
+                  echo "ℹ️ No JSON templates found under lib/"
+                else
+                  cfn-lint "${FILES[@]}"
+                fi
+
+              elif [ "$LANGUAGE" = "yaml" ]; then
+                # Lint YAML CloudFormation templates
+                shopt -s nullglob
+                FILES=(lib/**/*.yml lib/**/*.yaml lib/*.yml lib/*.yaml)
+                if [ ${#FILES[@]} -eq 0 ]; then
+                  echo "ℹ️ No YAML templates found under lib/"
+                else
+                  cfn-lint "${FILES[@]}"
+                fi
+              fi
+
             else
-              echo "❌ Linting score $SCORE/10 is less than $MIN_SCORE. Linting failed."
-              exit 1 # Explicitly exit with 1 to indicate failure for the step
+              echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"
+              echo "💡 Running default ESLint only"
+              npm run lint
             fi
-          elif [ "$PLATFORM" = "cfn" ]; then
-            echo "✅ CloudFormation project detected, running CloudFormation validation..."
-            if [ "$LANGUAGE" = "json" ]; then
-              pipenv run cfn-validate-json -D
-            elif [ "$LANGUAGE" = "yaml" ]; then
-              pipenv run cfn-validate-yaml -D
-            fi
-          else
-            echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"
-            echo "💡 Running default ESLint only"
-            npm run lint
-          fi
 
   unit-tests:
     name: Unit Testing
