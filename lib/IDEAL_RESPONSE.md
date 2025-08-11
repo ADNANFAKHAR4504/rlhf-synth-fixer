@@ -1,131 +1,126 @@
-# Healthcare Infrastructure CloudFormation Template
-* AWS CloudFormation template for HIPAA-compliant healthcare healthcare application infrastructure
-* Deploys to us-west-2, with KMS encryption, Secrets Manager for secrets, tagging, and safe update policies
-
-* Fully comply with the prompt, ensuring only supported CloudFormation resource properties are used to avoid deployment errors.
-
-* Include KMS encryption on all S3 buckets with explicit bucket policies enforcing encryption and blocking unencrypted uploads.
-
-* Store all secrets in Secrets Manager with appropriate access policies.
-
-* Tag all resources uniformly with the required tags.
-
-* Keep the VPC/subnet/networking resources minimal or parameterized unless explicitly required.
-
-* Use UpdateReplacePolicy and DeletionPolicy to avoid resource replacement where specified.
-
-* Provide clear comments explaining compliance decisions.
-
-* Include output values for key resource identifiers.
-
-* Maintain clarity, style, and formatting consistent with best practices.
-
-
-```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  HIPAA-compliant healthcare application infrastructure.
-  All S3 buckets encrypted with KMS.
-  Sensitive credentials stored in Secrets Manager.
-  Resources tagged with Project: HealthApp and Environment: Production.
-  Supports update without replacing critical resources.
+  TAP Stack - Healthcare Application Infrastructure CloudFormation Template
+  HIPAA-compliant infrastructure with encrypted S3 buckets, Secrets Manager,
+  proper tagging, and deployable in us-west-2 region.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: 'Application Configuration'
+        Parameters:
+          - ApplicationName
+          - DatabaseInstanceClass
+          - VpcCidr
 
 Parameters:
-  VpcCidr:
+  EnvironmentSuffix:
     Type: String
-    Default: '10.0.0.0/16'
-    Description: CIDR block for VPC
+    Default: 'prod'
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
+
+  ApplicationName:
+    Type: String
+    Default: 'healthapp'
+    Description: Name of the healthcare application
 
   DatabaseInstanceClass:
     Type: String
     Default: db.t3.medium
+    Description: RDS instance class for the database
     AllowedValues:
       - db.t3.medium
       - db.t3.large
       - db.r5.large
       - db.r5.xlarge
-    Description: RDS instance class
 
-  ApplicationName:
+  VpcCidr:
     Type: String
-    Default: healthcare-app
-    Description: Application name for resource naming
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC
+
+Conditions:
+  IsProd: !Equals [!Ref EnvironmentSuffix, 'prod']
 
 Resources:
 
-  # KMS Key for encryption of buckets and secrets
+  # KMS Key for encryption
   HealthcareKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: 'KMS key for healthcare app encryption (HIPAA compliant)'
+      Description: "KMS key for healthcare app encryption"
       EnableKeyRotation: true
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Sid: AllowRootAndAdmins
+          - Sid: Allow administration by root account
             Effect: Allow
             Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: AllowS3AndSecretsManagerUse
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow use by S3 and RDS services
             Effect: Allow
             Principal:
               Service:
                 - s3.amazonaws.com
-                - secretsmanager.amazonaws.com
                 - rds.amazonaws.com
             Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+            Resource: "*"
+          - Sid: Allow use by CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
       Tags:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
-  HealthcareKMSAlias:
+  HealthcareKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${ApplicationName}-kms-key'
+      AliasName: !Sub "alias/${ApplicationName}-${EnvironmentSuffix}-kms-key"
       TargetKeyId: !Ref HealthcareKMSKey
 
-  # Secrets Manager secrets for database credentials and API keys
+  # Secrets Manager for database credentials
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${ApplicationName}/database/credentials'
-      Description: 'Database credentials for healthcare application'
+      Name: !Sub "${ApplicationName}/${EnvironmentSuffix}/database/credentials"
+      Description: "Database credentials for healthcare app"
       GenerateSecretString:
         SecretStringTemplate: '{"username": "healthapp_admin"}'
         GenerateStringKey: password
         PasswordLength: 32
-        ExcludeCharacters: '"@/\\'
+        ExcludeCharacters: '"@/\'
       KmsKeyId: !Ref HealthcareKMSKey
       Tags:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
-  APISecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub '${ApplicationName}/api/keys'
-      Description: 'API keys for healthcare application'
-      SecretString: '{"api_key": "placeholder", "jwt_secret": "placeholder"}'
-      KmsKeyId: !Ref HealthcareKMSKey
-      Tags:
-        - Key: Project
-          Value: HealthApp
-        - Key: Environment
-          Value: Production
-
-  # VPC with minimal setup for networking
+  # VPC and subnets
   HealthcareVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -133,45 +128,81 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-vpc"
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
-
-  # Subnets (public and private) parameterized minimal for demo
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref HealthcareVPC
-      CidrBlock: 10.0.10.0/24
-      AvailabilityZone: us-west-2a
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Project
-          Value: HealthApp
-        - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref HealthcareVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-private-subnet-1"
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref HealthcareVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-private-subnet-2"
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref HealthcareVPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-public-subnet-1"
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref HealthcareVPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-public-subnet-2"
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-igw"
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -184,10 +215,12 @@ Resources:
     Properties:
       VpcId: !Ref HealthcareVPC
       Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-public-rt"
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -197,13 +230,19 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PublicSubnetRouteTableAssociation:
+  PublicSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
 
-  # S3 bucket with enforced KMS encryption and secure defaults
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # S3 bucket with KMS encryption
   HealthcareDataBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -214,6 +253,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref HealthcareKMSKey
+            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -225,83 +265,301 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
+        - Key: DataClassification
+          Value: PHI-Sensitive
 
-  # RDS Subnet Group for private subnet(s)
-  DatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
+  # Log bucket for S3 access logs with encryption
+  HealthcareLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      DBSubnetGroupDescription: 'Subnet group for healthcare database'
-      SubnetIds:
-        - !Ref PrivateSubnet1
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref HealthcareKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       Tags:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: Audit-Logs
 
-  # Security Group for RDS, allowing only internal VPC access
+  # RDS subnet group
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for healthcare database"
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Security Group for RDS
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Allow database access only within VPC'
+      GroupDescription: "Security group for healthcare database"
       VpcId: !Ref HealthcareVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
-          CidrIp: !Ref VpcCidr
+          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+          Description: "PostgreSQL access from app servers"
       Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-db-sg"
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
-  # RDS instance with encryption and referencing Secrets Manager for credentials
+  # RDS Instance
   HealthcareDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${ApplicationName}-db'
+      DBInstanceIdentifier: !Sub "${ApplicationName}-${EnvironmentSuffix}-database"
       DBInstanceClass: !Ref DatabaseInstanceClass
       Engine: postgres
-      EngineVersion: '13.7'
+      EngineVersion: 13.21
       AllocatedStorage: 100
+      StorageType: gp2
       StorageEncrypted: true
       KmsKeyId: !Ref HealthcareKMSKey
-      MasterUsername: !Join ['', [ '{{resolve:secretsmanager:', !Ref DatabaseSecret, ':SecretString:username}}' ]]
-      MasterUserPassword: !Join ['', [ '{{resolve:secretsmanager:', !Ref DatabaseSecret, ':SecretString:password}}' ]]
+      MasterUsername: "healthapp_admin"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       BackupRetentionPeriod: 30
-      PreferredBackupWindow: '03:00-04:00'
+      PreferredBackupWindow: 03:00-04:00
+      PreferredMaintenanceWindow: sun:04:00-sun:05:00
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+      EnablePerformanceInsights: true
+      PerformanceInsightsKMSKeyId: !Ref HealthcareKMSKey
       DeletionProtection: true
       Tags:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
+        - Key: DataClassification
+          Value: PHI-Sensitive
+
+  # Application Security Group
+  ApplicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for healthcare application servers"
+      VpcId: !Ref HealthcareVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          Description: "HTTPS from load balancer"
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          Description: "HTTP from load balancer (redirect to HTTPS)"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-app-sg"
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Load Balancer Security Group
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for healthcare app load balancer"
+      VpcId: !Ref HealthcareVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: "HTTPS from internet"
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: "HTTP from internet (redirect to HTTPS)"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-${EnvironmentSuffix}-alb-sg"
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for RDS monitoring
+  RDSEnhancedMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ApplicationName}-${EnvironmentSuffix}-rds-monitoring-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Tags:
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for application EC2 instances
+  ApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ApplicationName}-${EnvironmentSuffix}-application-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: HealthcareAppPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub "arn:aws:s3:::${HealthcareDataBucket}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub "arn:aws:s3:::${HealthcareDataBucket}"
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt HealthcareKMSKey.Arn
+      Tags:
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${ApplicationName}-${EnvironmentSuffix}-instance-profile"
+      Roles:
+        - !Ref ApplicationRole
+
+  # CloudWatch Log Group for application logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/healthcare/${ApplicationName}-${EnvironmentSuffix}"
+      RetentionInDays: !If [IsProd, 2557, 365] # 7 years retention for HIPAA compliance
+      KmsKeyId: !GetAtt HealthcareKMSKey.Arn
+      Tags:
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
 Outputs:
-  HealthcareDataBucketName:
-    Description: S3 Bucket name for healthcare data
-    Value: !Ref HealthcareDataBucket
-
-  HealthcareKMSKeyId:
-    Description: KMS Key ID used for encryption
-    Value: !Ref HealthcareKMSKey
-
-  DatabaseEndpoint:
-    Description: RDS Database Endpoint
-    Value: !GetAtt HealthcareDatabase.Endpoint.Address
-
-  DatabaseSecretArn:
-    Description: ARN of the database secret
-    Value: !Ref DatabaseSecret
 
   VPCId:
-    Description: VPC ID
+    Description: "ID of the healthcare VPC"
     Value: !Ref HealthcareVPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPC-ID"
 
+  PrivateSubnetIds:
+    Description: "IDs of the private subnets"
+    Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub "${AWS::StackName}-Private-Subnet-IDs"
+
+  PublicSubnetIds:
+    Description: "IDs of the public subnets"
+    Value: !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub "${AWS::StackName}-Public-Subnet-IDs"
+
+  DatabaseEndpoint:
+    Description: "RDS database endpoint"
+    Value: !GetAtt HealthcareDatabase.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-Database-Endpoint"
+
+  KMSKeyId:
+    Description: "KMS Key ID for encryption"
+    Value: !Ref HealthcareKMSKey
+    Export:
+      Name: !Sub "${AWS::StackName}-KMS-Key-ID"
+
+  PatientDataBucket:
+    Description: "S3 bucket for patient data"
+    Value: !Ref HealthcareDataBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-Patient-Data-Bucket"
+
+  LogsBucket:
+    Description: "S3 bucket for application logs"
+    Value: !Ref HealthcareLogsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-Logs-Bucket"
+
+  DatabaseSecretArn:
+    Description: "ARN of the database secret in Secrets Manager"
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-Database-Secret-ARN"
+
+  ApplicationRoleArn:
+    Description: "ARN of the application IAM role"
+    Value: !GetAtt ApplicationRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-Application-Role-ARN"
+
+  ApplicationSecurityGroupId:
+    Description: "Security group ID for application servers"
+    Value: !Ref ApplicationSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-Application-SG-ID"
+
+  LoadBalancerSecurityGroupId:
+    Description: "Security group ID for load balancer"
+    Value: !Ref LoadBalancerSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-LoadBalancer-SG-ID"
