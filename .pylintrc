@@ -17,9 +17,9 @@ max-line-length=100
 # Expected format of line ending, e.g. empty (any line ending), LF or CRLF
 expected-line-ending-format=LF
 
-# Indentation preference (using standard Python 4-space indentation)
-indent-string='    '  # 4 spaces
-indent-after-paren=4  # 4 spaces
+# Indentation preference
+indent-string='  '  # 2 spaces
+indent-after-paren=2  # 2 spaces
 
 [BASIC]
 # Good variable names which should always be accepted
