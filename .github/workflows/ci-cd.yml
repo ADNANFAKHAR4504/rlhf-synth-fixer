@@ -212,6 +212,9 @@ jobs:
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
           LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
+          echo "AWS_REGION is set to: $AWS_REGION"
+          echo "AWS_DEFAULT_REGION is set to: $AWS_DEFAULT_REGION"
+
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK deploy..."
             npm run cdk:deploy
