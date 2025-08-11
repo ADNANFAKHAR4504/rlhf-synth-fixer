@@ -54,7 +54,7 @@ describe('Web Application Stack Unit Tests', () => {
 
     test('should define all required parameters', () => {
       const params = template.Parameters;
-      expect(Object.keys(params).length).toBe(3);
+      expect(Object.keys(params).length).toBe(4);
       expect(params.DBMasterUsername).toBeDefined();
       expect(params.DynamoDBTableArnParameter).toBeDefined();
       expect(params.ECRImageUriParameter).toBeDefined();
@@ -231,7 +231,7 @@ describe('Web Application Stack Unit Tests', () => {
 
     test('should define all required outputs', () => {
       const outputs = template.Outputs;
-      expect(Object.keys(outputs).length).toBe(5);
+      expect(Object.keys(outputs).length).toBe(6);
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.ALBDNSName).toBeDefined();
       expect(outputs.S3BucketName).toBeDefined();

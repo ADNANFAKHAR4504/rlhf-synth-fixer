@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready stack for a highly available web application. Provisions VPC, Subnets, ALB, RDS, S3, IAM Role, and Lambda.'
+Description: 'Production-ready stack for a highly available web application. Provisions VPC, Subnets, ALB, RDS, S3, ECR, IAM Role, and Lambda.'
 
 Parameters:
   DBMasterUsername:
@@ -10,9 +10,13 @@ Parameters:
     Type: String
     Description: The ARN of the DynamoDB table for the Lambda function to access.
     Default: 'arn:aws:dynamodb:us-east-1:123456789012:table/MyExampleTable'
+  ECRRepositoryName:
+    Type: String
+    Description: The name of the ECR repository to be created for the Lambda function.
+    Default: 'my-web-app'
   ECRImageUriParameter:
     Type: String
-    Description: The URI of the ECR container image for the Lambda function.
+    Description: The full URI of the container image in ECR for the Lambda function (e.g., ACCOUNT.dkr.ecr.REGION.amazonaws.com/my-web-app:latest).
     Default: '123456789012.dkr.ecr.us-east-1.amazonaws.com/my-web-app:latest'
 
 Resources:
@@ -397,6 +401,29 @@ Resources:
           Value: WebAppTeam
 
   # ------------------------------------------------------------#
+  #  Container Registry (ECR)
+  # ------------------------------------------------------------#
+  WebAppECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ECRRepositoryName
+      RepositoryPolicyText:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: LambdaECRImageRetrievalPolicy
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: WebAppTeam
+
+  # ------------------------------------------------------------#
   #  IAM & Lambda
   # ------------------------------------------------------------#
   LambdaExecutionRole:
@@ -483,6 +510,9 @@ Outputs:
   S3BucketName:
     Description: 'Name of the S3 Bucket for application assets'
     Value: !Ref S3Bucket
+  ECRRepositoryNameOutput:
+    Description: 'Name of the ECR Repository for container images'
+    Value: !Ref WebAppECRRepository
   RDSInstanceEndpoint:
     Description: 'Endpoint address of the RDS database instance'
     Value: !GetAtt RDSInstance.Endpoint.Address
