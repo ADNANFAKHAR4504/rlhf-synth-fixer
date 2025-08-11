@@ -32,6 +32,14 @@ Parameters:
     AllowedPattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$'
     ConstraintDescription: 'Must be a valid S3 bucket name (lowercase, numbers, hyphens, periods)'
 
+  # Environment suffix for stage name uniqueness
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Suffix for environment uniqueness (e.g., dev, test, prod)'
+    Default: 'dev'
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    ConstraintDescription: 'Must be alphanumeric or hyphen'
+
 # Resources section - Core infrastructure and security components
 Resources:
 
@@ -732,7 +740,7 @@ Resources:
     Properties:
       RestApiId: !Ref SampleRestAPI
       DeploymentId: !Ref APIDeployment
-      StageName: prod
+      StageName: !Sub 'prod-${EnvironmentSuffix}'
       AccessLogSetting:
         DestinationArn: !GetAtt APIGatewayLogGroup.Arn
         Format: '$requestId $requestTime $httpMethod $resourcePath $status $responseLength $responseTime'
