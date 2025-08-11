@@ -21,7 +21,8 @@ export class StorageStack extends cdk.NestedStack {
 
     // S3 Bucket for web content with encryption
     this.contentBucket = new s3.Bucket(this, 'ContentBucket', {
-      bucketName: `webapp-${props.environmentSuffix}-${this.node.addr.substring(0, 8)}-${this.node.id.toLowerCase()}`,
+      // Let CloudFormation generate a unique bucket name automatically
+      // This prevents naming conflicts and ensures uniqueness
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: props.kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -29,6 +30,8 @@ export class StorageStack extends cdk.NestedStack {
       serverAccessLogsPrefix: 'access-logs/',
       enforceSSL: true,
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Make bucket deletable when stack is deleted
+      autoDeleteObjects: true, // Automatically delete objects when bucket is deleted
       lifecycleRules: [
         {
           id: 'DeleteIncompleteMultipartUploads',
@@ -69,7 +72,7 @@ export class StorageStack extends cdk.NestedStack {
     // Origin Access Control for CloudFront
     new cloudfront.CfnOriginAccessControl(this, 'OAC', {
       originAccessControlConfig: {
-        name: `webapp-oac-${props.environmentSuffix}-${this.node.addr.substring(0, 8)}-${this.node.id.toLowerCase()}`,
+        name: `webapp-oac-${props.environmentSuffix}`,
         originAccessControlOriginType: 's3',
         signingBehavior: 'always',
         signingProtocol: 'sigv4',
