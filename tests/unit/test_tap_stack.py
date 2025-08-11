@@ -74,3 +74,31 @@ def test_asg_uses_launch_template():
   tap_stack.create_compute_layer(public_subnets, ec2_sg, profile, tg)
   
   assert True
+
+@pulumi.runtime.test
+@mock_aws
+def test_alb_and_listener():
+    alb = tap_stack.create_alb()
+    assert alb.ip_address_type == "dualstack"
+    assert alb.load_balancer_type == "application"
+
+@pulumi.runtime.test
+@mock_aws
+def test_cloudwatch_dashboard():
+    dashboard = tap_stack.create_cloudwatch_dashboard()
+    assert "ALB Metrics" in dashboard.dashboard_body
+
+@pulumi.runtime.test
+@mock_aws
+def test_pulumi_outputs():
+    outputs = tap_stack.export_outputs()
+    assert "alb_dns_name" in outputs
+    assert "website_url" in outputs
+
+@pulumi.runtime.test
+@mock_aws
+def test_route53_optional():
+    domain_name = "example.com"
+    records = tap_stack.create_route53_records(domain_name)
+    assert records["a_record"].type == "A"
+    assert records["aaaa_record"].type == "AAAA"
