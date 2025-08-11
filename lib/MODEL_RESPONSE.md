@@ -1,3 +1,9 @@
+# AI Model Response
+
+Here's the Pulumi Python code the AI provided:
+
+```python
+
 import pulumi
 import pulumi_aws as aws
 
@@ -168,3 +174,4 @@ pulumi.export("vpc_id", vpc.id)
 pulumi.export("public_subnet_id", public_subnet.id)
 pulumi.export("private_subnet_id", private_subnet.id)
 pulumi.export("security_group_id", security_group.id)
+```
