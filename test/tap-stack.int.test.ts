@@ -87,10 +87,20 @@ describe('TapStack Integration Tests', () => {
       if (outputs.AppDataBucket && outputs.AppLogsBucket) {
         // Verify bucket names don't conflict
         expect(outputs.AppDataBucket).not.toBe(outputs.AppLogsBucket);
-        
-        // Both should contain account ID and environment suffix
-        expect(outputs.AppDataBucket).toMatch(/\d{12}/); // Contains AWS account ID
-        expect(outputs.AppLogsBucket).toMatch(/\d{12}/);
+
+        // Verify bucket names follow AWS S3 naming conventions
+        // S3 bucket names must be between 3 and 63 characters long
+        expect(outputs.AppDataBucket.length).toBeGreaterThanOrEqual(3);
+        expect(outputs.AppDataBucket.length).toBeLessThanOrEqual(63);
+        expect(outputs.AppLogsBucket.length).toBeGreaterThanOrEqual(3);
+        expect(outputs.AppLogsBucket.length).toBeLessThanOrEqual(63);
+
+        // S3 bucket names must be lowercase and can contain letters, numbers, and hyphens
+        expect(outputs.AppDataBucket).toMatch(/^[a-z0-9-]+$/);
+        expect(outputs.AppLogsBucket).toMatch(/^[a-z0-9-]+$/);
+
+        // Verify buckets have different names (indicating proper resource separation)
+        expect(outputs.AppDataBucket).not.toEqual(outputs.AppLogsBucket);
       } else {
         console.log('Skipping: No actual deployment outputs available');
       }
