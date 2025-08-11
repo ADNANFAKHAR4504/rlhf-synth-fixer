@@ -37,7 +37,10 @@ describe('TapStack Integration Tests', () => {
     test('should have RDS endpoint output', () => {
       if (outputs.RDSEndpoint) {
         expect(outputs.RDSEndpoint).toContain('.rds.amazonaws.com');
-        expect(outputs.RDSEndpoint).toContain(':3306');
+        // RDS endpoints don't include port in the address, just verify format
+        expect(outputs.RDSEndpoint).toMatch(
+          /^[a-zA-Z0-9-]+\.c[a-zA-Z0-9]+\.us-east-1\.rds\.amazonaws\.com$/
+        );
       } else {
         console.log('Skipping: No actual deployment outputs available');
       }
@@ -45,8 +48,17 @@ describe('TapStack Integration Tests', () => {
 
     test('should have S3 bucket outputs', () => {
       if (outputs.AppDataBucket) {
-        expect(outputs.AppDataBucket).toContain('app-data');
-        expect(outputs.AppLogsBucket).toContain('app-logs');
+        // Verify bucket names follow CloudFormation auto-generated pattern
+        // CloudFormation generates names like: stackname-logicalid-randomstring
+        expect(outputs.AppDataBucket).toMatch(/^[a-z0-9-]+$/); // Valid S3 bucket name format
+        expect(outputs.AppLogsBucket).toMatch(/^[a-z0-9-]+$/);
+
+        // Verify buckets are different
+        expect(outputs.AppDataBucket).not.toBe(outputs.AppLogsBucket);
+
+        // Verify bucket names contain the stack/logical ID patterns
+        expect(outputs.AppDataBucket.toLowerCase()).toContain('appdatabucket');
+        expect(outputs.AppLogsBucket.toLowerCase()).toContain('applogsbucket');
       } else {
         console.log('Skipping: No actual deployment outputs available');
       }
@@ -151,8 +163,9 @@ describe('TapStack Integration Tests', () => {
   describe('Monitoring and Logging', () => {
     test('should have CloudTrail configured for auditing', () => {
       if (outputs.AppLogsBucket) {
-        // CloudTrail uses the logs bucket
-        expect(outputs.AppLogsBucket).toContain('logs');
+        // CloudTrail uses the logs bucket - verify it's a valid S3 bucket name
+        expect(outputs.AppLogsBucket).toMatch(/^[a-z0-9-]+$/);
+        expect(outputs.AppLogsBucket.toLowerCase()).toContain('applogsbucket');
       } else {
         console.log('Skipping: No actual deployment outputs available');
       }
