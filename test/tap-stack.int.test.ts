@@ -114,14 +114,15 @@ describe('TapStack Integration Tests - Secure Web Application', () => {
     test('VPC is created with correct configuration', async () => {
       if (!isCI) return;
 
+      // Get VPC ID from stack outputs - use dynamic key based on environment
+      const vpcKey = Object.keys(stackOutputs).find(key => key.includes('NetworkStackVPC') && key.includes('Ref'));
+      expect(vpcKey).toBeDefined();
+      const vpcId = stackOutputs[vpcKey!];
+      expect(vpcId).toBeDefined();
+
       const vpcs = await ec2Client.send(
         new DescribeVpcsCommand({
-          Filters: [
-            {
-              Name: 'tag:aws:cloudformation:stack-name',
-              Values: [stackName],
-            },
-          ],
+          VpcIds: [vpcId!],
         })
       );
 
@@ -137,14 +138,30 @@ describe('TapStack Integration Tests - Secure Web Application', () => {
     test('Subnets are created in multiple availability zones', async () => {
       if (!isCI) return;
 
+      // Get subnet IDs from stack outputs - use dynamic keys based on environment
+      const publicSubnet1Key = Object.keys(stackOutputs).find(key => key.includes('NetworkStackVPCpublicSubnet1') && key.includes('Ref'));
+      const publicSubnet2Key = Object.keys(stackOutputs).find(key => key.includes('NetworkStackVPCpublicSubnet2') && key.includes('Ref'));
+      const privateSubnet1Key = Object.keys(stackOutputs).find(key => key.includes('NetworkStackVPCprivateSubnet1') && key.includes('Ref'));
+      const privateSubnet2Key = Object.keys(stackOutputs).find(key => key.includes('NetworkStackVPCprivateSubnet2') && key.includes('Ref'));
+
+      expect(publicSubnet1Key).toBeDefined();
+      expect(publicSubnet2Key).toBeDefined();
+      expect(privateSubnet1Key).toBeDefined();
+      expect(privateSubnet2Key).toBeDefined();
+
+      const publicSubnet1Id = stackOutputs[publicSubnet1Key!];
+      const publicSubnet2Id = stackOutputs[publicSubnet2Key!];
+      const privateSubnet1Id = stackOutputs[privateSubnet1Key!];
+      const privateSubnet2Id = stackOutputs[privateSubnet2Key!];
+
+      expect(publicSubnet1Id).toBeDefined();
+      expect(publicSubnet2Id).toBeDefined();
+      expect(privateSubnet1Id).toBeDefined();
+      expect(privateSubnet2Id).toBeDefined();
+
       const subnets = await ec2Client.send(
         new DescribeSubnetsCommand({
-          Filters: [
-            {
-              Name: 'tag:aws:cloudformation:stack-name',
-              Values: [stackName],
-            },
-          ],
+          SubnetIds: [publicSubnet1Id!, publicSubnet2Id!, privateSubnet1Id!, privateSubnet2Id!],
         })
       );
 
@@ -170,14 +187,26 @@ describe('TapStack Integration Tests - Secure Web Application', () => {
     test('Security groups are properly configured', async () => {
       if (!isCI) return;
 
+      // Get security group IDs from stack outputs - use dynamic keys based on environment
+      const loadBalancerSGKey = Object.keys(stackOutputs).find(key => key.includes('NetworkStackLoadBalancerSG') && key.includes('GroupId'));
+      const webServerSGKey = Object.keys(stackOutputs).find(key => key.includes('NetworkStackWebServerSG') && key.includes('GroupId'));
+      const databaseSGKey = Object.keys(stackOutputs).find(key => key.includes('NetworkStackDatabaseSG') && key.includes('GroupId'));
+
+      expect(loadBalancerSGKey).toBeDefined();
+      expect(webServerSGKey).toBeDefined();
+      expect(databaseSGKey).toBeDefined();
+
+      const loadBalancerSGId = stackOutputs[loadBalancerSGKey!];
+      const webServerSGId = stackOutputs[webServerSGKey!];
+      const databaseSGId = stackOutputs[databaseSGKey!];
+
+      expect(loadBalancerSGId).toBeDefined();
+      expect(webServerSGId).toBeDefined();
+      expect(databaseSGId).toBeDefined();
+
       const sgs = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
-          Filters: [
-            {
-              Name: 'tag:aws:cloudformation:stack-name',
-              Values: [stackName],
-            },
-          ],
+          GroupIds: [loadBalancerSGId!, webServerSGId!, databaseSGId!],
         })
       );
 
@@ -186,13 +215,13 @@ describe('TapStack Integration Tests - Secure Web Application', () => {
 
       // Check for different security group types
       const loadBalancerSG = sgs.SecurityGroups!.find((sg) =>
-        sg.GroupName?.includes('LoadBalancer')
+        sg.GroupId === loadBalancerSGId
       );
       const webServerSG = sgs.SecurityGroups!.find((sg) =>
-        sg.GroupName?.includes('WebServer')
+        sg.GroupId === webServerSGId
       );
       const databaseSG = sgs.SecurityGroups!.find((sg) =>
-        sg.GroupName?.includes('Database')
+        sg.GroupId === databaseSGId
       );
 
       expect(loadBalancerSG).toBeDefined();
