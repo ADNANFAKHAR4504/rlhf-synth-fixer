@@ -1,46 +1,61 @@
-## Problem Statement Refinement
+You are tasked with generating a single, fully functional AWS CloudFormation template in YAML format that provisions a production-grade infrastructure for a web application, incorporating high availability, security, and compliance requirements.
 
-**Title:**  
-Design a Security-First AWS CloudFormation YAML Template
+Environment Context:
+The existing environment is basic and must be upgraded to production-ready standards while preserving application functionality. The new infrastructure must run in the us-west-2 AWS region and follow corporate compliance rules.
 
-**Objective:**  
-Create an AWS CloudFormation YAML template (`SecurityConfig.yml`) that codifies security best practices for a cloud environment, ensuring robust access control, monitoring, and auditing as per the constraints below.
+Requirements:
 
-**Scope & Requirements:**  
+Tagging: Every AWS resource must include the tag:
 
-1. **Region Enforcement:**  
-   - All resources must be deployed in the `us-east-1` region.
+yaml
+Copy
+Edit
+Tags:
+  - Key: env
+    Value: production
+RDS: Deploy an Amazon RDS instance in Multi-AZ mode with encryption at rest enabled.
 
-2. **IAM Best Practices:**  
-   - Use IAM roles for EC2 instances; do not use IAM users for EC2 permissions.
-   - Implement the principle of least privilege for all IAM roles and policies.
-   - Enable Multi-Factor Authentication (MFA) for the root user and any IAM user with AWS Console access.
+IAM Role: Create an IAM role granting S3 read-only access, attach it to all EC2 instances.
 
-3. **S3 Security:**  
-   - All S3 buckets must have server-side encryption enabled (AES-256).
-   - S3 buckets must not be publicly accessible unless explicitly justified.
+S3 Buckets:
 
-4. **CloudTrail Auditing:**  
-   - Enable AWS CloudTrail in all regions to log API activity for auditing purposes.
+Enable versioning for data protection.
 
-5. **EC2 Network Security:**  
-   - EC2 instances must be associated with security groups that restrict SSH (port 22) access to a specific, approved IP range.
+Restrict public access (only accessible through CloudFront).
 
-6. **CloudWatch Monitoring:**  
-   - Configure CloudWatch alarms for critical resources.
-   - Ensure alarms notify a specified SNS topic.
+CloudFront: Deploy a CloudFront distribution serving content from the S3 bucket.
 
-**Expected Output:**  
-- Deliver a CloudFormation YAML template file named `SecurityConfig.yml` that implements all the above constraints.
-- The template must be deployable without errors and pass AWS CloudFormation validation.
-- All resources and configurations should strictly adhere to AWS security best practices.
+Application Load Balancer:
 
-**Notes:**  
-- Justify any public S3 bucket configuration if it is required.
-- Specify the approved IP range for SSH access.
-- Identify the SNS topic for CloudWatch alarm notifications.
+Deploy in two availability zones.
 
----
+Configure two listeners:
 
-**Goal:**  
-Provide a comprehensive, secure, and compliant starting point for cloud infrastructure as code using AWS CloudFormation.
+HTTP (port 80)
+
+HTTPS (port 443)
+
+VPC:
+
+Create a VPC with public and private subnets across two AZs.
+
+Configure routing for internet access in public subnets and NAT gateway for private subnets.
+
+CloudWatch: Create CloudWatch alarms to monitor EC2 instances’ CPU utilization and send alerts when usage exceeds a threshold.
+
+Security Groups: Restrict inbound traffic to HTTP (80), HTTPS (443), and SSH (22) only.
+
+Region: Ensure all resources are provisioned in us-west-2.
+
+Constraints:
+
+All resources must be tagged with 'env: production'.
+
+The CloudFormation template must pass cfn-lint validation and be directly deployable via AWS CLI or Console without manual edits.
+
+Use YAML syntax only.
+
+Expected Output:
+A single YAML CloudFormation template implementing the above infrastructure. Ensure modular readability with !Ref, !Sub, and parameterization where appropriate (e.g., instance types, CIDR ranges, DB username/password, certificate ARN for HTTPS).
+
+If you want, I can now turn this refined prompt into the IDEAL_RESPONSE.md format you asked about earlier so it’s directly usable in your repo. That way it fits your existing IaC compliance automation workflow.

@@ -1,134 +1,341 @@
-import * as cdk from 'aws-cdk-lib';
-import { Stack, StackProps, CfnOutput, Duration } from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+AWSTemplateFormatVersion: 2010-09-09
+Description: Production-grade infrastructure for web application
 
-export interface SecurityConfigStackProps extends StackProps {
-  approvedSshCidr: string;
-  alarmEmail: string;
-  testing?: boolean;
-}
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+  DBInstanceType:
+    Type: String
+    Default: db.t3.medium
+  EC2InstanceType:
+    Type: String
+    Default: t3.medium
+  SSHLocation:
+    Type: String
+    Description: The IP address range that can SSH into EC2 instances
+    Default: 0.0.0.0/0
+  CertificateArn:
+    Type: String
+    Description: ARN of the SSL certificate for HTTPS
 
-export class SecurityConfigStack extends Stack {
-  public readonly s3Bucket: s3.Bucket;
-  public readonly ec2Instance: ec2.Instance;
-  public readonly alarmTopic: sns.Topic;
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: env
+          Value: production
 
-  constructor(scope: Construct, id: string, props: SecurityConfigStackProps) {
-    super(scope, id, {
-      ...props,
-      env: { region: 'us-east-1' },
-    });
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCIDR, 4, 8]]
+      AvailabilityZone: us-west-2a
+      Tags:
+        - Key: env
+          Value: production
 
-    // IAM Role for EC2 (Least Privilege)
-    const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'EC2 role with least privilege',
-    });
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCIDR, 4, 8]]
+      AvailabilityZone: us-west-2b
+      Tags:
+        - Key: env
+          Value: production
 
-    ec2Role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
-    );
-    ec2Role.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ['ec2:DescribeInstances', 'ec2:DescribeTags'],
-        resources: ['*'],
-      })
-    );
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCIDR, 4, 8]]
+      AvailabilityZone: us-west-2a
+      Tags:
+        - Key: env
+          Value: production
 
-    // MFA Enforcement - Output Notice
-    new CfnOutput(this, 'MFAEnforcementNotice', {
-      value:
-        'Enable MFA for root and all IAM users with console access. CloudFormation/CDK cannot enforce this directly.',
-    });
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCIDR, 4, 8]]
+      AvailabilityZone: us-west-2b
+      Tags:
+        - Key: env
+          Value: production
 
-    // S3 Bucket - Encrypted, Not Public
-    this.s3Bucket = new s3.Bucket(this, 'SecureS3Bucket', {
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-    });
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: env
+          Value: production
 
-    // CloudTrail - Multi-Region
-    new cloudtrail.Trail(this, 'OrganizationTrail', {
-      bucket: this.s3Bucket,
-      isMultiRegionTrail: true,
-      includeGlobalServiceEvents: true,
-      enableFileValidation: true,
-    });
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
-    // VPC (use dummy for testing, default for deploy)
-    const vpc = props.testing
-      ? new ec2.Vpc(this, 'TestVpc', { maxAzs: 1 })
-      : ec2.Vpc.fromLookup(this, 'DefaultVpc', { isDefault: true });
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: env
+          Value: production
 
-    // EC2 Security Group - Restrict SSH
-    const sshSecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
-      vpc,
-      description: 'Restricts SSH access to approved IP range',
-      allowAllOutbound: true,
-    });
-    sshSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(props.approvedSshCidr),
-      ec2.Port.tcp(22),
-      'Allow SSH from approved IP range'
-    );
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
 
-    // EC2 Instance
-    this.ec2Instance = new ec2.Instance(this, 'SecureEC2Instance', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      role: ec2Role,
-      vpc,
-      securityGroup: sshSecurityGroup,
-    });
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
 
-    // SNS Topic for CloudWatch Alarms
-    this.alarmTopic = new sns.Topic(this, 'AlarmSNSTopic', {
-      displayName: 'Security Alarm Topic',
-    });
-    this.alarmTopic.addSubscription(
-      new subscriptions.EmailSubscription(props.alarmEmail)
-    );
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
 
-    // CloudWatch Alarm - EC2 CPU Utilization
-    const cpuMetric = new cloudwatch.Metric({
-      namespace: 'AWS/EC2',
-      metricName: 'CPUUtilization',
-      dimensionsMap: {
-        InstanceId: this.ec2Instance.instanceId,
-      },
-      statistic: 'Average',
-      period: Duration.minutes(5),
-    });
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
 
-    const cpuAlarm = new cloudwatch.Alarm(this, 'EC2HighCPUAlarm', {
-      metric: cpuMetric,
-      threshold: 80,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      alarmDescription: 'Alarm if EC2 instance CPU exceeds 80%',
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      actionsEnabled: true,
-    });
-    cpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.alarmTopic));
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: env
+          Value: production
 
-    // Outputs
-    new CfnOutput(this, 'S3BucketName', {
-      value: this.s3Bucket.bucketName,
-    });
-    new CfnOutput(this, 'EC2InstanceId', {
-      value: this.ec2Instance.instanceId,
-    });
-    new CfnOutput(this, 'AlarmSNSTopicArn', {
-      value: this.alarmTopic.topicArn,
-    });
-  }
-}
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: env
+          Value: production
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+      Tags:
+        - Key: env
+          Value: production
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub arn:aws:s3:::${S3Bucket}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt S3Bucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        Enabled: true
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+        Tags:
+          - Key: env
+            Value: production
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: !Ref DBInstanceType
+      Engine: postgres
+      MasterUsername: admin
+      MasterUserPassword: SecretPassword123
+      MultiAZ: true
+      StorageEncrypted: true
+      Tags:
+        - Key: env
+          Value: production
+
+  S3ReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReadOnlyAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: s3:Get*
+                Resource: "*"
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref S3ReadOnlyRole
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP, HTTPS, SSH
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+      Tags:
+        - Key: env
+          Value: production
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref SecurityGroup
+      Tags:
+        - Key: env
+          Value: production
+
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: 443
+            StatuCode: HTTP_301
+
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: 80
+      Protocol: HTTP
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /health
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref EC2InstanceType
+      ImageId: ami-0abcdef1234567890 # Replace with valid AMI ID
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: env
+          Value: production
+
+  CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmTopic
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref EC2Instance
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: admin@example.com
+          Protocol: email
