@@ -1,9 +1,8 @@
-import base64
-import json
-from typing import Any, Dict, List, Optional
-
 import pulumi
 import pulumi_aws as aws
+from typing import Dict, List, Optional, Any
+import json
+import base64
 
 
 class TapStackArgs:
@@ -229,11 +228,11 @@ class TapStack:
                 opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
             )
             
-            # Enable versioning on primary bucket
-            aws.s3.BucketVersioning(
+            # Enable versioning on primary bucket using BucketVersioningV2
+            aws.s3.BucketVersioningV2(
                 f"primary-bucket-versioning-{self.environment_suffix}",
                 bucket=primary_bucket.id,
-                versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
                     status="Enabled"
                 ),
                 opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
@@ -257,11 +256,11 @@ class TapStack:
                 opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
             )
             
-            # Enable versioning on primary bucket
-            aws.s3.BucketVersioning(
+            # Enable versioning on primary bucket using BucketVersioningV2
+            primary_versioning = aws.s3.BucketVersioningV2(
                 f"primary-bucket-versioning-{self.environment_suffix}",
                 bucket=primary_bucket.id,
-                versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
                     status="Enabled"
                 ),
                 opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
@@ -280,11 +279,11 @@ class TapStack:
                     opts=pulumi.ResourceOptions(provider=self.providers[replica_region])
                 )
                 
-                # Enable versioning on replica bucket
-                aws.s3.BucketVersioning(
+                # Enable versioning on replica bucket using BucketVersioningV2
+                replica_versioning = aws.s3.BucketVersioningV2(
                     f"replica-bucket-versioning-{self.environment_suffix}",
                     bucket=replica_bucket.id,
-                    versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                    versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
                         status="Enabled"
                     ),
                     opts=pulumi.ResourceOptions(provider=self.providers[replica_region])
@@ -357,15 +356,15 @@ class TapStack:
                 opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
             )
             
-            # Replication configuration
-            replication_config = aws.s3.BucketReplicationConfiguration(
+            # Replication configuration using BucketReplicationConfig
+            replication_config = aws.s3.BucketReplicationConfig(
                 f"bucket-replication-{self.environment_suffix}",
                 role=replication_role.arn,
                 bucket=primary_bucket.id,
-                rules=[aws.s3.BucketReplicationConfigurationRuleArgs(
+                rules=[aws.s3.BucketReplicationConfigRuleArgs(
                     id="replica-rule",
                     status="Enabled",
-                    destination=aws.s3.BucketReplicationConfigurationRuleDestinationArgs(
+                    destination=aws.s3.BucketReplicationConfigRuleDestinationArgs(
                         bucket=replica_bucket.arn,
                         storage_class="STANDARD"
                     )
