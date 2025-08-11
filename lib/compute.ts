@@ -35,6 +35,11 @@ export class Compute extends Construct {
   public readonly asgName: string;
   public readonly tgArn: string;
 
+  // Newly added props for Monitoring integration
+  public readonly scaleUpPolicyArn: string;
+  public readonly scaleDownPolicyArn: string;
+  public readonly albTargetGroupName: string;
+
   constructor(scope: Construct, id: string, props: ComputeProps) {
     super(scope, id);
 
@@ -127,6 +132,9 @@ export class Compute extends Construct {
       provider: props.provider,
     });
 
+    // Save target group name for monitoring
+    this.albTargetGroupName = tg.name;
+
     // Create HTTPS listener only if a cert was provided
     if (props.acmCertArn && props.acmCertArn.trim().length > 0) {
       new LbListener(this, 'httpsListener', {
@@ -167,7 +175,6 @@ systemctl start amazon-cloudwatch-agent
       minSize: props.minSize ?? 1,
       maxSize: props.maxSize ?? 3,
       desiredCapacity: props.desiredCapacity ?? 1,
-
       vpcZoneIdentifier: props.privateSubnets,
       launchTemplate: { id: lt.id, version: '$Latest' },
       targetGroupArns: [tg.arn],
@@ -175,7 +182,7 @@ systemctl start amazon-cloudwatch-agent
     });
 
     // Scale policies
-    new AutoscalingPolicy(this, 'scaleUp', {
+    const scaleUpPolicy = new AutoscalingPolicy(this, 'scaleUp', {
       name: name(env, 'scale-up', region),
       scalingAdjustment: 1,
       adjustmentType: 'ChangeInCapacity',
@@ -184,7 +191,7 @@ systemctl start amazon-cloudwatch-agent
       provider: props.provider,
     });
 
-    new AutoscalingPolicy(this, 'scaleDown', {
+    const scaleDownPolicy = new AutoscalingPolicy(this, 'scaleDown', {
       name: name(env, 'scale-down', region),
       scalingAdjustment: -1,
       adjustmentType: 'ChangeInCapacity',
@@ -193,6 +200,11 @@ systemctl start amazon-cloudwatch-agent
       provider: props.provider,
     });
 
+    // Save ARNs for monitoring
+    this.scaleUpPolicyArn = scaleUpPolicy.arn;
+    this.scaleDownPolicyArn = scaleDownPolicy.arn;
+
+    // Expose DNS, ASG name, TG ARN
     this.albDns = alb.dnsName;
     this.asgName = asg.name;
     this.tgArn = tg.arn;

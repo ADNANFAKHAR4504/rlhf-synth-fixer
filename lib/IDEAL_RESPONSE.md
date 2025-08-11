@@ -318,19 +318,19 @@ export class Security extends Construct {
 
 ```ts
 // lib/compute.ts
-import { Construct } from 'constructs';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
-import { Lb } from '@cdktf/provider-aws/lib/lb';
-import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
-import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
 import { DataAwsSsmParameter } from '@cdktf/provider-aws/lib/data-aws-ssm-parameter';
-import { TerraformOutput, Fn } from 'cdktf';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
+import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Fn, TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
 import { name } from './utils/naming';
 
 export interface ComputeProps {
@@ -346,14 +346,18 @@ export interface ComputeProps {
   desiredCapacity?: number;
   minSize?: number;
   maxSize?: number;
-  acmCertArn: string; // HTTPS cert
+  acmCertArn?: string;
 }
 
 export class Compute extends Construct {
   public readonly albDns: string;
-  public readonly albZoneId: string;
   public readonly asgName: string;
   public readonly tgArn: string;
+
+  // Newly added props for Monitoring integration
+  public readonly scaleUpPolicyArn: string;
+  public readonly scaleDownPolicyArn: string;
+  public readonly albTargetGroupName: string;
 
   constructor(scope: Construct, id: string, props: ComputeProps) {
     super(scope, id);
@@ -361,11 +365,18 @@ export class Compute extends Construct {
     const env = props.environment;
     const region = props.region;
 
+    // IAM Role for EC2 with SSM + CW Agent
     const ec2Role = new IamRole(this, 'ec2Role', {
       name: name(env, 'ec2-role', region),
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
-        Statement: [{ Action: 'sts:AssumeRole', Effect: 'Allow', Principal: { Service: 'ec2.amazonaws.com' } }],
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' },
+          },
+        ],
       }),
       provider: props.provider,
     });
@@ -379,11 +390,24 @@ export class Compute extends Construct {
           {
             Effect: 'Allow',
             Action: [
-              'ssm:DescribeAssociation','ssm:GetDeployablePatchSnapshotForInstance','ssm:GetDocument',
-              'ssm:DescribeDocument','ssm:GetParameters','ssm:ListAssociations','ssm:ListInstanceAssociations',
-              'ssm:UpdateInstanceInformation','ec2messages:AcknowledgeMessage','ec2messages:DeleteMessage',
-              'ec2messages:FailMessage','ec2messages:GetEndpoint','ec2messages:GetMessages','ec2messages:SendReply',
-              'cloudwatch:PutMetricData','logs:CreateLogGroup','logs:CreateLogStream','logs:PutLogEvents'
+              'ssm:DescribeAssociation',
+              'ssm:GetDeployablePatchSnapshotForInstance',
+              'ssm:GetDocument',
+              'ssm:DescribeDocument',
+              'ssm:GetParameters',
+              'ssm:ListAssociations',
+              'ssm:ListInstanceAssociations',
+              'ssm:UpdateInstanceInformation',
+              'ec2messages:AcknowledgeMessage',
+              'ec2messages:DeleteMessage',
+              'ec2messages:FailMessage',
+              'ec2messages:GetEndpoint',
+              'ec2messages:GetMessages',
+              'ec2messages:SendReply',
+              'cloudwatch:PutMetricData',
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
             ],
             Resource: '*',
           },
@@ -398,11 +422,13 @@ export class Compute extends Construct {
       provider: props.provider,
     });
 
+    // SSM Parameter for AL2023 AMI
     const ssmAmi = new DataAwsSsmParameter(this, 'amiParam', {
       name: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64',
       provider: props.provider,
     });
 
+    // ALB
     const alb = new Lb(this, 'alb', {
       name: name(env, 'alb', region),
       internal: false,
@@ -412,14 +438,21 @@ export class Compute extends Construct {
       provider: props.provider,
     });
 
+    // Target Group
     const tg = new LbTargetGroup(this, 'tg', {
       name: name(env, 'tg', region),
       port: 80,
       protocol: 'HTTP',
       vpcId: props.vpcId,
-      healthCheck: { path: '/', protocol: 'HTTP' },
+      healthCheck: {
+        path: '/',
+        protocol: 'HTTP',
+      },
       provider: props.provider,
     });
+
+    // Save target group name for monitoring
+    this.albTargetGroupName = tg.name;
 
     // Create HTTPS listener only if a cert was provided
     if (props.acmCertArn && props.acmCertArn.trim().length > 0) {
@@ -428,13 +461,16 @@ export class Compute extends Construct {
         port: 443,
         protocol: 'HTTPS',
         certificateArn: props.acmCertArn,
-        defaultAction: [{
-          type: 'forward',
-          targetGroupArn: tg.arn,
-        }],
+        defaultAction: [
+          {
+            type: 'forward',
+            targetGroupArn: tg.arn,
+          },
+        ],
       });
     }
 
+    // Launch Template with CW Agent + SSM Agent
     const userData = Fn.base64encode(`#!/bin/bash
 yum update -y
 yum install -y amazon-cloudwatch-agent
@@ -452,6 +488,7 @@ systemctl start amazon-cloudwatch-agent
       provider: props.provider,
     });
 
+    // ASG
     const asg = new AutoscalingGroup(this, 'asg', {
       name: name(env, 'asg', region),
       minSize: props.minSize ?? 1,
@@ -463,7 +500,8 @@ systemctl start amazon-cloudwatch-agent
       provider: props.provider,
     });
 
-    new AutoscalingPolicy(this, 'scaleUp', {
+    // Scale policies
+    const scaleUpPolicy = new AutoscalingPolicy(this, 'scaleUp', {
       name: name(env, 'scale-up', region),
       scalingAdjustment: 1,
       adjustmentType: 'ChangeInCapacity',
@@ -472,7 +510,7 @@ systemctl start amazon-cloudwatch-agent
       provider: props.provider,
     });
 
-    new AutoscalingPolicy(this, 'scaleDown', {
+    const scaleDownPolicy = new AutoscalingPolicy(this, 'scaleDown', {
       name: name(env, 'scale-down', region),
       scalingAdjustment: -1,
       adjustmentType: 'ChangeInCapacity',
@@ -481,8 +519,12 @@ systemctl start amazon-cloudwatch-agent
       provider: props.provider,
     });
 
+    // Save ARNs for monitoring
+    this.scaleUpPolicyArn = scaleUpPolicy.arn;
+    this.scaleDownPolicyArn = scaleDownPolicy.arn;
+
+    // Expose DNS, ASG name, TG ARN
     this.albDns = alb.dnsName;
-    this.albZoneId = alb.zoneId;
     this.asgName = asg.name;
     this.tgArn = tg.arn;
 
@@ -490,6 +532,7 @@ systemctl start amazon-cloudwatch-agent
     new TerraformOutput(this, 'asg_name', { value: this.asgName });
   }
 }
+
 ```
 
 ### `lib/database.ts`
@@ -607,7 +650,10 @@ export interface MonitoringProps {
   provider: any;
   environment: string;
   asgName: string;
-  dbIdentifier?: string; // made optional for safety
+  dbIdentifier: string;
+  scaleUpPolicyArn?: string;
+  scaleDownPolicyArn?: string;
+  albTargetGroupName?: string;
 }
 
 export class Monitoring extends Construct {
@@ -634,7 +680,7 @@ export class Monitoring extends Construct {
       retentionInDays: 30,
     });
 
-    // CPU Utilization Alarm for ASG
+    // CPU Utilization Alarm for ASG with scaling policies
     new CloudwatchMetricAlarm(this, `${id}-cpu-alarm`, {
       provider: props.provider,
       alarmName: `${props.environment}-high-cpu`,
@@ -647,11 +693,14 @@ export class Monitoring extends Construct {
       threshold: 80,
       alarmDescription: 'High CPU usage detected',
       dimensions: { AutoScalingGroupName: props.asgName },
-      alarmActions: [topic.arn],
+      alarmActions: props.scaleUpPolicyArn
+        ? [topic.arn, props.scaleUpPolicyArn]
+        : [topic.arn],
+      okActions: props.scaleDownPolicyArn ? [props.scaleDownPolicyArn] : [],
     });
 
-    // FreeStorageSpace Alarm for RDS (only if dbIdentifier is provided & not empty)
-    if (props.dbIdentifier && props.dbIdentifier.trim() !== '') {
+    // FreeStorageSpace Alarm for RDS — only if dbIdentifier is non-empty
+    if (props.dbIdentifier && props.dbIdentifier.trim().length > 0) {
       new CloudwatchMetricAlarm(this, `${id}-db-storage-alarm`, {
         provider: props.provider,
         alarmName: `${props.environment}-low-storage`,
@@ -664,6 +713,43 @@ export class Monitoring extends Construct {
         threshold: 2000000000, // 2 GB
         alarmDescription: 'Low RDS storage space detected',
         dimensions: { DBInstanceIdentifier: props.dbIdentifier },
+        alarmActions: [topic.arn],
+      });
+
+      // RDS Backup Verification Alarm
+      new CloudwatchMetricAlarm(this, `${id}-db-backup-alarm`, {
+        provider: props.provider,
+        alarmName: `${props.environment}-rds-backup-check`,
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'BackupStorageBilled',
+        namespace: 'AWS/RDS',
+        period: 86400, // 1 day
+        statistic: 'Average',
+        threshold: 1,
+        alarmDescription: 'RDS backup storage usage unexpectedly low',
+        dimensions: { DBInstanceIdentifier: props.dbIdentifier },
+        alarmActions: [topic.arn],
+      });
+    }
+
+    // ALB Target Health Alarm (optional)
+    if (
+      props.albTargetGroupName &&
+      props.albTargetGroupName.trim().length > 0
+    ) {
+      new CloudwatchMetricAlarm(this, `${id}-alb-health-alarm`, {
+        provider: props.provider,
+        alarmName: `${props.environment}-alb-unhealthy-hosts`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'UnHealthyHostCount',
+        namespace: 'AWS/ApplicationELB',
+        period: 60,
+        statistic: 'Average',
+        threshold: 0,
+        alarmDescription: 'One or more ALB targets are unhealthy',
+        dimensions: { TargetGroupName: props.albTargetGroupName },
         alarmActions: [topic.arn],
       });
     }
@@ -1029,6 +1115,9 @@ export class TapStack extends TerraformStack {
       environment: this.environment,
       asgName: primaryCompute.asgName,
       dbIdentifier: primaryDb?.dbIdentifier ?? '',
+      scaleUpPolicyArn: primaryCompute.scaleUpPolicyArn,
+      scaleDownPolicyArn: primaryCompute.scaleDownPolicyArn,
+      albTargetGroupName: primaryCompute.albTargetGroupName,
     });
 
     if (secondaryCompute) {
@@ -1037,6 +1126,9 @@ export class TapStack extends TerraformStack {
         environment: this.environment,
         asgName: secondaryCompute.asgName,
         dbIdentifier: secondaryDb?.dbIdentifier ?? '',
+        scaleUpPolicyArn: secondaryCompute.scaleUpPolicyArn,
+        scaleDownPolicyArn: secondaryCompute.scaleDownPolicyArn,
+        albTargetGroupName: secondaryCompute.albTargetGroupName,
       });
     }
 
@@ -1062,6 +1154,7 @@ export class TapStack extends TerraformStack {
     }
   }
 }
+
 ```
 
 ### `test/unit.test.ts`

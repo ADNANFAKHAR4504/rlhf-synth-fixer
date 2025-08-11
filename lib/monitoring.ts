@@ -7,7 +7,10 @@ export interface MonitoringProps {
   provider: any;
   environment: string;
   asgName: string;
-  dbIdentifier?: string; // made optional for safety
+  dbIdentifier: string;
+  scaleUpPolicyArn?: string;
+  scaleDownPolicyArn?: string;
+  albTargetGroupName?: string;
 }
 
 export class Monitoring extends Construct {
@@ -34,7 +37,7 @@ export class Monitoring extends Construct {
       retentionInDays: 30,
     });
 
-    // CPU Utilization Alarm for ASG
+    // CPU Utilization Alarm for ASG with scaling policies
     new CloudwatchMetricAlarm(this, `${id}-cpu-alarm`, {
       provider: props.provider,
       alarmName: `${props.environment}-high-cpu`,
@@ -47,11 +50,14 @@ export class Monitoring extends Construct {
       threshold: 80,
       alarmDescription: 'High CPU usage detected',
       dimensions: { AutoScalingGroupName: props.asgName },
-      alarmActions: [topic.arn],
+      alarmActions: props.scaleUpPolicyArn
+        ? [topic.arn, props.scaleUpPolicyArn]
+        : [topic.arn],
+      okActions: props.scaleDownPolicyArn ? [props.scaleDownPolicyArn] : [],
     });
 
-    // FreeStorageSpace Alarm for RDS (only if dbIdentifier is provided & not empty)
-    if (props.dbIdentifier && props.dbIdentifier.trim() !== '') {
+    // FreeStorageSpace Alarm for RDS — only if dbIdentifier is non-empty
+    if (props.dbIdentifier && props.dbIdentifier.trim().length > 0) {
       new CloudwatchMetricAlarm(this, `${id}-db-storage-alarm`, {
         provider: props.provider,
         alarmName: `${props.environment}-low-storage`,
@@ -64,6 +70,43 @@ export class Monitoring extends Construct {
         threshold: 2000000000, // 2 GB
         alarmDescription: 'Low RDS storage space detected',
         dimensions: { DBInstanceIdentifier: props.dbIdentifier },
+        alarmActions: [topic.arn],
+      });
+
+      // RDS Backup Verification Alarm
+      new CloudwatchMetricAlarm(this, `${id}-db-backup-alarm`, {
+        provider: props.provider,
+        alarmName: `${props.environment}-rds-backup-check`,
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'BackupStorageBilled',
+        namespace: 'AWS/RDS',
+        period: 86400, // 1 day
+        statistic: 'Average',
+        threshold: 1,
+        alarmDescription: 'RDS backup storage usage unexpectedly low',
+        dimensions: { DBInstanceIdentifier: props.dbIdentifier },
+        alarmActions: [topic.arn],
+      });
+    }
+
+    // ALB Target Health Alarm (optional)
+    if (
+      props.albTargetGroupName &&
+      props.albTargetGroupName.trim().length > 0
+    ) {
+      new CloudwatchMetricAlarm(this, `${id}-alb-health-alarm`, {
+        provider: props.provider,
+        alarmName: `${props.environment}-alb-unhealthy-hosts`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'UnHealthyHostCount',
+        namespace: 'AWS/ApplicationELB',
+        period: 60,
+        statistic: 'Average',
+        threshold: 0,
+        alarmDescription: 'One or more ALB targets are unhealthy',
+        dimensions: { TargetGroupName: props.albTargetGroupName },
         alarmActions: [topic.arn],
       });
     }

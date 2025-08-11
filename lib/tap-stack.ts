@@ -266,6 +266,9 @@ export class TapStack extends TerraformStack {
       environment: this.environment,
       asgName: primaryCompute.asgName,
       dbIdentifier: primaryDb?.dbIdentifier ?? '',
+      scaleUpPolicyArn: primaryCompute.scaleUpPolicyArn,
+      scaleDownPolicyArn: primaryCompute.scaleDownPolicyArn,
+      albTargetGroupName: primaryCompute.albTargetGroupName,
     });
 
     if (secondaryCompute) {
@@ -274,6 +277,9 @@ export class TapStack extends TerraformStack {
         environment: this.environment,
         asgName: secondaryCompute.asgName,
         dbIdentifier: secondaryDb?.dbIdentifier ?? '',
+        scaleUpPolicyArn: secondaryCompute.scaleUpPolicyArn,
+        scaleDownPolicyArn: secondaryCompute.scaleDownPolicyArn,
+        albTargetGroupName: secondaryCompute.albTargetGroupName,
       });
     }
 
