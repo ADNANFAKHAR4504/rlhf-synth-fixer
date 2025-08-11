@@ -87,7 +87,7 @@ describe('TapStack Security Infrastructure Tests', () => {
 
     test('should enable VPC Flow Logs for security monitoring', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/vpc/flowlogs',
+        LogGroupName: '/aws/vpc/flowlogs-test',
         RetentionInDays: 30
       });
 

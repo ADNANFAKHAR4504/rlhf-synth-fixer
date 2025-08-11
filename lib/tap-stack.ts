@@ -95,7 +95,7 @@ export class TapStack extends cdk.Stack {
      * Logs are stored in CloudWatch Logs with encryption
      */
     const flowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
-      logGroupName: '/aws/vpc/flowlogs',
+      logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: encryptionKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,

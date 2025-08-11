@@ -156,6 +156,12 @@ describe('TapStack Integration Tests', () => {
         expect(flowLog.Properties?.ResourceType).toBe('VPC');
         expect(flowLog.Properties?.TrafficType).toBe('ALL');
       });
+
+      // Verify log group has environment-specific naming
+      const vpcFlowLogGroups = Object.values(logGroups).filter(logGroup => 
+        logGroup.Properties?.LogGroupName?.includes('vpc/flowlogs')
+      );
+      expect(vpcFlowLogGroups.length).toBeGreaterThan(0);
     });
   });
 
