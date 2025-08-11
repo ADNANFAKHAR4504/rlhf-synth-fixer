@@ -12,11 +12,15 @@ import unittest
 
 import boto3
 import requests
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
   """Integration tests against live deployed Pulumi stack."""
+
+  # Test configuration constants
+  REQUEST_TIMEOUT = 30  # seconds
+  LOG_WAIT_TIME = 2     # seconds to wait for CloudWatch logs
 
   @classmethod
   def setUpClass(cls):
@@ -68,11 +72,15 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       self.skipTest("API Gateway URL not available")
 
     try:
-      response = requests.get(api_url, timeout=30)
+      response = requests.get(api_url, timeout=self.REQUEST_TIMEOUT)
       self.assertEqual(response.status_code, 200)
 
-      # Verify response is JSON
-      response_data = response.json()
+      # Verify response is JSON and has expected structure
+      try:
+        response_data = response.json()
+      except requests.JSONDecodeError:
+        self.fail(f"API response is not valid JSON: {response.text[:200]}")
+      
       self.assertIn('message', response_data)
       self.assertIn('timestamp', response_data)
       self.assertIn('environment', response_data)
@@ -89,7 +97,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     health_url = f"{api_url.rstrip('/')}/health"
 
     try:
-      response = requests.get(health_url, timeout=30)
+      response = requests.get(health_url, timeout=self.REQUEST_TIMEOUT)
       self.assertEqual(response.status_code, 200)
 
       response_data = response.json()
@@ -110,7 +118,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     info_url = f"{api_url.rstrip('/')}/info"
 
     try:
-      response = requests.get(info_url, timeout=30)
+      response = requests.get(info_url, timeout=self.REQUEST_TIMEOUT)
       self.assertEqual(response.status_code, 200)
 
       response_data = response.json()
@@ -133,7 +141,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         api_url,
         json=test_data,
         headers={'Content-Type': 'application/json'},
-        timeout=30
+        timeout=self.REQUEST_TIMEOUT
       )
       self.assertEqual(response.status_code, 200)
 
@@ -150,7 +158,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       self.skipTest("API Gateway URL not available")
 
     try:
-      response = requests.get(api_url, timeout=30)
+      response = requests.get(api_url, timeout=self.REQUEST_TIMEOUT)
       self.assertEqual(response.status_code, 200)
 
       # Check CORS headers
@@ -195,6 +203,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       self.assertIn('ENVIRONMENT', env_vars)
       self.assertIn('LOG_LEVEL', env_vars)
 
+    except NoCredentialsError:
+      self.skipTest("AWS credentials not configured for integration tests")
     except (BotoCoreError, ClientError, KeyError) as e:
       self.fail(f"Failed to access Lambda function: {e}")
 
@@ -222,6 +232,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       # Check retention policy (should be 14 days)
       self.assertEqual(log_group.get('retentionInDays', 14), 14)
 
+    except NoCredentialsError:
+      self.skipTest("AWS credentials not configured for integration tests")
     except (BotoCoreError, ClientError, KeyError) as e:
       self.fail(f"Failed to access CloudWatch log group: {e}")
 
@@ -239,7 +251,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       unique_id = f"test-{int(time.time())}"
       test_url = f"{api_url.rstrip('/')}?test_id={unique_id}"
 
-      response = requests.get(test_url, timeout=30)
+      response = requests.get(test_url, timeout=self.REQUEST_TIMEOUT)
       self.assertEqual(response.status_code, 200)
 
       response_data = response.json()
@@ -258,39 +270,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       self.assertIn('memory_limit', lambda_info)
 
       # Wait a bit for logs to be written
-      time.sleep(2)
+      time.sleep(self.LOG_WAIT_TIME)
 
-      # Check CloudWatch logs for the request
-      logs_client = boto3.client('logs', region_name=self.aws_region)
-
-      # Get recent log streams
-      streams_response = logs_client.describe_log_streams(
-        logGroupName=log_group_name,
-        orderBy='LastEventTime',
-        descending=True,
-        limit=5
-      )
-
-      if streams_response['logStreams']:
-        # Look for our request ID in recent logs
-        # Check latest 2 streams
-        for stream in streams_response['logStreams'][:2]:
-          events_response = logs_client.get_log_events(
-            logGroupName=log_group_name,
-            logStreamName=stream['logStreamName'],
-            limit=50,
-            startFromHead=False
-          )
-
-          # Check if any log event contains our unique ID
-          for event in events_response['events']:
-            if unique_id in event['message']:
-              # Found our request in the logs, test passes
-              return
-
-        # If we can't find the log, it's not necessarily a failure
-        # as logs might take time to appear or might be in a different stream
-        print(f"Warning: Could not find log entry for request {unique_id}")
+      # Check CloudWatch logs for the request (optional verification)
+      self._check_cloudwatch_logs(log_group_name, unique_id)
 
     except (requests.RequestException, requests.JSONDecodeError,
             BotoCoreError, ClientError, KeyError) as e:
@@ -316,7 +299,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         test_url = f"{api_url.rstrip('/')}{path}"
 
         try:
-          response = requests.get(test_url, timeout=30)
+          response = requests.get(test_url, timeout=self.REQUEST_TIMEOUT)
           self.assertEqual(response.status_code, 200)
 
           response_data = response.json()
@@ -340,7 +323,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     }
 
     try:
-      response = requests.get(api_url, params=test_params, timeout=30)
+      response = requests.get(api_url, params=test_params, timeout=self.REQUEST_TIMEOUT)
       self.assertEqual(response.status_code, 200)
 
       response_data = response.json()
@@ -352,6 +335,41 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     except (requests.RequestException, requests.JSONDecodeError, KeyError) as e:
       self.fail(f"Failed to test query parameters: {e}")
+
+  def _check_cloudwatch_logs(self, log_group_name, unique_id):
+    """Helper method to check CloudWatch logs for test request."""
+    try:
+      logs_client = boto3.client('logs', region_name=self.aws_region)
+
+      # Get recent log streams
+      streams_response = logs_client.describe_log_streams(
+        logGroupName=log_group_name,
+        orderBy='LastEventTime',
+        descending=True,
+        limit=5
+      )
+
+      if streams_response['logStreams']:
+        # Look for our request ID in recent logs
+        for stream in streams_response['logStreams'][:2]:
+          events_response = logs_client.get_log_events(
+            logGroupName=log_group_name,
+            logStreamName=stream['logStreamName'],
+            limit=50,
+            startFromHead=False
+          )
+
+          # Check if any log event contains our unique ID
+          for event in events_response['events']:
+            if unique_id in event['message']:
+              # Found our request in the logs
+              return
+
+        # Log not found - not necessarily a failure
+        print(f"Warning: Could not find log entry for request {unique_id}")
+
+    except NoCredentialsError:
+      print("Warning: AWS credentials not available for CloudWatch log verification")
 
 
 class TestTapStackResourceTags(unittest.TestCase):
@@ -406,6 +424,8 @@ class TestTapStackResourceTags(unittest.TestCase):
       self.assertIn('managed-by', tags)
       self.assertEqual(tags['managed-by'], 'pulumi')
 
+    except NoCredentialsError:
+      self.skipTest("AWS credentials not configured for integration tests")
     except (BotoCoreError, ClientError, KeyError) as e:
       self.fail(f"Failed to check Lambda function tags: {e}")
 
@@ -428,6 +448,8 @@ class TestTapStackResourceTags(unittest.TestCase):
       self.assertIn('managed-by', tags)
       self.assertEqual(tags['managed-by'], 'pulumi')
 
+    except NoCredentialsError:
+      self.skipTest("AWS credentials not configured for integration tests")
     except (BotoCoreError, ClientError, KeyError) as e:
       self.fail(f"Failed to check API Gateway tags: {e}")
 
