@@ -8,8 +8,8 @@ It integrates KMS, IAM, S3, Logging, and VPC components using modular design
 from MODEL_RESPONSE.md and adheres strictly to constraints in PROMPT.md.
 """
 import os
-
 import pulumi
+import subprocess
 from lib.modules.iam import IAMManager
 from lib.modules.kms import KMSManager
 from lib.modules.logging import LoggingManager
@@ -60,11 +60,18 @@ class TapStack(pulumi.ComponentResource):
     project_name = f"aws-nova-model-breaking-{self.environment_suffix}"
     environment = os.getenv("ENVIRONMENT_SUFFIX")
 
-    # # Validate required environment variables
-    # required_vars = ["AWS_ACCOUNT_ID"]
-    # for var in required_vars:
-    #   if not os.getenv(var):
-    #     raise ValueError(f"Environment variable {var} is required.")
+    # These should come from your environment variables in the pipeline
+    PULUMI_ORG = os.environ.get("PULUMI_ORG", "my-org")
+    ENVIRONMENT_SUFFIX = os.environ.get("ENVIRONMENT_SUFFIX", "-dev")
+    region = "us-west-1"
+
+    stack_name = f"{PULUMI_ORG}/TapStack/TapStack{ENVIRONMENT_SUFFIX}"
+
+    # Set aws:region for the stack
+    subprocess.run(
+        ["pulumi", "config", "set", "aws:region", region, "--stack", stack_name, "--non-interactive"],
+        check=True
+    )
 
     # === Module Initializations ===
     kms_manager = KMSManager(project_name, environment)

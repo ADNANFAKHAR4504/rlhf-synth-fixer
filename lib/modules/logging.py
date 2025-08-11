@@ -74,8 +74,7 @@ class LoggingManager:
     """Create VPC Flow Logs."""
 
     flow_log = aws.ec2.FlowLog(
-        f"{
-            self.project_name}-vpc-flow-log",
+        f"{self.project_name}-vpc-flow-log",
         vpc_id=vpc_id,
         traffic_type="ALL",
         log_destination_type="cloud-watch-logs",
@@ -83,8 +82,7 @@ class LoggingManager:
         iam_role_arn=flow_logs_role.arn,
         log_format="${srcaddr} ${dstaddr} ${dstport} ${protocol} ${packets} ${bytes} ${action}",
         tags={
-            "Name": f"{
-                self.project_name}-vpc-flow-log",
+            "Name": f"{self.project_name}-vpc-flow-log",
             "Environment": self.environment,
             "Purpose": "network-traffic-logging",
             "ManagedBy": "pulumi"})
