@@ -9,10 +9,12 @@ Description: "Secure infrastructure with IAM roles, CloudTrail, VPC subnets, S3 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: "Environment suffix to avoid resource name conflicts"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
     Default: "dev"
-    MinLength: 1
+    MinLength: 2
     MaxLength: 10
+    AllowedPattern: "^[a-zA-Z0-9-]+$"
+    ConstraintDescription: "Must be 2-10 characters, alphanumeric and hyphens only"
 
   ExistingVPCId:
     Type: AWS::EC2::VPC::Id
@@ -84,6 +86,8 @@ Resources:
           Value: !Sub "my-app-s3-kms-key-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "S3 bucket encryption"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -115,6 +119,8 @@ Resources:
           Value: !Sub "my-app-bucket-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "Application data storage"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # S3 Bucket Policy for application bucket
   AppS3BucketPolicy:
@@ -159,6 +165,8 @@ Resources:
           Value: !Sub "my-app-cloudtrail-logs-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "CloudTrail log storage"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # S3 Bucket Policy for CloudTrail logs
   CloudTrailLogsBucketPolicy:
@@ -214,6 +222,8 @@ Resources:
           Value: !Sub "my-app-cloudtrail-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "Compliance logging"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # IAM Role for S3 read access
   S3ReadOnlyRole:
@@ -234,6 +244,8 @@ Resources:
           Value: !Sub "my-app-Role-ReadS3-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "S3 read-only access"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # IAM Policy for S3 read-only access
   S3ReadOnlyPolicy:
@@ -278,6 +290,8 @@ Resources:
           Value: !Sub "my-app-Subnet-A-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "Application subnet"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # Subnet 2
   SubnetB:
@@ -291,6 +305,8 @@ Resources:
           Value: !Sub "my-app-Subnet-B-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "Application subnet"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # Security Group for EC2 instances
   EC2SecurityGroup:
@@ -310,6 +326,8 @@ Resources:
           Value: !Sub "my-app-EC2SecurityGroup-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "EC2 instance security"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # Sample EC2 Instance with detailed monitoring
   SampleEC2Instance:
@@ -328,6 +346,8 @@ Resources:
           Value: !Sub "my-app-SampleEC2-${EnvironmentSuffix}"
         - Key: Purpose
           Value: "Sample instance with monitoring"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
 Conditions:
   CreateS3BucketCondition: !Equals [!Ref CreateS3Bucket, "true"]
@@ -382,50 +402,5 @@ Outputs:
 
   DeploymentCommand:
     Description: "Command to deploy this stack"
-    Value: !Sub "aws cloudformation deploy --template-file template.yaml --stack-name my-app-secure-infra --parameter-overrides ExistingVPCId=${ExistingVPCId} EnvironmentSuffix=${EnvironmentSuffix} --capabilities CAPABILITY_NAMED_IAM"
+    Value: !Sub "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name my-app-secure-infra-${EnvironmentSuffix} --parameter-overrides EnvironmentSuffix=${EnvironmentSuffix} ExistingVPCId=vpc-0052878ec128b229f --capabilities CAPABILITY_NAMED_IAM"
 ```
-
-## Key Improvements in Ideal Response
-
-### 1. Environment Suffix Support
-- **Added EnvironmentSuffix parameter**: Required parameter to prevent resource name conflicts
-- **Updated all resource names**: All resource names now include `${EnvironmentSuffix}` for safe multi-environment deployments
-- **Enhanced bucket names**: S3 buckets include environment suffix to avoid conflicts
-- **IAM resource naming**: Roles, policies, and instance profiles include environment suffix
-
-### 2. Production-Ready Features
-- **Parameter validation**: EnvironmentSuffix has MinLength and MaxLength constraints
-- **Comprehensive tagging**: All resources include environment-specific tags
-- **Updated deployment command**: Includes EnvironmentSuffix parameter in deployment instructions
-
-### 3. Security Enhancements
-- **Environment isolation**: Resources are properly isolated by environment
-- **Consistent naming**: All resources follow the `my-app-*-${EnvironmentSuffix}` convention
-- **Updated resource ARNs**: IAM policy resources reference environment-specific bucket names
-
-### 4. Operational Excellence
-- **Safe deployments**: Template can be deployed multiple times with different suffixes
-- **Clear resource identification**: Environment suffix makes resource ownership clear
-- **Deployment flexibility**: Supports dev, staging, prod, and feature branch deployments
-
-## Compliance Verification
-
-- ✅ IAM role with minimal S3 read-only permissions
-- ✅ CloudTrail enabled across all regions with global service events  
-- ✅ VPC with 2+ subnets in different AZs
-- ✅ S3 bucket encrypted with KMS
-- ✅ EC2 instances with detailed monitoring enabled
-- ✅ All resources follow my-app-* naming convention with environment suffix
-- ✅ Security controls: tags, encryption, least-privilege policies
-- ✅ **Environment isolation for safe multi-environment deployments**
-
-## Security Features Implemented
-
-1. **Least Privilege IAM**: Minimal S3 permissions (GetObject, ListBucket, GetBucketLocation)
-2. **KMS Encryption**: All S3 buckets encrypted with customer-managed KMS key with rotation enabled
-3. **Multi-Region CloudTrail**: Compliance logging across all regions with global service events
-4. **Network Security**: Subnets in different AZs with proper security groups
-5. **Detailed Monitoring**: 1-minute EC2 metrics collection enabled
-6. **TLS Enforcement**: S3 buckets deny non-SSL requests
-7. **Public Access Block**: S3 buckets block all public access configurations
-8. **Environment Isolation**: Comprehensive environment suffix support prevents resource conflicts

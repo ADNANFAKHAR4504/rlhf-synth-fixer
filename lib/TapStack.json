@@ -4,10 +4,12 @@
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
-            "Description": "Environment suffix to avoid resource name conflicts",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
             "Default": "dev",
-            "MinLength": 1,
-            "MaxLength": 10
+            "MinLength": 2,
+            "MaxLength": 10,
+            "AllowedPattern": "^[a-zA-Z0-9-]+$",
+            "ConstraintDescription": "Must be 2-10 characters, alphanumeric and hyphens only"
         },
         "ExistingVPCId": {
             "Type": "AWS::EC2::VPC::Id",
@@ -105,6 +107,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "S3 bucket encryption"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -159,6 +167,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "Application data storage"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -234,6 +248,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "CloudTrail log storage"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -330,6 +350,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "Compliance logging"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -367,6 +393,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "S3 read-only access"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -449,6 +481,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "Application subnet"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -478,6 +516,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "Application subnet"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -511,6 +555,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "EC2 instance security"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -545,6 +595,12 @@
                     {
                         "Key": "Purpose",
                         "Value": "Sample instance with monitoring"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -655,7 +711,7 @@
         "DeploymentCommand": {
             "Description": "Command to deploy this stack",
             "Value": {
-                "Fn::Sub": "aws cloudformation deploy --template-file template.yaml --stack-name my-app-secure-infra --parameter-overrides ExistingVPCId=${ExistingVPCId} --capabilities CAPABILITY_NAMED_IAM"
+                "Fn::Sub": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name my-app-secure-infra-${EnvironmentSuffix} --parameter-overrides EnvironmentSuffix=${EnvironmentSuffix} ExistingVPCId=vpc-0052878ec128b229f --capabilities CAPABILITY_NAMED_IAM"
             }
         }
     }
