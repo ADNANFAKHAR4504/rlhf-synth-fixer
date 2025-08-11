@@ -462,6 +462,7 @@ Resources:
 
   PlaceholderLambda:
     Type: AWS::Lambda::Function
+    DependsOn: WebAppECRRepository
     Properties:
       FunctionName: WebApp-Placeholder-Function
       Role: !GetAtt LambdaExecutionRole.Arn
