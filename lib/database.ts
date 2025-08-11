@@ -87,7 +87,7 @@ export class Database extends Construct {
       dbSubnetGroupName: subnetGroup.name,
       vpcSecurityGroupIds: [props.rdsSgId],
 
-      username: 'admin',
+      username: 'TapStackpr824',
       password: dbPassword.result,
 
       multiAz: props.multiAz ?? env === 'prod',
