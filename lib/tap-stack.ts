@@ -61,7 +61,8 @@ export class TapStack extends TerraformStack {
     // 3. Instantiate the VPC Module
     const network = new VpcModule(this, 'ProductionVpc', {
       vpcCidr: '10.0.0.0/16',
-      availabilityZones: availabilityZones.names,
+      // availabilityZones: availabilityZones.names,
+      availabilityZones: availabilityZones.names.slice(0, 2),
     });
 
     // 4. Essential Outputs
