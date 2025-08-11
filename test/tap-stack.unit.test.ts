@@ -23,24 +23,24 @@ describe('TapStack Template Tests', () => {
   // (They’ll still run as they do now)
 
   // 🔹 NEW: VPC Tests
-  test('VPC exists with expected CIDR block', () => {
+  test('VPC uses VpcCidr parameter for CIDR block', () => {
     template.hasResourceProperties('AWS::EC2::VPC', {
-      CidrBlock: '10.0.0.0/16',
+      CidrBlock: { Ref: 'VpcCidr' },
     });
   });
-
+  
+  // Check subnet exists
   test('At least two subnets exist', () => {
     const subnets = template.findResources('AWS::EC2::Subnet');
     expect(Object.keys(subnets).length).toBeGreaterThanOrEqual(2);
   });
 
   // 🔹 NEW: EC2 Tests
-  test('EC2 instance exists and is t2.micro', () => {
+  test('EC2 instance uses InstanceType parameter', () => {
     template.hasResourceProperties('AWS::EC2::Instance', {
-      InstanceType: 't2.micro',
+      InstanceType: { Ref: 'InstanceType' },
     });
   });
-
   // 🔹 NEW: RDS Tests
   test('RDS DBInstance exists and uses MySQL engine', () => {
     template.hasResourceProperties('AWS::RDS::DBInstance', {
