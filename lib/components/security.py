@@ -167,7 +167,7 @@ class SecurityComponent(pulumi.ComponentResource):
         )
         
         # Lambda execution policy with minimal required permissions
-        lambda_policy = {
+        json_lambda_policy = {
             "Version": "2012-10-17",
             "Statement": [
                 # CloudWatch Logs permissions
@@ -230,7 +230,7 @@ class SecurityComponent(pulumi.ComponentResource):
         self.lambda_policy = aws.iam.RolePolicy(
             f"{name}-lambda-policy",
             role=self.lambda_execution_role.id,
-            policy=json.dumps(lambda_policy),
+            policy=json.dumps(json_lambda_policy),
             opts=pulumi.ResourceOptions(parent=self)
         )
         
