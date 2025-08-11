@@ -1,3 +1,8 @@
+<<<<<<< HEAD
+.coverage
+cov.json
+node_modules/
+=======
 # Compiled JavaScript files (but keep config files)
 /bin/*.js
 /lib/*.js
@@ -72,6 +77,7 @@ venv.bak/
 .coverage
 coverage.xml
 cov.json
+coverage
 
 cfn-outputs/*
 
@@ -84,6 +90,8 @@ cdktf.out
 cdktf.log
 *terraform.*.tfstate*
 .genpackage-lock.json
+.gen
+.gen/providers/*
 
 
 __pycache__/
@@ -93,3 +101,9 @@ cdk.out/
 
 tasks-status.md
 worktree/
+bin/.terraform.lock.hcl
+bin/tfplan
+
+
+build
+>>>>>>> 76d494e9c4a018680114ed2ed2896ea888b416ca
