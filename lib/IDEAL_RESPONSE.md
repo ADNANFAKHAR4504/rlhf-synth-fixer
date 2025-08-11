@@ -1,3 +1,9 @@
+# Healthcare Infrastructure CloudFormation Template - IDEAL RESPONSE
+
+Below is the ideal HIPAA-compliant AWS CloudFormation template for a healthcare application:
+
+```yaml
+# healthcare_infra.yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   TAP Stack - Healthcare Application Infrastructure CloudFormation Template
@@ -94,7 +100,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   HealthcareKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -118,7 +124,25 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
+
+  # API Secret for healthcare application
+  ApplicationAPISecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ApplicationName}/${EnvironmentSuffix}/api/keys"
+      Description: "API keys and tokens for healthcare application"
+      SecretString: |
+        {
+          "api_key": "placeholder-will-be-updated-post-deployment",
+          "jwt_secret": "placeholder-will-be-updated-post-deployment"
+        }
+      KmsKeyId: !Ref HealthcareKMSKey
+      Tags:
+        - Key: Project
+          Value: HealthApp
+        - Key: Environment
+          Value: Production
 
   # VPC and subnets
   HealthcareVPC:
@@ -133,7 +157,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -147,7 +171,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -161,7 +185,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -176,7 +200,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -191,7 +215,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -202,7 +226,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -220,7 +244,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -245,9 +269,10 @@ Resources:
   # S3 bucket with KMS encryption
   HealthcareDataBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
+      BucketName: !Sub '${ApplicationName}-patient-data-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -261,20 +286,24 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref HealthcareLogsBucket
+        LogFilePrefix: 'patient-data-access-logs/'
       Tags:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
         - Key: DataClassification
           Value: PHI-Sensitive
 
   # Log bucket for S3 access logs with encryption
   HealthcareLogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
+      BucketName: !Sub '${ApplicationName}-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -290,7 +319,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
         - Key: Purpose
           Value: Audit-Logs
 
@@ -306,7 +335,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   # Security Group for RDS
   DatabaseSecurityGroup:
@@ -326,13 +355,13 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   # RDS Instance
   HealthcareDatabase:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub "${ApplicationName}-${EnvironmentSuffix}-database"
       DBInstanceClass: !Ref DatabaseInstanceClass
@@ -354,12 +383,12 @@ Resources:
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
       EnablePerformanceInsights: true
       PerformanceInsightsKMSKeyId: !Ref HealthcareKMSKey
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
         - Key: DataClassification
           Value: PHI-Sensitive
 
@@ -386,7 +415,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   # Load Balancer Security Group
   LoadBalancerSecurityGroup:
@@ -411,7 +440,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   # IAM Role for RDS monitoring
   RDSEnhancedMonitoringRole:
@@ -431,7 +460,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   # IAM Role for application EC2 instances
   ApplicationRole:
@@ -465,6 +494,7 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Resource:
                   - !Ref DatabaseSecret
+                  - !Ref ApplicationAPISecret
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -474,7 +504,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
   ApplicationInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -494,7 +524,7 @@ Resources:
         - Key: Project
           Value: HealthApp
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: Production
 
 Outputs:
 
@@ -546,6 +576,12 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-Database-Secret-ARN"
 
+  ApplicationAPISecretArn:
+    Description: "ARN of the API secret in Secrets Manager"
+    Value: !Ref ApplicationAPISecret
+    Export:
+      Name: !Sub "${AWS::StackName}-API-Secret-ARN"
+
   ApplicationRoleArn:
     Description: "ARN of the application IAM role"
     Value: !GetAtt ApplicationRole.Arn
@@ -563,3 +599,4 @@ Outputs:
     Value: !Ref LoadBalancerSecurityGroup
     Export:
       Name: !Sub "${AWS::StackName}-LoadBalancer-SG-ID"
+```

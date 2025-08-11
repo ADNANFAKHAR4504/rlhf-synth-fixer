@@ -64,6 +64,7 @@ describe('TapStack - Live Integration Tests', () => {
       'PatientDataBucket',
       'LogsBucket',
       'DatabaseSecretArn',
+      'ApplicationAPISecretArn',
       'ApplicationRoleArn',
       'ApplicationSecurityGroupId',
       'LoadBalancerSecurityGroupId',
@@ -236,7 +237,7 @@ describe('TapStack - Live Integration Tests', () => {
     expect(found.kmsKeyId).toBeDefined();
   });
 
-  it('validates Secrets Manager secret contains username and password', async () => {
+  it('validates Database Secret contains username and password', async () => {
     if (!outputs) return; // skip
     const arn = outputs['DatabaseSecretArn'];
     const sec = await secrets.send(new GetSecretValueCommand({ SecretId: arn }));
@@ -244,6 +245,16 @@ describe('TapStack - Live Integration Tests', () => {
     const data = JSON.parse(payload);
     expect(typeof data.username).toBe('string');
     expect(typeof data.password).toBe('string');
+  });
+
+  it('validates Application API Secret contains api_key and jwt_secret', async () => {
+    if (!outputs) return; // skip
+    const arn = outputs['ApplicationAPISecretArn'];
+    const sec = await secrets.send(new GetSecretValueCommand({ SecretId: arn }));
+    const payload = sec.SecretString || '';
+    const data = JSON.parse(payload);
+    expect(typeof data.api_key).toBe('string');
+    expect(typeof data.jwt_secret).toBe('string');
   });
 
   it('validates IAM ApplicationRole inline policy contains expected statements', async () => {

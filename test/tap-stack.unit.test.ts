@@ -65,6 +65,12 @@ describe('TapStack CloudFormation Template - Unit Tests (YAML validation)', () =
       expectMatch(/DatabaseSecret:[\s\S]*KmsKeyId:\s*!Ref\s*HealthcareKMSKey/);
       expectMatch(/GenerateSecretString:[\s\S]*GenerateStringKey:\s*password[\s\S]*PasswordLength:\s*32/);
     });
+    test('API Secret with KMS', () => {
+      expectMatch(/ApplicationAPISecret:[\s\S]*Type:\s*AWS::SecretsManager::Secret/);
+      expectMatch(/ApplicationAPISecret:[\s\S]*KmsKeyId:\s*!Ref\s*HealthcareKMSKey/);
+      expectMatch(/ApplicationAPISecret:[\s\S]*SecretString:[\s\S]*api_key/);
+      expectMatch(/ApplicationAPISecret:[\s\S]*SecretString:[\s\S]*jwt_secret/);
+    });
   });
 
   describe('Networking', () => {
@@ -86,18 +92,23 @@ describe('TapStack CloudFormation Template - Unit Tests (YAML validation)', () =
   });
 
   describe('S3 Buckets', () => {
-    test('Data bucket encryption, PAB, versioning, tags', () => {
+    test('Data bucket encryption, PAB, versioning, logging, tags', () => {
       expectMatch(/HealthcareDataBucket:[\s\S]*Type:\s*AWS::S3::Bucket/);
+      expectMatch(/HealthcareDataBucket:[\s\S]*DeletionPolicy:\s*Delete/);
+      expectMatch(/HealthcareDataBucket:[\s\S]*BucketName:\s*!Sub/);
       expectMatch(/HealthcareDataBucket:[\s\S]*SSEAlgorithm:\s*aws:kms/);
       expectMatch(/HealthcareDataBucket:[\s\S]*KMSMasterKeyID:\s*!Ref\s*HealthcareKMSKey/);
       expectMatch(/HealthcareDataBucket:[\s\S]*BucketKeyEnabled:\s*true/);
       expectMatch(/HealthcareDataBucket:[\s\S]*PublicAccessBlockConfiguration:[\s\S]*BlockPublicAcls:\s*true/);
       expectMatch(/HealthcareDataBucket:[\s\S]*RestrictPublicBuckets:\s*true/);
       expectMatch(/HealthcareDataBucket:[\s\S]*VersioningConfiguration:[\s\S]*Status:\s*Enabled/);
+      expectMatch(/HealthcareDataBucket:[\s\S]*LoggingConfiguration:[\s\S]*DestinationBucketName:\s*!Ref\s*HealthcareLogsBucket/);
       expectMatch(/HealthcareDataBucket:[\s\S]*DataClassification[\s\S]*PHI-Sensitive/);
     });
     test('Logs bucket encryption and PAB', () => {
       expectMatch(/HealthcareLogsBucket:[\s\S]*Type:\s*AWS::S3::Bucket/);
+      expectMatch(/HealthcareLogsBucket:[\s\S]*DeletionPolicy:\s*Delete/);
+      expectMatch(/HealthcareLogsBucket:[\s\S]*BucketName:\s*!Sub/);
       expectMatch(/HealthcareLogsBucket:[\s\S]*SSEAlgorithm:\s*aws:kms/);
       expectMatch(/HealthcareLogsBucket:[\s\S]*KMSMasterKeyID:\s*!Ref\s*HealthcareKMSKey/);
       expectMatch(/HealthcareLogsBucket:[\s\S]*PublicAccessBlockConfiguration:[\s\S]*BlockPublicAcls:\s*true/);
@@ -112,8 +123,8 @@ describe('TapStack CloudFormation Template - Unit Tests (YAML validation)', () =
     });
     test('DB instance config, encryption, PI, tags', () => {
       expectMatch(/HealthcareDatabase:[\s\S]*Type:\s*AWS::RDS::DBInstance/);
-      expectMatch(/HealthcareDatabase:[\s\S]*DeletionPolicy:\s*Snapshot/);
-      expectMatch(/UpdateReplacePolicy:\s*Snapshot/);
+      expectMatch(/HealthcareDatabase:[\s\S]*DeletionPolicy:\s*Delete/);
+      expectMatch(/UpdateReplacePolicy:\s*Delete/);
       expectMatch(/Engine:\s*postgres/);
       expectMatch(/EngineVersion:\s*13\.21/);
       expectMatch(/AllocatedStorage:\s*100/);
@@ -130,7 +141,7 @@ describe('TapStack CloudFormation Template - Unit Tests (YAML validation)', () =
       expectMatch(/MonitoringInterval:\s*60/);
       expectMatch(/EnablePerformanceInsights:\s*true/);
       expectMatch(/PerformanceInsightsKMSKeyId:\s*!Ref\s*HealthcareKMSKey/);
-      expectMatch(/DeletionProtection:\s*true/);
+      expectMatch(/DeletionProtection:\s*false/);
       expectMatch(/DataClassification[\s\S]*PHI-Sensitive/);
     });
   });
@@ -186,14 +197,65 @@ describe('TapStack CloudFormation Template - Unit Tests (YAML validation)', () =
       expectMatch(/KMSKeyId:[\s\S]*Export:[\s\S]*Name:\s*!Sub\s*"\$\{AWS::StackName}-KMS-Key-ID"/);
       expectMatch(/PatientDataBucket:[\s\S]*Value:\s*!Ref\s*HealthcareDataBucket/);
       expectMatch(/PatientDataBucket:[\s\S]*Export:[\s\S]*Name:\s*!Sub\s*"\$\{AWS::StackName}-Patient-Data-Bucket"/);
+      expectMatch(/LogsBucket:[\s\S]*Value:\s*!Ref\s*HealthcareLogsBucket/);
+      expectMatch(/LogsBucket:[\s\S]*Export:[\s\S]*Name:\s*!Sub\s*"\$\{AWS::StackName}-Logs-Bucket"/);
       expectMatch(/DatabaseSecretArn:[\s\S]*Value:\s*!Ref\s*DatabaseSecret/);
       expectMatch(/DatabaseSecretArn:[\s\S]*Export:[\s\S]*Name:\s*!Sub\s*"\$\{AWS::StackName}-Database-Secret-ARN"/);
+      expectMatch(/ApplicationAPISecretArn:[\s\S]*Value:\s*!Ref\s*ApplicationAPISecret/);
+      expectMatch(/ApplicationAPISecretArn:[\s\S]*Export:[\s\S]*Name:\s*!Sub\s*"\$\{AWS::StackName}-API-Secret-ARN"/);
       expectMatch(/ApplicationRoleArn:[\s\S]*Value:\s*!GetAtt\s*ApplicationRole\.Arn/);
       expectMatch(/ApplicationRoleArn:[\s\S]*Export:[\s\S]*Name:\s*!Sub\s*"\$\{AWS::StackName}-Application-Role-ARN"/);
       expectMatch(/ApplicationSecurityGroupId:[\s\S]*Value:\s*!Ref\s*ApplicationSecurityGroup/);
       expectMatch(/ApplicationSecurityGroupId:[\s\S]*Export:[\s\S]*Name:\s*!Sub\s*"\$\{AWS::StackName}-Application-SG-ID"/);
       expectMatch(/LoadBalancerSecurityGroupId:[\s\S]*Value:\s*!Ref\s*LoadBalancerSecurityGroup/);
       expectMatch(/LoadBalancerSecurityGroupId:[\s\S]*Export:[\s\S]*Name:\s*!Sub\s*"\$\{AWS::StackName}-LoadBalancer-SG-ID"/);
+    });
+  });
+
+  describe('HIPAA Compliance Requirements', () => {
+    test('All resources use KMS encryption', () => {
+      // S3 buckets
+      expectMatch(/HealthcareDataBucket:[\s\S]*KMSMasterKeyID:\s*!Ref\s*HealthcareKMSKey/);
+      expectMatch(/HealthcareLogsBucket:[\s\S]*KMSMasterKeyID:\s*!Ref\s*HealthcareKMSKey/);
+      // RDS
+      expectMatch(/HealthcareDatabase:[\s\S]*StorageEncrypted:\s*true/);
+      expectMatch(/HealthcareDatabase:[\s\S]*KmsKeyId:\s*!Ref\s*HealthcareKMSKey/);
+      // Secrets
+      expectMatch(/DatabaseSecret:[\s\S]*KmsKeyId:\s*!Ref\s*HealthcareKMSKey/);
+      expectMatch(/ApplicationAPISecret:[\s\S]*KmsKeyId:\s*!Ref\s*HealthcareKMSKey/);
+      // CloudWatch Logs
+      expectMatch(/ApplicationLogGroup:[\s\S]*KmsKeyId:\s*!GetAtt\s*HealthcareKMSKey\.Arn/);
+    });
+    test('All sensitive data stored in Secrets Manager', () => {
+      expectMatch(/DatabaseSecret:[\s\S]*Type:\s*AWS::SecretsManager::Secret/);
+      expectMatch(/ApplicationAPISecret:[\s\S]*Type:\s*AWS::SecretsManager::Secret/);
+      expectMatch(/MasterUserPassword:\s*!Sub\s*"\{\{resolve:secretsmanager/);
+    });
+    test('All resources tagged with required tags', () => {
+      // Check Project tag
+      expectMatch(/Tags:[\s\S]*-\s*Key:\s*Project[\s\S]*Value:\s*HealthApp/);
+      // Check Environment tag is Production (not EnvironmentSuffix)
+      expectMatch(/Tags:[\s\S]*-\s*Key:\s*Environment[\s\S]*Value:\s*Production/);
+    });
+    test('No Retain policies (resources must be destroyable)', () => {
+      // Should not find any Retain policies
+      expect(content.match(/DeletionPolicy:\s*Retain/g)).toBeNull();
+      // Should have Delete policies instead
+      expectMatch(/HealthcareDataBucket:[\s\S]*DeletionPolicy:\s*Delete/);
+      expectMatch(/HealthcareLogsBucket:[\s\S]*DeletionPolicy:\s*Delete/);
+      expectMatch(/HealthcareDatabase:[\s\S]*DeletionPolicy:\s*Delete/);
+    });
+    test('Environment suffix used in resource names', () => {
+      expectMatch(/BucketName:\s*!Sub\s*'\$\{ApplicationName\}-patient-data-\$\{EnvironmentSuffix\}/);
+      expectMatch(/BucketName:\s*!Sub\s*'\$\{ApplicationName\}-logs-\$\{EnvironmentSuffix\}/);
+      expectMatch(/DBInstanceIdentifier:\s*!Sub\s*"\$\{ApplicationName\}-\$\{EnvironmentSuffix\}-database"/);
+      expectMatch(/RoleName:\s*!Sub\s*"\$\{ApplicationName\}-\$\{EnvironmentSuffix\}-/);
+    });
+    test('Public access blocked on S3 buckets', () => {
+      expectMatch(/PublicAccessBlockConfiguration:[\s\S]*BlockPublicAcls:\s*true/);
+      expectMatch(/PublicAccessBlockConfiguration:[\s\S]*BlockPublicPolicy:\s*true/);
+      expectMatch(/PublicAccessBlockConfiguration:[\s\S]*IgnorePublicAcls:\s*true/);
+      expectMatch(/PublicAccessBlockConfiguration:[\s\S]*RestrictPublicBuckets:\s*true/);
     });
   });
 });
