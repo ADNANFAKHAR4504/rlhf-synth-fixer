@@ -25,6 +25,12 @@ Parameters:
     Type: String
     Description: 'Project name for resource tagging and naming'
     Default: 'IaC-AWS-Nova-Model-Breaking'
+  ProjectNameLower:
+    Type: String
+    Description: 'Lowercase project name for S3 bucket naming'
+    Default: 'iac-aws-nova-model-breaking'
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$'
+    ConstraintDescription: 'Must be a valid S3 bucket name (lowercase, numbers, hyphens, periods)'
 
 # Resources section - Core infrastructure and security components
 Resources:
@@ -285,7 +291,7 @@ Resources:
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-app-data-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectNameLower}-${AWS::AccountId}-${AWS::Region}-app-data'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -855,4 +861,11 @@ Resources:
 
   # EventBridge rule for weekly patching schedule
   PatchingScheduleRule:
-    Type: AWS
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-Patching-Schedule'
+      ScheduleExpression: 'cron(0 3 ? * SUN *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt PatchingLambdaFunction.Arn
+          Id: !Sub '${ProjectName}-PatchingLambdaTarget'
