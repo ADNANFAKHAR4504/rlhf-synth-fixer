@@ -43,11 +43,11 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
 
-      publicSubnets.forEach(subnetId => {
+      publicSubnets.forEach((subnetId: string) => {
         expect(subnetId.trim()).toMatch(/^subnet-[a-f0-9]{17}$/);
       });
 
-      privateSubnets.forEach(subnetId => {
+      privateSubnets.forEach((subnetId: string) => {
         expect(subnetId.trim()).toMatch(/^subnet-[a-f0-9]{17}$/);
       });
     });
@@ -195,8 +195,8 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
   describe('High Availability Validation', () => {
     test('should have resources distributed across multiple AZs', () => {
-      const publicSubnets = outputs.PublicSubnets.split(',').map(s => s.trim());
-      const privateSubnets = outputs.PrivateSubnets.split(',').map(s => s.trim());
+      const publicSubnets = outputs.PublicSubnets.split(',').map((s: string) => s.trim());
+      const privateSubnets = outputs.PrivateSubnets.split(',').map((s: string) => s.trim());
       
       // Should have exactly 2 subnets of each type for HA
       expect(publicSubnets).toHaveLength(2);
