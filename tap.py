@@ -11,7 +11,7 @@ import os
 
 import aws_cdk as cdk
 from aws_cdk import Tags
-from lib.web_application_stack import WebApplicationStack
+from lib.tap_stack import WebApplicationStack
 
 # Initialize the CDK application
 app = cdk.App()
