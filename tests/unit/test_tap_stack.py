@@ -24,7 +24,8 @@ class TestTapStack(unittest.TestCase):
     """Test TapStack creation with default environment suffix"""
     # ARRANGE & ACT
     stack = TapStack(self.app, self.stack_id)
-    template = Template.from_stack(stack)
+    # Verify stack creation succeeded by checking attributes
+    self.assertIsNotNone(stack)
 
     # ASSERT
     # The nested stacks may not be present in the synthesized template, so check for MultiRegionStack constructs
@@ -374,7 +375,7 @@ class TestMultiRegionStack(unittest.TestCase):
     self.assertGreater(len(iam_roles), 0, "IAM role should be created")
     
     # Find the Lambda execution role and verify it has managed policies
-    for role_id, role_props in iam_roles.items():
+    for role_props in iam_roles.values():
         if "ManagedPolicyArns" in role_props.get("Properties", {}):
             managed_policies = role_props["Properties"]["ManagedPolicyArns"]
             self.assertIsInstance(managed_policies, list, "ManagedPolicyArns should be a list")
