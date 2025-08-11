@@ -1,0 +1,7 @@
+{
+  "AutoScalingGroupName": "tf-asg-pr854",
+  "KMSKeyId": "f1b5644e-41a5-443a-831f-7c94d7ef4a7c",
+  "LoadBalancerDNS": "tf-alb-pr854-1963050415.us-west-2.elb.amazonaws.com",
+  "S3BucketName": "tf-ec2-data-bucket-pr854",
+  "VPCId": "vpc-036a15d330715bdec"
+}
