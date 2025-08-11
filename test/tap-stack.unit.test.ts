@@ -488,14 +488,6 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(policy.Type).toBe('AWS::S3::BucketPolicy');
     });
 
-    test('should create GuardDuty detector', () => {
-      const detector = template.Resources.GuardDutyDetector;
-      expect(detector).toBeDefined();
-      expect(detector.Type).toBe('AWS::GuardDuty::Detector');
-      expect(detector.Properties.Enable).toBe(true);
-      expect(detector.Properties.FindingPublishingFrequency).toBe('FIFTEEN_MINUTES');
-    });
-
     test('should create AWS Config S3 bucket and service role', () => {
       const bucket = template.Resources.ConfigBucket;
       const role = template.Resources.ConfigServiceRole;
@@ -587,12 +579,6 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(flowLogs).toBeDefined();
       expect(flowLogs.Type).toBe('AWS::EC2::FlowLog');
       expect(flowLogs.Properties.TrafficType).toBe('ALL');
-    });
-
-    test('should have GuardDuty enabled', () => {
-      const guardDuty = template.Resources.GuardDutyDetector;
-      expect(guardDuty).toBeDefined();
-      expect(guardDuty.Properties.Enable).toBe(true);
     });
 
     test('should have Config S3 bucket for compliance monitoring', () => {
@@ -816,11 +802,6 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       const flowLogs = template.Resources.VPCFlowLogs;
       expect(flowLogs.Properties.TrafficType).toBe('ALL');
       expect(flowLogs.Properties.LogDestinationType).toBe('cloud-watch-logs');
-
-      // GuardDuty should be enabled
-      const guardDuty = template.Resources.GuardDutyDetector;
-      expect(guardDuty.Properties.Enable).toBe(true);
-      expect(guardDuty.Properties.DataSources.S3Logs.Enable).toBe(true);
 
       // Config S3 bucket should be available for compliance monitoring
       const configBucket = template.Resources.ConfigBucket;

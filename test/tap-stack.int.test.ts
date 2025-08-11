@@ -42,11 +42,6 @@ import {
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  GuardDutyClient,
-  ListDetectorsCommand,
-  GetDetectorCommand,
-} from '@aws-sdk/client-guardduty';
-import {
   IAMClient,
   GetRoleCommand,
   ListAttachedRolePoliciesCommand,
@@ -120,7 +115,6 @@ const cloudWatchClient = new CloudWatchClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 const cloudTrailClient = new CloudTrailClient({ region });
 const configClient = new ConfigServiceClient({ region });
-const guardDutyClient = new GuardDutyClient({ region });
 const secretsManagerClient = new SecretsManagerClient({ region });
 const stsClient = new STSClient({ region });
 const wafClient = new WAFV2Client({ region });
@@ -1084,30 +1078,6 @@ describe('TapStack Integration Tests', () => {
       // Note: ConfigurationRecorder tests removed to avoid account-level conflicts
     });
 
-    test('should create GuardDuty detector', async () => {
-      const command = new ListDetectorsCommand({});
-      const response = await guardDutyClient.send(command);
-      const detectorIds = response.DetectorIds || [];
-
-      expect(detectorIds.length).toBeGreaterThan(0);
-
-      // Check if any detector is enabled and matches our configuration
-      for (const detectorId of detectorIds) {
-        const detectorCommand = new GetDetectorCommand({
-          DetectorId: detectorId,
-        });
-        const detectorResponse = await guardDutyClient.send(detectorCommand);
-        
-        if (detectorResponse.Status === 'ENABLED') {
-          expect(detectorResponse.FindingPublishingFrequency).toBe('FIFTEEN_MINUTES');
-          
-          // Check data sources configuration
-          expect(detectorResponse.DataSources?.S3Logs?.Status).toBe('ENABLED');
-          expect(detectorResponse.DataSources?.MalwareProtection?.ScanEc2InstanceWithFindings?.EbsVolumes?.Status).toBe('ENABLED');
-          break;
-        }
-      }
-    });
   });
 
   describe('High Availability and Resilience', () => {
@@ -1704,19 +1674,6 @@ describe('TapStack Integration Tests', () => {
       }
       
       console.log(`✅ Config infrastructure verified for compliance monitoring`);
-    });
-
-    test('should validate GuardDuty threat detection', async () => {
-      const detectors = await guardDutyClient.send(new ListDetectorsCommand({}));
-      expect(detectors.DetectorIds?.length).toBeGreaterThan(0);
-      
-      if (detectors.DetectorIds?.[0]) {
-        const detector = await guardDutyClient.send(
-          new GetDetectorCommand({ DetectorId: detectors.DetectorIds[0] })
-        );
-        expect(detector.Status).toBe('ENABLED');
-        expect(detector.FindingPublishingFrequency).toBeDefined();
-      }
     });
 
     test('should validate resource tagging compliance', async () => {

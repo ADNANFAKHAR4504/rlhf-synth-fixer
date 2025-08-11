@@ -2240,37 +2240,6 @@
                 ]
             }
         },
-        "GuardDutyDetector": {
-            "Type": "AWS::GuardDuty::Detector",
-            "Properties": {
-                "Enable": true,
-                "FindingPublishingFrequency": "FIFTEEN_MINUTES",
-                "DataSources": {
-                    "S3Logs": {
-                        "Enable": true
-                    },
-                    "MalwareProtection": {
-                        "ScanEc2InstanceWithFindings": {
-                            "EbsVolumes": true
-                        }
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "TapGuardDuty-229157-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
         "ConfigBucket": {
             "Type": "AWS::S3::Bucket",
             "DeletionPolicy": "Delete",

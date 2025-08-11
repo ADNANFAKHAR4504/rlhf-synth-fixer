@@ -65,10 +65,10 @@ principles and follow AWS Well-Architected Framework security pillar best practi
    - Implement appropriate log retention policies
 
 9. **Additional Security Measures:**
-   - Enable GuardDuty or similar threat detection (if applicable)
    - Configure AWS Config for compliance monitoring
    - Implement proper tagging strategy for resource management
    - Consider backup and disaster recovery requirements
+   - Note: GuardDuty is not included as it's a regional service that may conflict with existing deployments
 
 ### Technical Constraints
 

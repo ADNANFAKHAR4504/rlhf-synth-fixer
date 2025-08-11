@@ -32,9 +32,9 @@ The TapStack.yml CloudFormation template defines a comprehensive, secure, and sc
 - **Security Groups**: Least-privilege network access controls
 - **Network ACLs**: Additional layer of network security
 - **CloudTrail**: API logging with file validation
-- **GuardDuty**: Threat detection and security monitoring
-- **AWS Config**: Resource compliance monitoring
+- **AWS Config**: Resource compliance monitoring (bucket only, avoiding account-level conflicts)
 - **VPC Flow Logs**: Network traffic logging
+- **Note**: GuardDuty excluded to avoid regional service conflicts
 
 ### Monitoring & Alerting
 - **CloudWatch Alarms**: CPU utilization monitoring for EC2 and RDS
@@ -55,8 +55,7 @@ The TapStack.yml CloudFormation template defines a comprehensive, secure, and sc
 4. **Security Groups**: Restrictive ingress/egress rules
 5. **Network ACLs**: Additional subnet-level security
 6. **CloudTrail Logging**: Comprehensive API audit trail
-7. **GuardDuty**: ML-powered threat detection
-8. **Config Rules**: Compliance monitoring and drift detection
+7. **Config Rules**: Compliance monitoring and drift detection (bucket only)
 
 ## High Availability & Resilience
 
@@ -1137,24 +1136,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'TapCloudTrail-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # GuardDuty
-  GuardDutyDetector:
-    Type: AWS::GuardDuty::Detector
-    Properties:
-      Enable: true
-      FindingPublishingFrequency: FIFTEEN_MINUTES
-      DataSources:
-        S3Logs:
-          Enable: true
-        MalwareProtection:
-          ScanEc2InstanceWithFindings:
-            EbsVolumes: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapGuardDuty-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 

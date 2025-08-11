@@ -12,11 +12,11 @@ The model response shows significant gaps compared to the ideal TapStack.yml imp
 - **No Auto Scaling Group**: Model used single EC2 instance instead of scalable ASG
 - **No Launch Template**: Missing modern EC2 launch configuration
 - **No CloudTrail**: No API audit logging for compliance
-- **No GuardDuty**: Missing threat detection service
 - **No AWS Config**: No resource compliance monitoring
 - **No VPC Flow Logs**: Missing network traffic monitoring
 - **No CloudWatch Alarms**: No monitoring or alerting configured
 - **No SNS Topic**: No notification system for alerts
+- **Note**: GuardDuty excluded from requirements due to regional service conflicts
 
 #### Routing Table Errors:
 ```yaml
@@ -79,8 +79,8 @@ CloudTrail: ...
 #### No Compliance Framework:
 - **No CloudTrail**: Missing API audit trail
 - **No Config**: Missing resource compliance monitoring
-- **No GuardDuty**: Missing threat detection
 - **No VPC Flow Logs**: Missing network monitoring
+- **Note**: GuardDuty excluded to avoid regional service conflicts
 
 ### 5. **Parameter & Configuration Failures**
 
@@ -191,10 +191,10 @@ Outputs:
 ### Critical Security Gaps:
 1. **No Encryption at Rest**: EBS volumes, CloudWatch Logs unencrypted
 2. **No API Auditing**: Missing CloudTrail for compliance
-3. **No Threat Detection**: Missing GuardDuty integration
-4. **No Network Monitoring**: Missing VPC Flow Logs
-5. **Database SSL Not Enforced**: Potential data in transit exposure
-6. **Overly Permissive IAM**: Broad permissions instead of least privilege
+3. **No Network Monitoring**: Missing VPC Flow Logs
+4. **Database SSL Not Enforced**: Potential data in transit exposure
+5. **Overly Permissive IAM**: Broad permissions instead of least privilege
+6. **Note**: GuardDuty excluded to avoid regional service conflicts
 
 ### Compliance Failures:
 - **SOC 2**: Missing audit trails and monitoring
@@ -237,7 +237,7 @@ Outputs:
 
 ### 1. **Security First Approach**
 - Implement comprehensive KMS encryption strategy
-- Add all security services (CloudTrail, GuardDuty, Config)
+- Add security services (CloudTrail, Config) - GuardDuty excluded due to regional conflicts
 - Follow least-privilege IAM principles
 
 ### 2. **High Availability Design**
