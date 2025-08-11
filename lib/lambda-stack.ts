@@ -75,9 +75,19 @@ def handler(event, context):
         # Process each S3 record
         for record in event.get('Records', []):
             if record.get('eventSource') == 'aws:s3':
-                bucket_name = record['s3']['bucket']['name']
-                object_key = record['s3']['object']['key']
-                event_name = record['eventName']
+                # Safely extract S3 information with validation
+                s3_info = record.get('s3', {})
+                bucket_info = s3_info.get('bucket', {})
+                object_info = s3_info.get('object', {})
+                
+                bucket_name = bucket_info.get('name', 'unknown')
+                object_key = object_info.get('key', 'unknown')
+                event_name = record.get('eventName', 'unknown')
+                
+                # Skip if essential information is missing
+                if bucket_name == 'unknown' or object_key == 'unknown':
+                    print(f"Skipping record with incomplete S3 information")
+                    continue
                 
                 # Log invocation to DynamoDB
                 response = table.put_item(
@@ -123,7 +133,14 @@ def handler(event, context):
         except Exception as log_error:
             print(f"Failed to log error to DynamoDB: {str(log_error)}")
         
-        raise e
+        # Return error response instead of raising
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'message': 'Error processing S3 event',
+                'error': str(e)
+            })
+        }
 `),
       role: lambdaRole,
       environment: {

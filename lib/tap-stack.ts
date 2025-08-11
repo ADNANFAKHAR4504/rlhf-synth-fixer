@@ -144,94 +144,51 @@ import boto3
 import uuid
 from datetime import datetime
 import os
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
 
-# Patch AWS SDK calls for X-Ray tracing
-patch_all()
-
+# Initialize AWS clients
 dynamodb = boto3.resource('dynamodb')
 eventbridge = boto3.client('events')
 table_name = os.environ['DYNAMODB_TABLE_NAME']
 event_bus_name = os.environ['EVENT_BUS_NAME']
 table = dynamodb.Table(table_name)
 
-@xray_recorder.capture('lambda_handler')
+# Try to import X-Ray SDK if available, but don't fail if not
+try:
+    from aws_xray_sdk.core import xray_recorder
+    from aws_xray_sdk.core import patch_all
+    patch_all()
+    XRAY_AVAILABLE = True
+except ImportError:
+    XRAY_AVAILABLE = False
+    print("X-Ray SDK not available, continuing without tracing")
+
 def handler(event, context):
-    """Process S3 object creation events with X-Ray tracing and EventBridge integration"""
+    """Process S3 object creation events with optional X-Ray tracing and EventBridge integration"""
     print(f"Received event: {json.dumps(event)}")
     
     request_id = str(uuid.uuid4())
     timestamp = datetime.utcnow().isoformat() + 'Z'
     
-    # Add X-Ray annotations
-    xray_recorder.put_annotation("requestId", request_id)
-    xray_recorder.put_annotation("functionName", context.function_name)
+    # Add X-Ray annotations if available
+    if XRAY_AVAILABLE:
+        xray_recorder.put_annotation("requestId", request_id)
+        xray_recorder.put_annotation("functionName", context.function_name)
     
     try:
         processed_objects = []
         
-        with xray_recorder.in_subsegment('process_s3_records'):
-            for record in event.get('Records', []):
-                if record.get('eventSource') == 'aws:s3':
-                    bucket_name = record['s3']['bucket']['name']
-                    object_key = record['s3']['object']['key']
-                    event_name = record['eventName']
-                    
-                    # Add X-Ray metadata for each object
-                    xray_recorder.put_metadata("s3_object", {
-                        "bucket": bucket_name,
-                        "key": object_key,
-                        "event": event_name
-                    })
-                    
-                    # Log to DynamoDB with X-Ray subsegment
-                    with xray_recorder.in_subsegment('dynamodb_write'):
-                        response = table.put_item(
-                            Item={
-                                'requestId': request_id,
-                                'timestamp': timestamp,
-                                'bucketName': bucket_name,
-                                'objectKey': object_key,
-                                'eventName': event_name,
-                                'functionName': context.function_name,
-                                'functionVersion': context.function_version,
-                                'awsRequestId': context.aws_request_id,
-                                'xrayTraceId': os.environ.get('_X_AMZN_TRACE_ID', '')
-                            }
-                        )
-                    
-                    processed_objects.append({
-                        'bucket': bucket_name,
-                        'key': object_key,
-                        'event': event_name
-                    })
-                    
-                    print(f"Logged invocation to DynamoDB: {request_id}")
+        # Process S3 records with optional X-Ray subsegment
+        if XRAY_AVAILABLE:
+            with xray_recorder.in_subsegment('process_s3_records'):
+                process_result = process_records(event, context, request_id, timestamp, processed_objects)
+        else:
+            process_result = process_records(event, context, request_id, timestamp, processed_objects)
+        
+        if not process_result:
+            print("No S3 records to process")
         
         # Publish success event to EventBridge
-        with xray_recorder.in_subsegment('publish_success_event'):
-            event_detail = {
-                'requestId': request_id,
-                'timestamp': timestamp,
-                'processedObjects': processed_objects,
-                'status': 'SUCCESS',
-                'functionName': context.function_name,
-                'xrayTraceId': os.environ.get('_X_AMZN_TRACE_ID', '')
-            }
-            
-            eventbridge.put_events(
-                Entries=[
-                    {
-                        'Source': 'custom.s3.processor',
-                        'DetailType': 'S3 Object Processed Successfully',
-                        'Detail': json.dumps(event_detail),
-                        'EventBusName': event_bus_name
-                    }
-                ]
-            )
-            
-            print(f"Published success event to EventBridge: {request_id}")
+        publish_success_event(request_id, timestamp, processed_objects, context)
                 
         return {
             'statusCode': 200,
@@ -245,54 +202,188 @@ def handler(event, context):
         
     except Exception as e:
         print(f"Error processing event: {str(e)}")
-        error_request_id = str(uuid.uuid4())
-        error_timestamp = datetime.utcnow().isoformat() + 'Z'
+        handle_error(e, context)
         
-        # Add X-Ray error annotation
-        xray_recorder.put_annotation("error", str(e))
-        
-        try:
-            # Log error to DynamoDB
-            with xray_recorder.in_subsegment('dynamodb_error_write'):
-                table.put_item(
-                    Item={
-                        'requestId': error_request_id,
-                        'timestamp': error_timestamp,
-                        'errorMessage': str(e),
-                        'functionName': context.function_name,
-                        'status': 'ERROR',
-                        'xrayTraceId': os.environ.get('_X_AMZN_TRACE_ID', '')
-                    }
-                )
+        # Return error response instead of raising
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'message': 'Error processing S3 event',
+                'error': str(e)
+            })
+        }
+
+def process_records(event, context, request_id, timestamp, processed_objects):
+    """Process S3 records from the event"""
+    records_processed = False
+    
+    for record in event.get('Records', []):
+        if record.get('eventSource') == 'aws:s3':
+            # Safely extract S3 information with validation
+            s3_info = record.get('s3', {})
+            bucket_info = s3_info.get('bucket', {})
+            object_info = s3_info.get('object', {})
             
-            # Publish error event to EventBridge
-            with xray_recorder.in_subsegment('publish_error_event'):
-                error_detail = {
-                    'requestId': error_request_id,
-                    'timestamp': error_timestamp,
-                    'errorMessage': str(e),
-                    'status': 'ERROR',
-                    'functionName': context.function_name,
-                    'xrayTraceId': os.environ.get('_X_AMZN_TRACE_ID', '')
-                }
-                
-                eventbridge.put_events(
-                    Entries=[
-                        {
-                            'Source': 'custom.s3.processor',
-                            'DetailType': 'S3 Object Processing Error',
-                            'Detail': json.dumps(error_detail),
-                            'EventBusName': event_bus_name
-                        }
-                    ]
-                )
-                
-                print(f"Published error event to EventBridge: {error_request_id}")
-                
-        except Exception as log_error:
-            print(f"Failed to log error: {str(log_error)}")
+            bucket_name = bucket_info.get('name', 'unknown')
+            object_key = object_info.get('key', 'unknown')
+            event_name = record.get('eventName', 'unknown')
+            
+            # Skip if essential information is missing
+            if bucket_name == 'unknown' or object_key == 'unknown':
+                print(f"Skipping record with incomplete S3 information")
+                continue
+            
+            # Add X-Ray metadata if available
+            if XRAY_AVAILABLE:
+                xray_recorder.put_metadata("s3_object", {
+                    "bucket": bucket_name,
+                    "key": object_key,
+                    "event": event_name
+                })
+            
+            # Log to DynamoDB
+            log_to_dynamodb(request_id, timestamp, bucket_name, object_key, event_name, context)
+            
+            processed_objects.append({
+                'bucket': bucket_name,
+                'key': object_key,
+                'event': event_name
+            })
+            
+            records_processed = True
+            print(f"Logged invocation to DynamoDB: {request_id}")
+    
+    return records_processed
+
+def log_to_dynamodb(request_id, timestamp, bucket_name, object_key, event_name, context):
+    """Log processing information to DynamoDB"""
+    try:
+        if XRAY_AVAILABLE:
+            with xray_recorder.in_subsegment('dynamodb_write'):
+                write_to_db(request_id, timestamp, bucket_name, object_key, event_name, context)
+        else:
+            write_to_db(request_id, timestamp, bucket_name, object_key, event_name, context)
+    except Exception as e:
+        print(f"Failed to write to DynamoDB: {str(e)}")
+        # Don't fail the entire function if DynamoDB write fails
+        pass
+
+def write_to_db(request_id, timestamp, bucket_name, object_key, event_name, context):
+    """Actual DynamoDB write operation"""
+    table.put_item(
+        Item={
+            'requestId': request_id,
+            'timestamp': timestamp,
+            'bucketName': bucket_name,
+            'objectKey': object_key,
+            'eventName': event_name,
+            'functionName': context.function_name,
+            'functionVersion': context.function_version,
+            'awsRequestId': context.aws_request_id,
+            'xrayTraceId': os.environ.get('_X_AMZN_TRACE_ID', '')
+        }
+    )
+
+def publish_success_event(request_id, timestamp, processed_objects, context):
+    """Publish success event to EventBridge"""
+    try:
+        if XRAY_AVAILABLE:
+            with xray_recorder.in_subsegment('publish_success_event'):
+                publish_event(request_id, timestamp, processed_objects, context, 'SUCCESS')
+        else:
+            publish_event(request_id, timestamp, processed_objects, context, 'SUCCESS')
         
-        raise e
+        print(f"Published success event to EventBridge: {request_id}")
+    except Exception as e:
+        print(f"Failed to publish success event: {str(e)}")
+        # Don't fail the entire function if EventBridge publish fails
+        pass
+
+def publish_event(request_id, timestamp, processed_objects, context, status):
+    """Actual EventBridge publish operation"""
+    event_detail = {
+        'requestId': request_id,
+        'timestamp': timestamp,
+        'processedObjects': processed_objects if status == 'SUCCESS' else [],
+        'status': status,
+        'functionName': context.function_name,
+        'xrayTraceId': os.environ.get('_X_AMZN_TRACE_ID', '')
+    }
+    
+    eventbridge.put_events(
+        Entries=[
+            {
+                'Source': 'custom.s3.processor',
+                'DetailType': f'S3 Object {"Processed Successfully" if status == "SUCCESS" else "Processing Error"}',
+                'Detail': json.dumps(event_detail),
+                'EventBusName': event_bus_name
+            }
+        ]
+    )
+
+def handle_error(error, context):
+    """Handle errors by logging to DynamoDB and EventBridge"""
+    error_request_id = str(uuid.uuid4())
+    error_timestamp = datetime.utcnow().isoformat() + 'Z'
+    
+    # Add X-Ray error annotation if available
+    if XRAY_AVAILABLE:
+        xray_recorder.put_annotation("error", str(error))
+    
+    try:
+        # Log error to DynamoDB
+        if XRAY_AVAILABLE:
+            with xray_recorder.in_subsegment('dynamodb_error_write'):
+                log_error_to_db(error_request_id, error_timestamp, error, context)
+        else:
+            log_error_to_db(error_request_id, error_timestamp, error, context)
+        
+        # Publish error event to EventBridge
+        if XRAY_AVAILABLE:
+            with xray_recorder.in_subsegment('publish_error_event'):
+                publish_error_event(error_request_id, error_timestamp, error, context)
+        else:
+            publish_error_event(error_request_id, error_timestamp, error, context)
+            
+        print(f"Published error event to EventBridge: {error_request_id}")
+        
+    except Exception as log_error:
+        print(f"Failed to log error: {str(log_error)}")
+
+def log_error_to_db(error_request_id, error_timestamp, error, context):
+    """Log error to DynamoDB"""
+    table.put_item(
+        Item={
+            'requestId': error_request_id,
+            'timestamp': error_timestamp,
+            'errorMessage': str(error),
+            'functionName': context.function_name,
+            'status': 'ERROR',
+            'xrayTraceId': os.environ.get('_X_AMZN_TRACE_ID', '')
+        }
+    )
+
+def publish_error_event(error_request_id, error_timestamp, error, context):
+    """Publish error event to EventBridge"""
+    error_detail = {
+        'requestId': error_request_id,
+        'timestamp': error_timestamp,
+        'errorMessage': str(error),
+        'status': 'ERROR',
+        'functionName': context.function_name,
+        'xrayTraceId': os.environ.get('_X_AMZN_TRACE_ID', '')
+    }
+    
+    eventbridge.put_events(
+        Entries=[
+            {
+                'Source': 'custom.s3.processor',
+                'DetailType': 'S3 Object Processing Error',
+                'Detail': json.dumps(error_detail),
+                'EventBusName': event_bus_name
+            }
+        ]
+    )
 `),
       role: lambdaRole,
       environment: {
@@ -303,13 +394,6 @@ def handler(event, context):
       memorySize: 256,
       description:
         'Process S3 object creation events with X-Ray tracing and EventBridge integration',
-      layers: [
-        lambda.LayerVersion.fromLayerVersionArn(
-          this,
-          'XRayLayer',
-          `arn:aws:lambda:${cdk.Aws.REGION}:580247275435:layer:LambdaInsightsExtension:14`
-        ),
-      ],
     });
 
     // Create S3 bucket

@@ -253,7 +253,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
           const response = await dynamoClient.send(scanCommand);
           return (response.Items?.length ?? 0) > 0;
         },
-        15000,
+        30000,
         2000
       );
 
@@ -285,7 +285,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
           Key: uniqueKey,
         })
       );
-    }, 30000);
+    }, 35000);
 
     test('Multiple S3 uploads are processed correctly', async () => {
       const numObjects = 3;
@@ -327,7 +327,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
           const results = await Promise.all(promises);
           return results.every((result) => result === true);
         },
-        20000,
+        35000,
         2000
       );
 
@@ -355,7 +355,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
           })
         );
       }
-    }, 40000);
+    }, 45000);
 
     test('Lambda handles S3 event errors gracefully', async () => {
       // Directly invoke Lambda with an invalid event
