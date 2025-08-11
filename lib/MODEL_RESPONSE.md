@@ -21,7 +21,7 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
     super(scope, id, {
       ...props,
       env: {
-        region: 'us-east-1',
+        region: 'us-west-2',
         account: props?.env?.account
       }
     });
@@ -449,7 +449,7 @@ def handler(event, context):
 const app = new cdk.App();
 new SecureEnterpriseInfrastructureStack(app, 'SecureEnterpriseInfrastructureStack', {
   env: {
-    region: 'us-east-1',
+    region: 'us-west-2',
   },
 });
 ```

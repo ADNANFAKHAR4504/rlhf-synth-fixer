@@ -11,7 +11,7 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
     super(scope, id, {
       ...props,
       env: {
-        region: props?.env?.region || 'us-east-1', // Flexible with sensible default
+        region: props?.env?.region || 'us-west-2', // Flexible with sensible default
         account: props?.env?.account,
       },
     });
@@ -271,7 +271,7 @@ describe('Stack Configuration', () => {
   });
   
   test('should use provided region when specified', () => {
-    expect(stack.region).toBe('us-east-1');
+    expect(stack.region).toBe('us-west-2');
   });
 });
 ```

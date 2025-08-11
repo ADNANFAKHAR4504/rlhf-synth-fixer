@@ -21,7 +21,7 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
     super(scope, id, {
       ...props,
       env: {
-        region: props?.env?.region || 'us-east-1',
+        region: props?.env?.region || 'us-west-2',
         account: props?.env?.account,
       },
       tags: {
@@ -33,7 +33,7 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
         LastUpdated: new Date().toISOString().split('T')[0], // YYYY-MM-DD
         Version: '1.0.0',
         Stack: 'TapStack',
-        Region: props?.env?.region || 'us-east-1',
+        Region: props?.env?.region || 'us-west-2',
         UpdateTrigger: `update-${Date.now()}`, // Forces update with unique timestamp
         ...props?.tags,
       },
@@ -606,7 +606,7 @@ new SecureEnterpriseInfrastructureStack(
   'SecureEnterpriseInfrastructureStack',
   {
     env: {
-      region: 'us-east-1',
+      region: 'us-west-2',
     },
   }
 );
