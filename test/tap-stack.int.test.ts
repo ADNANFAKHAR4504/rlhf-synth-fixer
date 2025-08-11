@@ -9,6 +9,7 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeTagsCommand,
+  DescribeVolumesCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
@@ -356,9 +357,6 @@ describe('Security Infrastructure Integration Tests', () => {
 
         // Check volume encryption if we have volumes
         if (volumeIds.length > 0) {
-          const { DescribeVolumesCommand } = await import(
-            '@aws-sdk/client-ec2'
-          );
           const volumesInfo = await ec2Client.send(
             new DescribeVolumesCommand({
               VolumeIds: volumeIds,
