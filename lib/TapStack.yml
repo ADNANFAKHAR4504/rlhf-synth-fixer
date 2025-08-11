@@ -1,0 +1,858 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure with comprehensive security controls'
+
+# Parameters section for customizable values
+Parameters:
+  # SSH access CIDR for security group configuration
+  SSHAccessCIDR:
+    Type: String
+    Description: 'CIDR block allowed for SSH access to EC2 instances'
+    Default: '10.0.0.0/8'
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: 'Must be a valid CIDR notation (e.g., 10.0.0.0/8)'
+
+  # Database master username
+  DBMasterUsername:
+    Type: String
+    Description: 'Master username for RDS database'
+    Default: 'admin'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  # Project name for resource naming
+  ProjectName:
+    Type: String
+    Description: 'Project name for resource tagging and naming'
+    Default: 'IaC-AWS-Nova-Model-Breaking'
+
+# Resources section - Core infrastructure and security components
+Resources:
+
+  # ========================================
+  # 1. VPC AND NETWORK ISOLATION
+  # ========================================
+  
+  # Main VPC with 10.0.0.0/16 CIDR
+  MainVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-VPC'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Internet Gateway for public internet access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-IGW'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Attach Internet Gateway to VPC
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref MainVPC
+
+  # Public Subnet in AZ-1 for internet-facing resources
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.1.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Public-Subnet-AZ1'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Public Subnet in AZ-2 for high availability
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.2.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Public-Subnet-AZ2'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Private App Subnet in AZ-1 for application tier
+  PrivateAppSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.11.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-App-Subnet-AZ1'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Private App Subnet in AZ-2 for high availability
+  PrivateAppSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.12.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-App-Subnet-AZ2'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Private Data Subnet in AZ-1 for database tier
+  PrivateDataSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.21.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-Data-Subnet-AZ1'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Private Data Subnet in AZ-2 for high availability
+  PrivateDataSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.22.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-Data-Subnet-AZ2'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Elastic IP for NAT Gateway in AZ-1
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-NAT-EIP-AZ1'
+
+  # Elastic IP for NAT Gateway in AZ-2
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-NAT-EIP-AZ2'
+
+  # NAT Gateway in Public Subnet AZ-1
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-NAT-Gateway-AZ1'
+
+  # NAT Gateway in Public Subnet AZ-2
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-NAT-Gateway-AZ2'
+
+  # Public Route Table for internet access
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MainVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Public-Routes'
+
+  # Default public route to Internet Gateway
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  # Associate Public Subnet 1 with Public Route Table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  # Associate Public Subnet 2 with Public Route Table
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Private Route Table for AZ-1
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MainVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-Routes-AZ1'
+
+  # Default private route to NAT Gateway AZ-1
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+
+  # Associate Private App Subnet 1 with Private Route Table 1
+  PrivateAppSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateAppSubnet1
+
+  # Associate Private Data Subnet 1 with Private Route Table 1
+  PrivateDataSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateDataSubnet1
+
+  # Private Route Table for AZ-2
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MainVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-Routes-AZ2'
+
+  # Default private route to NAT Gateway AZ-2
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway2
+
+  # Associate Private App Subnet 2 with Private Route Table 2
+  PrivateAppSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateAppSubnet2
+
+  # Associate Private Data Subnet 2 with Private Route Table 2
+  PrivateDataSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateDataSubnet2
+
+  # ========================================
+  # 2. IAM ROLE FOR TAG-BASED S3 ACCESS
+  # ========================================
+
+  # S3 bucket for application data
+  ApplicationDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-app-data-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-ApplicationData'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # IAM Role for EC2 instances with tag-based S3 access
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-EC2-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        # Tag-based S3 access policy - only allows access if EC2 has S3Access=Approved tag
+        - PolicyName: TagBasedS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${ApplicationDataBucket}/*'
+                Condition:
+                  StringEquals:
+                    'ec2:ResourceTag/S3Access': 'Approved'
+        # Secrets Manager access for database credentials
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseSecret
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-EC2-Role'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Instance Profile for EC2 instances
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${ProjectName}-EC2-Profile'
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ========================================
+  # 3. APPLICATION AND DATABASE SECURITY GROUPS
+  # ========================================
+
+  # ALB Security Group - allows HTTPS traffic from internet
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-ALB-SG'
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref MainVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS traffic from internet'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP traffic from internet (for redirect to HTTPS)'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-ALB-SecurityGroup'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Web Security Group - allows HTTPS from ALB and SSH from specified CIDR
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-Web-SG'
+      GroupDescription: 'Security group for web tier EC2 instances'
+      VpcId: !Ref MainVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: 'HTTPS traffic from ALB only'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHAccessCIDR
+          Description: 'SSH access from specified CIDR'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Web-SecurityGroup'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Database Security Group - allows MySQL traffic only from Web Security Group
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-Database-SG'
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref MainVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebSecurityGroup
+          Description: 'MySQL traffic from web tier only'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Database-SecurityGroup'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ========================================
+  # 4. DATA ENCRYPTION IN TRANSIT (SSL/TLS)
+  # ========================================
+
+  # DB Subnet Group for RDS
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${ProjectName}-db-subnet-group'
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref PrivateDataSubnet1
+        - !Ref PrivateDataSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-DatabaseSubnetGroup'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # RDS Parameter Group enforcing SSL/TLS connections
+  DatabaseParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: !Sub '${ProjectName}-mysql-params'
+      Description: 'Parameter group enforcing SSL/TLS for MySQL'
+      Family: 'mysql8.0'
+      Parameters:
+        require_secure_transport: 'ON'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-DatabaseParameterGroup'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Secrets Manager secret for database credentials
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ProjectName}-db-credentials'
+      Description: 'Database credentials for RDS instance'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-DatabaseSecret'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # RDS MySQL instance with SSL/TLS enforcement
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-mysql-db'
+      DBInstanceClass: 'db.t3.micro'
+      Engine: 'mysql'
+      EngineVersion: '8.0.35'
+      AllocatedStorage: 20
+      StorageType: 'gp2'
+      StorageEncrypted: true
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      DBParameterGroupName: !Ref DatabaseParameterGroup
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Database'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ========================================
+  # 5. AWS WAF INTEGRATION
+  # ========================================
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ProjectName}-ALB'
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-ApplicationLoadBalancer'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Target Group for ALB
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-TG'
+      Port: 443
+      Protocol: HTTPS
+      VpcId: !Ref MainVPC
+      HealthCheckEnabled: true
+      HealthCheckPath: '/health'
+      HealthCheckProtocol: HTTPS
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-TargetGroup'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ALB Listener
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref SSLCertificate
+
+  # Self-signed SSL certificate for demo purposes
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub '${ProjectName}.example.com'
+      ValidationMethod: DNS
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-SSL-Certificate'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # WAFv2 WebACL with OWASP Top 10 protection
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${ProjectName}-WebACL'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Rules:
+        # AWS Managed Rules - Common Rule Set (OWASP Top 10)
+        - Name: CommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSetMetric
+        # AWS Managed Rules - SQL Injection Rule Set
+        - Name: SQLiRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLiRuleSetMetric
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ProjectName}-WebACL'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-WebACL'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Associate WebACL with ALB
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref ApplicationLoadBalancer
+      WebACLArn: !GetAtt WebACL.Arn
+
+  # ========================================
+  # 6. API GATEWAY LOGGING
+  # ========================================
+
+  # CloudWatch Log Group for API Gateway
+  APIGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${ProjectName}'
+      RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-APIGateway-LogGroup'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # IAM Role for API Gateway logging
+  APIGatewayLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-APIGateway-Logging-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-APIGateway-Logging-Role'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # API Gateway Account configuration for logging
+  APIGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt APIGatewayLoggingRole.Arn
+
+  # Sample REST API Gateway
+  SampleRestAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-API'
+      Description: 'Sample REST API with comprehensive logging'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-RestAPI'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # API Gateway Resource
+  APIResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SampleRestAPI
+      ParentId: !GetAtt SampleRestAPI.RootResourceId
+      PathPart: 'sample'
+
+  # API Gateway Method
+  APIMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SampleRestAPI
+      ResourceId: !Ref APIResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: '{"message": "Hello from API Gateway"}'
+      MethodResponses:
+        - StatusCode: 200
+
+  # API Gateway Deployment
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - APIMethod
+    Properties:
+      RestApiId: !Ref SampleRestAPI
+      StageName: prod
+
+  # API Gateway Stage with comprehensive logging
+  APIStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref SampleRestAPI
+      DeploymentId: !Ref APIDeployment
+      StageName: prod
+      AccessLogSetting:
+        DestinationArn: !GetAtt APIGatewayLogGroup.Arn
+        Format: '$requestId $requestTime $httpMethod $resourcePath $status $responseLength $responseTime'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-API-Stage'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ========================================
+  # 7. AUTOMATED SECURITY PATCHING VIA LAMBDA
+  # ========================================
+
+  # IAM Role for Lambda function with SSM permissions
+  LambdaPatchingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-Lambda-Patching-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SSMPatchingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:SendCommand
+                  - ssm:DescribeInstanceInformation
+                  - ec2:DescribeInstances
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Lambda-Patching-Role'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Lambda function for automated patching
+  PatchingLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-Automated-Patching'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaPatchingRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          
+          def lambda_handler(event, context):
+              ssm_client = boto3.client('ssm')
+              ec2_client = boto3.client('ec2')
+              
+              try:
+                  # Get instances with PatchGroup=WebApp tag
+                  response = ec2_client.describe_instances(
+                      Filters=[
+                          {
+                              'Name': 'tag:PatchGroup',
+                              'Values': ['WebApp']
+                          },
+                          {
+                              'Name': 'instance-state-name',
+                              'Values': ['running']
+                          }
+                      ]
+                  )
+                  
+                  instance_ids = []
+                  for reservation in response['Reservations']:
+                      for instance in reservation['Instances']:
+                          instance_ids.append(instance['InstanceId'])
+                  
+                  if instance_ids:
+                      # Send patch baseline command
+                      command_response = ssm_client.send_command(
+                          InstanceIds=instance_ids,
+                          DocumentName='AWS-RunPatchBaseline',
+                          Parameters={
+                              'Operation': ['Install']
+                          }
+                      )
+                      
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'message': f'Patching initiated for {len(instance_ids)} instances',
+                              'commandId': command_response['Command']['CommandId']
+                          })
+                      }
+                  else:
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'message': 'No instances found with PatchGroup=WebApp tag'
+                          })
+                      }
+                      
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': str(e)
+                      })
+                  }
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Patching-Lambda'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # EventBridge rule for weekly patching schedule
+  PatchingScheduleRule:
+    Type: AWS
