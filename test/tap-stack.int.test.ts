@@ -201,7 +201,7 @@ testSuite('TapStack CloudFormation Integration Tests', () => {
       try {
         const roleName = roleArn.split('/').pop();
         const response = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-        expect(response.Role?.RoleName).toBe('secureapp-readonly-role');
+        expect(response.Role?.RoleName).toBe('tapstack-readonly-role');
         expect(response.Role?.Arn).toBe(roleArn);
       } catch (error) {
         throw new Error(`Read-only role is not accessible: ${error}`);
@@ -235,7 +235,7 @@ testSuite('TapStack CloudFormation Integration Tests', () => {
       try {
         const roleName = roleArn.split('/').pop();
         const response = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-        expect(response.Role?.RoleName).toBe('secureapp-readwrite-role');
+        expect(response.Role?.RoleName).toBe('tapstack-readwrite-role');
         expect(response.Role?.Arn).toBe(roleArn);
       } catch (error) {
         throw new Error(`Read-write role is not accessible: ${error}`);
@@ -249,7 +249,7 @@ testSuite('TapStack CloudFormation Integration Tests', () => {
       try {
         const roleName = roleArn.split('/').pop();
         const response = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-        expect(response.Role?.RoleName).toBe('secureapp-backup-role');
+        expect(response.Role?.RoleName).toBe('tapstack-backup-role');
         expect(response.Role?.Arn).toBe(roleArn);
       } catch (error) {
         throw new Error(`Backup role is not accessible: ${error}`);
@@ -365,7 +365,7 @@ testSuite('TapStack CloudFormation Integration Tests', () => {
 
     test('should verify stack name output is present', () => {
       expect(outputs.StackName).toBeDefined();
-      expect(outputs.StackName).toMatch(/^secureapp-/);
+      expect(outputs.StackName).toMatch(/^TapStack/);
     });
   });
 
@@ -378,7 +378,7 @@ testSuite('TapStack CloudFormation Integration Tests', () => {
       ];
 
       bucketNames.forEach(bucketName => {
-        expect(bucketName).toMatch(/^secureapp-/);
+        expect(bucketName).toMatch(/^tapstack-/);
         expect(bucketName).toMatch(/-\d{12}-us-west-2$/); // Account ID and region
       });
     });
@@ -391,12 +391,12 @@ testSuite('TapStack CloudFormation Integration Tests', () => {
       ];
 
       logGroupNames.forEach(logGroupName => {
-        expect(logGroupName).toMatch(/^\/secureapp\//);
+        expect(logGroupName).toMatch(/^\/tapstack\//);
       });
     });
 
     test('should verify CloudTrail name follows naming convention', () => {
-      expect(outputs.CloudTrailName).toMatch(/^secureapp-cloudtrail$/);
+      expect(outputs.CloudTrailName).toMatch(/^tapstack-cloudtrail$/);
     });
   });
 
