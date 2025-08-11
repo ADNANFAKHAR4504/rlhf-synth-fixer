@@ -16,6 +16,9 @@ import {
   S3Module,
   CommonConfig,
 } from './modules';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
 // import { MyStack } from './my-stack';
 
 interface TapStackProps {
@@ -98,7 +101,7 @@ export class TapStack extends TerraformStack {
       {
         ...config,
         vpc: vpcModule.vpc,
-        sshCidrBlock: process.env.SSH_CIDR_BLOCK || '0.0.0.0/0', // Restrict in production
+        sshCidrBlock: process.env.SSH_CIDR_BLOCK || '203.0.113.15/32', // Restrict in production
       }
     );
 
@@ -119,18 +122,38 @@ export class TapStack extends TerraformStack {
     });
 
     // Create RDS instance in private subnets
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
+      this,
+      'db-password-secret',
+      {
+        secretId: 'my-db-password',
+      }
+    );
     const rdsModule = new RdsModule(this, 'rds', {
       ...config,
       privateSubnets: subnetModule.privateSubnets,
       securityGroup: securityGroupModule.dbSecurityGroup,
       dbName: process.env.DB_NAME || 'tapdb',
       dbUsername: process.env.DB_USERNAME || 'admin',
-      dbPassword: process.env.DB_PASSWORD || 'changeme123!', // Use AWS Secrets Manager in production
+      dbPassword: dbPasswordSecret.secretString,
       instanceClass: process.env.DB_INSTANCE_CLASS || 'db.t3.medium',
     });
 
     // Create S3 bucket for logs
     const s3Module = new S3Module(this, 's3', config);
+
+    // Flow logs for VPC
+    const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
+      name: `${config.projectName}-vpc-flow-logs`,
+      retentionInDays: 90,
+    });
+
+    new FlowLog(this, 'vpc-flow-log', {
+      vpcId: vpcModule.vpc.id,
+      trafficType: 'ALL',
+      logDestinationType: 'cloud-watch-logs',
+      logDestination: flowLogGroup.arn,
+    });
 
     // Export important outputs for reference
     new TerraformOutput(this, 'vpc-id', {
