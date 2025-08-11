@@ -4,12 +4,12 @@ import pulumi_aws as aws
 from pulumi import ResourceOptions
 
 # Import the custom components
-from components.networking import NetworkingComponent
-from components.security import SecurityComponent
-from components.database import DatabaseComponent
-from components.serverless import ServerlessComponent
-from components.storage import StorageComponent
-from components.monitoring import CloudTrailComponent
+from lib.components.networking import NetworkingComponent
+from lib.components.security import SecurityComponent
+from lib.components.database import DatabaseComponent
+from lib.components.serverless import ServerlessComponent
+from lib.components.storage import StorageComponent
+from lib.components.monitoring import CloudTrailComponent
 
 class TapStackArgs:
   """
