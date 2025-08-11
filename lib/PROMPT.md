@@ -38,7 +38,7 @@ Deliver an AWS CDK (TypeScript) project that:
 - Applies `Environment: Production` tags to all resources.
 - Implements least-privilege IAM roles.
 - Does not hard-code any secrets.
-- All resources are created in `us-east-1`.
+- All resources are created in `us-east-2`.
 - Uses the following structure: `bin/tap.ts`, `lib/tap-stack.ts`, `cdk.json`.
 
 ## Output Format
