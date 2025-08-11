@@ -29,9 +29,9 @@ export class S3Stack extends pulumi.ComponentResource {
 
     // Create access logs bucket
     this.accessLogsBucket = new aws.s3.Bucket(
-      `access-logs-bucket-205432-${environmentSuffix}`,
+      `access-logs-bucket-${environmentSuffix}`,
       {
-        bucket: `secure-doc-access-205432-logs-${environmentSuffix}`,
+        bucket: `secure-doc-access-832457-logs-${environmentSuffix}`,
         tags: {
           Name: `access-logs-bucket-${environmentSuffix}`,
           Purpose: 'Access logs storage',
@@ -55,9 +55,9 @@ export class S3Stack extends pulumi.ComponentResource {
 
     // Create main S3 bucket
     this.bucket = new aws.s3.Bucket(
-      `secure-doc-bucket-${environmentSuffix}`,
+      `secure-doc-bucket-832457-${environmentSuffix}`,
       {
-        bucket: `secure-documents-205432-${environmentSuffix}`,
+        bucket: `secure-documents-832457-${environmentSuffix}`,
         tags: {
           Name: `secure-doc-bucket-${environmentSuffix}`,
           Purpose: 'Secure document storage',
