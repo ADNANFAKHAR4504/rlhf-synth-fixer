@@ -263,46 +263,83 @@ class TapStack:
   def _get_default_vpcs(self):
     """Get default VPCs and subnets instead of creating new ones"""
     try:
-      for region in self.regions:
-        # Get default VPC
-        default_vpc = aws.ec2.get_vpc(
-          default=True,
-          opts=pulumi.InvokeOptions(provider=self.providers[region])
-        )
-        
-        # Get default subnets in the VPC
-        default_subnets = aws.ec2.get_subnets(
-          filters=[
-            aws.ec2.GetSubnetsFilterArgs(
-              name="vpc-id",
-              values=[default_vpc.id]
-            ),
-            aws.ec2.GetSubnetsFilterArgs(
-              name="default-for-az",
-              values=["true"]
+        for region in self.regions:
+            # Get default VPC
+            default_vpc = aws.ec2.get_vpc(
+                default=True,
+                opts=pulumi.InvokeOptions(provider=self.providers[region])
             )
-          ],
-          opts=pulumi.InvokeOptions(provider=self.providers[region])
-        )
-        
-        # Get subnet objects
-        subnets = []
-        for subnet_id in default_subnets.ids:
-          subnet_data = aws.ec2.get_subnet(
-            id=subnet_id,
-            opts=pulumi.InvokeOptions(provider=self.providers[region])
-          )
-          subnets.append(subnet_data)
-        
-        # Store VPC and subnet information
-        self.vpcs[region] = default_vpc
-        self.subnets[region] = subnets
-        
-        # Internet gateway is already attached to default VPC
-        # No need to create or attach
-        
+            
+            # Define supported AZs for t3.micro instances by region
+            supported_azs_map = {
+                'us-east-1': ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1f'],
+                'us-west-2': ['us-west-2a', 'us-west-2b', 'us-west-2c', 'us-west-2d'],
+                'us-west-1': ['us-west-1a', 'us-west-1c'],
+                'eu-west-1': ['eu-west-1a', 'eu-west-1b', 'eu-west-1c'],
+                'ap-southeast-1': ['ap-southeast-1a', 'ap-southeast-1b', 'ap-southeast-1c'],
+                'ap-southeast-2': ['ap-southeast-2a', 'ap-southeast-2b', 'ap-southeast-2c']
+            }
+            
+            supported_azs = supported_azs_map.get(region, [])
+            
+            # Get default subnets in supported AZs only
+            if supported_azs:
+                default_subnets = aws.ec2.get_subnets(
+                    filters=[
+                        aws.ec2.GetSubnetsFilterArgs(
+                            name="vpc-id",
+                            values=[default_vpc.id]
+                        ),
+                        aws.ec2.GetSubnetsFilterArgs(
+                            name="default-for-az",
+                            values=["true"]
+                        ),
+                        aws.ec2.GetSubnetsFilterArgs(
+                            name="availability-zone",
+                            values=supported_azs
+                        )
+                    ],
+                    opts=pulumi.InvokeOptions(provider=self.providers[region])
+                )
+            else:
+                # Fallback: get all default subnets if no supported AZs defined
+                default_subnets = aws.ec2.get_subnets(
+                    filters=[
+                        aws.ec2.GetSubnetsFilterArgs(
+                            name="vpc-id",
+                            values=[default_vpc.id]
+                        ),
+                        aws.ec2.GetSubnetsFilterArgs(
+                            name="default-for-az",
+                            values=["true"]
+                        )
+                    ],
+                    opts=pulumi.InvokeOptions(provider=self.providers[region])
+                )
+            
+            # Get subnet objects
+            subnets = []
+            for subnet_id in default_subnets.ids:
+                subnet_data = aws.ec2.get_subnet(
+                    id=subnet_id,
+                    opts=pulumi.InvokeOptions(provider=self.providers[region])
+                )
+                subnets.append(subnet_data)
+            
+            # Ensure we have at least 2 subnets for multi-AZ deployment
+            if len(subnets) < 2:
+                raise RuntimeError(f"Not enough subnets found in supported AZs for region {region}. Found {len(subnets)}, need at least 2.")
+            
+            # Store VPC and subnet information
+            self.vpcs[region] = default_vpc
+            self.subnets[region] = subnets
+            
+            # Internet gateway is already attached to default VPC
+            # No need to create or attach
+            
     except Exception as e:
-      raise RuntimeError(f"Failed to get default VPCs: {str(e)}") from e
+        raise RuntimeError(f"Failed to get default VPCs: {str(e)}")
+
   
   def _create_s3_buckets_single_region(self):
     """Create S3 bucket for single region deployment"""
