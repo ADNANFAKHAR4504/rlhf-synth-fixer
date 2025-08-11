@@ -115,10 +115,21 @@ describe('TapStack Integration Tests - Secure Web Application', () => {
       if (!isCI) return;
 
       // Get VPC ID from stack outputs - use dynamic key based on environment
-      const vpcKey = Object.keys(stackOutputs).find(key => key.includes('NetworkStackVPC') && key.includes('Ref'));
+      // Look for the main VPC reference, not subnet references
+      const vpcKey = Object.keys(stackOutputs).find(key => 
+        key.includes('NetworkStackVPC') && 
+        key.includes('Ref') && 
+        !key.includes('Subnet') && 
+        !key.includes('public') && 
+        !key.includes('private') && 
+        !key.includes('isolated')
+      );
       expect(vpcKey).toBeDefined();
       const vpcId = stackOutputs[vpcKey!];
       expect(vpcId).toBeDefined();
+      
+      // Verify this is actually a VPC ID (starts with 'vpc-')
+      expect(vpcId).toMatch(/^vpc-/);
 
       const vpcs = await ec2Client.send(
         new DescribeVpcsCommand({
