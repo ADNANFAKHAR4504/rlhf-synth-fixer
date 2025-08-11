@@ -11,17 +11,28 @@ from aws_cdk import (
   aws_s3 as s3,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
-  Duration,
   CfnOutput,
-  RemovalPolicy
+  RemovalPolicy,
+  Duration,
+  Environment
 )
 from constructs import Construct
+
 
 class WebApplicationStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
 
-    vpc = ec2.Vpc(self, "VPC", max_azs=2)
+    # Retrieve an existing VPC using its VPC ID
+    vpc = ec2.Vpc.from_lookup(
+      self, "ExistingVPC",
+      vpc_id="vpc-0bafb9e75f087620"
+    )
+
+    # Select the private subnets from the VPC
+    private_subnets = vpc.select_subnets(
+      subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+    )
 
     # 1. ALB
     alb = elbv2.ApplicationLoadBalancer(
@@ -41,6 +52,13 @@ class WebApplicationStack(Stack):
       description="Allows access to the RDS database"
     )
 
+    db_subnet_group = rds.SubnetGroup(
+      self, "DBSubnetGroup",
+      vpc=vpc,
+      vpc_subnets=private_subnets,
+      description="Subnet group for the RDS database"
+    )
+
     db_instance = rds.DatabaseInstance(
       self, "MySQLDBInstance",
       engine=rds.DatabaseInstanceEngine.mysql(
@@ -50,11 +68,12 @@ class WebApplicationStack(Stack):
         ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.SMALL
       ),
       vpc=vpc,
-      multi_az=False,
+      multi_az=True,
       allocated_storage=20,
       publicly_accessible=False,
       removal_policy=RemovalPolicy.DESTROY,
-      security_groups=[db_security_group]
+      security_groups=[db_security_group],
+      subnet_group=db_subnet_group
     )
 
     db_instance.connections.allow_from(
@@ -78,6 +97,7 @@ class WebApplicationStack(Stack):
     asg = autoscaling.AutoScalingGroup(
       self, "ASG",
       vpc=vpc,
+      vpc_subnets=private_subnets,
       instance_type=ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.MICRO
       ),
@@ -106,7 +126,9 @@ class WebApplicationStack(Stack):
       metric=cloudwatch.Metric(
         namespace="AWS/EC2",
         metric_name="CPUUtilization",
-        dimensions_map={"AutoScalingGroupName": asg.auto_scaling_group_name},
+        dimensions_map={
+          "AutoScalingGroupName": asg.auto_scaling_group_name
+        },
         statistic="Average"
       ),
       threshold=70,
@@ -116,7 +138,9 @@ class WebApplicationStack(Stack):
       alarm_description="Alarm when average CPU utilization is too high"
     )
 
-    cpu_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alarm_topic))
+    cpu_alarm.add_alarm_action(
+      cloudwatch_actions.SnsAction(alarm_topic)
+    )
 
     # 6. S3 and CloudFront
     static_assets_bucket = s3.Bucket(
@@ -129,7 +153,8 @@ class WebApplicationStack(Stack):
       self, "CloudFrontDistribution",
       default_behavior=cloudfront.BehaviorOptions(
         origin=origins.LoadBalancerV2Origin(
-          alb, protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY
+          alb,
+          protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY
         ),
         viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
       ),
