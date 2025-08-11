@@ -43,14 +43,30 @@ that can be deployed with the current configuration of the ci-cd pipelines.
   - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-east-1
   - If deployment fails, fix the code until it deploys succesfully.
   - If you are not able to deploy, report this error and finish your execution with an error message.
+  - If there are AWS Quota Limit issues while deploying. Report this to the user, and await for user
+  input to continue.
 - Important: Verify that the deployed resources are consistent with the `lib/PROMPT.md` requirements. If
 they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
 - Important: Every deployment should be self-sufficient. There should not be references to resources
     that should be already created. Make sure that every deploy execution can run in isolation.
-- Every Stack should output the values that will be required for integration tests. Make sure that those outputs are being
-exported by the main or parent stack, so they are easy to retrieve by querying only one stack.
-- After the deployment succeeds, Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check the
-`Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on how to accomplish this per platform and region.
+- Every Stack should output the values that will be required for integration tests. Make sure that
+all child cfn stacks are named after with the parent stack as prefix: TapStack{ENVIRONMENT_SUFFIX}...
+In CDK this is achievable by instantiating the child stack using `this`. e.g:
+
+```typescript
+// Create compute stack with EC2 instances
+    const computeStack = new ComputeStack(
+      this, // HERE!!! when using this instead of scope. This stack will be named TapStack{ENVIRONMENT_SUFFIX}Compute...
+      'Compute', {
+      environmentSuffix,
+      vpc: networkStack.vpc,
+      dbInstance: databaseStack.dbInstance,
+      instanceRole: securityStack.ec2Role,
+    });
+```
+
+- After the deployment succeeds, Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check `Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on
+how to accomplish this per platform and region.
 The result should be similar to this (an object based on plain key, value).
 
 ```json
@@ -110,3 +126,4 @@ to fix the MODEL_RESPONSE.
 - Keep the file structure as simple as possible. But avoid creating files with too many lines.
 Use your best judgement to decide.
 - Never create or updated code outside of the lib, bin, test folders. That should be your working space to do the QA task.
+- Do not create specific github actions or workflows. Those are already created.

@@ -18,10 +18,11 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `iac-code-reviewer`
 
-- If the MODEL_FAILURES reported by this agent are minimal (not big deployment
-issues deploying the MODEL_RESPONSE), then request iac-infra-generator but to add 2 more recent AWS
+- If the `lib/MODEL_FAILURES.md` file reports minimal issues (not big deployment
+issues deploying the MODEL_RESPONSE), then request iac-infra-generator to add 2 more recent AWS
 Features or services to increase the complexity of the task. Then go to phase2 and give it
-another round.
+another round. The idea of this is to make sure that we are truly finding flaws in the initial
+`lib/MODEL_RESPONSE.md` and fix them in the `lib/IDEAL_RESPONSE.md`.
 
 ## Task Selection
 
@@ -29,7 +30,7 @@ another round.
 
 If `tasks.csv` is present in the repository:
 
-1. Select the first task that is not in status "in_progress" from tasks.csv.
+1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" from tasks.csv.
 2. Set the status column to in_progress.
 3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{task_id}.
 4. If `.claude/platform_enforcement.md` is present. Read it and transform the task to use the platform and language declared in that file.
