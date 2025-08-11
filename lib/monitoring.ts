@@ -7,7 +7,7 @@ export interface MonitoringProps {
   provider: any;
   environment: string;
   asgName: string;
-  dbIdentifier: string;
+  dbIdentifier?: string; // made optional for safety
 }
 
 export class Monitoring extends Construct {
@@ -50,20 +50,22 @@ export class Monitoring extends Construct {
       alarmActions: [topic.arn],
     });
 
-    // FreeStorageSpace Alarm for RDS
-    new CloudwatchMetricAlarm(this, `${id}-db-storage-alarm`, {
-      provider: props.provider,
-      alarmName: `${props.environment}-low-storage`,
-      comparisonOperator: 'LessThanThreshold',
-      evaluationPeriods: 1,
-      metricName: 'FreeStorageSpace',
-      namespace: 'AWS/RDS',
-      period: 300,
-      statistic: 'Average',
-      threshold: 2000000000, // 2 GB
-      alarmDescription: 'Low RDS storage space detected',
-      dimensions: { DBInstanceIdentifier: props.dbIdentifier },
-      alarmActions: [topic.arn],
-    });
+    // FreeStorageSpace Alarm for RDS (only if dbIdentifier is provided & not empty)
+    if (props.dbIdentifier && props.dbIdentifier.trim() !== '') {
+      new CloudwatchMetricAlarm(this, `${id}-db-storage-alarm`, {
+        provider: props.provider,
+        alarmName: `${props.environment}-low-storage`,
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'FreeStorageSpace',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 2000000000, // 2 GB
+        alarmDescription: 'Low RDS storage space detected',
+        dimensions: { DBInstanceIdentifier: props.dbIdentifier },
+        alarmActions: [topic.arn],
+      });
+    }
   }
 }

@@ -598,39 +598,43 @@ export class Database extends Construct {
 
 ```ts
 // lib/monitoring.ts
-import { Construct } from 'constructs';
-import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+import { Construct } from 'constructs';
 
 export interface MonitoringProps {
   provider: any;
   environment: string;
   asgName: string;
-  dbIdentifier: string;
+  dbIdentifier?: string; // made optional for safety
 }
 
 export class Monitoring extends Construct {
   constructor(scope: Construct, id: string, props: MonitoringProps) {
     super(scope, id);
 
+    // SNS Topic for alerts
     const topic = new SnsTopic(this, `${id}-alerts`, {
       provider: props.provider,
       name: `${props.environment}-alerts`,
     });
 
+    // Log group for application
     new CloudwatchLogGroup(this, `${id}-app-logs`, {
       provider: props.provider,
       name: `/app/${props.environment}`,
       retentionInDays: 30,
     });
 
+    // Log group for database
     new CloudwatchLogGroup(this, `${id}-db-logs`, {
       provider: props.provider,
       name: `/db/${props.environment}`,
       retentionInDays: 30,
     });
 
+    // CPU Utilization Alarm for ASG
     new CloudwatchMetricAlarm(this, `${id}-cpu-alarm`, {
       provider: props.provider,
       alarmName: `${props.environment}-high-cpu`,
@@ -646,22 +650,26 @@ export class Monitoring extends Construct {
       alarmActions: [topic.arn],
     });
 
-    new CloudwatchMetricAlarm(this, `${id}-db-storage-alarm`, {
-      provider: props.provider,
-      alarmName: `${props.environment}-low-storage`,
-      comparisonOperator: 'LessThanThreshold',
-      evaluationPeriods: 1,
-      metricName: 'FreeStorageSpace',
-      namespace: 'AWS/RDS',
-      period: 300,
-      statistic: 'Average',
-      threshold: 2_000_000_000, // 2 GB
-      alarmDescription: 'Low RDS storage space detected',
-      dimensions: { DBInstanceIdentifier: props.dbIdentifier },
-      alarmActions: [topic.arn],
-    });
+    // FreeStorageSpace Alarm for RDS (only if dbIdentifier is provided & not empty)
+    if (props.dbIdentifier && props.dbIdentifier.trim() !== '') {
+      new CloudwatchMetricAlarm(this, `${id}-db-storage-alarm`, {
+        provider: props.provider,
+        alarmName: `${props.environment}-low-storage`,
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'FreeStorageSpace',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 2000000000, // 2 GB
+        alarmDescription: 'Low RDS storage space detected',
+        dimensions: { DBInstanceIdentifier: props.dbIdentifier },
+        alarmActions: [topic.arn],
+      });
+    }
   }
 }
+
 ```
 
 ### `lib/dns.ts`
