@@ -6,7 +6,6 @@ import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { VpcModule } from './modules';
 // import { MyStack } from './my-stack';
 
@@ -52,21 +51,13 @@ export class TapStack extends TerraformStack {
     // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // 2. Get AWS Availability Zones Dynamically
-    // This makes the stack resilient and portable to other regions.
-    const availabilityZones = new DataAwsAvailabilityZones(this, 'azs', {
-      state: 'available',
-    });
-
-    // 3. Instantiate the VPC Module
+    // Instantiate the VPC Module
     const network = new VpcModule(this, 'ProductionVpc', {
       vpcCidr: '10.0.0.0/16',
-      // availabilityZones: availabilityZones.names,
-      // availabilityZones: availabilityZones.names.slice(0, 2),
       availabilityZones: ['us-west-2a', 'us-west-2b'],
     });
 
-    // 4. Essential Outputs
+    // Essential Outputs
     new TerraformOutput(this, 'vpc_id', {
       value: network.vpcId,
       description: 'The ID of the main VPC.',
