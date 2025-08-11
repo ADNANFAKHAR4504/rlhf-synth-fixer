@@ -17,7 +17,10 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
-import { AwsProvider, AwsProviderDefaultTags } from '@cdktf/provider-aws/lib/provider';
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
