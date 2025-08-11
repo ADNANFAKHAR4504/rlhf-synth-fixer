@@ -64,13 +64,13 @@ const PUBLIC_SUBNETS = outputs[`${stackName}-Public-Subnets`] || outputs['Public
 const WEBSERVER_SG_ID = outputs[`${stackName}-WebServer-SG-ID`] || outputs['WebServerSecurityGroupId'];
 const ALB_SG_ID = outputs[`${stackName}-ALB-SG-ID`] || outputs['ALBSecurityGroupId'];
 
-// AWS SDK v3 clients - using us-west-2 as per your template
-const ec2Client = new EC2Client({ region: 'us-west-2' });
-const elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
-const cloudWatchClient = new CloudWatchClient({ region: 'us-west-2' });
-const autoScalingClient = new AutoScalingClient({ region: 'us-west-2' });
-const cloudFormationClient = new CloudFormationClient({ region: 'us-west-2' });
-const iamClient = new IAMClient({ region: 'us-west-2' });
+// AWS SDK v3 clients - using us-east-1 as per your template
+const ec2Client = new EC2Client({ region: 'us-east-1' });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+const cloudWatchClient = new CloudWatchClient({ region: 'us-east-1' });
+const autoScalingClient = new AutoScalingClient({ region: 'us-east-1' });
+const cloudFormationClient = new CloudFormationClient({ region: 'us-east-1' });
+const iamClient = new IAMClient({ region: 'us-east-1' });
 
 // Helper functions for AWS SDK v3 operations
 async function getStackInfo() {
