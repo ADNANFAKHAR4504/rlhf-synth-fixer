@@ -2,8 +2,7 @@
 
 Below is a comprehensive CloudFormation template that meets all your requirements for a secure, scalable web application environment:
 
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
+```AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready web application infrastructure with ALB, Auto Scaling, RDS PostgreSQL, and comprehensive security'
 
 Parameters:
@@ -478,8 +477,8 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ProdAppTargetGroup
       LoadBalancerArn: !Ref ProdAppALB
-      Port: 80
-      Protocol: HTTP
+      Port: 80 # Not possible to use HTTPS as it needs manual validation for DNS propagation
+      Protocol: HTTP #Not possible to use HTTPS as it needs manual validation for DNS propagation
 
 
   # CloudWatch Log Groups
@@ -494,6 +493,17 @@ Resources:
     Properties:
       LogGroupName: '/aws/ec2/prodapp/httpd/error'
       RetentionInDays: 30
+
+  # SSL Certificate not possible to because it needs manual validation for DNS propagation
+  # ProdAppSSLCertificate:
+  #   Type: AWS::CertificateManager::Certificate
+  #   Condition: CreateNewCertificate
+  #   Properties:
+  #     DomainName: !Ref DomainName
+  #     ValidationMethod: DNS
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'ProdApp-SSL-Certificate-${EnvironmentSuffix}'
 
 Outputs:
   VPCId:

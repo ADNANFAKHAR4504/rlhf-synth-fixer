@@ -9,22 +9,6 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
-  SSLCertificateArn:
-    Type: String
-    Description: 'ARN of existing SSL certificate from ACM'
-    Default: ''
-
-  DomainName:
-    Type: String
-    Description: 'Domain name for the application (used for certificate creation)'
-    Default: 'webapp.mydomain.com'
-
-  CreateCertificate:
-    Type: String
-    Description: 'Whether to create a new certificate (Yes or No)'
-    Default: 'Yes'
-    AllowedValues: ['Yes', 'No']
-
   VpcCidr:
     Type: String
     Default: '10.0.0.0/16'
@@ -46,9 +30,6 @@ Parameters:
     Default: 'db.t3.micro'
     AllowedValues: ['db.t3.micro', 'db.t3.small', 'db.t3.medium']
     Description: 'RDS instance class'
-
-Conditions:
-  CreateNewCertificate: !Equals [!Ref CreateCertificate, 'Yes']
 
 Resources:
   # VPC and Networking
@@ -492,10 +473,9 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ProdAppTargetGroup
       LoadBalancerArn: !Ref ProdAppALB
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !If [CreateNewCertificate, !Ref ProdAppSSLCertificate, !Ref SSLCertificateArn]
+      Port: 80 # Not possible to use HTTPS as it needs manual validation for DNS propagation
+      Protocol: HTTP #Not possible to use HTTPS as it needs manual validation for DNS propagation
+
 
   # CloudWatch Log Groups
   ProdAppHTTPDAccessLogGroup:
@@ -510,16 +490,16 @@ Resources:
       LogGroupName: '/aws/ec2/prodapp/httpd/error'
       RetentionInDays: 30
 
-  # SSL Certificate
-  ProdAppSSLCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Condition: CreateNewCertificate
-    Properties:
-      DomainName: !Ref DomainName
-      ValidationMethod: DNS
-      Tags:
-        - Key: Name
-          Value: !Sub 'ProdApp-SSL-Certificate-${EnvironmentSuffix}'
+  # SSL Certificate not possible to because it needs manual validation for DNS propagation
+  # ProdAppSSLCertificate:
+  #   Type: AWS::CertificateManager::Certificate
+  #   Condition: CreateNewCertificate
+  #   Properties:
+  #     DomainName: !Ref DomainName
+  #     ValidationMethod: DNS
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'ProdApp-SSL-Certificate-${EnvironmentSuffix}'
 
 Outputs:
   VPCId:
@@ -545,9 +525,3 @@ Outputs:
     Value: !Ref ProdAppAutoScalingGroup
     Export:
       Name: !Sub '${AWS::StackName}-ASG-Name-${EnvironmentSuffix}'
-      
-  SSLCertificateARN:
-    Description: 'SSL Certificate ARN'
-    Value: !If [CreateNewCertificate, !Ref ProdAppSSLCertificate, !Ref SSLCertificateArn]
-    Export:
-      Name: !Sub '${AWS::StackName}-SSL-Certificate-ARN-${EnvironmentSuffix}'
