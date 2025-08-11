@@ -18,10 +18,11 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `iac-code-reviewer`
 
-- If the MODEL_FAILURES reported by this agent are minimal (not big deployment
-issues deploying the MODEL_RESPONSE), then request iac-infra-generator but to add 2 more recent AWS
+- If the `lib/MODEL_FAILURES.md` reported are minimal (not big deployment
+issues deploying the MODEL_RESPONSE), then request iac-infra-generator to add 2 more recent AWS
 Features or services to increase the complexity of the task. Then go to phase2 and give it
-another round.
+another round. The idea of this is to make sure that we are truly finding flaws in the initial
+`lib/MODEL_RESPONSE.md` and fix them in the `lib/IDEAL_RESPONSE.md`.
 
 ## Task Selection
 
