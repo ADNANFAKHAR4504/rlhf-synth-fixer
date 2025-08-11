@@ -29,9 +29,11 @@ Parameters:
     Default: "us-east-1a,us-east-1b"
 
   PublicKeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "EC2 Key Pair for SSH access"
+    Type: String
+    Description: "EC2 Key Pair for SSH access (optional - leave empty if no SSH access needed)"
     Default: ""
+    AllowedPattern: "^$|^[a-zA-Z0-9_-]+$"
+    ConstraintDescription: "Must be empty or a valid key pair name"
 
   AssumeRoleService:
     Type: String
@@ -337,7 +339,6 @@ Resources:
     Properties:
       ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI in us-east-1
       InstanceType: t3.micro
-      KeyName: !Ref PublicKeyName
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
       SubnetId: !Ref SubnetA
@@ -353,6 +354,7 @@ Resources:
 
 Conditions:
   CreateS3BucketCondition: !Equals [!Ref CreateS3Bucket, "true"]
+  HasKeyPair: !Not [!Equals [!Ref PublicKeyName, ""]]
 
 Outputs:
   S3KMSKeyArn:

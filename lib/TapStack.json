@@ -24,9 +24,11 @@
             "Default": "us-east-1a,us-east-1b"
         },
         "PublicKeyName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 Key Pair for SSH access",
-            "Default": ""
+            "Type": "String",
+            "Description": "EC2 Key Pair for SSH access (optional - leave empty if no SSH access needed)",
+            "Default": "",
+            "AllowedPattern": "^$|^[a-zA-Z0-9_-]+$",
+            "ConstraintDescription": "Must be empty or a valid key pair name"
         },
         "AssumeRoleService": {
             "Type": "String",
@@ -572,9 +574,6 @@
             "Properties": {
                 "ImageId": "ami-0c02fb55956c7d316",
                 "InstanceType": "t3.micro",
-                "KeyName": {
-                    "Ref": "PublicKeyName"
-                },
                 "SecurityGroupIds": [
                     {
                         "Ref": "EC2SecurityGroup"
@@ -615,6 +614,18 @@
                     "Ref": "CreateS3Bucket"
                 },
                 "true"
+            ]
+        },
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "PublicKeyName"
+                        },
+                        ""
+                    ]
+                }
             ]
         }
     },
