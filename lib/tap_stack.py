@@ -67,11 +67,15 @@ class TapStack(pulumi.ComponentResource):
 
     stack_name = f"{PULUMI_ORG}/TapStack/TapStack{ENVIRONMENT_SUFFIX}"
 
-    # Set aws:region for the stack
-    subprocess.run(
-        ["pulumi", "config", "set", "aws:region", region, "--stack", stack_name, "--non-interactive"],
-        check=True
-    )
+    if os.environ.get("PULUMI_TEST_MODE"):  
+        # Inject config directly for tests
+        os.environ["PULUMI_CONFIG"] = f'{{"aws:region":"{region}"}}'
+    else:
+        # Real deployment — update stack config via CLI
+        subprocess.run(
+            ["pulumi", "config", "set", "aws:region", region, "--stack", stack_name, "--non-interactive"],
+            check=True
+        )
 
     # === Module Initializations ===
     kms_manager = KMSManager(project_name, environment)

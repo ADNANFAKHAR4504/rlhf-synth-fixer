@@ -13,7 +13,7 @@ import os
 
 # Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
-
+os.environ["PULUMI_TEST_MODE"] ="1 pytest"
 
 """
 Here you define the classes for Unit tests for the TapStack Pulumi component and Pulumi's testing utilities.
