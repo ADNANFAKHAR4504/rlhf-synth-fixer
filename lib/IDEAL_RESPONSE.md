@@ -1369,13 +1369,19 @@ describe('TapStack — Integration Coverage', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
 
-    // Read the Terraform outputs (you can replace this with the actual location of your state file)
-    const terraformStateFile = path.join(__dirname, '..', 'cdktf.out', 'terraform.tfstate');
+    // Read the Terraform outputs (adjusted path for the CI pipeline)
+    const terraformStateFile = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    
+    // Check if the file exists (optional sanity check)
+    if (!fs.existsSync(terraformStateFile)) {
+      throw new Error(`Terraform state file not found at ${terraformStateFile}`);
+    }
+
     const state = JSON.parse(fs.readFileSync(terraformStateFile, 'utf8'));
 
     // Extract resource IDs from Terraform state outputs
-    const vpcId = state.resources.find((r: any) => r.type === 'aws_vpc' && r.name === 'primaryVpc')?.instances[0]?.attributes?.id;
-    const dbInstanceId = state.resources.find((r: any) => r.type === 'aws_db_instance')?.instances[0]?.attributes?.id;
+    const vpcId = state.TapStackpr824.PrimaryVpc_vpc_id_121F1BFC;
+    const dbInstanceId = state.TapStackpr824.PrimaryDb_db_instance_765D70A7;
 
     expect(vpcId).toBeDefined();
     expect(dbInstanceId).toBeDefined();
@@ -1393,6 +1399,7 @@ describe('TapStack — Integration Coverage', () => {
     expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);  // Check if DB instance exists
   });
 });
+
 ```
 
 ### `bin/tap.ts`
