@@ -1,3 +1,4 @@
+```python
 import json
 from typing import Optional
 
@@ -784,3 +785,4 @@ def \_enforce_rbac(self) -> None:
       policy_arn=self.rbac_policy.arn,
       opts=ResourceOptions(parent=self)
     )
+```
