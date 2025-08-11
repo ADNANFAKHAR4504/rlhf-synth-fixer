@@ -26,7 +26,6 @@ env:
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
   PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-  AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
   PULUMI_ORG: 'organization'
 
 jobs:
@@ -206,13 +205,15 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
-          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Deploy
         run: |
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
           LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
+
+          echo "AWS_REGION is set to: $AWS_REGION"
+          echo "AWS_DEFAULT_REGION is set to: $AWS_DEFAULT_REGION"
 
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK deploy..."
@@ -246,7 +247,6 @@ jobs:
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Get Deployment Outputs
@@ -561,7 +561,6 @@ jobs:
           CI: '1' # Set CI for the entire step
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   claude-code-action:
@@ -674,7 +673,6 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
-          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   archive-folders:
@@ -970,7 +968,6 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
-          # AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   # TODO: For future use
