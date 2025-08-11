@@ -362,6 +362,7 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: DBSecret # <-- ADD THIS LINE
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
