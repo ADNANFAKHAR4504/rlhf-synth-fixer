@@ -29,7 +29,7 @@ Use IAM roles with least privilege for EC2, RDS, and other resources.
 
 Store database credentials securely in AWS Secrets Manager and retrieve them for the RDS instance.
 
-Enable CloudWatch monitoring for EC2 and RDS.
+Enable the CloudWatch monitoring for EC2 and RDS.
 
 Prefix all resource names with "prod-" to indicate a production environment.
 
