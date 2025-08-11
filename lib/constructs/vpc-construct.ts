@@ -85,7 +85,8 @@ export class VpcConstruct extends Construct {
       `VPCFlowLogGroup-${environment}`,
       {
         retention: logs.RetentionDays.ONE_YEAR,
-        logGroupName: `/aws/vpc/${environment}/flow-logs`,
+        logGroupName: `/aws/vpc/${environment}/flow-logs-${Date.now()}`,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 

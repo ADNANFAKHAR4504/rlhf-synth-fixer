@@ -18,7 +18,8 @@ export class WafConstruct extends Construct {
     // CloudWatch Log Group for WAF logs
     const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
       retention: logs.RetentionDays.THREE_MONTHS,
-      logGroupName: `/aws/waf/${environment}/web-acl-logs`,
+      logGroupName: `/aws/waf/${environment}/web-acl-logs-${Date.now()}`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Create WAF Web ACL
