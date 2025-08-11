@@ -59,7 +59,9 @@ def create_infrastructure():
     "public-subnet-1",
     vpc_id=vpc.id,
     cidr_block="10.0.1.0/24",
-    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda cidr: f"{cidr[:-2]}1::/64" if cidr else None),
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+      lambda cidr: cidr.replace('/56', '1::/64') if cidr else None
+    ),
     assign_ipv6_address_on_creation=True,
     availability_zone=f"{region}a",
     tags={"Name": "public-subnet-1"},
@@ -70,7 +72,9 @@ def create_infrastructure():
     "public-subnet-2",
     vpc_id=vpc.id,
     cidr_block="10.0.2.0/24",
-    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda cidr: f"{cidr[:-2]}2::/64" if cidr else None),
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+      lambda cidr: cidr.replace('/56', '2::/64') if cidr else None
+    ),
     assign_ipv6_address_on_creation=True,
     availability_zone=f"{region}b",
     tags={"Name": "public-subnet-2"},
