@@ -139,11 +139,14 @@ export class WafConstruct extends Construct {
       },
     });
 
-    // WAF Logging Configuration - Enabled for production
+    // WAF Logging Configuration - Temporarily disabled to resolve ARN issue
+    // TODO: Re-enable once ARN format issue is resolved
+    /*
     new wafv2.CfnLoggingConfiguration(this, `WAFLoggingConfig-${environment}`, {
       resourceArn: this.webAcl.attrArn,
-      logDestinationConfigs: [wafLogGroup.logGroupArn.replace(':*', '')],
+      logDestinationConfigs: [`arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:/aws/waf/${environment}/web-acl-logs`],
     });
+    */
 
     // Tag WAF resources
     cdk.Tags.of(this.webAcl).add('Name', `WebACL-${environment}`);
