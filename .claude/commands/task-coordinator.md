@@ -18,10 +18,11 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `iac-code-reviewer`
 
-- If the MODEL_FAILURES reported by this agent are minimal (not big deployment
-issues deploying the MODEL_RESPONSE), then request iac-infra-generator but to add 2 more recent AWS
+- If the `lib/MODEL_FAILURES.md` reported are minimal (not big deployment
+issues deploying the MODEL_RESPONSE), then request iac-infra-generator to add 2 more recent AWS
 Features or services to increase the complexity of the task. Then go to phase2 and give it
-another round.
+another round. The idea of this is to make sure that we are truly finding flaws in the initial
+`lib/MODEL_RESPONSE.md` and fix them in the `lib/IDEAL_RESPONSE.md`.
 
 ## Task Selection
 
@@ -29,13 +30,14 @@ another round.
 
 If `tasks.csv` is present in the repository:
 
-1. Read and display available tasks from the CSV file
-2. Ask the user to select which task to work on by number or ID, unless the user has already
-given the ID in the initial prompt, then dont ask for confirmation.
-3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{TaskId}.
-4. If its a multi-cloud task, notify the user and stop every execution. This project is only for AWS tasks.
-5. All the work you and the sub-agents need to do from this monent will be inside the worktree folder.
-6. If `metadata.json` is not present, extract platform and language from the selected task and mimic the actions from `cli/create-task.ts`:
+1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" from tasks.csv.
+2. Set the status column to in_progress.
+3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{task_id}.
+4. If `.claude/platform_enforcement.md` is present. Read it and transform the task to use the platform and language declared in that file.
+instead of the platform+language declared in the task description.
+5. If its a multi-cloud task, notify the user and stop every execution. This project is only for AWS tasks.
+6. All the work you and the sub-agents need to do from this monent will be inside the worktree folder.
+7. If `metadata.json` is not present, extract platform and language from the selected task and mimic the actions from `cli/create-task.ts`:
    - Determine platform (cdk, cdktf, cfn, pulumi) from task description
    - Determine language (ts, py, yaml, json) from task description  
    - Set complexity from CSV difficulty field
@@ -46,12 +48,28 @@ given the ID in the initial prompt, then dont ask for confirmation.
    - Generate `metadata.json` with extracted information
    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
    region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
-7. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
-8. Use the selected task description for the workflow.
-9. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
+8. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
+9. Use the selected task description for the workflow. Start the workflow.
+10. Once the workflow has finished. Ask iac-infra-qa-trainer to run a last round of build, synth, lint, and unit tests and make
+sure everything is passing.
+11. If iac-infra-qa-trainer is not making all the pipelines pass. Stop and mark the task as error.
+12. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
+13. Remove the gitworktree created for this task.
+14. Finally, set the status of the task in the csv as status "done" and fill the trainr_notes column with a short note
+ on the process.
+15. Clear your context, make sure you are positioned in the root folder `iac-test-automations/` and start again from
+point 1.
 
 Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the sub-agent. Just send the task information
 to the generator agent
+
+Important: If, for any reason, youre unable to finish the task. set the task status in the csv as "error" and put the error
+information inside the trainr_notes column of that task.
+
+Additional:
+
+- If you find an issue in the task description that blocks you from deploying the infrastructure properly, and its an issue
+that can block future tasks, document it in `.claude/lessons_learnt.md`
 
 ### Option 2: Direct Task Input
 
@@ -111,6 +129,7 @@ Each sub-agent must provide status updates at these key points:
 - Report test execution progress and coverage metrics with current test being run
 - Report cleanup completion status and any cleanup failures
 - Report blocking conditions if infrastructure deployment fails repeatedly
+- Report unit-test coverage.
 
 #### Phase 3: iac-code-reviewer
 
