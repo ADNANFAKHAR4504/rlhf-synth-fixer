@@ -87,6 +87,7 @@ class TapStack(pulumi.ComponentResource):
                 f"security-{region_suffix}-{self.environment_suffix}",
                 vpc_id=self.networking.vpc.id,
                 subnets=self.networking.public_subnet_ids,
+                region=region,
                 tags=self.tags,
                 opts=provider_opts([self.networking])
             )
