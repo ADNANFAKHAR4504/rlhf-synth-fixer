@@ -2,7 +2,7 @@ import base64
 import json
 import re
 import uuid
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 import pulumi
 import pulumi_aws as aws
@@ -942,7 +942,7 @@ EOF
             instance_type=self.args.instance_type,
             vpc_security_group_ids=[self.security_groups[region]['ec2'].id],
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-                name=self.instance_profiles[region].name
+                name=self.iam_roles[region]["profile"].name
             ),
             user_data=pulumi.Output.concat(
                 "#!/bin/bash\n",
