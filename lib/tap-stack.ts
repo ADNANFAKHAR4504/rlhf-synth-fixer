@@ -293,7 +293,7 @@ export class TapStack extends cdk.Stack {
         const dynamodb = new AWS.DynamoDB.DocumentClient();
 
         exports.handler = async (event) => {
-          console.log('Running analytics processor');
+          console.log('Running analytics processor with event:', JSON.stringify(event));
           
           try {
             const params = {
@@ -305,15 +305,16 @@ export class TapStack extends cdk.Stack {
             };
             
             const result = await dynamodb.scan(params).promise();
-            console.log('Queried analytics data:', result.Items.length);
+            console.log('Queried analytics data:', result.Items ? result.Items.length : 0);
             
-            const userActivityCount = result.Items.filter(item => item.dataType === 'USER_ACTIVITY').length;
-            const orderActivityCount = result.Items.filter(item => item.dataType === 'ORDER_ACTIVITY').length;
+            const items = result.Items || [];
+            const userActivityCount = items.filter(item => item.dataType === 'USER_ACTIVITY').length;
+            const orderActivityCount = items.filter(item => item.dataType === 'ORDER_ACTIVITY').length;
             
             const summary = {
               dataType: 'DAILY_SUMMARY',
               processedAt: Date.now(),
-              totalRecords: result.Items.length,
+              totalRecords: items.length,
               userActivityCount,
               orderActivityCount,
               processedBy: 'analyticsProcessor'
@@ -326,12 +327,22 @@ export class TapStack extends cdk.Stack {
             
             console.log('Analytics summary created:', summary);
             
+            // Return proper response structure for both direct invocation and Step Functions
+            return { 
+              statusCode: 200, 
+              body: 'Successfully processed analytics',
+              summary: summary
+            };
+            
           } catch (error) {
-            console.error('Error processing analytics:', error.message);
-            throw error;
+            console.error('Error processing analytics:', error);
+            // Return error response with statusCode
+            return {
+              statusCode: 500,
+              body: JSON.stringify({ error: error.message }),
+              error: error.message
+            };
           }
-          
-          return { statusCode: 200, body: 'Successfully processed analytics' };
         };
       `),
     });
@@ -447,6 +458,7 @@ export class TapStack extends cdk.Stack {
       {
         lambdaFunction: dataValidator,
         outputPath: '$.Payload',
+        retryOnServiceExceptions: true,
       }
     );
 
@@ -456,6 +468,7 @@ export class TapStack extends cdk.Stack {
       {
         lambdaFunction: analyticsProcessor,
         outputPath: '$.Payload',
+        retryOnServiceExceptions: true,
       }
     );
 
