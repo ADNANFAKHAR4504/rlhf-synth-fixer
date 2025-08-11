@@ -89,10 +89,7 @@ describe('TapStack.yml - Unit Tests', () => {
       expect(yaml).toMatch(/Deployment/);
       expect(yaml).toMatch(/Networking/);
     });
-    test('has empty Transforms', () => {
-      expect(yaml).toMatch(/Transforms:\s*\[\s*\]/);
-    });
-  });
+      });
 
   describe('Parameters', () => {
     test('defines all expected parameters with constraints/defaults', () => {
@@ -118,11 +115,12 @@ describe('TapStack.yml - Unit Tests', () => {
   });
 
   describe('Conditions', () => {
-    test('defines UseExampleALB, UseNatGateways, IsProdEnv', () => {
+    test('defines UseExampleALB, UseNatGateways, IsProdEnv, UseDefaultBucketSuffix', () => {
       expect(yaml).toMatch(/Conditions:/);
       expect(yaml).toMatch(/UseExampleALB: \!Equals \[ \!Ref EnableExampleALB, 'true' \]/);
       expect(yaml).toMatch(/UseNatGateways: \!Equals \[ \!Ref CreateNatGateways, 'true' \]/);
       expect(yaml).toMatch(/IsProdEnv: \!Equals \[ \!Ref Environment, 'prod' \]/);
+      expect(yaml).toMatch(/UseDefaultBucketSuffix: \!Equals \[ \!Ref BucketSuffix, '' \]/);
     });
   });
 
@@ -153,6 +151,9 @@ describe('TapStack.yml - Unit Tests', () => {
       expectLineIncludes(block.content, /CidrBlock:\s*\!Ref VpcCidr/);
       expectLineIncludes(block.content, /EnableDnsSupport:\s*true/);
       expectLineIncludes(block.content, /EnableDnsHostnames:\s*true/);
+      // Ensure IsProd tag is wired to IsProdEnv condition
+      expectLineIncludes(block.content, /Key:\s*IsProd/);
+      expectLineIncludes(block.content, /\!If \[ IsProdEnv, 'true', 'false' \]/);
     });
     test('Public subnets map public IP on launch', () => {
       expectResourceHasType(yaml, 'PublicSubnet1', 'AWS::EC2::Subnet');
@@ -445,6 +446,8 @@ describe('TapStack.yml - Unit Tests', () => {
         'CloudTrailLogGroupArn',
         'WebACLArn',
         'ALBDNS',
+        'AdminCIDROut',
+        'AvailabilityZonesToUseOut',
       ];
       outputs.forEach(o => {
         const pattern = new RegExp(`(?:^|\\r?\\n)\\s*${o}:`);

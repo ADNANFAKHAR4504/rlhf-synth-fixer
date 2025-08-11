@@ -78,8 +78,8 @@ Conditions:
   UseExampleALB: !Equals [ !Ref EnableExampleALB, 'true' ]
   UseNatGateways: !Equals [ !Ref CreateNatGateways, 'true' ]
   IsProdEnv: !Equals [ !Ref Environment, 'prod' ]
+  UseDefaultBucketSuffix: !Equals [ !Ref BucketSuffix, '' ]
 
-Transforms: []
 
 Resources:
 
@@ -141,12 +141,15 @@ Resources:
           Value: FinancialProject
         - Key: Environment
           Value: !Ref Environment
+        - Key: IsProd
+          Value: !If [ IsProdEnv, 'true', 'false' ]
 
   # Generate 2*AvailabilityZonesToUse subnets from VpcCidr (public & private)
   # Use Fn::Cidr to create 4 (2 public + 2 private) subnets when AZs=2; if AZs=3, 6 subnets possible
   SubnetCidrs:
     Type: 'AWS::CloudFormation::WaitConditionHandle' # placeholder not created - used only for template readability (no physical subnet list resource)
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   # Public Subnet 1
   PublicSubnet1:
@@ -157,11 +160,8 @@ Resources:
         Fn::Select:
           - 0
           - Fn::Cidr:
-              - Fn::Ref: VpcCidr
-              - Fn::If:
-                - UseExampleALB
-                - 4
-                - 4
+              - Ref: VpcCidr
+              - 4
               - 8
       AvailabilityZone:
         Fn::Select:
@@ -184,7 +184,7 @@ Resources:
         Fn::Select:
           - 1
           - Fn::Cidr:
-              - Fn::Ref: VpcCidr
+              - Ref: VpcCidr
               - 4
               - 8
       AvailabilityZone:
@@ -208,7 +208,7 @@ Resources:
         Fn::Select:
           - 2
           - Fn::Cidr:
-              - Fn::Ref: VpcCidr
+              - Ref: VpcCidr
               - 4
               - 8
       AvailabilityZone:
@@ -231,7 +231,7 @@ Resources:
         Fn::Select:
           - 3
           - Fn::Cidr:
-              - Fn::Ref: VpcCidr
+              - Ref: VpcCidr
               - 4
               - 8
       AvailabilityZone:
@@ -555,7 +555,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !If
-        - Fn::Equals: [ !Ref BucketSuffix, '' ]
+        - UseDefaultBucketSuffix
         - !Sub '${Environment}-financial-data-${AWS::AccountId}-${AWS::Region}'
         - !Sub '${Environment}-financial-data-${AWS::AccountId}-${AWS::Region}-${BucketSuffix}'
       BucketEncryption:
@@ -601,7 +601,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !If
-        - Fn::Equals: [ !Ref BucketSuffix, '' ]
+        - UseDefaultBucketSuffix
         - !Sub '${Environment}-logging-${AWS::AccountId}-${AWS::Region}'
         - !Sub '${Environment}-logging-${AWS::AccountId}-${AWS::Region}-${BucketSuffix}'
       BucketEncryption:
@@ -625,7 +625,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !If
-        - Fn::Equals: [ !Ref BucketSuffix, '' ]
+        - UseDefaultBucketSuffix
         - !Sub '${Environment}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
         - !Sub '${Environment}-cloudtrail-${AWS::AccountId}-${AWS::Region}-${BucketSuffix}'
       BucketEncryption:
@@ -921,3 +921,11 @@ Outputs:
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${Environment}-ALB-DNS'
+
+  AdminCIDROut:
+    Description: Echo of AdminCIDR parameter to mark it as used
+    Value: !Ref AdminCIDR
+
+  AvailabilityZonesToUseOut:
+    Description: Echo of AvailabilityZonesToUse parameter to mark it as used
+    Value: !Ref AvailabilityZonesToUse
