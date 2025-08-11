@@ -93,12 +93,14 @@ Resources:
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
+          # Allow root account full administrative access to the CMK
           - Sid: AllowRootAccountFullAccess
             Effect: Allow
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: 'kms:*'
             Resource: '*'
+          # Permit CloudWatch Logs and CloudTrail service principals to use this CMK for log delivery and LogGroup encryption
           - Sid: AllowCloudWatchAndCloudTrailUse
             Effect: Allow
             Principal:
@@ -143,13 +145,7 @@ Resources:
         - Key: IsProd
           Value: !If [ IsProdEnv, 'true', 'false' ]
 
-  # Generate 2*AvailabilityZonesToUse subnets from VpcCidr (public & private)
-  # Use Fn::Cidr to create 4 (2 public + 2 private) subnets when AZs=2; if AZs=3, 6 subnets possible
-  SubnetCidrs:
-    Type: 'AWS::CloudFormation::WaitConditionHandle' # placeholder not created - used only for template readability (no physical subnet list resource)
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
+  
   # Public Subnet 1
   PublicSubnet1:
     Type: AWS::EC2::Subnet
