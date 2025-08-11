@@ -33,7 +33,6 @@ Globals:
       Application: !Ref ApplicationName
 
 Resources:
-  # DynamoDB Table
   AppDynamoTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -55,7 +54,6 @@ Resources:
         - Key: Application
           Value: !Ref ApplicationName
 
-  # Lambda Execution Role
   AppLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -99,7 +97,6 @@ Resources:
         - Key: Application
           Value: !Ref ApplicationName
 
-  # Lambda Function
   AppLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -237,7 +234,6 @@ Resources:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
 
-  # HTTP API Gateway
   AppHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -263,14 +259,13 @@ Resources:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
 
-  # Lambda Permission for API Gateway (explicit permission)
   ApiGatewayLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref AppLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${AppHttpApi}/*/ANY/{proxy+}'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AppHttpApi}/*/*'
 
 Outputs:
   ApiEndpoint:
@@ -296,5 +291,3 @@ Outputs:
     Value: !GetAtt AppDynamoTable.Arn
     Export:
       Name: !Sub '${AWS::StackName}-DynamoTableArn'
-
-      #abc
