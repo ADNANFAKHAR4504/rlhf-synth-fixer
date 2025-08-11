@@ -1,0 +1,44 @@
+[
+    {
+        "OutputKey": "DatabasePort",
+        "OutputValue": "3306",
+        "Description": "RDS database port",
+        "ExportName": "TapStacksynthtrainr24-DatabasePort"
+    },
+    {
+        "OutputKey": "LoadBalancerArn",
+        "OutputValue": "arn:aws:elasticloadbalancing:us-east-1:718240086340:loadbalancer/app/webapp-alb-synthtrainr24/b95c17cd627b5493",
+        "Description": "Application Load Balancer ARN",
+        "ExportName": "TapStacksynthtrainr24-LoadBalancerArn"
+    },
+    {
+        "OutputKey": "VPCId",
+        "OutputValue": "vpc-081d886375906b03c",
+        "Description": "VPC ID",
+        "ExportName": "TapStacksynthtrainr24-VPCId"
+    },
+    {
+        "OutputKey": "EnvironmentSuffix",
+        "OutputValue": "synthtrainr24",
+        "Description": "Environment suffix used for resource naming",
+        "ExportName": "TapStacksynthtrainr24-EnvironmentSuffix"
+    },
+    {
+        "OutputKey": "AutoScalingGroupName",
+        "OutputValue": "webapp-asg-synthtrainr24",
+        "Description": "Auto Scaling Group name",
+        "ExportName": "TapStacksynthtrainr24-AutoScalingGroupName"
+    },
+    {
+        "OutputKey": "LoadBalancerDNS",
+        "OutputValue": "webapp-alb-synthtrainr24-1526820965.us-east-1.elb.amazonaws.com",
+        "Description": "Application Load Balancer DNS name",
+        "ExportName": "TapStacksynthtrainr24-LoadBalancerDNS"
+    },
+    {
+        "OutputKey": "DatabaseEndpoint",
+        "OutputValue": "webapp-db-synthtrainr24.c43eiskmcd0s.us-east-1.rds.amazonaws.com",
+        "Description": "RDS database endpoint",
+        "ExportName": "TapStacksynthtrainr24-DatabaseEndpoint"
+    }
+]
