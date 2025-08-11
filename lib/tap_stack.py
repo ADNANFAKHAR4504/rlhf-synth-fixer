@@ -936,8 +936,8 @@ EOF
         
         # Launch Template
         launch_template = aws.ec2.LaunchTemplate(
-            f"lt-{region}-{self.args.environment}",
-            name=f"tap-lt-{region}-{self.args.environment}-{timestamp_suffix}",
+            f"lt-{region}-{self.args.environment_suffix}",
+            name=f"tap-lt-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
             image_id=ami.id,
             instance_type=self.args.instance_type,
             vpc_security_group_ids=[self.security_groups[region]['ec2'].id],
@@ -957,7 +957,7 @@ EOF
             tag_specifications=[
                 aws.ec2.LaunchTemplateTagSpecificationArgs(
                     resource_type="instance",
-                    tags={"Name": f"tap-instance-{region}-{self.args.environment}"}
+                    tags={"Name": f"tap-instance-{region}-{self.args.environment_suffix}"}
                 )
             ],
             opts=pulumi.ResourceOptions(provider=self.providers[region])
@@ -966,11 +966,11 @@ EOF
         subnet_ids = [s.id if hasattr(s, 'id') else s.subnet_id for s in self.subnets[region]]
         
         # Check if ASG already exists and use unique naming
-        asg_name = f"tap-asg-{self.args.environment}-{region}-{timestamp_suffix}"
+        asg_name = f"tap-asg-{self.args.environment_suffix}-{region}-{timestamp_suffix}"
         
         # Auto Scaling Group with unique name
         asg = aws.autoscaling.Group(
-            f"asg-{region}-{self.args.environment}",
+            f"asg-{region}-{self.args.environment_suffix}",
             name=asg_name,
             vpc_zone_identifiers=subnet_ids,
             target_group_arns=[self.target_groups[region].arn],
@@ -986,12 +986,12 @@ EOF
             tag=[
                 aws.autoscaling.GroupTagArgs(
                     key="Name",
-                    value=f"tap-asg-{region}-{self.args.environment}",
+                    value=f"tap-asg-{region}-{self.args.environment_suffix}",
                     propagate_at_launch=True
                 ),
                 aws.autoscaling.GroupTagArgs(
                     key="Environment",
-                    value=self.args.environment,
+                    value=self.args.environment_suffix,
                     propagate_at_launch=True
                 )
             ],
@@ -1004,8 +1004,8 @@ EOF
         
         # Auto Scaling Policies
         scale_up_policy = aws.autoscaling.Policy(
-            f"scale-up-{region}-{self.args.environment}",
-            name=f"tap-scale-up-{region}-{self.args.environment}-{timestamp_suffix}",
+            f"scale-up-{region}-{self.args.environment_suffix}",
+            name=f"tap-scale-up-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
             scaling_adjustment=1,
             adjustment_type="ChangeInCapacity",
             cooldown=300,
@@ -1014,8 +1014,8 @@ EOF
         )
         
         scale_down_policy = aws.autoscaling.Policy(
-            f"scale-down-{region}-{self.args.environment}",
-            name=f"tap-scale-down-{region}-{self.args.environment}-{timestamp_suffix}",
+            f"scale-down-{region}-{self.args.environment_suffix}",
+            name=f"tap-scale-down-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
             scaling_adjustment=-1,
             adjustment_type="ChangeInCapacity",
             cooldown=300,
@@ -1025,8 +1025,8 @@ EOF
         
         # CloudWatch Alarms
         aws.cloudwatch.MetricAlarm(
-            f"cpu-high-{region}-{self.args.environment}",
-            alarm_name=f"tap-cpu-high-{region}-{self.args.environment}-{timestamp_suffix}",
+            f"cpu-high-{region}-{self.args.environment_suffix}",
+            alarm_name=f"tap-cpu-high-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
@@ -1041,8 +1041,8 @@ EOF
         )
         
         aws.cloudwatch.MetricAlarm(
-            f"cpu-low-{region}-{self.args.environment}",
-            alarm_name=f"tap-cpu-low-{region}-{self.args.environment}-{timestamp_suffix}",
+            f"cpu-low-{region}-{self.args.environment_suffix}",
+            alarm_name=f"tap-cpu-low-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
             comparison_operator="LessThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
