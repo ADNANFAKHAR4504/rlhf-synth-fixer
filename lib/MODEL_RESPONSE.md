@@ -1,695 +1,977 @@
-# IaC - AWS Nova Model Breaking Solution
+# AWS Nova Model Breaking - Secure Infrastructure with Pulumi
 
-I'll provide a comprehensive solution for creating a secure, region-agnostic AWS VPC using Pulumi in Python that meets all the specified requirements.
+I'll create a comprehensive, secure, and scalable AWS infrastructure using Pulumi in Python. This solution addresses all requirements while following best practices for production environments.
 
-## Solution Structure
+## Project Structure
 
 ```
-project/
-├── __main__.py           # Main Pulumi program
-├── vpc_module.py         # VPC module with all components
-├── config.py            # Configuration and constants
-├── tests/
-│   ├── test_vpc.py      # Test suite
-│   └── __init__.py
-├── Pulumi.yaml          # Pulumi project configuration
-└── requirements.txt     # Python dependencies
+aws-nova-infrastructure/
+├── __main__.py
+├── Pulumi.yaml
+├── Pulumi.dev.yaml
+├── Pulumi.prod.yaml
+├── requirements.txt
+├── infrastructure/
+│   ├── __init__.py
+│   ├── vpc.py
+│   ├── security.py
+│   ├── compute.py
+│   ├── api_gateway.py
+│   ├── monitoring.py
+│   └── kms.py
+└── lambda/
+    └── health_check.py
 ```
 
-## 1. Main Pulumi Program (`__main__.py`)
+## Core Infrastructure Files
 
+### `__main__.py`
 ```python
 """
-Main Pulumi program for secure, region-agnostic AWS VPC deployment.
-Project: IaC - AWS Nova Model Breaking
-Problem ID: Security_Configuration_as_Code_Pulumi_Python_b9v7ltkf54m6
+Main Pulumi program for AWS Nova Model Breaking infrastructure.
+Deploys secure and scalable cloud infrastructure on AWS.
 """
 
 import pulumi
-from vpc_module import SecureVPC
-from config import VPCConfig
-
-# Initialize configuration
-config = VPCConfig()
-
-# Create the secure VPC infrastructure
-vpc_infrastructure = SecureVPC(
-    name_prefix=config.name_prefix,
-    vpc_cidr=config.vpc_cidr,
-    tags=config.default_tags,
-    enable_dns_hostnames=True,
-    enable_dns_support=True
+from infrastructure import (
+    vpc,
+    security,
+    compute,
+    api_gateway,
+    monitoring,
+    kms
 )
+from typing import Dict, Any
 
-# Export important outputs
-pulumi.export("vpc_id", vpc_infrastructure.vpc.id)
-pulumi.export("vpc_cidr", vpc_infrastructure.vpc.cidr_block)
-pulumi.export("public_subnet_ids", [subnet.id for subnet in vpc_infrastructure.public_subnets])
-pulumi.export("private_subnet_ids", [subnet.id for subnet in vpc_infrastructure.private_subnets])
-pulumi.export("internet_gateway_id", vpc_infrastructure.internet_gateway.id)
-pulumi.export("nat_gateway_ids", [nat.id for nat in vpc_infrastructure.nat_gateways])
-pulumi.export("flow_logs_id", vpc_infrastructure.flow_logs.id)
-pulumi.export("region", vpc_infrastructure.region)
-pulumi.export("availability_zones", vpc_infrastructure.availability_zones)
+
+def main() -> None:
+    """Main function to orchestrate infrastructure deployment."""
+    # Get configuration
+    config = pulumi.Config()
+    environment = config.require("environment")
+    
+    # Common tags for all resources
+    common_tags: Dict[str, str] = {
+        "Environment": "Production",
+        "Project": "AWS-Nova-Model-Breaking",
+        "ManagedBy": "Pulumi"
+    }
+    
+    # Create KMS key first (needed by other resources)
+    kms_key = kms.create_kms_key(common_tags)
+    
+    # Create VPC and networking
+    vpc_resources = vpc.create_vpc(common_tags)
+    
+    # Create security groups
+    security_groups = security.create_security_groups(
+        vpc_resources["vpc"], 
+        common_tags
+    )
+    
+    # Create IAM roles and EC2 instances
+    compute_resources = compute.create_compute_resources(
+        vpc_resources["subnets"],
+        security_groups["web_sg"],
+        kms_key,
+        common_tags
+    )
+    
+    # Create API Gateway with logging
+    api_resources = api_gateway.create_api_gateway(
+        kms_key,
+        common_tags
+    )
+    
+    # Create monitoring and health check Lambda
+    monitoring_resources = monitoring.create_monitoring(
+        vpc_resources["subnets"],
+        security_groups["lambda_sg"],
+        compute_resources["instances"],
+        kms_key,
+        common_tags
+    )
+    
+    # Export important values
+    pulumi.export("vpc_id", vpc_resources["vpc"].id)
+    pulumi.export("subnet_ids", [subnet.id for subnet in vpc_resources["subnets"]])
+    pulumi.export("instance_ids", [instance.id for instance in compute_resources["instances"]])
+    pulumi.export("api_gateway_url", api_resources["api_url"])
+    pulumi.export("kms_key_id", kms_key.id)
+
+
+if __name__ == "__main__":
+    main()
 ```
 
-## 2. VPC Module (`vpc_module.py`)
-
+### `infrastructure/vpc.py`
 ```python
-"""
-Secure VPC module with all required components.
-Implements region-agnostic, compliant AWS VPC infrastructure.
-"""
+"""VPC and networking infrastructure components."""
 
 import pulumi
 import pulumi_aws as aws
-from typing import List, Dict, Any
+from typing import Dict, List, Any
+
+
+def create_vpc(tags: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Create VPC with subnets in different availability zones.
+    
+    Args:
+        tags: Common resource tags
+        
+    Returns:
+        Dictionary containing VPC and subnet resources
+    """
+    # Create VPC
+    vpc = aws.ec2.Vpc(
+        "nova-vpc",
+        cidr_block="10.0.0.0/16",
+        enable_dns_hostnames=True,
+        enable_dns_support=True,
+        tags={
+            **tags,
+            "Name": "nova-production-vpc"
+        }
+    )
+    
+    # Create Internet Gateway
+    igw = aws.ec2.InternetGateway(
+        "nova-igw",
+        vpc_id=vpc.id,
+        tags={
+            **tags,
+            "Name": "nova-production-igw"
+        }
+    )
+    
+    # Get availability zones
+    azs = aws.get_availability_zones(state="available")
+    
+    # Create public subnets in different AZs
+    subnets: List[aws.ec2.Subnet] = []
+    for i in range(2):
+        subnet = aws.ec2.Subnet(
+            f"nova-subnet-{i+1}",
+            vpc_id=vpc.id,
+            cidr_block=f"10.0.{i+1}.0/24",
+            availability_zone=azs.names[i],
+            map_public_ip_on_launch=True,
+            tags={
+                **tags,
+                "Name": f"nova-production-subnet-{i+1}",
+                "Type": "Public"
+            }
+        )
+        subnets.append(subnet)
+    
+    # Create route table
+    route_table = aws.ec2.RouteTable(
+        "nova-rt",
+        vpc_id=vpc.id,
+        routes=[
+            aws.ec2.RouteTableRouteArgs(
+                cidr_block="0.0.0.0/0",
+                gateway_id=igw.id,
+            )
+        ],
+        tags={
+            **tags,
+            "Name": "nova-production-rt"
+        }
+    )
+    
+    # Associate subnets with route table
+    for i, subnet in enumerate(subnets):
+        aws.ec2.RouteTableAssociation(
+            f"nova-rta-{i+1}",
+            subnet_id=subnet.id,
+            route_table_id=route_table.id
+        )
+    
+    return {
+        "vpc": vpc,
+        "subnets": subnets,
+        "igw": igw,
+        "route_table": route_table
+    }
+```
+
+### `infrastructure/security.py`
+```python
+"""Security groups and IAM roles."""
+
+import pulumi
+import pulumi_aws as aws
+from typing import Dict, Any
+
+
+def create_security_groups(vpc: aws.ec2.Vpc, tags: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Create security groups with restricted access.
+    
+    Args:
+        vpc: VPC resource
+        tags: Common resource tags
+        
+    Returns:
+        Dictionary containing security group resources
+    """
+    # Web security group (HTTP/HTTPS only)
+    web_sg = aws.ec2.SecurityGroup(
+        "nova-web-sg",
+        description="Security group for web servers - HTTP/HTTPS only",
+        vpc_id=vpc.id,
+        ingress=[
+            aws.ec2.SecurityGroupIngressArgs(
+                description="HTTP",
+                from_port=80,
+                to_port=80,
+                protocol="tcp",
+                cidr_blocks=["0.0.0.0/0"]
+            ),
+            aws.ec2.SecurityGroupIngressArgs(
+                description="HTTPS",
+                from_port=443,
+                to_port=443,
+                protocol="tcp",
+                cidr_blocks=["0.0.0.0/0"]
+            )
+        ],
+        egress=[
+            aws.ec2.SecurityGroupEgressArgs(
+                description="All outbound traffic",
+                from_port=0,
+                to_port=0,
+                protocol="-1",
+                cidr_blocks=["0.0.0.0/0"]
+            )
+        ],
+        tags={
+            **tags,
+            "Name": "nova-web-security-group"
+        }
+    )
+    
+    # Lambda security group
+    lambda_sg = aws.ec2.SecurityGroup(
+        "nova-lambda-sg",
+        description="Security group for Lambda functions",
+        vpc_id=vpc.id,
+        egress=[
+            aws.ec2.SecurityGroupEgressArgs(
+                description="All outbound traffic",
+                from_port=0,
+                to_port=0,
+                protocol="-1",
+                cidr_blocks=["0.0.0.0/0"]
+            )
+        ],
+        tags={
+            **tags,
+            "Name": "nova-lambda-security-group"
+        }
+    )
+    
+    return {
+        "web_sg": web_sg,
+        "lambda_sg": lambda_sg
+    }
+```
+
+### `infrastructure/compute.py`
+```python
+"""EC2 instances and IAM roles."""
+
+import pulumi
+import pulumi_aws as aws
+from typing import Dict, List, Any
 import json
 
-class SecureVPC:
+
+def create_compute_resources(
+    subnets: List[aws.ec2.Subnet],
+    security_group: aws.ec2.SecurityGroup,
+    kms_key: aws.kms.Key,
+    tags: Dict[str, str]
+) -> Dict[str, Any]:
     """
-    Creates a secure, region-agnostic VPC with public/private subnets,
-    NAT gateways, security groups, NACLs, and VPC Flow Logs.
+    Create EC2 instances with unique IAM roles.
+    
+    Args:
+        subnets: List of subnet resources
+        security_group: Security group for instances
+        kms_key: KMS key for encryption
+        tags: Common resource tags
+        
+    Returns:
+        Dictionary containing compute resources
     """
+    instances: List[aws.ec2.Instance] = []
+    roles: List[aws.iam.Role] = []
     
-    def __init__(self, 
-                 name_prefix: str,
-                 vpc_cidr: str,
-                 tags: Dict[str, str],
-                 enable_dns_hostnames: bool = True,
-                 enable_dns_support: bool = True):
-        
-        self.name_prefix = name_prefix
-        self.vpc_cidr = vpc_cidr
-        self.tags = tags
-        
-        # Get current region and availability zones
-        self.region = aws.get_region().name
-        self.availability_zones = self._get_availability_zones()
-        
-        # Create VPC components
-        self.vpc = self._create_vpc(enable_dns_hostnames, enable_dns_support)
-        self.internet_gateway = self._create_internet_gateway()
-        
-        # Create subnets
-        self.public_subnets = self._create_public_subnets()
-        self.private_subnets = self._create_private_subnets()
-        
-        # Create NAT infrastructure
-        self.elastic_ips = self._create_elastic_ips()
-        self.nat_gateways = self._create_nat_gateways()
-        
-        # Create route tables
-        self.public_route_table = self._create_public_route_table()
-        self.private_route_tables = self._create_private_route_tables()
-        
-        # Create Network ACLs
-        self.public_nacl = self._create_public_nacl()
-        self.private_nacl = self._create_private_nacl()
-        
-        # Create VPC Flow Logs
-        self.flow_logs_role = self._create_flow_logs_role()
-        self.flow_logs = self._create_flow_logs()
-    
-    def _get_availability_zones(self) -> List[str]:
-        """Get available AZs in the current region."""
-        azs = aws.get_availability_zones(state="available")
-        # Use first 2 AZs for redundancy
-        return azs.names[:2]
-    
-    def _create_vpc(self, enable_dns_hostnames: bool, enable_dns_support: bool) -> aws.ec2.Vpc:
-        """Create the main VPC."""
-        return aws.ec2.Vpc(
-            f"{self.name_prefix}-vpc",
-            cidr_block=self.vpc_cidr,
-            enable_dns_hostnames=enable_dns_hostnames,
-            enable_dns_support=enable_dns_support,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-vpc"
-            }
-        )
-    
-    def _create_internet_gateway(self) -> aws.ec2.InternetGateway:
-        """Create Internet Gateway for public subnet access."""
-        return aws.ec2.InternetGateway(
-            f"{self.name_prefix}-igw",
-            vpc_id=self.vpc.id,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-igw"
-            }
-        )
-    
-    def _create_public_subnets(self) -> List[aws.ec2.Subnet]:
-        """Create public subnets in different AZs."""
-        subnets = []
-        for i, az in enumerate(self.availability_zones):
-            # Calculate subnet CIDR (10.0.1.0/24, 10.0.2.0/24)
-            subnet_cidr = f"10.0.{i+1}.0/24"
-            
-            subnet = aws.ec2.Subnet(
-                f"{self.name_prefix}-public-subnet-{i+1}",
-                vpc_id=self.vpc.id,
-                cidr_block=subnet_cidr,
-                availability_zone=az,
-                map_public_ip_on_launch=True,
-                tags={
-                    **self.tags,
-                    "Name": f"{self.name_prefix}-public-subnet-{i+1}",
-                    "Type": "Public"
-                }
+    # Get latest Amazon Linux 2 AMI
+    ami = aws.ec2.get_ami(
+        most_recent=True,
+        owners=["amazon"],
+        filters=[
+            aws.ec2.GetAmiFilterArgs(
+                name="name",
+                values=["amzn2-ami-hvm-*-x86_64-gp2"]
             )
-            subnets.append(subnet)
-        
-        return subnets
+        ]
+    )
     
-    def _create_private_subnets(self) -> List[aws.ec2.Subnet]:
-        """Create private subnets in different AZs."""
-        subnets = []
-        for i, az in enumerate(self.availability_zones):
-            # Calculate subnet CIDR (10.0.10.0/24, 10.0.20.0/24)
-            subnet_cidr = f"10.0.{(i+1)*10}.0/24"
-            
-            subnet = aws.ec2.Subnet(
-                f"{self.name_prefix}-private-subnet-{i+1}",
-                vpc_id=self.vpc.id,
-                cidr_block=subnet_cidr,
-                availability_zone=az,
-                tags={
-                    **self.tags,
-                    "Name": f"{self.name_prefix}-private-subnet-{i+1}",
-                    "Type": "Private"
-                }
-            )
-            subnets.append(subnet)
-        
-        return subnets
-    
-    def _create_elastic_ips(self) -> List[aws.ec2.Eip]:
-        """Create Elastic IPs for NAT Gateways."""
-        eips = []
-        for i in range(len(self.availability_zones)):
-            eip = aws.ec2.Eip(
-                f"{self.name_prefix}-nat-eip-{i+1}",
-                domain="vpc",
-                tags={
-                    **self.tags,
-                    "Name": f"{self.name_prefix}-nat-eip-{i+1}"
-                }
-            )
-            eips.append(eip)
-        
-        return eips
-    
-    def _create_nat_gateways(self) -> List[aws.ec2.NatGateway]:
-        """Create NAT Gateways in public subnets."""
-        nat_gateways = []
-        for i, (subnet, eip) in enumerate(zip(self.public_subnets, self.elastic_ips)):
-            nat_gateway = aws.ec2.NatGateway(
-                f"{self.name_prefix}-nat-gateway-{i+1}",
-                allocation_id=eip.id,
-                subnet_id=subnet.id,
-                tags={
-                    **self.tags,
-                    "Name": f"{self.name_prefix}-nat-gateway-{i+1}"
-                }
-            )
-            nat_gateways.append(nat_gateway)
-        
-        return nat_gateways
-    
-    def _create_public_route_table(self) -> aws.ec2.RouteTable:
-        """Create route table for public subnets."""
-        route_table = aws.ec2.RouteTable(
-            f"{self.name_prefix}-public-rt",
-            vpc_id=self.vpc.id,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-public-rt"
-            }
-        )
-        
-        # Route to Internet Gateway
-        aws.ec2.Route(
-            f"{self.name_prefix}-public-route",
-            route_table_id=route_table.id,
-            destination_cidr_block="0.0.0.0/0",
-            gateway_id=self.internet_gateway.id
-        )
-        
-        # Associate with public subnets
-        for i, subnet in enumerate(self.public_subnets):
-            aws.ec2.RouteTableAssociation(
-                f"{self.name_prefix}-public-rta-{i+1}",
-                subnet_id=subnet.id,
-                route_table_id=route_table.id
-            )
-        
-        return route_table
-    
-    def _create_private_route_tables(self) -> List[aws.ec2.RouteTable]:
-        """Create route tables for private subnets."""
-        route_tables = []
-        for i, (subnet, nat_gateway) in enumerate(zip(self.private_subnets, self.nat_gateways)):
-            route_table = aws.ec2.RouteTable(
-                f"{self.name_prefix}-private-rt-{i+1}",
-                vpc_id=self.vpc.id,
-                tags={
-                    **self.tags,
-                    "Name": f"{self.name_prefix}-private-rt-{i+1}"
-                }
-            )
-            
-            # Route to NAT Gateway
-            aws.ec2.Route(
-                f"{self.name_prefix}-private-route-{i+1}",
-                route_table_id=route_table.id,
-                destination_cidr_block="0.0.0.0/0",
-                nat_gateway_id=nat_gateway.id
-            )
-            
-            # Associate with private subnet
-            aws.ec2.RouteTableAssociation(
-                f"{self.name_prefix}-private-rta-{i+1}",
-                subnet_id=subnet.id,
-                route_table_id=route_table.id
-            )
-            
-            route_tables.append(route_table)
-        
-        return route_tables
-    
-    def _create_public_nacl(self) -> aws.ec2.NetworkAcl:
-        """Create Network ACL for public subnets allowing only HTTP/HTTPS."""
-        nacl = aws.ec2.NetworkAcl(
-            f"{self.name_prefix}-public-nacl",
-            vpc_id=self.vpc.id,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-public-nacl"
-            }
-        )
-        
-        # Inbound rules - HTTP (80) and HTTPS (443)
-        aws.ec2.NetworkAclRule(
-            f"{self.name_prefix}-public-nacl-inbound-http",
-            network_acl_id=nacl.id,
-            rule_number=100,
-            protocol="tcp",
-            rule_action="allow",
-            port_range=aws.ec2.NetworkAclRulePortRangeArgs(
-                from_=80,
-                to=80
-            ),
-            cidr_block="0.0.0.0/0"
-        )
-        
-        aws.ec2.NetworkAclRule(
-            f"{self.name_prefix}-public-nacl-inbound-https",
-            network_acl_id=nacl.id,
-            rule_number=110,
-            protocol="tcp",
-            rule_action="allow",
-            port_range=aws.ec2.NetworkAclRulePortRangeArgs(
-                from_=443,
-                to=443
-            ),
-            cidr_block="0.0.0.0/0"
-        )
-        
-        # Outbound rules - Allow all outbound traffic
-        aws.ec2.NetworkAclRule(
-            f"{self.name_prefix}-public-nacl-outbound-all",
-            network_acl_id=nacl.id,
-            rule_number=100,
-            protocol="-1",
-            rule_action="allow",
-            cidr_block="0.0.0.0/0",
-            egress=True
-        )
-        
-        # Associate with public subnets
-        for i, subnet in enumerate(self.public_subnets):
-            aws.ec2.NetworkAclAssociation(
-                f"{self.name_prefix}-public-nacl-assoc-{i+1}",
-                network_acl_id=nacl.id,
-                subnet_id=subnet.id
-            )
-        
-        return nacl
-    
-    def _create_private_nacl(self) -> aws.ec2.NetworkAcl:
-        """Create Network ACL for private subnets."""
-        nacl = aws.ec2.NetworkAcl(
-            f"{self.name_prefix}-private-nacl",
-            vpc_id=self.vpc.id,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-private-nacl"
-            }
-        )
-        
-        # Inbound rules - Allow from VPC CIDR
-        aws.ec2.NetworkAclRule(
-            f"{self.name_prefix}-private-nacl-inbound-vpc",
-            network_acl_id=nacl.id,
-            rule_number=100,
-            protocol="-1",
-            rule_action="allow",
-            cidr_block=self.vpc_cidr
-        )
-        
-        # Outbound rules - Allow all outbound traffic
-        aws.ec2.NetworkAclRule(
-            f"{self.name_prefix}-private-nacl-outbound-all",
-            network_acl_id=nacl.id,
-            rule_number=100,
-            protocol="-1",
-            rule_action="allow",
-            cidr_block="0.0.0.0/0",
-            egress=True
-        )
-        
-        # Associate with private subnets
-        for i, subnet in enumerate(self.private_subnets):
-            aws.ec2.NetworkAclAssociation(
-                f"{self.name_prefix}-private-nacl-assoc-{i+1}",
-                network_acl_id=nacl.id,
-                subnet_id=subnet.id
-            )
-        
-        return nacl
-    
-    def _create_flow_logs_role(self) -> aws.iam.Role:
-        """Create IAM role for VPC Flow Logs."""
-        assume_role_policy = {
+    for i in range(2):
+        # Create unique IAM role for each instance
+        assume_role_policy = json.dumps({
             "Version": "2012-10-17",
             "Statement": [
                 {
                     "Action": "sts:AssumeRole",
                     "Effect": "Allow",
                     "Principal": {
-                        "Service": "vpc-flow-logs.amazonaws.com"
+                        "Service": "ec2.amazonaws.com"
                     }
                 }
             ]
-        }
+        })
         
         role = aws.iam.Role(
-            f"{self.name_prefix}-flow-logs-role",
-            assume_role_policy=json.dumps(assume_role_policy),
+            f"nova-ec2-role-{i+1}",
+            assume_role_policy=assume_role_policy,
             tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-flow-logs-role"
+                **tags,
+                "Name": f"nova-ec2-role-{i+1}"
             }
         )
         
-        # Attach policy for CloudWatch Logs
+        # Attach managed policies
         aws.iam.RolePolicyAttachment(
-            f"{self.name_prefix}-flow-logs-policy",
+            f"nova-ec2-policy-attachment-{i+1}",
             role=role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy"
+            policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
         )
         
-        return role
+        # Create instance profile
+        instance_profile = aws.iam.InstanceProfile(
+            f"nova-instance-profile-{i+1}",
+            role=role.name,
+            tags={
+                **tags,
+                "Name": f"nova-instance-profile-{i+1}"
+            }
+        )
+        
+        # User data script
+        user_data = """#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Nova Production Server {}</h1>" > /var/www/html/index.html
+""".format(i+1)
+        
+        # Create EC2 instance
+        instance = aws.ec2.Instance(
+            f"nova-instance-{i+1}",
+            ami=ami.id,
+            instance_type="t3.micro",
+            subnet_id=subnets[i].id,
+            vpc_security_group_ids=[security_group.id],
+            iam_instance_profile=instance_profile.name,
+            user_data=user_data,
+            root_block_device=aws.ec2.InstanceRootBlockDeviceArgs(
+                volume_type="gp3",
+                volume_size=20,
+                encrypted=True,
+                kms_key_id=kms_key.arn
+            ),
+            tags={
+                **tags,
+                "Name": f"nova-production-instance-{i+1}"
+            }
+        )
+        
+        instances.append(instance)
+        roles.append(role)
     
-    def _create_flow_logs(self) -> aws.ec2.FlowLog:
-        """Create VPC Flow Logs."""
-        # Create CloudWatch Log Group
-        log_group = aws.cloudwatch.LogGroup(
-            f"{self.name_prefix}-vpc-flow-logs",
-            retention_in_days=30,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-vpc-flow-logs"
-            }
-        )
-        
-        # Create VPC Flow Logs
-        return aws.ec2.FlowLog(
-            f"{self.name_prefix}-vpc-flow-logs",
-            iam_role_arn=self.flow_logs_role.arn,
-            log_destination=log_group.arn,
-            log_destination_type="cloud-watch-logs",
-            resource_id=self.vpc.id,
-            resource_type="VPC",
-            traffic_type="ALL",
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-vpc-flow-logs"
-            }
-        )
+    return {
+        "instances": instances,
+        "roles": roles
+    }
 ```
 
-## 3. Configuration Module (`config.py`)
-
+### `infrastructure/api_gateway.py`
 ```python
-"""
-Configuration module for VPC deployment.
-Handles region-agnostic settings and default values.
-"""
+"""API Gateway with CloudWatch logging."""
 
 import pulumi
+import pulumi_aws as aws
+from typing import Dict, Any
+import json
+
+
+def create_api_gateway(kms_key: aws.kms.Key, tags: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Create API Gateway with CloudWatch logging enabled.
+    
+    Args:
+        kms_key: KMS key for encryption
+        tags: Common resource tags
+        
+    Returns:
+        Dictionary containing API Gateway resources
+    """
+    # Create CloudWatch log group for API Gateway
+    log_group = aws.cloudwatch.LogGroup(
+        "nova-api-gateway-logs",
+        name="/aws/apigateway/nova-api",
+        retention_in_days=14,
+        kms_key_id=kms_key.arn,
+        tags={
+            **tags,
+            "Name": "nova-api-gateway-logs"
+        }
+    )
+    
+    # Create API Gateway
+    api = aws.apigateway.RestApi(
+        "nova-api",
+        name="nova-production-api",
+        description="Nova Model Breaking API",
+        tags={
+            **tags,
+            "Name": "nova-production-api"
+        }
+    )
+    
+    # Create resource
+    resource = aws.apigateway.Resource(
+        "nova-api-resource",
+        rest_api=api.id,
+        parent_id=api.root_resource_id,
+        path_part="health"
+    )
+    
+    # Create method
+    method = aws.apigateway.Method(
+        "nova-api-method",
+        rest_api=api.id,
+        resource_id=resource.id,
+        http_method="GET",
+        authorization="NONE"
+    )
+    
+    # Create integration
+    integration = aws.apigateway.Integration(
+        "nova-api-integration",
+        rest_api=api.id,
+        resource_id=resource.id,
+        http_method=method.http_method,
+        integration_http_method="GET",
+        type="MOCK",
+        request_templates={
+            "application/json": json.dumps({"statusCode": 200})
+        }
+    )
+    
+    # Create method response
+    method_response = aws.apigateway.MethodResponse(
+        "nova-api-method-response",
+        rest_api=api.id,
+        resource_id=resource.id,
+        http_method=method.http_method,
+        status_code="200"
+    )
+    
+    # Create integration response
+    integration_response = aws.apigateway.IntegrationResponse(
+        "nova-api-integration-response",
+        rest_api=api.id,
+        resource_id=resource.id,
+        http_method=method.http_method,
+        status_code=method_response.status_code,
+        response_templates={
+            "application/json": json.dumps({"message": "API is healthy"})
+        }
+    )
+    
+    # Create deployment
+    deployment = aws.apigateway.Deployment(
+        "nova-api-deployment",
+        depends_on=[integration_response],
+        rest_api=api.id,
+        stage_name="prod"
+    )
+    
+    # Configure stage with logging
+    stage = aws.apigateway.Stage(
+        "nova-api-stage",
+        deployment_id=deployment.id,
+        rest_api=api.id,
+        stage_name="prod",
+        access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
+            destination_arn=log_group.arn,
+            format=json.dumps({
+                "requestId": "$context.requestId",
+                "ip": "$context.identity.sourceIp",
+                "caller": "$context.identity.caller",
+                "user": "$context.identity.user",
+                "requestTime": "$context.requestTime",
+                "httpMethod": "$context.httpMethod",
+                "resourcePath": "$context.resourcePath",
+                "status": "$context.status",
+                "protocol": "$context.protocol",
+                "responseLength": "$context.responseLength"
+            })
+        ),
+        tags={
+            **tags,
+            "Name": "nova-api-prod-stage"
+        }
+    )
+    
+    # Create API Gateway account for CloudWatch logging
+    account = aws.apigateway.Account(
+        "nova-api-account",
+        cloudwatch_role_arn=create_api_gateway_cloudwatch_role(tags).arn
+    )
+    
+    api_url = pulumi.Output.concat("https://", api.id, ".execute-api.us-east-1.amazonaws.com/prod")
+    
+    return {
+        "api": api,
+        "api_url": api_url,
+        "log_group": log_group,
+        "stage": stage
+    }
+
+
+def create_api_gateway_cloudwatch_role(tags: Dict[str, str]) -> aws.iam.Role:
+    """Create IAM role for API Gateway CloudWatch logging."""
+    assume_role_policy = json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "apigateway.amazonaws.com"
+                }
+            }
+        ]
+    })
+    
+    role = aws.iam.Role(
+        "nova-api-gateway-cloudwatch-role",
+        assume_role_policy=assume_role_policy,
+        tags={
+            **tags,
+            "Name": "nova-api-gateway-cloudwatch-role"
+        }
+    )
+    
+    aws.iam.RolePolicyAttachment(
+        "nova-api-gateway-cloudwatch-policy",
+        role=role.name,
+        policy_arn="arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+    )
+    
+    return role
+```
+
+### `infrastructure/monitoring.py`
+```python
+"""Monitoring and health check Lambda function."""
+
+import pulumi
+import pulumi_aws as aws
+from typing import Dict, List, Any
+import json
+import base64
+
+
+def create_monitoring(
+    subnets: List[aws.ec2.Subnet],
+    security_group: aws.ec2.SecurityGroup,
+    instances: List[aws.ec2.Instance],
+    kms_key: aws.kms.Key,
+    tags: Dict[str, str]
+) -> Dict[str, Any]:
+    """
+    Create Lambda function for health monitoring.
+    
+    Args:
+        subnets: List of subnet resources
+        security_group: Security group for Lambda
+        instances: List of EC2 instances to monitor
+        kms_key: KMS key for encryption
+        tags: Common resource tags
+        
+    Returns:
+        Dictionary containing monitoring resources
+    """
+    # Create CloudWatch log group for Lambda
+    log_group = aws.cloudwatch.LogGroup(
+        "nova-health-check-logs",
+        name="/aws/lambda/nova-health-check",
+        retention_in_days=14,
+        kms_key_id=kms_key.arn,
+        tags={
+            **tags,
+            "Name": "nova-health-check-logs"
+        }
+    )
+    
+    # Create IAM role for Lambda
+    assume_role_policy = json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "lambda.amazonaws.com"
+                }
+            }
+        ]
+    })
+    
+    lambda_role = aws.iam.Role(
+        "nova-lambda-role",
+        assume_role_policy=assume_role_policy,
+        tags={
+            **tags,
+            "Name": "nova-lambda-health-check-role"
+        }
+    )
+    
+    # Attach policies to Lambda role
+    aws.iam.RolePolicyAttachment(
+        "nova-lambda-vpc-policy",
+        role=lambda_role.name,
+        policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+    )
+    
+    aws.iam.RolePolicyAttachment(
+        "nova-lambda-basic-policy",
+        role=lambda_role.name,
+        policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    )
+    
+    # Create custom policy for EC2 and CloudWatch access
+    lambda_policy = aws.iam.RolePolicy(
+        "nova-lambda-custom-policy",
+        role=lambda_role.id,
+        policy=json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "ec2:DescribeInstances",
+                        "ec2:DescribeInstanceStatus",
+                        "cloudwatch:PutMetricData"
+                    ],
+                    "Resource": "*"
+                }
+            ]
+        })
+    )
+    
+    # Lambda function code
+    lambda_code = """
+import json
+import boto3
+import logging
 from typing import Dict, Any
 
-class VPCConfig:
-    """Configuration class for VPC deployment."""
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    \"\"\"Health check Lambda function.\"\"\"
+    ec2_client = boto3.client('ec2')
+    cloudwatch_client = boto3.client('cloudwatch')
     
-    def __init__(self):
-        # Get Pulumi configuration
-        config = pulumi.Config()
-        
-        # Basic configuration
-        self.name_prefix = config.get("name_prefix") or "secure-vpc"
-        self.vpc_cidr = config.get("vpc_cidr") or "10.0.0.0/16"
-        self.environment = config.get("environment") or "dev"
-        self.owner = config.get("owner") or "infrastructure-team"
-        
-        # Default tags applied to all resources
-        self.default_tags = {
-            "Owner": self.owner,
-            "Environment": self.environment,
-            "Project": "IaC-AWS-Nova-Model-Breaking",
-            "ManagedBy": "Pulumi"
-        }
-```
-
-## 4. Test Suite (`tests/test_vpc.py`)
-
-```python
-"""
-Test suite for secure VPC infrastructure.
-Validates compliance with security and configuration constraints.
-"""
-
-import unittest
-from unittest.mock import Mock, patch
-import pulumi
-from vpc_module import SecureVPC
-from config import VPCConfig
-
-class TestSecureVPC(unittest.TestCase):
-    """Test cases for SecureVPC implementation."""
-    
-    def setUp(self):
-        """Set up test fixtures."""
-        self.config = VPCConfig()
-        
-    @patch('pulumi_aws.get_region')
-    @patch('pulumi_aws.get_availability_zones')
-    def test_vpc_creation(self, mock_azs, mock_region):
-        """Test VPC creation with proper configuration."""
-        # Mock AWS responses
-        mock_region.return_value = Mock(name="us-west-2")
-        mock_azs.return_value = Mock(names=["us-west-2a", "us-west-2b"])
-        
-        # Create VPC instance
-        vpc = SecureVPC(
-            name_prefix="test-vpc",
-            vpc_cidr="10.0.0.0/16",
-            tags={"Environment": "test", "Owner": "test-user"}
+    try:
+        # Get instance statuses
+        response = ec2_client.describe_instance_status(
+            IncludeAllInstances=True
         )
         
-        # Verify VPC attributes
-        self.assertEqual(vpc.vpc_cidr, "10.0.0.0/16")
-        self.assertEqual(len(vpc.public_subnets), 2)
-        self.assertEqual(len(vpc.private_subnets), 2)
-        self.assertEqual(len(vpc.nat_gateways), 2)
-    
-    def test_subnet_cidr_calculation(self):
-        """Test that subnet CIDRs are calculated correctly."""
-        with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_availability_zones') as mock_azs:
-            
-            mock_region.return_value = Mock(name="us-east-1")
-            mock_azs.return_value = Mock(names=["us-east-1a", "us-east-1b"])
-            
-            vpc = SecureVPC(
-                name_prefix="test-vpc",
-                vpc_cidr="10.0.0.0/16",
-                tags={"Environment": "test", "Owner": "test-user"}
-            )
-            
-            # Verify subnet count
-            self.assertEqual(len(vpc.public_subnets), 2)
-            self.assertEqual(len(vpc.private_subnets), 2)
-    
-    def test_required_tags(self):
-        """Test that all resources have required tags."""
-        required_tags = ["Owner", "Environment"]
+        healthy_instances = 0
+        total_instances = len(response['InstanceStatuses'])
         
-        # Test with config tags
-        config_tags = self.config.default_tags
-        
-        for tag in required_tags:
-            self.assertIn(tag, config_tags)
-    
-    def test_region_agnostic_deployment(self):
-        """Test that deployment works across different regions."""
-        test_regions = ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"]
-        
-        for region in test_regions:
-            with patch('pulumi_aws.get_region') as mock_region, \
-                 patch('pulumi_aws.get_availability_zones') as mock_azs:
+        for instance_status in response['InstanceStatuses']:
+            instance_id = instance_status['InstanceId']
+            instance_state = instance_status['InstanceState']['Name']
+            
+            if instance_state == 'running':
+                system_status = instance_status.get('SystemStatus', {}).get('Status', 'unknown')
+                instance_check = instance_status.get('InstanceStatus', {}).get('Status', 'unknown')
                 
-                mock_region.return_value = Mock(name=region)
-                mock_azs.return_value = Mock(names=[f"{region}a", f"{region}b"])
-                
-                vpc = SecureVPC(
-                    name_prefix=f"test-vpc-{region}",
-                    vpc_cidr="10.0.0.0/16",
-                    tags={"Environment": "test", "Owner": "test-user"}
-                )
-                
-                self.assertEqual(vpc.region, region)
-    
-    def test_security_compliance(self):
-        """Test security compliance requirements."""
-        with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_availability_zones') as mock_azs:
-            
-            mock_region.return_value = Mock(name="us-west-2")
-            mock_azs.return_value = Mock(names=["us-west-2a", "us-west-2b"])
-            
-            vpc = SecureVPC(
-                name_prefix="test-vpc",
-                vpc_cidr="10.0.0.0/16",
-                tags={"Environment": "test", "Owner": "test-user"}
-            )
-            
-            # Verify NAT gateways exist for private subnet internet access
-            self.assertEqual(len(vpc.nat_gateways), 2)
-            
-            # Verify Flow Logs are enabled
-            self.assertIsNotNone(vpc.flow_logs)
-            
-            # Verify Network ACLs are created
-            self.assertIsNotNone(vpc.public_nacl)
-            self.assertIsNotNone(vpc.private_nacl)
-
-class TestVPCConfig(unittest.TestCase):
-    """Test cases for VPC configuration."""
-    
-    def test_default_configuration(self):
-        """Test default configuration values."""
-        config = VPCConfig()
+                if system_status == 'ok' and instance_check == 'ok':
+                    healthy_instances += 1
+                    logger.info(f"Instance {instance_id} is healthy")
+                else:
+                    logger.warning(f"Instance {instance_id} has issues: system={system_status}, instance={instance_check}")
+            else:
+                logger.warning(f"Instance {instance_id} is not running: {instance_state}")
         
-        # Test default values
-        self.assertEqual(config.vpc_cidr, "10.0.0.0/16")
-        self.assertIn("Owner", config.default_tags)
-        self.assertIn("Environment", config.default_tags)
-        self.assertIn("Project", config.default_tags)
-
-if __name__ == "__main__":
-    unittest.main()
+        # Send metrics to CloudWatch
+        cloudwatch_client.put_metric_data(
+            Namespace='Nova/HealthCheck',
+            MetricData=[
+                {
+                    'MetricName': 'HealthyInstances',
+                    'Value': healthy_instances,
+                    'Unit': 'Count'
+                },
+                {
+                    'MetricName': 'TotalInstances',
+                    'Value': total_instances,
+                    'Unit': 'Count'
+                }
+            ]
+        )
+        
+        logger.info(f"Health check completed: {healthy_instances}/{total_instances} instances healthy")
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'Health check completed',
+                'healthy_instances': healthy_instances,
+                'total_instances': total_instances
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'message': 'Health check failed',
+                'error': str(e)
+            })
+        }
+"""
+    
+    # Create Lambda function
+    lambda_function = aws.lambda_.Function(
+        "nova-health-check",
+        name="nova-health-check",
+        runtime="python3.9",
+        code=pulumi.AssetArchive({
+            "lambda_function.py": pulumi.StringAsset(lambda_code)
+        }),
+        handler="lambda_function.lambda_handler",
+        role=lambda_role.arn,
+        timeout=60,
+        vpc_config=aws.lambda_.FunctionVpcConfigArgs(
+            subnet_ids=[subnet.id for subnet in subnets],
+            security_group_ids=[security_group.id]
+        ),
+        environment=aws.lambda_.FunctionEnvironmentArgs(
+            variables={
+                "ENVIRONMENT": "production"
+            }
+        ),
+        kms_key_arn=kms_key.arn,
+        tags={
+            **tags,
+            "Name": "nova-health-check-lambda"
+        }
+    )
+    
+    # Create EventBridge rule for scheduling (every 5 minutes)
+    schedule_rule = aws.cloudwatch.EventRule(
+        "nova-health-check-schedule",
+        description="Trigger health check every 5 minutes",
+        schedule_expression="rate(5 minutes)",
+        tags={
+            **tags,
+            "Name": "nova-health-check-schedule"
+        }
+    )
+    
+    # Create EventBridge target
+    event_target = aws.cloudwatch.EventTarget(
+        "nova-health-check-target",
+        rule=schedule_rule.name,
+        arn=lambda_function.arn
+    )
+    
+    # Grant EventBridge permission to invoke Lambda
+    lambda_permission = aws.lambda_.Permission(
+        "nova-health-check-permission",
+        statement_id="AllowExecutionFromEventBridge",
+        action="lambda:InvokeFunction",
+        function=lambda_function.name,
+        principal="events.amazonaws.com",
+        source_arn=schedule_rule.arn
+    )
+    
+    return {
+        "lambda_function": lambda_function,
+        "log_group": log_group,
+        "schedule_rule": schedule_rule
+    }
 ```
 
-## 5. Supporting Files
+### `infrastructure/kms.py`
+```python
+"""KMS key for encryption."""
+
+import pulumi
+import pulumi_aws as aws
+from typing import Dict
+import json
+
+
+def create_kms_key(tags: Dict[str, str]) -> aws.kms.Key:
+    """
+    Create KMS key for encrypting sensitive data.
+    
+    Args:
+        tags: Common resource tags
+        
+    Returns:
+        KMS key resource
+    """
+    # Get current AWS account and region
+    current = aws.get_caller_identity()
+    
+    # KMS key policy
+    key_policy = json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Enable IAM User Permissions",
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": f"arn:aws:iam::{current.account_id}:root"
+                },
+                "Action": "kms:*",
+                "Resource": "*"
+            },
+            {
+                "Sid": "Allow CloudWatch Logs",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": f"logs.us-east-1.amazonaws.com"
+                },
+                "Action": [
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey"
+                ],
+                "Resource": "*"
+            }
+        ]
+    })
+    
+    # Create KMS key
+    kms_key = aws.kms.Key(
+        "nova-kms-key",
+        description="KMS key for Nova Model Breaking infrastructure encryption",
+        policy=key_policy,
+        tags={
+            **tags,
+            "Name": "nova-production-kms-key"
+        }
+    )
+    
+    # Create KMS key alias
+    aws.kms.Alias(
+        "nova-kms-alias",
+        name="alias/nova-production-key",
+        target_key_id=kms_key.key_id
+    )
+    
+    return kms_key
+```
+
+## Configuration Files
 
 ### `Pulumi.yaml`
 ```yaml
-name: secure-vpc-infrastructure
+name: aws-nova-infrastructure
 runtime: python
-description: Secure, region-agnostic AWS VPC infrastructure with compliance features
+description: Secure and scalable AWS infrastructure for Nova Model Breaking
+template:
+  config:
+    aws:region:
+      description: AWS region
+      default: us-east-1
+    environment:
+      description: Environment name
+      default: production
+```
 
+### `Pulumi.prod.yaml`
+```yaml
 config:
-  name_prefix:
-    description: Prefix for all resource names
-    default: "secure-vpc"
-  vpc_cidr:
-    description: CIDR block for the VPC
-    default: "10.0.0.0/16"
-  environment:
-    description: Environment name (dev, staging, prod)
-    default: "dev"
-  owner:
-    description: Owner of the infrastructure
-    default: "infrastructure-team"
+  aws:region: us-east-1
+  aws-nova-infrastructure:environment: production
 ```
 
 ### `requirements.txt`
-```txt
-pulumi>=3.0.0
-pulumi-aws>=6.0.0
+```
+pulumi>=3.0.0,<4.0.0
+pulumi-aws>=6.0.0,<7.0.0
 ```
 
 ## Key Features Implemented
 
-### ✅ Security Requirements
-- **Network ACLs**: Public subnets restricted to HTTP/HTTPS only
-- **NAT Gateways**: Private subnets route outbound traffic through NAT
-- **VPC Flow Logs**: All traffic captured for compliance and audit
-- **IAM Roles**: Proper permissions for Flow Logs service
+### ✅ **Security & Compliance**
+- **VPC with 2 subnets** in different AZs (us-east-1a, us-east-1b)
+- **Security groups** allowing only HTTP (80) and HTTPS (443)
+- **Unique IAM roles** for each EC2 instance
+- **KMS encryption** for EBS volumes, CloudWatch logs, and Lambda
+- **Least privilege** IAM policies
 
-### ✅ Region-Agnostic Design
-- **Dynamic AZ Discovery**: Automatically detects available AZs
-- **No Hardcoded Values**: Works in any AWS region
-- **Flexible CIDR Calculation**: Programmatic subnet CIDR assignment
+### ✅ **Scalability & Reliability**
+- **Multi-AZ deployment** for high availability
+- **Auto-scaling ready** infrastructure
+- **Managed services** (Lambda, API Gateway, CloudWatch)
+- **Health monitoring** with automated checks every 5 minutes
 
-### ✅ Compliance & Monitoring
-- **Comprehensive Tagging**: Owner and Environment tags on all resources
-- **CloudWatch Integration**: Flow Logs stored in CloudWatch
-- **Resource Naming**: Consistent naming convention
+### ✅ **Operational Excellence**
+- **Infrastructure as Code** with Pulumi
+- **Environment-specific** configurations
+- **Comprehensive logging** (API Gateway → CloudWatch)
+- **Resource tagging** with "Environment: Production"
+- **Type annotations** and PEP8 compliance
 
-### ✅ Best Practices
-- **Modular Design**: Separated concerns with dedicated modules
-- **Error Handling**: Robust configuration management
-- **Documentation**: Comprehensive comments and docstrings
-- **Testing**: Complete test suite for validation
+### ✅ **Monitoring & Observability**
+- **CloudWatch integration** for all services
+- **Custom metrics** for health monitoring
+- **Centralized logging** with KMS encryption
+- **EventBridge scheduling** for automated health checks
 
 ## Deployment Instructions
 
-1. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+1. **Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
 
-2. **Configure AWS Credentials**:
-   ```bash
-   aws configure
-   ```
+2. **Configure Pulumi:**
+```bash
+pulumi stack init prod
+pulumi config set aws:region us-east-1
+pulumi config set environment production
+```
 
-3. **Initialize Pulumi**:
-   ```bash
-   pulumi stack init dev
-   ```
+3. **Deploy infrastructure:**
+```bash
+pulumi up
+```
 
-4. **Set Configuration** (optional):
-   ```bash
-   pulumi config set name_prefix "my-secure-vpc"
-   pulumi config set environment "production"
-   pulumi config set owner "my-team"
-   ```
-
-5. **Deploy Infrastructure**:
-   ```bash
-   pulumi up
-   ```
-
-6. **Run Tests**:
-   ```bash
-   python -m pytest tests/
-   ```
-
-This solution provides a production-ready, secure, and compliant AWS VPC infrastructure that meets all specified requirements while following AWS and Pulumi best practices.
+4. **Verify deployment:**
+```
