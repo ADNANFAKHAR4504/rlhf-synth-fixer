@@ -7,7 +7,7 @@ const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 type Block = { name: string; content: string };
 
 function readTemplateJsonIfExists(): any | null {
-  const jsonPath = path.join(__dirname, '../lib/secure-architecture.json');
+  const jsonPath = path.join(__dirname, '../lib/TapStack.json');
   try {
     if (fs.existsSync(jsonPath)) {
       const json = fs.readFileSync(jsonPath, 'utf8');
@@ -20,7 +20,7 @@ function readTemplateJsonIfExists(): any | null {
 let templateJson: any | null = null;
 
 function readTemplate(): string {
-  const templatePath = path.join(__dirname, '../lib/secure-architecture.yml');
+  const templatePath = path.join(__dirname, '../lib/TapStack.yml');
   const yaml = fs.readFileSync(templatePath, 'utf8');
   expect(yaml && typeof yaml === 'string').toBeTruthy();
   return yaml;
@@ -62,7 +62,7 @@ function expectResourceHasType(yaml: string, name: string, type: string) {
   expect(block!.content).toMatch(new RegExp(`\\n\\s*Type:\\s*${escapeRegExp(type)}\\b`));
 }
 
-describe('secure-architecture.yml - Unit Tests', () => {
+describe('TapStack.yml - Unit Tests', () => {
   let yaml: string;
 
   beforeAll(() => {
@@ -341,7 +341,7 @@ describe('secure-architecture.yml - Unit Tests', () => {
 
   const describeIfJson: typeof describe = templateJson ? describe : describe.skip;
 
-  describeIfJson('JSON Template Validation (optional if secure-architecture.json is present)', () => {
+  describeIfJson('JSON Template Validation (optional if TapStack.json is present)', () => {
     test('has format version and description', () => {
       expect(templateJson!.AWSTemplateFormatVersion).toBe('2010-09-09');
       expect(typeof templateJson!.Description).toBe('string');
