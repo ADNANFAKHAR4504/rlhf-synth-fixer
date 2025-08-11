@@ -97,8 +97,8 @@ export class SecurityStack extends cdk.NestedStack {
 
     // CloudWatch Log Group for application logs
     // Using KMS encryption with proper dependency management
-    // Using a deterministic unique identifier to prevent conflicts
-    const uniqueId = `${props.environmentSuffix}-${this.node.id}-${this.node.addr.substring(0, 12)}`;
+    // Using a completely unique identifier with multiple factors to prevent conflicts
+    const uniqueId = `${props.environmentSuffix}-${this.node.id}-${this.node.addr}-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}`;
     const logGroup = new logs.LogGroup(this, 'WebAppLogs', {
       logGroupName: `/aws/webapp/${uniqueId}`,
       retention: logs.RetentionDays.ONE_MONTH,
