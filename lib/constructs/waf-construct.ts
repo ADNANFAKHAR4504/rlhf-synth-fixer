@@ -18,7 +18,7 @@ export class WafConstruct extends Construct {
     // CloudWatch Log Group for WAF logs
     const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
       retention: logs.RetentionDays.THREE_MONTHS,
-      logGroupName: `/aws/waf/${environment}/web-acl-logs-${Date.now()}`,
+      logGroupName: `/aws/waf/${environment}/web-acl-logs`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -142,7 +142,7 @@ export class WafConstruct extends Construct {
     // WAF Logging Configuration - Enabled for production
     new wafv2.CfnLoggingConfiguration(this, `WAFLoggingConfig-${environment}`, {
       resourceArn: this.webAcl.attrArn,
-      logDestinationConfigs: [wafLogGroup.logGroupArn],
+      logDestinationConfigs: [wafLogGroup.logGroupArn.replace(':*', '')],
     });
 
     // Tag WAF resources
