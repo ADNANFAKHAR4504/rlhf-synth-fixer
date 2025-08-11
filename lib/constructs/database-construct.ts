@@ -56,8 +56,6 @@ export class DatabaseConstruct extends Construct {
           log_queries_not_using_indexes: '1',
           // Explicitly enforce SSL/TLS connections
           require_secure_transport: 'ON',
-          // Enable SSL certificate verification
-          ssl_ca: 'rds-ca-2019',
         },
       }
     );
@@ -89,6 +87,7 @@ export class DatabaseConstruct extends Construct {
 
       // SSL/TLS enforcement - Explicitly configured in parameter group
       // require_secure_transport: 'ON' ensures all connections use SSL/TLS
+      // MySQL 8.0 uses AWS managed certificates for SSL connections
 
       // Backup settings
       backupRetention: cdk.Duration.days(7),
