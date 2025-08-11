@@ -112,7 +112,7 @@ export class VpcConstruct extends Construct {
       },
     });
 
-    // Enable VPC Flow Logs
+    // Enable VPC Flow Logs for ALL traffic (comprehensive logging)
     this.vpc.addFlowLog(`VPCFlowLog-${environment}`, {
       destination: ec2.FlowLogDestination.toCloudWatchLogs(
         flowLogGroup,
@@ -121,6 +121,67 @@ export class VpcConstruct extends Construct {
       trafficType: ec2.FlowLogTrafficType.ALL,
       maxAggregationInterval: ec2.FlowLogMaxAggregationInterval.ONE_MINUTE,
     });
+
+    // Create additional flow log for rejected traffic only (cost optimization)
+    const rejectedFlowLogGroup = new logs.LogGroup(
+      this,
+      `VPCRejectedFlowLogGroup-${environment}`,
+      {
+        retention: logs.RetentionDays.ONE_YEAR,
+        logGroupName: `/aws/vpc/${environment}/rejected-flow-logs`,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    // Create IAM role for rejected flow logs
+    const rejectedFlowLogRole = new iam.Role(
+      this,
+      `VPCRejectedFlowLogRole-${environment}`,
+      {
+        assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+        inlinePolicies: {
+          VPCRejectedFlowLogPolicy: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                resources: [rejectedFlowLogGroup.logGroupArn],
+              }),
+            ],
+          }),
+        },
+      }
+    );
+
+    // Enable VPC Flow Logs for rejected traffic only
+    this.vpc.addFlowLog(`VPCRejectedFlowLog-${environment}`, {
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        rejectedFlowLogGroup,
+        rejectedFlowLogRole
+      ),
+      trafficType: ec2.FlowLogTrafficType.REJECT,
+      maxAggregationInterval: ec2.FlowLogMaxAggregationInterval.ONE_MINUTE,
+    });
+
+    // Tag rejected flow log resources
+    cdk.Tags.of(rejectedFlowLogGroup).add(
+      'Name',
+      `VPCRejectedFlowLogGroup-${environment}`
+    );
+    cdk.Tags.of(rejectedFlowLogGroup).add('Component', 'Network');
+    cdk.Tags.of(rejectedFlowLogGroup).add('Environment', environment);
+    cdk.Tags.of(rejectedFlowLogRole).add(
+      'Name',
+      `VPCRejectedFlowLogRole-${environment}`
+    );
+    cdk.Tags.of(rejectedFlowLogRole).add('Component', 'Network');
+    cdk.Tags.of(rejectedFlowLogRole).add('Environment', environment);
 
     // Tag VPC Flow Log resources
     cdk.Tags.of(flowLogGroup).add('Name', `VPCFlowLogGroup-${environment}`);

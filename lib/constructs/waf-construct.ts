@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
@@ -15,12 +16,8 @@ export class WafConstruct extends Construct {
 
     const { environment } = props;
 
-    // CloudWatch Log Group for WAF logs
-    const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
-      retention: logs.RetentionDays.THREE_MONTHS,
-      logGroupName: `/aws/waf/${environment}/web-acl-logs`,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    // CloudWatch Log Group for WAF logs - Removed as WAF logging requires Kinesis Data Firehose
+    // TODO: Implement Kinesis Data Firehose delivery stream for proper WAF logging
 
     // Create WAF Web ACL
     this.webAcl = new wafv2.CfnWebACL(this, `WebACL-${environment}`, {
@@ -139,23 +136,52 @@ export class WafConstruct extends Construct {
       },
     });
 
-    // WAF Logging Configuration - Temporarily disabled to resolve ARN issue
-    // TODO: Re-enable once ARN format issue is resolved
-    /* */
+    // Create CloudWatch Log Group for WAF logs
+    const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
+      retention: logs.RetentionDays.ONE_YEAR,
+      logGroupName: `/aws/waf/${environment}/web-acl-logs`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Create IAM role for WAF logging to CloudWatch Logs
+    const wafLoggingRole = new iam.Role(this, `WAFLoggingRole-${environment}`, {
+      assumedBy: new iam.ServicePrincipal('wafv2.amazonaws.com'),
+      inlinePolicies: {
+        WAFLoggingPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              resources: [wafLogGroup.logGroupArn],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // Enable WAF Logging Configuration with proper CloudWatch Logs ARN
     new wafv2.CfnLoggingConfiguration(this, `WAFLoggingConfig-${environment}`, {
       resourceArn: this.webAcl.attrArn,
-      logDestinationConfigs: [
-        `arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:/aws/waf/${environment}/web-acl-logs`,
-      ],
+      logDestinationConfigs: [wafLogGroup.logGroupArn],
     });
+
     // Tag WAF resources
     cdk.Tags.of(this.webAcl).add('Name', `WebACL-${environment}`);
     cdk.Tags.of(this.webAcl).add('Component', 'Security');
     cdk.Tags.of(this.webAcl).add('Environment', environment);
 
-    // Tag WAF log group
+    // Tag WAF logging resources
     cdk.Tags.of(wafLogGroup).add('Name', `WAFLogGroup-${environment}`);
     cdk.Tags.of(wafLogGroup).add('Component', 'Security');
     cdk.Tags.of(wafLogGroup).add('Environment', environment);
+    cdk.Tags.of(wafLoggingRole).add('Name', `WAFLoggingRole-${environment}`);
+    cdk.Tags.of(wafLoggingRole).add('Component', 'Security');
+    cdk.Tags.of(wafLoggingRole).add('Environment', environment);
   }
 }
