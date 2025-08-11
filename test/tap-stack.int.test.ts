@@ -136,7 +136,7 @@ describe('TapStack Integration Tests', () => {
       
       // Verify IAM role is attached
       expect(instance.IamInstanceProfile).toBeDefined();
-      expect(instance.IamInstanceProfile?.Arn).toContain('EC2Role-Development-trainr70');
+      expect(instance.IamInstanceProfile?.Arn).toContain('EC2InstanceDevelopmenttrainr70');
     });
 
     test('Web server is accessible via HTTP', async () => {
@@ -219,7 +219,7 @@ describe('TapStack Integration Tests', () => {
 
     test('S3 Access Point is configured', () => {
       expect(outputs.S3AccessPointArn).toBeDefined();
-      expect(outputs.S3AccessPointArn).toContain('accesspoint/s3ap-development-trainr70');
+      expect(outputs.S3AccessPointArn).toContain(`accesspoint/s3ap-development-trainr70-${environmentSuffix}`);
       expect(outputs.S3AccessPointArn).toContain('us-west-2');
     });
   });
@@ -243,7 +243,7 @@ describe('TapStack Integration Tests', () => {
       
       // Verify SNS action is configured
       expect(alarm.AlarmActions).toHaveLength(1);
-      expect(alarm.AlarmActions![0]).toContain('AlarmTopic-Development-trainr70');
+      expect(alarm.AlarmActions![0]).toContain(`AlarmTopic-Development-trainr70-${environmentSuffix}`);
     });
   });
 
@@ -253,7 +253,7 @@ describe('TapStack Integration Tests', () => {
       const listResponse = await networkFirewallClient.send(listCommand);
       
       const firewall = listResponse.Firewalls?.find(fw => 
-        fw.FirewallName?.includes('NFW-Development-trainr70')
+        fw.FirewallName?.includes(`NFW-Development-trainr70-${environmentSuffix}`)
       );
       
       expect(firewall).toBeDefined();
@@ -288,7 +288,7 @@ describe('TapStack Integration Tests', () => {
       
       expect(instance.IamInstanceProfile).toBeDefined();
       const profileArn = instance.IamInstanceProfile?.Arn || '';
-      expect(profileArn).toContain('EC2Role-Development-trainr70');
+      expect(profileArn).toContain('EC2InstanceDevelopmenttrainr70');
       
       // The actual S3 access is verified by the IAM role having the correct policies
       // which was set up during stack creation
@@ -318,8 +318,8 @@ describe('TapStack Integration Tests', () => {
 
     test('Resources follow naming convention', () => {
       // Verify outputs follow the naming pattern
-      expect(outputs.S3BucketName).toMatch(/s3bucket-development-trainr70-.*/);
-      expect(outputs.S3AccessPointArn).toContain('s3ap-development-trainr70');
+      expect(outputs.S3BucketName).toMatch(new RegExp(`s3bucket-development-trainr70-${environmentSuffix}-.*`));
+      expect(outputs.S3AccessPointArn).toContain(`s3ap-development-trainr70-${environmentSuffix}`);
       
       // EC2 and VPC IDs are auto-generated, but we can verify they exist
       expect(outputs.EC2InstanceId).toMatch(/^i-[a-f0-9]+$/);
