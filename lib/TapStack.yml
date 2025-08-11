@@ -960,7 +960,10 @@ Outputs:
   AdminCIDROut:
     Description: Echo of AdminCIDR parameter to mark it as used
     Value: !Ref AdminCIDR
-
   AvailabilityZonesToUseOut:
     Description: Echo of AvailabilityZonesToUse parameter to mark it as used
     Value: !Ref AvailabilityZonesToUse
+
+  BucketSuffixOut:
+    Description: Echo of BucketSuffix parameter to mark it as used
+    Value: !Ref BucketSuffix
