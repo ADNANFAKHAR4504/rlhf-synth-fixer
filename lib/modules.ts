@@ -1,7 +1,6 @@
 // modules.ts
 
-import { Construct } from 'constructs'; // <-- FIX: Import Construct
-// No longer need TerraformModule imports
+import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
@@ -11,7 +10,7 @@ import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 
-// FIX: This interface no longer needs to extend a TerraformModule config
+// Define the properties for the VpcModule
 export interface VpcModuleProps {
   readonly vpcCidr: string;
   readonly availabilityZones: string[];
@@ -27,10 +26,11 @@ export class VpcModule extends Construct {
   public readonly privateAz: string;
 
   constructor(scope: Construct, id: string, props: VpcModuleProps) {
-    super(scope, id); // <-- FIX: Construct's super() call doesn't take props
-
+    super(scope, id);
     if (props.availabilityZones.length < 2) {
-      throw new Error('VpcModule requires at least two availability zones.');
+      throw new Error(
+        `VpcModule requires at least 2 availability zones, but received ${props.availabilityZones.length}: ${props.availabilityZones.join(', ') || 'none'}`
+      );
     }
 
     // Assign AZs to public properties for outputting later
