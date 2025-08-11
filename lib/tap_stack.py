@@ -11,6 +11,7 @@ from aws_cdk import (
   aws_s3 as s3,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
+  Duration,
   CfnOutput,
   RemovalPolicy
 )
@@ -94,7 +95,7 @@ class WebApplicationStack(Stack):
     asg.scale_on_cpu_utilization(
       "CpuScaling",
       target_utilization_percent=50,
-      cooldown=cdk.Duration.minutes(5)
+      cooldown=Duration.minutes(5)
     )
 
     # 5. CloudWatch Alarm
