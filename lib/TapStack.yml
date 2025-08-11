@@ -33,31 +33,56 @@ Resources:
   InfrastructureKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: 'KMS Key for infrastructure encryption'
+      Description: KMS Key for infrastructure encryption
+      EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
+          # 1) Keep full admin for the account root
           - Sid: AllowRootUseOfKMSKey
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: 'kms:*'
             Resource: '*'
-          - Sid: AllowCloudFormation
+
+          # 2) Allow any principal in THIS account to administer the key policy
+          #    (this covers your CI/deploy role so KMS won’t reject creation)
+          - Sid: AllowAccountAdminsToManageKey
             Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
+            Principal: '*'
             Action:
-              - 'kms:Decrypt'
-              - 'kms:Encrypt'
-              - 'kms:GenerateDataKey*'
-              - 'kms:ReEncrypt*'
+              - kms:PutKeyPolicy
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:Disable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
             Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Ref AWS::AccountId
+
+          # 3) (Optional) Allow in-account use via CFN-only path if you want to be stricter
+          # - Sid: AllowUseViaCloudFormation
+          #   Effect: Allow
+          #   Principal: "*"
+          #   Action:
+          #     - kms:Encrypt
+          #     - kms:Decrypt
+          #     - kms:ReEncrypt*
+          #     - kms:GenerateDataKey*
+          #     - kms:DescribeKey
+          #   Resource: "*"
+          #   Condition:
+          #     StringEquals:
+          #       kms:CallerAccount: !Ref AWS::AccountId
+          #       kms:ViaService: !Sub cloudformation.${AWS::Region}.amazonaws.com
 
   SecureVPC:
     Type: AWS::EC2::VPC

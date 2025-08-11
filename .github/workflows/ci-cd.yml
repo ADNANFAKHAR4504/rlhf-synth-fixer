@@ -421,6 +421,15 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
 
       # Python setup is handled by the setup-environment action
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install CloudFormation CLI tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cfn-lint cfn-validate-yaml cfn-flip
 
       - name: Run Linting
         run: |
@@ -500,11 +509,22 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install cfn-flip
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cfn-flip
+
       - name: Convert YAML to JSON for CloudFormation projects
         if: ${{ needs.lint.outputs.platform == 'cfn' && needs.lint.outputs.language == 'yaml' }}
         run: |
           echo "✅ CloudFormation YAML project detected, converting YAML to JSON for unit tests..."
-          pipenv run cfn-flip-to-json > lib/TapStack.json
+          # cfn-flip reads YAML and outputs JSON with -j
+          cfn-flip -j lib/TapStack.yml > lib/TapStack.json
 
       - name: Run unit tests
         run: |
