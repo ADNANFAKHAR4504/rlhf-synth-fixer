@@ -1026,7 +1026,7 @@
           "Fn::Sub": "/webapp/${EnvironmentSuffix}/database/config"
         },
         "Type": "String",
-        "Value": "{\"engine\": \"mysql\", \"version\": \"8.0.43\", \"instanceClass\": \"db.t3.medium\", \"allocatedStorage\": 100, \"multiAZ\": true, \"backupRetentionPeriod\": 7}",
+        "Value": "{\"engine\": \"mysql\", \"version\": \"8.0.42\", \"instanceClass\": \"db.t3.medium\", \"allocatedStorage\": 100, \"multiAZ\": true, \"backupRetentionPeriod\": 7}",
         "Description": "Database configuration parameters",
         "Tags": {
           "Environment": "Production"
@@ -1062,7 +1062,7 @@
         },
         "DBInstanceClass": "db.t3.medium",
         "Engine": "mysql",
-        "EngineVersion": "8.0.43",
+        "EngineVersion": "8.0.42",
         "MasterUsername": {
           "Fn::Sub": "{{resolve:secretsmanager:WebApp-DB-Secret-${EnvironmentSuffix}:SecretString:username}}"
         },
