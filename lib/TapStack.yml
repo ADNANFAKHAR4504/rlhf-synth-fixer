@@ -16,14 +16,14 @@ Parameters:
     Description: Whether to deploy Lambda functions inside a VPC
 
   VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC ID where Lambda functions will be deployed
-    Default: vpc-00000000
+    Type: String
+    Description: VPC ID where Lambda functions will be deployed (required when EnableVPC is true)
+    Default: ''
     
   PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: List of private subnet IDs for Lambda deployment
-    Default: subnet-00000000,subnet-00000001
+    Type: CommaDelimitedList
+    Description: List of private subnet IDs for Lambda deployment (required when EnableVPC is true)
+    Default: ''
     
   ApplicationName:
     Type: String
@@ -37,6 +37,15 @@ Parameters:
 
 Conditions:
   UseVPC: !Equals [ !Ref EnableVPC, 'true' ]
+
+Rules:
+  RequireVpcParametersWhenEnabled:
+    RuleCondition: !Equals [ !Ref EnableVPC, 'true' ]
+    Assertions:
+      - Assert: !Not [ !Equals [ !Ref VpcId, '' ] ]
+        AssertDescription: VpcId must be provided when EnableVPC is true
+      - Assert: !Not [ !Equals [ !Join [ ',', !Ref PrivateSubnetIds ], '' ] ]
+        AssertDescription: PrivateSubnetIds must be provided when EnableVPC is true
 
 Resources:
   # DynamoDB Table with encryption at rest
