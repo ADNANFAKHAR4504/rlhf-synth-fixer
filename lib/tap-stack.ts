@@ -6,6 +6,8 @@ import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  approvedSshCidr?: string;
+  alarmEmail?: string;
 }
 
 export class TapStack extends cdk.Stack {
