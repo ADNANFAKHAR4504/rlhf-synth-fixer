@@ -212,7 +212,7 @@ export class ProductionWebAppStack extends Stack {
     // Create RDS Instance with Multi-AZ and encryption
     this.rdsInstance = new rds.DatabaseInstance(this, 'ProductionRDS', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4,
+        version: rds.PostgresEngineVersion.VER_14_12, // Using a more widely available version
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
