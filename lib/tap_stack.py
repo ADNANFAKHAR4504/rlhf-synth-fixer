@@ -973,7 +973,7 @@ EOF
             f"asg-{region}-{self.args.environment_suffix}",
             name=asg_name,
             vpc_zone_identifiers=subnet_ids,
-            target_group_arns=[self.target_groups[region].arn],
+            target_group_arns=[self.load_balancers[region]["target_group"].arn],
             health_check_type="ELB",
             health_check_grace_period=300,
             min_size=self.args.min_size,
@@ -1058,6 +1058,7 @@ EOF
         
         self.launch_templates[region] = launch_template
         self.auto_scaling_groups[region] = asg
+
 
   
   def get_resource_count(self) -> Dict[str, int]:
