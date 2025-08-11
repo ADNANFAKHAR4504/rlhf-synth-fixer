@@ -1,7 +1,0 @@
-{
-  "ApiGatewayUrl": "https://example123456.execute-api.us-east-1.amazonaws.com/prod",
-  "LambdaFunctionArn": "arn:aws:lambda:us-east-1:123456789012:function:test-stack-processor-function",
-  "S3BucketName": "test-stack-processed-data-123456789012-us-east-1",
-  "KMSKeyId": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
-  "KMSKeyAlias": "alias/test-stack-s3-encryption-key"
-}
