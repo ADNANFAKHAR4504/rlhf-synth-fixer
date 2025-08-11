@@ -23,12 +23,13 @@ class S3Manager:
   def create_logging_bucket(self) -> aws.s3.BucketV2:
     """Create secure S3 bucket for centralized logging."""
 
-    bucket_name = f"{self.project_name}-secure-logs-{self.account_id}"
+    bucket_name = f"{self.project_name}-logs-{self.account_id}"
 
     # Create the bucket (V2)
     logging_bucket = aws.s3.BucketV2(
         f"{self.project_name}-logging-bucket",
         bucket=bucket_name,
+        force_destroy=True,
         tags={
             "Name": bucket_name,
             "Environment": self.environment,
