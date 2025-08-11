@@ -122,8 +122,7 @@ ami = get_ami(
     filters=[
         {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]},
         {"name": "owner-alias", "values": ["amazon"]}
-    ],
-    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
+    ]
 )
 
 USER_DATA = """#!/bin/bash
