@@ -1,4 +1,3 @@
-import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, CfnOutput, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -83,7 +82,10 @@ export class SecurityConfigStack extends Stack {
 
     // EC2 Instance
     this.ec2Instance = new ec2.Instance(this, 'SecureEC2Instance', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       role: ec2Role,
       vpc,
