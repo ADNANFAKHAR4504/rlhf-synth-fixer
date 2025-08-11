@@ -516,11 +516,23 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
 
+      - name: Set up Python
+        if: ${{ needs.lint.outputs.platform == 'cfn' && needs.lint.outputs.language == 'yaml' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install cfn-flip
+        if: ${{ needs.lint.outputs.platform == 'cfn' && needs.lint.outputs.language == 'yaml' }}
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cfn-flip
+
       - name: Convert YAML to JSON for CloudFormation projects
         if: ${{ needs.lint.outputs.platform == 'cfn' && needs.lint.outputs.language == 'yaml' }}
         run: |
           echo "✅ CloudFormation YAML project detected, converting YAML to JSON for unit tests..."
-          pipenv run cfn-flip-to-json > lib/TapStack.json
+          python -m cfn_flip -j lib/TapStack.yml > lib/TapStack.json
 
       - name: Run unit tests
         run: |
