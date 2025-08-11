@@ -123,6 +123,43 @@ describe('TapStack CloudFormation Template', () => {
       expect(lifecycle.ExpirationInDays).toBe(90);
     });
 
+    test('should have SecureAppLogsBucketPolicy resource', () => {
+      expect(template.Resources.SecureAppLogsBucketPolicy).toBeDefined();
+    });
+
+    test('SecureAppLogsBucketPolicy should be an S3 bucket policy', () => {
+      const policy = template.Resources.SecureAppLogsBucketPolicy;
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+    });
+
+    test('SecureAppLogsBucketPolicy should allow CloudTrail access', () => {
+      const policy = template.Resources.SecureAppLogsBucketPolicy;
+      const statements = policy.Properties.PolicyDocument.Statement;
+      
+      expect(statements).toHaveLength(3);
+      
+      const aclCheckStatement = statements.find((s: any) => s.Sid === 'CloudTrailAclCheck');
+      expect(aclCheckStatement).toBeDefined();
+      expect(aclCheckStatement.Principal.Service).toBe('cloudtrail.amazonaws.com');
+      expect(aclCheckStatement.Action).toBe('s3:GetBucketAcl');
+      
+      const writeStatement = statements.find((s: any) => s.Sid === 'CloudTrailWrite');
+      expect(writeStatement).toBeDefined();
+      expect(writeStatement.Principal.Service).toBe('cloudtrail.amazonaws.com');
+      expect(writeStatement.Action).toBe('s3:PutObject');
+      expect(writeStatement.Resource).toEqual({
+        'Fn::Sub': '${SecureAppLogsBucket.Arn}/cloudtrail-logs/*'
+      });
+      
+      const logDeliveryStatement = statements.find((s: any) => s.Sid === 'CloudTrailLogDeliveryWrite');
+      expect(logDeliveryStatement).toBeDefined();
+      expect(logDeliveryStatement.Principal.Service).toBe('cloudtrail.amazonaws.com');
+      expect(logDeliveryStatement.Action).toBe('s3:PutObject');
+      expect(logDeliveryStatement.Resource).toEqual({
+        'Fn::Sub': '${SecureAppLogsBucket.Arn}/cloudtrail-logs/*'
+      });
+    });
+
     test('should have SecureAppBackupBucket resource', () => {
       expect(template.Resources.SecureAppBackupBucket).toBeDefined();
     });
@@ -233,6 +270,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(properties.IsMultiRegionTrail).toBe(false);
       expect(properties.EnableLogFileValidation).toBe(true);
     });
+
+    test('SecureAppCloudTrail should have correct event selectors', () => {
+      const trail = template.Resources.SecureAppCloudTrail;
+      const eventSelector = trail.Properties.EventSelectors[0];
+      
+      expect(eventSelector.ReadWriteType).toBe('All');
+      expect(eventSelector.IncludeManagementEvents).toBe(true);
+      expect(eventSelector.DataResources).toBeUndefined();
+    });
   });
 
   describe('Outputs', () => {
@@ -323,7 +369,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(15); // KMS Key, KMS Alias, 3 S3 Buckets, 3 IAM Roles, 3 IAM Policies, 3 CloudWatch Log Groups, 1 CloudTrail
+      expect(resourceCount).toBe(16); // KMS Key, KMS Alias, 3 S3 Buckets, 1 S3 Bucket Policy, 3 IAM Roles, 3 IAM Policies, 3 CloudWatch Log Groups, 1 CloudTrail
     });
 
     test('should have exactly one parameter', () => {

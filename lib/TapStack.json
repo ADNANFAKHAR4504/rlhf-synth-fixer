@@ -121,7 +121,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "secureapp-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "secureapp-log-bucket-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -163,6 +163,67 @@
                         }
                     }
                 ]
+            }
+        },
+        "SecureAppLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureAppLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "CloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SecureAppLogsBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "CloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureAppLogsBucket.Arn}/cloudtrail-logs/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "CloudTrailLogDeliveryWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureAppLogsBucket.Arn}/cloudtrail-logs/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
             }
         },
         "SecureAppBackupBucket": {
@@ -551,6 +612,7 @@
         },
         "SecureAppCloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "SecureAppLogsBucketPolicy",
             "Properties": {
                 "TrailName": "secureapp-cloudtrail",
                 "S3BucketName": {
@@ -564,20 +626,7 @@
                 "EventSelectors": [
                     {
                         "ReadWriteType": "All",
-                        "IncludeManagementEvents": true,
-                        "DataResources": [
-                            {
-                                "Type": "AWS::S3::Object",
-                                "Values": [
-                                    {
-                                        "Fn::Sub": "${SecureAppDataBucket}/*"
-                                    },
-                                    {
-                                        "Fn::Sub": "${SecureAppBackupBucket}/*"
-                                    }
-                                ]
-                            }
-                        ]
+                        "IncludeManagementEvents": true
                     }
                 ],
                 "Tags": [

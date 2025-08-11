@@ -87,7 +87,7 @@ Resources:
   SecureAppLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secureapp-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'secureapp-log-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -109,6 +109,39 @@ Resources:
           Value: 'secureapp-logs-bucket'
         - Key: Environment
           Value: !Ref Environment
+
+  # S3 Bucket Policy for CloudTrail logging
+  SecureAppLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureAppLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt SecureAppLogsBucket.Arn
+          - Sid: CloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${SecureAppLogsBucket.Arn}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: CloudTrailLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${SecureAppLogsBucket.Arn}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
 
   # Backup bucket for critical data
   SecureAppBackupBucket:
@@ -338,6 +371,7 @@ Resources:
   # CloudTrail for comprehensive API logging
   SecureAppCloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: SecureAppLogsBucketPolicy
     Properties:
       TrailName: 'secureapp-cloudtrail'
       S3BucketName: !Ref SecureAppLogsBucket
@@ -349,11 +383,6 @@ Resources:
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values:
-                - !Sub '${SecureAppDataBucket}/*'
-                - !Sub '${SecureAppBackupBucket}/*'
       Tags:
         - Key: Name
           Value: 'secureapp-cloudtrail'
