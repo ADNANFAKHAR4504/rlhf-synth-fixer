@@ -166,6 +166,7 @@ describe('TapStack Unit Tests', () => {
         {
           vpcId: vpcInstance.vpc.id,
           subnetId: vpcInstance.publicSubnets[0].id,
+          sshCidrBlock: '0.0.0.0/0',
         }
       );
     });

@@ -27,7 +27,7 @@ export class S3LoggingBucketModule extends Construct {
 
     this.bucket = new S3Bucket(this, 'LoggingBucket', {
       bucket: props.bucketName,
-      acl: 'private',
+      // The deprecated 'acl' property has been removed.
     });
 
     new S3BucketServerSideEncryptionConfigurationA(this, 'BucketEncryption', {
@@ -129,9 +129,11 @@ export class VpcModule extends Construct {
   }
 }
 
+// Corrected: Add the sshCidrBlock property to the interface.
 export interface Ec2InstanceModuleProps {
   vpcId: string;
   subnetId: string;
+  sshCidrBlock: string;
 }
 
 export class Ec2InstanceModule extends Construct {
@@ -167,11 +169,12 @@ export class Ec2InstanceModule extends Construct {
           cidrBlocks: ['0.0.0.0/0'],
           description: 'Allow HTTPS',
         },
+        // Corrected: Use the property from the constructor instead of a hardcoded placeholder.
         {
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
-          cidrBlocks: ['YOUR_IP_HERE/32'],
+          cidrBlocks: [props.sshCidrBlock],
           description: 'Allow SSH',
         },
       ],
