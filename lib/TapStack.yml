@@ -236,7 +236,7 @@ Resources:
   RDSSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: RDSMasterSecret
+      Name: RDSSecret
       GenerateSecretString:
         SecretStringTemplate: !Sub |
           {"username":"${DBUsername}","password":"${DBPassword}"}
