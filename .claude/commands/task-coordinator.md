@@ -30,10 +30,12 @@ another round. The idea of this is to make sure that we are truly finding flaws 
 
 If `tasks.csv` is present in the repository:
 
-1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" from tasks.csv.
+1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" from tasks
+csv. Be aware that, in the csv file there are some rows that take more than 1 line of the file.
 2. Set the status column to in_progress.
 3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{task_id}.
-4. If `.claude/platform_enforcement.md` is present. Read it and transform the task to use the platform and language declared in that file.
+4. If `.claude/platform_enforcement.md` is present. Read it and transform the task to use the platform and
+language declared in that file.
 instead of the platform+language declared in the task description.
 5. If its a multi-cloud task, notify the user and stop every execution. This project is only for AWS tasks.
 6. All the work you and the sub-agents need to do from this monent will be inside the worktree folder.
@@ -50,8 +52,8 @@ instead of the platform+language declared in the task description.
    region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
 8. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
 9. Use the selected task description for the workflow. Start the workflow.
-10. Once the workflow has finished. Ask iac-infra-qa-trainer to run a last round of build, synth, lint, and unit tests and make
-sure everything is passing.
+10. Once the workflow has finished. Ask iac-infra-qa-trainer to run a last round of build, synth, lint, and unit
+tests and make sure everything is passing.
 11. If iac-infra-qa-trainer is not making all the pipelines pass. Stop and mark the task as error.
 12. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
 13. Remove the gitworktree created for this task.
