@@ -1,3 +1,8 @@
+"""
+Pulumi infrastructure as code for dual-stack web application.
+Creates VPC, subnets, ALB, EC2 instance, and CloudWatch dashboard.
+"""
+
 import json
 from base64 import b64encode
 
@@ -7,10 +12,10 @@ from pulumi import Config, Output, export
 from pulumi_aws.ec2 import get_ami
 
 config = Config()
-region = config.get("region") or "us-west-2"
-domain_name = config.get_secret("domainName")
+REGION = config.get("region") or "us-west-2"
+DOMAIN_NAME = config.get_secret("domainName")
 
-aws_provider = aws.Provider("aws", region=region)
+AWS_PROVIDER = aws.Provider("aws", region=REGION)
 
 vpc = aws.ec2.Vpc(
     "web-vpc",
@@ -19,14 +24,14 @@ vpc = aws.ec2.Vpc(
     enable_dns_support=True,
     enable_dns_hostnames=True,
     tags={"Name": "web-vpc"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 igw = aws.ec2.InternetGateway(
     "web-igw",
     vpc_id=vpc.id,
     tags={"Name": "web-igw"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 public_route_table = aws.ec2.RouteTable(
@@ -43,7 +48,7 @@ public_route_table = aws.ec2.RouteTable(
         )
     ],
     tags={"Name": "public-route-table"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 subnet1 = aws.ec2.Subnet(
@@ -52,9 +57,9 @@ subnet1 = aws.ec2.Subnet(
     cidr_block="10.0.1.0/24",
     ipv6_cidr_block=Output.concat(vpc.ipv6_cidr_block, "1::/64"),
     assign_ipv6_address_on_creation=True,
-    availability_zone=f"{region}a",
+    availability_zone=f"{REGION}a",
     tags={"Name": "public-subnet-1"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 subnet2 = aws.ec2.Subnet(
@@ -63,23 +68,23 @@ subnet2 = aws.ec2.Subnet(
     cidr_block="10.0.2.0/24",
     ipv6_cidr_block=Output.concat(vpc.ipv6_cidr_block, "2::/64"),
     assign_ipv6_address_on_creation=True,
-    availability_zone=f"{region}b",
+    availability_zone=f"{REGION}b",
     tags={"Name": "public-subnet-2"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 route_table_assoc1 = aws.ec2.RouteTableAssociation(
     "route-table-assoc-1",
     subnet_id=subnet1.id,
     route_table_id=public_route_table.id,
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 route_table_assoc2 = aws.ec2.RouteTableAssociation(
     "route-table-assoc-2",
     subnet_id=subnet2.id,
     route_table_id=public_route_table.id,
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 ec2_role = aws.iam.Role(
@@ -93,20 +98,20 @@ ec2_role = aws.iam.Role(
         }]
     }),
     tags={"Name": "ec2-role"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 cloudwatch_policy = aws.iam.RolePolicyAttachment(
     "cloudwatch-policy",
     role=ec2_role.name,
     policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 instance_profile = aws.iam.InstanceProfile(
     "ec2-instance-profile",
     role=ec2_role.name,
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 ami = get_ami(
@@ -115,10 +120,10 @@ ami = get_ami(
         {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]},
         {"name": "owner-alias", "values": ["amazon"]}
     ],
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
-user_data = """#!/bin/bash
+USER_DATA = """#!/bin/bash
 yum update -y
 amazon-linux-extras install nginx1 -y
 systemctl enable nginx
@@ -141,7 +146,7 @@ ec2_sg = aws.ec2.SecurityGroup(
         )
     ],
     tags={"Name": "ec2-sg"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 alb_sg = aws.ec2.SecurityGroup(
@@ -168,7 +173,7 @@ alb_sg = aws.ec2.SecurityGroup(
         )
     ],
     tags={"Name": "alb-sg"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 ec2_sg_ingress = aws.ec2.SecurityGroupRule(
@@ -180,7 +185,7 @@ ec2_sg_ingress = aws.ec2.SecurityGroupRule(
     source_security_group_id=alb_sg.id,
     security_group_id=ec2_sg.id,
     description="Allow HTTP from ALB",
-    opts=pulumi.ResourceOptions(provider=aws_provider, depends_on=[alb_sg])
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER, depends_on=[alb_sg])
 )
 
 ec2_instance = aws.ec2.Instance(
@@ -192,10 +197,10 @@ ec2_instance = aws.ec2.Instance(
     ipv6_address_count=1,
     security_groups=[ec2_sg.id],
     iam_instance_profile=instance_profile.name,
-    user_data=b64encode(user_data.encode()).decode(),
+    user_data=b64encode(USER_DATA.encode()).decode(),
     monitoring=True,
     tags={"Name": "web-instance"},
-    opts=pulumi.ResourceOptions(provider=aws_provider, depends_on=[ec2_sg_ingress])
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER, depends_on=[ec2_sg_ingress])
 )
 
 alb = aws.lb.LoadBalancer(
@@ -207,7 +212,7 @@ alb = aws.lb.LoadBalancer(
     ip_address_type="dualstack",
     enable_deletion_protection=False,
     tags={"Name": "web-alb"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 target_group = aws.lb.TargetGroup(
@@ -226,7 +231,7 @@ target_group = aws.lb.TargetGroup(
         unhealthy_threshold=2
     ),
     tags={"Name": "web-tg"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 target_group_attachment = aws.lb.TargetGroupAttachment(
@@ -234,7 +239,7 @@ target_group_attachment = aws.lb.TargetGroupAttachment(
     target_group_arn=target_group.arn,
     target_id=ec2_instance.id,
     port=80,
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 listener = aws.lb.Listener(
@@ -249,7 +254,7 @@ listener = aws.lb.Listener(
         )
     ],
     tags={"Name": "web-listener"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 dashboard_body = Output.all(alb.arn, target_group.arn).apply(
@@ -285,7 +290,7 @@ dashboard_body = Output.all(alb.arn, target_group.arn).apply(
                     ],
                     "view": "timeSeries",
                     "stacked": False,
-                    "region": region,
+                    "region": REGION,
                     "title": "ALB Metrics"
                 }
             }
@@ -297,16 +302,16 @@ dashboard = aws.cloudwatch.Dashboard(
     "web-dashboard",
     dashboard_name="WebAppDashboard",
     dashboard_body=dashboard_body,
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
 )
 
 website_url = alb.dns_name
-if domain_name:
-    hosted_zone = aws.route53.get_zone(name=domain_name)
+if DOMAIN_NAME:
+    hosted_zone = aws.route53.get_zone(name=DOMAIN_NAME)
     record_a = aws.route53.Record(
         "web-a-record",
         zone_id=hosted_zone.zone_id,
-        name=domain_name,
+        name=DOMAIN_NAME,
         type="A",
         aliases=[
             aws.route53.RecordAliasArgs(
@@ -315,12 +320,12 @@ if domain_name:
                 evaluate_target_health=True
             )
         ],
-        opts=pulumi.ResourceOptions(provider=aws_provider)
+        opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
     )
     record_aaaa = aws.route53.Record(
         "web-aaaa-record",
         zone_id=hosted_zone.zone_id,
-        name=domain_name,
+        name=DOMAIN_NAME,
         type="AAAA",
         aliases=[
             aws.route53.RecordAliasArgs(
@@ -329,9 +334,9 @@ if domain_name:
                 evaluate_target_health=True
             )
         ],
-        opts=pulumi.ResourceOptions(provider=aws_provider)
+        opts=pulumi.ResourceOptions(provider=AWS_PROVIDER)
     )
-    website_url = Output.concat("http://", domain_name)
+    website_url = Output.concat("http://", DOMAIN_NAME)
 
 export("alb_dns_name", alb.dns_name)
 export("website_url", website_url)
