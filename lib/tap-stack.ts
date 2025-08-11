@@ -126,7 +126,7 @@ export class TapStack extends TerraformStack {
       dbName: process.env.DB_NAME || 'tapdb',
       dbUsername: process.env.DB_USERNAME || 'admin',
       dbPassword: process.env.DB_PASSWORD || 'changeme123!', // Use AWS Secrets Manager in production
-      instanceClass: process.env.DB_INSTANCE_CLASS || 'db.t3.micro',
+      instanceClass: process.env.DB_INSTANCE_CLASS || 'db.t3.medium',
     });
 
     // Create S3 bucket for logs
