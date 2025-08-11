@@ -444,7 +444,7 @@ describe('Security Infrastructure Integration Tests', () => {
 
       expect(vpcEndpoints.VpcEndpoints).toBeDefined();
       expect(vpcEndpoints.VpcEndpoints!.length).toBeGreaterThan(0);
-      expect(vpcEndpoints.VpcEndpoints![0].State).toBe('Available');
+      expect(vpcEndpoints.VpcEndpoints![0].State).toBe('available');
       expect(vpcEndpoints.VpcEndpoints![0].VpcEndpointType).toBe('Gateway');
     });
 
