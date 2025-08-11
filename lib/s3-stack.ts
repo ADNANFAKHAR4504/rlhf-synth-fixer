@@ -101,7 +101,7 @@ export class S3Stack extends cdk.Stack {
               },
               {
                 storageClass: s3.StorageClass.DEEP_ARCHIVE,
-                transitionAfter: cdk.Duration.days(90),
+                transitionAfter: cdk.Duration.days(120),
               },
             ],
           },
