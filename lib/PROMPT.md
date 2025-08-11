@@ -13,7 +13,7 @@ Implement role-based access control using AWS IAM roles. | Ensure all S3 buckets
 
 **Environment:**
 
-Design a highly secure and compliant cloud infrastructure using CDK PYTHON. Your task is to create a CDK Python code that adheres to the following requirements: 1. Implement role-based access control using AWS IAM roles for different application components. 2. Ensure all S3 buckets are encrypted using server-side encryption (SSE-S3 or SSE-KMS). 3. Set up a Virtual Private Cloud (VPC) to house your resources, ensuring that databases are not accessible from the public internet; only allow access via private subnets. 4. Provision a CloudWatch alarm to monitor and notify on high CPU usage via an SNS topic. 5. Use Lambda functions with the latest version of AWS runtime. 6. Deploy resources across the EU West (Ireland) and EU Central (Frankfurt, Germany) AWS regions to ensure high availability. 7. Ensure all resources are tagged with 'Project' and 'Environment' for easy identification. Expected output: a YAML CloudFormation template that meets all specified constraints, deployable on AWS without errors.
+Design a highly secure and compliant cloud infrastructure using CDK PYTHON. Your task is to create a CDK Python code that adheres to the following requirements: 1. Implement role-based access control using AWS IAM roles for different application components. 2. Ensure all S3 buckets are encrypted using server-side encryption (SSE-S3 or SSE-KMS). 3. Set up a Virtual Private Cloud (VPC) to house your resources, ensuring that databases are not accessible from the public internet; only allow access via private subnets. 4. Provision a CloudWatch alarm to monitor and notify on high CPU usage via an SNS topic. 5. Use Lambda functions with the latest version of AWS runtime. 6. Deploy resources across the EU West (London) and EU Central (Frankfurt, Germany) AWS regions to ensure high availability. 7. Ensure all resources are tagged with 'Project' and 'Environment' for easy identification. Expected output: a YAML CloudFormation template that meets all specified constraints, deployable on AWS without errors.
 
 **Proposed Statement:**
 
@@ -28,7 +28,7 @@ CDK Python code targeting EU West (London) and EU Central (Frankfurt, Germany) r
 2. **Primary deliverable:** Produce **CDK Python source code** (stack(s) and any helper modules) that implements the infrastructure described in the "Provided data". The CDK code must be runnable in a CDK v2 Python project.
 
 3. **What must appear in the generated CDK Python code:**
-   - Explicitly set AWS `env`/region for stacks to **EU West (Ireland) (`eu-west-2`)** and **EU Central (Frankfurt) (`eu-central-1`)** as separate stacks or as multi-stack deployment.
+   - Explicitly set AWS `env`/region for stacks to **EU West (London) (`eu-west-2`)** and **EU Central (Frankfurt) (`eu-central-1`)** as separate stacks or as multi-stack deployment.
    - Implement **role-based access control** using AWS IAM roles for application components; roles must follow least-privilege principle and should not use wildcard (`*`) actions.
    - Create **S3 buckets** with server-side encryption (SSE-S3 or SSE-KMS). At least one bucket must be SSE-KMS with an explicitly created KMS key.
    - Create a **VPC** with public and private subnets. Ensure databases are placed in private subnets and **no direct public access** is allowed to them.
