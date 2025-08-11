@@ -29,7 +29,7 @@ another round.
 
 If `tasks.csv` is present in the repository:
 
-1. Select the first task that has difficulty as 'hard' that is not in status "in_progress" from tasks.csv.
+1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" from tasks.csv.
 2. Set the status column to in_progress.
 3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{task_id}.
 4. If `.claude/platform_enforcement.md` is present. Read it and transform the task to use the platform and language declared in that file.
