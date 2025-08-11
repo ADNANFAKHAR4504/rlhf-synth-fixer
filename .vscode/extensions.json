@@ -10,6 +10,11 @@
     "ms-vscode.test-adapter-converter",
     "formulahendry.auto-rename-tag",
     "christian-kohler.path-intellisense",
-    "ms-vscode.vscode-node-azure-pack"
+    "ms-vscode.vscode-node-azure-pack",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.isort",
+    "kevinrose.vsc-python-indent",
+    "njpwerner.autodocstring"
   ]
 }

@@ -1,0 +1,539 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Automated daily backup solution for EC2 instance using EventBridge, Lambda, SSM, and S3. The solution creates a secure, event-driven backup workflow that compresses application data and stores it in an encrypted S3 bucket without requiring additional ports or SSH access.'
+
+Parameters:
+  BackupSchedule:
+    Type: String
+    Default: 'cron(0 2 * * ? *)'
+    Description: 'Backup schedule in cron format (default: daily at 2 AM UTC)'
+
+  ApplicationDataPath:
+    Type: String
+    Default: '/var/www/html'
+    Description: 'Path to application data to backup'
+
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: CIDR block for the VPC
+
+  PublicSubnetCidr:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: CIDR block for the public subnet
+
+  PrivateSubnetCidr:
+    Type: String
+    Default: '10.0.2.0/24'
+    Description: CIDR block for the private subnet
+
+  InstanceType:
+    Type: String
+    Default: 't3.micro'
+    AllowedValues: ['t3.micro', 't3.small', 't3.medium']
+    Description: EC2 instance type for the web server
+
+Resources:
+  # VPC and Networking Infrastructure (New additions for complete solution)
+  BackupVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: BackupSolution-VPC
+        - Key: Environment
+          Value: Production
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref BackupVPC
+      CidrBlock: !Ref PublicSubnetCidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: BackupSolution-PublicSubnet
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref BackupVPC
+      CidrBlock: !Ref PrivateSubnetCidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: BackupSolution-PrivateSubnet
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: BackupSolution-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref BackupVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: BackupSolution-NAT-EIP
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: BackupSolution-NAT
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref BackupVPC
+      Tags:
+        - Key: Name
+          Value: BackupSolution-PublicRT
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref BackupVPC
+      Tags:
+        - Key: Name
+          Value: BackupSolution-PrivateRT
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Security Group for Web Server (HTTPS only)
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for web server allowing HTTPS traffic only
+      VpcId: !Ref BackupVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: HTTPS traffic from internet
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: All outbound traffic
+      Tags:
+        - Key: Name
+          Value: BackupSolution-WebServerSG
+
+  # CloudWatch Log Group for backup operations
+  BackupLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/backup/${AWS::StackName}'
+      RetentionInDays: 14
+
+  # S3 Bucket for storing backups
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldBackups
+            Status: Enabled
+            ExpirationInDays: 30
+            NoncurrentVersionExpirationInDays: 7
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AccessLogsBucket
+        LogFilePrefix: 'backup-access-logs/'
+
+  # S3 Bucket for access logs
+  AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # IAM Role for Lambda function
+  BackupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SSMSendCommandPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:DescribeInstanceInformation
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ssm:SendCommand
+                  - ssm:GetCommandInvocation
+                Resource:
+                  - 'arn:aws:ssm:*:*:document/AWS-RunShellScript'
+                  - 'arn:aws:ssm:*:*:instance/*'
+                  - 'arn:aws:ec2:*:*:instance/*'
+                Condition:
+                  StringEquals:
+                    'ssm:ResourceTag/BackupEnabled': 'true'
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub '${BackupLogGroup.Arn}:*'
+
+  # IAM Role for EC2 instance
+  EC2BackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: S3BackupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub '${BackupBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt BackupBucket.Arn
+
+  # Instance Profile for EC2
+  EC2BackupInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2BackupRole
+
+  # EC2 Instance for Web Server
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref EC2BackupInstanceProfile
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      SubnetId: !Ref PrivateSubnet
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+
+          # Create sample application data directory
+          mkdir -p ${ApplicationDataPath}/app-data
+          echo "Sample application data - $(date)" > ${ApplicationDataPath}/app-data/data.txt
+          echo "Configuration file - $(date)" > ${ApplicationDataPath}/app-data/config.json
+
+          # Install and start SSM agent (already installed on Amazon Linux 2)
+          systemctl start amazon-ssm-agent
+          systemctl enable amazon-ssm-agent
+      Tags:
+        - Key: Name
+          Value: BackupSolution-WebServer
+        - Key: BackupEnabled
+          Value: 'true'
+        - Key: Environment
+          Value: Production
+
+  # Lambda function for backup orchestration
+  BackupLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-backup-orchestrator'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt BackupLambdaRole.Arn
+      Timeout: 300
+      Environment:
+        Variables:
+          INSTANCE_ID: !Ref WebServerInstance
+          BUCKET_NAME: !Ref BackupBucket
+          DATA_PATH: !Ref ApplicationDataPath
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import logging
+          from datetime import datetime
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def lambda_handler(event, context):
+              """
+              Lambda function to orchestrate EC2 backup using SSM Run Command.
+              This function is triggered by EventBridge on a daily schedule.
+              """
+              
+              ssm_client = boto3.client('ssm')
+              
+              instance_id = os.environ['INSTANCE_ID']
+              bucket_name = os.environ['BUCKET_NAME']
+              data_path = os.environ['DATA_PATH']
+              
+              logger.info(f"Starting backup process for instance: {instance_id}")
+              
+              try:
+                  # Check if instance is available for SSM
+                  response = ssm_client.describe_instance_information(
+                      Filters=[
+                          {
+                              'Key': 'InstanceIds',
+                              'Values': [instance_id]
+                          }
+                      ]
+                  )
+                  
+                  if not response['InstanceInformationList']:
+                      raise Exception(f"Instance {instance_id} is not available for SSM")
+                  
+                  instance_info = response['InstanceInformationList'][0]
+                  if instance_info['PingStatus'] != 'Online':
+                      raise Exception(f"Instance {instance_id} is not online. Status: {instance_info['PingStatus']}")
+                  
+                  # Send backup command to EC2 instance
+                  backup_script = f"""#!/bin/bash
+                  set -e
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  HOSTNAME=$(hostname)
+                  BACKUP_FILE="/tmp/backup_${{HOSTNAME}}_${{TIMESTAMP}}.tar.gz"
+                  DATA_PATH="{data_path}"
+                  BUCKET_NAME="{bucket_name}"
+                  
+                  echo "Starting backup process at $(date)"
+                  echo "Backing up data from: $DATA_PATH"
+                  echo "Backup file: $BACKUP_FILE"
+                  
+                  # Create compressed archive of application data
+                  if [ -d "$DATA_PATH" ]; then
+                    tar -czf "$BACKUP_FILE" -C "$(dirname "$DATA_PATH")" "$(basename "$DATA_PATH")" 2>/dev/null || {{
+                      echo "Error: Failed to create backup archive"
+                      exit 1
+                    }}
+                  else
+                    echo "Error: Data path $DATA_PATH does not exist"
+                    exit 1
+                  fi
+                  
+                  # Verify backup file was created
+                  if [ ! -f "$BACKUP_FILE" ]; then
+                    echo "Error: Backup file was not created"
+                    exit 1
+                  fi
+                  
+                  BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+                  echo "Backup archive created successfully. Size: $BACKUP_SIZE"
+                  
+                  # Upload to S3
+                  S3_KEY="backups/${{HOSTNAME}}/${{TIMESTAMP}}/backup_${{HOSTNAME}}_${{TIMESTAMP}}.tar.gz"
+                  echo "Uploading to s3://${{BUCKET_NAME}}/${{S3_KEY}}"
+                  
+                  aws s3 cp "$BACKUP_FILE" "s3://${{BUCKET_NAME}}/${{S3_KEY}}" --region us-east-1 || {{
+                    echo "Error: Failed to upload backup to S3"
+                    rm -f "$BACKUP_FILE"
+                    exit 1
+                  }}
+                  
+                  # Clean up local backup file
+                  rm -f "$BACKUP_FILE"
+                  echo "Backup completed successfully at $(date)"
+                  echo "Backup stored at: s3://${{BUCKET_NAME}}/${{S3_KEY}}"
+                  """
+                  
+                  command_response = ssm_client.send_command(
+                      InstanceIds=[instance_id],
+                      DocumentName='AWS-RunShellScript',
+                      Parameters={
+                          'commands': [backup_script]
+                      },
+                      Comment=f'Automated backup initiated at {datetime.utcnow().isoformat()}',
+                      TimeoutSeconds=3600
+                  )
+                  
+                  command_id = command_response['Command']['CommandId']
+                  logger.info(f"Backup command sent successfully. Command ID: {command_id}")
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Backup command sent successfully',
+                          'commandId': command_id,
+                          'instanceId': instance_id,
+                          'timestamp': datetime.utcnow().isoformat()
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error initiating backup: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': str(e),
+                          'instanceId': instance_id,
+                          'timestamp': datetime.utcnow().isoformat()
+                      })
+                  }
+
+  # EventBridge Rule for daily backup schedule
+  BackupScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-daily-backup-schedule'
+      Description: 'Daily trigger for automated EC2 backup process'
+      ScheduleExpression: !Ref BackupSchedule
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt BackupLambdaFunction.Arn
+          Id: 'BackupLambdaTarget'
+          Input: !Sub |
+            {
+              "source": "aws.events",
+              "detail-type": "Scheduled Event",
+              "detail": {
+                "instance-id": "${WebServerInstance}",
+                "backup-type": "daily-automated"
+              }
+            }
+
+  # Permission for EventBridge to invoke Lambda
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackupLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt BackupScheduleRule.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+Outputs:
+  BackupBucketName:
+    Description: 'Name of the S3 bucket storing backups'
+    Value: !Ref BackupBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-backup-bucket'
+
+  BackupBucketArn:
+    Description: 'ARN of the S3 backup bucket'
+    Value: !GetAtt BackupBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-backup-bucket-arn'
+
+  LambdaFunctionArn:
+    Description: 'ARN of the backup orchestration Lambda function'
+    Value: !GetAtt BackupLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-lambda-function-arn'
+
+  BackupSchedule:
+    Description: 'Backup schedule expression'
+    Value: !Ref BackupSchedule
+    Export:
+      Name: !Sub '${AWS::StackName}-backup-schedule'
+
+  LogGroupName:
+    Description: 'CloudWatch Log Group for backup operations'
+    Value: !Ref BackupLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-log-group'
+
+  WebServerInstanceId:
+    Description: 'Instance ID of the web server'
+    Value: !Ref WebServerInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-web-server-instance'
+
+  VPCId:
+    Description: 'ID of the VPC'
+    Value: !Ref BackupVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-vpc-id'
+```

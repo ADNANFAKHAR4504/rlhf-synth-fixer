@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "274677",
+  "startedAt": "2025-07-28T09:06:39.983Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": "s3://iac-rlhf-production/docker_images/Pr240/docker-image-274677.tar"
+}

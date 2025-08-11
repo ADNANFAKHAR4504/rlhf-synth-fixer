@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "292073",
+  "startedAt": "2025-07-31T05:43:19.209Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

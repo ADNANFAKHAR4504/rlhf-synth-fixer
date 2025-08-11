@@ -1,0 +1,262 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation template for a development environment in us-east-1.",
+  "Parameters": {
+    "BucketName": {
+      "Description": "Name for the public S3 bucket (must be globally unique)",
+      "Type": "String",
+      "Default": "my-dev-public-bucket-12345-new"
+    },
+    "EC2KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access",
+      "Type": "String",
+      "Default": "iac-rlhf-aws-trainer-instance"
+    },
+    "SubnetId": {
+      "Description": "Existing Subnet ID within VPC vpc-12345",
+      "Type": "String",
+      "Default": "subnet-0e83114b417d0c5e1"
+    },
+    "SecurityGroupId": {
+      "Description": "Existing Security Group ID (must allow SSH from 203.0.113.0/24)",
+      "Type": "String",
+      "Default": "sg-67890"
+    }
+  },
+  "Conditions": {
+    "HasKeyName": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EC2KeyName"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "S3AccessLogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${BucketName}-logs"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Development"
+          }
+        ]
+      }
+    },
+    "PublicS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Ref": "BucketName"
+        },
+        "LoggingConfiguration": {
+          "DestinationBucketName": {
+            "Ref": "S3AccessLogBucket"
+          },
+          "LogFilePrefix": "logs/"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": false,
+          "BlockPublicPolicy": false,
+          "IgnorePublicAcls": false,
+          "RestrictPublicBuckets": false
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Development"
+          }
+        ]
+      }
+    },
+    "S3BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "PublicS3Bucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${PublicS3Bucket.Arn}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "S3ReadOnlyInstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "S3ReadOnlyAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:Get*",
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Development"
+          }
+        ]
+      }
+    },
+    "S3ReadOnlyInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "S3ReadOnlyInstanceRole"
+          }
+        ]
+      }
+    },
+    "EC2EIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Development"
+          }
+        ]
+      }
+    },
+    "DevInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "InstanceType": "t2.micro",
+        "KeyName": {
+          "Fn::If": [
+            "HasKeyName",
+            {
+              "Ref": "EC2KeyName"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "ImageId": "ami-083e865b97bdf1c1b",
+        "NetworkInterfaces": [
+          {
+            "AssociatePublicIpAddress": true,
+            "DeviceIndex": 0,
+            "SubnetId": {
+              "Ref": "SubnetId"
+            },
+            "GroupSet": [
+              {
+                "Ref": "SecurityGroupId"
+              }
+            ]
+          }
+        ],
+        "IamInstanceProfile": {
+          "Ref": "S3ReadOnlyInstanceProfile"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Development"
+          }
+        ]
+      }
+    },
+    "EIPAssociation": {
+      "Type": "AWS::EC2::EIPAssociation",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "EC2EIP",
+            "AllocationId"
+          ]
+        },
+        "InstanceId": {
+          "Ref": "DevInstance"
+        }
+      }
+    },
+    "CPUAlarmHigh": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Alarm if CPU > 80% for 5 minutes",
+        "Namespace": "AWS/EC2",
+        "MetricName": "CPUUtilization",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "DevInstance"
+            }
+          }
+        ],
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 5,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Development"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "S3BucketName": {
+      "Description": "Name of the public S3 bucket",
+      "Value": {
+        "Ref": "PublicS3Bucket"
+      }
+    },
+    "EC2PublicIP": {
+      "Description": "Public IP of the EC2 instance",
+      "Value": {
+        "Ref": "EC2EIP"
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "229216",
+  "startedAt": "2025-07-26T10:02:50.349Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "divyam-turing",
+  "dockerS3Location": ""
+}

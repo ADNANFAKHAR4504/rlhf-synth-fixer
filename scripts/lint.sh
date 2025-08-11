@@ -18,10 +18,6 @@ if [ "$LANGUAGE" = "ts" ]; then
     echo "✅ TypeScript project detected, running ESLint..."
     npm run lint
 elif [ "$LANGUAGE" = "py" ]; then
-    echo "Installing Python dev dependencies via pipenv..."
-    pipenv install --dev --deploy --system || { echo "❌ pipenv install failed!"; exit 1; }
-    echo "Python dev dependencies installed."
-    echo "Executing pipenv run lint..."
     LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
     LINT_EXIT_CODE=$?
     echo "--- START PYLINT OUTPUT (Raw) ---"
