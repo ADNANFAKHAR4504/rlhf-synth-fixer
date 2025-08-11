@@ -1,58 +1,61 @@
-# Terraform CDK Prompt for Refactoring and Modularization
+# Expert Prompt Engineer - Infrastructure as Code (IaC) using CDKTF-TS
 
-You are an expert Terraform engineer tasked with optimizing an existing AWS infrastructure codebase using **Terraform CDK (CDKTF) in TypeScript**. Your objective is to strictly apply the **DRY (Don't Repeat Yourself)** principle to refactor the codebase while preserving the infrastructure's existing functionality.
+## **Goal**
 
-The current infrastructure spans **multiple environments**—`development`, `staging`, and `production`—and includes the following AWS services:
-
-* Amazon EC2 instances
-* Amazon RDS databases
-* Amazon S3 buckets
-* Networking components like VPCs, subnets, route tables, NAT gateways, and security groups
+Generate a complete, functional, and validated **CDKTF TypeScript (TS)** codebase that provisions a **robust, scalable, and secure multi-region AWS infrastructure** as described below. All provided details must remain **exactly intact** — do not modify or omit any data.
 
 ---
 
-## Your Task
+### **Environment**
 
-1. **Refactor** the existing infrastructure configuration into **modular CDKTF constructs**, ensuring reusability across environments.
-
-2. Create DRY-compliant reusable stacks/modules for:
-
-   * VPC (with public/private subnets)
-   * EC2 (parameterized instance types, AMIs, security groups)
-   * RDS (parameterized engine, instance size, subnet groups)
-   * S3 (with versioning and encryption)
-   * Security Groups (reused definitions)
-
-3. Maintain **separation of concerns**:
-
-   * Use environment suffixes (e.g., `dev`, `staging`) to name stacks distinctly
-   * Use workspace-specific variables or overrides
-   * Configure a remote S3 + DynamoDB backend for state isolation
-
-4. Validate that the configuration is **deployable in all environments without changing logic**.
-
-5. Follow best practices for:
-
-   * Resource naming conventions
-   * Provider and module version pinning
-   * Secure state management using CDKTF
+- **Two AWS regions**: `us-east-1` and `eu-west-1`.
+- Infrastructure must allow **cross-region redundancy** and **failover capabilities**.
+- Naming conventions must associate resources with **environment** and **region**.
+- All stages of environments must be managed via **CDKTF workspaces**.
 
 ---
 
-## Output Requirements
+### **Constraints**
 
-* All code must be written using **Terraform CDK (TypeScript)**
-* Use Terraform 1.x-compatible CDKTF constructs
-* Directory structure should include:
+1. Use **CDKTF TypeScript (TS)** for all configurations.
+2. Support configuration of **multiple AWS providers** for `us-east-1` and `eu-west-1`.
+3. Ensure **high availability** by distributing resources across **multiple Availability Zones** in each region.
+4. Incorporate **CDKTF modules** for reusability and organizational standards.
+5. Store all CDKTF **state files** securely in an **S3 bucket** with **versioning enabled**.
+6. Use **backend configuration** for remote state management with **locking mechanisms**.
+7. Implement **Application Load Balancers (ALBs)** for distributing traffic to **multiple EC2 instances**.
+8. Configure **Auto Scaling** for EC2 instances based on **CPU usage thresholds**.
+9. Ensure **VPCs, subnets, and route tables** are configured for isolated and public/private traffic flow.
+10. Deploy **RDS (PostgreSQL)** with **multi-AZ configuration** and **automatic backups**.
+11. Include **CloudWatch alarms** to monitor performance and trigger autoscaling.
+12. Integrate **IAM roles and policies** with the **principle of least privilege**.
+13. Utilize **CDKTF workspaces** for development, testing, and production.
+14. Ensure all resource names comply with `<environment>-<service>-<region>` naming format.
+15. Apply **tagging strategy** for all resources including `environment`, `project`, `owner`, `cost_center`.
 
-  * `modules/` or `lib/` for reusable stacks
-  * `bin/` as the CDKTF entrypoint
-  * `test/` for unit and integration tests
-  * `README.md` with instructions for deployment
+---
 
-### Secrets
+### **Proposed Statement**
 
-Database credentials must not be hardcoded. Use either:
+> Design a robust, scalable, and secure cloud environment setup using **CDKTF TypeScript** for a critical application deployment across multiple AWS regions. The infrastructure must support high availability and disaster recovery functionalities.
 
-* `passwordSecretArn` (AWS Secrets Manager), or
-* `passwordEnvVarName` with an environment variable during synth (e.g., `DB_PASSWORD`).
+---
+
+### **Requirements**
+
+1. Use **CDKTF** to configure **AWS VPCs**, subnets, route tables, security groups, and Internet gateways.
+2. Deploy and manage **EC2 instances** with load balancing and auto-scaling configurations.
+3. Set up **RDS** for database needs, ensuring **high availability** with backup solutions.
+4. Apply best practices for infrastructure security via **IAM roles**, **S3 bucket policies** for state files, and **traffic isolation**.
+5. Enable monitoring and logging via **CloudWatch**.
+6. Use **CDKTF workspaces** for **development**, **testing**, and **production**.
+7. Follow **naming conventions** and apply **resource tagging** for management and cost tracking.
+
+---
+
+### **Expected Output**
+
+- A **complete CDKTF TypeScript (TS)** configuration meeting all requirements.
+- Tested and validated against AWS infrastructure standards.
+- Successfully deployable in **both regions** with no errors.
+- Packaged as a **version-controlled repository**, ready for immediate deployment.
