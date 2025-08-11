@@ -3,6 +3,29 @@ import pulumi_aws as aws
 from typing import Dict, List, Optional, Any
 import json
 import base64
+import re
+
+
+def sanitize_bucket_name(name: str) -> str:
+    """Sanitize S3 bucket name to comply with AWS naming rules"""
+    # Convert to lowercase
+    name = name.lower()
+    # Remove invalid characters: only letters, numbers, dots, hyphens allowed
+    name = re.sub(r'[^a-z0-9.-]', '-', name)
+    # Remove leading/trailing invalid characters
+    name = re.sub(r'^[-.]+', '', name)
+    name = re.sub(r'[-.]+$', '', name)
+    # Replace consecutive dots with single dot
+    name = re.sub(r'\.\.+', '.', name)
+    # Limit to 63 characters
+    if len(name) > 63:
+        name = name[:63]
+    # Prevent name formatted as IP address
+    if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', name):
+        name = f'bucket-{name}'
+    # Ensure it doesn't end with invalid characters after truncation
+    name = name.rstrip('-.')
+    return name
 
 
 class TapStackArgs:
@@ -82,7 +105,6 @@ class TapStackArgs:
         
         # Validate environment suffix format
         valid_env_pattern = r'^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$'
-        import re
         if not re.match(valid_env_pattern, self.environment_suffix.lower()):
             raise ValueError(f"Invalid environment suffix format: {self.environment_suffix}")
         
@@ -135,9 +157,13 @@ class TapStackArgs:
         return base_name
     
     def get_bucket_name(self, bucket_type: str = "primary") -> str:
-        """Generate S3 bucket names"""
+        """Generate S3 bucket names with proper formatting"""
+        import uuid
         stack_name = pulumi.get_stack()
-        return f"tap-{bucket_type}-data-{self.environment_suffix}-{stack_name}"
+        # Create unique suffix to avoid naming conflicts
+        unique_id = str(uuid.uuid4())[:8]
+        raw_name = f"tap-{bucket_type}-data-{self.environment_suffix}-{stack_name}-{unique_id}"
+        return sanitize_bucket_name(raw_name)
 
 
 class TapStack:
@@ -344,7 +370,7 @@ class TapStack:
                             "s3:ReplicateObject",
                             "s3:ReplicateDelete"
                         ],
-                        "Resource": f"{arns[24]}/*"
+                        "Resource": f"{arns[1]}/*"
                     }
                 ]
             }))
@@ -446,10 +472,17 @@ class TapStack:
         """Create VPC and networking components"""
         try:
             for region in self.regions:
-                # Create VPC
+                # Create VPC with unique CIDR per environment to avoid conflicts
+                vpc_cidr_base = {
+                    'prod': '10.0.0.0/16',
+                    'staging': '10.1.0.0/16', 
+                    'dev': '10.2.0.0/16'
+                }
+                vpc_cidr = vpc_cidr_base.get(self.environment_suffix, '10.3.0.0/16')
+                
                 vpc = aws.ec2.Vpc(
                     f"vpc-{region}-{self.environment_suffix}",
-                    cidr_block=self.args.vpc_cidr,
+                    cidr_block=vpc_cidr,
                     enable_dns_hostnames=True,
                     enable_dns_support=True,
                     tags={"Name": self.args.get_resource_name("vpc", region)},
@@ -474,11 +507,13 @@ class TapStack:
                 subnets = []
                 max_subnets = min(3, len(azs.names))
                 
+                base_octet = {'prod': 0, 'staging': 1, 'dev': 2}.get(self.environment_suffix, 3)
+                
                 for i in range(max_subnets):
                     subnet = aws.ec2.Subnet(
                         f"subnet-{region}-{i}-{self.environment_suffix}",
                         vpc_id=vpc.id,
-                        cidr_block=f"10.{2 if self.environment_suffix == 'dev' else (1 if self.environment_suffix == 'staging' else 0)}.{i+1}.0/24",
+                        cidr_block=f"10.{base_octet}.{i+1}.0/24",
                         availability_zone=azs.names[i],
                         map_public_ip_on_launch=True,
                         tags={"Name": f"{self.args.get_resource_name('subnet', region)}-{i}"},
@@ -1021,7 +1056,7 @@ EOF
             
             # Environment-specific validations
             validation_results["environment_suffix_valid"] = bool(self.environment_suffix)
-            validation_results["resource_naming_consistent"] = True  # Could add more specific checks
+            validation_results["resource_naming_consistent"] = True
             
             # Overall validation
             validation_results["overall"] = all(validation_results.values())
