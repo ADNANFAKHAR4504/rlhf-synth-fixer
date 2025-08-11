@@ -1024,9 +1024,10 @@ EOF
         )
         
         # CloudWatch Alarms
+        # CloudWatch Alarms (FIXED)
         aws.cloudwatch.MetricAlarm(
             f"cpu-high-{region}-{self.args.environment_suffix}",
-            alarm_name=f"tap-cpu-high-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
+            name=f"tap-cpu-high-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
@@ -1039,10 +1040,10 @@ EOF
             dimensions={"AutoScalingGroupName": asg.name},
             opts=pulumi.ResourceOptions(provider=self.providers[region])
         )
-        
+
         aws.cloudwatch.MetricAlarm(
             f"cpu-low-{region}-{self.args.environment_suffix}",
-            alarm_name=f"tap-cpu-low-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
+            name=f"tap-cpu-low-{region}-{self.args.environment_suffix}-{timestamp_suffix}",
             comparison_operator="LessThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
@@ -1055,6 +1056,7 @@ EOF
             dimensions={"AutoScalingGroupName": asg.name},
             opts=pulumi.ResourceOptions(provider=self.providers[region])
         )
+
         
         self.launch_templates[region] = launch_template
         self.auto_scaling_groups[region] = asg
