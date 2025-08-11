@@ -43,7 +43,7 @@ export class ProductionWebAppStack extends Stack {
     // Create VPC with public and private subnets across 2 AZs
     this.vpc = new ec2.Vpc(this, 'ProductionVPC', {
       maxAzs: 2,
-      cidr: '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       natGateways: 1, // Cost optimization - single NAT gateway
       subnetConfiguration: [
         {
@@ -76,7 +76,7 @@ export class ProductionWebAppStack extends Stack {
       'ProductionCloudFront',
       {
         defaultBehavior: {
-          origin: new origins.S3Origin(this.s3Bucket),
+          origin: origins.S3BucketOrigin.withOriginAccessControl(this.s3Bucket),
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
