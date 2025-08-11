@@ -25,7 +25,6 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { KeyPair } from '@cdktf/provider-aws/lib/key-pair';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { EbsVolume } from '@cdktf/provider-aws/lib/ebs-volume';
 import { VolumeAttachment } from '@cdktf/provider-aws/lib/volume-attachment';
@@ -416,7 +415,6 @@ export class IamModule extends Construct {
  */
 export class Ec2Module extends Construct {
   public readonly instances: Instance[];
-  public readonly keyPair: KeyPair;
 
   constructor(
     scope: Construct,
@@ -426,21 +424,10 @@ export class Ec2Module extends Construct {
       securityGroups: SecurityGroup[];
       instanceProfile: IamInstanceProfile;
       instanceType: string;
-      publicKeyMaterial: string;
+      keyName: string;
     }
   ) {
     super(scope, id);
-
-    // Create key pair for EC2 access
-    this.keyPair = new KeyPair(this, 'key-pair', {
-      keyName: `${config.projectName}-key-pair`,
-      publicKey: config.publicKeyMaterial,
-      tags: {
-        Name: `${config.projectName}-key-pair`,
-        Environment: config.environment,
-        Owner: config.owner,
-      },
-    });
 
     // Get latest Amazon Linux 2 AMI
     const ami = new DataAwsAmi(this, 'amazon-linux', {
@@ -465,7 +452,7 @@ export class Ec2Module extends Construct {
       const instance = new Instance(this, `instance-${index}`, {
         ami: ami.id,
         instanceType: config.instanceType,
-        keyName: this.keyPair.keyName,
+        keyName: config.keyName,
         subnetId: subnet.id,
         vpcSecurityGroupIds: config.securityGroups.map(sg => sg.id),
         iamInstanceProfile: config.instanceProfile.name,
@@ -570,7 +557,7 @@ export class RdsModule extends Construct {
       maintenanceWindow: 'sun:04:00-sun:05:00',
 
       // Monitoring and performance
-      monitoringInterval: 60,
+      monitoringInterval: 0,
       performanceInsightsEnabled: true,
 
       // Deletion protection
@@ -763,7 +750,7 @@ export class TapStack extends TerraformStack {
       ],
       instanceProfile: iamModule.ec2InstanceProfile,
       instanceType: process.env.INSTANCE_TYPE || 't3.micro',
-      publicKeyMaterial: process.env.PUBLIC_KEY_MATERIAL || '', // Must be provided
+      keyName: 'nova-model-key',
     });
 
     // Create RDS instance in private subnets
@@ -774,7 +761,7 @@ export class TapStack extends TerraformStack {
       dbName: process.env.DB_NAME || 'tapdb',
       dbUsername: process.env.DB_USERNAME || 'admin',
       dbPassword: process.env.DB_PASSWORD || 'changeme123!', // Use AWS Secrets Manager in production
-      instanceClass: process.env.DB_INSTANCE_CLASS || 'db.t3.micro',
+      instanceClass: process.env.DB_INSTANCE_CLASS || 'db.t3.medium',
     });
 
     // Create S3 bucket for logs
