@@ -3,47 +3,47 @@ const path = require('path');
 const yaml = require('js-yaml');
 
 describe('Node.js Production Stack Unit Tests', () => {
-  let template;
+  let template: any;
 
   beforeAll(() => {
     // This custom schema is required to correctly parse CloudFormation intrinsic functions
     const cfnSchema = yaml.DEFAULT_SCHEMA.extend([
       new yaml.Type('!Ref', {
         kind: 'scalar',
-        construct: data => ({ Ref: data }),
+        construct: (data: any) => ({ Ref: data }),
       }),
       new yaml.Type('!Sub', {
         kind: 'scalar',
-        construct: data => ({ 'Fn::Sub': data }),
+        construct: (data: any) => ({ 'Fn::Sub': data }),
       }),
       new yaml.Type('!Sub', {
         kind: 'sequence',
-        construct: data => ({ 'Fn::Sub': data }),
+        construct: (data: any) => ({ 'Fn::Sub': data }),
       }),
       new yaml.Type('!GetAtt', {
         kind: 'scalar',
-        construct: data => ({ 'Fn::GetAtt': data.split('.') }),
+        construct: (data: any) => ({ 'Fn::GetAtt': data.split('.') }),
       }),
       new yaml.Type('!FindInMap', {
         kind: 'sequence',
-        construct: data => ({ 'Fn::FindInMap': data }),
+        construct: (data: any) => ({ 'Fn::FindInMap': data }),
       }),
       new yaml.Type('!Select', {
         kind: 'sequence',
-        construct: data => ({ 'Fn::Select': data }),
+        construct: (data: any) => ({ 'Fn::Select': data }),
       }),
       new yaml.Type('!GetAZs', {
         kind: 'scalar',
-        construct: data => ({ 'Fn::GetAZs': data }),
+        construct: (data: any) => ({ 'Fn::GetAZs': data }),
       }),
       new yaml.Type('!Join', {
         kind: 'sequence',
-        construct: data => ({ 'Fn::Join': data }),
+        construct: (data: any) => ({ 'Fn::Join': data }),
       }),
     ]);
 
-    // Update this path to point to your CloudFormation template file
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml'); // Corrected path
+    // Path to your CloudFormation template file
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.yml'); // Adjust path if needed
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(templateContent, { schema: cfnSchema });
   });
@@ -58,7 +58,7 @@ describe('Node.js Production Stack Unit Tests', () => {
 
     test('should define all required parameters with correct types', () => {
       const params = template.Parameters;
-      expect(Object.keys(params).length).toBe(6); // Corrected parameter count
+      expect(Object.keys(params).length).toBe(6);
       expect(params.DomainName).toBeDefined();
       expect(params.HostedZoneName).toBeDefined();
       expect(params.CertificateArn).toBeDefined();
@@ -69,8 +69,8 @@ describe('Node.js Production Stack Unit Tests', () => {
 
     test('should contain mappings for Elastic Beanstalk Hosted Zone IDs', () => {
       expect(template.Mappings.EBHostedZoneIds).toBeDefined();
-      expect(template.Mappings.EBHostedZoneIds['us-east-1'].Id).toBe(
-        'Z117KPS5GTRQ2G'
+      expect(template.Mappings.EBHostedZoneIds['us-west-2'].Id).toBe(
+        'Z38NKT9BP95V3O'
       );
     });
   });
@@ -84,13 +84,13 @@ describe('Node.js Production Stack Unit Tests', () => {
 
     test('should create two public and two private subnets', () => {
       const subnets = Object.values(template.Resources).filter(
-        r => r.Type === 'AWS::EC2::Subnet'
+        (r: any) => r.Type === 'AWS::EC2::Subnet'
       );
       const publicSubnets = subnets.filter(
-        s => s.Properties.MapPublicIpOnLaunch === true
+        (s: any) => s.Properties.MapPublicIpOnLaunch === true
       );
       const privateSubnets = subnets.filter(
-        s => s.Properties.MapPublicIpOnLaunch !== true
+        (s: any) => s.Properties.MapPublicIpOnLaunch !== true
       );
       expect(publicSubnets.length).toBe(2);
       expect(privateSubnets.length).toBe(2);
@@ -120,8 +120,8 @@ describe('Node.js Production Stack Unit Tests', () => {
     test('LoadBalancer Security Group should allow inbound HTTP and HTTPS from the internet', () => {
       const albSg = template.Resources.LoadBalancerSecurityGroup;
       const ingressRules = albSg.Properties.SecurityGroupIngress;
-      const httpRule = ingressRules.find(r => r.FromPort === 80);
-      const httpsRule = ingressRules.find(r => r.FromPort === 443);
+      const httpRule = ingressRules.find((r: any) => r.FromPort === 80);
+      const httpsRule = ingressRules.find((r: any) => r.FromPort === 443);
       expect(httpRule.CidrIp).toBe('0.0.0.0/0');
       expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
     });
@@ -147,11 +147,13 @@ describe('Node.js Production Stack Unit Tests', () => {
     test('Beanstalk IAM Role should have least-privilege permissions', () => {
       const role = template.Resources.BeanstalkInstanceRole;
       const statements = role.Properties.Policies[0].PolicyDocument.Statement;
-      const s3Policy = statements.find(s => s.Action.includes('s3:GetObject'));
-      const logsPolicy = statements.find(s =>
+      const s3Policy = statements.find((s: any) =>
+        s.Action.includes('s3:GetObject')
+      );
+      const logsPolicy = statements.find((s: any) =>
         s.Action.includes('logs:PutLogEvents')
       );
-      const secretsPolicy = statements.find(s =>
+      const secretsPolicy = statements.find((s: any) =>
         s.Action.includes('secretsmanager:GetSecretValue')
       );
 
@@ -202,12 +204,12 @@ describe('Node.js Production Stack Unit Tests', () => {
       const optionSettings =
         template.Resources.BeanstalkEnvironment.Properties.OptionSettings;
       const lbType = optionSettings.find(
-        o =>
+        (o: any) =>
           o.Namespace === 'aws:elasticbeanstalk:environment' &&
           o.OptionName === 'LoadBalancerType'
       );
       const streamLogs = optionSettings.find(
-        o =>
+        (o: any) =>
           o.Namespace === 'aws:elasticbeanstalk:cloudwatch:logs' &&
           o.OptionName === 'StreamLogs'
       );
@@ -219,10 +221,11 @@ describe('Node.js Production Stack Unit Tests', () => {
       const optionSettings =
         template.Resources.BeanstalkEnvironment.Properties.OptionSettings;
       const httpListener = optionSettings.find(
-        o =>
+        (o: any) =>
           o.Namespace === 'aws:elbv2:listener:80' &&
           o.OptionName === 'DefaultActions'
       );
+      expect(httpListener).toBeDefined();
       const redirectAction = JSON.parse(httpListener.Value)[0];
       expect(redirectAction.Type).toBe('redirect');
       expect(redirectAction.RedirectConfig.Protocol).toBe('HTTPS');
@@ -245,7 +248,7 @@ describe('Node.js Production Stack Unit Tests', () => {
   describe('Outputs', () => {
     test('should define all required outputs', () => {
       const outputs = template.Outputs;
-      expect(Object.keys(outputs).length).toBe(3);
+      expect(Object.keys(outputs).length).toBe(5);
       expect(outputs.ApplicationURL).toBeDefined();
       expect(outputs.RDSEndpoint).toBeDefined();
       expect(outputs.DBSecretARN).toBeDefined();

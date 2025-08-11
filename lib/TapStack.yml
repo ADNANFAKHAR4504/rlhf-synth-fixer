@@ -490,3 +490,9 @@ Outputs:
   DBSecretARN:
     Description: The ARN of the database password secret in Secrets Manager.
     Value: !Ref DBSecret
+  DomainName:
+    Description: Domain of the application
+    Value: !Ref DomainName
+  HostedZoneName:
+    Description: The name of the hosted zone
+    Value: !Ref HostedZoneName
