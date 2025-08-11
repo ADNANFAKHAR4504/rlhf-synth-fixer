@@ -9,6 +9,11 @@ import json
 from unittest.mock import Mock, patch
 
 import pytest
+import base64
+
+
+def _import_handler_module():
+  return importlib.import_module('lib.lambda.handler')
 
 
 class TestTapStackArgs:
@@ -165,6 +170,170 @@ class TestLambdaHandler:
     assert 'Access-Control-Allow-Origin' in headers
     assert 'Access-Control-Allow-Methods' in headers
     assert 'Access-Control-Allow-Headers' in headers
+
+  def test_get_info_endpoint(self):
+    handler = _import_handler_module()
+    event = {
+      'httpMethod': 'GET',
+      'path': '/info',
+      'headers': {},
+      'queryStringParameters': None,
+      'body': None,
+    }
+    with patch.dict('os.environ', {'ENVIRONMENT': 'test'}):
+      response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert body['service'] == 'TAP API'
+    assert body['environment'] == 'test'
+
+  def test_get_unknown_path_returns_404(self):
+    handler = _import_handler_module()
+    event = {
+      'httpMethod': 'GET',
+      'path': '/does-not-exist',
+      'headers': {},
+      'queryStringParameters': None,
+      'body': None,
+    }
+    response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 404
+
+  def test_post_base64_valid_json(self):
+    handler = _import_handler_module()
+    payload = json.dumps({'a': 1}).encode('utf-8')
+    event = {
+      'httpMethod': 'POST',
+      'path': '/',
+      'headers': {},
+      'isBase64Encoded': True,
+      'body': base64.b64encode(payload).decode('utf-8'),
+    }
+    with patch.dict('os.environ', {'ENVIRONMENT': 'dev'}):
+      response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert body['received_data'] == {'a': 1}
+
+  def test_post_invalid_json_returns_raw_body(self):
+    handler = _import_handler_module()
+    event = {
+      'httpMethod': 'POST',
+      'path': '/',
+      'headers': {},
+      'body': '{not json}',
+    }
+    with patch.dict('os.environ', {'ENVIRONMENT': 'dev'}):
+      response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert body['received_data'] == {'raw_body': '{not json}'}
+
+  def test_put_valid_and_invalid_bodies(self):
+    handler = _import_handler_module()
+    event_valid = {
+      'httpMethod': 'PUT',
+      'path': '/',
+      'headers': {},
+      'body': json.dumps({'update': True}),
+    }
+    with patch.dict('os.environ', {'ENVIRONMENT': 'qa'}):
+      response_valid = handler.lambda_handler(event_valid, Mock())
+    assert response_valid['statusCode'] == 200
+    body_valid = json.loads(response_valid['body'])
+    assert body_valid['received_data'] == {'update': True}
+
+    event_invalid = {
+      'httpMethod': 'PUT',
+      'path': '/',
+      'headers': {},
+      'body': 'not-json',
+    }
+    with patch.dict('os.environ', {'ENVIRONMENT': 'qa'}):
+      response_invalid = handler.lambda_handler(event_invalid, Mock())
+    assert response_invalid['statusCode'] == 200
+    body_invalid = json.loads(response_invalid['body'])
+    assert body_invalid['received_data'] == {'raw_body': 'not-json'}
+
+  def test_put_base64_valid_json(self):
+    handler = _import_handler_module()
+    payload = json.dumps({'b': 2}).encode('utf-8')
+    event = {
+      'httpMethod': 'PUT',
+      'path': '/',
+      'headers': {},
+      'isBase64Encoded': True,
+      'body': base64.b64encode(payload).decode('utf-8'),
+    }
+    with patch.dict('os.environ', {'ENVIRONMENT': 'stage'}):
+      response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert body['received_data'] == {'b': 2}
+
+  def test_delete_request(self):
+    handler = _import_handler_module()
+    event = {
+      'httpMethod': 'DELETE',
+      'path': '/resource/1',
+      'headers': {},
+      'body': None,
+    }
+    with patch.dict('os.environ', {'ENVIRONMENT': 'test'}):
+      response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert body['path'] == '/resource/1'
+
+  def test_method_not_allowed(self):
+    handler = _import_handler_module()
+    event = {
+      'httpMethod': 'PATCH',
+      'path': '/',
+      'headers': {},
+      'body': None,
+    }
+    response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 405
+
+  def test_create_response_without_cors_headers(self):
+    handler = _import_handler_module()
+    response = handler.create_response(201, {'ok': True}, cors_headers=False)
+    assert response['statusCode'] == 201
+    headers = response['headers']
+    assert 'Access-Control-Allow-Origin' not in headers
+    assert headers['Content-Type'] == 'application/json'
+
+  def test_options_uses_origin_when_allowed(self):
+    handler = _import_handler_module()
+    event = {
+      'httpMethod': 'OPTIONS',
+      'path': '/',
+      'headers': {'Origin': 'https://app.example.com'},
+      'body': None,
+    }
+    with patch.dict('os.environ', {'ALLOWED_ORIGINS': 'https://example.com, https://app.example.com'}):
+      response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 200
+    assert response['headers']['Access-Control-Allow-Origin'] == 'https://app.example.com'
+
+  def test_get_allowed_origin_match_and_default(self):
+    handler = _import_handler_module()
+    with patch.dict('os.environ', {'ALLOWED_ORIGINS': 'https://x.com, https://y.com'}):
+      assert handler.get_allowed_origin('https://y.com') == 'https://y.com'
+      assert handler.get_allowed_origin('https://z.com') == 'https://x.com'
+
+  def test_lambda_handler_catches_exceptions(self):
+    handler = _import_handler_module()
+    event = {
+      'httpMethod': 'GET',
+      'path': '/',
+      'headers': {},
+      'body': None,
+    }
+    with patch('lib.lambda.handler.handle_get_request', side_effect=RuntimeError('boom')):
+      response = handler.lambda_handler(event, Mock())
+    assert response['statusCode'] == 500
 
 
 class TestTapStackResources:
@@ -564,3 +733,133 @@ class TestTapStackConfiguration:
     assert api_config['binary_media_types'] == ["*/*"]
     assert api_config['endpoint_configuration']['types'] == "REGIONAL"
     assert api_config['description'] == "TAP API Gateway for Lambda - test"
+
+
+# --- TapStack instantiation tests (merged from test_tap_stack_instantiation.py) ---
+
+def _setup_common_patches():
+  return (
+    patch('pulumi.ComponentResource.__init__', return_value=None),
+    patch('pulumi.ComponentResource.register_outputs', return_value=None),
+    patch('pulumi.export'),
+    patch('pulumi.Output'),
+    patch('pulumi.Output.concat'),
+    patch('pulumi.Output.all'),
+    patch('pulumi.Output.from_input'),
+    patch('pulumi.AssetArchive'),
+    patch('pulumi.FileArchive'),
+    patch('pulumi.get_stack', return_value='test-stack'),
+    patch('lib.tap_stack.ResourceOptions'),
+    patch('lib.tap_stack.iam.Role'),
+    patch('lib.tap_stack.iam.Policy'),
+    patch('lib.tap_stack.iam.RolePolicyAttachment'),
+    patch('lib.tap_stack.cloudwatch.LogGroup'),
+    patch('lib.tap_stack.cloudwatch.MetricAlarm'),
+    patch('lib.tap_stack.cloudwatch.Dashboard'),
+    patch('lib.tap_stack.lambda_.Function'),
+    patch('lib.tap_stack.lambda_.Permission'),
+    patch('lib.tap_stack.apigateway.RestApi'),
+    patch('lib.tap_stack.apigateway.Resource'),
+    patch('lib.tap_stack.apigateway.Method'),
+    patch('lib.tap_stack.apigateway.Integration'),
+    patch('lib.tap_stack.apigateway.MethodResponse'),
+    patch('lib.tap_stack.apigateway.IntegrationResponse'),
+    patch('lib.tap_stack.apigateway.Deployment'),
+  )
+
+
+def _configure_mock_returns(mocks):
+  # Minimal attributes accessed by TapStack for each resource
+  role = mocks['Role']
+  role.return_value = Mock(name='Role')
+  role.return_value.name = 'lambda-execution-role-test'
+  role.return_value.arn = 'arn:aws:iam::123456789012:role/lambda-execution-role-test'
+
+  policy = mocks['Policy']
+  policy.return_value = Mock(name='Policy')
+  policy.return_value.arn = 'arn:aws:iam::123456789012:policy/lambda-cloudwatch-policy-test'
+
+  attach = mocks['RolePolicyAttachment']
+  attach.return_value = Mock(name='RolePolicyAttachment')
+
+  log_group = mocks['LogGroup']
+  log_group.return_value = Mock(name='LogGroup')
+  log_group.return_value.name = '/aws/lambda/tap-api-handler-test'
+
+  lambda_fn = mocks['Function']
+  lambda_fn.return_value = Mock(name='Function')
+  lambda_fn.return_value.name = 'tap-api-handler-test'
+  lambda_fn.return_value.arn = 'arn:aws:lambda:us-east-1:123456789012:function:tap-api-handler-test'
+  lambda_fn.return_value.memory_size = 512
+  lambda_fn.return_value.timeout = 60
+  lambda_fn.return_value.runtime = 'python3.12'
+
+  rest_api = mocks['RestApi']
+  rest_api.return_value = Mock(name='RestApi')
+  rest_api.return_value.id = 'api-id'
+  rest_api.return_value.root_resource_id = 'root-id'
+  rest_api.return_value.execution_arn = 'arn:aws:execute-api:us-east-1:123456789012:api-id'
+
+  # Output mocks
+  for key in ('Output', 'concat', 'all', 'from_input'):
+    mocks[key].return_value = Mock(name=key)
+    mocks[key].return_value.apply = Mock()
+
+
+def test_tap_stack_instantiates_with_prod_branch():
+  # Arrange patches
+  patchers = _setup_common_patches()
+  actives = [p.start() for p in patchers]
+  try:
+    # Map names to mocks for configuration and assertions
+    mocks = {p.attribute: a for p, a in zip(patchers, actives)}
+    _configure_mock_returns(mocks)
+
+    from lib.tap_stack import TapStack, TapStackArgs
+
+    # Act: instantiate with prod to hit prod thresholds/retention
+    args = TapStackArgs(environment_suffix='prod', region='us-east-1', tags={'Owner': 'QA'})
+    stack = TapStack('tap', args)
+
+    # Assert: key properties set
+    assert stack.lambda_function.name == 'tap-api-handler-test'
+    assert stack.api_gateway.id == 'api-id'
+    # LogGroup retention argument for prod (30)
+    _, lg_kwargs = mocks['LogGroup'].call_args
+    assert lg_kwargs['retention_in_days'] == 30
+    # MetricAlarm thresholds for prod
+    alarm_calls = mocks['MetricAlarm'].call_args_list
+    thresholds = [call.kwargs.get('threshold') for call in alarm_calls]
+    assert 3 in thresholds and 45000 in thresholds
+    # API config arguments
+    _, api_kwargs = mocks['RestApi'].call_args
+    assert api_kwargs['minimum_compression_size'] == 1024
+    assert api_kwargs['binary_media_types'] == ["*/*"]
+  finally:
+    for p in patchers:
+      p.stop()
+
+
+def test_tap_stack_instantiates_with_nonprod_branch():
+  patchers = _setup_common_patches()
+  actives = [p.start() for p in patchers]
+  try:
+    mocks = {p.attribute: a for p, a in zip(patchers, actives)}
+    _configure_mock_returns(mocks)
+
+    from lib.tap_stack import TapStack, TapStackArgs
+
+    args = TapStackArgs(environment_suffix='dev', region='us-east-1')
+    stack = TapStack('tap', args)
+
+    assert stack.lambda_function.runtime == 'python3.12'
+    # LogGroup retention for non-prod (14)
+    _, lg_kwargs = mocks['LogGroup'].call_args
+    assert lg_kwargs['retention_in_days'] == 14
+    # Non-prod thresholds
+    alarm_calls = mocks['MetricAlarm'].call_args_list
+    thresholds = [call.kwargs.get('threshold') for call in alarm_calls]
+    assert 5 in thresholds and 25000 in thresholds
+  finally:
+    for p in patchers:
+      p.stop()
