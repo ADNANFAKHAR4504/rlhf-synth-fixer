@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
@@ -138,12 +138,8 @@ describe('TapStack - Secure Web Application Infrastructure', () => {
       });
     });
 
-    test('Security Hub is enabled', () => {
-      securityTemplate.hasResourceProperties('AWS::SecurityHub::Hub', {
-        EnableDefaultStandards: true,
-        AutoEnableControls: true,
-      });
-    });
+    // Security Hub test removed - Security Hub can only be enabled once per AWS account
+    // and should be managed outside of the CloudFormation stack
 
     test('SNS topic is created for alerts', () => {
       securityTemplate.hasResourceProperties('AWS::SNS::Topic', {
@@ -151,7 +147,7 @@ describe('TapStack - Secure Web Application Infrastructure', () => {
       });
     });
 
-    test('CloudWatch Log Group is encrypted', () => {
+    test('CloudWatch Log Group is created with retention', () => {
       securityTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
         RetentionInDays: 30,
       });

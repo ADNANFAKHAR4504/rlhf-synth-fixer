@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as guardduty from 'aws-cdk-lib/aws-guardduty';
-import * as securityhub from 'aws-cdk-lib/aws-securityhub';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import * as guardduty from 'aws-cdk-lib/aws-guardduty';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
 interface SecurityStackProps extends cdk.NestedStackProps {
@@ -30,6 +30,33 @@ export class SecurityStack extends cdk.NestedStack {
     });
 
     this.kmsKey.addAlias(`webapp-key-${props.environmentSuffix}`);
+
+    // Custom resource to ensure KMS key is fully propagated
+    const kmsKeyValidator = new cr.AwsCustomResource(this, 'KMSKeyValidator', {
+      onCreate: {
+        service: 'KMS',
+        action: 'describeKey',
+        parameters: {
+          KeyId: this.kmsKey.keyId,
+        },
+        physicalResourceId: cr.PhysicalResourceId.of('KMSKeyValidator'),
+      },
+      onUpdate: {
+        service: 'KMS',
+        action: 'describeKey',
+        parameters: {
+          KeyId: this.kmsKey.keyId,
+        },
+        physicalResourceId: cr.PhysicalResourceId.of('KMSKeyValidator'),
+      },
+      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
+      }),
+    });
+
+    // Grant CloudFormation execution role permission to use the KMS key
+    this.kmsKey.grantEncryptDecrypt(new iam.ServicePrincipal('cloudformation.amazonaws.com'));
+    this.kmsKey.grantEncryptDecrypt(new iam.ServicePrincipal('logs.amazonaws.com'));
 
     // SNS Topic for alerts
     this.alertsTopic = new sns.Topic(this, 'AlertsTopic', {
@@ -85,19 +112,27 @@ export class SecurityStack extends cdk.NestedStack {
       ],
     });
 
-    // Enable Security Hub with new 2025 capabilities
-    new securityhub.CfnHub(this, 'SecurityHub', {
-      enableDefaultStandards: true,
-      autoEnableControls: true,
-      controlFindingGenerator: 'SECURITY_CONTROL',
-    });
+    // Note: Security Hub is removed as it can only be enabled once per AWS account
+    // If you need to enable Security Hub, do it manually via AWS Console or CLI
+    // and ensure it's not included in subsequent deployments
 
     // CloudWatch Log Group for application logs
-    new logs.LogGroup(this, 'WebAppLogs', {
+    // Using KMS encryption with proper dependency management
+    const logGroup = new logs.LogGroup(this, 'WebAppLogs', {
       logGroupName: `/aws/webapp/${props.environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
     });
+    
+    // Ensure the Log Group depends on the KMS key validator being completed
+    logGroup.node.addDependency(kmsKeyValidator);
+
+    // Alternative approach: If KMS encryption fails, you can uncomment this:
+    // const logGroupFallback = new logs.LogGroup(this, 'WebAppLogsFallback', {
+    //   logGroupName: `/aws/webapp/${props.environmentSuffix}`,
+    //   retention: logs.RetentionDays.ONE_MONTH,
+    //   // No encryption key - uses default CloudWatch Logs encryption
+    // });
 
     // CloudWatch Alarms
     new cloudwatch.Alarm(this, 'HighErrorRateAlarm', {
