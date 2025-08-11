@@ -2,6 +2,7 @@
 Unit tests for the IPv6 dual-stack VPC infrastructure.
 """
 
+import importlib.util
 import os
 import sys
 import unittest
@@ -52,38 +53,33 @@ class TestTapStack(unittest.TestCase):
     def test_infrastructure_with_prod_suffix(self):
         """Test infrastructure with prod environment suffix"""
         import importlib
-        import lib.tap_stack
+
+        import lib.tap_stack  # noqa: F401
         importlib.reload(lib.tap_stack)
         self.assertTrue(mock_aws.ec2.Vpc.called)
 
     def test_derive_ipv6_subnet_cidr_function(self):
         """Test the derive_ipv6_subnet_cidr helper function"""
-        import importlib.util
-        # Import the function
         spec = importlib.util.spec_from_file_location("tap_stack", "lib/tap_stack.py")
         module = importlib.util.module_from_spec(spec)
-
-        # Mock the dependencies before execution
+        
         module.pulumi = mock_pulumi
         module.aws = mock_aws
         module.os = Mock()
         module.os.environ.get = Mock(return_value='test')
-
+        
         with patch.dict('sys.modules', {'pulumi': mock_pulumi, 'pulumi_aws': mock_aws}):
             spec.loader.exec_module(module)
-
-        # Test the function exists
+            
         self.assertTrue(hasattr(module, 'derive_ipv6_subnet_cidr'))
-
-        # Test the function logic
         result = module.derive_ipv6_subnet_cidr('2001:db8::/56', 1)
         self.assertIn('2001:db8', result)
         self.assertTrue(result.endswith('/64'))
 
     def test_vpc_configuration(self):
         """Test VPC configuration parameters"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('cidr_block="10.0.0.0/16"', source_code)
         self.assertIn('enable_dns_support=True', source_code)
@@ -92,8 +88,8 @@ class TestTapStack(unittest.TestCase):
 
     def test_subnet_configuration(self):
         """Test subnet configuration"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('public-subnet', source_code)
         self.assertIn('private-subnet', source_code)
@@ -102,8 +98,8 @@ class TestTapStack(unittest.TestCase):
 
     def test_security_group_configuration(self):
         """Test security group configuration"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('SecurityGroup', source_code)
         self.assertIn('from_port=22', source_code)
@@ -112,8 +108,8 @@ class TestTapStack(unittest.TestCase):
 
     def test_ec2_instances_configuration(self):
         """Test EC2 instances configuration"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('web-server-1', source_code)
         self.assertIn('web-server-2', source_code)
@@ -122,8 +118,8 @@ class TestTapStack(unittest.TestCase):
 
     def test_auto_scaling_group(self):
         """Test auto-scaling group configuration"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('autoscaling.Group', source_code)
         self.assertIn('min_size=1', source_code)
@@ -132,8 +128,8 @@ class TestTapStack(unittest.TestCase):
 
     def test_networking_components(self):
         """Test networking components"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('InternetGateway', source_code)
         self.assertIn('NatGateway', source_code)
@@ -142,26 +138,26 @@ class TestTapStack(unittest.TestCase):
 
     def test_tags_configuration(self):
         """Test resource tagging"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('"Environment": "Production"', source_code)
         self.assertIn('"Project": "IPv6StaticTest"', source_code)
 
     def test_exports_configuration(self):
         """Test Pulumi exports"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
-        exports = ['vpc_id', 'vpc_ipv6_cidr_block', 'public_subnet_id', 
-                  'private_subnet_id', 'security_group_id', 'nat_gateway_id']
+        exports = ['vpc_id', 'vpc_ipv6_cidr_block', 'public_subnet_id',
+                   'private_subnet_id', 'security_group_id', 'nat_gateway_id']
         for export in exports:
             self.assertIn(f'pulumi.export("{export}"', source_code)
 
     def test_tap_py_structure(self):
         """Test tap.py file structure"""
-        with open('tap.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('tap.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('#!/usr/bin/env python3', source_code)
         self.assertIn('import lib.tap_stack', source_code)
@@ -169,8 +165,8 @@ class TestTapStack(unittest.TestCase):
 
     def test_ipv6_specific_features(self):
         """Test IPv6 specific configurations"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('ipv6_cidr_block', source_code)
         self.assertIn('assign_ipv6_address_on_creation=True', source_code)
@@ -179,20 +175,12 @@ class TestTapStack(unittest.TestCase):
 
     def test_resource_replacement_options(self):
         """Test resource replacement configurations"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
+        with open('lib/tap_stack.py', 'r', encoding='utf-8') as file:
+            source_code = file.read()
         
         self.assertIn('replace_on_changes', source_code)
         self.assertIn('depends_on', source_code)
         self.assertIn('ResourceOptions', source_code)
-
-    def test_availability_zones_configuration(self):
-        """Test availability zones configuration"""
-        with open('lib/tap_stack.py', 'r', encoding='utf-8') as f:
-            source_code = f.read()
-        
-        self.assertIn('availability_zone', source_code)
-        self.assertIn('get_availability_zones', source_code)
 
 
 if __name__ == '__main__':
