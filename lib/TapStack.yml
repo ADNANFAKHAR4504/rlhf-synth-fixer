@@ -672,7 +672,6 @@ Resources:
   # -----------------------------
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn: PrimaryKmsKey
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${Environment}'
       RetentionInDays: !Ref CloudTrailLogRetentionDays
@@ -685,7 +684,6 @@ Resources:
 
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn: PrimaryKmsKey
     Properties:
       LogGroupName: !Sub '/aws/s3/${Environment}-access'
       RetentionInDays: 365
