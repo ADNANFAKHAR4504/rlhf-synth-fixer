@@ -1,5 +1,5 @@
 {
-  "app": "pipenv run python3 tap.py",
+  "app": "python tap.py",
   "watch": {
     "include": [
       "**"
