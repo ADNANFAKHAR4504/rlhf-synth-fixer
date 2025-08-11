@@ -283,14 +283,14 @@ describe('TapStack.yml - Unit Tests', () => {
       const lg = getResourceBlock(yaml, 'CloudTrailLogGroup')!;
       expectLineIncludes(lg.content, /LogGroupName:\s*\!Sub '\/aws\/cloudtrail\/\$\{Environment\}'/);
       expectLineIncludes(lg.content, /RetentionInDays:\s*\!Ref CloudTrailLogRetentionDays/);
-      expectLineIncludes(lg.content, /KmsKeyId:\s*\!Ref PrimaryKmsKey/);
+      expectLineIncludes(lg.content, /KmsKeyId:\s*\!GetAtt PrimaryKmsKey\.Arn/);
     });
     test('S3AccessLogGroup encrypted with KMS and retention 365', () => {
       expectResourceHasType(yaml, 'S3AccessLogGroup', 'AWS::Logs::LogGroup');
       const lg = getResourceBlock(yaml, 'S3AccessLogGroup')!;
       expectLineIncludes(lg.content, /LogGroupName:\s*\!Sub '\/aws\/s3\/\$\{Environment\}-access'/);
       expectLineIncludes(lg.content, /RetentionInDays:\s*365/);
-      expectLineIncludes(lg.content, /KmsKeyId:\s*\!Ref PrimaryKmsKey/);
+      expectLineIncludes(lg.content, /KmsKeyId:\s*\!GetAtt PrimaryKmsKey\.Arn/);
     });
     test('CloudTrail Trail is multi-region and logs to CloudWatch', () => {
       expectResourceHasType(yaml, 'CloudTrail', 'AWS::CloudTrail::Trail');
@@ -397,7 +397,7 @@ describe('TapStack.yml - Unit Tests', () => {
 
       // CloudTrail log group retention and KMS
       expect(r.CloudTrailLogGroup.Properties.RetentionInDays).toEqual({ Ref: 'CloudTrailLogRetentionDays' });
-      expect(r.CloudTrailLogGroup.Properties.KmsKeyId).toEqual({ Ref: 'PrimaryKmsKey' });
+      expect(r.CloudTrailLogGroup.Properties.KmsKeyId).toEqual({ 'Fn::GetAtt': ['PrimaryKmsKey', 'Arn'] });
 
       // CloudTrail Trail core settings
       expect(r.CloudTrail.Properties.IsMultiRegionTrail).toBe(true);
