@@ -1,4 +1,4 @@
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeFlowLogsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeFlowLogsCommand, DescribeSecurityGroupsCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';
 import { S3Client, ListBucketsCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3';
 import { KMSClient, DescribeKeyCommand, GetKeyRotationStatusCommand } from '@aws-sdk/client-kms';
 import { SecretsManagerClient, DescribeSecretCommand, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
@@ -35,8 +35,20 @@ skipIfNoOutputs('Security Infrastructure Integration Tests', () => {
       
       const vpc = vpcs.Vpcs![0];
       expect(vpc.State).toBe('available');
-      expect((vpc as any).EnableDnsHostnames).toBe(true);
-      expect((vpc as any).EnableDnsSupport).toBe(true);
+      
+      // Check DNS hostnames attribute
+      const dnsHostnames = await ec2.send(new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsHostnames'
+      }));
+      expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
+      
+      // Check DNS support attribute
+      const dnsSupport = await ec2.send(new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsSupport'
+      }));
+      expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
     }, 30000);
 
     test('VPC has correct tags', async () => {
