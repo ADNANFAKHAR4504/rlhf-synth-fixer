@@ -252,9 +252,17 @@
                 "FunctionVersion": "$LATEST",
                 "Name": "prod",
                 "ProvisionedConcurrencyConfig": {
-                    "ProvisionedConcurrentExecutions": {
-                        "Ref": "LambdaProvisionedConcurrency"
-                    }
+                    "Fn::If": [
+                        "EnableProvisionedConcurrency",
+                        {
+                            "ProvisionedConcurrentExecutions": {
+                                "Ref": "LambdaProvisionedConcurrency"
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
                 }
             }
         },
