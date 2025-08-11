@@ -92,10 +92,10 @@ describe('Serverless API Integration Tests', () => {
       expectedOutputs.forEach(outputKey => {
         if (stackOutputs[outputKey]) {
           console.log(
-            `✅ Found output: ${outputKey} = ${stackOutputs[outputKey]}`
+            `Found output: ${outputKey} = ${stackOutputs[outputKey]}`
           );
         } else {
-          console.log(`❌ Missing output: ${outputKey}`);
+          console.log(`Missing output: ${outputKey}`);
         }
         expect(stackOutputs[outputKey]).toBeDefined();
       });
