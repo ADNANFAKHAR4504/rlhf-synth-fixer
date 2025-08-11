@@ -24,12 +24,31 @@
             "Default": "serverless-app",
             "Description": "Application name for resource naming"
         },
+        "EnableProvisionedConcurrency": {
+            "Type": "String",
+            "Default": "false",
+            "Description": "Enable provisioned concurrency for Lambda functions",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
         "LambdaProvisionedConcurrency": {
             "Type": "Number",
-            "Default": 1000,
+            "Default": 100,
             "Description": "Provisioned concurrency for Lambda functions to avoid cold starts",
-            "MinValue": 100,
-            "MaxValue": 10000
+            "MinValue": 10,
+            "MaxValue": 990
+        }
+    },
+    "Conditions": {
+        "EnableProvisionedConcurrency": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableProvisionedConcurrency"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
@@ -224,27 +243,13 @@
                 }
             }
         },
-        "LambdaVersion": {
-            "Type": "AWS::Lambda::Version",
-            "Properties": {
-                "FunctionName": {
-                    "Ref": "MainLambdaFunction"
-                },
-                "Description": "Production version for provisioned concurrency"
-            }
-        },
         "LambdaAlias": {
             "Type": "AWS::Lambda::Alias",
             "Properties": {
                 "FunctionName": {
                     "Ref": "MainLambdaFunction"
                 },
-                "FunctionVersion": {
-                    "Fn::GetAtt": [
-                        "LambdaVersion",
-                        "Version"
-                    ]
-                },
+                "FunctionVersion": "$LATEST",
                 "Name": "prod",
                 "ProvisionedConcurrencyConfig": {
                     "ProvisionedConcurrentExecutions": {
@@ -257,7 +262,7 @@
             "Type": "AWS::Lambda::Permission",
             "Properties": {
                 "FunctionName": {
-                    "Ref": "MainLambdaFunction"
+                    "Ref": "LambdaAlias"
                 },
                 "Action": "lambda:InvokeFunction",
                 "Principal": "apigateway.amazonaws.com",
@@ -313,6 +318,7 @@
         },
         "ApiMethod": {
             "Type": "AWS::ApiGateway::Method",
+            "DependsOn": "LambdaAlias",
             "Properties": {
                 "RestApiId": {
                     "Ref": "RestApi"
@@ -326,7 +332,7 @@
                     "Type": "AWS_PROXY",
                     "IntegrationHttpMethod": "POST",
                     "Uri": {
-                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambdaFunction.Arn}:prod/invocations"
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaAlias}/invocations"
                     },
                     "IntegrationResponses": [
                         {
