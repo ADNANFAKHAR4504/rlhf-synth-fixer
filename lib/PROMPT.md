@@ -17,7 +17,7 @@ Design a highly secure and compliant cloud infrastructure using CDK PYTHON. Your
 
 **Proposed Statement:**
 
-CDK Python code targeting EU West (Ireland) and EU Central (Frankfurt, Germany) regions. Resources are provisioned using default naming conventions unless explicitly stated. The budget allows for selection of predefined AWS managed services where applicable.
+CDK Python code targeting EU West (London) and EU Central (Frankfurt, Germany) regions. Resources are provisioned using default naming conventions unless explicitly stated. The budget allows for selection of predefined AWS managed services where applicable.
 
 ---
 
