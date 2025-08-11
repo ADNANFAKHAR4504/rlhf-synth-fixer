@@ -40,7 +40,7 @@ Your Pulumi project must provision the following interconnected resources, demon
         - VPC-related permissions for running in a VPC.
 
 4.  **API Gateway (Secure Entry Point):**
-    - Provision an **HTTP API Gateway**.
+    - Provision a **REST API Gateway**.
     - **Connection & Security:**
       - Configure a default stage with logging enabled, sending logs to a CloudWatch Log Group.
       - Create an integration that triggers the Lambda function.

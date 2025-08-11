@@ -1,73 +1,104 @@
-I'll create a complete, production-ready secure serverless API infrastructure using Pulumi TypeScript. This solution implements all the security best practices you've outlined with a focus on least privilege and private networking.
+# Production-Ready Secure Serverless API
+
+I'll create a complete Pulumi TypeScript project that implements a highly secure, production-ready serverless API following AWS security best practices and the principle of least privilege.
+
+## Project Structure
+
+### `index.ts` (Main Infrastructure File)
 
 ```typescript
 import * as pulumi from '@pulumi/pulumi';
-import { createVpcInfrastructure } from './src/networking/vpc';
-import { createVpcEndpoints } from './src/networking/endpoints';
+import { createVPC } from './src/networking/vpc';
+import { createVPCEndpoints } from './src/networking/endpoints';
 import { createSecureS3Bucket } from './src/storage/s3';
-import { createLambdaRole } from './src/iam/roles';
+import { createLambdaExecutionRole } from './src/iam/roles';
 import { createLambdaFunction } from './src/compute/lambda';
-import { createApiGateway } from './src/api/gateway';
+import { createAPIGateway } from './src/api/gateway';
 import { createCloudWatchResources } from './src/monitoring/cloudwatch';
 
+// Configuration
 const config = new pulumi.Config();
-const projectName = config.require('projectName');
+const projectName = config.get('projectName') || 'secure-doc-api';
 const environment = config.get('environment') || 'dev';
 
-// Create VPC and networking infrastructure
-const vpcInfra = createVpcInfrastructure(projectName, environment);
+async function main() {
+  // 1. Create VPC and networking infrastructure
+  const networking = createVPC(projectName, environment);
 
-// Create VPC Endpoints for secure AWS service access
-const vpcEndpoints = createVpcEndpoints(
-  vpcInfra.vpc,
-  vpcInfra.routeTable,
-  projectName,
-  environment
-);
+  // 2. Create VPC Endpoints for secure AWS service access
+  const endpoints = createVPCEndpoints(
+    networking.vpc,
+    networking.routeTable,
+    projectName
+  );
 
-// Create CloudWatch resources for logging
-const cloudWatchResources = createCloudWatchResources(projectName, environment);
+  // 3. Create CloudWatch resources for monitoring and logging
+  const monitoring = createCloudWatchResources(projectName, environment);
 
-// Create secure S3 bucket
-const s3Bucket = createSecureS3Bucket(
-  vpcEndpoints.s3Endpoint,
-  projectName,
-  environment
-);
+  // 4. Create secure S3 bucket for document storage
+  const storage = createSecureS3Bucket(
+    projectName,
+    environment,
+    endpoints.s3Endpoint
+  );
 
-// Create IAM role for Lambda with least privilege
-const lambdaRole = createLambdaRole(
-  s3Bucket.bucket,
-  cloudWatchResources.logGroup,
-  projectName,
-  environment
-);
+  // 5. Create IAM role with least privilege permissions
+  const lambdaRole = createLambdaExecutionRole(
+    projectName,
+    environment,
+    storage.bucket.arn,
+    monitoring.lambdaLogGroup.arn
+  );
 
-// Create Lambda function in private subnet
-const lambdaFunction = createLambdaFunction(
-  lambdaRole,
-  vpcInfra.privateSubnets,
-  vpcInfra.lambdaSecurityGroup,
-  s3Bucket.bucket,
-  cloudWatchResources.logGroup,
-  projectName,
-  environment
-);
+  // 6. Create Lambda function in private subnet
+  const lambda = createLambdaFunction(
+    projectName,
+    environment,
+    lambdaRole,
+    networking.privateSubnets,
+    networking.lambdaSecurityGroup,
+    storage.bucket.bucket,
+    monitoring.lambdaLogGroup.name
+  );
 
-// Create API Gateway
-const apiGateway = createApiGateway(
-  lambdaFunction,
-  cloudWatchResources.apiLogGroup,
-  projectName,
-  environment
-);
+  // 7. Create API Gateway with private integration
+  const api = createAPIGateway(
+    projectName,
+    environment,
+    lambda.function,
+    monitoring.apiLogGroup
+  );
 
-// Export important values
-export const vpcId = vpcInfra.vpc.id;
-export const s3BucketName = s3Bucket.bucket.bucket;
-export const lambdaFunctionName = lambdaFunction.name;
-export const apiGatewayUrl = apiGateway.url;
-export const logGroupName = cloudWatchResources.logGroup.name;
+  // Export important resource information
+  return {
+    // Networking
+    vpcId: networking.vpc.id,
+    privateSubnetIds: networking.privateSubnets.map(subnet => subnet.id),
+    publicSubnetIds: networking.publicSubnets.map(subnet => subnet.id),
+
+    // Storage
+    bucketName: storage.bucket.bucket,
+    bucketArn: storage.bucket.arn,
+
+    // Compute
+    lambdaFunctionName: lambda.function.name,
+    lambdaFunctionArn: lambda.function.arn,
+
+    // API
+    apiGatewayUrl: api.deployment.invokeUrl,
+    apiGatewayId: api.restApi.id,
+
+    // Monitoring
+    lambdaLogGroupName: monitoring.lambdaLogGroup.name,
+    apiLogGroupName: monitoring.apiLogGroup.name,
+
+    // Security
+    lambdaRoleArn: lambdaRole.arn,
+    s3EndpointId: endpoints.s3Endpoint.id,
+  };
+}
+
+export = main();
 ```
 
 ### `src/networking/vpc.ts`
@@ -76,19 +107,7 @@ export const logGroupName = cloudWatchResources.logGroup.name;
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-export interface VpcInfrastructure {
-  vpc: aws.ec2.Vpc;
-  internetGateway: aws.ec2.InternetGateway;
-  publicSubnets: aws.ec2.Subnet[];
-  privateSubnets: aws.ec2.Subnet[];
-  routeTable: aws.ec2.RouteTable;
-  lambdaSecurityGroup: aws.ec2.SecurityGroup;
-}
-
-export function createVpcInfrastructure(
-  projectName: string,
-  environment: string
-): VpcInfrastructure {
+export function createVPC(projectName: string, environment: string) {
   // Create VPC
   const vpc = new aws.ec2.Vpc(`${projectName}-${environment}-vpc`, {
     cidrBlock: '10.0.0.0/16',
@@ -101,7 +120,7 @@ export function createVpcInfrastructure(
     },
   });
 
-  // Create Internet Gateway
+  // Create Internet Gateway for public subnets
   const internetGateway = new aws.ec2.InternetGateway(
     `${projectName}-${environment}-igw`,
     {
@@ -109,7 +128,6 @@ export function createVpcInfrastructure(
       tags: {
         Name: `${projectName}-${environment}-igw`,
         Environment: environment,
-        Project: projectName,
       },
     }
   );
@@ -119,7 +137,7 @@ export function createVpcInfrastructure(
     state: 'available',
   });
 
-  // Create public subnets (for NAT Gateway if needed in future)
+  // Create public subnets (for NAT Gateway if needed, but we're using VPC endpoints)
   const publicSubnets = availabilityZones.then(azs =>
     azs.names.slice(0, 2).map(
       (az, index) =>
@@ -132,16 +150,15 @@ export function createVpcInfrastructure(
             mapPublicIpOnLaunch: true,
             tags: {
               Name: `${projectName}-${environment}-public-subnet-${index + 1}`,
-              Type: 'Public',
+              Type: 'public',
               Environment: environment,
-              Project: projectName,
             },
           }
         )
     )
   );
 
-  // Create private subnets for Lambda
+  // Create private subnets for Lambda functions
   const privateSubnets = availabilityZones.then(azs =>
     azs.names.slice(0, 2).map(
       (az, index) =>
@@ -151,50 +168,86 @@ export function createVpcInfrastructure(
             vpcId: vpc.id,
             cidrBlock: `10.0.${index + 10}.0/24`,
             availabilityZone: az,
+            mapPublicIpOnLaunch: false,
             tags: {
               Name: `${projectName}-${environment}-private-subnet-${index + 1}`,
-              Type: 'Private',
+              Type: 'private',
               Environment: environment,
-              Project: projectName,
             },
           }
         )
     )
   );
 
+  // Create route table for public subnets
+  const publicRouteTable = new aws.ec2.RouteTable(
+    `${projectName}-${environment}-public-rt`,
+    {
+      vpcId: vpc.id,
+      tags: {
+        Name: `${projectName}-${environment}-public-rt`,
+        Environment: environment,
+      },
+    }
+  );
+
   // Create route table for private subnets
-  const routeTable = new aws.ec2.RouteTable(
+  const privateRouteTable = new aws.ec2.RouteTable(
     `${projectName}-${environment}-private-rt`,
     {
       vpcId: vpc.id,
       tags: {
         Name: `${projectName}-${environment}-private-rt`,
         Environment: environment,
-        Project: projectName,
       },
     }
   );
 
-  // Associate private subnets with route table
-  privateSubnets.then(subnets => {
-    subnets.forEach((subnet, index) => {
-      new aws.ec2.RouteTableAssociation(
-        `${projectName}-${environment}-private-rta-${index + 1}`,
-        {
-          subnetId: subnet.id,
-          routeTableId: routeTable.id,
-        }
-      );
-    });
+  // Add route to internet gateway for public subnets
+  new aws.ec2.Route(`${projectName}-${environment}-public-route`, {
+    routeTableId: publicRouteTable.id,
+    destinationCidrBlock: '0.0.0.0/0',
+    gatewayId: internetGateway.id,
   });
 
-  // Create security group for Lambda
+  // Associate public subnets with public route table
+  publicSubnets.then(subnets =>
+    subnets.forEach(
+      (subnet, index) =>
+        new aws.ec2.RouteTableAssociation(
+          `${projectName}-${environment}-public-rta-${index + 1}`,
+          {
+            subnetId: subnet.id,
+            routeTableId: publicRouteTable.id,
+          }
+        )
+    )
+  );
+
+  // Associate private subnets with private route table
+  privateSubnets.then(subnets =>
+    subnets.forEach(
+      (subnet, index) =>
+        new aws.ec2.RouteTableAssociation(
+          `${projectName}-${environment}-private-rta-${index + 1}`,
+          {
+            subnetId: subnet.id,
+            routeTableId: privateRouteTable.id,
+          }
+        )
+    )
+  );
+
+  // Security group for Lambda functions
   const lambdaSecurityGroup = new aws.ec2.SecurityGroup(
     `${projectName}-${environment}-lambda-sg`,
     {
-      vpcId: vpc.id,
+      name: `${projectName}-${environment}-lambda-sg`,
       description:
-        'Security group for Lambda function - allows HTTPS outbound only',
+        'Security group for Lambda functions - allows HTTPS outbound only',
+      vpcId: vpc.id,
+
+      // Allow HTTPS outbound for AWS API calls
       egress: [
         {
           fromPort: 443,
@@ -204,10 +257,10 @@ export function createVpcInfrastructure(
           description: 'HTTPS outbound for AWS API calls',
         },
       ],
+
       tags: {
         Name: `${projectName}-${environment}-lambda-sg`,
         Environment: environment,
-        Project: projectName,
       },
     }
   );
@@ -215,9 +268,9 @@ export function createVpcInfrastructure(
   return {
     vpc,
     internetGateway,
-    publicSubnets: publicSubnets.then(subnets => subnets),
-    privateSubnets: privateSubnets.then(subnets => subnets),
-    routeTable,
+    publicSubnets,
+    privateSubnets,
+    routeTable: privateRouteTable,
     lambdaSecurityGroup,
   };
 }
@@ -229,47 +282,41 @@ export function createVpcInfrastructure(
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-export interface VpcEndpoints {
-  s3Endpoint: aws.ec2.VpcEndpoint;
-}
-
-export function createVpcEndpoints(
+export function createVPCEndpoints(
   vpc: aws.ec2.Vpc,
   routeTable: aws.ec2.RouteTable,
-  projectName: string,
-  environment: string
-): VpcEndpoints {
-  // Create S3 Gateway VPC Endpoint for secure S3 access
-  const s3Endpoint = new aws.ec2.VpcEndpoint(
-    `${projectName}-${environment}-s3-endpoint`,
-    {
-      vpcId: vpc.id,
-      serviceName: 'com.amazonaws.us-west-2.s3',
-      vpcEndpointType: 'Gateway',
-      routeTableIds: [routeTable.id],
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: '*',
-            Action: [
-              's3:GetObject',
-              's3:PutObject',
-              's3:DeleteObject',
-              's3:ListBucket',
-            ],
-            Resource: '*',
-          },
-        ],
-      }),
-      tags: {
-        Name: `${projectName}-${environment}-s3-endpoint`,
-        Environment: environment,
-        Project: projectName,
-      },
-    }
-  );
+  projectName: string
+) {
+  // S3 Gateway VPC Endpoint - critical for secure S3 access from private subnets
+  const s3Endpoint = new aws.ec2.VpcEndpoint(`${projectName}-s3-endpoint`, {
+    vpcId: vpc.id,
+    serviceName: 'com.amazonaws.us-west-2.s3',
+    vpcEndpointType: 'Gateway',
+    routeTableIds: [routeTable.id],
+
+    // Policy to restrict access to specific actions
+    policy: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Principal: '*',
+          Action: [
+            's3:GetObject',
+            's3:PutObject',
+            's3:DeleteObject',
+            's3:ListBucket',
+          ],
+          Resource: '*',
+        },
+      ],
+    }),
+
+    tags: {
+      Name: `${projectName}-s3-endpoint`,
+      Purpose: 'Secure S3 access from private subnets',
+    },
+  });
 
   return {
     s3Endpoint,
@@ -283,34 +330,64 @@ export function createVpcEndpoints(
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-export interface S3Resources {
-  bucket: aws.s3.BucketV2;
-  accessLogsBucket: aws.s3.BucketV2;
-}
-
 export function createSecureS3Bucket(
-  s3Endpoint: aws.ec2.VpcEndpoint,
   projectName: string,
-  environment: string
-): S3Resources {
-  // Create access logs bucket
-  const accessLogsBucket = new aws.s3.BucketV2(
+  environment: string,
+  s3Endpoint: aws.ec2.VpcEndpoint
+) {
+  // Main document storage bucket
+  const bucket = new aws.s3.Bucket(`${projectName}-${environment}-documents`, {
+    bucket: `${projectName}-${environment}-documents-${Date.now()}`,
+
+    // Enable versioning for data protection
+    versioning: {
+      enabled: true,
+    },
+
+    // Server-side encryption with AWS managed keys (AES-256)
+    serverSideEncryptionConfiguration: {
+      rule: {
+        applyServerSideEncryptionByDefault: {
+          sseAlgorithm: 'AES256',
+        },
+        bucketKeyEnabled: true,
+      },
+    },
+
+    tags: {
+      Name: `${projectName}-${environment}-documents`,
+      Environment: environment,
+      Purpose: 'Secure document storage',
+    },
+  });
+
+  // Access logging bucket
+  const accessLogBucket = new aws.s3.Bucket(
     `${projectName}-${environment}-access-logs`,
     {
       bucket: `${projectName}-${environment}-access-logs-${Date.now()}`,
+
+      serverSideEncryptionConfiguration: {
+        rule: {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+        },
+      },
+
       tags: {
         Name: `${projectName}-${environment}-access-logs`,
         Environment: environment,
-        Project: projectName,
+        Purpose: 'S3 access logging',
       },
     }
   );
 
-  // Block public access for access logs bucket
+  // Block all public access to main bucket
   new aws.s3.BucketPublicAccessBlock(
-    `${projectName}-${environment}-access-logs-pab`,
+    `${projectName}-${environment}-documents-pab`,
     {
-      bucket: accessLogsBucket.id,
+      bucket: bucket.id,
       blockPublicAcls: true,
       blockPublicPolicy: true,
       ignorePublicAcls: true,
@@ -318,62 +395,28 @@ export function createSecureS3Bucket(
     }
   );
 
-  // Create main S3 bucket
-  const bucket = new aws.s3.BucketV2(
-    `${projectName}-${environment}-documents`,
+  // Block all public access to logging bucket
+  new aws.s3.BucketPublicAccessBlock(
+    `${projectName}-${environment}-access-logs-pab`,
     {
-      bucket: `${projectName}-${environment}-documents-${Date.now()}`,
-      tags: {
-        Name: `${projectName}-${environment}-documents`,
-        Environment: environment,
-        Project: projectName,
-      },
+      bucket: accessLogBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
     }
   );
-
-  // Enable versioning
-  new aws.s3.BucketVersioningV2(`${projectName}-${environment}-versioning`, {
-    bucket: bucket.id,
-    versioningConfiguration: {
-      status: 'Enabled',
-    },
-  });
-
-  // Configure server-side encryption with AWS managed keys (AES-256)
-  new aws.s3.BucketServerSideEncryptionConfigurationV2(
-    `${projectName}-${environment}-encryption`,
-    {
-      bucket: bucket.id,
-      rules: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
-          bucketKeyEnabled: true,
-        },
-      ],
-    }
-  );
-
-  // Block all public access
-  new aws.s3.BucketPublicAccessBlock(`${projectName}-${environment}-pab`, {
-    bucket: bucket.id,
-    blockPublicAcls: true,
-    blockPublicPolicy: true,
-    ignorePublicAcls: true,
-    restrictPublicBuckets: true,
-  });
 
   // Enable access logging
-  new aws.s3.BucketLoggingV2(`${projectName}-${environment}-logging`, {
+  new aws.s3.BucketLogging(`${projectName}-${environment}-documents-logging`, {
     bucket: bucket.id,
-    targetBucket: accessLogsBucket.id,
+    targetBucket: accessLogBucket.id,
     targetPrefix: 'access-logs/',
   });
 
-  // Create restrictive bucket policy
+  // Restrictive bucket policy - only allow access from Lambda role and VPC endpoint
   const bucketPolicy = new aws.s3.BucketPolicy(
-    `${projectName}-${environment}-policy`,
+    `${projectName}-${environment}-documents-policy`,
     {
       bucket: bucket.id,
       policy: pulumi
@@ -383,26 +426,26 @@ export function createSecureS3Bucket(
             Version: '2012-10-17',
             Statement: [
               {
-                Sid: 'DenyAllExceptVpcEndpointAndLambdaRole',
+                Sid: 'DenyAllExceptVPCEndpoint',
                 Effect: 'Deny',
                 Principal: '*',
                 Action: '*',
                 Resource: [bucketArn, `${bucketArn}/*`],
                 Condition: {
                   StringNotEquals: {
-                    'aws:sourceVpce': endpointId,
+                    'aws:SourceVpce': endpointId,
                   },
                 },
               },
               {
-                Sid: 'AllowVpcEndpointAccess',
+                Sid: 'AllowVPCEndpointAccess',
                 Effect: 'Allow',
                 Principal: '*',
                 Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
                 Resource: `${bucketArn}/*`,
                 Condition: {
                   StringEquals: {
-                    'aws:sourceVpce': endpointId,
+                    'aws:SourceVpce': endpointId,
                   },
                 },
               },
@@ -414,7 +457,8 @@ export function createSecureS3Bucket(
 
   return {
     bucket,
-    accessLogsBucket,
+    accessLogBucket,
+    bucketPolicy,
   };
 }
 ```
@@ -425,16 +469,20 @@ export function createSecureS3Bucket(
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-export function createLambdaRole(
-  s3Bucket: aws.s3.BucketV2,
-  logGroup: aws.cloudwatch.LogGroup,
+export function createLambdaExecutionRole(
   projectName: string,
-  environment: string
-): aws.iam.Role {
-  // Create Lambda execution role with least privilege
+  environment: string,
+  bucketArn: pulumi.Output<string>,
+  logGroupArn: pulumi.Output<string>
+) {
+  // Lambda execution role with least privilege
   const lambdaRole = new aws.iam.Role(
     `${projectName}-${environment}-lambda-role`,
     {
+      name: `${projectName}-${environment}-lambda-role`,
+      description:
+        'Least privilege execution role for document processing Lambda',
+
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -447,124 +495,96 @@ export function createLambdaRole(
           },
         ],
       }),
+
       tags: {
         Name: `${projectName}-${environment}-lambda-role`,
         Environment: environment,
-        Project: projectName,
+        Purpose: 'Lambda execution with least privilege',
       },
     }
   );
 
-  // Create custom policy with least privilege permissions
-  const lambdaPolicy = new aws.iam.Policy(
-    `${projectName}-${environment}-lambda-policy`,
-    {
-      description: 'Least privilege policy for document processing Lambda',
-      policy: pulumi
-        .all([s3Bucket.arn, logGroup.arn])
-        .apply(([bucketArn, logGroupArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['s3:PutObject'],
-                Resource: `${bucketArn}/*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: [
-                  'logs:CreateLogGroup',
-                  'logs:CreateLogStream',
-                  'logs:PutLogEvents',
-                ],
-                Resource: `${logGroupArn}:*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: [
-                  'ec2:CreateNetworkInterface',
-                  'ec2:DescribeNetworkInterfaces',
-                  'ec2:DeleteNetworkInterface',
-                ],
-                Resource: '*',
-              },
-            ],
-          })
-        ),
-      tags: {
-        Name: `${projectName}-${environment}-lambda-policy`,
-        Environment: environment,
-        Project: projectName,
-      },
-    }
-  );
-
-  // Attach the custom policy to the role
+  // VPC execution policy for Lambda
   new aws.iam.RolePolicyAttachment(
-    `${projectName}-${environment}-lambda-policy-attachment`,
+    `${projectName}-${environment}-lambda-vpc-policy`,
     {
       role: lambdaRole.name,
-      policyArn: lambdaPolicy.arn,
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
     }
   );
+
+  // Custom policy with least privilege permissions
+  const lambdaPolicy = new aws.iam.RolePolicy(
+    `${projectName}-${environment}-lambda-policy`,
+    {
+      name: `${projectName}-${environment}-lambda-policy`,
+      role: lambdaRole.id,
+
+      policy: pulumi.all([bucketArn, logGroupArn]).apply(([bArn, lArn]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'S3DocumentAccess',
+              Effect: 'Allow',
+              Action: ['s3:PutObject', 's3:PutObjectAcl'],
+              Resource: `${bArn}/*`,
+            },
+            {
+              Sid: 'CloudWatchLogsAccess',
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              Resource: `${lArn}:*`,
+            },
+          ],
+        })
+      ),
+    }
+  );
+
+  /*
+   * AUDITOR ROLE EXAMPLE (commented for reference):
+   *
+   * To create a separate auditor role with read-only access to logs:
+   *
+   * const auditorRole = new aws.iam.Role(`${projectName}-${environment}-auditor-role`, {
+   *     assumeRolePolicy: JSON.stringify({
+   *         Version: "2012-10-17",
+   *         Statement: [{
+   *             Action: "sts:AssumeRole",
+   *             Effect: "Allow",
+   *             Principal: {
+   *                 AWS: "arn:aws:iam::ACCOUNT-ID:user/auditor-user"
+   *             }
+   *         }]
+   *     })
+   * });
+   *
+   * new aws.iam.RolePolicy(`${projectName}-${environment}-auditor-policy`, {
+   *     role: auditorRole.id,
+   *     policy: logGroupArn.apply(lArn => JSON.stringify({
+   *         Version: "2012-10-17",
+   *         Statement: [{
+   *             Effect: "Allow",
+   *             Action: [
+   *                 "logs:GetLogEvents",
+   *                 "logs:FilterLogEvents",
+   *                 "logs:DescribeLogGroups",
+   *                 "logs:DescribeLogStreams"
+   *             ],
+   *             Resource: `${lArn}:*`
+   *         }]
+   *     }))
+   * });
+   */
 
   return lambdaRole;
 }
-
-/*
- * AUDITOR ROLE EXAMPLE (commented for reference):
- *
- * To create a separate IAM role for an "Auditor" with least privilege access to logs:
- *
- * export function createAuditorRole(logGroup: aws.cloudwatch.LogGroup, projectName: string, environment: string): aws.iam.Role {
- *   const auditorRole = new aws.iam.Role(`${projectName}-${environment}-auditor-role`, {
- *     assumeRolePolicy: JSON.stringify({
- *       Version: "2012-10-17",
- *       Statement: [
- *         {
- *           Action: "sts:AssumeRole",
- *           Effect: "Allow",
- *           Principal: {
- *             AWS: "arn:aws:iam::ACCOUNT-ID:root", // Replace with specific user/role ARN
- *           },
- *           Condition: {
- *             StringEquals: {
- *               "sts:ExternalId": "unique-external-id"
- *             }
- *           }
- *         },
- *       ],
- *     }),
- *   });
- *
- *   const auditorPolicy = new aws.iam.Policy(`${projectName}-${environment}-auditor-policy`, {
- *     policy: logGroup.arn.apply(logGroupArn =>
- *       JSON.stringify({
- *         Version: "2012-10-17",
- *         Statement: [
- *           {
- *             Effect: "Allow",
- *             Action: [
- *               "logs:GetLogEvents",
- *               "logs:FilterLogEvents",
- *               "logs:DescribeLogStreams",
- *             ],
- *             Resource: `${logGroupArn}:*`,
- *           },
- *         ],
- *       })
- *     ),
- *   });
- *
- *   new aws.iam.RolePolicyAttachment(`${projectName}-${environment}-auditor-policy-attachment`, {
- *     role: auditorRole.name,
- *     policyArn: auditorPolicy.arn,
- *   });
- *
- *   return auditorRole;
- * }
- */
 ```
 
 ### `src/compute/lambda.ts`
@@ -572,17 +592,19 @@ export function createLambdaRole(
 ```typescript
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export function createLambdaFunction(
-  lambdaRole: aws.iam.Role,
-  privateSubnets: pulumi.Output<aws.ec2.Subnet[]>,
-  securityGroup: aws.ec2.SecurityGroup,
-  s3Bucket: aws.s3.BucketV2,
-  logGroup: aws.cloudwatch.LogGroup,
   projectName: string,
-  environment: string
-): aws.lambda.Function {
-  // Lambda function code
+  environment: string,
+  executionRole: aws.iam.Role,
+  privateSubnets: Promise<aws.ec2.Subnet[]>,
+  securityGroup: aws.ec2.SecurityGroup,
+  bucketName: pulumi.Output<string>,
+  logGroupName: pulumi.Output<string>
+) {
+  // Create deployment package
   const lambdaCode = `
 const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
@@ -591,39 +613,33 @@ exports.handler = async (event) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
     
     try {
-        // Extract document data from the event
-        const documentData = event.body ? JSON.parse(event.body) : event;
-        const documentId = documentData.documentId || 'doc-' + Date.now();
-        const content = documentData.content || 'Default document content';
+        // Extract document data from the request
+        const body = JSON.parse(event.body || '{}');
+        const documentContent = body.content || 'Default document content';
+        const fileName = body.fileName || \`document-\${Date.now()}.txt\`;
         
-        // Process the document (placeholder logic)
-        const processedDocument = {
-            id: documentId,
-            content: content,
-            processedAt: new Date().toISOString(),
-            status: 'processed'
-        };
-        
-        // Store in S3
-        const s3Params = {
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: \`documents/\${documentId}.json\`,
-            Body: JSON.stringify(processedDocument, null, 2),
-            ContentType: 'application/json',
+        // Process and store the document in S3
+        const params = {
+            Bucket: process.env.BUCKET_NAME,
+            Key: \`processed/\${fileName}\`,
+            Body: documentContent,
+            ContentType: 'text/plain',
             ServerSideEncryption: 'AES256'
         };
         
-        const result = await s3.putObject(s3Params).promise();
+        const result = await s3.putObject(params).promise();
+        
         console.log('Document stored successfully:', result);
         
         return {
             statusCode: 200,
             headers: {
                 'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
             },
             body: JSON.stringify({
                 message: 'Document processed and stored successfully',
-                documentId: documentId,
+                fileName: fileName,
                 etag: result.ETag
             })
         };
@@ -635,6 +651,7 @@ exports.handler = async (event) => {
             statusCode: 500,
             headers: {
                 'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
             },
             body: JSON.stringify({
                 message: 'Error processing document',
@@ -645,41 +662,60 @@ exports.handler = async (event) => {
 };
 `;
 
+  // Write Lambda code to file
+  const lambdaDir = path.join(__dirname, '../../lambda');
+  if (!fs.existsSync(lambdaDir)) {
+    fs.mkdirSync(lambdaDir, { recursive: true });
+  }
+  fs.writeFileSync(path.join(lambdaDir, 'handler.js'), lambdaCode);
+
   // Create Lambda function
   const lambdaFunction = new aws.lambda.Function(
     `${projectName}-${environment}-processor`,
     {
-      runtime: aws.lambda.Runtime.NodeJS18dX,
+      name: `${projectName}-${environment}-document-processor`,
+      description: 'Secure document processing function in private subnet',
+
+      // Code configuration
       code: new pulumi.asset.AssetArchive({
-        'index.js': new pulumi.asset.StringAsset(lambdaCode),
-      }),
-      handler: 'index.handler',
-      role: lambdaRole.arn,
-      timeout: 30,
-      memorySize: 256,
-      environment: {
-        variables: {
-          S3_BUCKET_NAME: s3Bucket.bucket,
-          LOG_GROUP_NAME: logGroup.name,
-          ENVIRONMENT: environment,
-        },
-      },
-      vpcConfig: {
-        subnetIds: privateSubnets.apply(subnets =>
-          subnets.map(subnet => subnet.id)
+        'handler.js': new pulumi.asset.FileAsset(
+          path.join(lambdaDir, 'handler.js')
         ),
+      }),
+      handler: 'handler.handler',
+      runtime: 'nodejs18.x',
+
+      // Security and networking
+      role: executionRole.arn,
+      vpcConfig: {
+        subnetIds: privateSubnets.then(subnets => subnets.map(s => s.id)),
         securityGroupIds: [securityGroup.id],
       },
-      dependsOn: [logGroup],
+
+      // Environment variables
+      environment: {
+        variables: {
+          BUCKET_NAME: bucketName,
+          LOG_GROUP_NAME: logGroupName,
+          NODE_ENV: environment,
+        },
+      },
+
+      // Resource configuration
+      timeout: 30,
+      memorySize: 256,
+
       tags: {
-        Name: `${projectName}-${environment}-processor`,
+        Name: `${projectName}-${environment}-document-processor`,
         Environment: environment,
-        Project: projectName,
+        Purpose: 'Secure document processing',
       },
     }
   );
 
-  return lambdaFunction;
+  return {
+    function: lambdaFunction,
+  };
 }
 ```
 
@@ -689,106 +725,175 @@ exports.handler = async (event) => {
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-export interface ApiGatewayResources {
-  api: aws.apigatewayv2.Api;
-  stage: aws.apigatewayv2.Stage;
-  integration: aws.apigatewayv2.Integration;
-  route: aws.apigatewayv2.Route;
-  url: pulumi.Output<string>;
-}
-
-export function createApiGateway(
-  lambdaFunction: aws.lambda.Function,
-  logGroup: aws.cloudwatch.LogGroup,
+export function createAPIGateway(
   projectName: string,
-  environment: string
-): ApiGatewayResources {
-  // Create HTTP API Gateway
-  const api = new aws.apigatewayv2.Api(`${projectName}-${environment}-api`, {
-    protocolType: 'HTTP',
-    description: `Secure document processing API for ${projectName}`,
-    corsConfiguration: {
-      allowCredentials: false,
-      allowMethods: ['POST', 'OPTIONS'],
-      allowOrigins: ['*'], // Restrict this in production
-      allowHeaders: ['content-type', 'x-amz-date', 'authorization'],
-    },
-    tags: {
-      Name: `${projectName}-${environment}-api`,
-      Environment: environment,
-      Project: projectName,
-    },
-  });
+  environment: string,
+  lambdaFunction: aws.lambda.Function,
+  logGroup: aws.cloudwatch.LogGroup
+) {
+  // REST API Gateway
+  const restApi = new aws.apigateway.RestApi(
+    `${projectName}-${environment}-api`,
+    {
+      name: `${projectName}-${environment}-document-api`,
+      description:
+        'Secure document processing API with private Lambda integration',
 
-  // Create Lambda permission for API Gateway
+      endpointConfiguration: {
+        types: 'REGIONAL',
+      },
+
+      tags: {
+        Name: `${projectName}-${environment}-document-api`,
+        Environment: environment,
+      },
+    }
+  );
+
+  // API Gateway resource for documents
+  const documentsResource = new aws.apigateway.Resource(
+    `${projectName}-${environment}-documents-resource`,
+    {
+      restApi: restApi.id,
+      parentId: restApi.rootResourceId,
+      pathPart: 'documents',
+    }
+  );
+
+  // POST method for document submission
+  const postMethod = new aws.apigateway.Method(
+    `${projectName}-${environment}-post-method`,
+    {
+      restApi: restApi.id,
+      resourceId: documentsResource.id,
+      httpMethod: 'POST',
+      authorization: 'NONE', // In production, you'd want to add proper authorization
+
+      requestValidatorId: new aws.apigateway.RequestValidator(
+        `${projectName}-${environment}-validator`,
+        {
+          restApi: restApi.id,
+          name: `${projectName}-${environment}-request-validator`,
+          validateRequestBody: true,
+          validateRequestParameters: true,
+        }
+      ).id,
+    }
+  );
+
+  // Lambda integration
+  const lambdaIntegration = new aws.apigateway.Integration(
+    `${projectName}-${environment}-lambda-integration`,
+    {
+      restApi: restApi.id,
+      resourceId: documentsResource.id,
+      httpMethod: postMethod.httpMethod,
+
+      integrationHttpMethod: 'POST',
+      type: 'AWS_PROXY',
+      uri: lambdaFunction.invokeArn,
+    }
+  );
+
+  // Method response
+  new aws.apigateway.MethodResponse(
+    `${projectName}-${environment}-method-response`,
+    {
+      restApi: restApi.id,
+      resourceId: documentsResource.id,
+      httpMethod: postMethod.httpMethod,
+      statusCode: '200',
+
+      responseModels: {
+        'application/json': 'Empty',
+      },
+    }
+  );
+
+  // Lambda permission for API Gateway
   new aws.lambda.Permission(
     `${projectName}-${environment}-api-lambda-permission`,
     {
       action: 'lambda:InvokeFunction',
       function: lambdaFunction.name,
       principal: 'apigateway.amazonaws.com',
-      sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
+      sourceArn: pulumi.interpolate`${restApi.executionArn}/*/*`,
     }
   );
 
-  // Create integration with Lambda
-  const integration = new aws.apigatewayv2.Integration(
-    `${projectName}-${environment}-integration`,
+  // API Gateway deployment
+  const deployment = new aws.apigateway.Deployment(
+    `${projectName}-${environment}-deployment`,
     {
-      apiId: api.id,
-      integrationType: 'AWS_PROXY',
-      integrationUri: lambdaFunction.arn,
-      integrationMethod: 'POST',
-      payloadFormatVersion: '2.0',
-    }
-  );
+      restApi: restApi.id,
+      description: `${environment} deployment`,
 
-  // Create route
-  const route = new aws.apigatewayv2.Route(
-    `${projectName}-${environment}-route`,
+      // Ensure deployment happens after all resources are created
+      triggers: {
+        redeployment: pulumi
+          .all([restApi.body, postMethod.id, lambdaIntegration.id])
+          .apply(([body, method, integration]) =>
+            JSON.stringify({ body, method, integration })
+          ),
+      },
+    },
     {
-      apiId: api.id,
-      routeKey: 'POST /process-document',
-      target: pulumi.interpolate`integrations/${integration.id}`,
+      dependsOn: [postMethod, lambdaIntegration],
     }
   );
 
-  // Create stage with logging
-  const stage = new aws.apigatewayv2.Stage(
+  // API Gateway stage
+  const stage = new aws.apigateway.Stage(
     `${projectName}-${environment}-stage`,
     {
-      apiId: api.id,
-      name: environment,
-      autoDeploy: true,
+      deployment: deployment.id,
+      restApi: restApi.id,
+      stageName: environment,
+
+      // Enable logging
       accessLogSettings: {
         destinationArn: logGroup.arn,
         format: JSON.stringify({
-          requestId: '$context.requestId',
-          ip: '$context.identity.sourceIp',
-          requestTime: '$context.requestTime',
-          httpMethod: '$context.httpMethod',
-          routeKey: '$context.routeKey',
-          status: '$context.status',
-          protocol: '$context.protocol',
-          responseLength: '$context.responseLength',
+          requestId: '$requestId',
+          ip: '$sourceIp',
+          requestTime: '$requestTime',
+          httpMethod: '$httpMethod',
+          resourcePath: '$resourcePath',
+          status: '$status',
+          protocol: '$protocol',
+          responseLength: '$responseLength',
         }),
       },
+
       tags: {
         Name: `${projectName}-${environment}-stage`,
         Environment: environment,
-        Project: projectName,
       },
     }
   );
 
-  const url = pulumi.interpolate`${api.apiEndpoint}/${stage.name}`;
+  // Enable detailed CloudWatch metrics
+  new aws.apigateway.MethodSettings(
+    `${projectName}-${environment}-method-settings`,
+    {
+      restApi: restApi.id,
+      stageName: stage.stageName,
+      methodPath: '*/*',
+
+      settings: {
+        metricsEnabled: true,
+        loggingLevel: 'INFO',
+        dataTraceEnabled: true,
+        throttlingBurstLimit: 100,
+        throttlingRateLimit: 50,
+      },
+    }
+  );
 
   return {
-    api,
+    restApi,
+    deployment,
     stage,
-    integration,
-    route,
-    url,
   };
 }
 ```
@@ -796,153 +901,39 @@ export function createApiGateway(
 ### `src/monitoring/cloudwatch.ts`
 
 ```typescript
-import * as aws from '@pulumi/aws';
+import * as aws from "@pulumi/aws";
 
-export interface CloudWatchResources {
-  logGroup: aws.cloudwatch.LogGroup;
-  apiLogGroup: aws.cloudwatch.LogGroup;
-}
+export function createCloudWatchResources(projectName: string, environment: string) {
+    // CloudWatch Log Group for Lambda function
+    const lambdaLogGroup = new aws.cloudwatch.LogGroup(`${projectName}-${environment}-lambda-logs`, {
+        name: `/aws/lambda/${projectName}-${environment}-document-processor`,
+        retentionInDays: 90, // 90 days retention for compliance
 
-export function createCloudWatchResources(
-  projectName: string,
-  environment: string
-): CloudWatchResources {
-  // Create CloudWatch Log Group for Lambda
-  const logGroup = new aws.cloudwatch.LogGroup(
-    `${projectName}-${environment}-lambda-logs`,
-    {
-      name: `/aws/lambda/${projectName}-${environment}-processor`,
-      retentionInDays: 90,
-      tags: {
-        Name: `${projectName}-${environment}-lambda-logs`,
-        Environment: environment,
-        Project: projectName,
-      },
-    }
-  );
+        tags: {
+            Name: `${projectName}-${environment}-lambda-logs`,
+            Environment: environment,
+            Purpose: "Lambda function logs"
+        }
+    });
 
-  // Create CloudWatch Log Group for API Gateway
-  const apiLogGroup = new aws.cloudwatch.LogGroup(
-    `${projectName}-${environment}-api-logs`,
-    {
-      name: `/aws/apigateway/${projectName}-${environment}-api`,
-      retentionInDays: 90,
-      tags: {
-        Name: `${projectName}-${environment}-api-logs`,
-        Environment: environment,
-        Project: projectName,
-      },
-    }
-  );
+    // CloudWatch Log Group for API Gateway
+    const apiLogGroup = new aws.cloudwatch.LogGroup(`${projectName}-${environment}-api-logs`, {
+        name: `/aws/apigateway/${projectName}-${environment}-document-api`,
+        retentionInDays: 90,
 
-  return {
-    logGroup,
-    apiLogGroup,
-  };
-}
-```
+        tags: {
+            Name: `${projectName}-${environment}-api-logs`,
+            Environment: environment,
+            Purpose: "API Gateway access logs"
+        }
+    });
 
-### `README.md`
+    // CloudWatch Alarm for Lambda errors
+    new aws.cloudwatch.MetricAlarm(`${projectName}-${environment}-lambda-errors`, {
+        name: `${projectName}-${environment}-lambda-errors`,
+        description: "Lambda function error rate alarm",
 
-````markdown
-# Secure Serverless API - Production-Ready Infrastructure
-
-This project deploys a highly secure, production-ready serverless API infrastructure on AWS using Pulumi TypeScript. The architecture implements security best practices with a focus on least privilege access and private networking.
-
-## Architecture Overview
-
-The infrastructure creates a secure document processing API with the following components:
-
-- **VPC with Private Networking**: Lambda functions run in private subnets with no internet access
-- **S3 Gateway VPC Endpoint**: Secure communication to S3 without internet traversal
-- **Encrypted S3 Storage**: Documents stored with AWS managed encryption (AES-256)
-- **Least Privilege IAM**: Lambda role with minimal required permissions
-- **API Gateway**: Secure HTTP API with CloudWatch logging
-- **Comprehensive Monitoring**: CloudWatch logs with 90-day retention
-
-## Security Features
-
-### 🔒 Network Security
-
-- Lambda functions deployed in private subnets
-- No NAT Gateway - all AWS service communication via VPC Endpoints
-- Security groups with minimal egress rules (HTTPS only)
-- S3 bucket policy restricts access to VPC Endpoint only
-
-### 🔑 IAM Security (Least Privilege)
-
-- Lambda execution role with only required permissions:
-  - `s3:PutObject` on specific bucket ARN only
-  - CloudWatch logs permissions on specific log group only
-  - VPC networking permissions for ENI management
-
-### 🛡️ Data Security
-
-- S3 bucket encryption at rest using AWS managed keys (AES-256)
-- All public access blocked on S3 buckets
-- S3 versioning enabled for data protection
-- Access logging enabled for audit trails
-
-### 📊 Monitoring & Auditing
-
-- CloudWatch logs for Lambda and API Gateway
-- 90-day log retention policy
-- Structured logging for security analysis
-
-## Prerequisites
-
-1. **AWS CLI configured** with appropriate permissions
-2. **Pulumi CLI installed** (`curl -fsSL https://get.pulumi.com | sh`)
-3. **Node.js 18+** and npm installed
-4. **AWS Account** with permissions to create VPC, Lambda, S3, IAM, and API Gateway resources
-
-## Deployment Instructions
-
-### 1. Initialize the Project
-
-```bash
-# Clone or create the project directory
-mkdir secure-serverless-api && cd secure-serverless-api
-
-# Install dependencies
-npm install
-
-# Initialize Pulumi stack
-pulumi stack init dev
-pulumi config set aws:region us-west-2
-pulumi config set secure-serverless-api:environment dev
-pulumi config set secure-serverless-api:projectName secure-doc-api
-```
-````
-
-### 2. Deploy Infrastructure
-
-```bash
-# Preview the deployment
-pulumi preview
-
-# Deploy the infrastructure
-pulumi up
-```
-
-The deployment will create all resources and output the API Gateway URL.
-
-### 3. Verify Deployment
-
-After deployment, note the following outputs:
-
-- `apiGatewayUrl`: The API endpoint URL
-- `s3BucketName`: The created S3 bucket name
-- `lambdaFunctionName`: The Lambda function name
-- `logGroupName`: CloudWatch log group name
-
-## Testing the End-to-End Flow
-
-### 1. Test the API Endpoint
-
-Use curl to test the document processing API:
-
-```bash
-# Get the API Gateway URL from Pulumi outputs
-API_URL=$(pulumi
+        metricName: "Errors",
+        namespace: "AWS/Lambda",
+        statistic: "
 ```
