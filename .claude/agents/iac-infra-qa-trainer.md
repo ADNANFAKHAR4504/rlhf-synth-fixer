@@ -65,7 +65,8 @@ In CDK this is achievable by instantiating the child stack using `this`. e.g:
     });
 ```
 
-- After the deployment succeeds, Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check `Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on
+- After the deployment succeeds, Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check
+`Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on
 how to accomplish this per platform and region.
 The result should be similar to this (an object based on plain key, value).
 
@@ -127,3 +128,4 @@ to fix the MODEL_RESPONSE.
 Use your best judgement to decide.
 - Never create or updated code outside of the lib, bin, test folders. That should be your working space to do the QA task.
 - Do not create specific github actions or workflows. Those are already created.
+- Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside the lib/ folder
