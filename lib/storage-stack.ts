@@ -152,7 +152,6 @@ export class StorageStack extends cdk.Stack {
       },
     ];
 
-    const timestamp = Date.now();
     databaseConfigs.forEach(config => {
       new rds.DatabaseInstance(this, `Database${config.id}`, {
         engine: rds.DatabaseInstanceEngine.postgres({
@@ -160,7 +159,7 @@ export class StorageStack extends cdk.Stack {
         }),
         instanceType: config.instanceType,
         credentials: rds.Credentials.fromGeneratedSecret('postgres', {
-          secretName: `rds-credentials-${config.id}-${suffix}-${timestamp}`,
+          secretName: `rds-credentials-${config.id}-${suffix}`,
         }),
         vpc: props.vpc,
         subnetGroup: dbSubnetGroup,
