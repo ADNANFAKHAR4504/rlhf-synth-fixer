@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as rds from 'aws-cdk-lib/aws-rds';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 interface StorageStackProps extends cdk.StackProps {
@@ -152,6 +152,7 @@ export class StorageStack extends cdk.Stack {
       },
     ];
 
+    const timestamp = Date.now();
     databaseConfigs.forEach(config => {
       new rds.DatabaseInstance(this, `Database${config.id}`, {
         engine: rds.DatabaseInstanceEngine.postgres({
@@ -159,7 +160,7 @@ export class StorageStack extends cdk.Stack {
         }),
         instanceType: config.instanceType,
         credentials: rds.Credentials.fromGeneratedSecret('postgres', {
-          secretName: `rds-credentials-${config.id}-${suffix}`,
+          secretName: `rds-credentials-${config.id}-${suffix}-${timestamp}`,
         }),
         vpc: props.vpc,
         subnetGroup: dbSubnetGroup,
