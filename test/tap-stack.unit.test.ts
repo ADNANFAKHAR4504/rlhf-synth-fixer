@@ -406,7 +406,7 @@ describe('TapStack CloudFormation Template', () => {
         const policy = template.Resources[policyName];
         const statements = policy.Properties.PolicyDocument.Statement;
         
-        statements.forEach(statement => {
+        statements.forEach((statement: any) => {
           expect(statement.Effect).toBe('Allow');
           expect(statement.Action).toBeDefined();
           expect(statement.Resource).toBeDefined();
