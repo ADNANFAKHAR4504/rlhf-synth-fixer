@@ -75,7 +75,7 @@ class TestTapStackConfiguration(unittest.TestCase):
       stack.tags = self.test_tags
       
       # Call the method we're testing
-      stack._load_config()
+      stack._load_config()  # pylint: disable=protected-access
       
       # Verify configuration was loaded correctly
       self.assertEqual(stack.name_prefix, 'corp')
@@ -107,7 +107,7 @@ class TestTapStackConfiguration(unittest.TestCase):
       
       # Mock pulumi.log.warn to capture the warning
       with patch('pulumi.log.warn') as mock_warn:
-        stack._load_config()
+        stack._load_config()  # pylint: disable=protected-access
         
         # Verify warning was logged and fallback was used
         mock_warn.assert_called_once()
@@ -118,7 +118,7 @@ class TestTapStackConfiguration(unittest.TestCase):
     with patch.object(TapStack, '__init__', return_value=None):
       stack = TapStack.__new__(TapStack)
       
-      buildspec = stack._get_default_buildspec()
+      buildspec = stack._get_default_buildspec()  # pylint: disable=protected-access
       
       # Verify buildspec contains expected phases
       self.assertIn('version: 0.2', buildspec)
@@ -141,7 +141,7 @@ class TestTapStackResourceCreation(unittest.TestCase):
   @patch('lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2')
   @patch('lib.tap_stack.aws.s3.BucketVersioningV2')
   @patch('lib.tap_stack.ResourceOptions')
-  def test_create_artifacts_bucket(self, mock_resource_options, mock_versioning,
+  def test_create_artifacts_bucket(self, mock_resource_options, mock_versioning,  # pylint: disable=too-many-positional-arguments
                                    mock_encryption, mock_pab, mock_bucket):
     """Test artifacts bucket creation with security configurations."""
     with patch.object(TapStack, '__init__', return_value=None):
@@ -159,7 +159,7 @@ class TestTapStackResourceCreation(unittest.TestCase):
       # Mock ResourceOptions to avoid issues with depends_on
       mock_resource_options.return_value = Mock()
       
-      stack._create_artifacts_bucket()
+      stack._create_artifacts_bucket()  # pylint: disable=protected-access
       
       # Verify bucket was created
       mock_bucket.assert_called_once()
@@ -201,11 +201,11 @@ class TestTapStackResourceCreation(unittest.TestCase):
       # Mock ResourceOptions
       mock_resource_options.return_value = Mock()
       
-      stack._create_service_roles()
+      stack._create_service_roles()  # pylint: disable=protected-access
       
       # Verify roles were created (pipeline, codebuild, notifications)
       self.assertEqual(mock_role.call_count, 3)
-      self.assertEqual(mock_policy.call_count, 2)  # Pipeline and CodeBuild policies
+      self.assertEqual(mock_policy.call_count, 1)  # Only CodeBuild policy in _create_service_roles
       mock_attachment.assert_called_once()  # Notifications policy attachment
 
 
@@ -218,7 +218,7 @@ class TestTapStackIntegration(unittest.TestCase):
   @patch('lib.tap_stack.aws.codepipeline.Pipeline')
   @patch('lib.tap_stack.aws.sns.Topic')
   @patch('lib.tap_stack.Config')
-  def test_tap_stack_initialization(self, mock_config_class, mock_topic, mock_pipeline,
+  def test_tap_stack_initialization(self, mock_config_class, mock_topic, mock_pipeline,  # pylint: disable=too-many-positional-arguments
                                     mock_codebuild, mock_role, mock_bucket):
     """Test complete TapStack initialization."""
     # Mock configuration

@@ -11,7 +11,7 @@ class TapStackArgs:
     self.environment_suffix = environment_suffix or 'dev'
     self.tags = tags
 
-class TapStack(pulumi.ComponentResource):
+class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-attributes
   def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
     super().__init__('tap:stack:TapStack', name, None, opts)
     self.environment_suffix = args.environment_suffix
