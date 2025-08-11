@@ -29,6 +29,7 @@
     "cdk.out",
     "templates",
     "archive",
-    "worktree"
+    "worktree",
+    "test/**/*.int.test.ts"
   ]
 }
