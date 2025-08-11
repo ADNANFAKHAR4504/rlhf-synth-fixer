@@ -21,7 +21,7 @@ export class StorageStack extends cdk.NestedStack {
 
     // S3 Bucket for web content with encryption
     this.contentBucket = new s3.Bucket(this, 'ContentBucket', {
-      bucketName: `webapp-content-${props.environmentSuffix}-${cdk.Stack.of(this).account}-${this.node.addr.substring(0, 8)}`,
+      bucketName: `webapp-content-${props.environmentSuffix}-${cdk.Stack.of(this).account}-${this.node.addr.substring(0, 12)}-${this.node.id.toLowerCase()}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: props.kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -69,7 +69,7 @@ export class StorageStack extends cdk.NestedStack {
     // Origin Access Control for CloudFront
     new cloudfront.CfnOriginAccessControl(this, 'OAC', {
       originAccessControlConfig: {
-        name: `webapp-oac-${props.environmentSuffix}-${this.node.addr.substring(0, 8)}`,
+        name: `webapp-oac-${props.environmentSuffix}-${this.node.addr.substring(0, 12)}-${this.node.id.toLowerCase()}`,
         originAccessControlOriginType: 's3',
         signingBehavior: 'always',
         signingProtocol: 'sigv4',
