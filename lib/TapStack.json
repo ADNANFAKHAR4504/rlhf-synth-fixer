@@ -15,12 +15,14 @@
     "Owner": {
       "Type": "String",
       "Description": "Team or individual responsible for these resources",
+      "Default": "devops-team",
       "MinLength": 1
     },
     "Project": {
       "Type": "String",
       "Description": "Project name for resource identification",
-      "MinLength": 1
+      "MinLength": 1,
+      "Default": "security-best-practice"
     },
     "VpcCidr": {
       "Type": "String",
@@ -88,6 +90,30 @@
                 "kms:GenerateDataKey"
               ],
               "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs Service",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Project}-${Environment}-secure-function"
+                  }
+                }
+              }
             }
           ]
         },
@@ -528,7 +554,7 @@
               "Principal": "*",
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${SecureS3Bucket}/*"
+                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
               },
               "Condition": {
                 "StringNotEquals": {
@@ -542,7 +568,7 @@
               "Principal": "*",
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${SecureS3Bucket}/*"
+                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
               },
               "Condition": {
                 "StringNotEquals": {
@@ -562,13 +588,10 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Fn::GetAtt": [
-                    "SecureS3Bucket",
-                    "Arn"
-                  ]
+                  "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
                 },
                 {
-                  "Fn::Sub": "${SecureS3Bucket}/*"
+                  "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
                 }
               ],
               "Condition": {
@@ -595,7 +618,7 @@
                 "s3:PutObject"
               ],
               "Resource": {
-                "Fn::Sub": "${SecureS3Bucket}/*"
+                "Fn::Sub": "${SecureS3Bucket.Arn}/*"
               }
             },
             {
