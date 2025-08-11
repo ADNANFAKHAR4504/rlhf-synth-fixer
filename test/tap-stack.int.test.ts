@@ -39,6 +39,7 @@ import axios from 'axios';
 const environment = process.env.ENVIRONMENT_SUFFIX || 'prod';
 const stackName = "TapStackpr767"
 const region = process.env.AWS_REGION || 'us-east-1';
+//This is a new line to trigger the pipeline.
 
 // Initialize AWS clients
 const cloudFormationClient = new CloudFormationClient({ region });
