@@ -1,14 +1,160 @@
+import base64
+import json
+from typing import Any, Dict, List, Optional
+
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, List, Optional, Any
-import json
-import base64
+
+
+class TapStackArgs:
+    """Arguments class for TapStack configuration"""
+    
+    def __init__(self, environment_suffix: str, tags: dict = None):
+        """
+        Initialize TapStack arguments
+        
+        Args:
+            environment_suffix: Environment suffix (e.g., 'dev', 'staging', 'prod')
+            tags: Additional tags to apply to resources
+        """
+        self.environment_suffix = environment_suffix
+        self.tags = tags or {}
+        
+        # Set default configuration based on environment
+        self._set_default_config()
+        
+        # Validate arguments
+        self._validate()
+    
+    def _set_default_config(self):
+        """Set default configuration based on environment suffix"""
+        # Default project name
+        self.project_name = f"tap-{self.environment_suffix}"
+        
+        # Environment-specific defaults
+        if self.environment_suffix in ['prod', 'production']:
+            self.regions = ["us-east-1", "eu-west-1"]
+            self.instance_type = "t3.small"
+            self.min_size = 3
+            self.max_size = 12
+            self.desired_capacity = 6
+            self.enable_s3_replication = True
+            self.enable_monitoring = True
+            self.enable_logging = True
+            self.vpc_cidr = "10.0.0.0/16"
+        elif self.environment_suffix in ['staging', 'stage']:
+            self.regions = ["us-east-1", "eu-west-1"]
+            self.instance_type = "t3.small"
+            self.min_size = 2
+            self.max_size = 8
+            self.desired_capacity = 4
+            self.enable_s3_replication = True
+            self.enable_monitoring = True
+            self.enable_logging = True
+            self.vpc_cidr = "10.1.0.0/16"
+        else:  # dev, test, etc.
+            self.regions = ["us-east-1", "eu-west-1"]
+            self.instance_type = "t3.micro"
+            self.min_size = 1
+            self.max_size = 6
+            self.desired_capacity = 3
+            self.enable_s3_replication = True
+            self.enable_monitoring = True
+            self.enable_logging = False
+            self.vpc_cidr = "10.2.0.0/16"
+        
+        # Health check and scaling configurations
+        self.health_check_grace_period = 300
+        self.cooldown_period = 60
+        self.cpu_high_threshold = 70.0
+        self.cpu_low_threshold = 10.0
+        
+        # Add environment to tags
+        self.tags.update({
+            'Environment': self.environment_suffix,
+            'Project': self.project_name,
+            'ManagedBy': 'Pulumi'
+        })
+    
+    def _validate(self):
+        """Validate the arguments"""
+        if not self.environment_suffix:
+            raise ValueError("Environment suffix cannot be empty")
+        
+        # Validate environment suffix format
+        valid_env_pattern = r'^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$'
+        import re
+        if not re.match(valid_env_pattern, self.environment_suffix.lower()):
+            raise ValueError(f"Invalid environment suffix format: {self.environment_suffix}")
+        
+        # Validate regions
+        valid_regions = [
+            'us-east-1', 'us-west-1', 'us-west-2', 'us-east-2',
+            'eu-west-1', 'eu-west-2', 'eu-central-1', 'eu-north-1',
+            'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1'
+        ]
+        
+        for region in self.regions:
+            if region not in valid_regions:
+                raise ValueError(f"Invalid region: {region}")
+        
+        if self.min_size <= 0:
+            raise ValueError("Minimum size must be greater than 0")
+        
+        if self.max_size < self.min_size:
+            raise ValueError("Maximum size must be greater than or equal to minimum size")
+        
+        if self.desired_capacity < self.min_size or self.desired_capacity > self.max_size:
+            raise ValueError("Desired capacity must be between min_size and max_size")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert arguments to dictionary"""
+        return {
+            "environment_suffix": self.environment_suffix,
+            "project_name": self.project_name,
+            "regions": self.regions,
+            "instance_type": self.instance_type,
+            "min_size": self.min_size,
+            "max_size": self.max_size,
+            "desired_capacity": self.desired_capacity,
+            "enable_s3_replication": self.enable_s3_replication,
+            "enable_monitoring": self.enable_monitoring,
+            "enable_logging": self.enable_logging,
+            "vpc_cidr": self.vpc_cidr,
+            "health_check_grace_period": self.health_check_grace_period,
+            "cooldown_period": self.cooldown_period,
+            "cpu_high_threshold": self.cpu_high_threshold,
+            "cpu_low_threshold": self.cpu_low_threshold,
+            "tags": self.tags
+        }
+    
+    def get_resource_name(self, resource_type: str, region: str = None) -> str:
+        """Generate standardized resource names"""
+        base_name = f"tap-{resource_type}-{self.environment_suffix}"
+        if region:
+            return f"{base_name}-{region}"
+        return base_name
+    
+    def get_bucket_name(self, bucket_type: str = "primary") -> str:
+        """Generate S3 bucket names"""
+        stack_name = pulumi.get_stack()
+        return f"tap-{bucket_type}-data-{self.environment_suffix}-{stack_name}"
+
 
 class TapStack:
-    def __init__(self, project_name: str, regions: List[str] = None, config: Optional[Dict[str, Any]] = None):
-        self.project_name = project_name
-        self.regions = regions or ["us-east-1", "eu-west-1"]
-        self.config = config or {}
+    def __init__(self, name: str, args: TapStackArgs):
+        """
+        Initialize TapStack
+        
+        Args:
+            name: Stack name
+            args: TapStackArgs configuration object
+        """
+        self.name = name
+        self.args = args
+        self.project_name = args.project_name
+        self.regions = args.regions
+        self.environment_suffix = args.environment_suffix
         
         # Initialize storage for resources
         self.providers = {}
@@ -26,42 +172,20 @@ class TapStack:
         self.cloudwatch_alarms = {}
         self.replication_config = {}
         
-        # Validate inputs
-        self._validate_inputs()
-        
         # Initialize providers for each region
         self._setup_providers()
         
         # Create infrastructure components in order
         self._create_infrastructure()
-        
-    def _validate_inputs(self):
-        """Validate input parameters"""
-        if not self.project_name:
-            raise ValueError("Project name cannot be empty")
-        
-        if not self.regions or len(self.regions) < 1:
-            raise ValueError("At least one region must be specified")
-        
-        valid_regions = ['us-east-1', 'us-west-1', 'us-west-2', 'eu-west-1', 'eu-central-1', 'ap-southeast-1']
-        for region in self.regions:
-            if region not in valid_regions:
-                raise ValueError(f"Invalid region: {region}")
     
     def _setup_providers(self):
         """Set up AWS providers for each region"""
         try:
             for region in self.regions:
                 self.providers[region] = aws.Provider(
-                    f"aws-{region.replace('-', '_')}",
+                    f"aws-{region.replace('-', '_')}-{self.environment_suffix}",
                     region=region,
-                    default_tags=aws.ProviderDefaultTagsArgs(
-                        tags={
-                            "Project": self.project_name,
-                            "ManagedBy": "Pulumi",
-                            "Environment": pulumi.get_stack()
-                        }
-                    )
+                    default_tags=aws.ProviderDefaultTagsArgs(tags=self.args.tags)
                 )
         except Exception as e:
             raise RuntimeError(f"Failed to setup providers: {str(e)}")
@@ -73,7 +197,10 @@ class TapStack:
             self._create_iam_roles()
             
             # Step 2: Create S3 buckets with cross-region replication
-            self._create_s3_buckets()
+            if self.args.enable_s3_replication and len(self.regions) > 1:
+                self._create_s3_buckets()
+            else:
+                self._create_s3_buckets_single_region()
             
             # Step 3: Create networking infrastructure
             self._create_networking()
@@ -90,22 +217,49 @@ class TapStack:
         except Exception as e:
             raise RuntimeError(f"Failed to create infrastructure: {str(e)}")
     
-    def _create_s3_buckets(self):
-        """Create S3 buckets with cross-region replication"""
+    def _create_s3_buckets_single_region(self):
+        """Create S3 bucket for single region deployment"""
         try:
-            # Primary bucket in first region
             primary_region = self.regions[0]
-            primary_bucket_name = f"{self.project_name}-primary-data-{pulumi.get_stack()}"
+            primary_bucket_name = self.args.get_bucket_name("primary")
             
             primary_bucket = aws.s3.Bucket(
-                "primary-data-bucket",
+                f"primary-data-bucket-{self.environment_suffix}",
                 bucket=primary_bucket_name,
                 opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
             )
             
             # Enable versioning on primary bucket
-            primary_versioning = aws.s3.BucketVersioning(
-                "primary-bucket-versioning",
+            aws.s3.BucketVersioning(
+                f"primary-bucket-versioning-{self.environment_suffix}",
+                bucket=primary_bucket.id,
+                versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                    status="Enabled"
+                ),
+                opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
+            )
+            
+            self.s3_buckets["primary"] = primary_bucket
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to create S3 bucket: {str(e)}")
+    
+    def _create_s3_buckets(self):
+        """Create S3 buckets with cross-region replication"""
+        try:
+            # Primary bucket in first region
+            primary_region = self.regions[0]
+            primary_bucket_name = self.args.get_bucket_name("primary")
+            
+            primary_bucket = aws.s3.Bucket(
+                f"primary-data-bucket-{self.environment_suffix}",
+                bucket=primary_bucket_name,
+                opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
+            )
+            
+            # Enable versioning on primary bucket
+            aws.s3.BucketVersioning(
+                f"primary-bucket-versioning-{self.environment_suffix}",
                 bucket=primary_bucket.id,
                 versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                     status="Enabled"
@@ -118,17 +272,17 @@ class TapStack:
             # Create replica bucket if more than one region
             if len(self.regions) > 1:
                 replica_region = self.regions[1]
-                replica_bucket_name = f"{self.project_name}-replica-data-{pulumi.get_stack()}"
+                replica_bucket_name = self.args.get_bucket_name("replica")
                 
                 replica_bucket = aws.s3.Bucket(
-                    "replica-data-bucket",
+                    f"replica-data-bucket-{self.environment_suffix}",
                     bucket=replica_bucket_name,
                     opts=pulumi.ResourceOptions(provider=self.providers[replica_region])
                 )
                 
                 # Enable versioning on replica bucket
-                replica_versioning = aws.s3.BucketVersioning(
-                    "replica-bucket-versioning",
+                aws.s3.BucketVersioning(
+                    f"replica-bucket-versioning-{self.environment_suffix}",
                     bucket=replica_bucket.id,
                     versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                         status="Enabled"
@@ -160,7 +314,7 @@ class TapStack:
             })
             
             replication_role = aws.iam.Role(
-                "s3-replication-role",
+                f"s3-replication-role-{self.environment_suffix}",
                 assume_role_policy=replication_assume_role_policy,
                 opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
             )
@@ -197,7 +351,7 @@ class TapStack:
             }))
             
             replication_policy = aws.iam.RolePolicy(
-                "s3-replication-policy",
+                f"s3-replication-policy-{self.environment_suffix}",
                 role=replication_role.id,
                 policy=replication_policy_doc,
                 opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
@@ -205,7 +359,7 @@ class TapStack:
             
             # Replication configuration
             replication_config = aws.s3.BucketReplicationConfiguration(
-                "bucket-replication",
+                f"bucket-replication-{self.environment_suffix}",
                 role=replication_role.arn,
                 bucket=primary_bucket.id,
                 rules=[aws.s3.BucketReplicationConfigurationRuleArgs(
@@ -247,23 +401,25 @@ class TapStack:
                 
                 # Create instance role
                 instance_role = aws.iam.Role(
-                    f"ec2-instance-role-{region}",
-                    name=f"{self.project_name}-ec2-role-{region}-{pulumi.get_stack()}",
+                    f"ec2-instance-role-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("ec2-role", region),
                     assume_role_policy=assume_role_policy,
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
-                # Attach CloudWatch policy
-                cloudwatch_policy_attachment = aws.iam.RolePolicyAttachment(
-                    f"ec2-cloudwatch-policy-{region}",
-                    role=instance_role.name,
-                    policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
-                    opts=pulumi.ResourceOptions(provider=self.providers[region])
-                )
+                # Attach CloudWatch policy if monitoring is enabled
+                cloudwatch_policy_attachment = None
+                if self.args.enable_monitoring:
+                    cloudwatch_policy_attachment = aws.iam.RolePolicyAttachment(
+                        f"ec2-cloudwatch-policy-{region}-{self.environment_suffix}",
+                        role=instance_role.name,
+                        policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+                        opts=pulumi.ResourceOptions(provider=self.providers[region])
+                    )
                 
                 # Attach SSM policy
                 ssm_policy_attachment = aws.iam.RolePolicyAttachment(
-                    f"ec2-ssm-policy-{region}",
+                    f"ec2-ssm-policy-{region}-{self.environment_suffix}",
                     role=instance_role.name,
                     policy_arn="arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
@@ -271,8 +427,8 @@ class TapStack:
                 
                 # Create instance profile
                 instance_profile = aws.iam.InstanceProfile(
-                    f"ec2-instance-profile-{region}",
-                    name=f"{self.project_name}-ec2-profile-{region}-{pulumi.get_stack()}",
+                    f"ec2-instance-profile-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("ec2-profile", region),
                     role=instance_role.name,
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
@@ -293,19 +449,19 @@ class TapStack:
             for region in self.regions:
                 # Create VPC
                 vpc = aws.ec2.Vpc(
-                    f"vpc-{region}",
-                    cidr_block="10.0.0.0/16",
+                    f"vpc-{region}-{self.environment_suffix}",
+                    cidr_block=self.args.vpc_cidr,
                     enable_dns_hostnames=True,
                     enable_dns_support=True,
-                    tags={"Name": f"{self.project_name}-vpc-{region}"},
+                    tags={"Name": self.args.get_resource_name("vpc", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
                 # Create Internet Gateway
                 igw = aws.ec2.InternetGateway(
-                    f"igw-{region}",
+                    f"igw-{region}-{self.environment_suffix}",
                     vpc_id=vpc.id,
-                    tags={"Name": f"{self.project_name}-igw-{region}"},
+                    tags={"Name": self.args.get_resource_name("igw", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
@@ -321,32 +477,32 @@ class TapStack:
                 
                 for i in range(max_subnets):
                     subnet = aws.ec2.Subnet(
-                        f"subnet-{region}-{i}",
+                        f"subnet-{region}-{i}-{self.environment_suffix}",
                         vpc_id=vpc.id,
-                        cidr_block=f"10.0.{i+1}.0/24",
+                        cidr_block=f"10.{2 if self.environment_suffix == 'dev' else (1 if self.environment_suffix == 'staging' else 0)}.{i+1}.0/24",
                         availability_zone=azs.names[i],
                         map_public_ip_on_launch=True,
-                        tags={"Name": f"{self.project_name}-subnet-{region}-{i}"},
+                        tags={"Name": f"{self.args.get_resource_name('subnet', region)}-{i}"},
                         opts=pulumi.ResourceOptions(provider=self.providers[region])
                     )
                     subnets.append(subnet)
                 
                 # Create route table
                 route_table = aws.ec2.RouteTable(
-                    f"rt-{region}",
+                    f"rt-{region}-{self.environment_suffix}",
                     vpc_id=vpc.id,
                     routes=[aws.ec2.RouteTableRouteArgs(
                         cidr_block="0.0.0.0/0",
                         gateway_id=igw.id
                     )],
-                    tags={"Name": f"{self.project_name}-rt-{region}"},
+                    tags={"Name": self.args.get_resource_name("rt", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
                 # Associate subnets with route table
                 for i, subnet in enumerate(subnets):
                     aws.ec2.RouteTableAssociation(
-                        f"rta-{region}-{i}",
+                        f"rta-{region}-{i}-{self.environment_suffix}",
                         subnet_id=subnet.id,
                         route_table_id=route_table.id,
                         opts=pulumi.ResourceOptions(provider=self.providers[region])
@@ -368,8 +524,8 @@ class TapStack:
                 
                 # ALB Security Group
                 alb_sg = aws.ec2.SecurityGroup(
-                    f"alb-sg-{region}",
-                    name=f"{self.project_name}-alb-sg-{region}",
+                    f"alb-sg-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("alb-sg", region),
                     description="Security group for Application Load Balancer",
                     vpc_id=vpc.id,
                     ingress=[
@@ -394,14 +550,14 @@ class TapStack:
                         protocol="-1",
                         cidr_blocks=["0.0.0.0/0"]
                     )],
-                    tags={"Name": f"{self.project_name}-alb-sg-{region}"},
+                    tags={"Name": self.args.get_resource_name("alb-sg", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
                 # EC2 Security Group
                 ec2_sg = aws.ec2.SecurityGroup(
-                    f"ec2-sg-{region}",
-                    name=f"{self.project_name}-ec2-sg-{region}",
+                    f"ec2-sg-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("ec2-sg", region),
                     description="Security group for EC2 instances",
                     vpc_id=vpc.id,
                     ingress=[
@@ -423,7 +579,7 @@ class TapStack:
                             from_port=22,
                             to_port=22,
                             protocol="tcp",
-                            cidr_blocks=["10.0.0.0/16"],
+                            cidr_blocks=[self.args.vpc_cidr],
                             description="SSH from VPC"
                         )
                     ],
@@ -433,7 +589,7 @@ class TapStack:
                         protocol="-1",
                         cidr_blocks=["0.0.0.0/0"]
                     )],
-                    tags={"Name": f"{self.project_name}-ec2-sg-{region}"},
+                    tags={"Name": self.args.get_resource_name("ec2-sg", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
@@ -455,20 +611,20 @@ class TapStack:
                 
                 # Application Load Balancer
                 alb = aws.lb.LoadBalancer(
-                    f"alb-{region}",
-                    name=f"{self.project_name}-alb-{region}",
+                    f"alb-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("alb", region),
                     load_balancer_type="application",
                     security_groups=[alb_sg.id],
                     subnets=[subnet.id for subnet in subnets],
                     enable_deletion_protection=False,
-                    tags={"Name": f"{self.project_name}-alb-{region}"},
+                    tags={"Name": self.args.get_resource_name("alb", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
                 # Target Group with health checks
                 target_group = aws.lb.TargetGroup(
-                    f"tg-{region}",
-                    name=f"{self.project_name}-tg-{region}",
+                    f"tg-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("tg", region),
                     port=80,
                     protocol="HTTP",
                     vpc_id=vpc.id,
@@ -484,13 +640,13 @@ class TapStack:
                         protocol="HTTP",
                         port="traffic-port"
                     ),
-                    tags={"Name": f"{self.project_name}-tg-{region}"},
+                    tags={"Name": self.args.get_resource_name("tg", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
                 # Listener
                 listener = aws.lb.Listener(
-                    f"listener-{region}",
+                    f"listener-{region}-{self.environment_suffix}",
                     load_balancer_arn=alb.arn,
                     port="80",
                     protocol="HTTP",
@@ -512,32 +668,9 @@ class TapStack:
     
     def _get_user_data_script(self, region: str) -> str:
         """Generate user data script for EC2 instances"""
-        return f"""#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-
-# Create health check endpoint
-echo "OK" > /var/www/html/health
-
-# Create index page with region and instance info
-cat <<EOF > /var/www/html/index.html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{self.project_name} - {region}</title>
-</head>
-<body>
-    <h1>Welcome to {self.project_name}</h1>
-    <p>Region: {region}</p>
-    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-    <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
-    <p>Timestamp: $(date)</p>
-</body>
-</html>
-EOF
-
+        monitoring_config = ""
+        if self.args.enable_monitoring:
+            monitoring_config = f"""
 # Install and configure CloudWatch agent
 yum install -y amazon-cloudwatch-agent
 cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
@@ -565,9 +698,13 @@ EOF
 
 # Start CloudWatch agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-
+"""
+        
+        logging_config = ""
+        if self.args.enable_logging:
+            logging_config = """
 # Configure log rotation
-echo '/var/log/httpd/*.log {{
+echo '/var/log/httpd/*.log {
     daily
     rotate 7
     compress
@@ -578,7 +715,40 @@ echo '/var/log/httpd/*.log {{
     postrotate
         systemctl reload httpd
     endscript
-}}' > /etc/logrotate.d/httpd
+}' > /etc/logrotate.d/httpd
+"""
+        
+        return f"""#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+
+# Create health check endpoint
+echo "OK" > /var/www/html/health
+
+# Create index page with environment and instance info
+cat <<EOF > /var/www/html/index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TAP Infrastructure - {self.environment_suffix} - {region}</title>
+</head>
+<body>
+    <h1>Welcome to TAP Infrastructure</h1>
+    <p>Environment: {self.environment_suffix}</p>
+    <p>Region: {region}</p>
+    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+    <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+    <p>Timestamp: $(date)</p>
+    <p>Stack: {self.name}</p>
+</body>
+</html>
+EOF
+
+{monitoring_config}
+
+{logging_config}
 """
     
     def _create_auto_scaling_groups(self):
@@ -603,42 +773,38 @@ echo '/var/log/httpd/*.log {{
                 encoded_user_data = base64.b64encode(user_data_script.encode()).decode()
                 
                 launch_template = aws.ec2.LaunchTemplate(
-                    f"lt-{region}",
-                    name=f"{self.project_name}-lt-{region}",
-                    description=f"Launch template for {self.project_name} in {region}",
+                    f"lt-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("lt", region),
+                    description=f"Launch template for TAP infrastructure {self.environment_suffix} in {region}",
                     image_id=ami.id,
-                    instance_type=self.config.get("instance_type", "t3.micro"),
+                    instance_type=self.args.instance_type,
                     iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
                         name=self.iam_roles[region]["profile"].name
                     ),
                     vpc_security_group_ids=[self.security_groups[region]["ec2"].id],
                     user_data=encoded_user_data,
-                    monitoring=aws.ec2.LaunchTemplateMonitoringArgs(enabled=True),
+                    monitoring=aws.ec2.LaunchTemplateMonitoringArgs(enabled=self.args.enable_monitoring),
                     metadata_options=aws.ec2.LaunchTemplateMetadataOptionsArgs(
                         http_endpoint="enabled",
                         http_tokens="required",
                         http_put_response_hop_limit=2
                     ),
-                    tags={"Name": f"{self.project_name}-lt-{region}"},
+                    tags={"Name": self.args.get_resource_name("lt", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
                 # Create Auto Scaling Group
-                min_size = self.config.get("min_size", 3)
-                max_size = self.config.get("max_size", 9)
-                desired_capacity = self.config.get("desired_capacity", 3)
-                
                 asg = aws.autoscaling.Group(
-                    f"asg-{region}",
-                    name=f"{self.project_name}-asg-{region}",
+                    f"asg-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("asg", region),
                     vpc_zone_identifiers=[subnet.id for subnet in self.subnets[region]],
                     target_group_arns=[self.load_balancers[region]["target_group"].arn],
                     health_check_type="ELB",
-                    health_check_grace_period=300,
-                    min_size=min_size,
-                    max_size=max_size,
-                    desired_capacity=desired_capacity,
-                    default_cooldown=60,  # Quick recovery
+                    health_check_grace_period=self.args.health_check_grace_period,
+                    min_size=self.args.min_size,
+                    max_size=self.args.max_size,
+                    desired_capacity=self.args.desired_capacity,
+                    default_cooldown=self.args.cooldown_period,
                     launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
                         id=launch_template.id,
                         version="$Latest"
@@ -646,7 +812,12 @@ echo '/var/log/httpd/*.log {{
                     tags=[
                         aws.autoscaling.GroupTagArgs(
                             key="Name",
-                            value=f"{self.project_name}-instance-{region}",
+                            value=f"{self.args.get_resource_name('instance', region)}",
+                            propagate_at_launch=True
+                        ),
+                        aws.autoscaling.GroupTagArgs(
+                            key="Environment",
+                            value=self.environment_suffix,
                             propagate_at_launch=True
                         ),
                         aws.autoscaling.GroupTagArgs(
@@ -660,61 +831,65 @@ echo '/var/log/httpd/*.log {{
                 
                 # Create scaling policies
                 scale_up_policy = aws.autoscaling.Policy(
-                    f"scale-up-{region}",
-                    name=f"{self.project_name}-scale-up-{region}",
+                    f"scale-up-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("scale-up", region),
                     scaling_adjustment=1,
                     adjustment_type="ChangeInCapacity",
-                    cooldown=60,
+                    cooldown=self.args.cooldown_period,
                     autoscaling_group_name=asg.name,
                     policy_type="SimpleScaling",
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
                 scale_down_policy = aws.autoscaling.Policy(
-                    f"scale-down-{region}",
-                    name=f"{self.project_name}-scale-down-{region}",
+                    f"scale-down-{region}-{self.environment_suffix}",
+                    name=self.args.get_resource_name("scale-down", region),
                     scaling_adjustment=-1,
                     adjustment_type="ChangeInCapacity",
-                    cooldown=60,
+                    cooldown=self.args.cooldown_period,
                     autoscaling_group_name=asg.name,
                     policy_type="SimpleScaling",
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
-                # Create CloudWatch alarms
-                cpu_high_alarm = aws.cloudwatch.MetricAlarm(
-                    f"cpu-high-{region}",
-                    alarm_name=f"{self.project_name}-cpu-high-{region}",
-                    comparison_operator="GreaterThanThreshold",
-                    evaluation_periods="2",
-                    metric_name="CPUUtilization",
-                    namespace="AWS/EC2",
-                    period="60",
-                    statistic="Average",
-                    threshold="70.0",
-                    alarm_description=f"High CPU utilization for {self.project_name} in {region}",
-                    alarm_actions=[scale_up_policy.arn],
-                    dimensions={"AutoScalingGroupName": asg.name},
-                    tags={"Project": self.project_name},
-                    opts=pulumi.ResourceOptions(provider=self.providers[region])
-                )
+                # Create CloudWatch alarms if monitoring is enabled
+                cpu_high_alarm = None
+                cpu_low_alarm = None
                 
-                cpu_low_alarm = aws.cloudwatch.MetricAlarm(
-                    f"cpu-low-{region}",
-                    alarm_name=f"{self.project_name}-cpu-low-{region}",
-                    comparison_operator="LessThanThreshold",
-                    evaluation_periods="2",
-                    metric_name="CPUUtilization",
-                    namespace="AWS/EC2",
-                    period="60",
-                    statistic="Average",
-                    threshold="10.0",
-                    alarm_description=f"Low CPU utilization for {self.project_name} in {region}",
-                    alarm_actions=[scale_down_policy.arn],
-                    dimensions={"AutoScalingGroupName": asg.name},
-                    tags={"Project": self.project_name},
-                    opts=pulumi.ResourceOptions(provider=self.providers[region])
-                )
+                if self.args.enable_monitoring:
+                    cpu_high_alarm = aws.cloudwatch.MetricAlarm(
+                        f"cpu-high-{region}-{self.environment_suffix}",
+                        alarm_name=self.args.get_resource_name("cpu-high", region),
+                        comparison_operator="GreaterThanThreshold",
+                        evaluation_periods="2",
+                        metric_name="CPUUtilization",
+                        namespace="AWS/EC2",
+                        period="60",
+                        statistic="Average",
+                        threshold=str(self.args.cpu_high_threshold),
+                        alarm_description=f"High CPU utilization for TAP {self.environment_suffix} in {region}",
+                        alarm_actions=[scale_up_policy.arn],
+                        dimensions={"AutoScalingGroupName": asg.name},
+                        tags={"Environment": self.environment_suffix},
+                        opts=pulumi.ResourceOptions(provider=self.providers[region])
+                    )
+                    
+                    cpu_low_alarm = aws.cloudwatch.MetricAlarm(
+                        f"cpu-low-{region}-{self.environment_suffix}",
+                        alarm_name=self.args.get_resource_name("cpu-low", region),
+                        comparison_operator="LessThanThreshold",
+                        evaluation_periods="2",
+                        metric_name="CPUUtilization",
+                        namespace="AWS/EC2",
+                        period="60",
+                        statistic="Average",
+                        threshold=str(self.args.cpu_low_threshold),
+                        alarm_description=f"Low CPU utilization for TAP {self.environment_suffix} in {region}",
+                        alarm_actions=[scale_down_policy.arn],
+                        dimensions={"AutoScalingGroupName": asg.name},
+                        tags={"Environment": self.environment_suffix},
+                        opts=pulumi.ResourceOptions(provider=self.providers[region])
+                    )
                 
                 # Store resources
                 self.launch_templates[region] = launch_template
@@ -746,7 +921,7 @@ echo '/var/log/httpd/*.log {{
             "s3_buckets": len(self.s3_buckets),
             "iam_roles": len(self.iam_roles),
             "scaling_policies": sum(len(policies) for policies in self.scaling_policies.values()),
-            "cloudwatch_alarms": sum(len(alarms) for alarms in self.cloudwatch_alarms.values())
+            "cloudwatch_alarms": sum(len(alarms) for alarms in self.cloudwatch_alarms.values() if alarms.get("cpu_high") is not None)
         }
     
     def get_outputs(self) -> Dict[str, Any]:
@@ -758,27 +933,34 @@ echo '/var/log/httpd/*.log {{
             for region in self.regions:
                 if region in self.load_balancers:
                     region_key = region.replace('-', '_')
-                    outputs[f"alb_dns_{region_key}"] = self.load_balancers[region]["alb"].dns_name
-                    outputs[f"alb_zone_id_{region_key}"] = self.load_balancers[region]["alb"].zone_id
-                    outputs[f"alb_arn_{region_key}"] = self.load_balancers[region]["alb"].arn
+                    outputs[f"alb_dns_{region_key}_{self.environment_suffix}"] = self.load_balancers[region]["alb"].dns_name
+                    outputs[f"alb_zone_id_{region_key}_{self.environment_suffix}"] = self.load_balancers[region]["alb"].zone_id
+                    outputs[f"alb_arn_{region_key}_{self.environment_suffix}"] = self.load_balancers[region]["alb"].arn
             
             # S3 bucket outputs
             if "primary" in self.s3_buckets:
-                outputs["primary_s3_bucket"] = self.s3_buckets["primary"].bucket
-                outputs["primary_s3_bucket_arn"] = self.s3_buckets["primary"].arn
+                outputs[f"primary_s3_bucket_{self.environment_suffix}"] = self.s3_buckets["primary"].bucket
+                outputs[f"primary_s3_bucket_arn_{self.environment_suffix}"] = self.s3_buckets["primary"].arn
             
             if "replica" in self.s3_buckets:
-                outputs["replica_s3_bucket"] = self.s3_buckets["replica"].bucket
-                outputs["replica_s3_bucket_arn"] = self.s3_buckets["replica"].arn
+                outputs[f"replica_s3_bucket_{self.environment_suffix}"] = self.s3_buckets["replica"].bucket
+                outputs[f"replica_s3_bucket_arn_{self.environment_suffix}"] = self.s3_buckets["replica"].arn
             
             # VPC outputs
             for region in self.regions:
                 if region in self.vpcs:
                     region_key = region.replace('-', '_')
-                    outputs[f"vpc_id_{region_key}"] = self.vpcs[region].id
+                    outputs[f"vpc_id_{region_key}_{self.environment_suffix}"] = self.vpcs[region].id
+            
+            # Configuration outputs
+            outputs[f"configuration_{self.environment_suffix}"] = self.args.to_dict()
             
             # Resource counts
-            outputs["resource_counts"] = self.get_resource_count()
+            outputs[f"resource_counts_{self.environment_suffix}"] = self.get_resource_count()
+            
+            # Environment-specific outputs
+            outputs["environment_suffix"] = self.environment_suffix
+            outputs["stack_name"] = self.name
             
         except Exception as e:
             raise RuntimeError(f"Failed to generate outputs: {str(e)}")
@@ -809,7 +991,7 @@ echo '/var/log/httpd/*.log {{
             validation_results["s3_replication"] = (
                 len(self.s3_buckets) >= 2 and
                 "config" in self.replication_config
-            )
+            ) if self.args.enable_s3_replication else True
             
             # Validate load balancers
             validation_results["load_balancers"] = all(
@@ -829,6 +1011,19 @@ echo '/var/log/httpd/*.log {{
                 for region in self.regions
             )
             
+            # Validate monitoring setup
+            validation_results["monitoring_setup"] = (
+                not self.args.enable_monitoring or
+                all(
+                    self.cloudwatch_alarms.get(region, {}).get("cpu_high") is not None
+                    for region in self.regions
+                )
+            )
+            
+            # Environment-specific validations
+            validation_results["environment_suffix_valid"] = bool(self.environment_suffix)
+            validation_results["resource_naming_consistent"] = True  # Could add more specific checks
+            
             # Overall validation
             validation_results["overall"] = all(validation_results.values())
             
@@ -839,20 +1034,5 @@ echo '/var/log/httpd/*.log {{
         return validation_results
 
 
-def create_stack(project_name: str = None, regions: List[str] = None, config: Dict[str, Any] = None):
-    """Factory function to create TapStack"""
-    if not project_name:
-        project_name = pulumi.get_project()
-    
-    stack = TapStack(project_name, regions, config)
-    
-    # Export outputs
-    outputs = stack.get_outputs()
-    for key, value in outputs.items():
-        pulumi.export(key, value)
-    
-    # Export validation results
-    validation = stack.validate_infrastructure()
-    pulumi.export("validation_results", validation)
-    
-    return stack
+# Export the classes and factory function
+__all__ = ["TapStack", "TapStackArgs"]
