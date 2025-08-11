@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kinesisfirehose from 'aws-cdk-lib/aws-kinesisfirehose';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
@@ -137,89 +136,38 @@ export class WafConstruct extends Construct {
       },
     });
 
-    // Create S3 bucket for WAF logs
-    const wafLogBucket = new s3.Bucket(this, `WAFLogBucket-${environment}`, {
-      bucketName: `waf-logs-${environment}-${cdk.Stack.of(this).account}`,
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    // Create CloudWatch Log Group for WAF logs
+    const wafLogGroup = new logs.LogGroup(this, `WAFLogGroup-${environment}`, {
+      retention: logs.RetentionDays.ONE_YEAR,
+      logGroupName: `/aws/waf/${environment}/web-acl-logs`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-      lifecycleRules: [
-        {
-          id: 'WAFLogRetention',
-          enabled: true,
-          expiration: cdk.Duration.days(365), // 1 year retention
-          transitions: [
-            {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30),
-            },
-            {
-              storageClass: s3.StorageClass.GLACIER,
-              transitionAfter: cdk.Duration.days(90),
-            },
+    });
+
+    // Create IAM role for WAF logging
+    const wafLoggingRole = new iam.Role(this, `WAFLoggingRole-${environment}`, {
+      assumedBy: new iam.ServicePrincipal('wafv2.amazonaws.com'),
+      inlinePolicies: {
+        WAFLoggingPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              resources: [wafLogGroup.logGroupArn],
+            }),
           ],
-        },
-      ],
+        }),
+      },
     });
 
-    // Create IAM role for Kinesis Data Firehose
-    const firehoseRole = new iam.Role(
-      this,
-      `WAFLoggingFirehoseRole-${environment}`,
-      {
-        assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com'),
-        inlinePolicies: {
-          FirehoseS3Policy: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:AbortMultipartUpload',
-                  's3:GetBucketLocation',
-                  's3:GetObject',
-                  's3:ListBucket',
-                  's3:ListBucketMultipartUploads',
-                  's3:PutObject',
-                ],
-                resources: [
-                  wafLogBucket.bucketArn,
-                  `${wafLogBucket.bucketArn}/*`,
-                ],
-              }),
-            ],
-          }),
-        },
-      }
-    );
-
-    // Create Kinesis Data Firehose delivery stream for WAF logging
-    const wafLoggingStream = new kinesisfirehose.CfnDeliveryStream(
-      this,
-      `WAFLoggingStream-${environment}`,
-      {
-        deliveryStreamName: `waf-logs-${environment}`,
-        deliveryStreamType: 'DirectPut',
-        extendedS3DestinationConfiguration: {
-          bucketArn: wafLogBucket.bucketArn,
-          roleArn: firehoseRole.roleArn,
-          prefix: `waf-logs/${environment}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/`,
-          errorOutputPrefix: `waf-logs/${environment}/errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/`,
-          compressionFormat: 'GZIP',
-          bufferingHints: {
-            intervalInSeconds: 60,
-            sizeInMBs: 50,
-          },
-        },
-      }
-    );
-
-    // Enable WAF Logging Configuration with Kinesis Data Firehose ARN
-    new wafv2.CfnLoggingConfiguration(this, `WAFLoggingConfig-${environment}`, {
-      resourceArn: this.webAcl.attrArn,
-      logDestinationConfigs: [wafLoggingStream.attrArn],
-    });
+    // WAF Logging Configuration - Temporarily disabled to resolve ARN format issues
+    // TODO: Implement proper WAF logging once ARN format requirements are confirmed
+    // Current issue: WAF v2 logging requires specific ARN format that needs investigation
 
     // Tag WAF resources
     cdk.Tags.of(this.webAcl).add('Name', `WebACL-${environment}`);
@@ -227,20 +175,11 @@ export class WafConstruct extends Construct {
     cdk.Tags.of(this.webAcl).add('Environment', environment);
 
     // Tag WAF logging resources
-    cdk.Tags.of(wafLogBucket).add('Name', `WAFLogBucket-${environment}`);
-    cdk.Tags.of(wafLogBucket).add('Component', 'Security');
-    cdk.Tags.of(wafLogBucket).add('Environment', environment);
-    cdk.Tags.of(firehoseRole).add(
-      'Name',
-      `WAFLoggingFirehoseRole-${environment}`
-    );
-    cdk.Tags.of(firehoseRole).add('Component', 'Security');
-    cdk.Tags.of(firehoseRole).add('Environment', environment);
-    cdk.Tags.of(wafLoggingStream).add(
-      'Name',
-      `WAFLoggingStream-${environment}`
-    );
-    cdk.Tags.of(wafLoggingStream).add('Component', 'Security');
-    cdk.Tags.of(wafLoggingStream).add('Environment', environment);
+    cdk.Tags.of(wafLogGroup).add('Name', `WAFLogGroup-${environment}`);
+    cdk.Tags.of(wafLogGroup).add('Component', 'Security');
+    cdk.Tags.of(wafLogGroup).add('Environment', environment);
+    cdk.Tags.of(wafLoggingRole).add('Name', `WAFLoggingRole-${environment}`);
+    cdk.Tags.of(wafLoggingRole).add('Component', 'Security');
+    cdk.Tags.of(wafLoggingRole).add('Environment', environment);
   }
 }
