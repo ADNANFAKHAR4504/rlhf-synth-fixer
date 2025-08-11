@@ -33,8 +33,10 @@ describe('TapStack Integration Tests', () => {
         environmentSuffix: 'integration-test',
         awsRegion: 'us-west-2',
         defaultTags: {
-          IntegrationTest: 'true',
-          TestSuite: 'CDKTFIntegration',
+          tags: {
+            IntegrationTest: 'true',
+            TestSuite: 'CDKTFIntegration',
+          },
         },
       });
 

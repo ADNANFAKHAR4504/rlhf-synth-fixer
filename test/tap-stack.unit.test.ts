@@ -13,7 +13,9 @@ describe('TapStack Unit Tests', () => {
       environmentSuffix: 'prod',
       awsRegion: 'us-east-1',
       defaultTags: {
-        Environment: 'Test',
+        tags: {
+          Environment: 'Test',
+        },
       },
     });
     const synthesizedString = Testing.synth(stack);
