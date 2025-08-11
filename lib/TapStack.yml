@@ -7,12 +7,15 @@ Parameters:
   DomainName:
     Type: String
     Description: The custom domain name for your application (e.g., myapp.example.com).
+    Default: app.tap.us-west-2.meerio.com
   HostedZoneName:
     Type: String
     Description: The Route 53 Hosted Zone name for your domain (e.g., example.com.).
+    Default: meerio.com.
   CertificateArn:
     Type: String
     Description: The ARN of the ACM SSL certificate for your domain.
+    Default: arn:aws:acm:us-west-2:718240086340:certificate/c43e41ee-5b6c-4d2c-80e9-82c1db57289e
   DBUsername:
     Type: String
     Description: The master username for the RDS database.
@@ -20,6 +23,7 @@ Parameters:
     MaxLength: '16'
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+    Default: 'myappuser'
   MinSize:
     Description: Minimum number of EC2 instances for the Auto Scaling group.
     Type: Number
