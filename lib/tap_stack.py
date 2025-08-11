@@ -23,18 +23,17 @@ class WebApplicationStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
 
-    # Retrieve an existing VPC using its VPC ID
+    # Retrieve an existing VPC
     vpc = ec2.Vpc.from_lookup(
       self, "ExistingVPC",
       vpc_id="vpc-1234567890abcdef0"
     )
 
-    # Select private subnets for ASG and RDS
     private_subnets = vpc.select_subnets(
       subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
     )
 
-    # 1. ALB
+    # 1. Application Load Balancer
     alb = elbv2.ApplicationLoadBalancer(
       self, "ALB",
       vpc=vpc,
@@ -44,7 +43,7 @@ class WebApplicationStack(Stack):
 
     listener = alb.add_listener("HTTPListener", port=80, open=True)
 
-    # 2. RDS
+    # 2. RDS Database
     db_security_group = ec2.SecurityGroup(
       self, "DBSecurityGroup",
       vpc=vpc,
@@ -55,7 +54,7 @@ class WebApplicationStack(Stack):
     db_subnet_group = rds.SubnetGroup(
       self, "DBSubnetGroup",
       vpc=vpc,
-      vpc_subnets=private_subnets.subnet_selection,
+      vpc_subnets=ec2.SubnetSelection(subnets=private_subnets.subnets),
       description="Subnet group for the RDS database"
     )
 
@@ -91,14 +90,16 @@ class WebApplicationStack(Stack):
     )
 
     web_server_role.add_managed_policy(
-      iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
+      iam.ManagedPolicy.from_aws_managed_policy_name(
+        "CloudWatchAgentServerPolicy"
+      )
     )
 
     # 4. Auto Scaling Group
     asg = autoscaling.AutoScalingGroup(
       self, "ASG",
       vpc=vpc,
-      vpc_subnets=private_subnets.subnet_selection,
+      vpc_subnets=ec2.SubnetSelection(subnets=private_subnets.subnets),
       instance_type=ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE2,
         ec2.InstanceSize.MICRO
