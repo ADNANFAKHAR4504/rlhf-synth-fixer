@@ -13,7 +13,6 @@ describe('TapStack — Integration Coverage', () => {
     process.env = { ...originalEnv };
     jest.clearAllMocks();
 
-    // Stable defaults so synth is deterministic
     process.env.ENVIRONMENT_SUFFIX = 'dev';
     process.env.TERRAFORM_STATE_BUCKET = 'iac-rlhf-tf-states';
     process.env.TERRAFORM_STATE_BUCKET_REGION = 'us-east-1';
@@ -36,14 +35,13 @@ describe('TapStack — Integration Coverage', () => {
     process.env = originalEnv;
   });
 
-  // Existing unit tests (unchanged)
   test('instantiates with overrides via props (back-compat keys) and synthesizes', () => {
     const app = new App();
     const stack = new TapStack(app, 'TestTapStackWithProps', {
       environmentSuffix: 'prod',
       stateBucket: 'custom-state-bucket',
       stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2', // legacy, ignored but accepted
+      awsRegion: 'us-west-2',
     });
     const synthesized = Testing.synth(stack);
 
@@ -52,26 +50,20 @@ describe('TapStack — Integration Coverage', () => {
 
     // Providers present
     expect(synthesized).toMatch(/"provider":\s*{\s*"aws":/);
-
-    // Representative resources from each construct
-    expect(synthesized).toMatch(/"aws_vpc"/);                    // VPC
-    expect(synthesized).toMatch(/"aws_security_group"/);         // Security
-    expect(synthesized).toMatch(/"aws_lb"/);                     // Compute
-    expect(synthesized).toMatch(/"aws_autoscaling_group"/);      // Compute
-    expect(synthesized).toMatch(/"aws_db_instance"/);            // Database
-    expect(synthesized).toMatch(/"random_password"/);            // Random provider
-    expect(synthesized).toMatch(/"aws_secretsmanager_secret"/);  // Secrets
-    expect(synthesized).toMatch(/"aws_cloudwatch_metric_alarm"/);// Monitoring
-    expect(synthesized).toMatch(/"aws_sns_topic"/);              // Monitoring
-
-    // Unambiguous proof we created infra in both regions
+    expect(synthesized).toMatch(/"aws_vpc"/);                    
+    expect(synthesized).toMatch(/"aws_security_group"/);         
+    expect(synthesized).toMatch(/"aws_lb"/);                     
+    expect(synthesized).toMatch(/"aws_autoscaling_group"/);      
+    expect(synthesized).toMatch(/"aws_db_instance"/);            
+    expect(synthesized).toMatch(/"random_password"/);            
+    expect(synthesized).toMatch(/"aws_secretsmanager_secret"/);  
+    expect(synthesized).toMatch(/"aws_cloudwatch_metric_alarm"/);
+    expect(synthesized).toMatch(/"aws_sns_topic"/);              
     expect(synthesized).toMatch(/"primary_vpc_id"/);
     expect(synthesized).toMatch(/"secondary_vpc_id"/);
   });
 
-  // New: True Integration Test — Deploy infrastructure, get outputs, and verify live resources
   test('deploys live resources and verifies DB connectivity', async () => {
-    // Deploy infrastructure using cdktf deploy (or terraform apply)
     const app = new App();
     const stack = new TapStack(app, 'TestLiveEnvironmentDeployment');
     const synthesized = Testing.synth(stack);
@@ -79,36 +71,29 @@ describe('TapStack — Integration Coverage', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
 
-    // Read the Terraform outputs (adjusted path for the CI pipeline)
     const terraformStateFile = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
     
-    // Check if the file exists (optional sanity check)
     if (!fs.existsSync(terraformStateFile)) {
       throw new Error(`Terraform state file not found at ${terraformStateFile}`);
     }
 
     const state = JSON.parse(fs.readFileSync(terraformStateFile, 'utf8'));
-
-    // Log the state for debugging
     console.log("State: ", state);
 
-    // Extract resource IDs from Terraform state outputs
+    // Ensure the correct output names are being referenced here
     const vpcId = state.TapStackpr824.PrimaryVpc_vpc_id_121F1BFC;
-    const dbInstanceId = state.TapStackpr824.PrimaryDb_db_instance_765D70A7;
+    const dbInstanceId = state.TapStackpr824.db_instance_id; // Ensure this matches the output key from TapStack
 
     expect(vpcId).toBeDefined();
     expect(dbInstanceId).toBeDefined();
 
-    // Real AWS SDK checks (check live resources)
     const vpcClient = new EC2Client({ region: 'us-east-1' });
     const dbClient = new RDSClient({ region: 'us-east-1' });
 
-    // Verify VPC existence
     const vpcResponse = await vpcClient.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-    expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);  // Check if VPC is deployed
+    expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);
 
-    // Verify DB instance existence
     const dbResponse = await dbClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId }));
-    expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);  // Check if DB instance exists
+    expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);
   });
 });

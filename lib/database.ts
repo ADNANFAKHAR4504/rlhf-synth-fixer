@@ -1,16 +1,12 @@
-// lib/database.ts
-import { TerraformOutput } from 'cdktf';
-import { Construct } from 'constructs';
-
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbParameterGroup } from '@cdktf/provider-aws/lib/db-parameter-group';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-
 import { Password } from '@cdktf/provider-random/lib/password';
-
+import { TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
 import { name } from './utils/naming';
 
 export interface DatabaseProps {
@@ -106,7 +102,9 @@ export class Database extends Construct {
     // CloudWatch dimensions usually use DBInstanceIdentifier; db.id maps to the Terraform resource ID (identifier)
     this.dbIdentifier = db.id;
 
+    // Terraform Output for DB instance
     new TerraformOutput(this, 'db_endpoint', { value: this.endpoint });
     new TerraformOutput(this, 'db_secret_arn', { value: this.secretArn });
+    new TerraformOutput(this, 'db_instance_id', { value: db.id }); // Add output for db instance ID
   }
 }

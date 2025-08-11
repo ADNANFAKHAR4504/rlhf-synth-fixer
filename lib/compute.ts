@@ -1,4 +1,3 @@
-// lib/compute.ts
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
 import { DataAwsSsmParameter } from '@cdktf/provider-aws/lib/data-aws-ssm-parameter';
@@ -32,6 +31,7 @@ export interface ComputeProps {
 
 export class Compute extends Construct {
   public readonly albDns: string;
+  public readonly albZoneId: string; // Add this property
   public readonly asgName: string;
   public readonly tgArn: string;
 
@@ -119,6 +119,10 @@ export class Compute extends Construct {
       provider: props.provider,
     });
 
+    // Save the DNS and ZoneId
+    this.albDns = alb.dnsName;
+    this.albZoneId = alb.zoneId; // Ensure the ALB Zone ID is also saved
+
     // Target Group
     const tg = new LbTargetGroup(this, 'tg', {
       name: name(env, 'tg', region),
@@ -205,11 +209,8 @@ systemctl start amazon-cloudwatch-agent
     this.scaleDownPolicyArn = scaleDownPolicy.arn;
 
     // Expose DNS, ASG name, TG ARN
-    this.albDns = alb.dnsName;
-    this.asgName = asg.name;
-    this.tgArn = tg.arn;
-
     new TerraformOutput(this, 'alb_dns', { value: this.albDns });
-    new TerraformOutput(this, 'asg_name', { value: this.asgName });
+    new TerraformOutput(this, 'alb_zone_id', { value: this.albZoneId }); // Add output for ALB Zone ID
+    new TerraformOutput(this, 'asg_name', { value: asg.name });
   }
 }

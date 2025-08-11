@@ -1,4 +1,4 @@
-# IDEAL\_RESPONSE.md
+# IDEAL_RESPONSE.md
 
 ## Overview
 
@@ -351,6 +351,7 @@ export interface ComputeProps {
 
 export class Compute extends Construct {
   public readonly albDns: string;
+  public readonly albZoneId: string; // Add this property
   public readonly asgName: string;
   public readonly tgArn: string;
 
@@ -438,6 +439,10 @@ export class Compute extends Construct {
       provider: props.provider,
     });
 
+    // Save the DNS and ZoneId
+    this.albDns = alb.dnsName;
+    this.albZoneId = alb.zoneId; // Ensure the ALB Zone ID is also saved
+
     // Target Group
     const tg = new LbTargetGroup(this, 'tg', {
       name: name(env, 'tg', region),
@@ -524,32 +529,26 @@ systemctl start amazon-cloudwatch-agent
     this.scaleDownPolicyArn = scaleDownPolicy.arn;
 
     // Expose DNS, ASG name, TG ARN
-    this.albDns = alb.dnsName;
-    this.asgName = asg.name;
-    this.tgArn = tg.arn;
-
     new TerraformOutput(this, 'alb_dns', { value: this.albDns });
-    new TerraformOutput(this, 'asg_name', { value: this.asgName });
+    new TerraformOutput(this, 'alb_zone_id', { value: this.albZoneId }); // Add output for ALB Zone ID
+    new TerraformOutput(this, 'asg_name', { value: asg.name });
   }
 }
-
 ```
 
 ### `lib/database.ts`
 
 ```ts
 // lib/database.ts
-import { Construct } from 'constructs';
-import { TerraformOutput } from 'cdktf';
-
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DbParameterGroup } from '@cdktf/provider-aws/lib/db-parameter-group';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { Password } from '@cdktf/provider-random/lib/password';
-
+import { TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
 import { name } from './utils/naming';
 
 export interface DatabaseProps {
@@ -558,14 +557,17 @@ export interface DatabaseProps {
   region: string;
   privateSubnets: string[];
   rdsSgId: string;
-  instanceClass?: string;      // default: db.t3.micro
-  allocatedStorage?: number;   // default: 20
-  multiAz?: boolean;           // default: true in prod, false otherwise
+  instanceClass?: string; // default: db.t3.micro
+  allocatedStorage?: number; // default: 20
+  multiAz?: boolean; // default: true in prod, false otherwise
 }
 
 export class Database extends Construct {
+  /** RDS endpoint DNS name */
   public readonly endpoint: string;
+  /** Secrets Manager secret ARN containing the DB password */
   public readonly secretArn: string;
+  /** DB instance identifier (useful for CW alarm dimensions) */
   public readonly dbIdentifier: string;
 
   constructor(scope: Construct, id: string, props: DatabaseProps) {
@@ -574,11 +576,13 @@ export class Database extends Construct {
     const env = props.environment;
     const region = props.region;
 
+    // Generate a strong password
     const dbPassword = new Password(this, 'dbPassword', {
       length: 16,
       special: true,
     });
 
+    // Store password in Secrets Manager
     const secret = new SecretsmanagerSecret(this, 'dbSecret', {
       name: name(env, 'db-password', region),
       description: `Database password for ${env} in ${region}`,
@@ -592,12 +596,14 @@ export class Database extends Construct {
       provider: props.provider,
     });
 
+    // Subnet group (private subnets only)
     const subnetGroup = new DbSubnetGroup(this, 'dbSubnetGroup', {
       name: name(env, 'db-subnet-group', region),
       subnetIds: props.privateSubnets,
       provider: props.provider,
     });
 
+    // Parameter group (Postgres14 tuning example)
     const paramGroup = new DbParameterGroup(this, 'dbParamGroup', {
       name: name(env, 'db-params', region),
       family: 'postgres14',
@@ -608,31 +614,40 @@ export class Database extends Construct {
       provider: props.provider,
     });
 
+    // RDS Instance (Postgres)
     const db = new DbInstance(this, 'dbInstance', {
       identifier: name(env, 'db', region),
       engine: 'postgres',
       engineVersion: '15.7',
       instanceClass: props.instanceClass || 'db.t3.micro',
       allocatedStorage: props.allocatedStorage || 20,
+
       dbSubnetGroupName: subnetGroup.name,
       vpcSecurityGroupIds: [props.rdsSgId],
+
       username: 'TapStackpr824',
       password: dbPassword.result,
-      multiAz: props.multiAz ?? (env === 'prod'),
+
+      multiAz: props.multiAz ?? env === 'prod',
       deletionProtection: env === 'prod',
       skipFinalSnapshot: true,
       publiclyAccessible: false,
       storageEncrypted: true,
       parameterGroupName: paramGroup.name,
+
       provider: props.provider,
     });
 
+    // Expose outputs/properties
     this.endpoint = db.address;
     this.secretArn = secret.arn;
+    // CloudWatch dimensions usually use DBInstanceIdentifier; db.id maps to the Terraform resource ID (identifier)
     this.dbIdentifier = db.id;
 
+    // Terraform Output for DB instance
     new TerraformOutput(this, 'db_endpoint', { value: this.endpoint });
     new TerraformOutput(this, 'db_secret_arn', { value: this.secretArn });
+    new TerraformOutput(this, 'db_instance_id', { value: db.id }); // Add output for db instance ID
   }
 }
 ```
@@ -852,12 +867,11 @@ import {
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
-import { IResolvable, S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 import { Compute } from './compute';
 import { Database } from './database';
-import { Dns } from './dns';
 import { Monitoring } from './monitoring';
 import { SecureVpc } from './secure-vpc';
 import { Security } from './security';
@@ -879,7 +893,7 @@ export interface TapStackProps {
 
 function toProviderDefaultTagsArray(
   tags: AwsProviderDefaultTags | undefined
-): IResolvable | AwsProviderDefaultTags[] | undefined {
+): AwsProviderDefaultTags[] | undefined {
   if (!tags) return undefined;
   return [tags];
 }
@@ -903,7 +917,6 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: TapStackProps = {}) {
     super(scope, id);
 
-    // ---- Workspace / env naming ----
     const environment =
       props.environment ??
       props.environmentSuffix ??
@@ -913,16 +926,13 @@ export class TapStack extends TerraformStack {
       'dev';
     this.environment = environment;
 
-    // STRICT PR detection: pr### only (won’t match "prod")
     const isPrEnv = /^pr\d+$/i.test(this.environment);
 
-    // Feature gates
     const enableSecondary =
       !isPrEnv && (process.env.ENABLE_SECONDARY ?? 'true') !== 'false';
     const enableDatabase =
       !isPrEnv && (process.env.ENABLE_DATABASE ?? 'true') !== 'false';
 
-    // ---- Tags (lowercased keys to avoid “Duplicate tag keys”) ----
     const project = props.project ?? process.env.PROJECT ?? 'multi-region-app';
     const owner = props.owner ?? process.env.OWNER ?? 'DevOps Team';
     const costCenter =
@@ -941,20 +951,17 @@ export class TapStack extends TerraformStack {
       ),
     };
 
-    // ---- Provider constraints ----
     this.addOverride('terraform.required_version', '>= 1.6');
     this.addOverride('terraform.required_providers.aws', {
       source: 'hashicorp/aws',
       version: '~> 5.0',
     });
 
-    // ---- Regions ----
     const primaryRegion =
       props.primaryRegion || process.env.AWS_REGION_PRIMARY || 'us-east-1';
     const secondaryRegion =
       props.secondaryRegion || process.env.AWS_REGION_SECONDARY || 'eu-west-1';
 
-    // Providers
     this.primary = new AwsProvider(this, 'awsPrimary', {
       region: primaryRegion,
       alias: 'primary',
@@ -967,10 +974,8 @@ export class TapStack extends TerraformStack {
       defaultTags: toProviderDefaultTagsArray(mergedDefaultTags),
     });
 
-    // Random provider
     new RandomProvider(this, 'random', {});
 
-    // ---- Remote state (S3 + optional DynamoDB lock) ----
     const stateBucket =
       props.stateBucket ||
       process.env.TERRAFORM_STATE_BUCKET ||
@@ -991,12 +996,10 @@ export class TapStack extends TerraformStack {
       this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
     }
 
-    // ---- Outputs ----
     new TerraformOutput(this, 'workspace', { value: environment });
     new TerraformOutput(this, 'primary_region', { value: primaryRegion });
     new TerraformOutput(this, 'secondary_region', { value: secondaryRegion });
 
-    // ---- Secure VPCs ----
     const vpcCidrPrimary = process.env.VPC_CIDR_PRIMARY || '10.0.0.0/16';
     const azCount = parseInt(process.env.AZ_COUNT || '2', 10);
     const natPerAz = process.env.NAT_PER_AZ === 'true';
@@ -1027,19 +1030,11 @@ export class TapStack extends TerraformStack {
       });
     }
 
-    // ---- Security (SGs) ----
-    const adminCidr = process.env.ADMIN_CIDR || '';
-    const appPort = parseInt(process.env.APP_PORT || '80', 10);
-    const enableSshToApp = process.env.ENABLE_SSH_TO_APP === 'true';
-
     const primarySec = new Security(this, 'PrimarySecurity', {
       provider: this.primary,
       environment: this.environment,
       region: primaryRegion,
       vpcId: primaryVpc.vpcId,
-      adminCidr,
-      appPort,
-      enableSshToApp,
     });
 
     let secondarySec: Security | undefined;
@@ -1049,13 +1044,9 @@ export class TapStack extends TerraformStack {
         environment: this.environment,
         region: secondaryRegion,
         vpcId: secondaryVpc.vpcId,
-        adminCidr,
-        appPort,
-        enableSshToApp,
       });
     }
 
-    // ---- Compute (ALB/ASG) ----
     const primaryCompute = new Compute(this, 'PrimaryCompute', {
       provider: this.primary,
       environment: this.environment,
@@ -1065,8 +1056,6 @@ export class TapStack extends TerraformStack {
       privateSubnets: primaryVpc.privateSubnetIds,
       albSgId: primarySec.albSgId,
       appSgId: primarySec.appSgId,
-      instanceType: 't3.micro',
-      acmCertArn: process.env.ACM_CERT_ARN || '',
     });
 
     let secondaryCompute: Compute | undefined;
@@ -1080,12 +1069,9 @@ export class TapStack extends TerraformStack {
         privateSubnets: secondaryVpc.privateSubnetIds,
         albSgId: secondarySec.albSgId,
         appSgId: secondarySec.appSgId,
-        instanceType: 't3.micro',
-        acmCertArn: process.env.ACM_CERT_ARN_SECONDARY || '',
       });
     }
 
-    // ---- Database (RDS + Secrets) ----
     let primaryDb: Database | undefined;
     let secondaryDb: Database | undefined;
 
@@ -1107,9 +1093,16 @@ export class TapStack extends TerraformStack {
           rdsSgId: secondarySec.rdsSgId,
         });
       }
+
+      new TerraformOutput(this, 'db_instance_id', {
+        value: primaryDb.dbIdentifier,
+      });
+
+      new TerraformOutput(this, 'db_endpoint', {
+        value: primaryDb.endpoint,
+      });
     }
 
-    // ---- Monitoring ----
     new Monitoring(this, 'PrimaryMonitoring', {
       provider: this.primary,
       environment: this.environment,
@@ -1129,27 +1122,6 @@ export class TapStack extends TerraformStack {
         scaleUpPolicyArn: secondaryCompute.scaleUpPolicyArn,
         scaleDownPolicyArn: secondaryCompute.scaleDownPolicyArn,
         albTargetGroupName: secondaryCompute.albTargetGroupName,
-      });
-    }
-
-    // ---- DNS (optional; only if both regions exist) ----
-    const hostedZoneId = process.env.DNS_HOSTED_ZONE_ID || '';
-    const recordName = process.env.DNS_RECORD_NAME || '';
-    if (hostedZoneId && recordName && secondaryCompute) {
-      const primaryAlbZoneId = (primaryCompute as any).alb?.zoneId;
-      const secondaryAlbZoneId = (secondaryCompute as any).alb?.zoneId;
-
-      new Dns(this, 'LatencyDns', {
-        hostedZoneId,
-        recordName,
-        primaryAlbDns: primaryCompute.albDns,
-        primaryAlbZoneId,
-        secondaryAlbDns: secondaryCompute.albDns,
-        secondaryAlbZoneId,
-        healthCheckPath: process.env.DNS_HEALTHCHECK_PATH || '/',
-        primaryProvider: this.primary,
-        secondaryProvider: this.secondary,
-        environment: this.environment,
       });
     }
   }
@@ -1303,7 +1275,6 @@ describe('TapStack — Integration Coverage', () => {
     process.env = { ...originalEnv };
     jest.clearAllMocks();
 
-    // Stable defaults so synth is deterministic
     process.env.ENVIRONMENT_SUFFIX = 'dev';
     process.env.TERRAFORM_STATE_BUCKET = 'iac-rlhf-tf-states';
     process.env.TERRAFORM_STATE_BUCKET_REGION = 'us-east-1';
@@ -1326,14 +1297,13 @@ describe('TapStack — Integration Coverage', () => {
     process.env = originalEnv;
   });
 
-  // Existing unit tests (unchanged)
   test('instantiates with overrides via props (back-compat keys) and synthesizes', () => {
     const app = new App();
     const stack = new TapStack(app, 'TestTapStackWithProps', {
       environmentSuffix: 'prod',
       stateBucket: 'custom-state-bucket',
       stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2', // legacy, ignored but accepted
+      awsRegion: 'us-west-2',
     });
     const synthesized = Testing.synth(stack);
 
@@ -1342,26 +1312,20 @@ describe('TapStack — Integration Coverage', () => {
 
     // Providers present
     expect(synthesized).toMatch(/"provider":\s*{\s*"aws":/);
-
-    // Representative resources from each construct
-    expect(synthesized).toMatch(/"aws_vpc"/);                    // VPC
-    expect(synthesized).toMatch(/"aws_security_group"/);         // Security
-    expect(synthesized).toMatch(/"aws_lb"/);                     // Compute
-    expect(synthesized).toMatch(/"aws_autoscaling_group"/);      // Compute
-    expect(synthesized).toMatch(/"aws_db_instance"/);            // Database
-    expect(synthesized).toMatch(/"random_password"/);            // Random provider
-    expect(synthesized).toMatch(/"aws_secretsmanager_secret"/);  // Secrets
-    expect(synthesized).toMatch(/"aws_cloudwatch_metric_alarm"/);// Monitoring
-    expect(synthesized).toMatch(/"aws_sns_topic"/);              // Monitoring
-
-    // Unambiguous proof we created infra in both regions
+    expect(synthesized).toMatch(/"aws_vpc"/);                    
+    expect(synthesized).toMatch(/"aws_security_group"/);         
+    expect(synthesized).toMatch(/"aws_lb"/);                     
+    expect(synthesized).toMatch(/"aws_autoscaling_group"/);      
+    expect(synthesized).toMatch(/"aws_db_instance"/);            
+    expect(synthesized).toMatch(/"random_password"/);            
+    expect(synthesized).toMatch(/"aws_secretsmanager_secret"/);  
+    expect(synthesized).toMatch(/"aws_cloudwatch_metric_alarm"/);
+    expect(synthesized).toMatch(/"aws_sns_topic"/);              
     expect(synthesized).toMatch(/"primary_vpc_id"/);
     expect(synthesized).toMatch(/"secondary_vpc_id"/);
   });
 
-  // New: True Integration Test — Deploy infrastructure, get outputs, and verify live resources
   test('deploys live resources and verifies DB connectivity', async () => {
-    // Deploy infrastructure using cdktf deploy (or terraform apply)
     const app = new App();
     const stack = new TapStack(app, 'TestLiveEnvironmentDeployment');
     const synthesized = Testing.synth(stack);
@@ -1369,39 +1333,33 @@ describe('TapStack — Integration Coverage', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
 
-    // Read the Terraform outputs (adjusted path for the CI pipeline)
     const terraformStateFile = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
     
-    // Check if the file exists (optional sanity check)
     if (!fs.existsSync(terraformStateFile)) {
       throw new Error(`Terraform state file not found at ${terraformStateFile}`);
     }
 
     const state = JSON.parse(fs.readFileSync(terraformStateFile, 'utf8'));
-
-    // Log the state for debugging
     console.log("State: ", state);
 
-    // Extract resource IDs from Terraform state outputs
+    // Ensure the correct output names are being referenced here
     const vpcId = state.TapStackpr824.PrimaryVpc_vpc_id_121F1BFC;
-    const dbInstanceId = state.TapStackpr824.PrimaryDb_db_instance_765D70A7;
+    const dbInstanceId = state.TapStackpr824.db_instance_id; // Ensure this matches the output key from TapStack
 
     expect(vpcId).toBeDefined();
     expect(dbInstanceId).toBeDefined();
 
-    // Real AWS SDK checks (check live resources)
     const vpcClient = new EC2Client({ region: 'us-east-1' });
     const dbClient = new RDSClient({ region: 'us-east-1' });
 
-    // Verify VPC existence
     const vpcResponse = await vpcClient.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-    expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);  // Check if VPC is deployed
+    expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);
 
-    // Verify DB instance existence
     const dbResponse = await dbClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId }));
-    expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);  // Check if DB instance exists
+    expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);
   });
 });
+
 ```
 
 ### `bin/tap.ts`
