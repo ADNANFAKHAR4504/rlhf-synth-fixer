@@ -385,89 +385,90 @@ class TapStack:
             raise RuntimeError(f"Failed to create S3 buckets: {str(e)}")
     
     def _setup_s3_replication(self, primary_bucket, replica_bucket, primary_region):
-        """Set up S3 cross-region replication"""
-        try:
-            # Replication role
-            replication_assume_role_policy = json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {"Service": "s3.amazonaws.com"},
-                        "Action": "sts:AssumeRole"
-                    }
-                ]
-            })
-            
-            replication_role = aws.iam.Role(
-                f"s3-replication-role-{self.environment_suffix}",
-                assume_role_policy=replication_assume_role_policy,
-                opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
-            )
-            
-            # FIXED: Replication policy with correct indexing
-            replication_policy_doc = pulumi.Output.all(
-                primary_bucket.arn,
-                replica_bucket.arn
-            ).apply(lambda arns: json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:GetObjectVersionForReplication",
-                            "s3:GetObjectVersionAcl"
-                        ],
-                        "Resource": f"{arns[0]}/*"  # Fixed: Use arns instead of arns[1]
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": ["s3:ListBucket"],
-                        "Resource": arns  # Fixed: Use arns instead of invalid index
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:ReplicateObject",
-                            "s3:ReplicateDelete"
-                        ],
-                        "Resource": f"{arns[2]}/*"  # Fixed: Use arns[2] instead of invalid index
-                    }
-                ]
-            }))
-            
-            replication_policy = aws.iam.RolePolicy(
-                f"s3-replication-policy-{self.environment_suffix}",
-                role=replication_role.id,
-                policy=replication_policy_doc,
-                opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
-            )
-            
-            # Replication configuration using BucketReplicationConfig
-            replication_config = aws.s3.BucketReplicationConfig(
-                f"bucket-replication-{self.environment_suffix}",
-                role=replication_role.arn,
-                bucket=primary_bucket.id,
-                rules=[aws.s3.BucketReplicationConfigRuleArgs(
-                    id="replica-rule",
-                    status="Enabled",
-                    destination=aws.s3.BucketReplicationConfigRuleDestinationArgs(
-                        bucket=replica_bucket.arn,
-                        storage_class="STANDARD"
-                    )
-                )],
-                opts=pulumi.ResourceOptions(
-                    provider=self.providers[primary_region],
-                    depends_on=[replication_policy]
-                )
-            )
-            
-            self.replication_config["role"] = replication_role
-            self.replication_config["policy"] = replication_policy
-            self.replication_config["config"] = replication_config
-            
-        except Exception as e:
-            raise RuntimeError(f"Failed to setup S3 replication: {str(e)}")
+      """Set up S3 cross-region replication"""
+      try:
+          # Replication role
+          replication_assume_role_policy = json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [
+                  {
+                      "Effect": "Allow",
+                      "Principal": {"Service": "s3.amazonaws.com"},
+                      "Action": "sts:AssumeRole"
+                  }
+              ]
+          })
+          
+          replication_role = aws.iam.Role(
+              f"s3-replication-role-{self.environment_suffix}",
+              assume_role_policy=replication_assume_role_policy,
+              opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
+          )
+          
+          # FIXED: Replication policy with correct indexing (only use arns[0] and arns[2])
+          replication_policy_doc = pulumi.Output.all(
+              primary_bucket.arn,
+              replica_bucket.arn
+          ).apply(lambda arns: json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "s3:GetObjectVersionForReplication",
+                          "s3:GetObjectVersionAcl"
+                      ],
+                      "Resource": f"{arns[0]}/*"  # Primary bucket objects
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": ["s3:ListBucket"],
+                      "Resource": arns  # Primary bucket
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "s3:ReplicateObject",
+                          "s3:ReplicateDelete"
+                      ],
+                      "Resource": f"{arns[2]}/*"  # Replica bucket objects
+                  }
+              ]
+          }))
+          
+          replication_policy = aws.iam.RolePolicy(
+              f"s3-replication-policy-{self.environment_suffix}",
+              role=replication_role.id,
+              policy=replication_policy_doc,
+              opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
+          )
+          
+          # Replication configuration using BucketReplicationConfig
+          replication_config = aws.s3.BucketReplicationConfig(
+              f"bucket-replication-{self.environment_suffix}",
+              role=replication_role.arn,
+              bucket=primary_bucket.id,
+              rules=[aws.s3.BucketReplicationConfigRuleArgs(
+                  id="replica-rule",
+                  status="Enabled",
+                  destination=aws.s3.BucketReplicationConfigRuleDestinationArgs(
+                      bucket=replica_bucket.arn,
+                      storage_class="STANDARD"
+                  )
+              )],
+              opts=pulumi.ResourceOptions(
+                  provider=self.providers[primary_region],
+                  depends_on=[replication_policy]
+              )
+          )
+          
+          self.replication_config["role"] = replication_role
+          self.replication_config["policy"] = replication_policy
+          self.replication_config["config"] = replication_config
+          
+      except Exception as e:
+          raise RuntimeError(f"Failed to setup S3 replication: {str(e)}")
+
 
     
     def _create_iam_roles(self):
