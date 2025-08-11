@@ -17,7 +17,7 @@ except ImportError:
 def create_infrastructure():
   """Create the entire AWS infrastructure stack."""
   config = Config()
-  region = config.get("region") or "us-west-2"
+  region = config.get("region") or "us-east-1"
 
   aws_provider = aws.Provider("aws", region=region)
 
@@ -109,13 +109,19 @@ def create_infrastructure():
     opts=pulumi.ResourceOptions(provider=aws_provider)
   )
 
-  ami = get_ami(
-    most_recent=True,
-    filters=[
-      {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]},
-      {"name": "owner-alias", "values": ["amazon"]}
-    ]
-  )
+  try:
+    ami = get_ami(
+      most_recent=True,
+      filters=[
+        {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]},
+        {"name": "owner-alias", "values": ["amazon"]}
+      ],
+      owners=["137112412989"],
+      opts=pulumi.InvokeOptions(provider=aws_provider)
+    )
+    ami_id = ami.id
+  except Exception:
+    ami_id = "ami-0c02fb55956c7d316"  # Amazon Linux 2 AMI for us-east-1
 
   user_data = """#!/bin/bash
 yum update -y
@@ -183,7 +189,7 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
   ec2_instance = aws.ec2.Instance(
     "web-instance",
     instance_type="t3.micro",
-    ami=ami.id,
+    ami=ami_id,
     subnet_id=subnet1.id,
     associate_public_ip_address=True,
     security_groups=[ec2_sg.id],
