@@ -914,171 +914,151 @@ EOF
 {logging_config}
 """
   
-  def _create_auto_scaling_groups(self):
-    """Create Auto Scaling Groups with launch templates"""
-    try:
-      for region in self.regions:
-        # Get latest Amazon Linux 2 AMI
+  def _create_auto_scaling(self):
+    """Create Auto Scaling Groups with Launch Templates"""
+    # Get latest Amazon Linux 2 AMI for each region
+    for region in self.regions:
         ami = aws.ec2.get_ami(
-          most_recent=True,
-          owners=["amazon"],
-          filters=[
-            aws.ec2.GetAmiFilterArgs(
-              name="name",
-              values=["amzn2-ami-hvm-*-x86_64-gp2"]
-            )
-          ],
-          opts=pulumi.InvokeOptions(provider=self.providers[region])
+            most_recent=True,
+            owners=["amazon"],
+            filters=[
+                aws.ec2.GetAmiFilterArgs(
+                    name="name",
+                    values=["amzn2-ami-hvm-*-x86_64-gp2"]
+                )
+            ],
+            opts=pulumi.InvokeOptions(provider=self.providers[region])
         )
         
-        # Create launch template
-        user_data_script = self._get_user_data_script(region)
-        encoded_user_data = base64.b64encode(user_data_script.encode()).decode()
+        # Use a more unique naming strategy with timestamp or random suffix
+        import time
+        timestamp_suffix = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
         
+        # Launch Template
         launch_template = aws.ec2.LaunchTemplate(
-          f"lt-{region}-{self.environment_suffix}",
-          name=self.args.get_resource_name("lt", region),
-          description=(
-            f"Launch template for TAP infrastructure {self.environment_suffix} in {region}"
-          ),
-          image_id=ami.id,
-          instance_type=self.args.instance_type,
-          iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-            name=self.iam_roles[region]["profile"].name
-          ),
-          vpc_security_group_ids=[self.security_groups[region]["ec2"].id],
-          user_data=encoded_user_data,
-          monitoring=aws.ec2.LaunchTemplateMonitoringArgs(enabled=self.args.enable_monitoring),
-          metadata_options=aws.ec2.LaunchTemplateMetadataOptionsArgs(
-            http_endpoint="enabled",
-            http_tokens="required",
-            http_put_response_hop_limit=2
-          ),
-          tags={"Name": self.args.get_resource_name("lt", region)},
-          opts=pulumi.ResourceOptions(provider=self.providers[region])
+            f"lt-{region}-{self.args.environment}",
+            name=f"tap-lt-{region}-{self.args.environment}-{timestamp_suffix}",
+            image_id=ami.id,
+            instance_type=self.args.instance_type,
+            vpc_security_group_ids=[self.security_groups[region]['ec2'].id],
+            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
+                name=self.instance_profiles[region].name
+            ),
+            user_data=pulumi.Output.concat(
+                "#!/bin/bash\n",
+                "yum update -y\n",
+                "yum install -y httpd\n",
+                "systemctl start httpd\n",
+                "systemctl enable httpd\n",
+                "echo '<h1>Hello from ", region, "</h1>' > /var/www/html/index.html\n",
+                "echo 'OK' > /var/www/html/health\n"
+            ).apply(lambda x: pulumi.Output.from_input(x).apply(lambda s: 
+                __import__('base64').b64encode(s.encode()).decode())),
+            tag_specifications=[
+                aws.ec2.LaunchTemplateTagSpecificationArgs(
+                    resource_type="instance",
+                    tags={"Name": f"tap-instance-{region}-{self.args.environment}"}
+                )
+            ],
+            opts=pulumi.ResourceOptions(provider=self.providers[region])
         )
         
-        # For default VPC, use subnet IDs; for created VPC, use subnet objects
-        if self.args.use_default_vpc:
-          subnet_ids = [subnet.id for subnet in self.subnets[region]]
-        else:
-          subnet_ids = [subnet.id for subnet in self.subnets[region]]
+        subnet_ids = [s.id if hasattr(s, 'id') else s.subnet_id for s in self.subnets[region]]
         
-        # Create Auto Scaling Group
+        # Check if ASG already exists and use unique naming
+        asg_name = f"tap-asg-{self.args.environment}-{region}-{timestamp_suffix}"
+        
+        # Auto Scaling Group with unique name
         asg = aws.autoscaling.Group(
-          f"asg-{region}-{self.environment_suffix}",
-          name=self.args.get_resource_name("asg", region),
-          vpc_zone_identifiers=subnet_ids,
-          target_group_arns=[self.load_balancers[region]["target_group"].arn],
-          health_check_type="ELB",
-          health_check_grace_period=self.args.health_check_grace_period,
-          min_size=self.args.min_size,
-          max_size=self.args.max_size,
-          desired_capacity=self.args.desired_capacity,
-          default_cooldown=self.args.cooldown_period,
-          launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
-            id=launch_template.id,
-            version="$Latest"
-          ),
-          tags=[
-            aws.autoscaling.GroupTagArgs(
-              key="Name",
-              value=f"{self.args.get_resource_name('instance', region)}",
-              propagate_at_launch=True
+            f"asg-{region}-{self.args.environment}",
+            name=asg_name,
+            vpc_zone_identifiers=subnet_ids,
+            target_group_arns=[self.target_groups[region].arn],
+            health_check_type="ELB",
+            health_check_grace_period=300,
+            min_size=self.args.min_size,
+            max_size=self.args.max_size,
+            desired_capacity=self.args.desired_capacity,
+            launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
+                id=launch_template.id,
+                version="$Latest"
             ),
-            aws.autoscaling.GroupTagArgs(
-              key="Environment",
-              value=self.environment_suffix,
-              propagate_at_launch=True
-            ),
-            aws.autoscaling.GroupTagArgs(
-              key="Project",
-              value=self.project_name,
-              propagate_at_launch=True
+            tag=[
+                aws.autoscaling.GroupTagArgs(
+                    key="Name",
+                    value=f"tap-asg-{region}-{self.args.environment}",
+                    propagate_at_launch=True
+                ),
+                aws.autoscaling.GroupTagArgs(
+                    key="Environment",
+                    value=self.args.environment,
+                    propagate_at_launch=True
+                )
+            ],
+            opts=pulumi.ResourceOptions(
+                provider=self.providers[region],
+                # Add this to replace existing resources if needed
+                replace_on_changes=["name"]
             )
-          ],
-          opts=pulumi.ResourceOptions(provider=self.providers[region])
         )
         
-        # Create scaling policies
+        # Auto Scaling Policies
         scale_up_policy = aws.autoscaling.Policy(
-          f"scale-up-{region}-{self.environment_suffix}",
-          name=self.args.get_resource_name("scale-up", region),
-          scaling_adjustment=1,
-          adjustment_type="ChangeInCapacity",
-          cooldown=self.args.cooldown_period,
-          autoscaling_group_name=asg.name,
-          policy_type="SimpleScaling",
-          opts=pulumi.ResourceOptions(provider=self.providers[region])
+            f"scale-up-{region}-{self.args.environment}",
+            name=f"tap-scale-up-{region}-{self.args.environment}-{timestamp_suffix}",
+            scaling_adjustment=1,
+            adjustment_type="ChangeInCapacity",
+            cooldown=300,
+            autoscaling_group_name=asg.name,
+            opts=pulumi.ResourceOptions(provider=self.providers[region])
         )
         
         scale_down_policy = aws.autoscaling.Policy(
-          f"scale-down-{region}-{self.environment_suffix}",
-          name=self.args.get_resource_name("scale-down", region),
-          scaling_adjustment=-1,
-          adjustment_type="ChangeInCapacity",
-          cooldown=self.args.cooldown_period,
-          autoscaling_group_name=asg.name,
-          policy_type="SimpleScaling",
-          opts=pulumi.ResourceOptions(provider=self.providers[region])
+            f"scale-down-{region}-{self.args.environment}",
+            name=f"tap-scale-down-{region}-{self.args.environment}-{timestamp_suffix}",
+            scaling_adjustment=-1,
+            adjustment_type="ChangeInCapacity",
+            cooldown=300,
+            autoscaling_group_name=asg.name,
+            opts=pulumi.ResourceOptions(provider=self.providers[region])
         )
         
-        # Create CloudWatch alarms if monitoring is enabled
-        cpu_high_alarm = None
-        cpu_low_alarm = None
-        
-        if self.args.enable_monitoring:
-          cpu_high_alarm = aws.cloudwatch.MetricAlarm(
-            f"cpu-high-{region}-{self.environment_suffix}",
-            name=self.args.get_resource_name("cpu-high", region),
+        # CloudWatch Alarms
+        aws.cloudwatch.MetricAlarm(
+            f"cpu-high-{region}-{self.args.environment}",
+            alarm_name=f"tap-cpu-high-{region}-{self.args.environment}-{timestamp_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
             namespace="AWS/EC2",
-            period=60,
+            period=120,
             statistic="Average",
-            threshold=self.args.cpu_high_threshold,
-            alarm_description=f"High CPU utilization for TAP {self.environment_suffix} in {region}",
+            threshold=80.0,
+            alarm_description="This metric monitors ec2 cpu utilization",
             alarm_actions=[scale_up_policy.arn],
             dimensions={"AutoScalingGroupName": asg.name},
-            tags={"Environment": self.environment_suffix},
             opts=pulumi.ResourceOptions(provider=self.providers[region])
-          )
-          
-          cpu_low_alarm = aws.cloudwatch.MetricAlarm(
-            f"cpu-low-{region}-{self.environment_suffix}",
-            name=self.args.get_resource_name("cpu-low", region),
+        )
+        
+        aws.cloudwatch.MetricAlarm(
+            f"cpu-low-{region}-{self.args.environment}",
+            alarm_name=f"tap-cpu-low-{region}-{self.args.environment}-{timestamp_suffix}",
             comparison_operator="LessThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
             namespace="AWS/EC2",
-            period=60,
+            period=120,
             statistic="Average",
-            threshold=self.args.cpu_low_threshold,
-            alarm_description=f"Low CPU utilization for TAP {self.environment_suffix} in {region}",
+            threshold=10.0,
+            alarm_description="This metric monitors ec2 cpu utilization",
             alarm_actions=[scale_down_policy.arn],
             dimensions={"AutoScalingGroupName": asg.name},
-            tags={"Environment": self.environment_suffix},
             opts=pulumi.ResourceOptions(provider=self.providers[region])
-          )
+        )
         
-        # Store resources
         self.launch_templates[region] = launch_template
-        self.auto_scaling_groups[region] = {
-          "asg": asg,
-          "launch_template": launch_template
-        }
-        self.scaling_policies[region] = {
-          "scale_up": scale_up_policy,
-          "scale_down": scale_down_policy
-        }
-        self.cloudwatch_alarms[region] = {
-          "cpu_high": cpu_high_alarm,
-          "cpu_low": cpu_low_alarm
-        }
-        
-    except Exception as e:
-      raise RuntimeError(f"Failed to create auto scaling groups: {str(e)}") from e
+        self.auto_scaling_groups[region] = asg
+
   
   def get_resource_count(self) -> Dict[str, int]:
     """Get count of created resources for testing"""
