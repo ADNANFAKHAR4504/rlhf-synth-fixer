@@ -1,4 +1,4 @@
-# CloudFormation Infrastructure Creation Prompt
+# CloudFormation Infrastructure Creation Prompt.
 
 ## Environment
 You are tasked with creating a **CloudFormation template** (`TapStack.yml`) to **secure an AWS environment comprehensively**. The environment consists of multiple AWS resources, and **security best practices** must be embedded from the outset.
