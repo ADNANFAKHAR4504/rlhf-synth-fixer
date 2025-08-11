@@ -12,9 +12,11 @@
             "ConstraintDescription": "Must be 2-10 characters, alphanumeric and hyphens only"
         },
         "ExistingVPCId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "Existing VPC ID with CIDR 10.0.0.0/16",
-            "ConstraintDescription": "Must be a valid VPC ID"
+            "Type": "String",
+            "Description": "Existing VPC ID with CIDR 10.0.0.0/16 (defaults to secure-infrastructure-dev-vpc if not provided)",
+            "Default": "vpc-0052878ec128b229f",
+            "AllowedPattern": "^vpc-[a-f0-9]+$",
+            "ConstraintDescription": "Must be a valid VPC ID starting with vpc-"
         },
         "AvailabilityZones": {
             "Type": "CommaDelimitedList",
@@ -711,7 +713,7 @@
         "DeploymentCommand": {
             "Description": "Command to deploy this stack",
             "Value": {
-                "Fn::Sub": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name my-app-secure-infra-${EnvironmentSuffix} --parameter-overrides EnvironmentSuffix=${EnvironmentSuffix} ExistingVPCId=vpc-0052878ec128b229f --capabilities CAPABILITY_NAMED_IAM"
+                "Fn::Sub": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name my-app-secure-infra-${EnvironmentSuffix} --parameter-overrides EnvironmentSuffix=${EnvironmentSuffix} --capabilities CAPABILITY_NAMED_IAM"
             }
         }
     }
