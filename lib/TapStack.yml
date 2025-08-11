@@ -31,10 +31,13 @@ Globals:
     Tags:
       Environment: !Ref Environment
       Application: !Ref ApplicationName
+      EnvironmentSuffix: !Ref EnvironmentSuffix
 
 Resources:
   AppDynamoTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       TableName: !Sub '${ApplicationName}-${EnvironmentSuffix}-data'
       BillingMode: PAY_PER_REQUEST
@@ -53,6 +56,8 @@ Resources:
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   AppLambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -78,24 +83,15 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
+                  - dynamodb:Scan
                 Resource: !GetAtt AppDynamoTable.Arn
-        - PolicyName: S3AccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                Resource:
-                  - 'arn:aws:s3:::my-lambda-bucket/*'
-                  - !Sub 'arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*/*'
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-*/*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   AppLambdaFunction:
     Type: AWS::Serverless::Function
@@ -224,6 +220,12 @@ Resources:
       Handler: app.lambda_handler
       Role: !GetAtt AppLambdaExecutionRole.Arn
       Events:
+        RootPath:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /
+            Method: ANY
         ApiEvent:
           Type: HttpApi
           Properties:
@@ -233,6 +235,7 @@ Resources:
       Tags:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
+        EnvironmentSuffix: !Ref EnvironmentSuffix
 
   AppHttpApi:
     Type: AWS::Serverless::HttpApi
@@ -258,6 +261,7 @@ Resources:
       Tags:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
+        EnvironmentSuffix: !Ref EnvironmentSuffix
 
   ApiGatewayLambdaPermission:
     Type: AWS::Lambda::Permission
