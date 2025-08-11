@@ -2,13 +2,28 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Serverless web application with API Gateway, Lambda, and DynamoDB'
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
+
+  EnableVPC:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Whether to deploy Lambda functions inside a VPC
+
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: VPC ID where Lambda functions will be deployed
+    Default: vpc-00000000
     
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: List of private subnet IDs for Lambda deployment
+    Default: subnet-00000000,subnet-00000001
     
   ApplicationName:
     Type: String
@@ -20,12 +35,17 @@ Parameters:
     Default: WebAppData
     Description: Name of the DynamoDB table
 
+Conditions:
+  UseVPC: !Equals [ !Ref EnableVPC, 'true' ]
+
 Resources:
   # DynamoDB Table with encryption at rest
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      TableName: !Ref DynamoDBTableName
+      TableName: !Sub '${DynamoDBTableName}-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: id
@@ -42,11 +62,14 @@ Resources:
         - Key: Application
           Value: !Ref ApplicationName
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${EnvironmentSuffix}-dynamodb'
 
   # Security Group for Lambda functions
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: UseVPC
     Properties:
       GroupDescription: Security group for Lambda functions
       VpcId: !Ref VpcId
@@ -63,7 +86,7 @@ Resources:
           Description: HTTP outbound
       Tags:
         - Key: Name
-          Value: !Sub '${ApplicationName}-lambda-sg'
+          Value: !Sub '${ApplicationName}-${EnvironmentSuffix}-lambda-sg'
         - Key: Application
           Value: !Ref ApplicationName
 
@@ -71,7 +94,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ApplicationName}-lambda-execution-role'
+      RoleName: !Sub '${ApplicationName}-${EnvironmentSuffix}-lambda-execution-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -104,20 +127,22 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}-*'
+                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}-${EnvironmentSuffix}-*'
 
   # Lambda function for CREATE operations (POST)
   CreateFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ApplicationName}-create'
-      Runtime: python3.8
+      FunctionName: !Sub '${ApplicationName}-${EnvironmentSuffix}-create'
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds: !Ref PrivateSubnetIds
+      VpcConfig: !If 
+        - UseVPC
+        - SecurityGroupIds:
+            - !Ref LambdaSecurityGroup
+          SubnetIds: !Ref PrivateSubnetIds
+        - !Ref AWS::NoValue
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoDBTable
@@ -170,14 +195,16 @@ Resources:
   ReadFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ApplicationName}-read'
-      Runtime: python3.8
+      FunctionName: !Sub '${ApplicationName}-${EnvironmentSuffix}-read'
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds: !Ref PrivateSubnetIds
+      VpcConfig: !If 
+        - UseVPC
+        - SecurityGroupIds:
+            - !Ref LambdaSecurityGroup
+          SubnetIds: !Ref PrivateSubnetIds
+        - !Ref AWS::NoValue
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoDBTable
@@ -246,14 +273,16 @@ Resources:
   UpdateFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ApplicationName}-update'
-      Runtime: python3.8
+      FunctionName: !Sub '${ApplicationName}-${EnvironmentSuffix}-update'
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds: !Ref PrivateSubnetIds
+      VpcConfig: !If 
+        - UseVPC
+        - SecurityGroupIds:
+            - !Ref LambdaSecurityGroup
+          SubnetIds: !Ref PrivateSubnetIds
+        - !Ref AWS::NoValue
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoDBTable
@@ -325,14 +354,16 @@ Resources:
   DeleteFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ApplicationName}-delete'
-      Runtime: python3.8
+      FunctionName: !Sub '${ApplicationName}-${EnvironmentSuffix}-delete'
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds: !Ref PrivateSubnetIds
+      VpcConfig: !If 
+        - UseVPC
+        - SecurityGroupIds:
+            - !Ref LambdaSecurityGroup
+          SubnetIds: !Ref PrivateSubnetIds
+        - !Ref AWS::NoValue
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoDBTable
@@ -398,7 +429,7 @@ Resources:
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub '${ApplicationName}-api'
+      Name: !Sub '${ApplicationName}-${EnvironmentSuffix}-api'
       Description: REST API for serverless web application
       EndpointConfiguration:
         Types:
@@ -536,16 +567,22 @@ Outputs:
     Description: URL of the API Gateway
     Value: !Sub 'https://${ApiGateway}.execute-api.us-east-1.amazonaws.com/prod'
     Export:
-      Name: !Sub '${ApplicationName}-api-url'
+      Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
 
   DynamoDBTableName:
     Description: Name of the DynamoDB table
     Value: !Ref DynamoDBTable
     Export:
-      Name: !Sub '${ApplicationName}-dynamodb-table'
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
 
   DynamoDBTableArn:
     Description: ARN of the DynamoDB table
     Value: !GetAtt DynamoDBTable.Arn
     Export:
-      Name: !Sub '${ApplicationName}-dynamodb-table-arn'
+      Name: !Sub '${AWS::StackName}-DynamoDBTableArn'
+
+  EnvironmentSuffix:
+    Description: Environment suffix used for this deployment
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'

@@ -1,1 +1,448 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless web application with API Gateway, Lambda, and DynamoDB'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
+
+  EnableVPC:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Whether to deploy Lambda functions inside a VPC
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where Lambda functions will be deployed
+    Default: vpc-00000000
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of private subnet IDs for Lambda deployment
+    Default: subnet-00000000,subnet-00000001
+
+  ApplicationName:
+    Type: String
+    Default: serverless-web-app
+    Description: Name of the application (used for resource naming)
+
+  DynamoDBTableName:
+    Type: String
+    Default: WebAppData
+    Description: Name of the DynamoDB table
+
+Conditions:
+  UseVPC: !Equals [!Ref EnableVPC, 'true']
+
+Resources:
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub '${DynamoDBTableName}-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${EnvironmentSuffix}-dynamodb'
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: UseVPC
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS outbound for DynamoDB and AWS services
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP outbound
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${EnvironmentSuffix}-lambda-sg'
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ApplicationName}-${EnvironmentSuffix}-lambda-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource: !GetAtt DynamoDBTable.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}-${EnvironmentSuffix}-*'
+
+  CreateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ApplicationName}-${EnvironmentSuffix}-create'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      VpcConfig: !If
+        - UseVPC
+        - SecurityGroupIds:
+            - !Ref LambdaSecurityGroup
+          SubnetIds: !Ref PrivateSubnetIds
+        - !Ref AWS::NoValue
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoDBTable
+          REGION: us-east-1
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import uuid
+          from datetime import datetime
+
+          dynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
+          table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+
+          def lambda_handler(event, context):
+              try:
+                  body = json.loads(event['body']) if event.get('body') else {}
+                  item = {
+                      'id': str(uuid.uuid4()),
+                      'created_at': datetime.utcnow().isoformat(),
+                      **body
+                  }
+                  table.put_item(Item=item)
+                  return { 'statusCode': 201, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps(item) }
+              except Exception as e:
+                  return { 'statusCode': 500, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': str(e)}) }
+
+  ReadFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ApplicationName}-${EnvironmentSuffix}-read'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      VpcConfig: !If
+        - UseVPC
+        - SecurityGroupIds:
+            - !Ref LambdaSecurityGroup
+          SubnetIds: !Ref PrivateSubnetIds
+        - !Ref AWS::NoValue
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoDBTable
+          REGION: us-east-1
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from boto3.dynamodb.conditions import Key
+
+          dynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
+          table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+
+          def lambda_handler(event, context):
+              try:
+                  item_id = event.get('pathParameters', {}).get('id') if event.get('pathParameters') else None
+                  if item_id:
+                      response = table.get_item(Key={'id': item_id})
+                      if 'Item' in response:
+                          return { 'statusCode': 200, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps(response['Item']) }
+                      else:
+                          return { 'statusCode': 404, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'Item not found'}) }
+                  else:
+                      response = table.scan()
+                      return { 'statusCode': 200, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps(response['Items']) }
+              except Exception as e:
+                  return { 'statusCode': 500, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': str(e)}) }
+
+  UpdateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ApplicationName}-${EnvironmentSuffix}-update'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      VpcConfig: !If
+        - UseVPC
+        - SecurityGroupIds:
+            - !Ref LambdaSecurityGroup
+          SubnetIds: !Ref PrivateSubnetIds
+        - !Ref AWS::NoValue
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoDBTable
+          REGION: us-east-1
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+
+          dynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
+          table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+
+          def lambda_handler(event, context):
+              try:
+                  item_id = event.get('pathParameters', {}).get('id')
+                  if not item_id:
+                      return { 'statusCode': 400, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'ID is required'}) }
+                  body = json.loads(event['body']) if event.get('body') else {}
+                  body['updated_at'] = datetime.utcnow().isoformat()
+                  response = table.get_item(Key={'id': item_id})
+                  if 'Item' not in response:
+                      return { 'statusCode': 404, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'Item not found'}) }
+                  updated_item = {**response['Item'], **body}
+                  table.put_item(Item=updated_item)
+                  return { 'statusCode': 200, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps(updated_item) }
+              except Exception as e:
+                  return { 'statusCode': 500, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': str(e)}) }
+
+  DeleteFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ApplicationName}-${EnvironmentSuffix}-delete'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      VpcConfig: !If
+        - UseVPC
+        - SecurityGroupIds:
+            - !Ref LambdaSecurityGroup
+          SubnetIds: !Ref PrivateSubnetIds
+        - !Ref AWS::NoValue
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoDBTable
+          REGION: us-east-1
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          dynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
+          table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+
+          def lambda_handler(event, context):
+              try:
+                  item_id = event.get('pathParameters', {}).get('id')
+                  if not item_id:
+                      return { 'statusCode': 400, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'ID is required'}) }
+                  response = table.get_item(Key={'id': item_id})
+                  if 'Item' not in response:
+                      return { 'statusCode': 404, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'Item not found'}) }
+                  table.delete_item(Key={'id': item_id})
+                  return { 'statusCode': 204, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+              except Exception as e:
+                  return { 'statusCode': 500, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': str(e)}) }
+
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ApplicationName}-${EnvironmentSuffix}-api'
+      Description: REST API for serverless web application
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ItemsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: items
+
+  ItemResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref ItemsResource
+      PathPart: '{id}'
+
+  PostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ItemsResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${CreateFunction.Arn}/invocations'
+
+  GetItemsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ItemsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${ReadFunction.Arn}/invocations'
+
+  GetItemMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ItemResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${ReadFunction.Arn}/invocations'
+
+  PutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ItemResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${UpdateFunction.Arn}/invocations'
+
+  DeleteMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ItemResource
+      HttpMethod: DELETE
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${DeleteFunction.Arn}/invocations'
+
+  CreateFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*'
+
+  ReadFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ReadFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*'
+
+  UpdateFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*'
+
+  DeleteFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DeleteFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - PostMethod
+      - GetItemsMethod
+      - GetItemMethod
+      - PutMethod
+      - DeleteMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: prod
+
+Outputs:
+  ApiGatewayUrl:
+    Description: URL of the API Gateway
+    Value: !Sub 'https://${ApiGateway}.execute-api.us-east-1.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
+
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref DynamoDBTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+
+  DynamoDBTableArn:
+    Description: ARN of the DynamoDB table
+    Value: !GetAtt DynamoDBTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableArn'
+
+  EnvironmentSuffix:
+    Description: Environment suffix used for this deployment
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+```
+
 Insert here the ideal response
