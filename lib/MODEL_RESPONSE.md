@@ -1,1059 +1,882 @@
-I'll create a comprehensive multi-environment AWS infrastructure using Terraform with proper modularization and state separation. Here's the complete solution:
+I'll create a comprehensive CDKTF TypeScript solution for multi-environment AWS infrastructure. Let me break this down into the required components while ensuring strict adherence to all constraints.
 
-## Directory Structure
+## Project Structure
 
 ```
-terraform-multi-env/
-├── environments/
-│   ├── development/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   ├── outputs.tf
-│   │   ├── provider.tf
-│   │   └── terraform.tfvars
-│   ├── staging/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   ├── outputs.tf
-│   │   ├── provider.tf
-│   │   └── terraform.tfvars
-│   └── production/
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       ├── provider.tf
-│       └── terraform.tfvars
-└── modules/
-    ├── vpc/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    ├── ec2/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    ├── s3/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    ├── iam/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    └── cloudwatch/
-        ├── main.tf
-        ├── variables.tf
-        └── outputs.tf
+cdktf-aws-multi-env/
+├── src/
+│   ├── main.ts
+│   ├── stacks/
+│   │   └── aws-infrastructure-stack.ts
+│   ├── modules/
+│   │   ├── vpc/
+│   │   │   └── index.ts
+│   │   ├── ec2/
+│   │   │   └── index.ts
+│   │   ├── s3/
+│   │   │   └── index.ts
+│   │   ├── iam/
+│   │   │   └── index.ts
+│   │   └── cloudwatch/
+│   │       └── index.ts
+│   └── config/
+│       ├── development.ts
+│       ├── staging.ts
+│       └── production.ts
+├── cdktf.json
+├── package.json
+└── README.md
 ```
 
-## Modules
+## 1. Main Entry Point
 
-### VPC Module (`modules/vpc/`)
+**src/main.ts**
+```typescript
+import { App } from 'cdktf';
+import { AwsInfrastructureStack } from './stacks/aws-infrastructure-stack';
+import { developmentConfig } from './config/development';
+import { stagingConfig } from './config/staging';
+import { productionConfig } from './config/production';
 
-**`modules/vpc/variables.tf`**
-```hcl
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
+const app = new App();
 
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-}
+// Development Environment
+new AwsInfrastructureStack(app, 'aws-infrastructure-development', {
+  ...developmentConfig,
+  environment: 'development',
+});
 
-variable "availability_zones" {
-  description = "List of availability zones"
-  type        = list(string)
-}
+// Staging Environment
+new AwsInfrastructureStack(app, 'aws-infrastructure-staging', {
+  ...stagingConfig,
+  environment: 'staging',
+});
 
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-}
+// Production Environment
+new AwsInfrastructureStack(app, 'aws-infrastructure-production', {
+  ...productionConfig,
+  environment: 'production',
+});
 
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-}
-
-variable "database_subnet_cidrs" {
-  description = "CIDR blocks for database subnets"
-  type        = list(string)
-}
-
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
-  default     = {}
-}
+app.synth();
 ```
 
-**`modules/vpc/main.tf`**
-```hcl
-# VPC
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+## 2. Configuration Files
 
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-vpc"
-    Type = "VPC"
-  })
-}
-
-# Internet Gateway
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-igw"
-  })
-}
-
-# Public Subnets
-resource "aws_subnet" "public" {
-  count             = length(var.public_subnet_cidrs)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.public_subnet_cidrs[count.index]
-  availability_zone = var.availability_zones[count.index]
-
-  map_public_ip_on_launch = true
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-public-subnet-${count.index + 1}"
-    Type = "Public"
-  })
-}
-
-# Private Subnets
-resource "aws_subnet" "private" {
-  count             = length(var.private_subnet_cidrs)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = var.availability_zones[count.index]
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-private-subnet-${count.index + 1}"
-    Type = "Private"
-  })
-}
-
-# Database Subnets
-resource "aws_subnet" "database" {
-  count             = length(var.database_subnet_cidrs)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.database_subnet_cidrs[count.index]
-  availability_zone = var.availability_zones[count.index]
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-database-subnet-${count.index + 1}"
-    Type = "Database"
-  })
-}
-
-# Elastic IP for NAT Gateway
-resource "aws_eip" "nat" {
-  count  = length(var.private_subnet_cidrs)
-  domain = "vpc"
-
-  depends_on = [aws_internet_gateway.main]
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-nat-eip-${count.index + 1}"
-  })
-}
-
-# NAT Gateway
-resource "aws_nat_gateway" "main" {
-  count         = length(var.private_subnet_cidrs)
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-nat-gateway-${count.index + 1}"
-  })
-
-  depends_on = [aws_internet_gateway.main]
-}
-
-# Route Tables
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+**src/config/development.ts**
+```typescript
+export const developmentConfig = {
+  region: 'us-west-2',
+  vpcCidr: '10.0.0.0/16',
+  publicSubnetCidr: '10.0.1.0/24',
+  privateSubnetCidr: '10.0.2.0/24',
+  databaseSubnetCidr: '10.0.3.0/24',
+  availabilityZone: 'us-west-2a',
+  instanceType: 't3.micro',
+  enableS3Versioning: true,
+  s3LifecycleEnabled: true,
+  s3LifecycleDays: 30,
+  cloudwatchRetentionDays: 7,
+  tags: {
+    Environment: 'development',
+    Owner: 'DevOps Team',
+    Service: 'Infrastructure',
+    CostCenter: 'Engineering',
+    Project: 'Multi-Env-Infrastructure'
   }
+};
+```
 
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-public-rt"
-  })
-}
-
-resource "aws_route_table" "private" {
-  count  = length(var.private_subnet_cidrs)
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+**src/config/staging.ts**
+```typescript
+export const stagingConfig = {
+  region: 'us-west-2',
+  vpcCidr: '10.1.0.0/16',
+  publicSubnetCidr: '10.1.1.0/24',
+  privateSubnetCidr: '10.1.2.0/24',
+  databaseSubnetCidr: '10.1.3.0/24',
+  availabilityZone: 'us-west-2a',
+  instanceType: 't3.small',
+  enableS3Versioning: true,
+  s3LifecycleEnabled: true,
+  s3LifecycleDays: 60,
+  cloudwatchRetentionDays: 14,
+  tags: {
+    Environment: 'staging',
+    Owner: 'DevOps Team',
+    Service: 'Infrastructure',
+    CostCenter: 'Engineering',
+    Project: 'Multi-Env-Infrastructure'
   }
+};
+```
 
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-private-rt-${count.index + 1}"
-  })
+**src/config/production.ts**
+```typescript
+export const productionConfig = {
+  region: 'us-west-2',
+  vpcCidr: '10.2.0.0/16',
+  publicSubnetCidr: '10.2.1.0/24',
+  privateSubnetCidr: '10.2.2.0/24',
+  databaseSubnetCidr: '10.2.3.0/24',
+  availabilityZone: 'us-west-2a',
+  instanceType: 't3.medium',
+  enableS3Versioning: true,
+  s3LifecycleEnabled: false,
+  s3LifecycleDays: 0,
+  cloudwatchRetentionDays: 365,
+  tags: {
+    Environment: 'production',
+    Owner: 'DevOps Team',
+    Service: 'Infrastructure',
+    CostCenter: 'Engineering',
+    Project: 'Multi-Env-Infrastructure'
+  }
+};
+```
+
+## 3. Main Infrastructure Stack
+
+**src/stacks/aws-infrastructure-stack.ts**
+```typescript
+import { Construct } from 'constructs';
+import { TerraformStack, S3Backend } from 'cdktf';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { VpcModule } from '../modules/vpc';
+import { Ec2Module } from '../modules/ec2';
+import { S3Module } from '../modules/s3';
+import { IamModule } from '../modules/iam';
+import { CloudWatchModule } from '../modules/cloudwatch';
+
+interface StackConfig {
+  environment: string;
+  region: string;
+  vpcCidr: string;
+  publicSubnetCidr: string;
+  privateSubnetCidr: string;
+  databaseSubnetCidr: string;
+  availabilityZone: string;
+  instanceType: string;
+  enableS3Versioning: boolean;
+  s3LifecycleEnabled: boolean;
+  s3LifecycleDays: number;
+  cloudwatchRetentionDays: number;
+  tags: Record<string, string>;
 }
 
-resource "aws_route_table" "database" {
-  vpc_id = aws_vpc.main.id
+export class AwsInfrastructureStack extends TerraformStack {
+  constructor(scope: Construct, id: string, config: StackConfig) {
+    super(scope, id);
 
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-database-rt"
-  })
-}
+    // Configure S3 Backend for state separation
+    new S3Backend(this, {
+      bucket: `terraform-state-${config.environment}-${config.region}`,
+      key: `infrastructure/${config.environment}/terraform.tfstate`,
+      region: config.region,
+      dynamodbTable: `terraform-locks-${config.environment}`,
+      encrypt: true,
+    });
 
-# Route Table Associations
-resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
+    // AWS Provider
+    new AwsProvider(this, 'aws', {
+      region: config.region,
+      defaultTags: [{
+        tags: config.tags,
+      }],
+    });
 
-resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
-}
+    // VPC Module
+    const vpc = new VpcModule(this, 'vpc', {
+      environment: config.environment,
+      vpcCidr: config.vpcCidr,
+      publicSubnetCidr: config.publicSubnetCidr,
+      privateSubnetCidr: config.privateSubnetCidr,
+      databaseSubnetCidr: config.databaseSubnetCidr,
+      availabilityZone: config.availabilityZone,
+      tags: config.tags,
+    });
 
-resource "aws_route_table_association" "database" {
-  count          = length(aws_subnet.database)
-  subnet_id      = aws_subnet.database[count.index].id
-  route_table_id = aws_route_table.database.id
-}
+    // IAM Module
+    const iam = new IamModule(this, 'iam', {
+      environment: config.environment,
+      tags: config.tags,
+    });
 
-# VPC Flow Logs
-resource "aws_flow_log" "vpc" {
-  iam_role_arn    = aws_iam_role.flow_log.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
-}
+    // EC2 Module
+    const ec2 = new Ec2Module(this, 'ec2', {
+      environment: config.environment,
+      instanceType: config.instanceType,
+      vpcId: vpc.vpcId,
+      publicSubnetId: vpc.publicSubnetId,
+      privateSubnetId: vpc.privateSubnetId,
+      instanceProfileName: iam.instanceProfileName,
+      tags: config.tags,
+    });
 
-# CloudWatch Log Group for VPC Flow Logs
-resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs/${var.environment}"
-  retention_in_days = var.environment == "production" ? 365 : 30
+    // S3 Module
+    const s3 = new S3Module(this, 's3', {
+      environment: config.environment,
+      enableVersioning: config.enableS3Versioning,
+      lifecycleEnabled: config.s3LifecycleEnabled,
+      lifecycleDays: config.s3LifecycleDays,
+      tags: config.tags,
+    });
 
-  tags = var.common_tags
-}
-
-# IAM Role for VPC Flow Logs
-resource "aws_iam_role" "flow_log" {
-  name = "${var.environment}-vpc-flow-log-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "vpc-flow-logs.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = var.common_tags
-}
-
-resource "aws_iam_role_policy" "flow_log" {
-  name = "${var.environment}-vpc-flow-log-policy"
-  role = aws_iam_role.flow_log.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
-        ]
-        Effect   = "Allow"
-        Resource = "*"
-      }
-    ]
-  })
+    // CloudWatch Module
+    new CloudWatchModule(this, 'cloudwatch', {
+      environment: config.environment,
+      vpcId: vpc.vpcId,
+      instanceId: ec2.instanceId,
+      s3BucketName: s3.bucketName,
+      retentionDays: config.cloudwatchRetentionDays,
+      tags: config.tags,
+    });
+  }
 }
 ```
 
-**`modules/vpc/outputs.tf`**
-```hcl
-output "vpc_id" {
-  description = "ID of the VPC"
-  value       = aws_vpc.main.id
+## 4. VPC Module
+
+**src/modules/vpc/index.ts**
+```typescript
+import { Construct } from 'constructs';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+
+interface VpcModuleConfig {
+  environment: string;
+  vpcCidr: string;
+  publicSubnetCidr: string;
+  privateSubnetCidr: string;
+  databaseSubnetCidr: string;
+  availabilityZone: string;
+  tags: Record<string, string>;
 }
 
-output "vpc_cidr_block" {
-  description = "CIDR block of the VPC"
-  value       = aws_vpc.main.cidr_block
-}
+export class VpcModule extends Construct {
+  public readonly vpcId: string;
+  public readonly publicSubnetId: string;
+  public readonly privateSubnetId: string;
+  public readonly databaseSubnetId: string;
 
-output "public_subnet_ids" {
-  description = "IDs of the public subnets"
-  value       = aws_subnet.public[*].id
-}
+  constructor(scope: Construct, id: string, config: VpcModuleConfig) {
+    super(scope, id);
 
-output "private_subnet_ids" {
-  description = "IDs of the private subnets"
-  value       = aws_subnet.private[*].id
-}
-
-output "database_subnet_ids" {
-  description = "IDs of the database subnets"
-  value       = aws_subnet.database[*].id
-}
-
-output "internet_gateway_id" {
-  description = "ID of the Internet Gateway"
-  value       = aws_internet_gateway.main.id
-}
-
-output "nat_gateway_ids" {
-  description = "IDs of the NAT Gateways"
-  value       = aws_nat_gateway.main[*].id
-}
-```
-
-### IAM Module (`modules/iam/`)
-
-**`modules/iam/variables.tf`**
-```hcl
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
-  default     = {}
-}
-```
-
-**`modules/iam/main.tf`**
-```hcl
-# EC2 Instance Role
-resource "aws_iam_role" "ec2_role" {
-  name = "${var.environment}-ec2-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = var.common_tags
-}
-
-# EC2 Instance Profile
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.environment}-ec2-profile"
-  role = aws_iam_role.ec2_role.name
-
-  tags = var.common_tags
-}
-
-# EC2 Policy - Least Privilege
-resource "aws_iam_role_policy" "ec2_policy" {
-  name = "${var.environment}-ec2-policy"
-  role = aws_iam_role.ec2_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudwatch:PutMetricData",
-          "ec2:DescribeVolumes",
-          "ec2:DescribeTags",
-          "logs:PutLogEvents",
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:DescribeLogStreams",
-          "logs:DescribeLogGroups"
-        ]
-        Resource = "*"
+    // VPC
+    const vpc = new Vpc(this, 'vpc', {
+      cidrBlock: config.vpcCidr,
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: {
+        ...config.tags,
+        Name: `vpc-${config.environment}`,
       },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject"
-        ]
-        Resource = "arn:aws:s3:::${var.environment}-*/*"
-      }
-    ]
-  })
-}
+    });
 
-# S3 Service Role
-resource "aws_iam_role" "s3_service_role" {
-  name = "${var.environment}-s3-service-role"
+    // Internet Gateway
+    const igw = new InternetGateway(this, 'igw', {
+      vpcId: vpc.id,
+      tags: {
+        ...config.tags,
+        Name: `igw-${config.environment}`,
+      },
+    });
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "s3.amazonaws.com"
-        }
-      }
-    ]
-  })
+    // Public Subnet
+    const publicSubnet = new Subnet(this, 'public-subnet', {
+      vpcId: vpc.id,
+      cidrBlock: config.publicSubnetCidr,
+      availabilityZone: config.availabilityZone,
+      mapPublicIpOnLaunch: true,
+      tags: {
+        ...config.tags,
+        Name: `public-subnet-${config.environment}`,
+        Type: 'public',
+      },
+    });
 
-  tags = var.common_tags
-}
+    // Private Subnet
+    const privateSubnet = new Subnet(this, 'private-subnet', {
+      vpcId: vpc.id,
+      cidrBlock: config.privateSubnetCidr,
+      availabilityZone: config.availabilityZone,
+      tags: {
+        ...config.tags,
+        Name: `private-subnet-${config.environment}`,
+        Type: 'private',
+      },
+    });
 
-# CloudWatch Logs Role
-resource "aws_iam_role" "cloudwatch_role" {
-  name = "${var.environment}-cloudwatch-role"
+    // Database Subnet
+    const databaseSubnet = new Subnet(this, 'database-subnet', {
+      vpcId: vpc.id,
+      cidrBlock: config.databaseSubnetCidr,
+      availabilityZone: config.availabilityZone,
+      tags: {
+        ...config.tags,
+        Name: `database-subnet-${config.environment}`,
+        Type: 'database',
+      },
+    });
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "logs.amazonaws.com"
-        }
-      }
-    ]
-  })
+    // Elastic IP for NAT Gateway
+    const natEip = new Eip(this, 'nat-eip', {
+      domain: 'vpc',
+      tags: {
+        ...config.tags,
+        Name: `nat-eip-${config.environment}`,
+      },
+    });
 
-  tags = var.common_tags
+    // NAT Gateway
+    const natGateway = new NatGateway(this, 'nat-gateway', {
+      allocationId: natEip.id,
+      subnetId: publicSubnet.id,
+      tags: {
+        ...config.tags,
+        Name: `nat-gateway-${config.environment}`,
+      },
+    });
+
+    // Public Route Table
+    const publicRouteTable = new RouteTable(this, 'public-route-table', {
+      vpcId: vpc.id,
+      tags: {
+        ...config.tags,
+        Name: `public-rt-${config.environment}`,
+      },
+    });
+
+    // Private Route Table
+    const privateRouteTable = new RouteTable(this, 'private-route-table', {
+      vpcId: vpc.id,
+      tags: {
+        ...config.tags,
+        Name: `private-rt-${config.environment}`,
+      },
+    });
+
+    // Routes
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: igw.id,
+    });
+
+    new Route(this, 'private-route', {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: natGateway.id,
+    });
+
+    // Route Table Associations
+    new RouteTableAssociation(this, 'public-rta', {
+      subnetId: publicSubnet.id,
+      routeTableId: publicRouteTable.id,
+    });
+
+    new RouteTableAssociation(this, 'private-rta', {
+      subnetId: privateSubnet.id,
+      routeTableId: privateRouteTable.id,
+    });
+
+    // Database subnet uses private route table
+    new RouteTableAssociation(this, 'database-rta', {
+      subnetId: databaseSubnet.id,
+      routeTableId: privateRouteTable.id,
+    });
+
+    // Export values
+    this.vpcId = vpc.id;
+    this.publicSubnetId = publicSubnet.id;
+    this.privateSubnetId = privateSubnet.id;
+    this.databaseSubnetId = databaseSubnet.id;
+  }
 }
 ```
 
-**`modules/iam/outputs.tf`**
-```hcl
-output "ec2_role_arn" {
-  description = "ARN of the EC2 IAM role"
-  value       = aws_iam_role.ec2_role.arn
+## 5. IAM Module
+
+**src/modules/iam/index.ts**
+```typescript
+import { Construct } from 'constructs';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+
+interface IamModuleConfig {
+  environment: string;
+  tags: Record<string, string>;
 }
 
-output "ec2_instance_profile_name" {
-  description = "Name of the EC2 instance profile"
-  value       = aws_iam_instance_profile.ec2_profile.name
-}
+export class IamModule extends Construct {
+  public readonly instanceProfileName: string;
 
-output "s3_service_role_arn" {
-  description = "ARN of the S3 service role"
-  value       = aws_iam_role.s3_service_role.arn
-}
+  constructor(scope: Construct, id: string, config: IamModuleConfig) {
+    super(scope, id);
 
-output "cloudwatch_role_arn" {
-  description = "ARN of the CloudWatch role"
-  value       = aws_iam_role.cloudwatch_role.arn
+    // EC2 Instance Role
+    const ec2Role = new IamRole(this, 'ec2-role', {
+      name: `ec2-role-${config.environment}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: {
+        ...config.tags,
+        Name: `ec2-role-${config.environment}`,
+      },
+    });
+
+    // Custom policy for least privilege access
+    const ec2Policy = new IamPolicy(this, 'ec2-policy', {
+      name: `ec2-policy-${config.environment}`,
+      description: `Least privilege policy for EC2 instances in ${config.environment}`,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'cloudwatch:PutMetricData',
+              'cloudwatch:GetMetricStatistics',
+              'cloudwatch:ListMetrics',
+              'logs:PutLogEvents',
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:DescribeLogStreams',
+              'logs:DescribeLogGroups',
+            ],
+            Resource: '*',
+          },
+          {
+            Effect: 'Allow',
+            Action: [
+              's3:GetObject',
+              's3:PutObject',
+            ],
+            Resource: `arn:aws:s3:::app-bucket-${config.environment}/*`,
+          },
+        ],
+      }),
+      tags: config.tags,
+    });
+
+    // Attach custom policy to role
+    new IamRolePolicyAttachment(this, 'ec2-policy-attachment', {
+      role: ec2Role.name,
+      policyArn: ec2Policy.arn,
+    });
+
+    // Instance Profile
+    const instanceProfile = new IamInstanceProfile(this, 'ec2-instance-profile', {
+      name: `ec2-instance-profile-${config.environment}`,
+      role: ec2Role.name,
+      tags: config.tags,
+    });
+
+    this.instanceProfileName = instanceProfile.name;
+  }
 }
 ```
 
-### EC2 Module (`modules/ec2/`)
+## 6. EC2 Module
 
-**`modules/ec2/variables.tf`**
-```hcl
-variable "environment" {
-  description = "Environment name"
-  type        = string
+**src/modules/ec2/index.ts**
+```typescript
+import { Construct } from 'constructs';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+
+interface Ec2ModuleConfig {
+  environment: string;
+  instanceType: string;
+  vpcId: string;
+  publicSubnetId: string;
+  privateSubnetId: string;
+  instanceProfileName: string;
+  tags: Record<string, string>;
 }
 
-variable "vpc_id" {
-  description = "VPC ID"
-  type        = string
-}
+export class Ec2Module extends Construct {
+  public readonly instanceId: string;
 
-variable "subnet_id" {
-  description = "Subnet ID for EC2 instance"
-  type        = string
-}
+  constructor(scope: Construct, id: string, config: Ec2ModuleConfig) {
+    super(scope, id);
 
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.micro"
-}
+    // Get latest Amazon Linux 2 AMI
+    const ami = new DataAwsAmi(this, 'amazon-linux', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+        },
+      ],
+    });
 
-variable "key_name" {
-  description = "EC2 Key Pair name"
-  type        = string
-  default     = ""
-}
+    // Security Group for Web Server
+    const webSecurityGroup = new SecurityGroup(this, 'web-sg', {
+      name: `web-sg-${config.environment}`,
+      description: `Security group for web servers in ${config.environment}`,
+      vpcId: config.vpcId,
+      
+      ingress: [
+        {
+          description: 'HTTP',
+          fromPort: 80,
+          toPort: 80,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'], // Justified for web server
+        },
+        {
+          description: 'HTTPS',
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'], // Justified for web server
+        },
+        {
+          description: 'SSH',
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: ['10.0.0.0/8'], // Only from private networks
+        },
+      ],
+      
+      egress: [
+        {
+          description: 'All outbound traffic',
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      
+      tags: {
+        ...config.tags,
+        Name: `web-sg-${config.environment}`,
+      },
+    });
 
-variable "iam_instance_profile" {
-  description = "IAM instance profile name"
-  type        = string
-}
-
-variable "allowed_cidr_blocks" {
-  description = "CIDR blocks allowed to access the instance"
-  type        = list(string)
-  default     = []
-}
-
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
-  default     = {}
-}
-```
-
-**`modules/ec2/main.tf`**
-```hcl
-# Get latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
-
-# Security Group for EC2
-resource "aws_security_group" "ec2" {
-  name_prefix = "${var.environment}-ec2-"
-  vpc_id      = var.vpc_id
-
-  # SSH access from allowed CIDR blocks only
-  dynamic "ingress" {
-    for_each = var.allowed_cidr_blocks
-    content {
-      from_port   = 22
-      to_port     = 22
-      protocol    = "tcp"
-      cidr_blocks = [ingress.value]
-    }
-  }
-
-  # HTTP access from VPC only
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"]
-  }
-
-  # HTTPS access from VPC only
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"]
-  }
-
-  # Outbound internet access
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-ec2-sg"
-  })
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# User data script
-locals {
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    environment = var.environment
-  }))
-}
-
-# EC2 Instance
-resource "aws_instance" "main" {
-  ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = var.instance_type
-  key_name               = var.key_name != "" ? var.key_name : null
-  vpc_security_group_ids = [aws_security_group.ec2.id]
-  subnet_id              = var.subnet_id
-  iam_instance_profile   = var.iam_instance_profile
-
-  user_data = local.user_data
-
-  root_block_device {
-    volume_type           = "gp3"
-    volume_size           = var.environment == "production" ? 20 : 10
-    delete_on_termination = true
-    encrypted             = true
-  }
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-web-server"
-    Type = "WebServer"
-  })
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# CloudWatch Log Group for EC2
-resource "aws_cloudwatch_log_group" "ec2" {
-  name              = "/aws/ec2/${var.environment}"
-  retention_in_days = var.environment == "production" ? 365 : 30
-
-  tags = var.common_tags
-}
-```
-
-**`modules/ec2/user_data.sh`**
-```bash
-#!/bin/bash
+    // User Data Script
+    const userData = `#!/bin/bash
 yum update -y
-yum install -y amazon-cloudwatch-agent httpd
-
-# Configure CloudWatch agent
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
-{
-    "logs": {
-        "logs_collected": {
-            "files": {
-                "collect_list": [
-                    {
-                        "file_path": "/var/log/httpd/access_log",
-                        "log_group_name": "/aws/ec2/${environment}",
-                        "log_stream_name": "{instance_id}/httpd/access_log"
-                    },
-                    {
-                        "file_path": "/var/log/httpd/error_log",
-                        "log_group_name": "/aws/ec2/${environment}",
-                        "log_stream_name": "{instance_id}/httpd/error_log"
-                    }
-                ]
-            }
-        }
-    }
-}
-EOF
-
-# Start CloudWatch agent
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-
-# Configure Apache
+yum install -y amazon-cloudwatch-agent
+yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 
-# Create a simple index page
-cat > /var/www/html/index.html << EOF
-<!DOCTYPE html>
-<html>
-<head>
-    <title>${environment} Environment</title>
-</head>
-<body>
-    <h1>Welcome to ${environment} Environment</h1>
-    <p>This server is running in the ${environment} environment.</p>
-</body>
-</html>
+# Configure CloudWatch Agent
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+{
+  "metrics": {
+    "namespace": "AWS/EC2/Custom",
+    "metrics_collected": {
+      "cpu": {
+        "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+        "metrics_collection_interval": 300
+      },
+      "disk": {
+        "measurement": ["used_percent"],
+        "metrics_collection_interval": 300,
+        "resources": ["*"]
+      },
+      "mem": {
+        "measurement": ["mem_used_percent"],
+        "metrics_collection_interval": 300
+      }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/httpd/access_log",
+            "log_group_name": "/aws/ec2/${config.environment}/httpd/access",
+            "log_stream_name": "{instance_id}"
+          },
+          {
+            "file_path": "/var/log/httpd/error_log",
+            "log_group_name": "/aws/ec2/${config.environment}/httpd/error",
+            "log_stream_name": "{instance_id}"
+          }
+        ]
+      }
+    }
+  }
+}
 EOF
 
-systemctl restart httpd
-```
+# Start CloudWatch Agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
-**`modules/ec2/outputs.tf`**
-```hcl
-output "instance_id" {
-  description = "ID of the EC2 instance"
-  value       = aws_instance.main.id
-}
+# Create a simple index page
+echo "<h1>Environment: ${config.environment}</h1>" > /var/www/html/index.html
+echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+`;
 
-output "instance_private_ip" {
-  description = "Private IP address of the EC2 instance"
-  value       = aws_instance.main.private_ip
-}
+    // EC2 Instance
+    const instance = new Instance(this, 'web-instance', {
+      ami: ami.id,
+      instanceType: config.instanceType,
+      subnetId: config.publicSubnetId, // Public subnet for web server
+      vpcSecurityGroupIds: [webSecurityGroup.id],
+      iamInstanceProfile: config.instanceProfileName,
+      userData: Buffer.from(userData).toString('base64'),
+      
+      tags: {
+        ...config.tags,
+        Name: `web-instance-${config.environment}`,
+      },
+    });
 
-output "instance_public_ip" {
-  description = "Public IP address of the EC2 instance"
-  value       = aws_instance.main.public_ip
-}
-
-output "security_group_id" {
-  description = "ID of the security group"
-  value       = aws_security_group.ec2.id
-}
-```
-
-### S3 Module (`modules/s3/`)
-
-**`modules/s3/variables.tf`**
-```hcl
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-variable "bucket_name" {
-  description = "Name of the S3 bucket"
-  type        = string
-}
-
-variable "enable_versioning" {
-  description = "Enable versioning on the S3 bucket"
-  type        = bool
-  default     = true
-}
-
-variable "lifecycle_rules" {
-  description = "Lifecycle rules for the S3 bucket"
-  type = list(object({
-    id     = string
-    status = string
-    expiration = object({
-      days = number
-    })
-    noncurrent_version_expiration = object({
-      noncurrent_days = number
-    })
-  }))
-  default = []
-}
-
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
-  default     = {}
-}
-```
-
-**`modules/s3/main.tf`**
-```hcl
-# S3 Bucket
-resource "aws_s3_bucket" "main" {
-  bucket = var.bucket_name
-
-  tags = merge(var.common_tags, {
-    Name = var.bucket_name
-    Type = "Storage"
-  })
-}
-
-# S3 Bucket Versioning
-resource "aws_s3_bucket_versioning" "main" {
-  bucket = aws_s3_bucket.main.id
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Disabled"
+    this.instanceId = instance.id;
   }
 }
+```
 
-# S3 Bucket Server Side Encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
-  bucket = aws_s3_bucket.main.id
+## 7. S3 Module
 
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+**src/modules/s3/index.ts**
+```typescript
+import { Construct } from 'constructs';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketVersioning } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketServerSideEncryptionConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketLogging } from '@cdktf/provider-aws/lib/s3-bucket-logging';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+
+interface S3ModuleConfig {
+  environment: string;
+  enableVersioning: boolean;
+  lifecycleEnabled: boolean;
+  lifecycleDays: number;
+  tags: Record<string, string>;
+}
+
+export class S3Module extends Construct {
+  public readonly bucketName: string;
+
+  constructor(scope: Construct, id: string, config: S3ModuleConfig) {
+    super(scope, id);
+
+    // Main Application Bucket
+    const appBucket = new S3Bucket(this, 'app-bucket', {
+      bucket: `app-bucket-${config.environment}-${Math.random().toString(36).substring(2, 15)}`,
+      tags: {
+        ...config.tags,
+        Name: `app-bucket-${config.environment}`,
+      },
+    });
+
+    // Access Logs Bucket
+    const logsBucket = new S3Bucket(this, 'logs-bucket', {
+      bucket: `app-logs-bucket-${config.environment}-${Math.random().toString(36).substring(2, 15)}`,
+      tags: {
+        ...config.tags,
+        Name: `app-logs-bucket-${config.environment}`,
+      },
+    });
+
+    // Block public access
+    new S3BucketPublicAccessBlock(this, 'app-bucket-pab', {
+      bucket: appBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    new S3BucketPublicAccessBlock(this, 'logs-bucket-pab', {
+      bucket: logsBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    // Enable versioning
+    if (config.enableVersioning) {
+      new S3BucketVersioning(this, 'app-bucket-versioning', {
+        bucket: appBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      });
     }
-    bucket_key_enabled = true
-  }
-}
 
-# S3 Bucket Public Access Block
-resource "aws_s3_bucket_public_access_block" "main" {
-  bucket = aws_s3_bucket.main.id
+    // Server-side encryption
+    new S3BucketServerSideEncryptionConfiguration(this, 'app-bucket-encryption', {
+      bucket: appBucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+          bucketKeyEnabled: true,
+        },
+      ],
+    });
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
+    new S3BucketServerSideEncryptionConfiguration(this, 'logs-bucket-encryption', {
+      bucket: logsBucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+          bucketKeyEnabled: true,
+        },
+      ],
+    });
 
-# S3 Bucket Lifecycle Configuration
-resource "aws_s3_bucket_lifecycle_configuration" "main" {
-  count  = length(var.lifecycle_rules) > 0 ? 1 : 0
-  bucket = aws_s3_bucket.main.id
-
-  dynamic "rule" {
-    for_each = var.lifecycle_rules
-    content {
-      id     = rule.value.id
-      status = rule.value.status
-
-      expiration {
-        days = rule.value.expiration.days
-      }
-
-      noncurrent_version_expiration {
-        noncurrent_days = rule.value.noncurrent_version_expiration.noncurrent_days
-      }
+    // Lifecycle configuration
+    if (config.lifecycleEnabled && config.lifecycleDays > 0) {
+      new S3BucketLifecycleConfiguration(this, 'app-bucket-lifecycle', {
+        bucket: appBucket.id,
+        rule: [
+          {
+            id: 'delete-old-objects',
+            status: 'Enabled',
+            expiration: {
+              days: config.lifecycleDays,
+            },
+            noncurrentVersionExpiration: {
+              noncurrentDays: config.lifecycleDays,
+            },
+          },
+        ],
+      });
     }
-  }
 
-  depends_on = [aws_s3_bucket_versioning.main]
-}
+    // Access logging
+    new S3BucketLogging(this, 'app-bucket-logging', {
+      bucket: appBucket.id,
+      targetBucket: logsBucket.id,
+      targetPrefix: 'access-logs/',
+    });
 
-# S3 Bucket Logging
-resource "aws_s3_bucket_logging" "main" {
-  bucket = aws_s3_bucket.main.id
-
-  target_bucket = aws_s3_bucket.access_logs.id
-  target_prefix = "access-logs/"
-}
-
-# S3 Bucket for Access Logs
-resource "aws_s3_bucket" "access_logs" {
-  bucket = "${var.bucket_name}-access-logs"
-
-  tags = merge(var.common_tags, {
-    Name = "${var.bucket_name}-access-logs"
-    Type = "AccessLogs"
-  })
-}
-
-# Access Logs Bucket Public Access Block
-resource "aws_s3_bucket_public_access_block" "access_logs" {
-  bucket = aws_s3_bucket.access_logs.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# Access Logs Bucket Server Side Encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
-  bucket = aws_s3_bucket.access_logs.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-    bucket_key_enabled = true
+    this.bucketName = appBucket.id;
   }
 }
 ```
 
-**`modules/s3/outputs.tf`**
-```hcl
-output "bucket_id" {
-  description = "Name of the S3 bucket"
-  value       = aws_s3_bucket.main.id
+## 8. CloudWatch Module
+
+**src/modules/cloudwatch/index.ts**
+```typescript
+import { Construct } from 'constructs';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+
+interface CloudWatchModuleConfig {
+  environment: string;
+  vpcId: string;
+  instanceId: string;
+  s3BucketName: string;
+  retentionDays: number;
+  tags: Record<string, string>;
 }
 
-output "bucket_arn" {
-  description = "ARN of the S3 bucket"
-  value       = aws_s3_bucket.main.arn
-}
+export class CloudWatchModule extends Construct {
+  constructor(scope: Construct, id: string, config: CloudWatchModuleConfig) {
+    super(scope, id);
 
-output "bucket_domain_name" {
-  description = "Domain name of the S3 bucket"
-  value       = aws_s3_bucket.main.bucket_domain_name
-}
+    // CloudWatch Log Groups
+    const vpcLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
+      name: `/aws/vpc/${config.environment}/flowlogs`,
+      retentionInDays: config.retentionDays,
+      tags: {
+        ...config.tags,
+        Name: `vpc-flow-logs-${config.environment}`,
+      },
+    });
 
-output "access_logs_bucket_id" {
-  description = "Name of the access logs S3 bucket"
-  value       = aws_s3_bucket.access_logs.id
-}
-```
+    new CloudwatchLogGroup(this, 'ec2-httpd-access-logs', {
+      name: `/aws/ec2/${config.environment}/httpd/access`,
+      retentionInDays: config.retentionDays,
+      tags: {
+        ...config.tags,
+        Name: `ec2-httpd-access-logs-${config.environment}`,
+      },
+    });
 
-### CloudWatch Module (`modules/cloudwatch/`)
+    new CloudwatchLogGroup(this, 'ec2-httpd-error-logs', {
+      name: `/aws/ec2/${config.environment}/httpd/error`,
+      retentionInDays: config.retentionDays,
+      tags: {
+        ...config.tags,
+        Name: `ec2-httpd-error-logs-${config.environment}`,
+      },
+    });
 
-**`modules/cloudwatch/variables.tf`**
-```hcl
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
+    // IAM Role for VPC Flow Logs
+    const flowLogRole = new IamRole(this, 'flow-log-role', {
+      name: `flow-log-role-${config.environment}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: {
+        ...config.tags,
+        Name: `flow-log-role-${config.environment}`,
+      },
+    });
 
-variable "instance_id" {
-  description = "EC2 instance ID to monitor"
-  type        = string
-}
+    // Attach policy to flow log role
+    new IamRolePolicyAttachment(this, 'flow-log-policy-attachment', {
+      role: flowLogRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+    });
 
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
-  default     = {}
-}
-```
-
-**`modules/cloudwatch/main.tf`**
-```hcl
-# CloudWatch Dashboard
-resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${var.environment}-infrastructure-dashboard"
-
-  dashboard_body = jsonencode({
-    widgets = [
-      {
-        type   = "metric"
-        x      = 0
-        y      = 0
-        width  = 12
-        height = 6
-
-        properties = {
-          metrics = [
-            ["AWS/EC2", "CPUUtilization", "InstanceId", var.instance_id],
-            [".", "NetworkIn", ".", "."],
-            [".", "NetworkOut", ".", "."]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = "us-west-2"
-          title   = "EC2 Instance Metrics"
-          period  = 300
-        }
-      }
-    ]
-  })
-}
-
-# CloudWatch Alarms
-resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "${var.environment}-high-cpu-utilization"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = var.environment == "production" ? "80" : "90"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-
-  dimensions = {
-    InstanceId = var.instance_id
-  }
-
-  tags = var.common_tags
-}
-
-resource "aws_cloudwatch_metric_alarm" "instance_health" {
-  alarm_name          = "${var.environment}-instance-health-check"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "StatusCheckFailed"
-  namespace           = "AWS/EC2"
-  period              = "300"
-  statistic           = "Maximum"
-  threshold           = "0"
-  alarm_description   = "This metric monitors ec2 health check"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-
-  dimensions = {
-    InstanceId = var.instance_id
-  }
-
-  tags = var.common_tags
-}
-
-# SNS Topic for Alerts
-resource "aws_sns_topic" "alerts" {
-  name = "${var.environment}-infrastructure-alerts"
-
-  tags = var.common_tags
-}
-
-# CloudWatch Log Groups
-resource "aws_cloudwatch_log_group" "application" {
-  name              = "/aws/application/${var.environment}"
-  retention_in_days = var.environment == "production" ? 365 : 30
-
-  tags = var.common_tags
-}
-```
-
-**`modules/cloudwatch/outputs.tf`**
-```hcl
-output "dashboard_url" {
-  description = "URL of the CloudWatch dashboard"
-  value       = "https://console.aws.amazon.com/cloudwatch/home?region=${data.aws_region.current.name}#dashboards:name=${aws_cloudwatch_dashboard.main.dashboard_name}"
-}
-
-output "sns_topic_arn" {
-  description = "ARN of the SNS topic for alerts"
-  value       = aws_sns_topic.alerts.arn
-}
-
-data "aws_region" "current" {}
-```
-
-## Environment Configurations
-
-### Development Environment (`environments/development/`)
-
-**`environments/development/provider.tf`**
-```hcl
-terraform {
-  required_version = ">= 1.0"
-  
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-
-  backend "s3" {
-    bucket         = "terraform-state-dev-12345"  # Replace with your bucket
-    key            = "development/terraform.tfstate"
-    region         = "us-west-2"
-    dynamodb_table = "terraform-state-lock"
-    encrypt        = true
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      Environment = var.environment
-      Owner       = var.owner
-      Service     = var.service
-      CostCenter  = var.cost_center
-      ManagedBy   = "Terraform"
-    }
+    // VPC Flow Logs
+    new FlowLog(this, 'vpc-flow-log', {
+      iamRoleArn: flowLogRole.arn,
+      logDestination: vpcLogGroup.arn,
+      resourceId: config.vpcId,
+      resourceType: 'VPC',
+      trafficType: 'ALL',
+      tags: {
+        ...config.tags,
+        Name: `vpc-flow-log-${config.environment}`,
+      },
+    });
   }
 }
 ```
 
-**`environments/development/variables.tf`**
-```hcl
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-west-2"
-}
+## 9. Package Configuration
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "development"
-}
-
-variable "owner" {
-  description = "Owner of the resources
+**package
