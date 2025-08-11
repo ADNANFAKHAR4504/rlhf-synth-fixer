@@ -405,7 +405,7 @@ class TapStack:
               opts=pulumi.ResourceOptions(provider=self.providers[primary_region])
           )
           
-          # FIXED: Replication policy with correct indexing (only use arns[0] and arns[2])
+          # FIXED: Correct replication policy with proper indexing
           replication_policy_doc = pulumi.Output.all(
               primary_bucket.arn,
               replica_bucket.arn
@@ -423,7 +423,7 @@ class TapStack:
                   {
                       "Effect": "Allow",
                       "Action": ["s3:ListBucket"],
-                      "Resource": arns  # Primary bucket
+                      "Resource": arns[0]  # Primary bucket (fixed from 'arns' to 'arns[0]')
                   },
                   {
                       "Effect": "Allow",
@@ -431,7 +431,7 @@ class TapStack:
                           "s3:ReplicateObject",
                           "s3:ReplicateDelete"
                       ],
-                      "Resource": f"{arns[2]}/*"  # Replica bucket objects
+                      "Resource": f"{arns[1]}/*"  # Replica bucket objects (fixed from arns[2] to arns[1])
                   }
               ]
           }))
@@ -468,7 +468,6 @@ class TapStack:
           
       except Exception as e:
           raise RuntimeError(f"Failed to setup S3 replication: {str(e)}")
-
 
     
     def _create_iam_roles(self):
