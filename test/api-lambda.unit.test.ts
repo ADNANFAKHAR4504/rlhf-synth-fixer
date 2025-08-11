@@ -12,8 +12,10 @@ describe('ApiLambda', () => {
 
   beforeEach(() => {
     stack = new cdk.Stack();
-    // Mock role with minimal required properties
-    role = { roleArn: 'arn:aws:iam::123456789012:role/test-role' } as iam.Role;
+    // Use a real IAM Role for CDK compatibility
+    role = new iam.Role(stack, 'TestRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    });
   });
 
   test('creates lambda function with correct properties', () => {
@@ -24,19 +26,35 @@ describe('ApiLambda', () => {
     const apiLambda = new ApiLambda(stack, 'TestApiLambda', props);
     expect(apiLambda.func).toBeDefined();
     expect(apiLambda.func.role).toBe(role);
-    expect(apiLambda.func.environment.BUCKET_NAME.value).toBe('my-bucket');
+    // Check environment variable via CloudFormation resource using CDK assertions
+    const template = require('aws-cdk-lib/assertions').Template.fromStack(
+      stack
+    );
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          BUCKET_NAME: 'my-bucket',
+        },
+      },
+    });
     expect(apiLambda.func.runtime).toBe(lambda.Runtime.NODEJS_20_X);
     expect(apiLambda.func.timeout?.toSeconds()).toBe(10);
     expect(apiLambda.func.functionName).toBeDefined();
   });
 
   test('throws if missing required props', () => {
-    // @ts-expect-error
+    // Should throw if role is missing
     expect(
-      () => new ApiLambda(stack, 'MissingRole', { bucketName: 'b' })
+      () =>
+        // @ts-expect-error
+        new ApiLambda(stack, 'MissingRole', { bucketName: 'b' })
     ).toThrow();
-    // @ts-expect-error
-    expect(() => new ApiLambda(stack, 'MissingBucket', { role })).toThrow();
+    // Should throw if bucketName is missing
+    expect(
+      () =>
+        // @ts-expect-error
+        new ApiLambda(stack, 'MissingBucket', { role })
+    ).toThrow();
   });
 
   test('creates lambda with empty bucketName', () => {

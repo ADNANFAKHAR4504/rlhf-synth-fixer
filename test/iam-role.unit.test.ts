@@ -97,13 +97,17 @@ describe('ApiLambdaRole', () => {
   });
 
   test('throws if missing required props', () => {
-    // @ts-expect-error
+    // Should throw if bucketArnForObjects is missing
     expect(
-      () => new ApiLambdaRole(stack, 'MissingBucketArn', { kmsKeyArn })
+      () =>
+        // @ts-expect-error
+        new ApiLambdaRole(stack, 'MissingBucketArn', { kmsKeyArn })
     ).toThrow();
-    // @ts-expect-error
+    // Should throw if kmsKeyArn is missing
     expect(
-      () => new ApiLambdaRole(stack, 'MissingKmsArn', { bucketArnForObjects })
+      () =>
+        // @ts-expect-error
+        new ApiLambdaRole(stack, 'MissingKmsArn', { bucketArnForObjects })
     ).toThrow();
   });
 });
