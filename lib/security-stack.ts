@@ -104,7 +104,7 @@ export class SecurityStack extends cdk.NestedStack {
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
     });
-    
+
     // Ensure the Log Group depends on the KMS key validator being completed
     logGroup.node.addDependency(kmsKeyValidator);
 
