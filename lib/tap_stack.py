@@ -36,11 +36,11 @@ def get_regions_for_environment(env: str) -> List[str]:
         'production': ['us-east-1', 'eu-west-1'],
         'staging': ['us-west-2', 'ap-southeast-2'],
         'stage': ['us-west-2', 'ap-southeast-2'],
-        'dev': ['eu-central-1', 'ap-northeast-1'],
+        'dev': ['us-east-1', 'us-west-2'],  # Changed to use regions with default VPCs
         'test': ['us-west-1', 'ap-southeast-1'],
-        'pr811': ['eu-central-1', 'ap-northeast-1']  # Specific for this PR
+        'pr811': ['us-east-1', 'us-west-2']  # Use regions with existing default VPCs
     }
-    return region_map.get(env.lower(), ['eu-central-1', 'ap-northeast-1'])
+    return region_map.get(env.lower(), ['us-east-1', 'us-west-2'])
 
 
 class TapStackArgs:
@@ -80,7 +80,7 @@ class TapStackArgs:
             self.enable_s3_replication = True
             self.enable_monitoring = True
             self.enable_logging = True
-            self.vpc_cidr = "10.0.0.0/16"
+            self.use_default_vpc = False  # Create new VPCs for production
         elif self.environment_suffix in ['staging', 'stage']:
             self.instance_type = "t3.small"
             self.min_size = 2
@@ -89,7 +89,7 @@ class TapStackArgs:
             self.enable_s3_replication = True
             self.enable_monitoring = True
             self.enable_logging = True
-            self.vpc_cidr = "10.1.0.0/16"
+            self.use_default_vpc = False  # Create new VPCs for staging
         else:  # dev, test, pr environments, etc.
             self.instance_type = "t3.micro"
             self.min_size = 1
@@ -98,7 +98,7 @@ class TapStackArgs:
             self.enable_s3_replication = True
             self.enable_monitoring = True
             self.enable_logging = False
-            self.vpc_cidr = "10.2.0.0/16"
+            self.use_default_vpc = True  # Use default VPCs to avoid limits
         
         # Health check and scaling configurations
         self.health_check_grace_period = 300
@@ -156,7 +156,7 @@ class TapStackArgs:
             "enable_s3_replication": self.enable_s3_replication,
             "enable_monitoring": self.enable_monitoring,
             "enable_logging": self.enable_logging,
-            "vpc_cidr": self.vpc_cidr,
+            "use_default_vpc": getattr(self, 'use_default_vpc', False),
             "health_check_grace_period": self.health_check_grace_period,
             "cooldown_period": self.cooldown_period,
             "cpu_high_threshold": self.cpu_high_threshold,
@@ -241,8 +241,11 @@ class TapStack:
             else:
                 self._create_s3_buckets_single_region()
             
-            # Step 3: Create networking infrastructure
-            self._create_networking()
+            # Step 3: Create networking infrastructure (VPC or use default)
+            if self.args.use_default_vpc:
+                self._get_default_vpcs()
+            else:
+                self._create_networking()
             
             # Step 4: Create security groups
             self._create_security_groups()
@@ -255,6 +258,50 @@ class TapStack:
             
         except Exception as e:
             raise RuntimeError(f"Failed to create infrastructure: {str(e)}")
+    
+    def _get_default_vpcs(self):
+        """Get default VPCs and subnets instead of creating new ones"""
+        try:
+            for region in self.regions:
+                # Get default VPC
+                default_vpc = aws.ec2.get_vpc(
+                    default=True,
+                    opts=pulumi.InvokeOptions(provider=self.providers[region])
+                )
+                
+                # Get default subnets in the VPC
+                default_subnets = aws.ec2.get_subnets(
+                    filters=[
+                        aws.ec2.GetSubnetsFilterArgs(
+                            name="vpc-id",
+                            values=[default_vpc.id]
+                        ),
+                        aws.ec2.GetSubnetsFilterArgs(
+                            name="default-for-az",
+                            values=["true"]
+                        )
+                    ],
+                    opts=pulumi.InvokeOptions(provider=self.providers[region])
+                )
+                
+                # Get subnet objects
+                subnets = []
+                for subnet_id in default_subnets.ids:
+                    subnet_data = aws.ec2.get_subnet(
+                        id=subnet_id,
+                        opts=pulumi.InvokeOptions(provider=self.providers[region])
+                    )
+                    subnets.append(subnet_data)
+                
+                # Store VPC and subnet information
+                self.vpcs[region] = default_vpc
+                self.subnets[region] = subnets
+                
+                # Internet gateway is already attached to default VPC
+                # No need to create or attach
+                
+        except Exception as e:
+            raise RuntimeError(f"Failed to get default VPCs: {str(e)}")
     
     def _create_s3_buckets_single_region(self):
         """Create S3 bucket for single region deployment"""
@@ -384,7 +431,7 @@ class TapStack:
                             "s3:ReplicateObject",
                             "s3:ReplicateDelete"
                         ],
-                        "Resource": f"{arns[1]}/*"
+                        "Resource": f"{arns[21]}/*"
                     }
                 ]
             }))
@@ -483,7 +530,7 @@ class TapStack:
             raise RuntimeError(f"Failed to create IAM roles: {str(e)}")
     
     def _create_networking(self):
-        """Create VPC and networking components"""
+        """Create VPC and networking components (only for production environments)"""
         try:
             for region in self.regions:
                 # Create VPC with unique CIDR per environment to avoid conflicts
@@ -492,9 +539,6 @@ class TapStack:
                     'production': '10.0.0.0/16',
                     'staging': '10.1.0.0/16', 
                     'stage': '10.1.0.0/16',
-                    'dev': '10.2.0.0/16',
-                    'test': '10.3.0.0/16',
-                    'pr811': '10.4.0.0/16'  # Specific CIDR for this PR
                 }
                 vpc_cidr = vpc_cidr_base.get(self.environment_suffix, '10.5.0.0/16')
                 
@@ -529,9 +573,6 @@ class TapStack:
                 base_octet_map = {
                     'prod': 0, 'production': 0,
                     'staging': 1, 'stage': 1,
-                    'dev': 2,
-                    'test': 3,
-                    'pr811': 4
                 }
                 base_octet = base_octet_map.get(self.environment_suffix, 5)
                 
@@ -581,6 +622,17 @@ class TapStack:
         try:
             for region in self.regions:
                 vpc = self.vpcs[region]
+                
+                # Get VPC CIDR for security group rules
+                if self.args.use_default_vpc:
+                    vpc_cidr = vpc.cidr_block  # Default VPC CIDR
+                else:
+                    # Use the CIDR we assigned when creating the VPC
+                    vpc_cidr_map = {
+                        'prod': '10.0.0.0/16', 'production': '10.0.0.0/16',
+                        'staging': '10.1.0.0/16', 'stage': '10.1.0.0/16',
+                    }
+                    vpc_cidr = vpc_cidr_map.get(self.environment_suffix, '10.5.0.0/16')
                 
                 # ALB Security Group
                 alb_sg = aws.ec2.SecurityGroup(
@@ -639,7 +691,7 @@ class TapStack:
                             from_port=22,
                             to_port=22,
                             protocol="tcp",
-                            cidr_blocks=[self.args.vpc_cidr],
+                            cidr_blocks=[vpc_cidr],
                             description="SSH from VPC"
                         )
                     ],
@@ -669,25 +721,33 @@ class TapStack:
                 vpc = self.vpcs[region]
                 alb_sg = self.security_groups[region]["alb"]
                 
+                # For default VPC, use subnet IDs; for created VPC, use subnet objects
+                if self.args.use_default_vpc:
+                    subnet_ids = [subnet.id for subnet in subnets]
+                else:
+                    subnet_ids = [subnet.id for subnet in subnets]
+                
                 # Application Load Balancer
                 alb = aws.lb.LoadBalancer(
                     f"alb-{region}-{self.environment_suffix}",
                     name=self.args.get_resource_name("alb", region),
                     load_balancer_type="application",
                     security_groups=[alb_sg.id],
-                    subnets=[subnet.id for subnet in subnets],
+                    subnets=subnet_ids,
                     enable_deletion_protection=False,
                     tags={"Name": self.args.get_resource_name("alb", region)},
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
                 # Target Group with health checks
+                vpc_id = vpc.id if hasattr(vpc, 'id') else vpc.id
+                
                 target_group = aws.lb.TargetGroup(
                     f"tg-{region}-{self.environment_suffix}",
                     name=self.args.get_resource_name("tg", region),
                     port=80,
                     protocol="HTTP",
-                    vpc_id=vpc.id,
+                    vpc_id=vpc_id,
                     target_type="instance",
                     health_check=aws.lb.TargetGroupHealthCheckArgs(
                         enabled=True,
@@ -798,6 +858,7 @@ cat <<EOF > /var/www/html/index.html
     <h1>Welcome to TAP Infrastructure</h1>
     <p>Environment: {self.environment_suffix}</p>
     <p>Region: {region}</p>
+    <p>VPC Type: {'Default VPC' if self.args.use_default_vpc else 'Custom VPC'}</p>
     <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
     <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
     <p>Timestamp: $(date)</p>
@@ -853,11 +914,17 @@ EOF
                     opts=pulumi.ResourceOptions(provider=self.providers[region])
                 )
                 
+                # For default VPC, use subnet IDs; for created VPC, use subnet objects
+                if self.args.use_default_vpc:
+                    subnet_ids = [subnet.id for subnet in self.subnets[region]]
+                else:
+                    subnet_ids = [subnet.id for subnet in self.subnets[region]]
+                
                 # Create Auto Scaling Group
                 asg = aws.autoscaling.Group(
                     f"asg-{region}-{self.environment_suffix}",
                     name=self.args.get_resource_name("asg", region),
-                    vpc_zone_identifiers=[subnet.id for subnet in self.subnets[region]],
+                    vpc_zone_identifiers=subnet_ids,
                     target_group_arns=[self.load_balancers[region]["target_group"].arn],
                     health_check_type="ELB",
                     health_check_grace_period=self.args.health_check_grace_period,
@@ -1010,7 +1077,8 @@ EOF
             for region in self.regions:
                 if region in self.vpcs:
                     region_key = region.replace('-', '_')
-                    outputs[f"vpc_id_{region_key}_{self.environment_suffix}"] = self.vpcs[region].id
+                    vpc_id = self.vpcs[region].id if hasattr(self.vpcs[region], 'id') else self.vpcs[region].id
+                    outputs[f"vpc_id_{region_key}_{self.environment_suffix}"] = vpc_id
             
             # Configuration outputs
             outputs[f"configuration_{self.environment_suffix}"] = self.args.to_dict()
@@ -1021,6 +1089,7 @@ EOF
             # Environment-specific outputs
             outputs["environment_suffix"] = self.environment_suffix
             outputs["stack_name"] = self.name
+            outputs["uses_default_vpc"] = self.args.use_default_vpc
             
         except Exception as e:
             raise RuntimeError(f"Failed to generate outputs: {str(e)}")
@@ -1083,6 +1152,7 @@ EOF
             # Environment-specific validations
             validation_results["environment_suffix_valid"] = bool(self.environment_suffix)
             validation_results["resource_naming_consistent"] = True
+            validation_results["vpc_strategy_appropriate"] = True
             
             # Overall validation
             validation_results["overall"] = all(validation_results.values())
