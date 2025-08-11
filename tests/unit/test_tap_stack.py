@@ -138,8 +138,8 @@ def create_mock_resource(name_prefix="mock"):
   return MockResource(name_prefix)
 
 
-class TestTapStack(unittest.TestCase):
-  """Comprehensive test cases for TapStack Pulumi component and Lambda function functionality."""
+class TestTapStackInfrastructure(unittest.TestCase):
+  """Test cases for TapStack infrastructure and configuration."""
 
   def setUp(self):
     """Set up test fixtures before each test method."""
@@ -148,47 +148,6 @@ class TestTapStack(unittest.TestCase):
       tags={'Environment': 'test', 'Project': 'serverless-test'}
     )
     self.mock_resources = {}
-    
-    # Mock Lambda context for Lambda tests
-    self.mock_context = type('MockContext', (), {})()
-    self.mock_context.function_name = "test-api-handler"
-    self.mock_context.function_version = "1"
-    self.mock_context.aws_request_id = "test-request-id-123"
-    self.mock_context.memory_limit_in_mb = 128
-
-    # Set environment variables for testing
-    os.environ['ENVIRONMENT'] = 'test'
-    os.environ['LOG_LEVEL'] = 'INFO'
-
-  def create_api_gateway_event(self, method='GET', path='/',
-                               query_params=None, headers=None):
-    """
-    Create a mock API Gateway event for Lambda testing
-
-    Args:
-      method (str): HTTP method
-      path (str): Request path
-      query_params (dict): Query parameters
-      headers (dict): Request headers
-
-    Returns:
-      dict: Mock API Gateway event
-    """
-    return {
-      "httpMethod": method,
-      "path": path,
-      "queryStringParameters": query_params,
-      "headers": headers or {
-        "User-Agent": "test-client/1.0",
-        "Content-Type": "application/json"
-      },
-      "body": None,
-      "isBase64Encoded": False,
-      "requestContext": {
-        "requestId": "test-request-123",
-        "stage": "test"
-      }
-    }
 
   def create_all_patches(self):
     """Create all necessary patches for TapStack testing."""
@@ -544,6 +503,53 @@ class TestTapStack(unittest.TestCase):
       self.assertTrue(len(export) > 0)
 
     self.assertEqual(len(expected_exports), 5)
+
+
+class TestTapStackLambda(unittest.TestCase):
+  """Test cases for Lambda function functionality."""
+
+  def setUp(self):
+    """Set up test fixtures before each test method."""
+    # Mock Lambda context for Lambda tests
+    self.mock_context = type('MockContext', (), {})()
+    self.mock_context.function_name = "test-api-handler"
+    self.mock_context.function_version = "1"
+    self.mock_context.aws_request_id = "test-request-id-123"
+    self.mock_context.memory_limit_in_mb = 128
+
+    # Set environment variables for testing
+    os.environ['ENVIRONMENT'] = 'test'
+    os.environ['LOG_LEVEL'] = 'INFO'
+
+  def create_api_gateway_event(self, method='GET', path='/',
+                               query_params=None, headers=None):
+    """
+    Create a mock API Gateway event for Lambda testing
+
+    Args:
+      method (str): HTTP method
+      path (str): Request path
+      query_params (dict): Query parameters
+      headers (dict): Request headers
+
+    Returns:
+      dict: Mock API Gateway event
+    """
+    return {
+      "httpMethod": method,
+      "path": path,
+      "queryStringParameters": query_params,
+      "headers": headers or {
+        "User-Agent": "test-client/1.0",
+        "Content-Type": "application/json"
+      },
+      "body": None,
+      "isBase64Encoded": False,
+      "requestContext": {
+        "requestId": "test-request-123",
+        "stage": "test"
+      }
+    }
     
   # ===== Lambda Function Tests =====
 
@@ -730,6 +736,23 @@ class TestTapStack(unittest.TestCase):
     self.assertEqual(body['request_info']['method'], 'GET')
     self.assertEqual(body['request_info']['path'], '/api/users')
     self.assertIn('limit', body['request_info']['query_parameters'])
+
+
+class TestTapStackLambdaErrorHandling(unittest.TestCase):
+  """Test cases for Lambda function error handling and edge cases."""
+
+  def setUp(self):
+    """Set up test fixtures before each test method."""
+    # Mock Lambda context
+    self.mock_context = type('MockContext', (), {})()
+    self.mock_context.function_name = "test-api-handler"
+    self.mock_context.function_version = "1"
+    self.mock_context.aws_request_id = "test-request-id-123"
+    self.mock_context.memory_limit_in_mb = 128
+
+    # Set environment variables for testing
+    os.environ['ENVIRONMENT'] = 'test'
+    os.environ['LOG_LEVEL'] = 'INFO'
     
   # ===== Lambda Error Handling Tests =====
 
@@ -823,6 +846,23 @@ class TestTapStack(unittest.TestCase):
     self.assertEqual(response['statusCode'], 200)
     body = json.loads(response['body'])
     self.assertEqual(len(body['request_info']['query_parameters']), 50)
+
+
+class TestTapStackLambdaUtilities(unittest.TestCase):
+  """Test cases for Lambda utility functions and performance."""
+
+  def setUp(self):
+    """Set up test fixtures before each test method."""
+    # Mock Lambda context
+    self.mock_context = type('MockContext', (), {})()
+    self.mock_context.function_name = "test-api-handler"
+    self.mock_context.function_version = "1"
+    self.mock_context.aws_request_id = "test-request-id-123"
+    self.mock_context.memory_limit_in_mb = 128
+
+    # Set environment variables for testing
+    os.environ['ENVIRONMENT'] = 'test'
+    os.environ['LOG_LEVEL'] = 'INFO'
     
   # ===== Lambda Utility Function Tests =====
 
