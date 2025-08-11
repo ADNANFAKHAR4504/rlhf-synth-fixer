@@ -37,7 +37,7 @@ describe("Terraform S3 config (static checks)", () => {
       )
     );
 
-    // bucket_name
+    // bucket name
     expect(hcl).toMatch(
       new RegExp(
         String.raw`variable\s+"bucket_name"\s*{[\s\S]*?type\s*=\s*string[\s\S]*?default\s*=\s*"turing-dev-s3-bucket-001"[\s\S]*?}`,
