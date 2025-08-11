@@ -28,7 +28,7 @@ export class TapStack extends cdk.Stack {
       {
         vpcName: `VPC-${environment}-${uniqueId}-${environmentSuffix}`,
         maxAzs: 2,
-        cidr: '10.0.0.0/16',
+        ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
         natGateways: 1,
         subnetConfiguration: [
           {
