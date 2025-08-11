@@ -102,3 +102,13 @@ bin/tfplan
 
 
 build
+PRODUCTION_READY_CHANGES.md
+lib/constructs/*.js
+
+.gitignore
+test/*/*.test.js
+
+test/setup.js
+TEST_COVERAGE_SUMMARY.md
+PRODUCTION_CHANGES_SUMMARY.md
+ENHANCEMENTS.md
