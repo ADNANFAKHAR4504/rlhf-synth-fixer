@@ -51,3 +51,5 @@ generates infrastructure described in the task description.
      - e.g. If you need to create a lambda code, create it inside the lib/folder.
 
 **Note**: Code generation only - no build/test/lint in this phase
+
+- Important: Never remove the templates folder.
