@@ -89,3 +89,4 @@ class TapStack(cdk.Stack):
         region_name="eu-central-1",
         environment_suffix=environment_suffix
     )
+

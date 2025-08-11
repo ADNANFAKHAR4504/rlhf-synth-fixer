@@ -307,3 +307,11 @@ def handler(event, context):
         value=database.instance_endpoint.hostname,
         description="RDS Database endpoint"
     )
+
+    # Store outputs as properties for parent stack access
+    self.vpc_id = vpc.vpc_id
+    self.s3_bucket_sse_s3_name = s3_bucket_sse_s3.bucket_name
+    self.s3_bucket_sse_kms_name = s3_bucket_sse_kms.bucket_name
+    self.lambda_function_arn = lambda_function.function_arn
+    self.sns_topic_arn = sns_topic.topic_arn
+    self.database_endpoint = database.instance_endpoint.hostname
