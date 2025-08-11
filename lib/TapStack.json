@@ -61,7 +61,7 @@
     },
     "SSHAllowedCidr": {
       "Type": "String",
-      "Default": "0.0.0.0/0",
+      "Default": "10.0.0.0/16",
       "Description": "CIDR block allowed for SSH access (only used if KeyPairName is provided)"
     },
     "EnableNatGateway": {
