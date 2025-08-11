@@ -155,7 +155,7 @@ class TapStack(pulumi.ComponentResource):
       f"rotate-policy-{env}",
       user=user.name,
       name="AccessKeyRotationPolicy",
-      policy=self.rotation_policy()
+      policy=TapStack.rotation_policy(created_on)
     )
 
     access_key = aws.iam.AccessKey(
@@ -238,36 +238,39 @@ class TapStack(pulumi.ComponentResource):
     })
 
 
-  @staticmethod
-  def rotation_policy() -> str:
-    return json.dumps({
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Sid": "AllowAccessKeyManagement",
-          "Effect": "Allow",
-          "Action": [
-            "iam:CreateAccessKey",
-            "iam:DeleteAccessKey",
-            "iam:UpdateAccessKey",
-            "iam:ListAccessKeys"
-          ],
-          "Resource": "*"
-        },
-        {
-          "Sid": "DenyIfRotationExpired",
-          "Effect": "Deny",
-          "Action": "*",
-          "Resource": "*",
-          "Condition": {
-            "DateGreaterThan": {
-              "aws:CurrentTime": "2025-08-06T00:00:00Z"
-            }
-          }
-        }
-      ]
-    }, indent=2)
 
+  @staticmethod
+  def rotation_policy(user_creation_time: datetime) -> str:
+      expiry_date = (user_creation_time + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+      policy = {
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Sid": "AllowAccessKeyManagement",
+                  "Effect": "Allow",
+                  "Action": [
+                      "iam:CreateAccessKey",
+                      "iam:DeleteAccessKey",
+                      "iam:UpdateAccessKey",
+                      "iam:ListAccessKeys"
+                  ],
+                  "Resource": "*"
+              },
+              {
+                  "Sid": "DenyAllActionsAfterExpiry",
+                  "Effect": "Deny",
+                  "Action": "*",
+                  "Resource": "*",
+                  "Condition": {
+                      "DateGreaterThan": {
+                          "aws:CurrentTime": expiry_date
+                      }
+                  }
+              }
+          ]
+      }
+      return json.dumps(policy, indent=2)
 
 
   @staticmethod

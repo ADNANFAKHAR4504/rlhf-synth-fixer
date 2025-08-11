@@ -2,6 +2,7 @@
 
 import os
 import unittest
+import requests
 import boto3
 import base64
 from pulumi import automation as auto
@@ -69,6 +70,61 @@ class TestTapStackDeployedResources(unittest.TestCase):
     key = self.kms.describe_key(KeyId=self.kms_key_id)["KeyMetadata"]
     self.assertTrue(key["Enabled"])
     self.assertIn("secure-web-key", self.kms_alias)
+
+
+  def test_kms_ciphertext_resource_exists(self):
+    # The ciphertext is not directly exposed by KMS, but you can check stack outputs
+    encrypted_secret = self.stack.outputs().get("encrypted_app_secret")
+    if not encrypted_secret:
+      self.skipTest("encrypted_app_secret not found in stack outputs")
+
+    ciphertext = encrypted_secret.value
+    self.assertIsInstance(ciphertext, str)
+    self.assertTrue(len(ciphertext) > 0, "Ciphertext should be non-empty string")
+
+    # Optionally check base64-encoded pattern (KMS ciphertext is base64-encoded blob)
+    try:
+      base64.b64decode(ciphertext)
+    except Exception as e:
+      self.fail(f"Ciphertext is not valid base64: {e}")
+
+  def test_iam_policy_contains_deny_after_expiry(self):
+    if not self.user_arn:
+      self.skipTest("iam_user_arn not found in stack outputs")
+
+    username = self.user_arn.split("/")[-1]
+
+    # List inline policies attached to user
+    policies = self.iam.list_user_policies(UserName=username)["PolicyNames"]
+    self.assertIn("AccessKeyRotationPolicy", policies)
+
+    # Get policy document (returns URL-encoded JSON string)
+    policy_document_response = self.iam.get_user_policy(
+      UserName=username,
+      PolicyName="AccessKeyRotationPolicy"
+    )
+    policy_document = policy_document_response["PolicyDocument"]
+
+    # policy_document is already a dict, check statements
+    statements = {stmt["Sid"]: stmt for stmt in policy_document.get("Statement", [])}
+
+    self.assertIn("DenyAllActionsAfterExpiry", statements)
+
+    deny_stmt = statements["DenyAllActionsAfterExpiry"]
+    self.assertEqual(deny_stmt["Effect"], "Deny")
+    self.assertEqual(deny_stmt["Action"], "*")
+    self.assertIn("Condition", deny_stmt)
+    condition = deny_stmt["Condition"]
+    self.assertIn("DateGreaterThan", condition)
+    self.assertIn("aws:CurrentTime", condition["DateGreaterThan"])
+
+    expiry_date = condition["DateGreaterThan"]["aws:CurrentTime"]
+    # Simple ISO8601 check
+    import re
+    iso8601_regex = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"
+    self.assertRegex(expiry_date, iso8601_regex)
+
+
 
 if __name__ == "__main__":
   unittest.main()

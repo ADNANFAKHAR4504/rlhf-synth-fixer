@@ -5,6 +5,9 @@ import os
 import pulumi
 from pulumi import Output
 from pulumi.runtime import mocks
+import datetime
+import json
+import re
 
 from lib.tap_stack import TapStack, TapStackArgs
 
@@ -99,6 +102,53 @@ class TapStackUnitTest(unittest.TestCase):
     self.assertEqual(args.environment_suffix, "dev")
     self.assertEqual(args.tags, {})
     self.assertIsInstance(args.tags, dict)
+
+
+  def test_iam_rotation_policy_structure(self):
+    args = TapStackArgs(environment_suffix="test")
+    stack = TapStack("test-stack", args)
+
+    # The policy is passed as JSON string in aws.iam.UserPolicy resource, so fetch it
+    # To do this, find the UserPolicy resource in stack (via Pulumi outputs or attributes)
+    # Since you generate policy via rotation_policy(), call it here with known creation time
+
+    created_on = datetime.datetime.utcnow()
+    policy_json_str = TapStack.rotation_policy(created_on)
+
+    policy = json.loads(policy_json_str)
+    statements = {stmt["Sid"]: stmt for stmt in policy.get("Statement", [])}
+
+    # Check AllowAccessKeyManagement exists
+    self.assertIn("AllowAccessKeyManagement", statements)
+
+    # Check DenyAllActionsAfterExpiry exists
+    self.assertIn("DenyAllActionsAfterExpiry", statements)
+
+    deny_stmt = statements["DenyAllActionsAfterExpiry"]
+    self.assertEqual(deny_stmt["Effect"], "Deny")
+    self.assertEqual(deny_stmt["Action"], "*")
+
+    cond = deny_stmt.get("Condition")
+    self.assertIsNotNone(cond)
+    self.assertIn("DateGreaterThan", cond)
+    date_cond = cond["DateGreaterThan"].get("aws:CurrentTime")
+
+    # Validate expiry date format is ISO8601 UTC (rough check)
+    iso8601_utc_re = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"
+    self.assertRegex(date_cond, iso8601_utc_re)
+
+
+  def test_kms_ciphertext_resource_simple(self):
+    args = TapStackArgs(environment_suffix="test")
+    stack = TapStack("test-stack", args)
+
+    self.assertTrue(hasattr(stack, "encrypted_app_secret"))
+    ciphertext = stack.encrypted_app_secret
+
+    self.assertIsInstance(ciphertext, pulumi.Output)
+
+
+
 
 
 if __name__ == "__main__":
