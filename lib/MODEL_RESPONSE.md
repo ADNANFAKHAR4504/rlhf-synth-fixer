@@ -290,7 +290,7 @@ export function createVPCEndpoints(
   // S3 Gateway VPC Endpoint - critical for secure S3 access from private subnets
   const s3Endpoint = new aws.ec2.VpcEndpoint(`${projectName}-s3-endpoint`, {
     vpcId: vpc.id,
-    serviceName: 'com.amazonaws.us-west-2.s3',
+    serviceName: 'com.amazonaws.us-east-1.s3',
     vpcEndpointType: 'Gateway',
     routeTableIds: [routeTable.id],
 

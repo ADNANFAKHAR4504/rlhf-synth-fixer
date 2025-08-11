@@ -37,7 +37,7 @@ class MockNetworkingStack {
     this.vpc = {
       id: vpcId,
       cidrBlock: '10.0.0.0/16',
-      arn: `arn:aws:ec2:us-west-2:123:vpc/${vpcId}`,
+      arn: `arn:aws:ec2:us-east-1:123:vpc/${vpcId}`,
       enableDnsHostnames: true,
       enableDnsSupport: true,
     };
@@ -46,13 +46,13 @@ class MockNetworkingStack {
       {
         id: `mock-private-subnet-1-${env}`,
         cidrBlock: '10.0.1.0/24',
-        availabilityZone: 'us-west-2a',
+        availabilityZone: 'us-east-1a',
         mapPublicIpOnLaunch: false,
       },
       {
         id: `mock-private-subnet-2-${env}`,
         cidrBlock: '10.0.2.0/24',
-        availabilityZone: 'us-west-2b',
+        availabilityZone: 'us-east-1b',
         mapPublicIpOnLaunch: false,
       },
     ];
@@ -60,12 +60,12 @@ class MockNetworkingStack {
     this.vpcSecurityGroup = {
       id: `mock-sg-${env}`,
       name: `vpc-endpoint-sg-${env}`,
-      arn: `arn:aws:ec2:us-west-2:123:security-group/mock-sg-${env}`,
+      arn: `arn:aws:ec2:us-east-1:123:security-group/mock-sg-${env}`,
     };
     
     this.s3VpcEndpoint = {
       id: `mock-vpce-${env}`,
-      serviceName: 'com.amazonaws.us-west-2.s3',
+      serviceName: 'com.amazonaws.us-east-1.s3',
       vpcEndpointType: 'Gateway',
     };
   }

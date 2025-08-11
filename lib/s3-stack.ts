@@ -11,7 +11,6 @@ import { ResourceOptions } from '@pulumi/pulumi';
 export interface S3StackArgs {
   environmentSuffix: string;
   lambdaRoleArn?: pulumi.Input<string>; // Optional - if not provided, creates temporary role
-  s3VpcEndpointId: pulumi.Input<string>;
   tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
@@ -25,7 +24,7 @@ export class S3Stack extends pulumi.ComponentResource {
   constructor(name: string, args: S3StackArgs, opts?: ResourceOptions) {
     super('tap:s3:S3Stack', name, args, opts);
 
-    const { environmentSuffix, lambdaRoleArn, s3VpcEndpointId, tags } = args;
+    const { environmentSuffix, lambdaRoleArn, tags } = args;
 
     // Create access logs bucket
     this.accessLogsBucket = new aws.s3.Bucket(
@@ -173,28 +172,17 @@ export class S3Stack extends pulumi.ComponentResource {
     // Use provided role or temporary role for initial bucket policy
     const initialRoleArn = lambdaRoleArn || this.tempLambdaRole!.arn;
 
-    const accountId = pulumi.output(aws.getCallerIdentity()).accountId;
-
     this.bucketPolicy = new aws.s3.BucketPolicy(
       `bucket-policy-${environmentSuffix}`,
       {
         bucket: this.bucket.id,
         policy: pulumi
-          .all([this.bucket.arn, initialRoleArn, s3VpcEndpointId, accountId])
-          .apply(([bucketArn, roleArn, vpcEndpointId, accountId]) =>
+          .all([this.bucket.arn, initialRoleArn])
+          .apply(([bucketArn, roleArn]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Id: `SecureBucketPolicy-${environmentSuffix}`,
               Statement: [
-                {
-                  Sid: 'AllowRootUserFullAccess',
-                  Effect: 'Allow',
-                  Principal: {
-                    AWS: `arn:aws:iam::${accountId}:root`,
-                  },
-                  Action: 's3:*',
-                  Resource: [bucketArn, `${bucketArn}/*`],
-                },
                 {
                   Sid: 'AllowLambdaAccess',
                   Effect: 'Allow',
@@ -220,20 +208,6 @@ export class S3Stack extends pulumi.ComponentResource {
                   Condition: {
                     Bool: {
                       'aws:SecureTransport': 'false',
-                    },
-                  },
-                },
-                {
-                  Sid: 'RestrictToVPCEndpoint',
-                  Effect: 'Deny',
-                  NotPrincipal: {
-                    AWS: `arn:aws:iam::${accountId}:root`,
-                  },
-                  Action: 's3:*',
-                  Resource: [bucketArn, `${bucketArn}/*`],
-                  Condition: {
-                    StringNotEquals: {
-                      'aws:sourceVpce': vpcEndpointId,
                     },
                   },
                 },
@@ -256,31 +230,19 @@ export class S3Stack extends pulumi.ComponentResource {
 
   // Method to update bucket policy with real Lambda role
   public updateBucketPolicy(
-    realLambdaRoleArn: pulumi.Input<string>,
-    vpcEndpointId: pulumi.Input<string>
+    realLambdaRoleArn: pulumi.Input<string>
   ): aws.s3.BucketPolicy {
-    const accountId = pulumi.output(aws.getCallerIdentity()).accountId;
-
     return new aws.s3.BucketPolicy(
       'bucket-policy-updated-final',
       {
         bucket: this.bucket.id,
         policy: pulumi
-          .all([this.bucket.arn, realLambdaRoleArn, accountId, vpcEndpointId])
-          .apply(([bucketArn, roleArn, accountId, vpcEndpointId]) =>
+          .all([this.bucket.arn, realLambdaRoleArn])
+          .apply(([bucketArn, roleArn]) =>
             JSON.stringify({
               Version: '2012-10-17',
-              Id: 'SecureBucketPolicy-final',
+              Id: 'SecureBucketPolicy-simplified',
               Statement: [
-                {
-                  Sid: 'AllowRootUserFullAccess',
-                  Effect: 'Allow',
-                  Principal: {
-                    AWS: `arn:aws:iam::${accountId}:root`,
-                  },
-                  Action: 's3:*',
-                  Resource: [bucketArn, `${bucketArn}/*`],
-                },
                 {
                   Sid: 'AllowLambdaAccess',
                   Effect: 'Allow',
@@ -306,20 +268,6 @@ export class S3Stack extends pulumi.ComponentResource {
                   Condition: {
                     Bool: {
                       'aws:SecureTransport': 'false',
-                    },
-                  },
-                },
-                {
-                  Sid: 'RestrictToVPCEndpoint',
-                  Effect: 'Deny',
-                  NotPrincipal: {
-                    AWS: `arn:aws:iam::${accountId}:root`,
-                  },
-                  Action: 's3:*',
-                  Resource: [bucketArn, `${bucketArn}/*`],
-                  Condition: {
-                    StringNotEquals: {
-                      'aws:sourceVpce': vpcEndpointId,
                     },
                   },
                 },

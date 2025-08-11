@@ -72,8 +72,8 @@ describe('TapStack Secure Document API Integration Tests', () => {
     // Load stack outputs - will throw if file doesn't exist
     stackOutputs = loadStackOutputs();
 
-    // Initialize AWS clients for us-west-2 region as per requirements
-    const region = 'us-west-2';
+    // Initialize AWS clients for us-east-1 region as per requirements
+    const region = 'us-east-1';
     s3Client = new S3Client({ region });
     lambdaClient = new LambdaClient({ region });
     apiGatewayClient = new APIGatewayClient({ region });
@@ -83,7 +83,7 @@ describe('TapStack Secure Document API Integration Tests', () => {
   });
 
   describe('VPC and Networking Security Configuration', () => {
-    it('should have VPC in us-west-2 region', async () => {
+    it('should have VPC in us-east-1 region', async () => {
       // Skip if vpcId is not available in outputs
       if (!stackOutputs.vpcId) {
         console.log('VPC ID not available in outputs, skipping VPC validation');
@@ -131,7 +131,7 @@ describe('TapStack Secure Document API Integration Tests', () => {
       if (stackOutputs.vpcId) {
         expect(endpoint?.VpcId).toBe(stackOutputs.vpcId);
       }
-      expect(endpoint?.ServiceName).toBe('com.amazonaws.us-west-2.s3');
+      expect(endpoint?.ServiceName).toBe('com.amazonaws.us-east-1.s3');
       expect(endpoint?.VpcEndpointType).toBe('Gateway');
     });
   });
@@ -255,7 +255,7 @@ describe('TapStack Secure Document API Integration Tests', () => {
 
     it('should have proper URL format', () => {
       expect(stackOutputs.apiUrl).toMatch(
-        /^https:\/\/.*\.execute-api\.us-west-2\.amazonaws\.com\/.*/
+        /^https:\/\/.*\.execute-api\.us-east-1\.amazonaws\.com\/.*/
       );
       expect(stackOutputs.apiUrl).toContain(stackOutputs.apiGatewayId);
     });
@@ -315,7 +315,7 @@ describe('TapStack Secure Document API Integration Tests', () => {
 
     it('should have proper resource relationships', () => {
       // All resources should be deployed in the same region
-      expect(stackOutputs.region).toBe('us-west-2');
+      expect(stackOutputs.region).toBe('us-east-1');
 
       // Lambda function should be properly named
       expect(stackOutputs.lambdaFunctionName).toContain('doc-processor');
@@ -325,17 +325,17 @@ describe('TapStack Secure Document API Integration Tests', () => {
 
       // API Gateway should have secure URL
       expect(stackOutputs.apiUrl).toContain(
-        'execute-api.us-west-2.amazonaws.com'
+        'execute-api.us-east-1.amazonaws.com'
       );
     });
   });
 
   describe('Security Compliance Validation', () => {
-    it('should deploy all resources in us-west-2 region', () => {
-      expect(stackOutputs.region).toBe('us-west-2');
+    it('should deploy all resources in us-east-1 region', () => {
+      expect(stackOutputs.region).toBe('us-east-1');
 
       // Verify ARNs contain correct region
-      expect(stackOutputs.lambdaFunctionArn).toContain('us-west-2');
+      expect(stackOutputs.lambdaFunctionArn).toContain('us-east-1');
       expect(stackOutputs.s3BucketArn).toMatch(/^arn:aws:s3:::/); // S3 ARNs are global
     });
 

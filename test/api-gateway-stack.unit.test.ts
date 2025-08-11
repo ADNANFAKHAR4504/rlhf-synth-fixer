@@ -21,7 +21,7 @@ class MockApiGatewayStack {
     
     this.api = {
       id: apiId,
-      executionArn: `arn:aws:execute-api:us-west-2:123456789012:${apiId}`,
+      executionArn: `arn:aws:execute-api:us-east-1:123456789012:${apiId}`,
       name: `secure-doc-api-${env}`,
       endpointConfiguration: { types: ['REGIONAL'] },
     };
@@ -47,7 +47,7 @@ class MockApiGatewayStack {
       pathPart: 'documents',
     };
     
-    this.apiUrl = `https://${apiId}.execute-api.us-west-2.amazonaws.com/${env}`;
+    this.apiUrl = `https://${apiId}.execute-api.us-east-1.amazonaws.com/${env}`;
   }
 }
 
@@ -62,7 +62,7 @@ describe('ApiGatewayStack', () => {
     it('should create ApiGatewayStack with default values', async () => {
       stack = new MockApiGatewayStack('test-stack', {
         environmentSuffix: 'dev',
-        lambdaFunctionArn: 'arn:aws:lambda:us-west-2:123:function:doc-processor-dev',
+        lambdaFunctionArn: 'arn:aws:lambda:us-east-1:123:function:doc-processor-dev',
         lambdaFunctionName: 'doc-processor-dev',
       });
 
@@ -80,7 +80,7 @@ describe('ApiGatewayStack', () => {
     it('should create ApiGatewayStack with custom environment suffix', async () => {
       stack = new MockApiGatewayStack('test-stack', {
         environmentSuffix: 'prod',
-        lambdaFunctionArn: 'arn:aws:lambda:us-west-2:123:function:doc-processor-prod',
+        lambdaFunctionArn: 'arn:aws:lambda:us-east-1:123:function:doc-processor-prod',
         lambdaFunctionName: 'doc-processor-prod',
       });
 
@@ -93,7 +93,7 @@ describe('ApiGatewayStack', () => {
       const customTags = { Owner: 'TestTeam', CostCenter: 'CC001' };
       stack = new MockApiGatewayStack('test-stack', {
         environmentSuffix: 'test',
-        lambdaFunctionArn: 'arn:aws:lambda:us-west-2:123:function:doc-processor-test',
+        lambdaFunctionArn: 'arn:aws:lambda:us-east-1:123:function:doc-processor-test',
         lambdaFunctionName: 'doc-processor-test',
         tags: customTags,
       });
@@ -107,7 +107,7 @@ describe('ApiGatewayStack', () => {
     beforeEach(() => {
       stack = new MockApiGatewayStack('test-stack', {
         environmentSuffix: 'dev',
-        lambdaFunctionArn: 'arn:aws:lambda:us-west-2:123:function:doc-processor-dev',
+        lambdaFunctionArn: 'arn:aws:lambda:us-east-1:123:function:doc-processor-dev',
         lambdaFunctionName: 'doc-processor-dev',
       });
     });
@@ -122,7 +122,7 @@ describe('ApiGatewayStack', () => {
     });
 
     it('should have apiUrl output with correct format', () => {
-      expect(stack.apiUrl).toMatch(/^https:\/\/.*\.execute-api\.us-west-2\.amazonaws\.com\/dev$/);
+      expect(stack.apiUrl).toMatch(/^https:\/\/.*\.execute-api\.us-east-1\.amazonaws\.com\/dev$/);
     });
   });
 
@@ -130,7 +130,7 @@ describe('ApiGatewayStack', () => {
     it('should follow consistent naming pattern for all resources', () => {
       stack = new MockApiGatewayStack('test-stack', {
         environmentSuffix: 'staging',
-        lambdaFunctionArn: 'arn:aws:lambda:us-west-2:123:function:doc-processor-staging',
+        lambdaFunctionArn: 'arn:aws:lambda:us-east-1:123:function:doc-processor-staging',
         lambdaFunctionName: 'doc-processor-staging',
       });
 
@@ -150,7 +150,7 @@ describe('ApiGatewayStack', () => {
       environments.forEach(env => {
         const testStack = new MockApiGatewayStack('test-stack', {
           environmentSuffix: env,
-          lambdaFunctionArn: `arn:aws:lambda:us-west-2:123:function:doc-processor-${env}`,
+          lambdaFunctionArn: `arn:aws:lambda:us-east-1:123:function:doc-processor-${env}`,
           lambdaFunctionName: `doc-processor-${env}`,
         });
 
@@ -167,7 +167,7 @@ describe('ApiGatewayStack', () => {
     it('should create all required API Gateway resources', () => {
       stack = new MockApiGatewayStack('test-stack', {
         environmentSuffix: 'dev',
-        lambdaFunctionArn: 'arn:aws:lambda:us-west-2:123:function:doc-processor-dev',
+        lambdaFunctionArn: 'arn:aws:lambda:us-east-1:123:function:doc-processor-dev',
         lambdaFunctionName: 'doc-processor-dev',
       });
 
@@ -182,7 +182,7 @@ describe('ApiGatewayStack', () => {
 
   describe('Lambda integration', () => {
     it('should accept Lambda function ARN and name', () => {
-      const lambdaFunctionArn = 'arn:aws:lambda:us-west-2:123:function:test-function';
+      const lambdaFunctionArn = 'arn:aws:lambda:us-east-1:123:function:test-function';
       const lambdaFunctionName = 'test-function';
 
       stack = new MockApiGatewayStack('test-stack', {
@@ -199,12 +199,12 @@ describe('ApiGatewayStack', () => {
       const testCases = [
         {
           env: 'dev',
-          arn: 'arn:aws:lambda:us-west-2:123:function:dev-function',
+          arn: 'arn:aws:lambda:us-east-1:123:function:dev-function',
           name: 'dev-function',
         },
         {
           env: 'prod',
-          arn: 'arn:aws:lambda:us-west-2:123:function:prod-function',
+          arn: 'arn:aws:lambda:us-east-1:123:function:prod-function',
           name: 'prod-function',
         },
       ];

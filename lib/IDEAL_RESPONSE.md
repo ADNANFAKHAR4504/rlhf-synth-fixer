@@ -65,9 +65,9 @@ export class TapStack extends pulumi.ComponentResource {
       ...args.tags,
     };
 
-    // Force AWS region to us-west-2 as per requirements
-    const awsProvider = new aws.Provider('aws-us-west-2', {
-      region: 'us-west-2',
+    // Force AWS region to us-east-1 as per requirements
+    const awsProvider = new aws.Provider('aws-us-east-1', {
+      region: 'us-east-1',
     });
 
     // 1. Networking infrastructure
@@ -173,7 +173,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.apiGatewayMethodId = apiGateway.method.id;
     this.apiGatewayResourceId = apiGateway.resource.id;
     // Environment and configuration
-    this.region = 'us-west-2';
+    this.region = 'us-east-1';
     this.environmentSuffix = environmentSuffix;
     this.tags = pulumi.output(tags);
 
@@ -251,9 +251,9 @@ export class NetworkingStack extends pulumi.ComponentResource {
 
     const { environmentSuffix, tags } = args;
 
-    // Force region to us-west-2 as per requirements
-    // This ensures all resources are deployed in us-west-2 regardless of Pulumi config
-    const region = 'us-west-2';
+    // Force region to us-east-1 as per requirements
+    // This ensures all resources are deployed in us-east-1 regardless of Pulumi config
+    const region = 'us-east-1';
 
     // Derive availability zones from the required region
     const availabilityZones = [`${region}a`, `${region}b`];
@@ -586,7 +586,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
         httpMethod: 'POST',
         type: 'AWS_PROXY',
         integrationHttpMethod: 'POST',
-        uri: pulumi.interpolate`arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
+        uri: pulumi.interpolate`arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
         timeoutMilliseconds: 29000,
       },
       { parent: this }
@@ -684,7 +684,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
     this.apiUrl = pulumi
       .all([this.api.id, this.stage.stageName])
       .apply(([apiId, stageName]) => {
-        const region = 'us-west-2'; // Hardcoded as per requirements
+        const region = 'us-east-1'; // Hardcoded as per requirements
         return `https://${apiId}.execute-api.${region}.amazonaws.com/${stageName}`;
       });
 

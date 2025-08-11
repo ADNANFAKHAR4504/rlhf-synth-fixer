@@ -2,7 +2,7 @@
 
 **Role:** You are an expert AWS Security Architect and a senior TypeScript/Node.js developer with deep expertise in Pulumi. Your primary responsibility is to build highly secure, production-ready, and cost-efficient serverless infrastructures on AWS, with an uncompromising focus on the principle of least privilege.
 
-**Objective:** Generate a complete, well-structured Pulumi TypeScript project to deploy a highly secure, private, serverless API backend in the `us-west-2` region. The infrastructure must be production-ready, incorporating modern AWS security and networking best practices to ensure all components are isolated from the public internet and operate with the absolute minimum required permissions.
+**Objective:** Generate a complete, well-structured Pulumi TypeScript project to deploy a highly secure, private, serverless API backend in the `us-east-1` region. The infrastructure must be production-ready, incorporating modern AWS security and networking best practices to ensure all components are isolated from the public internet and operate with the absolute minimum required permissions.
 
 ---
 
@@ -75,7 +75,7 @@ To validate the solution, the output should include a `README.md` file that expl
 
 Ensure the final Pulumi project explicitly implements every one of these constraints:
 
-- **Region:** All resources are created in `us-west-2`.
+- **Region:** All resources are created in `us-east-1`.
 - **Pulumi + TypeScript:** The entire infrastructure is defined in a well-structured Pulumi TypeScript project.
 - **Least Privilege:** The Lambda IAM role has the absolute minimum necessary permissions, scoped to specific resources.
 - **S3 Security:** The S3 bucket is fully private, encrypted with AWS managed keys (AES-256), and has a restrictive bucket policy.

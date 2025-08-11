@@ -12,7 +12,7 @@ class MockTapStack {
   ) {
     const env = options.environmentSuffix || 'dev';
     this.vpcId = `mock-vpc-${env}`;
-    this.apiUrl = `https://mock-api-${env}.execute-api.us-west-2.amazonaws.com/${env}`;
+    this.apiUrl = `https://mock-api-${env}.execute-api.us-east-1.amazonaws.com/${env}`;
     this.bucketName = `mock-bucket-${env}`;
     this.lambdaFunctionName = `mock-lambda-${env}`;
     this.tags = options.tags || {};
@@ -33,7 +33,7 @@ describe('TapStack', () => {
       expect(stack).toBeDefined();
       expect(stack.vpcId).toBe('mock-vpc-dev');
       expect(stack.apiUrl).toBe(
-        'https://mock-api-dev.execute-api.us-west-2.amazonaws.com/dev'
+        'https://mock-api-dev.execute-api.us-east-1.amazonaws.com/dev'
       );
       expect(stack.bucketName).toBe('mock-bucket-dev');
       expect(stack.lambdaFunctionName).toBe('mock-lambda-dev');
@@ -45,7 +45,7 @@ describe('TapStack', () => {
       expect(stack).toBeDefined();
       expect(stack.vpcId).toBe('mock-vpc-prod');
       expect(stack.apiUrl).toBe(
-        'https://mock-api-prod.execute-api.us-west-2.amazonaws.com/prod'
+        'https://mock-api-prod.execute-api.us-east-1.amazonaws.com/prod'
       );
       expect(stack.bucketName).toBe('mock-bucket-prod');
       expect(stack.lambdaFunctionName).toBe('mock-lambda-prod');
@@ -61,7 +61,7 @@ describe('TapStack', () => {
       expect(stack).toBeDefined();
       expect(stack.vpcId).toBe('mock-vpc-test');
       expect(stack.apiUrl).toBe(
-        'https://mock-api-test.execute-api.us-west-2.amazonaws.com/test'
+        'https://mock-api-test.execute-api.us-east-1.amazonaws.com/test'
       );
       expect(stack.bucketName).toBe('mock-bucket-test');
       expect(stack.lambdaFunctionName).toBe('mock-lambda-test');
@@ -93,7 +93,7 @@ describe('TapStack', () => {
 
     it('should have apiUrl output', () => {
       expect(stack.apiUrl).toBe(
-        'https://mock-api-dev.execute-api.us-west-2.amazonaws.com/dev'
+        'https://mock-api-dev.execute-api.us-east-1.amazonaws.com/dev'
       );
     });
 

@@ -66,7 +66,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
         httpMethod: 'POST',
         type: 'AWS_PROXY',
         integrationHttpMethod: 'POST',
-        uri: pulumi.interpolate`arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
+        uri: pulumi.interpolate`arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
         timeoutMilliseconds: 29000,
       },
       { parent: this }
@@ -164,7 +164,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
     this.apiUrl = pulumi
       .all([this.api.id, this.stage.stageName])
       .apply(([apiId, stageName]) => {
-        const region = 'us-west-2'; // Hardcoded as per requirements
+        const region = 'us-east-1'; // Hardcoded as per requirements
         return `https://${apiId}.execute-api.${region}.amazonaws.com/${stageName}`;
       });
 

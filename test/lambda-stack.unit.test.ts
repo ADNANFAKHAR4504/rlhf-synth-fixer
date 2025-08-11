@@ -35,7 +35,7 @@ class MockLambdaStack {
     this.function = {
       id: functionName,
       name: functionName,
-      arn: `arn:aws:lambda:us-west-2:123:function:${functionName}`,
+      arn: `arn:aws:lambda:us-east-1:123:function:${functionName}`,
       runtime: 'nodejs20.x',
     };
     
@@ -47,7 +47,7 @@ class MockLambdaStack {
     
     this.functionUrl = {
       id: `function-url-${env}`,
-      functionUrl: `https://${functionName}.lambda-url.us-west-2.on.aws`,
+      functionUrl: `https://${functionName}.lambda-url.us-east-1.on.aws`,
     };
   }
 }
@@ -68,7 +68,7 @@ describe('LambdaStack', () => {
         bucketName: 'test-bucket',
         privateSubnetIds: ['subnet-1', 'subnet-2'],
         vpcSecurityGroupId: 'sg-123',
-        logGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/test',
+        logGroupArn: 'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/test',
       });
 
       expect(stack).toBeDefined();
@@ -84,7 +84,7 @@ describe('LambdaStack', () => {
         bucketName: 'prod-bucket',
         privateSubnetIds: ['subnet-3', 'subnet-4'],
         vpcSecurityGroupId: 'sg-456',
-        logGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/prod',
+        logGroupArn: 'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/prod',
       });
 
       expect(stack).toBeDefined();
@@ -101,7 +101,7 @@ describe('LambdaStack', () => {
         bucketName: 'test-bucket',
         privateSubnetIds: ['subnet-5', 'subnet-6'],
         vpcSecurityGroupId: 'sg-789',
-        logGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/test',
+        logGroupArn: 'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/test',
         tags: customTags,
       });
 
@@ -119,7 +119,7 @@ describe('LambdaStack', () => {
         bucketName: 'test-bucket',
         privateSubnetIds: multipleSubnets,
         vpcSecurityGroupId: 'sg-123',
-        logGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/test',
+        logGroupArn: 'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/test',
       });
 
       expect(stack).toBeDefined();
@@ -134,7 +134,7 @@ describe('LambdaStack', () => {
         bucketName: 'test-bucket',
         privateSubnetIds: singleSubnet,
         vpcSecurityGroupId: 'sg-123',
-        logGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/test',
+        logGroupArn: 'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/test',
       });
 
       expect(stack).toBeDefined();
@@ -150,14 +150,14 @@ describe('LambdaStack', () => {
         bucketName: 'test-bucket',
         privateSubnetIds: ['subnet-1', 'subnet-2'],
         vpcSecurityGroupId: 'sg-123',
-        logGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/test',
+        logGroupArn: 'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/test',
       });
     });
 
     it('should have function output with correct properties', () => {
       expect(stack.function.name).toBe('doc-processor-dev');
       expect(stack.function.arn).toBe(
-        'arn:aws:lambda:us-west-2:123:function:doc-processor-dev'
+        'arn:aws:lambda:us-east-1:123:function:doc-processor-dev'
       );
     });
 
@@ -181,7 +181,7 @@ describe('LambdaStack', () => {
         bucketName: 'staging-bucket',
         privateSubnetIds: ['subnet-1', 'subnet-2'],
         vpcSecurityGroupId: 'sg-staging',
-        logGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/staging',
+        logGroupArn: 'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/staging',
       });
       
       // Check function naming pattern
@@ -206,7 +206,7 @@ describe('LambdaStack', () => {
           bucketName: `${env}-bucket`,
           privateSubnetIds: [`subnet-${env}-1`, `subnet-${env}-2`],
           vpcSecurityGroupId: `sg-${env}`,
-          logGroupArn: `arn:aws:logs:us-west-2:123:log-group:/aws/lambda/${env}`,
+          logGroupArn: `arn:aws:logs:us-east-1:123:log-group:/aws/lambda/${env}`,
         });
 
         expect(testStack.function).toBeDefined();
@@ -224,12 +224,12 @@ describe('LambdaStack', () => {
         bucketName: 'test-bucket',
         privateSubnetIds: ['subnet-1', 'subnet-2'],
         vpcSecurityGroupId: 'sg-123',
-        logGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/test',
+        logGroupArn: 'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/test',
       });
       
       // Lambda function ARN format
       expect(stack.function.arn).toMatch(
-        /^arn:aws:lambda:us-west-2:\d+:function:doc-processor-dev$/
+        /^arn:aws:lambda:us-east-1:\d+:function:doc-processor-dev$/
       );
 
       // IAM role ARN format
@@ -248,7 +248,7 @@ describe('LambdaStack', () => {
       const privateSubnetIds = ['subnet-1', 'subnet-2'];
       const vpcSecurityGroupId = 'sg-123';
       const logGroupArn =
-        'arn:aws:logs:us-west-2:123:log-group:/aws/lambda/test';
+        'arn:aws:logs:us-east-1:123:log-group:/aws/lambda/test';
 
       stack = new MockLambdaStack('test-stack', {
         environmentSuffix: 'dev',

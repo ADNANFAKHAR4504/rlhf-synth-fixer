@@ -66,9 +66,9 @@ export class TapStack extends pulumi.ComponentResource {
       ...args.tags,
     };
 
-    // Force AWS region to us-west-2 as per requirements
-    const awsProvider = new aws.Provider('aws-us-west-2', {
-      region: 'us-west-2',
+    // Force AWS region to us-east-1 as per requirements
+    const awsProvider = new aws.Provider('aws-us-east-1', {
+      region: 'us-east-1',
     });
 
     // 1. Networking infrastructure
@@ -96,7 +96,6 @@ export class TapStack extends pulumi.ComponentResource {
       's3',
       {
         environmentSuffix,
-        s3VpcEndpointId: networking.s3VpcEndpoint.id,
         tags,
       },
       { parent: this, provider: awsProvider }
@@ -122,7 +121,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // 5. Update S3 bucket policy with real Lambda role
-    s3.updateBucketPolicy(lambda.role.arn, networking.s3VpcEndpoint.id);
+    s3.updateBucketPolicy(lambda.role.arn);
 
     // 6. API Gateway
     const apiGateway = new ApiGatewayStack(
@@ -174,7 +173,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.apiGatewayMethodId = apiGateway.method.id;
     this.apiGatewayResourceId = apiGateway.resource.id;
     // Environment and configuration
-    this.region = 'us-west-2';
+    this.region = 'us-east-1';
     this.environmentSuffix = environmentSuffix;
     this.tags = pulumi.output(tags);
 

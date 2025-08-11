@@ -25,7 +25,6 @@ class MockS3Stack {
     stackName: string,
     options: {
       environmentSuffix: string;
-      s3VpcEndpointId: string;
       lambdaRoleArn?: string;
       tags?: Record<string, string>;
     }
@@ -33,23 +32,23 @@ class MockS3Stack {
     const env = options.environmentSuffix;
     const bucketName = `secure-documents-205432-${env}`;
     const accessLogsBucketName = `secure-doc-access-205432-logs-${env}`;
-    
+
     this.bucket = {
       id: bucketName,
       bucket: bucketName,
       arn: `arn:aws:s3:::${bucketName}`,
     };
-    
+
     this.accessLogsBucket = {
       id: accessLogsBucketName,
       bucket: accessLogsBucketName,
       arn: `arn:aws:s3:::${accessLogsBucketName}`,
     };
-    
+
     this.bucketPolicy = {
       id: `bucket-policy-${env}`,
     };
-    
+
     // Create temporary Lambda role only if lambdaRoleArn is not provided
     if (!options.lambdaRoleArn) {
       this.tempLambdaRole = {
@@ -59,7 +58,7 @@ class MockS3Stack {
     }
   }
 
-  updateBucketPolicy(lambdaRoleArn: string, vpcEndpointId: string): { id: string } {
+  updateBucketPolicy(lambdaRoleArn: string): { id: string } {
     const roleName = lambdaRoleArn.split('/').pop() || 'unknown-role';
     this.updatedBucketPolicy = {
       id: `updated-bucket-policy-${roleName}`,
@@ -80,7 +79,6 @@ describe('S3Stack', () => {
     it('should create S3Stack with default values', () => {
       stack = new MockS3Stack('test-stack', {
         environmentSuffix: 'dev',
-        s3VpcEndpointId: 'mock-vpce-dev',
       });
 
       expect(stack).toBeDefined();
@@ -92,7 +90,6 @@ describe('S3Stack', () => {
     it('should create S3Stack with custom environment suffix', () => {
       stack = new MockS3Stack('test-stack', {
         environmentSuffix: 'prod',
-        s3VpcEndpointId: 'mock-vpce-prod',
       });
 
       expect(stack).toBeDefined();
@@ -105,7 +102,6 @@ describe('S3Stack', () => {
       const customTags = { Owner: 'TestTeam', CostCenter: 'CC001' };
       stack = new MockS3Stack('test-stack', {
         environmentSuffix: 'test',
-        s3VpcEndpointId: 'mock-vpce-test',
         tags: customTags,
       });
 
@@ -117,7 +113,6 @@ describe('S3Stack', () => {
     it('should create temporary Lambda role when lambdaRoleArn is not provided', () => {
       stack = new MockS3Stack('test-stack', {
         environmentSuffix: 'dev',
-        s3VpcEndpointId: 'mock-vpce-dev',
       });
 
       expect(stack.tempLambdaRole).toBeDefined();
@@ -127,7 +122,6 @@ describe('S3Stack', () => {
       stack = new MockS3Stack('test-stack', {
         environmentSuffix: 'dev',
         lambdaRoleArn: 'arn:aws:iam::123:role/existing-role',
-        s3VpcEndpointId: 'mock-vpce-dev',
       });
 
       expect(stack.tempLambdaRole).toBeUndefined();
@@ -138,7 +132,6 @@ describe('S3Stack', () => {
     beforeEach(() => {
       stack = new MockS3Stack('test-stack', {
         environmentSuffix: 'dev',
-        s3VpcEndpointId: 'mock-vpce-dev',
       });
     });
 
@@ -159,7 +152,9 @@ describe('S3Stack', () => {
     });
 
     it('should have access logs bucket with correct naming pattern', () => {
-      expect(stack.accessLogsBucket.bucket).toMatch(/^secure-doc-access-205432-logs-dev$/);
+      expect(stack.accessLogsBucket.bucket).toMatch(
+        /^secure-doc-access-205432-logs-dev$/
+      );
     });
   });
 
@@ -167,27 +162,26 @@ describe('S3Stack', () => {
     beforeEach(() => {
       stack = new MockS3Stack('test-stack', {
         environmentSuffix: 'dev',
-        s3VpcEndpointId: 'mock-vpce-dev',
       });
     });
 
     it('should update bucket policy with correct parameters', () => {
       const lambdaRoleArn = 'arn:aws:iam::123:role/lambda-role';
-      const vpcEndpointId = 'mock-vpce-dev';
 
-      const result = stack.updateBucketPolicy(lambdaRoleArn, vpcEndpointId);
+      const result = stack.updateBucketPolicy(lambdaRoleArn);
 
       expect(result).toBeDefined();
       expect(result.id).toBe('updated-bucket-policy-lambda-role');
       expect(stack.updatedBucketPolicy).toBeDefined();
-      expect(stack.updatedBucketPolicy!.id).toBe('updated-bucket-policy-lambda-role');
+      expect(stack.updatedBucketPolicy!.id).toBe(
+        'updated-bucket-policy-lambda-role'
+      );
     });
 
     it('should handle different role ARN formats', () => {
       const lambdaRoleArn = 'arn:aws:iam::123:role/another-role-name';
-      const vpcEndpointId = 'mock-vpce-dev';
 
-      const result = stack.updateBucketPolicy(lambdaRoleArn, vpcEndpointId);
+      const result = stack.updateBucketPolicy(lambdaRoleArn);
 
       expect(result.id).toBe('updated-bucket-policy-another-role-name');
     });
@@ -197,9 +191,8 @@ describe('S3Stack', () => {
     it('should follow consistent naming pattern for all resources', () => {
       stack = new MockS3Stack('test-stack', {
         environmentSuffix: 'staging',
-        s3VpcEndpointId: 'mock-vpce-staging',
       });
-      
+
       // Check bucket naming pattern
       expect(stack.bucket.bucket).toMatch(/^secure-documents-205432-staging$/);
 
@@ -220,7 +213,6 @@ describe('S3Stack', () => {
       environments.forEach(env => {
         const testStack = new MockS3Stack('test-stack', {
           environmentSuffix: env,
-          s3VpcEndpointId: `mock-vpce-${env}`,
         });
 
         expect(testStack.bucket).toBeDefined();

@@ -26,9 +26,9 @@ export class NetworkingStack extends pulumi.ComponentResource {
 
     const { environmentSuffix, tags } = args;
 
-    // Force region to us-west-2 as per requirements
-    // This ensures all resources are deployed in us-west-2 regardless of Pulumi config
-    const region = 'us-west-2';
+    // Force region to us-east-1 as per requirements
+    // This ensures all resources are deployed in us-east-1 regardless of Pulumi config
+    const region = 'us-east-1';
 
     // Derive availability zones from the required region
     const availabilityZones = [`${region}a`, `${region}b`];

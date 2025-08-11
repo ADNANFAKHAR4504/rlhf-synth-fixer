@@ -124,7 +124,7 @@ iac-test-automations/
 
 - Proper environment suffix handling
 - Comprehensive tagging strategy
-- Region enforcement (us-west-2)
+- Region enforcement (us-east-1)
 - Provider configuration
 
 **Failure Analysis:** The model response lacks the configuration management needed for production deployments.

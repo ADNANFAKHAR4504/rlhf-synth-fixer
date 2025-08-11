@@ -25,14 +25,14 @@ class MockCloudWatchStack {
     this.lambdaLogGroup = {
       id: `lambda-log-group-${env}`,
       name: `/aws/lambda/doc-processor-${env}`,
-      arn: `arn:aws:logs:us-west-2:123:log-group:/aws/lambda/doc-processor-${env}`,
+      arn: `arn:aws:logs:us-east-1:123:log-group:/aws/lambda/doc-processor-${env}`,
       retentionInDays: 90,
     };
     
     this.apiGatewayLogGroup = {
       id: `api-gateway-log-group-${env}`,
       name: `/aws/apigateway/secure-doc-api-${env}`,
-      arn: `arn:aws:logs:us-west-2:123:log-group:/aws/apigateway/secure-doc-api-${env}`,
+      arn: `arn:aws:logs:us-east-1:123:log-group:/aws/apigateway/secure-doc-api-${env}`,
       retentionInDays: 90,
     };
   }
@@ -157,12 +157,12 @@ describe('CloudWatchStack', () => {
       
       // Lambda log group ARN format
       expect(stack.lambdaLogGroup.arn).toMatch(
-        /^arn:aws:logs:us-west-2:\d+:log-group:\/aws\/lambda\/doc-processor-dev/
+        /^arn:aws:logs:us-east-1:\d+:log-group:\/aws\/lambda\/doc-processor-dev/
       );
 
       // API Gateway log group ARN format
       expect(stack.apiGatewayLogGroup.arn).toMatch(
-        /^arn:aws:logs:us-west-2:\d+:log-group:\/aws\/apigateway\/secure-doc-api-dev/
+        /^arn:aws:logs:us-east-1:\d+:log-group:\/aws\/apigateway\/secure-doc-api-dev/
       );
     });
   });
