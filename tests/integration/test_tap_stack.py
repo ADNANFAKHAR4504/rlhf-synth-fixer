@@ -7,7 +7,6 @@ Tests actual AWS resources when available, gracefully skips when infrastructure 
 
 import json
 import os
-import time
 import unittest
 from urllib.parse import urlparse
 
