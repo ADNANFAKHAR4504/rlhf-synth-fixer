@@ -86,114 +86,6 @@ class TestTapStackArgs(unittest.TestCase):
     self.assertEqual(len(args.tags), 1)
 
 
-class TestTapStackConfiguration(unittest.TestCase):
-  """Test TapStack configuration and setup without full resource mocking."""
-
-  def test_common_tags_structure(self):
-    """Test that common tags are properly structured."""
-    # Test the common tags that would be created
-    expected_tags = {
-      "project": "serverless-infra-pulumi",
-      "environment": "test",
-      "managed-by": "pulumi"
-    }
-
-    # Verify the structure
-    self.assertIn('project', expected_tags)
-    self.assertIn('environment', expected_tags)
-    self.assertIn('managed-by', expected_tags)
-    self.assertEqual(expected_tags['project'], 'serverless-infra-pulumi')
-    self.assertEqual(expected_tags['managed-by'], 'pulumi')
-
-  def test_resource_naming_convention(self):
-    """Test resource naming convention logic."""
-    environment = "test"
-
-    # Test naming patterns
-    expected_lambda_role = f"{environment}-lambda-execution-role"
-    expected_lambda_function = f"{environment}-api-handler"
-    expected_api_gateway = f"{environment}-serverless-api"
-    expected_log_group = f"/aws/lambda/{environment}-api-handler"
-
-    self.assertEqual(expected_lambda_role, "test-lambda-execution-role")
-    self.assertEqual(expected_lambda_function, "test-api-handler")
-    self.assertEqual(expected_api_gateway, "test-serverless-api")
-    self.assertEqual(expected_log_group, "/aws/lambda/test-api-handler")
-
-  def test_lambda_configuration_values(self):
-    """Test Lambda function configuration values."""
-    expected_config = {
-      'runtime': 'python3.9',
-      'handler': 'lambda_function.lambda_handler',
-      'timeout': 30,
-      'memory_size': 128
-    }
-
-    self.assertEqual(expected_config['runtime'], 'python3.9')
-    self.assertEqual(
-      expected_config['handler'], 'lambda_function.lambda_handler'
-    )
-    self.assertEqual(expected_config['timeout'], 30)
-    self.assertEqual(expected_config['memory_size'], 128)
-
-  def test_environment_variables_structure(self):
-    """Test Lambda environment variables structure."""
-    environment = "test"
-    expected_env_vars = {
-      "ENVIRONMENT": environment,
-      "LOG_LEVEL": "INFO"
-    }
-
-    self.assertEqual(expected_env_vars['ENVIRONMENT'], "test")
-    self.assertEqual(expected_env_vars['LOG_LEVEL'], "INFO")
-
-  def test_api_gateway_configuration_values(self):
-    """Test API Gateway configuration values."""
-    environment = "test"
-    expected_config = {
-      'name': f'{environment}-serverless-api',
-      'description': f'Serverless API for {environment} environment',
-      'endpoint_type': 'REGIONAL'
-    }
-
-    self.assertEqual(expected_config['name'], 'test-serverless-api')
-    self.assertIn(
-      'Serverless API for test environment',
-      expected_config['description']
-    )
-    self.assertEqual(expected_config['endpoint_type'], 'REGIONAL')
-
-  def test_log_group_configuration(self):
-    """Test CloudWatch log group configuration."""
-    environment = "test"
-    expected_config = {
-      'name': f'/aws/lambda/{environment}-api-handler',
-      'retention_days': 14
-    }
-
-    self.assertEqual(
-      expected_config['name'], '/aws/lambda/test-api-handler'
-    )
-    self.assertEqual(expected_config['retention_days'], 14)
-
-  def test_pulumi_exports_structure(self):
-    """Test the structure of expected Pulumi exports."""
-    expected_exports = [
-      'lambda_function_name',
-      'lambda_function_arn',
-      'api_gateway_url',
-      'api_gateway_id',
-      'cloudwatch_log_group'
-    ]
-
-    # Verify all required exports are defined
-    for export in expected_exports:
-      self.assertIsInstance(export, str)
-      self.assertTrue(len(export) > 0)
-
-    self.assertEqual(len(expected_exports), 5)
-
-
 class MockPulumiResource:
   """Mock class to simulate Pulumi resource behavior."""
 
@@ -247,15 +139,56 @@ def create_mock_resource(name_prefix="mock"):
 
 
 class TestTapStack(unittest.TestCase):
-  """Comprehensive test cases for TapStack Pulumi component."""
+  """Comprehensive test cases for TapStack Pulumi component and Lambda function functionality."""
 
   def setUp(self):
-    """Set up test fixtures."""
+    """Set up test fixtures before each test method."""
     self.test_args = TapStackArgs(
       environment_suffix='test',
       tags={'Environment': 'test', 'Project': 'serverless-test'}
     )
     self.mock_resources = {}
+    
+    # Mock Lambda context for Lambda tests
+    self.mock_context = type('MockContext', (), {})()
+    self.mock_context.function_name = "test-api-handler"
+    self.mock_context.function_version = "1"
+    self.mock_context.aws_request_id = "test-request-id-123"
+    self.mock_context.memory_limit_in_mb = 128
+
+    # Set environment variables for testing
+    os.environ['ENVIRONMENT'] = 'test'
+    os.environ['LOG_LEVEL'] = 'INFO'
+
+  def create_api_gateway_event(self, method='GET', path='/',
+                               query_params=None, headers=None):
+    """
+    Create a mock API Gateway event for Lambda testing
+
+    Args:
+      method (str): HTTP method
+      path (str): Request path
+      query_params (dict): Query parameters
+      headers (dict): Request headers
+
+    Returns:
+      dict: Mock API Gateway event
+    """
+    return {
+      "httpMethod": method,
+      "path": path,
+      "queryStringParameters": query_params,
+      "headers": headers or {
+        "User-Agent": "test-client/1.0",
+        "Content-Type": "application/json"
+      },
+      "body": None,
+      "isBase64Encoded": False,
+      "requestContext": {
+        "requestId": "test-request-123",
+        "stage": "test"
+      }
+    }
 
   def create_all_patches(self):
     """Create all necessary patches for TapStack testing."""
@@ -318,6 +251,8 @@ class TestTapStack(unittest.TestCase):
 
     return patches
 
+  # ===== Infrastructure Component Tests =====
+  
   def test_tap_stack_initialization(self):
     """Test TapStack initialization creates all necessary resources."""
     patches = self.create_all_patches()
@@ -503,54 +438,114 @@ class TestTapStack(unittest.TestCase):
           patch_obj.stop()
         except RuntimeError:
           pass
-
-
-class TestLambdaFunction(unittest.TestCase):
-  """Test cases for Lambda function handler"""
-
-  def setUp(self):
-    """Set up test fixtures before each test method"""
-    # Mock Lambda context
-    # Create proper mock context with string values
-    self.mock_context = type('MockContext', (), {})() 
-    self.mock_context.function_name = "test-api-handler"
-    self.mock_context.function_version = "1"
-    self.mock_context.aws_request_id = "test-request-id-123"
-    self.mock_context.memory_limit_in_mb = 128
-
-    # Set environment variables for testing
-    os.environ['ENVIRONMENT'] = 'test'
-    os.environ['LOG_LEVEL'] = 'INFO'
-
-  def create_api_gateway_event(self, method='GET', path='/',
-                               query_params=None, headers=None):
-    """
-    Create a mock API Gateway event
-
-    Args:
-      method (str): HTTP method
-      path (str): Request path
-      query_params (dict): Query parameters
-      headers (dict): Request headers
-
-    Returns:
-      dict: Mock API Gateway event
-    """
-    return {
-      "httpMethod": method,
-      "path": path,
-      "queryStringParameters": query_params,
-      "headers": headers or {
-        "User-Agent": "test-client/1.0",
-        "Content-Type": "application/json"
-      },
-      "body": None,
-      "isBase64Encoded": False,
-      "requestContext": {
-        "requestId": "test-request-123",
-        "stage": "test"
-      }
+          
+  # ===== Configuration Tests =====
+  
+  def test_configuration_common_tags_structure(self):
+    """Test that common tags are properly structured."""
+    # Test the common tags that would be created
+    expected_tags = {
+      "project": "serverless-infra-pulumi",
+      "environment": "test",
+      "managed-by": "pulumi"
     }
+
+    # Verify the structure
+    self.assertIn('project', expected_tags)
+    self.assertIn('environment', expected_tags)
+    self.assertIn('managed-by', expected_tags)
+    self.assertEqual(expected_tags['project'], 'serverless-infra-pulumi')
+    self.assertEqual(expected_tags['managed-by'], 'pulumi')
+
+  def test_resource_naming_convention(self):
+    """Test resource naming convention logic."""
+    environment = "test"
+
+    # Test naming patterns
+    expected_lambda_role = f"{environment}-lambda-execution-role"
+    expected_lambda_function = f"{environment}-api-handler"
+    expected_api_gateway = f"{environment}-serverless-api"
+    expected_log_group = f"/aws/lambda/{environment}-api-handler"
+
+    self.assertEqual(expected_lambda_role, "test-lambda-execution-role")
+    self.assertEqual(expected_lambda_function, "test-api-handler")
+    self.assertEqual(expected_api_gateway, "test-serverless-api")
+    self.assertEqual(expected_log_group, "/aws/lambda/test-api-handler")
+
+  def test_lambda_configuration_values(self):
+    """Test Lambda function configuration values."""
+    expected_config = {
+      'runtime': 'python3.9',
+      'handler': 'lambda_function.lambda_handler',
+      'timeout': 30,
+      'memory_size': 128
+    }
+
+    self.assertEqual(expected_config['runtime'], 'python3.9')
+    self.assertEqual(
+      expected_config['handler'], 'lambda_function.lambda_handler'
+    )
+    self.assertEqual(expected_config['timeout'], 30)
+    self.assertEqual(expected_config['memory_size'], 128)
+
+  def test_environment_variables_structure(self):
+    """Test Lambda environment variables structure."""
+    environment = "test"
+    expected_env_vars = {
+      "ENVIRONMENT": environment,
+      "LOG_LEVEL": "INFO"
+    }
+
+    self.assertEqual(expected_env_vars['ENVIRONMENT'], "test")
+    self.assertEqual(expected_env_vars['LOG_LEVEL'], "INFO")
+
+  def test_api_gateway_configuration_values(self):
+    """Test API Gateway configuration values."""
+    environment = "test"
+    expected_config = {
+      'name': f'{environment}-serverless-api',
+      'description': f'Serverless API for {environment} environment',
+      'endpoint_type': 'REGIONAL'
+    }
+
+    self.assertEqual(expected_config['name'], 'test-serverless-api')
+    self.assertIn(
+      'Serverless API for test environment',
+      expected_config['description']
+    )
+    self.assertEqual(expected_config['endpoint_type'], 'REGIONAL')
+
+  def test_log_group_configuration(self):
+    """Test CloudWatch log group configuration."""
+    environment = "test"
+    expected_config = {
+      'name': f'/aws/lambda/{environment}-api-handler',
+      'retention_days': 14
+    }
+
+    self.assertEqual(
+      expected_config['name'], '/aws/lambda/test-api-handler'
+    )
+    self.assertEqual(expected_config['retention_days'], 14)
+
+  def test_pulumi_exports_structure(self):
+    """Test the structure of expected Pulumi exports."""
+    expected_exports = [
+      'lambda_function_name',
+      'lambda_function_arn',
+      'api_gateway_url',
+      'api_gateway_id',
+      'cloudwatch_log_group'
+    ]
+
+    # Verify all required exports are defined
+    for export in expected_exports:
+      self.assertIsInstance(export, str)
+      self.assertTrue(len(export) > 0)
+
+    self.assertEqual(len(expected_exports), 5)
+    
+  # ===== Lambda Function Tests =====
 
   def test_successful_get_request_root_path(self):
     """Test successful GET request to root path"""
@@ -699,20 +694,9 @@ class TestLambdaFunction(unittest.TestCase):
         body = json.loads(response['body'])
         self.assertIn('timestamp', body)
         self.assertIn('environment', body)
-
-
-class TestAPIGatewayIntegration(unittest.TestCase):
-  """Integration tests simulating API Gateway behavior"""
-
-  def setUp(self):
-    """Set up test fixtures"""
-    # Create proper mock context with string values
-    self.mock_context = type('MockContext', (), {})()
-    self.mock_context.function_name = "dev-api-handler"
-    self.mock_context.function_version = "1"
-    self.mock_context.aws_request_id = "integration-test-123"
-    self.mock_context.memory_limit_in_mb = 128
-
+        
+  # ===== API Gateway Integration Tests =====
+  
   def test_api_gateway_proxy_integration(self):
     """Test API Gateway proxy integration simulation"""
     # Simulate API Gateway proxy integration event
@@ -746,19 +730,8 @@ class TestAPIGatewayIntegration(unittest.TestCase):
     self.assertEqual(body['request_info']['method'], 'GET')
     self.assertEqual(body['request_info']['path'], '/api/users')
     self.assertIn('limit', body['request_info']['query_parameters'])
-
-
-class TestLambdaErrorHandling(unittest.TestCase):
-  """Test edge cases and error handling in Lambda function."""
-
-  def setUp(self):
-    """Set up test fixtures"""
-    # Create proper mock context with string values
-    self.mock_context = type('MockContext', (), {})()
-    self.mock_context.function_name = "test-api-handler"
-    self.mock_context.function_version = "1"
-    self.mock_context.aws_request_id = "test-request-id-456"
-    self.mock_context.memory_limit_in_mb = 128
+    
+  # ===== Lambda Error Handling Tests =====
 
   def test_missing_event_properties(self):
     """Test handling of missing event properties"""
@@ -850,10 +823,8 @@ class TestLambdaErrorHandling(unittest.TestCase):
     self.assertEqual(response['statusCode'], 200)
     body = json.loads(response['body'])
     self.assertEqual(len(body['request_info']['query_parameters']), 50)
-
-
-class TestLambdaUtilityFunctions(unittest.TestCase):
-  """Test utility functions in the Lambda module."""
+    
+  # ===== Lambda Utility Function Tests =====
 
   def test_health_check_structure(self):
     """Test health check function returns proper structure"""
@@ -887,19 +858,8 @@ class TestLambdaUtilityFunctions(unittest.TestCase):
     self.assertIn('POST', headers['Access-Control-Allow-Methods'])
     self.assertIn('Content-Type', headers['Access-Control-Allow-Headers'])
     self.assertEqual(headers['Access-Control-Max-Age'], '86400')
-
-
-class TestLambdaLogging(unittest.TestCase):
-  """Test logging functionality in Lambda function."""
-
-  def setUp(self):
-    """Set up test fixtures"""
-    # Create proper mock context with string values
-    self.mock_context = type('MockContext', (), {})()
-    self.mock_context.function_name = "test-api-handler"
-    self.mock_context.aws_request_id = "test-request-logging"
-    self.mock_context.function_version = "1"
-    self.mock_context.memory_limit_in_mb = 128
+    
+  # ===== Lambda Logging Tests =====
 
   def test_log_level_environment_variable(self):
     """Test that LOG_LEVEL environment variable is respected"""
@@ -908,19 +868,8 @@ class TestLambdaLogging(unittest.TestCase):
       # For this test, we just verify the env var is being read correctly
       level = os.environ.get('LOG_LEVEL', 'INFO')
       self.assertEqual(level, 'DEBUG')
-
-
-class TestLambdaPerformance(unittest.TestCase):
-  """Test performance-related aspects of Lambda function."""
-
-  def setUp(self):
-    """Set up test fixtures"""
-    # Create proper mock context with string values
-    self.mock_context = type('MockContext', (), {})()
-    self.mock_context.function_name = "perf-test-handler"
-    self.mock_context.aws_request_id = "perf-test-123"
-    self.mock_context.memory_limit_in_mb = 128
-    self.mock_context.function_version = "1"
+      
+  # ===== Lambda Performance Tests =====
 
   def test_response_time_consistency(self):
     """Test that response time is consistent across multiple calls"""
