@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure AWS infrastructure for FinancialApp - Multi-tier architecture with comprehensive security controls and a DynamoDB table.'
+Description: 'Secure AWS infrastructure for FinancialApp - Multi-tier architecture with comprehensive security controls.'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -142,7 +142,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-VPC'
+          Value: !Sub 'FinancialApp-VPC-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
 
@@ -151,7 +151,7 @@ Resources:
     Properties:
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-IGW'
+          Value: !Sub 'FinancialApp-IGW-${EnvironmentSuffix}'
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -168,7 +168,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Public-Subnet-1'
+          Value: !Sub 'FinancialApp-Public-Subnet-1-${EnvironmentSuffix}'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -179,7 +179,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Public-Subnet-2'
+          Value: !Sub 'FinancialApp-Public-Subnet-2-${EnvironmentSuffix}'
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -189,7 +189,7 @@ Resources:
       CidrBlock: !Ref PrivateSubnet1Cidr
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Private-Subnet-1'
+          Value: !Sub 'FinancialApp-Private-Subnet-1-${EnvironmentSuffix}'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -199,7 +199,7 @@ Resources:
       CidrBlock: !Ref PrivateSubnet2Cidr
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Private-Subnet-2'
+          Value: !Sub 'FinancialApp-Private-Subnet-2-${EnvironmentSuffix}'
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -208,7 +208,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-NAT-EIP-1'
+          Value: !Sub 'FinancialApp-NAT-EIP-1-${EnvironmentSuffix}'
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
@@ -217,7 +217,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-NAT-EIP-2'
+          Value: !Sub 'FinancialApp-NAT-EIP-2-${EnvironmentSuffix}'
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -226,7 +226,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-NAT-Gateway-1'
+          Value: !Sub 'FinancialApp-NAT-Gateway-1-${EnvironmentSuffix}'
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -235,7 +235,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-NAT-Gateway-2'
+          Value: !Sub 'FinancialApp-NAT-Gateway-2-${EnvironmentSuffix}'
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -243,7 +243,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Public-Route-Table'
+          Value: !Sub 'FinancialApp-Public-Route-Table-${EnvironmentSuffix}'
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -271,7 +271,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Private-Route-Table-1'
+          Value: !Sub 'FinancialApp-Private-Route-Table-1-${EnvironmentSuffix}'
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -292,7 +292,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Private-Route-Table-2'
+          Value: !Sub 'FinancialApp-Private-Route-Table-2-${EnvironmentSuffix}'
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -328,7 +328,7 @@ Resources:
           Description: 'HTTPS access from internet'
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-ALB-SecurityGroup'
+          Value: !Sub 'FinancialApp-ALB-SecurityGroup-${EnvironmentSuffix}'
 
   AppServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -348,7 +348,7 @@ Resources:
           Description: 'SSH access from Bastion'
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-AppServer-SecurityGroup'
+          Value: !Sub 'FinancialApp-AppServer-SecurityGroup-${EnvironmentSuffix}'
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -363,7 +363,7 @@ Resources:
           Description: 'MySQL access from application servers'
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Database-SecurityGroup'
+          Value: !Sub 'FinancialApp-Database-SecurityGroup-${EnvironmentSuffix}'
 
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -378,7 +378,7 @@ Resources:
           Description: 'SSH access from internet (restrict this in production)'
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Bastion-SecurityGroup'
+          Value: !Sub 'FinancialApp-Bastion-SecurityGroup-${EnvironmentSuffix}'
 
   # ==============================================
   # S3 BUCKET WITH AES-256 ENCRYPTION
@@ -386,7 +386,7 @@ Resources:
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-app-data-${AWS::AccountId}'
+      BucketName: !Sub '${AWS::StackName}-app-data-${AWS::AccountId}-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -404,14 +404,14 @@ Resources:
         LogFilePrefix: 'app-data-bucket-logs/'
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Data-Bucket'
+          Value: !Sub 'FinancialApp-Data-Bucket-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
 
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-logs-${AWS::AccountId}'
+      BucketName: !Sub '${AWS::StackName}-logs-${AWS::AccountId}-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -424,32 +424,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Logs-Bucket'
-        - Key: 'Environment'
-          Value: !Ref Environment
-
-  # ==============================================
-  # DYNAMODB TABLE
-  # ==============================================
-  TurnAroundPromptTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      TableName: !Sub 'TurnAroundPromptTable-${EnvironmentSuffix}'
-      AttributeDefinitions:
-        - AttributeName: 'id'
-          AttributeType: 'S'
-      KeySchema:
-        - AttributeName: 'id'
-          KeyType: 'HASH'
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
-      SSESpecification:
-        KMSMasterKeyId: !Ref FinancialAppKMSKey
-        SSEEnabled: true
-        SSEType: KMS
-      Tags:
+          Value: !Sub 'FinancialApp-Logs-Bucket-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
 
@@ -465,12 +440,12 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-DB-SubnetGroup'
+          Value: !Sub 'FinancialApp-DB-SubnetGroup-${EnvironmentSuffix}'
 
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${AWS::StackName}-db-password'
+      Name: !Sub '${AWS::StackName}-db-password-${EnvironmentSuffix}'
       Description: 'Database password for FinancialApp'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
@@ -479,13 +454,14 @@ Resources:
         ExcludeCharacters: '"@/\'
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-DB-Password'
+          Value: !Sub 'FinancialApp-DB-Password-${EnvironmentSuffix}'
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: 'mysql'
       EngineVersion: '8.0.35'
@@ -510,7 +486,7 @@ Resources:
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Database'
+          Value: !Sub 'FinancialApp-Database-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
 
@@ -520,7 +496,7 @@ Resources:
   CriticalOperationsRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-CriticalOperationsRole'
+      RoleName: !Sub '${AWS::StackName}-CriticalOperationsRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -536,7 +512,7 @@ Resources:
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/ReadOnlyAccess'
       Policies:
-        - PolicyName: 'CriticalOperationsPolicy'
+        - PolicyName: !Sub 'CriticalOperationsPolicy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -562,7 +538,7 @@ Resources:
                     'aws:MultiFactorAuthPresent': 'false'
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-CriticalOperations-Role'
+          Value: !Sub 'FinancialApp-CriticalOperations-Role-${EnvironmentSuffix}'
 
   EC2InstanceRole:
     Type: AWS::IAM::Role
@@ -578,7 +554,7 @@ Resources:
         - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
         - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
       Policies:
-        - PolicyName: 'S3AccessPolicy'
+        - PolicyName: !Sub 'S3AccessPolicy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -592,22 +568,9 @@ Resources:
                 Action:
                   - 's3:ListBucket'
                 Resource: !GetAtt ApplicationDataBucket.Arn
-        - PolicyName: 'DynamoDBAccessPolicy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'dynamodb:GetItem'
-                  - 'dynamodb:PutItem'
-                  - 'dynamodb:UpdateItem'
-                  - 'dynamodb:DeleteItem'
-                  - 'dynamodb:Query'
-                  - 'dynamodb:Scan'
-                Resource: !GetAtt TurnAroundPromptTable.Arn
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-EC2-Instance-Role'
+          Value: !Sub 'FinancialApp-EC2-Instance-Role-${EnvironmentSuffix}'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -652,13 +615,13 @@ Resources:
   ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}'
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   RestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub '${AWS::StackName}-api'
+      Name: !Sub '${AWS::StackName}-api-${EnvironmentSuffix}'
       Description: 'FinancialApp REST API'
       EndpointConfiguration:
         Types:
@@ -677,7 +640,7 @@ Resources:
     Properties:
       DeploymentId: !Ref ApiGatewayDeployment
       RestApiId: !Ref RestApi
-      StageName: 'prod'
+      StageName: !Ref EnvironmentSuffix
       AccessLogSetting:
         DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
         Format: '$context.requestId $context.status $context.error.message $context.error.messageString'
@@ -727,11 +690,11 @@ Resources:
   PatchBaseline:
     Type: AWS::SSM::PatchBaseline
     Properties:
-      Name: !Sub '${AWS::StackName}-PatchBaseline'
+      Name: !Sub '${AWS::StackName}-PatchBaseline-${EnvironmentSuffix}'
       Description: 'Patch baseline for FinancialApp EC2 instances'
       OperatingSystem: 'AMAZON_LINUX_2'
       PatchGroups:
-        - !Sub '${AWS::StackName}-patch-group'
+        - !Sub '${AWS::StackName}-patch-group-${EnvironmentSuffix}'
       ApprovalRules:
         PatchRules:
           - PatchFilterGroup:
@@ -750,12 +713,12 @@ Resources:
       RejectedPatches: []
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-PatchBaseline'
+          Value: !Sub 'FinancialApp-PatchBaseline-${EnvironmentSuffix}'
 
   MaintenanceWindow:
     Type: AWS::SSM::MaintenanceWindow
     Properties:
-      Name: !Sub '${AWS::StackName}-MaintenanceWindow'
+      Name: !Sub '${AWS::StackName}-MaintenanceWindow-${EnvironmentSuffix}'
       Description: 'Maintenance window for automated patching'
       Duration: 2
       Cutoff: 1
@@ -764,7 +727,7 @@ Resources:
       AllowUnassociatedTargets: false
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-MaintenanceWindow'
+          Value: !Sub 'FinancialApp-MaintenanceWindow-${EnvironmentSuffix}'
 
   MaintenanceWindowTarget:
     Type: AWS::SSM::MaintenanceWindowTarget
@@ -774,7 +737,7 @@ Resources:
       Targets:
         - Key: 'tag:PatchGroup'
           Values:
-            - !Sub '${AWS::StackName}-patch-group'
+            - !Sub '${AWS::StackName}-patch-group-${EnvironmentSuffix}'
 
   PatchMaintenanceWindowTask:
     Type: AWS::SSM::MaintenanceWindowTask
@@ -810,7 +773,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
+      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate-${EnvironmentSuffix}'
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
@@ -820,7 +783,7 @@ Resources:
         SecurityGroupIds:
           - !Ref AppServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent
@@ -852,11 +815,11 @@ Resources:
           - ResourceType: 'instance'
             Tags:
               - Key: 'Name'
-                Value: 'FinancialApp-Instance'
+                Value: !Sub 'FinancialApp-Instance-${EnvironmentSuffix}'
               - Key: 'Environment'
                 Value: !Ref Environment
               - Key: 'PatchGroup'
-                Value: !Sub '${AWS::StackName}-patch-group'
+                Value: !Sub '${AWS::StackName}-patch-group-${EnvironmentSuffix}'
 
   ApplicationServer1:
     Type: AWS::EC2::Instance
@@ -867,11 +830,11 @@ Resources:
       SubnetId: !Ref PrivateSubnet1
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Server-1'
+          Value: !Sub 'FinancialApp-Server-1-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
         - Key: 'PatchGroup'
-          Value: !Sub '${AWS::StackName}-patch-group'
+          Value: !Sub '${AWS::StackName}-patch-group-${EnvironmentSuffix}'
 
   ApplicationServer2:
     Type: AWS::EC2::Instance
@@ -882,11 +845,11 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Server-2'
+          Value: !Sub 'FinancialApp-Server-2-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
         - Key: 'PatchGroup'
-          Value: !Sub '${AWS::StackName}-patch-group'
+          Value: !Sub '${AWS::StackName}-patch-group-${EnvironmentSuffix}'
 
   BastionHost:
     Type: AWS::EC2::Instance
@@ -899,17 +862,17 @@ Resources:
         - !Ref BastionSecurityGroup
       IamInstanceProfile: !Ref EC2InstanceProfile
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-Bastion'
+          Value: !Sub 'FinancialApp-Bastion-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
         - Key: 'PatchGroup'
-          Value: !Sub '${AWS::StackName}-patch-group'
+          Value: !Sub '${AWS::StackName}-patch-group-${EnvironmentSuffix}'
 
   # ==============================================
   # APPLICATION LOAD BALANCER
@@ -917,7 +880,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-ALB'
+      Name: !Sub '${AWS::StackName}-ALB-${EnvironmentSuffix}'
       Type: 'application'
       Scheme: 'internet-facing'
       SecurityGroups:
@@ -927,14 +890,14 @@ Resources:
         - !Ref PublicSubnet2
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-ALB'
+          Value: !Sub 'FinancialApp-ALB-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-TG'
+      Name: !Sub '${AWS::StackName}-TG-${EnvironmentSuffix}'
       Port: 8080
       Protocol: 'HTTP'
       VpcId: !Ref VPC
@@ -951,7 +914,7 @@ Resources:
           Port: 8080
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-TargetGroup'
+          Value: !Sub 'FinancialApp-TargetGroup-${EnvironmentSuffix}'
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -969,7 +932,7 @@ Resources:
   DatabaseCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-Database-CPU-High'
+      AlarmName: !Sub '${AWS::StackName}-Database-CPU-High-${EnvironmentSuffix}'
       AlarmDescription: 'Database CPU utilization is too high'
       MetricName: 'CPUUtilization'
       Namespace: 'AWS/RDS'
@@ -986,7 +949,7 @@ Resources:
   DatabaseConnectionsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-Database-Connections-High'
+      AlarmName: !Sub '${AWS::StackName}-Database-Connections-High-${EnvironmentSuffix}'
       AlarmDescription: 'Database connection count is too high'
       MetricName: 'DatabaseConnections'
       Namespace: 'AWS/RDS'
@@ -1014,7 +977,7 @@ Resources:
               Service: vpc-flow-logs.amazonaws.com
             Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: 'CloudWatchLogsPolicy'
+        - PolicyName: !Sub 'CloudWatchLogsPolicy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -1030,7 +993,7 @@ Resources:
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   VPCFlowLogs:
@@ -1044,16 +1007,7 @@ Resources:
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
       Tags:
         - Key: 'Name'
-          Value: 'FinancialApp-VPC-FlowLogs'
-
-  # ==============================================
-  # PATCH GROUP ASSOCIATION
-  # ==============================================
-  PatchGroupRegistration:
-    Type: AWS::SSM::PatchBaselineRegistration
-    Properties:
-      BaselineId: !Ref PatchBaseline
-      PatchGroup: !Sub '${AWS::StackName}-patch-group'
+          Value: !Sub 'FinancialApp-VPC-FlowLogs-${EnvironmentSuffix}'
 
 # ==============================================
 # OUTPUTS
@@ -1127,7 +1081,7 @@ Outputs:
 
   ApiGatewayURL:
     Description: 'API Gateway URL'
-    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
     Export:
       Name: !Sub '${AWS::StackName}-API-URL'
 
@@ -1148,19 +1102,6 @@ Outputs:
     Value: !GetAtt CriticalOperationsRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-CriticalOps-Role-ARN'
-
-  # New Outputs
-  TurnAroundPromptTableName:
-    Description: 'Name of the DynamoDB table'
-    Value: !Ref TurnAroundPromptTable
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-
-  TurnAroundPromptTableArn:
-    Description: 'ARN of the DynamoDB table'
-    Value: !GetAtt TurnAroundPromptTable.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
 
   StackName:
     Description: 'Name of this CloudFormation stack'

@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure CloudFormation template for FinancialApp - Financial Institution Compliant Infrastructure'
 
@@ -832,3 +833,4 @@ Outputs:
     Value: !Ref PrivateSubnet2
     Export:
       Name: !Sub '${AWS::StackName
+```
