@@ -33,6 +33,6 @@ Enable CloudWatch monitoring for EC2 and RDS.
 
 Prefix all resource names with "prod-" to indicate a production environment.
 
-Follow best practices for redundancy, security, and scaling.
+Follow best practices for redundancy,security, and scaling.
 
 The output must be a TypeScript CDKTF project with the above requirements fully implemented, compiling and deploying without manual intervention. Use modern CDKTF patterns and resource constructs.
