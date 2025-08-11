@@ -13,7 +13,8 @@ class KMSManager:
     self.project_name = project_name
     self.environment = environment
     self.account_id = pulumi_aws.get_caller_identity().account_id
-    self.region = os.getenv("AWS_REGION", "us-east-1")
+    config = pulumi.Config("aws")
+    self.region = config.require("region")  
 
   def create_master_key(self) -> kms.Key:
     """Create master KMS key for primary encryption."""
