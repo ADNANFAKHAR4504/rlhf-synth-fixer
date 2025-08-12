@@ -310,8 +310,7 @@ class TapStack(ComponentResource):
       f"prod-api-integration-{self.environment_suffix}",
       api_id=self.api_gateway.id,
       integration_type="AWS_PROXY",
-      integration_method="POST",
-      integration_uri=self.lambda_function.invoke_arn,
+      integration_uri=self.lambda_function.arn,
       payload_format_version="2.0",
       opts=ResourceOptions(parent=self)
     )
@@ -331,6 +330,15 @@ class TapStack(ComponentResource):
       f"prod-api-route-health-{self.environment_suffix}",
       api_id=self.api_gateway.id,
       route_key="GET /health",
+      target=lambda_integration.id.apply(lambda id: f"integrations/{id}"),
+      opts=ResourceOptions(parent=self)
+    )
+    
+    # Data endpoint route  
+    aws.apigatewayv2.Route(
+      f"prod-api-route-data-{self.environment_suffix}",
+      api_id=self.api_gateway.id,
+      route_key="POST /data",
       target=lambda_integration.id.apply(lambda id: f"integrations/{id}"),
       opts=ResourceOptions(parent=self)
     )
@@ -372,7 +380,7 @@ class TapStack(ComponentResource):
       f"prod-lambda-permission-{self.environment_suffix}",
       statement_id="AllowExecutionFromAPIGateway",
       action="lambda:InvokeFunction",
-      function=self.lambda_function.name,
+      function=self.lambda_function.arn,
       principal="apigateway.amazonaws.com",
       source_arn=pulumi.Output.concat(
         self.api_gateway.execution_arn, "/*/*"
