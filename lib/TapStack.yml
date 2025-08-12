@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready stack for a highly available web application. Provisions VPC, Subnets, ALB, RDS, S3, ECR, IAM Role, and Lambda.'
+Description: 'Production-ready stack for a highly available web application. Provisions VPC, Subnets, ALB, RDS, S3, IAM Role, and Lambda.'
 
 Parameters:
   DBMasterUsername:
@@ -10,14 +10,10 @@ Parameters:
     Type: String
     Description: The ARN of the DynamoDB table for the Lambda function to access.
     Default: 'arn:aws:dynamodb:us-east-1:123456789012:table/MyExampleTable'
-  ECRRepositoryName:
+  ECRImageUriParameter:
     Type: String
-    Description: The name of the ECR repository to be created for the Lambda function.
-    Default: 'my-web-app'
-  ImageTag:
-    Type: String
-    Description: The tag of the container image to deploy (e.g., latest, v1.2.3).
-    Default: 'latest'
+    Description: The URI of the container image for the Lambda function.
+    Default: 'public.ecr.aws/nginx/nginx:latest'
 
 Resources:
   # ------------------------------------------------------------#
@@ -401,29 +397,6 @@ Resources:
           Value: WebAppTeam
 
   # ------------------------------------------------------------#
-  #  Container Registry (ECR)
-  # ------------------------------------------------------------#
-  WebAppECRRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Ref ECRRepositoryName
-      RepositoryPolicyText:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: LambdaECRImageRetrievalPolicy
-            Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action:
-              - ecr:GetDownloadUrlForLayer
-              - ecr:BatchGetImage
-      Tags:
-        - Key: Environment
-          Value: Production
-        - Key: Owner
-          Value: WebAppTeam
-
-  # ------------------------------------------------------------#
   #  IAM & Lambda
   # ------------------------------------------------------------#
   LambdaExecutionRole:
@@ -462,13 +435,12 @@ Resources:
 
   PlaceholderLambda:
     Type: AWS::Lambda::Function
-    DependsOn: WebAppECRRepository
     Properties:
       FunctionName: WebApp-Placeholder-Function
       Role: !GetAtt LambdaExecutionRole.Arn
       PackageType: Image
       Code:
-        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryName}:${ImageTag}'
+        ImageUri: !Ref ECRImageUriParameter
       VpcConfig:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
@@ -511,9 +483,6 @@ Outputs:
   S3BucketName:
     Description: 'Name of the S3 Bucket for application assets'
     Value: !Ref S3Bucket
-  ECRRepositoryNameOutput:
-    Description: 'Name of the ECR Repository for container images'
-    Value: !Ref WebAppECRRepository
   RDSInstanceEndpoint:
     Description: 'Endpoint address of the RDS database instance'
     Value: !GetAtt RDSInstance.Endpoint.Address
