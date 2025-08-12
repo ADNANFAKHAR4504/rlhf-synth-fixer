@@ -506,13 +506,14 @@ def create_api_gateway(kms_key: aws.kms.Key,
       http_method=method.http_method,
       status_code=method_response.status_code,
       response_templates={"application/json": json.dumps({"message": "API is healthy"})},
+      opts=ResourceOptions(depends_on=[integration])
   )
 
   deployment = aws.apigateway.Deployment(
       "nova-api-deployment",
       rest_api=api.id,
       # ensures deployment runs after integration
-      opts=ResourceOptions(depends_on=[integration])
+      opts=ResourceOptions(depends_on=[integration, integration_response])
   )
 
   stage = aws.apigateway.Stage(
