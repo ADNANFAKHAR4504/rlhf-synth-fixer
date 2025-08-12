@@ -25,7 +25,8 @@ export class TapStack extends cdk.Stack {
 
     // Determine if this is the primary region
     const currentRegion = this.region;
-    const isPrimaryRegion = currentRegion === 'us-east-1' || currentRegion === cdk.Aws.NO_VALUE;
+    const isPrimaryRegion =
+      currentRegion === 'us-east-1' || currentRegion === cdk.Aws.NO_VALUE;
 
     // Multi-Region VPC with conditional CIDR
     this.vpc = new ec2.Vpc(this, 'FinancialServicesVPC', {
@@ -87,20 +88,24 @@ export class TapStack extends cdk.Stack {
     );
 
     // Turn Around Prompt Table
-    this.turnAroundPromptTable = new dynamodb.Table(this, 'TurnAroundPromptTable', {
-      tableName: `TurnAroundPromptTable${environmentSuffix}`,
-      partitionKey: {
-        name: 'id',
-        type: dynamodb.AttributeType.STRING,
-      },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: this.kmsKey,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      },
-    });
+    this.turnAroundPromptTable = new dynamodb.Table(
+      this,
+      'TurnAroundPromptTable',
+      {
+        tableName: `TurnAroundPromptTable${environmentSuffix}`,
+        partitionKey: {
+          name: 'id',
+          type: dynamodb.AttributeType.STRING,
+        },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+        encryptionKey: this.kmsKey,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        pointInTimeRecoverySpecification: {
+          pointInTimeRecoveryEnabled: true,
+        },
+      }
+    );
 
     // Tags for all resources
     cdk.Tags.of(this).add('Environment', 'Production');

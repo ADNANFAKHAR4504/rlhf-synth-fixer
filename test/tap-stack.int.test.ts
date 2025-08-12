@@ -1,8 +1,21 @@
 ﻿// Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import { DynamoDBClient, PutItemCommand, GetItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
-import { EC2Client, DescribeVpcsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
-import { KMSClient, DescribeKeyCommand, ListAliasesCommand } from '@aws-sdk/client-kms';
+import {
+  DynamoDBClient,
+  PutItemCommand,
+  GetItemCommand,
+  DeleteItemCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSecurityGroupsCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -15,7 +28,9 @@ try {
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
 } catch (error) {
-  console.warn('cfn-outputs/flat-outputs.json not found, using mock values for local testing');
+  console.warn(
+    'cfn-outputs/flat-outputs.json not found, using mock values for local testing'
+  );
   outputs = {
     VPCId: `vpc-${environmentSuffix}`,
     KMSKeyId: `key-${environmentSuffix}`,
@@ -34,8 +49,16 @@ describe('TapStack Integration Tests', () => {
     const testItemId = `test-item-${Date.now()}`;
 
     test('should be able to put and get item from DynamoDB table', async () => {
-      if (!outputs.TurnAroundPromptTableName || outputs.TurnAroundPromptTableName.startsWith('TurnAroundPromptTable') && outputs.TurnAroundPromptTableName.length < 25) {
-        console.warn('DynamoDB table name appears to be mock value, skipping actual AWS test');
+      if (
+        !outputs.TurnAroundPromptTableName ||
+        (outputs.TurnAroundPromptTableName.startsWith(
+          'TurnAroundPromptTable'
+        ) &&
+          outputs.TurnAroundPromptTableName.length < 25)
+      ) {
+        console.warn(
+          'DynamoDB table name appears to be mock value, skipping actual AWS test'
+        );
         expect(outputs.TurnAroundPromptTableName).toBeDefined();
         return;
       }
@@ -67,7 +90,13 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
 
     afterAll(async () => {
-      if (!outputs.TurnAroundPromptTableName || outputs.TurnAroundPromptTableName.startsWith('TurnAroundPromptTable') && outputs.TurnAroundPromptTableName.length < 25) {
+      if (
+        !outputs.TurnAroundPromptTableName ||
+        (outputs.TurnAroundPromptTableName.startsWith(
+          'TurnAroundPromptTable'
+        ) &&
+          outputs.TurnAroundPromptTableName.length < 25)
+      ) {
         return;
       }
 
@@ -90,8 +119,13 @@ describe('TapStack Integration Tests', () => {
     const ec2Client = new EC2Client({ region });
 
     test('should verify VPC exists with correct configuration', async () => {
-      if (!outputs.VPCId || outputs.VPCId.startsWith('vpc-') && outputs.VPCId.length < 15) {
-        console.warn('VPC ID appears to be mock value, skipping actual AWS test');
+      if (
+        !outputs.VPCId ||
+        (outputs.VPCId.startsWith('vpc-') && outputs.VPCId.length < 15)
+      ) {
+        console.warn(
+          'VPC ID appears to be mock value, skipping actual AWS test'
+        );
         expect(outputs.VPCId).toBeDefined();
         return;
       }
@@ -102,7 +136,7 @@ describe('TapStack Integration Tests', () => {
 
       const result = await ec2Client.send(command);
       expect(result.Vpcs).toHaveLength(1);
-      
+
       const vpc = result.Vpcs![0];
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toMatch(/^10\.[01]\.0\.0\/16$/);
@@ -110,8 +144,14 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
 
     test('should verify security group exists with correct rules', async () => {
-      if (!outputs.LambdaSecurityGroupId || outputs.LambdaSecurityGroupId.startsWith('sg-') && outputs.LambdaSecurityGroupId.length < 15) {
-        console.warn('Security Group ID appears to be mock value, skipping actual AWS test');
+      if (
+        !outputs.LambdaSecurityGroupId ||
+        (outputs.LambdaSecurityGroupId.startsWith('sg-') &&
+          outputs.LambdaSecurityGroupId.length < 15)
+      ) {
+        console.warn(
+          'Security Group ID appears to be mock value, skipping actual AWS test'
+        );
         expect(outputs.LambdaSecurityGroupId).toBeDefined();
         return;
       }
@@ -126,7 +166,7 @@ describe('TapStack Integration Tests', () => {
       const sg = result.SecurityGroups![0];
       expect(sg.GroupName).toContain('Lambda-SecurityGroup');
       expect(sg.Description).toContain('Lambda functions');
-      
+
       // Check for HTTPS ingress rule
       const httpsIngressRule = sg.IpPermissions?.find(
         rule => rule.FromPort === 443 && rule.ToPort === 443
@@ -139,8 +179,13 @@ describe('TapStack Integration Tests', () => {
     const kmsClient = new KMSClient({ region });
 
     test('should verify KMS key exists and is enabled', async () => {
-      if (!outputs.KMSKeyId || outputs.KMSKeyId.startsWith('key-') && outputs.KMSKeyId.length < 15) {
-        console.warn('KMS Key ID appears to be mock value, skipping actual AWS test');
+      if (
+        !outputs.KMSKeyId ||
+        (outputs.KMSKeyId.startsWith('key-') && outputs.KMSKeyId.length < 15)
+      ) {
+        console.warn(
+          'KMS Key ID appears to be mock value, skipping actual AWS test'
+        );
         expect(outputs.KMSKeyId).toBeDefined();
         return;
       }
@@ -162,13 +207,18 @@ describe('TapStack Integration Tests', () => {
 
       const expectedAlias = `alias/financial-services-${environmentSuffix}`;
       const alias = result.Aliases?.find(a => a.AliasName === expectedAlias);
-      
-      if (!outputs.KMSKeyId || outputs.KMSKeyId.startsWith('key-') && outputs.KMSKeyId.length < 15) {
-        console.warn('KMS Key ID appears to be mock value, skipping actual AWS alias verification');
+
+      if (
+        !outputs.KMSKeyId ||
+        (outputs.KMSKeyId.startsWith('key-') && outputs.KMSKeyId.length < 15)
+      ) {
+        console.warn(
+          'KMS Key ID appears to be mock value, skipping actual AWS alias verification'
+        );
         expect(expectedAlias).toBeDefined();
         return;
       }
-      
+
       expect(alias).toBeDefined();
       expect(alias?.TargetKeyId).toBeDefined();
     }, 30000);

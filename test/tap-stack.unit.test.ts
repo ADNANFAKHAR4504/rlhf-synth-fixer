@@ -5,12 +5,12 @@ import { TapStack } from '../lib/tap-stack';
 describe('TapStack Unit Tests', () => {
   let app: cdk.App;
   let template: Template;
-  
+
   describe('Default Stack Configuration', () => {
     beforeAll(() => {
       app = new cdk.App();
       const stack = new TapStack(app, 'TestTapStack', {
-        env: { region: 'us-east-1' }
+        env: { region: 'us-east-1' },
       });
       template = Template.fromStack(stack);
     });
@@ -25,7 +25,8 @@ describe('TapStack Unit Tests', () => {
 
     test('should create KMS key with rotation enabled', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'Customer-managed KMS key for Financial Services encryption',
+        Description:
+          'Customer-managed KMS key for Financial Services encryption',
         EnableKeyRotation: true,
         KeyUsage: 'ENCRYPT_DECRYPT',
       });
@@ -39,7 +40,8 @@ describe('TapStack Unit Tests', () => {
 
     test('should create security group with correct rules', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for Lambda functions in Financial Services infrastructure',
+        GroupDescription:
+          'Security group for Lambda functions in Financial Services infrastructure',
         SecurityGroupIngress: [
           {
             IpProtocol: 'tcp',
@@ -224,7 +226,7 @@ describe('TapStack Unit Tests', () => {
     test('should expose public properties correctly', () => {
       const app = new cdk.App();
       const stack = new TapStack(app, 'TestTapStack');
-      
+
       expect(stack.vpc).toBeDefined();
       expect(stack.kmsKey).toBeDefined();
       expect(stack.lambdaSecurityGroup).toBeDefined();
