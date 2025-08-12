@@ -28,6 +28,6 @@ it may not fit the stack you're deploying.
 #   def test_tap_stack_args_default_values(self):
 #     """Test TapStackArgs with default values."""
 #     args = TapStackArgs()
-    
+
 #     self.assertEqual(args.environment_suffix, 'dev')
 #     self.assertIsNone(args.tags)
