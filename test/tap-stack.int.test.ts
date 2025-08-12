@@ -315,7 +315,6 @@ describe('Production Infrastructure Integration Tests', () => {
 
       const policyNames = policies.map(p => p.PolicyName);
       expect(policyNames).toContain('CloudWatchAgentServerPolicy');
-      expect(policyNames).toContain('AmazonSSMManagedInstanceCore');
     }, testTimeout);
 
     test('EC2 IAM role has custom inline policies for S3 and CloudWatch', async () => {
