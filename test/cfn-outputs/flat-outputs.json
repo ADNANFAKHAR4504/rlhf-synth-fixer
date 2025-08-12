@@ -1,0 +1,10 @@
+{
+  "S3KMSKeyArn": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+  "S3BucketName": "my-app-bucket-dev",
+  "CloudTrailName": "CloudTrail-pr797",
+  "IAMRoleArn": "arn:aws:iam::123456789012:role/my-app-Role-ReadS3-dev",
+  "SubnetAId": "subnet-0123456789abcdef0",
+  "SubnetBId": "subnet-0123456789abcdef1",
+  "SampleEC2InstanceId": "i-0123456789abcdef0",
+  "DeploymentCommand": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name my-app-secure-infra-dev --parameter-overrides EnvironmentSuffix=dev --capabilities CAPABILITY_NAMED_IAM"
+}

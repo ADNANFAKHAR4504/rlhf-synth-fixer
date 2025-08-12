@@ -21,15 +21,15 @@ try {
 let outputs: Record<string, string>;
 try {
   outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+    fs.readFileSync('test/cfn-outputs/flat-outputs.json', 'utf8')
   );
   console.log('Using CloudFormation outputs from file');
 } catch (error) {
   console.error(
-    'Could not load outputs from file - cfn-outputs/flat-outputs.json is required'
+    'Could not load outputs from file - test/cfn-outputs/flat-outputs.json is required'
   );
   throw new Error(
-    'Required outputs file not found or invalid. Please ensure cfn-outputs/flat-outputs.json exists and contains valid JSON.'
+    'Required outputs file not found or invalid. Please ensure test/cfn-outputs/flat-outputs.json exists and contains valid JSON.'
   );
 }
 
