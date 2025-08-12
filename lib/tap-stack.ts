@@ -1,4 +1,4 @@
-import { Stack, StackProps, Tags } from 'aws-cdk-lib';
+import { aws_ssm as ssm, Stack, StackProps, Tags } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { WebAlb } from './constructs/alb';
 import { WebAsg } from './constructs/asg';
@@ -8,7 +8,7 @@ import { WebVpc } from './constructs/vpc';
 
 interface TapStackProps extends StackProps {
   stage: string;
-  certificateArn: string | undefined;
+  appName: string;
 }
 
 export class TapStack extends Stack {
@@ -18,6 +18,7 @@ export class TapStack extends Stack {
     // Get environment suffix from props, context, or use 'dev' as default
     const region = this.region;
     const stage = props?.stage || 'dev';
+    const appName = props?.appName || 'webapp';
 
     const vpc = new WebVpc(this, 'WebVpc', { stage }).vpc;
 
@@ -30,21 +31,30 @@ export class TapStack extends Stack {
 
     const asg = new WebAsg(this, 'WebAsg', { vpc, launchTemplate: lt }).asg;
 
-    if (!props?.certificateArn) {
+    // Pull cert ARN from SSM so you only pass environmentSuffix at synth/deploy.
+    // Create these parameters ahead of time (see commands below).
+
+    const certArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/${appName}/${stage}/alb/cert-arn/${region}`
+    );
+
+    if (!certArn) {
       throw new Error(
         `certificateArn is required to create HTTPS listener in ${region}`
       );
     }
 
-    const alb = new WebAlb(this, 'WebAlb', {
+    new WebAlb(this, 'WebAlb', {
       vpc,
       albSecurityGroup: sgs.albSg,
       appAsg: asg,
       stage,
-      certificateArn: props.certificateArn,
+      certificateArn: certArn,
     });
 
     // Global tags / naming convention
+    Tags.of(this).add('App', appName);
     Tags.of(this).add('Stage', stage);
     Tags.of(this).add('Region', region);
     Tags.of(this).add(

@@ -15,7 +15,7 @@ describe('TapStack Integration', () => {
     const stack = new TapStack(app, 'TapStackInt', {
       env: defaultEnv,
       stage: 'integration',
-      certificateArn: defaultCertArn,
+      appName: 'webapp',
     });
     const template = Template.fromStack(stack);
     // Major resources
@@ -39,19 +39,6 @@ describe('TapStack Integration', () => {
       ])
     );
   });
-
-  it('throws if certificateArn is missing (integration)', () => {
-    const app = new cdk.App();
-    expect(
-      () =>
-        new TapStack(app, 'TapStackNoCertInt', {
-          env: defaultEnv,
-          stage: 'integration',
-          // certificateArn intentionally omitted
-        } as any)
-    ).toThrow(/certificateArn is required/);
-  });
-
   it('defaults stage to dev if not provided (integration)', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TapStackNoStageInt', {
