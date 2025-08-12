@@ -135,6 +135,8 @@ Conditions:
   UseNatGateways: !Equals [ !Ref CreateNatGateways, 'true' ]
   UseCloudFront: !Equals [ !Ref CreateCloudFront, 'true' ]
   UseCustomCert: !Not [ !Equals [ !Ref ACMCertificateArn, '' ] ]
+  HasSecondAZ: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+  HasBucketNamePrefix: !Not [ !Equals [ !Ref BucketNamePrefix, '' ] ]
 
 # ---------------------------
 # HELPER & COMMON TAGS (used inline)
@@ -169,7 +171,7 @@ Resources:
             Principal:
               Service:
                 - cloudtrail.amazonaws.com
-                - logs.${AWS::Region}.amazonaws.com
+                - !Sub 'logs.${AWS::Region}.amazonaws.com'
                 - s3.amazonaws.com
                 - cloudfront.amazonaws.com
             Action:
@@ -185,6 +187,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   PrimaryKmsAlias:
     Type: AWS::KMS::Alias
@@ -211,17 +214,13 @@ Resources:
           Value: !Ref Owner
 
   # derive subnet CIDRs using Fn::Cidr - allocate 6 subnets (3 per AZ): public/private/isolated across AZCount
-  AllAZs:
-    Type: 'Custom::GetAZCount'
-    # Note: placeholder — this resource is not a real CFN resource; if you prefer, compute subnets using Fn::GetAZs and Fn::Cidr inline below.
-    # To keep template CloudFormation-native we'll compute subnets below using Fn::Cidr and Fn::GetAZs directly.
-
+  
   # Public subnets (create two by default or AZCount)
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 0, !Fn::Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PublicSubnetMask ] ]
+      CidrBlock: !Select [ 0, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PublicSubnetMask ] ]
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
@@ -233,11 +232,11 @@ Resources:
           Value: !Ref Owner
 
   PublicSubnet2:
-    Condition: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+    Condition: HasSecondAZ
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 1, !Fn::Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PublicSubnetMask ] ]
+      CidrBlock: !Select [ 1, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PublicSubnetMask ] ]
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
@@ -253,7 +252,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 0, !Fn::Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PrivateSubnetMask ] ]
+      CidrBlock: !Select [ 0, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PrivateSubnetMask ] ]
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -264,11 +263,11 @@ Resources:
           Value: !Ref Owner
 
   PrivateSubnet2:
-    Condition: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+    Condition: HasSecondAZ
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 1, !Fn::Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PrivateSubnetMask ] ]
+      CidrBlock: !Select [ 1, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PrivateSubnetMask ] ]
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -283,7 +282,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 2, !Fn::Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref IsolatedSubnetMask ] ]
+      CidrBlock: !Select [ 2, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref IsolatedSubnetMask ] ]
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -294,11 +293,11 @@ Resources:
           Value: !Ref Owner
 
   IsolatedSubnet2:
-    Condition: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+    Condition: HasSecondAZ
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 3, !Fn::Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref IsolatedSubnetMask ] ]
+      CidrBlock: !Select [ 3, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref IsolatedSubnetMask ] ]
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -352,7 +351,7 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnet2RouteAssociation:
-    Condition: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+    Condition: HasSecondAZ
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
@@ -411,7 +410,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable1
 
   PrivateSubnet2RouteAssociation:
-    Condition: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+    Condition: HasSecondAZ
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
@@ -437,7 +436,7 @@ Resources:
       RouteTableId: !Ref IsolatedRouteTable
 
   IsolatedSubnet2RouteAssociation:
-    Condition: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+    Condition: HasSecondAZ
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref IsolatedSubnet2
@@ -502,7 +501,7 @@ Resources:
       NetworkAclId: !Ref PublicNetworkAcl
 
   PublicSubnetNaclAssoc2:
-    Condition: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+    Condition: HasSecondAZ
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
@@ -547,7 +546,7 @@ Resources:
       NetworkAclId: !Ref PrivateNetworkAcl
 
   PrivateSubnetNaclAssoc2:
-    Condition: !Not [ !Equals [ !Ref AZCount, 1 ] ]
+    Condition: HasSecondAZ
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
@@ -589,6 +588,11 @@ Resources:
           ToPort: 8080
           SourceSecurityGroupId: !Ref WebSecurityGroup
           Description: App port from web tier
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AdminCIDR
+          Description: Admin SSH access
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
@@ -757,6 +761,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   # ---------------------------
   # S3 Buckets (no fixed names to avoid collisions; CFN will generate names unless prefix provided)
@@ -767,9 +772,9 @@ Resources:
     Properties:
       # optional stable name using prefix + account + region, but if prefix empty, CFN generates unique name
       BucketName: !If
-        - Fn::Equals: [ !Ref BucketNamePrefix, '' ]
-        - !Ref AWS::NoValue
+        - HasBucketNamePrefix
         - !Sub '${BucketNamePrefix}-${Environment}-${AWS::AccountId}-${AWS::Region}'
+        - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -791,6 +796,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   # Bucket policy to enforce HTTPS and SSE-KMS usage when uploading
   SecureDataBucketPolicy:
@@ -818,14 +824,24 @@ Resources:
             Condition:
               StringNotEquals:
                 s3:x-amz-server-side-encryption: aws:kms
+          - !If
+            - UseCloudFront
+            - 
+              Sid: AllowCloudFrontServicePrincipal
+              Effect: Allow
+              Principal:
+                CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+              Action: s3:GetObject
+              Resource: !Sub '${SecureDataBucket.Arn}/*'
+            - !Ref AWS::NoValue
 
   AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !If
-        - Fn::Equals: [ !Ref BucketNamePrefix, '' ]
-        - !Ref AWS::NoValue
+        - HasBucketNamePrefix
         - !Sub '${BucketNamePrefix}-access-logs-${Environment}-${AWS::AccountId}'
+        - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -842,14 +858,15 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !If
-        - Fn::Equals: [ !Ref BucketNamePrefix, '' ]
-        - !Ref AWS::NoValue
+        - HasBucketNamePrefix
         - !Sub '${BucketNamePrefix}-cloudtrail-${Environment}-${AWS::AccountId}'
+        - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -866,6 +883,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -894,9 +912,9 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !If
-        - Fn::Equals: [ !Ref BucketNamePrefix, '' ]
-        - !Ref AWS::NoValue
+        - HasBucketNamePrefix
         - !Sub '${BucketNamePrefix}-config-${Environment}-${AWS::AccountId}'
+        - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -913,6 +931,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   ConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -954,6 +973,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
@@ -967,6 +987,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   # ---------------------------
   # CloudTrail (multi-region) with KMS encryption and CloudWatch integration
@@ -1013,7 +1034,7 @@ Resources:
     Properties:
       ConformancePackName: !Sub '${Environment}-cis-foundations'
       DeliveryS3Bucket: !Ref ConfigBucket
-      TemplateS3Uri: 'https://s3.amazonaws.com/aws-config-conformance-packs-us-east-1/aws-cis-foundations-conformance-pack.template' 
+      TemplateS3Uri: 's3://aws-config-conformance-packs-us-east-1/aws-cis-foundations-conformance-pack.template' 
       # Note: using AWS-managed/template location. If your environment disallows, replace with managed rules set below.
     DependsOn:
       - ConfigurationRecorder
@@ -1103,6 +1124,7 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-financial-db'
       AllocatedStorage: !Ref DBAllocatedStorage
@@ -1216,22 +1238,6 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-
-  # Allow CloudFront OAI to GetObject from SecureDataBucket
-  SecureDataBucketOaiPolicy:
-    Condition: UseCloudFront
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref SecureDataBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowCloudFrontServicePrincipal
-            Effect: Allow
-            Principal:
-              CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
-            Action: s3:GetObject
-            Resource: !Sub '${SecureDataBucket.Arn}/*'
 
   # ---------------------------
   # CloudWatch Metric Filter + Alarm for Unauthorized API calls
