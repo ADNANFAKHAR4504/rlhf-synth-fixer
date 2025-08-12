@@ -6,10 +6,6 @@ Parameters:
     Type: String
     Default: 'nova'
     Description: 'Project name, used for resource naming.'
-  Environment:
-    Type: String
-    Default: 'prod'
-    Description: 'Environment name (e.g., prod, dev).'
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
@@ -22,11 +18,9 @@ Parameters:
     AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
   PeerVpcId:
     Type: String
-    Default: ''
     Description: '(Optional - For Step 2) The VPC ID of the peer region to establish VPC Peering.'
   PeerCidrBlock:
     Type: String
-    Default: ''
     Description: '(Optional - For Step 2) The CIDR block of the peer VPC (e.g., 10.1.0.0/16).'
 
 Conditions:
@@ -37,7 +31,7 @@ Resources:
   KMSKey:
     Type: 'AWS::KMS::Key'
     Properties:
-      Description: !Sub 'KMS key for ${ProjectName}-${Environment} resources'
+      Description: !Sub 'KMS key for ${ProjectName}-${EnvironmentSuffix} resources'
       EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
@@ -59,7 +53,7 @@ Resources:
   KMSKeyAlias:
     Type: 'AWS::KMS::Alias'
     Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${Environment}-key'
+      AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-key'
       TargetKeyId: !Ref KMSKey
   VPC:
     Type: 'AWS::EC2::VPC'
@@ -69,7 +63,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-vpc'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc'
   PublicSubnet:
     Type: 'AWS::EC2::Subnet'
     Properties:
@@ -79,7 +73,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-public-subnet'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet'
   PrivateSubnet:
     Type: 'AWS::EC2::Subnet'
     Properties:
@@ -88,7 +82,7 @@ Resources:
       CidrBlock: !If [IsPrimaryRegion, '10.0.100.0/24', '10.1.100.0/24']
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-private-subnet'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet'
   InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
   AttachGateway:
@@ -145,7 +139,7 @@ Resources:
       PeerRegion: !If [IsPrimaryRegion, 'us-west-2', 'us-east-1']
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-peering'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-peering'
   PeeringRoute:
     Type: 'AWS::EC2::Route'
     Condition: HasPeerVpcId
@@ -229,7 +223,7 @@ Resources:
   DataBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-data-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-data-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -258,7 +252,7 @@ Resources:
   PrimaryDBInstance:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-      DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db'
+      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-db'
       Engine: 'postgres'
       EngineVersion: '15.7'
       DBInstanceClass: 'db.t3.medium'
@@ -266,7 +260,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
       MasterUsername: 'nova_admin'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProjectName}-${Environment}-db-password:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProjectName}-${EnvironmentSuffix}-db-password:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups: [!Ref RDSSecurityGroup]
       DBParameterGroupName: !Ref DBParameterGroup
@@ -291,11 +285,11 @@ Resources:
             KmsKeyId: !Ref KMSKey
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-app-server'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-server'
   CloudTrailLogBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerEnforced
@@ -340,7 +334,7 @@ Resources:
   VPCFlowLogsLogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
-      LogGroupName: !Sub '/aws/vpc-flow-logs/${ProjectName}-${Environment}'
+      LogGroupName: !Sub '/aws/vpc-flow-logs/${ProjectName}-${EnvironmentSuffix}'
       RetentionInDays: 90
       KmsKeyId: !GetAtt KMSKey.Arn
   VPCFlowLogs:
