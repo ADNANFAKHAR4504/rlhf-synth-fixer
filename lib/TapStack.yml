@@ -72,6 +72,30 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
+          - Sid: Allow Auto Scaling Service
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+          - Sid: Allow EC2 Service
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-master-key'
@@ -543,9 +567,9 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceClass: 'db.t3.micro'
+      DBInstanceClass: 'db.t3.small'
       Engine: 'mysql'
-      EngineVersion: '8.0.39'
+      EngineVersion: '8.0.42'
       AllocatedStorage: 20
       StorageType: 'gp3'
       StorageEncrypted: true
@@ -557,8 +581,6 @@ Resources:
         - !Ref DatabaseSecurityGroup
       BackupRetentionPeriod: 7
       MultiAZ: true
-      EnablePerformanceInsights: true
-      PerformanceInsightsKMSKeyId: !Ref MasterEncryptionKey
       DeletionProtection: !If [IsProduction, true, false]
       Tags:
         - Key: Name
