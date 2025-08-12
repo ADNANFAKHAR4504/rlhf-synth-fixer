@@ -1,4 +1,3 @@
-// test/unit.test.ts
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
@@ -99,7 +98,6 @@ describe('TapStack — unit coverage', () => {
     expect(synthesized).toMatch(/"aws_route53_health_check"/);
   });
 
-  // NEW: hit branchy paths (SSH to app + NAT-per-AZ)
   test('covers SSH-to-app and NAT-per-AZ branches', () => {
     process.env.ENABLE_SSH_TO_APP = 'true';
     process.env.ADMIN_CIDR = '203.0.113.0/24'; // required for SSH rule
@@ -117,5 +115,25 @@ describe('TapStack — unit coverage', () => {
     expect(synthesized).toMatch(/"aws_nat_gateway"/);
     // Sanity: security groups exist (SSH rule branch executed)
     expect(synthesized).toMatch(/"aws_security_group"/);
+  });
+
+  // NEW: Test disable secondary region
+  test('disables secondary region when ENABLE_SECONDARY is false', () => {
+    process.env.ENABLE_SECONDARY = 'false';
+
+    const app = new App();
+    const stack = new TapStack(app, 'TestTapStackNoSecondary');
+    const synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Primary resources should be present
+    expect(synthesized).toMatch(/"aws_vpc"/);
+    expect(synthesized).toMatch(/"primary_vpc_id"/);
+
+    // Secondary resources should not be present
+    expect(synthesized).not.toMatch(/"secondary_vpc_id"/);
+    expect(synthesized).not.toMatch(/"aws_lb".*alias:.*secondary/); // Approximate check for secondary ALB
   });
 });

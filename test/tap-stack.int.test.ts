@@ -27,8 +27,8 @@ describe('TapStack — Integration Coverage', () => {
     process.env.AZ_COUNT = '2';
     process.env.NAT_PER_AZ = 'false';
     process.env.ENABLE_SSH_TO_APP = 'false';
-    delete process.env.DNS_HOSTED_ZONE_ID;
-    delete process.env.DNS_RECORD_NAME;
+    process.env.DNS_HOSTED_ZONE_ID = 'Z1234567890ABC'; // Added for Dns
+    process.env.DNS_RECORD_NAME = 'app.example.com'; // Added for Dns
   });
 
   afterAll(() => {
@@ -80,20 +80,34 @@ describe('TapStack — Integration Coverage', () => {
     const state = JSON.parse(fs.readFileSync(terraformStateFile, 'utf8'));
     console.log("State: ", state);
 
-    // Ensure the correct output names are being referenced here
-    const vpcId = state.TapStackpr824.PrimaryVpc_vpc_id_121F1BFC;
-    const dbInstanceId = state.TapStackpr824.db_instance_id; // Ensure this matches the output key from TapStack
+    // Dynamically match output keys based on stack ID
+    const stackId = 'TestLiveEnvironmentDeployment';
+    const vpcIdKey = `${stackId}.primary_vpc_id`;
+    const dbInstanceIdKey = `${stackId}.db_instance_id`;
+
+    const vpcId = state[vpcIdKey];
+    const dbInstanceId = state[dbInstanceIdKey];
 
     expect(vpcId).toBeDefined();
     expect(dbInstanceId).toBeDefined();
 
-    const vpcClient = new EC2Client({ region: 'us-east-1' });
-    const dbClient = new RDSClient({ region: 'us-east-1' });
+    const vpcClient = new EC2Client({ region: process.env.AWS_REGION_PRIMARY });
+    const dbClient = new RDSClient({ region: process.env.AWS_REGION_PRIMARY });
 
-    const vpcResponse = await vpcClient.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-    expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);
+    try {
+      const vpcResponse = await vpcClient.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);
+    } catch (error) {
+      console.error('VPC check failed:', error);
+      throw error;
+    }
 
-    const dbResponse = await dbClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId }));
-    expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);
+    try {
+      const dbResponse = await dbClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId }));
+      expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);
+    } catch (error) {
+      console.error('DB check failed:', error);
+      throw error;
+    }
   });
 });

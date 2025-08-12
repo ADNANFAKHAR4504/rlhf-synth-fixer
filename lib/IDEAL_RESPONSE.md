@@ -777,35 +777,36 @@ export class Monitoring extends Construct {
 
 ```ts
 // lib/dns.ts
-import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
+import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+import { Construct } from 'constructs';
 
 export interface DnsProps {
-  hostedZoneId: string;
-  recordName: string;
-
-  primaryAlbDns: string;
-  primaryAlbZoneId: string;
-
-  secondaryAlbDns: string;
-  secondaryAlbZoneId: string;
-
-  healthCheckPath?: string;
-
-  primaryProvider: AwsProvider;
-  secondaryProvider: AwsProvider;
-
-  environment: string;
+  hostedZoneId: string; // Route53 hosted zone ID (e.g., Z123ABC...)
+  recordName: string; // e.g., app.example.com
+  primaryAlbDns: string; // DNS name of the primary ALB
+  primaryAlbZoneId: string; // Canonical hosted zone ID of the primary ALB
+  secondaryAlbDns: string; // DNS name of the secondary ALB
+  secondaryAlbZoneId: string; // Canonical hosted zone ID of the secondary ALB
+  healthCheckPath?: string; // Optional health check path
+  primaryProvider: AwsProvider; // AWS provider for primary region
+  secondaryProvider: AwsProvider; // AWS provider for secondary region
+  environment: string; // Environment name (e.g., dev, prod)
 }
 
+/**
+ * Creates:
+ * - HTTPS health checks for each region's ALB
+ * - Two latency-based alias A-records pointing at each ALB
+ */
 export class Dns extends Construct {
   constructor(scope: Construct, id: string, props: DnsProps) {
     super(scope, id);
 
     const path = props.healthCheckPath ?? '/';
 
+    // Health checks (HTTPS) for primary ALB
     const primaryHc = new Route53HealthCheck(this, 'primaryHc', {
       type: 'HTTPS',
       fqdn: props.primaryAlbDns,
@@ -816,6 +817,7 @@ export class Dns extends Construct {
       provider: props.primaryProvider,
     });
 
+    // Health checks (HTTPS) for secondary ALB
     const secondaryHc = new Route53HealthCheck(this, 'secondaryHc', {
       type: 'HTTPS',
       fqdn: props.secondaryAlbDns,
@@ -826,6 +828,7 @@ export class Dns extends Construct {
       provider: props.secondaryProvider,
     });
 
+    // Latency alias record (primary)
     new Route53Record(this, 'primaryLatencyRec', {
       zoneId: props.hostedZoneId,
       name: props.recordName,
@@ -836,11 +839,14 @@ export class Dns extends Construct {
         zoneId: props.primaryAlbZoneId,
         evaluateTargetHealth: true,
       },
-      latencyRoutingPolicy: { region: props.primaryProvider.region! },
+      latencyRoutingPolicy: {
+        region: props.primaryProvider.region!,
+      },
       healthCheckId: primaryHc.id,
       provider: props.primaryProvider,
     });
 
+    // Latency alias record (secondary)
     new Route53Record(this, 'secondaryLatencyRec', {
       zoneId: props.hostedZoneId,
       name: props.recordName,
@@ -851,7 +857,9 @@ export class Dns extends Construct {
         zoneId: props.secondaryAlbZoneId,
         evaluateTargetHealth: true,
       },
-      latencyRoutingPolicy: { region: props.secondaryProvider.region! },
+      latencyRoutingPolicy: {
+        region: props.secondaryProvider.region!,
+      },
       healthCheckId: secondaryHc.id,
       provider: props.secondaryProvider,
     });
@@ -869,9 +877,9 @@ import {
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-
 import { Compute } from './compute';
 import { Database } from './database';
+import { Dns } from './dns';
 import { Monitoring } from './monitoring';
 import { SecureVpc } from './secure-vpc';
 import { Security } from './security';
@@ -889,6 +897,8 @@ export interface TapStackProps {
   environmentSuffix?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
+  hostedZoneId?: string; // Added for Dns
+  recordName?: string; // Added for Dns
 }
 
 function toProviderDefaultTagsArray(
@@ -991,10 +1001,11 @@ export class TapStack extends TerraformStack {
       key: `infrastructure/${environment}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
+      dynamodbTable:
+        dynamoLockTable && dynamoLockTable.trim().length > 0
+          ? dynamoLockTable
+          : undefined,
     });
-    if (dynamoLockTable && dynamoLockTable.trim().length > 0) {
-      this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
-    }
 
     new TerraformOutput(this, 'workspace', { value: environment });
     new TerraformOutput(this, 'primary_region', { value: primaryRegion });
@@ -1113,7 +1124,7 @@ export class TapStack extends TerraformStack {
       albTargetGroupName: primaryCompute.albTargetGroupName,
     });
 
-    if (secondaryCompute) {
+    if (secondaryCompute && secondaryDb) {
       new Monitoring(this, 'SecondaryMonitoring', {
         provider: this.secondary,
         environment: this.environment,
@@ -1122,6 +1133,26 @@ export class TapStack extends TerraformStack {
         scaleUpPolicyArn: secondaryCompute.scaleUpPolicyArn,
         scaleDownPolicyArn: secondaryCompute.scaleDownPolicyArn,
         albTargetGroupName: secondaryCompute.albTargetGroupName,
+      });
+    }
+
+    // DNS Configuration
+    const hostedZoneId = props.hostedZoneId || process.env.HOSTED_ZONE_ID || '';
+    const recordName =
+      props.recordName || process.env.RECORD_NAME || 'app.example.com';
+
+    if (enableSecondary && secondaryCompute && hostedZoneId && recordName) {
+      new Dns(this, 'Dns', {
+        hostedZoneId,
+        recordName,
+        primaryAlbDns: primaryCompute.albDns, // Changed from albDnsName to albDns
+        primaryAlbZoneId: primaryCompute.albZoneId, // Changed from albZoneId to albZoneId
+        secondaryAlbDns: secondaryCompute.albDns, // Changed from albDnsName to albDns
+        secondaryAlbZoneId: secondaryCompute.albZoneId, // Changed from albZoneId to albZoneId
+        healthCheckPath: '/',
+        primaryProvider: this.primary,
+        secondaryProvider: this.secondary,
+        environment: this.environment,
       });
     }
   }
@@ -1233,7 +1264,6 @@ describe('TapStack — unit coverage', () => {
     expect(synthesized).toMatch(/"aws_route53_health_check"/);
   });
 
-  // NEW: hit branchy paths (SSH to app + NAT-per-AZ)
   test('covers SSH-to-app and NAT-per-AZ branches', () => {
     process.env.ENABLE_SSH_TO_APP = 'true';
     process.env.ADMIN_CIDR = '203.0.113.0/24'; // required for SSH rule
@@ -1252,8 +1282,27 @@ describe('TapStack — unit coverage', () => {
     // Sanity: security groups exist (SSH rule branch executed)
     expect(synthesized).toMatch(/"aws_security_group"/);
   });
-});
 
+  // NEW: Test disable secondary region
+  test('disables secondary region when ENABLE_SECONDARY is false', () => {
+    process.env.ENABLE_SECONDARY = 'false';
+
+    const app = new App();
+    const stack = new TapStack(app, 'TestTapStackNoSecondary');
+    const synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+    // Primary resources should be present
+    expect(synthesized).toMatch(/"aws_vpc"/);
+    expect(synthesized).toMatch(/"primary_vpc_id"/);
+
+    // Secondary resources should not be present
+    expect(synthesized).not.toMatch(/"secondary_vpc_id"/);
+    expect(synthesized).not.toMatch(/"aws_lb".*alias:.*secondary/); // Approximate check for secondary ALB
+  });
+});
 ```
 
 ### `test/tap-stack.int.test.ts`
@@ -1289,8 +1338,8 @@ describe('TapStack — Integration Coverage', () => {
     process.env.AZ_COUNT = '2';
     process.env.NAT_PER_AZ = 'false';
     process.env.ENABLE_SSH_TO_APP = 'false';
-    delete process.env.DNS_HOSTED_ZONE_ID;
-    delete process.env.DNS_RECORD_NAME;
+    process.env.DNS_HOSTED_ZONE_ID = 'Z1234567890ABC'; // Added for Dns
+    process.env.DNS_RECORD_NAME = 'app.example.com'; // Added for Dns
   });
 
   afterAll(() => {
@@ -1342,24 +1391,37 @@ describe('TapStack — Integration Coverage', () => {
     const state = JSON.parse(fs.readFileSync(terraformStateFile, 'utf8'));
     console.log("State: ", state);
 
-    // Ensure the correct output names are being referenced here
-    const vpcId = state.TapStackpr824.PrimaryVpc_vpc_id_121F1BFC;
-    const dbInstanceId = state.TapStackpr824.db_instance_id; // Ensure this matches the output key from TapStack
+    // Dynamically match output keys based on stack ID
+    const stackId = 'TestLiveEnvironmentDeployment';
+    const vpcIdKey = `${stackId}.primary_vpc_id`;
+    const dbInstanceIdKey = `${stackId}.db_instance_id`;
+
+    const vpcId = state[vpcIdKey];
+    const dbInstanceId = state[dbInstanceIdKey];
 
     expect(vpcId).toBeDefined();
     expect(dbInstanceId).toBeDefined();
 
-    const vpcClient = new EC2Client({ region: 'us-east-1' });
-    const dbClient = new RDSClient({ region: 'us-east-1' });
+    const vpcClient = new EC2Client({ region: process.env.AWS_REGION_PRIMARY });
+    const dbClient = new RDSClient({ region: process.env.AWS_REGION_PRIMARY });
 
-    const vpcResponse = await vpcClient.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-    expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);
+    try {
+      const vpcResponse = await vpcClient.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      expect(vpcResponse.Vpcs?.length).toBeGreaterThan(0);
+    } catch (error) {
+      console.error('VPC check failed:', error);
+      throw error;
+    }
 
-    const dbResponse = await dbClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId }));
-    expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);
+    try {
+      const dbResponse = await dbClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId }));
+      expect(dbResponse.DBInstances?.length).toBeGreaterThan(0);
+    } catch (error) {
+      console.error('DB check failed:', error);
+      throw error;
+    }
   });
 });
-
 ```
 
 ### `bin/tap.ts`

@@ -5,9 +5,9 @@ import {
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-
 import { Compute } from './compute';
 import { Database } from './database';
+import { Dns } from './dns';
 import { Monitoring } from './monitoring';
 import { SecureVpc } from './secure-vpc';
 import { Security } from './security';
@@ -25,6 +25,8 @@ export interface TapStackProps {
   environmentSuffix?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
+  hostedZoneId?: string; // Added for Dns
+  recordName?: string; // Added for Dns
 }
 
 function toProviderDefaultTagsArray(
@@ -127,10 +129,11 @@ export class TapStack extends TerraformStack {
       key: `infrastructure/${environment}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
+      dynamodbTable:
+        dynamoLockTable && dynamoLockTable.trim().length > 0
+          ? dynamoLockTable
+          : undefined,
     });
-    if (dynamoLockTable && dynamoLockTable.trim().length > 0) {
-      this.addOverride('terraform.backend.s3.dynamodb_table', dynamoLockTable);
-    }
 
     new TerraformOutput(this, 'workspace', { value: environment });
     new TerraformOutput(this, 'primary_region', { value: primaryRegion });
@@ -249,7 +252,7 @@ export class TapStack extends TerraformStack {
       albTargetGroupName: primaryCompute.albTargetGroupName,
     });
 
-    if (secondaryCompute) {
+    if (secondaryCompute && secondaryDb) {
       new Monitoring(this, 'SecondaryMonitoring', {
         provider: this.secondary,
         environment: this.environment,
@@ -258,6 +261,26 @@ export class TapStack extends TerraformStack {
         scaleUpPolicyArn: secondaryCompute.scaleUpPolicyArn,
         scaleDownPolicyArn: secondaryCompute.scaleDownPolicyArn,
         albTargetGroupName: secondaryCompute.albTargetGroupName,
+      });
+    }
+
+    // DNS Configuration
+    const hostedZoneId = props.hostedZoneId || process.env.HOSTED_ZONE_ID || '';
+    const recordName =
+      props.recordName || process.env.RECORD_NAME || 'app.example.com';
+
+    if (enableSecondary && secondaryCompute && hostedZoneId && recordName) {
+      new Dns(this, 'Dns', {
+        hostedZoneId,
+        recordName,
+        primaryAlbDns: primaryCompute.albDns, // Changed from albDnsName to albDns
+        primaryAlbZoneId: primaryCompute.albZoneId, // Changed from albZoneId to albZoneId
+        secondaryAlbDns: secondaryCompute.albDns, // Changed from albDnsName to albDns
+        secondaryAlbZoneId: secondaryCompute.albZoneId, // Changed from albZoneId to albZoneId
+        healthCheckPath: '/',
+        primaryProvider: this.primary,
+        secondaryProvider: this.secondary,
+        environment: this.environment,
       });
     }
   }

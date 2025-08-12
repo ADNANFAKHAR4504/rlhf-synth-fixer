@@ -1,4 +1,3 @@
-// lib/dns.ts
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
 import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
@@ -7,22 +6,14 @@ import { Construct } from 'constructs';
 export interface DnsProps {
   hostedZoneId: string; // Route53 hosted zone ID (e.g., Z123ABC...)
   recordName: string; // e.g., app.example.com
-
-  // Primary ALB
-  primaryAlbDns: string;
-  primaryAlbZoneId: string;
-
-  // Secondary ALB
-  secondaryAlbDns: string;
-  secondaryAlbZoneId: string;
-
-  healthCheckPath?: string;
-
-  // Providers
-  primaryProvider: AwsProvider;
-  secondaryProvider: AwsProvider;
-
-  environment: string;
+  primaryAlbDns: string; // DNS name of the primary ALB
+  primaryAlbZoneId: string; // Canonical hosted zone ID of the primary ALB
+  secondaryAlbDns: string; // DNS name of the secondary ALB
+  secondaryAlbZoneId: string; // Canonical hosted zone ID of the secondary ALB
+  healthCheckPath?: string; // Optional health check path
+  primaryProvider: AwsProvider; // AWS provider for primary region
+  secondaryProvider: AwsProvider; // AWS provider for secondary region
+  environment: string; // Environment name (e.g., dev, prod)
 }
 
 /**
@@ -36,7 +27,7 @@ export class Dns extends Construct {
 
     const path = props.healthCheckPath ?? '/';
 
-    // Health checks (HTTPS)
+    // Health checks (HTTPS) for primary ALB
     const primaryHc = new Route53HealthCheck(this, 'primaryHc', {
       type: 'HTTPS',
       fqdn: props.primaryAlbDns,
@@ -47,6 +38,7 @@ export class Dns extends Construct {
       provider: props.primaryProvider,
     });
 
+    // Health checks (HTTPS) for secondary ALB
     const secondaryHc = new Route53HealthCheck(this, 'secondaryHc', {
       type: 'HTTPS',
       fqdn: props.secondaryAlbDns,
@@ -72,7 +64,6 @@ export class Dns extends Construct {
         region: props.primaryProvider.region!,
       },
       healthCheckId: primaryHc.id,
-      // ttl is ignored for alias; omit or leave undefined
       provider: props.primaryProvider,
     });
 
