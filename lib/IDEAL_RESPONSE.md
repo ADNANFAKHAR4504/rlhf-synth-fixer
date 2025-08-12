@@ -544,4 +544,5 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("web_server_url", web_instance.public_ip.apply(lambda ip: f"http://{ip}"))
     pulumi.export("region", aws_region)
     self.register_outputs({})
+
 ```
