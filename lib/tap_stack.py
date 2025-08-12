@@ -135,7 +135,7 @@ class TapStack(pulumi.ComponentResource):
           f"serverless-{region_suffix}-{self.environment_suffix}",
           environment=self.environment_suffix,
           lambda_role_arn=self.security[region].lambda_execution_role.arn,
-          private_subnet_ids=self.networking[region].private_subnet_ids,
+          private_subnet_ids=self.networking[region].public_subnet_ids,
           lambda_security_group_id=self.security[region].lambda_security_group.id,
           rds_endpoint=self.database[region].rds_endpoint,
           tags=self.tags,
