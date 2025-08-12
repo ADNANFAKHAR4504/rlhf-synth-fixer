@@ -595,11 +595,7 @@ target_group = aws.lb.TargetGroup(
         "Name": get_resource_name("web-tg"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    },
-    opts=pulumi.ResourceOptions(
-        delete_before_replace=True,
-        custom_timeouts=pulumi.CustomTimeouts(delete="20m")
-    )
+    }
 )
 
 # Attach EC2 instances to target group
@@ -608,11 +604,7 @@ for i, instance in enumerate(ec2_instances):
         get_resource_name(f"web-tg-attachment-{i + 1}"),
         target_group_arn=target_group.arn,
         target_id=instance.id,
-        port=80,
-        opts=pulumi.ResourceOptions(
-            delete_before_replace=True,
-            custom_timeouts=pulumi.CustomTimeouts(delete="20m")
-        )
+    port=80
     )
 
 # Create Application Load Balancer with dual-stack support
@@ -648,11 +640,7 @@ http_listener = aws.lb.Listener(
             type="forward",
             target_group_arn=target_group.arn
         )
-    ],
-    opts=pulumi.ResourceOptions(
-        delete_before_replace=True,
-        custom_timeouts=pulumi.CustomTimeouts(delete="20m")
-    )
+    ]
 )
 
 # =============================================================================
