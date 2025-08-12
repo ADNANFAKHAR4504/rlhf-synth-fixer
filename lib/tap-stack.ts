@@ -64,7 +64,7 @@ export class TapStack extends cdk.Stack {
       functionName: 'lambda-nova-team-development',
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
       role: lambdaExecutionRole,
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
