@@ -1,49 +1,74 @@
-You are an AWS CloudFormation expert specializing in secure, compliant infrastructure as code. Create a complete, production-ready CloudFormation template in YAML for the us-west-2 AWS region that meets the following requirements:
+Prompt to Generate the Template (NO AWS Config)
+You are an AWS CloudFormation expert specializing in secure, compliant infrastructure as code. Create a complete, production-ready CloudFormation template in YAML for the us-west-2 AWS region that meets the following requirements.
 
+Critical constraint (do this first):
+Do NOT include AWS Config. Do not create AWS::Config::ConfigurationRecorder, AWS::Config::DeliveryChannel, AWS::Config::ConfigurationRecorderStatus, AWS::Config::ConfigRule, ConformancePack, RemediationConfiguration, or any other AWS Config–related resources or references.
+
+Requirements
 Networking
-
-Create a VPC with both public and private subnets across at least two availability zones.
+Create a VPC with both public and private subnets across at least two Availability Zones in us-west-2.
 
 Attach an Internet Gateway for public subnet access.
 
-Configure a NAT Gateway in the public subnet for private subnet outbound traffic.
+Create one NAT Gateway in a public subnet and route private subnets’ outbound internet traffic through it.
+
+Proper route tables and associations for public/private subnets.
 
 Security Groups & Access Control
+Security group allowing SSH only from 203.0.113.0/24.
 
-Create security groups allowing SSH access only from the IP range 203.0.113.0/24.
+Ensure all EBS volumes attached to EC2 instances are encrypted (use a Launch Template or equivalent).
 
-Ensure all EBS volumes attached to EC2 instances are encrypted.
+Create an IAM role and instance profile for EC2 to access S3 securely (no embedded credentials).
 
-Use IAM roles for EC2 instances to securely access S3 without embedding credentials.
+S3 bucket policies that enforce HTTPS/TLS only (deny non-TLS).
 
-Create S3 bucket policies to allow only HTTPS/TLS connections.
+Monitoring (No AWS Config) & Logging
+Enable CloudTrail to log all account activity to an S3 bucket with encryption and also to CloudWatch Logs.
 
-Monitoring & Compliance
+Create any required KMS keys and policies following least privilege.
 
-Enable CloudTrail to log all account activity to an S3 bucket (with encryption).
-
-Enable AWS Config to monitor and record all resource configurations.
+Do not add AWS Config (restate: no ConfigurationRecorder/DeliveryChannel/ConfigRules/etc.).
 
 Compute & Scaling
+Deploy EC2 instances in an Auto Scaling Group spanning two AZs for high availability.
 
-Deploy EC2 instances in an Auto Scaling Group across two availability zones for high availability.
+Parameterize instance type and key properties.
+
+Use an Amazon Linux 2 AMI (pull via SSM Parameter).
+
+Ensure EBS volume encryption is enabled by default.
 
 Database & Storage
+Create a DynamoDB table with Point-In-Time Recovery (PITR) enabled.
 
-Create at least one DynamoDB table with point-in-time recovery enabled.
+Parameterize table name and billing mode (on-demand preferred).
 
 Alerting & Incident Response
+From CloudTrail logs, create a metric filter for UnauthorizedOperation/AccessDenied events.
 
-Create a CloudWatch alarm that triggers on unauthorized access attempts (CloudTrail events).
+Create a CloudWatch Alarm on that metric.
 
-Use an AWS Lambda function to send alerts via SNS email notification when triggered.
+Create an SNS Topic for alerts and an email subscription (parameterize the email).
 
-Additional Requirements:
+Create a Lambda function (least-privilege IAM) that sends enriched alerts to SNS when the alarm triggers (Alarm → Event rule → Lambda → SNS, or Alarm → SNS → Lambda if you prefer; ensure it works end-to-end).
 
-Follow AWS best practices for security and compliance.
+Best Practices & Constraints
+Use parameterization for CIDR ranges, instance types, email address, DynamoDB table name, etc.
 
-Use parameterization where possible (e.g., CIDR ranges, instance types).
+Apply least-privilege IAM policies.
 
-Ensure the YAML is fully valid and deployable without modification.
+Use KMS encryption where applicable (CloudTrail S3, CloudWatch Logs if needed).
 
-Include Outputs for key resources (e.g., VPC ID, Subnet IDs, EC2 ASG name, S3 bucket names).
+Ensure the template is valid YAML and deployable without modification.
+
+Include Outputs for key resources: VPC ID, Public/Private Subnet IDs, Internet Gateway ID, NAT Gateway ID, ASG name, Instance Profile name, CloudTrail bucket name, CloudWatch Log Group name, DynamoDB table name/ARN, SNS Topic ARN, and Lambda function name/ARN.
+
+Include appropriate Tags (e.g., Project, Environment).
+
+Use cfn-lint-friendly, fully resolvable intrinsic functions (no placeholders like <REPLACE_ME>).
+
+Output Formatting
+Return only the YAML template inside a single fenced code block.
+
+Do not include explanations or commentary outside the code block.

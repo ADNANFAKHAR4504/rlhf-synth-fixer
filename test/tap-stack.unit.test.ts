@@ -3,7 +3,7 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('TapStack CloudFormation Template (NO AWS Config)', () => {
   let template: any;
 
   beforeAll(() => {
@@ -17,10 +17,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
+    test('should have the expected description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Production-ready secure infrastructure with VPC, EC2 Auto Scaling, monitoring, and compliance features'
+        'Production-ready secure infrastructure with VPC, EC2 Auto Scaling, monitoring, and compliance features (NO AWS Config resources)'
       );
     });
   });
@@ -34,16 +34,14 @@ describe('TapStack CloudFormation Template', () => {
       const envSuffixParam = template.Parameters.EnvironmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
-      // Description now mentions lowercase; just ensure it exists
       expect(envSuffixParam.Description).toContain('Environment suffix');
-      // pattern is lowercase now
       expect(envSuffixParam.AllowedPattern).toBe('^[a-z0-9]+$');
       expect(envSuffixParam.ConstraintDescription).toBe(
         'Must contain only lowercase alphanumeric characters'
       );
     });
 
-    test('should have all required parameters', () => {
+    test('should have all required parameters (no CreateConfigResources)', () => {
       const expected = [
         'EnvironmentSuffix',
         'VpcCidr',
@@ -55,9 +53,10 @@ describe('TapStack CloudFormation Template', () => {
         'KeyPairName',
         'AlertEmail',
         'AmiId',
-        'CreateConfigResources',
       ];
       expected.forEach((p) => expect(template.Parameters[p]).toBeDefined());
+      // Ensure deprecated/removed param is not present
+      expect(template.Parameters.CreateConfigResources).toBeUndefined();
     });
 
     test('KeyPairName should have default value', () => {
@@ -136,8 +135,6 @@ describe('TapStack CloudFormation Template', () => {
     test('should have S3 buckets with encryption', () => {
       expect(template.Resources.ApplicationS3Bucket).toBeDefined();
       expect(template.Resources.CloudTrailS3Bucket).toBeDefined();
-      // ConfigS3Bucket is conditionally created but present in template
-      expect(template.Resources.ConfigS3Bucket).toBeDefined();
 
       const appBucket = template.Resources.ApplicationS3Bucket;
       expect(appBucket.Properties.BucketEncryption).toBeDefined();
@@ -182,11 +179,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(trail.Properties.EnableLogFileValidation).toBe(true);
     });
 
-    test('should have AWS Config resources declared', () => {
-      // They are conditionally created, but definitions are present
-      expect(template.Resources.ConfigServiceRole).toBeDefined();
-      expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
-      expect(template.Resources.ConfigurationRecorder).toBeDefined();
+    test('should NOT define any AWS Config resources', () => {
+      expect(template.Resources.ConfigS3Bucket).toBeUndefined();
+      expect(template.Resources.ConfigServiceRole).toBeUndefined();
+      expect(template.Resources.ConfigDeliveryChannel).toBeUndefined();
+      expect(template.Resources.ConfigurationRecorder).toBeUndefined();
     });
 
     test('should have CloudWatch Log Groups', () => {
@@ -209,53 +206,51 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-    describe('Resource Naming Convention', () => {
-      const getSubString = (val: any): string => {
-        // BucketName is expressed as { "Fn::Sub": "..." }
-        if (val && typeof val === 'object' && 'Fn::Sub' in val) return val['Fn::Sub'] as string;
-        // Fallback: if ever a plain string slips in
-        if (typeof val === 'string') return val;
-        throw new Error('Expected BucketName to be an Fn::Sub string');
+  describe('Resource Naming Convention', () => {
+    const getSubString = (val: any): string => {
+      // BucketName is expressed as { "Fn::Sub": "..." }
+      if (val && typeof val === 'object' && 'Fn::Sub' in val) return val['Fn::Sub'] as string;
+      // Fallback: if ever a plain string slips in
+      if (typeof val === 'string') return val;
+      throw new Error('Expected value to be an Fn::Sub string');
+    };
+
+    test('S3 bucket names should include environment suffix AND region', () => {
+      const buckets = ['ApplicationS3Bucket', 'CloudTrailS3Bucket'];
+      buckets.forEach((name) => {
+        const res = template.Resources[name];
+        expect(res).toBeDefined();
+        const sub = getSubString(res.Properties.BucketName);
+
+        expect(sub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
+        expect(sub).toEqual(expect.stringContaining('${AWS::Region}'));
+        expect(sub).toEqual(expect.stringContaining('${AWS::AccountId}'));
+      });
+    });
+
+    test('resource names should include environment suffix in tags', () => {
+      const withTags = ['VPC', 'InternetGateway', 'PublicSubnet1', 'NATGateway'];
+      withTags.forEach((name) => {
+        const res = template.Resources[name];
+        expect(res).toBeDefined();
+        const nameTag = res.Properties.Tags.find((t: any) => t.Key === 'Name');
+        const tagSub = getSubString(nameTag.Value);
+        expect(tagSub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
+      });
+    });
+
+    test('service names should include environment suffix', () => {
+      const resources: Record<string, string> = {
+        DynamoDBTable: 'TableName',
+        LaunchTemplate: 'LaunchTemplateName',
+        AutoScalingGroup: 'AutoScalingGroupName',
       };
-
-      test('S3 bucket names should include environment suffix AND region', () => {
-        const buckets = ['ApplicationS3Bucket', 'CloudTrailS3Bucket', 'ConfigS3Bucket'];
-        buckets.forEach((name) => {
-          const res = template.Resources[name];
-          expect(res).toBeDefined();
-          const sub = getSubString(res.Properties.BucketName);
-
-          expect(sub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
-          expect(sub).toEqual(expect.stringContaining('${AWS::Region}'));
-
-          // Optional but recommended (you have it in names): also include AccountId
-          expect(sub).toEqual(expect.stringContaining('${AWS::AccountId}'));
-        });
+      Object.entries(resources).forEach(([resName, prop]) => {
+        const res = template.Resources[resName];
+        const sub = getSubString(res.Properties[prop]);
+        expect(sub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
       });
-
-      test('resource names should include environment suffix in tags', () => {
-        const withTags = ['VPC', 'InternetGateway', 'PublicSubnet1', 'NATGateway'];
-        withTags.forEach((name) => {
-          const res = template.Resources[name];
-          expect(res).toBeDefined();
-          const nameTag = res.Properties.Tags.find((t: any) => t.Key === 'Name');
-          const tagSub = getSubString(nameTag.Value);
-          expect(tagSub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
-        });
-      });
-
-      test('service names should include environment suffix', () => {
-        const resources: Record<string, string> = {
-          DynamoDBTable: 'TableName',
-          LaunchTemplate: 'LaunchTemplateName',
-          AutoScalingGroup: 'AutoScalingGroupName',
-        };
-        Object.entries(resources).forEach(([resName, prop]) => {
-          const res = template.Resources[resName];
-          const sub = getSubString(res.Properties[prop]);
-          expect(sub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
-        });
-      });
+    });
   });
 
   describe('Outputs', () => {
@@ -310,7 +305,7 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Template Validation', () => {
     test('should have valid JSON structure', () => {
-      expect(template && typeof template).toBe('object');
+      expect(typeof template).toBe('object');
     });
 
     test('should not have any undefined or null required sections', () => {
@@ -321,7 +316,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have expected number of main resource categories', () => {
+    test('should have expected diversity of resource types', () => {
       const types = Object.values(template.Resources).map((r: any) => r.Type);
       const unique = [...new Set(types)];
       expect(unique.length).toBeGreaterThan(15);
@@ -336,10 +331,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(trail.Properties.EnableLogFileValidation).toBe(true);
     });
 
-    test('should have AWS Config for compliance monitoring (declared)', () => {
-      const rec = template.Resources.ConfigurationRecorder;
-      expect(rec.Properties.RecordingGroup.AllSupported).toBe(true);
-      expect(rec.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
+    test('should NOT have AWS Config for compliance monitoring (by design)', () => {
+      expect(template.Resources.ConfigurationRecorder).toBeUndefined();
+      expect(template.Resources.ConfigDeliveryChannel).toBeUndefined();
+      expect(template.Resources.ConfigServiceRole).toBeUndefined();
     });
   });
 });

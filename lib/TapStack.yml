@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Production-ready secure infrastructure with VPC, EC2 Auto Scaling, monitoring, and compliance features"
+Description: "Production-ready secure infrastructure with VPC, EC2 Auto Scaling, monitoring, and compliance features (NO AWS Config resources)"
 
 Parameters:
   EnvironmentSuffix:
@@ -56,16 +56,6 @@ Parameters:
   AmiId:
     Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
     Default: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
-
-  # Set to "false" if the account/region already has AWS Config set up
-  CreateConfigResources:
-    Type: String
-    AllowedValues: ["true", "false"]
-    Default: "true"
-    Description: Create AWS Config resources (delivery channel/recorder/role). Set to false if already present.
-
-Conditions:
-  CreateConfig: !Equals [!Ref CreateConfigResources, "true"]
 
 Resources:
   # ===============================
@@ -349,7 +339,7 @@ Resources:
             Resource: !Sub "${CloudTrailS3Bucket.Arn}/*"
             Condition:
               StringEquals:
-                "s3:x-amz-acl": bucket-owner-full-control
+                "s3:x-amz-acl": "bucket-owner-full-control"
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: "*"
@@ -394,8 +384,6 @@ Resources:
                   - logs:DescribeLogGroups
                   - logs:DescribeLogStreams
                 Resource: "*"
-
-              # Not strictly required because you pre-create the group, but harmless and future-proof:
               - Effect: Allow
                 Action: logs:CreateLogGroup
                 Resource: !GetAtt CloudTrailLogGroup.Arn
@@ -417,73 +405,10 @@ Resources:
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                # For all objects in the app bucket (required trailing slash, no wildcard)
                 - !Sub "arn:${AWS::Partition}:s3:::${ApplicationS3Bucket}/"
       Tags:
         - Key: Name
           Value: !Sub "TapStack${EnvironmentSuffix}-CloudTrail"
-
-  # ===============================
-  # AWS CONFIG (optional)
-  # ===============================
-  ConfigS3Bucket:
-    Condition: CreateConfig
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "tapstack${EnvironmentSuffix}-config-${AWS::AccountId}-${AWS::Region}"
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  ConfigServiceRole:
-    Condition: CreateConfig
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
-      Policies:
-        - PolicyName: ConfigS3DeliveryPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: [s3:GetBucketAcl, s3:ListBucket]
-                Resource: !GetAtt ConfigS3Bucket.Arn
-              - Effect: Allow
-                Action: s3:PutObject
-                Resource: !Sub "${ConfigS3Bucket.Arn}/*"
-                Condition:
-                  StringEquals: { "s3:x-amz-acl": bucket-owner-full-control }
-
-  ConfigDeliveryChannel:
-    Condition: CreateConfig
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub "TapStack${EnvironmentSuffix}-Config-DeliveryChannel"
-      S3BucketName: !Ref ConfigS3Bucket
-
-  ConfigurationRecorder:
-    Condition: CreateConfig
-    Type: AWS::Config::ConfigurationRecorder
-    DependsOn: ConfigDeliveryChannel
-    Properties:
-      Name: !Sub "TapStack${EnvironmentSuffix}-Config-Recorder"
-      RoleARN: !GetAtt ConfigServiceRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
 
   # ===============================
   # LAUNCH TEMPLATE + ASG
