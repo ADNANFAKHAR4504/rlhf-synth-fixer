@@ -392,168 +392,172 @@ class TapStack(pulumi.ComponentResource):
             self.databases[region] = db_instance
     
     def _create_compute_infrastructure(self):
-        """Create auto-scaling compute resources with load balancers."""
-        
-        for region in self.args.regions:
-            provider = self.providers[region]
-            
-            # Get latest Amazon Linux 2 AMI
-            ami = aws.ec2.get_ami(
-                most_recent=True,
-                owners=["amazon"],
-                filters=[{"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}],
-                opts=pulumi.InvokeOptions(provider=provider)
-            )
-            
-            # Create Application Load Balancer
-            alb = aws.lb.LoadBalancer(
-                self.args.get_resource_name(f"alb-{region}"),
-                load_balancer_type="application",
-                subnets=[subnet.id for subnet in self.subnets[region]["public"]],
-                security_groups=[self.security_groups[f"web-{region}"].id],
-                enable_deletion_protection=False,
-                tags=self.default_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            self.load_balancers[region] = alb
-            
-            # Create target group
-            target_group = aws.lb.TargetGroup(
-                self.args.get_resource_name(f"tg-{region}"),
-                port=80,
-                protocol="HTTP",
-                vpc_id=self.vpcs[region].id,
-                health_check={
-                    "enabled": True,
-                    "healthy_threshold": 2,
-                    "unhealthy_threshold": 2,
-                    "timeout": 5,
-                    "interval": 30,
-                    "path": "/health",
-                    "matcher": "200"
-                },
-                tags=self.default_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Create ALB listener
-            aws.lb.Listener(
-                self.args.get_resource_name(f"alb-listener-{region}"),
-                load_balancer_arn=alb.arn,
-                port="80",
-                protocol="HTTP",
-                default_actions=[{
-                    "type": "forward",
-                    "target_group_arn": target_group.arn
-                }],
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Create launch template
-            user_data = f"""#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>TAP Infrastructure - Region: {region}</h1>" > /var/www/html/index.html
-echo "OK" > /var/www/html/health
-"""
-            
-            launch_template = aws.ec2.LaunchTemplate(
-                self.args.get_resource_name(f"lt-{region}"),
-                name_prefix=self.args.get_resource_name(f"lt-{region}"),
-                image_id=ami.id,
-                instance_type="t3.micro",
-                vpc_security_group_ids=[self.security_groups[f"web-{region}"].id],
-                iam_instance_profile={"name": self.ec2_instance_profile.name},
-                user_data=pulumi.Output.from_input(user_data).apply(
-                    lambda ud: base64.b64encode(ud.encode()).decode()
-                ),
-                monitoring={"enabled": True},
-                metadata_options={
-                    "http_endpoint": "enabled",
-                    "http_tokens": "required",
-                    "http_put_response_hop_limit": 1
-                },
-                tag_specifications=[{
-                    "resource_type": "instance",
-                    "tags": self.default_tags
-                }],
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Create Auto Scaling Group
-            asg = aws.autoscaling.Group(
-                self.args.get_resource_name(f"asg-{region}"),
-                min_size=1,
-                max_size=6,
-                desired_capacity=2,
-                vpc_zone_identifiers=[subnet.id for subnet in self.subnets[region]["private"]],
-                target_group_arns=[target_group.arn],
-                health_check_type="ELB",
-                health_check_grace_period=300,
-                launch_template={
-                    "id": launch_template.id,
-                    "version": "$Latest"
-                },
-                tag=[{
-                    "key": key,
-                    "value": value,
-                    "propagate_at_launch": True
-                } for key, value in self.default_tags.items()],
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            self.auto_scaling_groups[region] = asg
-            
-            # Create scaling policies
-            scale_up_policy = aws.autoscaling.Policy(
-                self.args.get_resource_name(f"scale-up-policy-{region}"),
-                scaling_adjustment=1,
-                adjustment_type="ChangeInCapacity",
-                cooldown=300,
-                autoscaling_group_name=asg.name,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            scale_down_policy = aws.autoscaling.Policy(
-                self.args.get_resource_name(f"scale-down-policy-{region}"),
-                scaling_adjustment=-1,
-                adjustment_type="ChangeInCapacity",
-                cooldown=300,
-                autoscaling_group_name=asg.name,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Create CloudWatch alarms
-            aws.cloudwatch.MetricAlarm(
-                self.args.get_resource_name(f"cpu-high-{region}"),
-                comparison_operator="GreaterThanThreshold",
-                evaluation_periods="2",
-                metric_name="CPUUtilization",
-                namespace="AWS/EC2",
-                period="120",
-                statistic="Average",
-                threshold="70.0",
-                alarm_description="This metric monitors ec2 cpu utilization",
-                alarm_actions=[scale_up_policy.arn],
-                dimensions={"AutoScalingGroupName": asg.name},
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            aws.cloudwatch.MetricAlarm(
-                self.args.get_resource_name(f"cpu-low-{region}"),
-                comparison_operator="LessThanThreshold",
-                evaluation_periods="2",
-                metric_name="CPUUtilization",
-                namespace="AWS/EC2",
-                period="120",
-                statistic="Average",
-                threshold="20.0",
-                alarm_description="This metric monitors ec2 cpu utilization",
-                alarm_actions=[scale_down_policy.arn],
-                dimensions={"AutoScalingGroupName": asg.name},
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
+      """Create auto-scaling compute resources with load balancers."""
+      
+      for region in self.args.regions:
+          provider = self.providers[region]
+          
+          # Get latest Amazon Linux 2 AMI
+          ami = aws.ec2.get_ami(
+              most_recent=True,
+              owners=["amazon"],
+              filters=[{"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}],
+              opts=pulumi.InvokeOptions(provider=provider)
+          )
+          
+          # Create Application Load Balancer
+          alb = aws.lb.LoadBalancer(
+              self.args.get_resource_name(f"alb-{region}"),
+              load_balancer_type="application",
+              subnets=[subnet.id for subnet in self.subnets[region]["public"]],
+              security_groups=[self.security_groups[f"web-{region}"].id],
+              enable_deletion_protection=False,
+              tags=self.default_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          self.load_balancers[region] = alb
+          
+          # Create target group
+          target_group = aws.lb.TargetGroup(
+              self.args.get_resource_name(f"tg-{region}"),
+              port=80,
+              protocol="HTTP",
+              vpc_id=self.vpcs[region].id,
+              health_check={
+                  "enabled": True,
+                  "healthy_threshold": 2,
+                  "unhealthy_threshold": 2,
+                  "timeout": 5,
+                  "interval": 30,
+                  "path": "/health",
+                  "matcher": "200"
+              },
+              tags=self.default_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Create ALB listener
+          aws.lb.Listener(
+              self.args.get_resource_name(f"alb-listener-{region}"),
+              load_balancer_arn=alb.arn,
+              port="80",
+              protocol="HTTP",
+              default_actions=[{
+                  "type": "forward",
+                  "target_group_arn": target_group.arn
+              }],
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Create launch template
+          user_data = f"""#!/bin/bash
+  yum update -y
+  yum install -y httpd
+  systemctl start httpd
+  systemctl enable httpd
+  echo "<h1>TAP Infrastructure - Region: {region}</h1>" > /var/www/html/index.html
+  echo "OK" > /var/www/html/health
+  """
+          
+          launch_template = aws.ec2.LaunchTemplate(
+              self.args.get_resource_name(f"lt-{region}"),
+              name_prefix=self.args.get_resource_name(f"lt-{region}"),
+              image_id=ami.id,
+              instance_type="t3.micro",
+              vpc_security_group_ids=[self.security_groups[f"web-{region}"].id],
+              iam_instance_profile={"name": self.ec2_instance_profile.name},
+              user_data=pulumi.Output.from_input(user_data).apply(
+                  lambda ud: base64.b64encode(ud.encode()).decode()
+              ),
+              monitoring={"enabled": True},
+              metadata_options={
+                  "http_endpoint": "enabled",
+                  "http_tokens": "required",
+                  "http_put_response_hop_limit": 1
+              },
+              tag_specifications=[{
+                  "resource_type": "instance",
+                  "tags": self.default_tags
+              }],
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Create Auto Scaling Group - FIXED TAG FORMAT
+          asg = aws.autoscaling.Group(
+              self.args.get_resource_name(f"asg-{region}"),
+              min_size=1,
+              max_size=6,
+              desired_capacity=2,
+              vpc_zone_identifiers=[subnet.id for subnet in self.subnets[region]["private"]],
+              target_group_arns=[target_group.arn],
+              health_check_type="ELB",
+              health_check_grace_period=300,
+              launch_template={
+                  "id": launch_template.id,
+                  "version": "$Latest"
+              },
+              # CORRECT TAG FORMAT FOR ASG
+              tags=[
+                  aws.autoscaling.GroupTagArgs(
+                      key=key,
+                      value=value,
+                      propagate_at_launch=True
+                  ) for key, value in self.default_tags.items()
+              ],
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          self.auto_scaling_groups[region] = asg
+          
+          # Create scaling policies
+          scale_up_policy = aws.autoscaling.Policy(
+              self.args.get_resource_name(f"scale-up-policy-{region}"),
+              scaling_adjustment=1,
+              adjustment_type="ChangeInCapacity",
+              cooldown=300,
+              autoscaling_group_name=asg.name,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          scale_down_policy = aws.autoscaling.Policy(
+              self.args.get_resource_name(f"scale-down-policy-{region}"),
+              scaling_adjustment=-1,
+              adjustment_type="ChangeInCapacity",
+              cooldown=300,
+              autoscaling_group_name=asg.name,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Create CloudWatch alarms
+          aws.cloudwatch.MetricAlarm(
+              self.args.get_resource_name(f"cpu-high-{region}"),
+              comparison_operator="GreaterThanThreshold",
+              evaluation_periods="2",
+              metric_name="CPUUtilization",
+              namespace="AWS/EC2",
+              period="120",
+              statistic="Average",
+              threshold="70.0",
+              alarm_description="This metric monitors ec2 cpu utilization",
+              alarm_actions=[scale_up_policy.arn],
+              dimensions={"AutoScalingGroupName": asg.name},
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          aws.cloudwatch.MetricAlarm(
+              self.args.get_resource_name(f"cpu-low-{region}"),
+              comparison_operator="LessThanThreshold",
+              evaluation_periods="2",
+              metric_name="CPUUtilization",
+              namespace="AWS/EC2",
+              period="120",
+              statistic="Average",
+              threshold="20.0",
+              alarm_description="This metric monitors ec2 cpu utilization",
+              alarm_actions=[scale_down_policy.arn],
+              dimensions={"AutoScalingGroupName": asg.name},
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+
     
     def _create_monitoring_infrastructure(self):
         """Create CloudWatch logging and monitoring infrastructure."""
