@@ -425,7 +425,6 @@ target_group = aws.lb.TargetGroup(
     port=80,
     protocol="HTTP",
     vpc_id=vpc.id,
-    ip_address_type="dualstack",  # Support both IPv4 and IPv6
     health_check=aws.lb.TargetGroupHealthCheckArgs(
         enabled=True,
         healthy_threshold=2,
