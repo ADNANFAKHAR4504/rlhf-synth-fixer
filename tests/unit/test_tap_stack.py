@@ -20,4 +20,4 @@ class TestTapStackArgs(unittest.TestCase):
     self.assertEqual(args.tags, {})
     self.assertEqual(args.lambda_memory_size, 256)
     self.assertEqual(args.lambda_timeout, 30)
-    self.assertEqual(args.api_stage_name, "v1")
+    self.assertEqual(args.api_stage_name, "$default")

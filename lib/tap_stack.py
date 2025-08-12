@@ -27,7 +27,7 @@ class TapStackArgs:
       tags: Optional[dict] = None,
       lambda_memory_size: int = 256,
       lambda_timeout: int = 30,
-      api_stage_name: str = "v1"
+      api_stage_name: str = "$default"
   ):  # pylint: disable=too-many-arguments,too-many-positional-arguments
     self.environment_suffix = environment_suffix  or 'dev'
     self.tags = tags or {}
@@ -245,7 +245,7 @@ class TapStack(ComponentResource):
       "ENVIRONMENT": self.environment_suffix,
       "S3_BUCKET_NAME": self.s3_bucket.bucket,
       "LOG_LEVEL": self.config.get("log_level") or "INFO",
-      "API_VERSION": self.args.api_stage_name
+      "API_VERSION": "1.0"
     }
     
     # Add any additional environment variables from config

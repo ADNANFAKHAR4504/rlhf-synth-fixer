@@ -55,7 +55,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     function_name = self.stack_outputs.get('lambda_function_name')
     
     if not function_name or function_name == 'prod-lambda-function-dev':
-      self.skipTest(f"Lambda function {function_name} not deployed - deployment required for live testing")
+      self.skipTest(f"Lambda function {function_name} not deployed - "
+                    "deployment required for live testing")
     
     try:
       response = self.lambda_client.get_function(FunctionName=function_name)
