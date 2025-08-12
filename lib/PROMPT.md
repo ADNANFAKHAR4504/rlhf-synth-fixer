@@ -25,7 +25,7 @@ You are an AWS Cloud Infrastructure Engineer specializing in secure, compliant, 
     9. Implement **Multi-Factor Authentication (MFA)** enforcement for all IAM users.
     10. Ensure compliance with **CIS AWS Foundations Benchmarks** for all applicable resources.
     11. Apply the naming convention: `companyname-env-component` for all resources.
-    12. Deploy all resources in the **us-east-2** region.
+    12. Deploy all resources in the **eu-central-1** region.
   - Ensure parameters and conditions are used where applicable for flexibility and reuse across environments.
 
 - **Security and Compliance:**
@@ -48,7 +48,7 @@ Deliver an AWS CDK (TypeScript) project that:
 - Deploys RDS in a dedicated VPC subnet group.
 - Uses the naming convention `companyname-env-component`.
 - Is fully compliant with **CIS AWS Foundations Benchmarks**.
-- Deploys to `us-east-2`.
+- Deploys to `eu-central-1`.
 
 ## Output Format
 
