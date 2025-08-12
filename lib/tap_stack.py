@@ -109,7 +109,7 @@ internet_gateway = aws.ec2.InternetGateway(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Create public subnets with dual-stack support (following working pattern)
+# Create public subnets with dual-stack support (forcing recreation with new names)
 public_subnets = []
 for i, az in enumerate(availability_zones):
     # Calculate IPv6 CIDR properly to avoid conflicts
@@ -123,7 +123,7 @@ for i, az in enumerate(availability_zones):
         )
     
     subnet = aws.ec2.Subnet(
-        get_resource_name(f"public-subnet-{i+1}"),
+        get_resource_name(f"public-subnet-v2-{i+1}"),  # New name to force recreation
         vpc_id=vpc.id,
         cidr_block=f"10.0.{10+i}.0/24",
         availability_zone=az,
@@ -131,7 +131,7 @@ for i, az in enumerate(availability_zones):
         ipv6_cidr_block=ipv6_cidr_calc,
         map_public_ip_on_launch=True,
         tags={
-            "Name": get_resource_name(f"public-subnet-{i+1}"),
+            "Name": get_resource_name(f"public-subnet-v2-{i+1}"),
             "Environment": ENVIRONMENT,
             "Type": "Public"
         },
@@ -170,10 +170,10 @@ ipv6_route = aws.ec2.Route(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Associate route table with public subnets
+# Associate route table with public subnets (new names to force recreation)
 for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
-        get_resource_name(f"public-rta-{i + 1}"),
+        get_resource_name(f"public-rta-v2-{i + 1}"),  # New name to force recreation
         subnet_id=subnet.id,
         route_table_id=public_route_table.id,
         opts=pulumi.ResourceOptions(provider=aws_provider)
