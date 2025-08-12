@@ -100,7 +100,7 @@ export class TapStack extends cdk.Stack {
       enableKeyRotation: true,
       keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
       keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
       policy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
@@ -169,7 +169,7 @@ export class TapStack extends cdk.Stack {
       logGroupName: `/tap/${this.stackName.toLowerCase()}-${this.deploymentId}/vpc/flowlogs`,
       retention: logs.RetentionDays.ONE_YEAR,
       encryptionKey: this.kmsKey,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Create IAM role for VPC Flow Logs
@@ -250,7 +250,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Allow HTTP traffic only from specified IP addresses
-    allowedIpAddresses.forEach((ip, _index) => {
+    allowedIpAddresses.forEach(ip => {
       securityGroup.addIngressRule(
         ec2.Peer.ipv4(ip),
         ec2.Port.tcp(80),
@@ -295,7 +295,7 @@ export class TapStack extends cdk.Stack {
       versioned: true,
       enforceSSL: true,
       publicReadAccess: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
       lifecycleRules: [
         {
           id: 'DeleteIncompleteMultipartUploads',
@@ -421,9 +421,9 @@ export class TapStack extends cdk.Stack {
       storageEncrypted: true,
       storageEncryptionKey: this.kmsKey,
       backupRetention: config?.backupRetention || cdk.Duration.days(7),
-      deletionProtection: false,
-      deleteAutomatedBackups: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      deletionProtection: true,
+      deleteAutomatedBackups: false,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
       publiclyAccessible: false,
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: true,
@@ -517,7 +517,7 @@ export class TapStack extends cdk.Stack {
       logGroupName: `/tap/${this.stackName.toLowerCase()}-${this.deploymentId}/cloudtrail/logs`,
       retention: logs.RetentionDays.ONE_YEAR,
       encryptionKey: this.kmsKey,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Note: CloudTrail doesn't require a separate role when using CloudWatch Logs
@@ -611,7 +611,9 @@ export class TapStack extends cdk.Stack {
     // For infrastructure as code, consider using AWS Config rules to monitor compliance
 
     // Alternative: Create a custom resource to set password policy
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // Note: This is a placeholder for future password policy implementation
+    // TODO: Implement password policy custom resource when needed
+    /*
     const passwordPolicyCustomResource = new cdk.CustomResource(
       this,
       'TapPasswordPolicy',
@@ -674,6 +676,7 @@ def handler(event, context):
         ).functionArn,
       }
     );
+    */
 
     return { mfaPolicy, financeGroup };
   }

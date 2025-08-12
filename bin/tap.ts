@@ -19,7 +19,7 @@ Tags.of(app).add('Author', commitAuthor);
 
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
-  allowedIpAddresses: [
+  allowedIpAddresses: app.node.tryGetContext('allowedIpAddresses') || [
     // Default to some safe IP ranges - these should be configured per environment
     '192.168.1.0/24', // Local network
     '10.0.0.0/16', // Private network
