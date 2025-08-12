@@ -172,7 +172,7 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
       )
     ],
     tags={"Name": "ec2-sg"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+  opts=pulumi.ResourceOptions(provider=aws_provider, ignore_changes=["egress"])
   )
 
   alb_sg = aws.ec2.SecurityGroup(
