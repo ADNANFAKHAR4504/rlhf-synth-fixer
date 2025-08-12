@@ -25,6 +25,40 @@ describe('TapStack', () => {
       expect(stack.vpcId).toBeDefined();
       expect(stack.albDnsName).toBeDefined();
       expect(stack.rdsEndpoint).toBeDefined();
+      expect(stack.s3BucketName).toBeDefined();
+    });
+
+    it('should create a TapStack with minimal configuration (no tags)', () => {
+      const app = Testing.app();
+      const minimalStack = new TapStack(app, 'test-minimal-stack', {
+        region: 'us-west-2',
+        environmentSuffix: 'minimal',
+        // No tags provided to test default value
+      });
+
+      expect(minimalStack).toBeInstanceOf(TapStack);
+      expect(minimalStack.vpcId).toBeDefined();
+      expect(minimalStack.albDnsName).toBeDefined();
+      expect(minimalStack.rdsEndpoint).toBeDefined();
+      expect(minimalStack.s3BucketName).toBeDefined();
+    });
+
+    it('should handle configuration with crossAccountId', () => {
+      const app = Testing.app();
+      const crossAccountStack = new TapStack(app, 'test-cross-stack', {
+        region: 'eu-west-1',
+        environmentSuffix: 'cross',
+        crossAccountId: '987654321098',
+        tags: {
+          Environment: 'cross',
+        },
+      });
+
+      expect(crossAccountStack).toBeInstanceOf(TapStack);
+      expect(crossAccountStack.vpcId).toBeDefined();
+      expect(crossAccountStack.albDnsName).toBeDefined();
+      expect(crossAccountStack.rdsEndpoint).toBeDefined();
+      expect(crossAccountStack.s3BucketName).toBeDefined();
     });
   });
 
@@ -400,6 +434,175 @@ describe('TapStack', () => {
 
       expect((ec2Config as any).retention_in_days).toBe(7);
       expect((rdsConfig as any).retention_in_days).toBe(7);
+    });
+  });
+
+  describe('S3 Storage Resources', () => {
+    it('should create S3 bucket with correct configuration', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      // Check S3 bucket
+      const s3Bucket = Object.values(resources.aws_s3_bucket || {})[0] as any;
+      expect(s3Bucket).toBeDefined();
+      expect(s3Bucket.tags.Name).toContain(`prod-${environmentSuffix}-storage-bucket-${region}`);
+      expect(s3Bucket.tags.Purpose).toBe('Multi-region storage with lifecycle management');
+      expect(stack.s3BucketName).toBeDefined();
+    });
+
+    it('should configure S3 bucket versioning', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const s3Versioning = Object.values(resources.aws_s3_bucket_versioning || {})[0] as any;
+      expect(s3Versioning).toBeDefined();
+      expect(s3Versioning.versioning_configuration.status).toBe('Enabled');
+    });
+
+    it('should configure S3 bucket encryption', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const s3Encryption = Object.values(resources.aws_s3_bucket_server_side_encryption_configuration || {})[0] as any;
+      expect(s3Encryption).toBeDefined();
+      expect(s3Encryption.rule[0].apply_server_side_encryption_by_default.sse_algorithm).toBe('AES256');
+    });
+
+    it('should configure S3 bucket lifecycle policies', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const s3Lifecycle = Object.values(resources.aws_s3_bucket_lifecycle_configuration || {})[0] as any;
+      expect(s3Lifecycle).toBeDefined();
+      expect(s3Lifecycle.rule).toBeDefined();
+      expect(s3Lifecycle.rule[0].id).toBe('transition-to-ia');
+      expect(s3Lifecycle.rule[0].status).toBe('Enabled');
+      
+      const transitions = s3Lifecycle.rule[0].transition;
+      expect(transitions.length).toBe(3);
+      expect(transitions[0].days).toBe(30);
+      expect(transitions[0].storage_class).toBe('STANDARD_IA');
+      expect(transitions[1].days).toBe(90);
+      expect(transitions[1].storage_class).toBe('GLACIER');
+      expect(transitions[2].days).toBe(365);
+      expect(transitions[2].storage_class).toBe('DEEP_ARCHIVE');
+    });
+
+    it('should configure S3 bucket public access block', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const s3Pab = Object.values(resources.aws_s3_bucket_public_access_block || {})[0] as any;
+      expect(s3Pab).toBeDefined();
+      expect(s3Pab.block_public_acls).toBe(true);
+      expect(s3Pab.block_public_policy).toBe(true);
+      expect(s3Pab.ignore_public_acls).toBe(true);
+      expect(s3Pab.restrict_public_buckets).toBe(true);
+    });
+  });
+
+  describe('Cross-Account IAM Resources', () => {
+    it('should create cross-account IAM role without cross-account access', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const crossAccountRole = Object.values(resources.aws_iam_role || {}).find((role: any) => 
+        role.tags?.Name?.includes('cross-account-role')
+      ) as any;
+      
+      expect(crossAccountRole).toBeDefined();
+      expect(crossAccountRole.tags.Name).toContain(`prod-${environmentSuffix}-cross-account-role-${region}`);
+      expect(crossAccountRole.tags.Purpose).toBe('Cross-account access demonstration');
+
+      const assumeRolePolicy = JSON.parse(crossAccountRole.assume_role_policy);
+      expect(assumeRolePolicy.Statement).toHaveLength(1);
+      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+    });
+
+    it('should create cross-account IAM policy for S3 access', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const crossAccountPolicy = Object.values(resources.aws_iam_policy || {}).find((policy: any) =>
+        policy.tags?.Name?.includes('cross-account-s3-policy')
+      ) as any;
+
+      expect(crossAccountPolicy).toBeDefined();
+      expect(crossAccountPolicy.name).toContain(`prod-${environmentSuffix}-cross-account-s3-policy-${region}`);
+      expect(crossAccountPolicy.description).toBe('Policy for cross-account S3 bucket access');
+
+      const policyDocument = JSON.parse(crossAccountPolicy.policy);
+      expect(policyDocument.Statement).toHaveLength(2);
+      
+      const s3Statement = policyDocument.Statement[0];
+      expect(s3Statement.Effect).toBe('Allow');
+      expect(s3Statement.Action).toContain('s3:GetObject');
+      expect(s3Statement.Action).toContain('s3:PutObject');
+      expect(s3Statement.Action).toContain('s3:DeleteObject');
+      expect(s3Statement.Action).toContain('s3:ListBucket');
+
+      const cloudwatchStatement = policyDocument.Statement[1];
+      expect(cloudwatchStatement.Effect).toBe('Allow');
+      expect(cloudwatchStatement.Action).toContain('cloudwatch:PutMetricData');
+      expect(cloudwatchStatement.Resource).toBe('*');
+    });
+
+    it('should attach cross-account policy to cross-account role', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const policyAttachment = Object.values(resources.aws_iam_role_policy_attachment || {}).find((attachment: any) =>
+        attachment.role?.includes?.('cross-account-role') || 
+        (typeof attachment.role === 'string' && attachment.role.includes('cross-account-role'))
+      ) as any;
+
+      expect(policyAttachment).toBeDefined();
+    });
+  });
+
+  describe('Cross-Account Configuration with External Account', () => {
+    let crossAccountStack: TapStack;
+
+    beforeEach(() => {
+      const app = Testing.app();
+      crossAccountStack = new TapStack(app, 'test-cross-account-stack', {
+        region: region,
+        environmentSuffix: environmentSuffix,
+        crossAccountId: '123456789012', // Test account ID
+        tags: {
+          Environment: environmentSuffix,
+          Repository: 'test-repo',
+          Author: 'test-user',
+        },
+      });
+    });
+
+    it('should create cross-account IAM role with external account access', () => {
+      const synthesized = Testing.synth(crossAccountStack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const crossAccountRole = Object.values(resources.aws_iam_role || {}).find((role: any) => 
+        role.tags?.Name?.includes('cross-account-role')
+      ) as any;
+      
+      expect(crossAccountRole).toBeDefined();
+
+      const assumeRolePolicy = JSON.parse(crossAccountRole.assume_role_policy);
+      expect(assumeRolePolicy.Statement).toHaveLength(2);
+      
+      // Check EC2 service principal
+      const ec2Statement = assumeRolePolicy.Statement.find((stmt: any) => 
+        stmt.Principal?.Service === 'ec2.amazonaws.com'
+      );
+      expect(ec2Statement).toBeDefined();
+
+      // Check cross-account principal
+      const crossAccountStatement = assumeRolePolicy.Statement.find((stmt: any) => 
+        stmt.Principal?.AWS?.includes('123456789012')
+      );
+      expect(crossAccountStatement).toBeDefined();
+      expect(crossAccountStatement.Principal.AWS).toBe('arn:aws:iam::123456789012:root');
+      expect(crossAccountStatement.Condition.StringEquals['sts:ExternalId']).toContain(`prod-${environmentSuffix}-external-id-${region}`);
     });
   });
 
