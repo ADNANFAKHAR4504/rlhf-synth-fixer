@@ -1,7 +1,8 @@
 // tests/terraform.int.test.ts
 // LIVE integration tests (EC2/VPC/NAT/Routes/SG + PEM sanity) using Terraform structured outputs.
-// No Terraform CLI. Requires AWS creds with READ permissions for EC2/VPC/NAT/RouteTables/Subnets/SG.
-// Run: AWS_REGION=us-west-2 npx jest --runInBand --detectOpenHandles
+// No Terraform CLI. Requires AWS creds with READ permissions.
+// Run: npx jest --runInBand --detectOpenHandles --testTimeout=180000
+// Tip: You don't need to set AWS_REGION; tests auto-discover region from vpc_id.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -13,6 +14,7 @@ import {
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeSecurityGroupsCommand,
+  DescribeVpcsCommand,
   IpPermission,
   RouteTable,
   InternetGateway,
@@ -53,6 +55,14 @@ function readStructuredOutputs() {
   return { vpcId, bastionIp, privateInstanceIds, publicSubnetIds, privateSubnetIds, bastionPrivateKeyPem };
 }
 
+function sanitizeOutputsForLog(rawJson: string): string {
+  // Redact the PEM body for safety while keeping headers/footers visible
+  return rawJson.replace(
+    /-----BEGIN RSA PRIVATE KEY-----[\s\S]*?-----END RSA PRIVATE KEY-----/g,
+    "-----BEGIN RSA PRIVATE KEY-----\n***REDACTED***\n-----END RSA PRIVATE KEY-----"
+  );
+}
+
 async function retry<T>(fn: () => Promise<T>, attempts = 12, baseMs = 1000): Promise<T> {
   let lastErr: any;
   for (let i = 0; i < attempts; i++) {
@@ -67,22 +77,59 @@ async function retry<T>(fn: () => Promise<T>, attempts = 12, baseMs = 1000): Pro
   throw lastErr;
 }
 
-// Narrowing helper to satisfy TS and give clear messages
 function assertDefined<T>(v: T | undefined | null, msg: string): T {
   if (v === undefined || v === null) throw new Error(msg);
   return v;
 }
 
-const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-west-2";
-const o = readStructuredOutputs();
-const ec2 = new EC2Client({ region: AWS_REGION });
+/* ----------------------------- Region autodiscovery ----------------------------- */
 
-function pickFirstInstance(res: any) {
-  for (const r of res.Reservations || []) {
-    for (const i of r.Instances || []) return i;
+const o = readStructuredOutputs();
+let REGION: string;               // discovered region for the given VPC
+let ec2: EC2Client;               // single shared client
+
+async function discoverRegionForVpc(vpcId: string): Promise<string> {
+  // Candidate regions: env first (if set), then likely US regions (incl. us-west-2, which your TF defaults to)
+  const envRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+  const candidates = Array.from(
+    new Set(
+      [
+        envRegion,
+        "us-west-2",
+        "us-east-1",
+        "us-east-2",
+        "us-west-1",
+        // Add more if you deploy elsewhere often:
+        "eu-west-1",
+        "eu-central-1",
+      ].filter(Boolean) as string[]
+    )
+  );
+
+  for (const r of candidates) {
+    const probe = new EC2Client({ region: r });
+    try {
+      const v = await probe.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      if ((v.Vpcs || []).length > 0) {
+        probe.destroy();
+        return r;
+      }
+    } catch (e: any) {
+      // Ignore InvalidVpcID.NotFound / AuthZ issues and try next region
+      // console.debug(`Region probe ${r} failed:`, e?.name || e?.Code || e?.message);
+    } finally {
+      // don't leak sockets
+      try { probe.destroy(); } catch {}
+    }
   }
-  return undefined;
+
+  throw new Error(
+    `Could not locate VPC ${vpcId} in candidate regions: ${candidates.join(", ")}. ` +
+    `Set AWS_REGION or extend the candidates list.`
+  );
 }
+
+/* ----------------------------- Helpers depending on EC2 client ----------------------------- */
 
 function hasDefaultRouteToGateway(rt: RouteTable, gwType: "igw" | "nat") {
   for (const r of rt.Routes || []) {
@@ -96,6 +143,13 @@ function hasDefaultRouteToGateway(rt: RouteTable, gwType: "igw" | "nat") {
 
 function portRangeMatch(p: IpPermission, port: number) {
   return p.IpProtocol === "tcp" && p.FromPort === port && p.ToPort === port;
+}
+
+function pickFirstInstance(res: any) {
+  for (const r of res.Reservations || []) {
+    for (const i of r.Instances || []) return i;
+  }
+  return undefined;
 }
 
 /** Robust bastion discovery: try by public IP, then by tag+VPC (fallback). */
@@ -138,11 +192,11 @@ async function findBastionInstance() {
 
   throw new Error(
     `Bastion instance not found. Tried by public-ip=${o.bastionIp}, NI association, and tag:Name=project-bastion in VPC ${o.vpcId}. ` +
-      `Check region (${AWS_REGION}) and that the instance is running.`
+      `Resolved region is ${REGION}. Ensure instance is running and IP/VPC match.`
   );
 }
 
-/** Get route tables grouped by subnet, and the VPC main route table (for subnets without explicit assoc). */
+/** Map subnetId -> route tables, and get VPC main table (for subnets without explicit assoc). */
 function indexRouteTables(rtRes: { RouteTables?: RouteTable[] }) {
   const rtBySubnet: Record<string, RouteTable[]> = {};
   let mainRt: RouteTable | undefined;
@@ -160,8 +214,19 @@ function indexRouteTables(rtRes: { RouteTables?: RouteTable[] }) {
 describe("LIVE: Terraform-provisioned network & compute (from structured outputs)", () => {
   const TEST_TIMEOUT = 120_000; // 120s per test
 
+  beforeAll(async () => {
+    // Debug stage: echo the outputs JSON (PEM redacted) so you can cross-check values
+    const raw = fs.readFileSync(path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"), "utf8");
+    console.info("\n--- Loaded cfn-outputs/all-outputs.json ---\n" + sanitizeOutputsForLog(raw) + "\n-------------------------------------------\n");
+
+    // Autodiscover correct region from the VPC ID so we don't fail on env misconfig
+    REGION = await discoverRegionForVpc(o.vpcId);
+    ec2 = new EC2Client({ region: REGION });
+    console.info(`Using region: ${REGION}`);
+  });
+
   afterAll(async () => {
-    ec2.destroy();
+    try { ec2.destroy(); } catch {}
   });
 
   test(
@@ -169,7 +234,6 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     async () => {
       const inst = await findBastionInstance();
 
-      // Validate public IP matches outputs (drift detector)
       const pubIp = assertDefined(inst.PublicIpAddress, `Bastion ${inst.InstanceId} has no PublicIpAddress`);
       expect(pubIp).toBe(o.bastionIp);
 
@@ -228,7 +292,7 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
       }
       const igwChecked = assertDefined(
         igw,
-        `No Internet Gateway attached to VPC ${o.vpcId} in region ${AWS_REGION}`
+        `No Internet Gateway attached to VPC ${o.vpcId} in region ${REGION}`
       );
       expect((igwChecked.Attachments || [])[0]?.VpcId).toBe(o.vpcId);
 
@@ -240,10 +304,10 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
           })
         )
       );
-      let nat: NatGateway | undefined = (natRes.NatGateways || [])[0];
+      const nat: NatGateway | undefined = (natRes.NatGateways || [])[0];
       const natChecked = assertDefined(
         nat,
-        `NAT Gateway not found in public subnet ${o.publicSubnetIds[0]} (region ${AWS_REGION}). ` +
+        `NAT Gateway not found in public subnet ${o.publicSubnetIds[0]} (region ${REGION}). ` +
           `If NAT is elsewhere, check Terraform (aws_nat_gateway.subnet_id).`
       );
       expect(["available", "pending"]).toContain(natChecked.State);
@@ -307,6 +371,7 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
         `Security group ${bastionSgId} not found`
       );
 
+      // Name check is nice-to-have (don't fail if name drifted)
       if (bastionSg.GroupName) expect(bastionSg.GroupName).toBe("project-bastion-sg");
 
       const bastionIngress = bastionSg.IpPermissions || [];
