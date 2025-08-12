@@ -85,15 +85,15 @@ export class TapStack extends cdk.Stack {
       version: lambdaFunction.currentVersion,
       description:
         'Live alias for production traffic with provisioned concurrency',
-      provisionedConcurrentExecutions: 1000, // Explicitly set initial provisioned concurrency
+      provisionedConcurrentExecutions: 5, // Set to a safe value within account limits
     });
     // Explicitly tag Lambda alias
     Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaAlias).add(k, v));
 
     // Provisioned Concurrency Auto Scaling
     lambdaAlias.addAutoScaling({
-      minCapacity: 50,
-      maxCapacity: 1000,
+      minCapacity: 1,
+      maxCapacity: 10,
     });
 
     // Application Auto Scaling Role
@@ -113,8 +113,8 @@ export class TapStack extends cdk.Stack {
         serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
         resourceId: `function:${lambdaFunction.functionName}:${lambdaAlias.aliasName}`,
         scalableDimension: 'lambda:function:ProvisionedConcurrency',
-        minCapacity: 50,
-        maxCapacity: 1000,
+        minCapacity: 1,
+        maxCapacity: 10,
         role: autoScalingRole,
       }
     );
