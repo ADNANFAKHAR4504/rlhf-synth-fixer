@@ -1,1 +1,4 @@
-# This file makes the tests/integration directory a Python package
+"""Integration tests package.
+
+Note: duplicate-code warnings across unit test helpers are acceptable here.
+"""
