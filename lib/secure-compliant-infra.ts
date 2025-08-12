@@ -54,7 +54,8 @@ kmsKeys.map(({ region, key }) => ({
 const cloudtrailBucket = new aws.s3.Bucket(
   `${projectName}-${environment}-cloudtrail-logs`,
   {
-    bucket: `${projectName}-${environment}-cloudtrail-logs-${Date.now()}`,
+    bucket: `${environment}-${projectName}-cloudtrail-logs`,
+    forceDestroy: true,
     tags: commonTags,
   },
   { provider: providers.find(p => p.region === 'us-east-1')?.provider }
@@ -64,7 +65,7 @@ const cloudtrailBucket = new aws.s3.Bucket(
 const accessLogsBucket = new aws.s3.Bucket(
   `${projectName}-${environment}-access-logs`,
   {
-    bucket: `${projectName}-${environment}-access-logs-${Date.now()}`,
+    bucket: `${environment}-${projectName}-access-logs`,
     tags: commonTags,
   },
   { provider: providers.find(p => p.region === 'us-east-1')?.provider }

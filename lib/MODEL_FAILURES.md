@@ -118,6 +118,65 @@ new aws.s3.BucketLogging(
 );
 ```
 
+### 6. S3 Bucket Naming with Dynamic Timestamps
+**Issue**: The model used `Date.now()` in S3 bucket names, which would create new buckets on every deployment instead of using consistent, reusable bucket names. This violates infrastructure as code principles and would lead to resource proliferation.
+
+**Problem**: Using dynamic timestamps in resource names means:
+- New buckets created on every deployment
+- Old buckets left orphaned
+- Inconsistent resource naming
+- Potential cost implications from unused resources
+
+**Original Code**:
+```typescript
+const cloudtrailBucket = new aws.s3.Bucket(
+  `${projectName}-${environment}-cloudtrail-logs`,
+  {
+    bucket: `${projectName}-${environment}-cloudtrail-logs-${Date.now()}`,
+    forceDestroy: true,
+    tags: commonTags,
+  },
+  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
+);
+
+const accessLogsBucket = new aws.s3.Bucket(
+  `${projectName}-${environment}-access-logs`,
+  {
+    bucket: `${projectName}-${environment}-access-logs-${Date.now()}`,
+    tags: commonTags,
+  },
+  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
+);
+```
+
+**Fixed Code**:
+```typescript
+const cloudtrailBucket = new aws.s3.Bucket(
+  `${projectName}-${environment}-cloudtrail-logs`,
+  {
+    bucket: `${environment}-${projectName}-cloudtrail-logs`,
+    forceDestroy: true,
+    tags: commonTags,
+  },
+  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
+);
+
+const accessLogsBucket = new aws.s3.Bucket(
+  `${projectName}-${environment}-access-logs`,
+  {
+    bucket: `${environment}-${projectName}-access-logs`,
+    tags: commonTags,
+  },
+  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
+);
+```
+
+**Benefits of the Fix**:
+- Consistent bucket names across deployments
+- Environment-prefixed naming for better organization
+- Reusable infrastructure resources
+- Follows infrastructure as code best practices
+
 ## Lint Errors (Code Style and Quality)
 
 ### 1. Quote Style Inconsistency
@@ -169,7 +228,8 @@ All issues have been successfully resolved:
 - ✅ Linting passes (`npm run lint`)
 - ✅ Availability zone region mismatch fixed
 - ✅ Deprecated S3 resource replaced with current version
+- ✅ S3 bucket naming fixed to use consistent environment-prefixed names
 - ✅ Infrastructure code maintains all original functionality
 - ✅ Test files updated to match actual interface definitions
 
-The infrastructure code now follows the project's coding standards while preserving all the security and compliance features specified in the original MODEL_RESPONSE.md, and should deploy successfully across multiple regions.
+The infrastructure code now follows the project's coding standards while preserving all the security and compliance features specified in the original MODEL_RESPONSE.md, and should deploy successfully across multiple regions with consistent, reusable resource names.
