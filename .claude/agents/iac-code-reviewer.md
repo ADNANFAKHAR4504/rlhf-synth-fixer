@@ -22,10 +22,13 @@ QA expert that ensures IaC meets quality standards and requirements.
 - Generate compliance report: Requirement | Status (✅/⚠️/❌) | Action
 - Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation (Note: The code in both files should be identical)
 - Calculate compliance percentage
+- Compare `lib/IDEAL_RESPONSE.md` and `lib/MODEL_RESPONSE.md`. Highlight the differences in terms
+ of infrastructure and validate the value added.
 
 ### Phase 3: Test Coverage
 
-- Analyze integration test coverage for all resources (Note: Integration should use stack output file to test live resource and it should not use any mocks)
+- Analyze integration test coverage for all resources (Note: Integration should use stack output file to
+test live resource and it should not use any mocks)
 - Generate coverage report: Requirement | Covered? | Test Name | Notes
 - Provide Ready/Pending recommendation
 

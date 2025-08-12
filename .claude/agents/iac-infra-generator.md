@@ -17,7 +17,11 @@ generates infrastructure described in the task description.
     what the task description is requiring, keeping a minimal approach.
    - The prompt should look like 'Human generated'. Do not make it more complex than needed.
    - Explore AWS docs and include 2 latest features or services in the prompt. Keep it simple.
-   - Do not over engineer the prompt. Keet the prompt minimal to meet the task requirements.
+   - Avoid creating resources that take too long to deploy. If those are needed,
+    make sure to set properties that reduce the deployment time.
+     - e.g. ConfigRecorder
+     - e.g RDS non-serverless instances
+   - Do not over engineer the prompt. Keep the prompt minimal to meet the task requirements.
    - Do not use emojis or any other characteristic to the prompt that could make it look non-human generated
    - Explicitly request infrastructure code in the prompt. One code block per file.
 
@@ -44,5 +48,9 @@ generates infrastructure described in the task description.
    - Do not iterate over the code created. Just represent inside the /lib folder the code generated in the response.
    - Do not create unit tests or integration tests. This phase should only involve the initial generation
    of the code to execute. Subsequent phases will take care of fixing it.
+   - Do not generate code outside bin, lib, test or tests folders.
+     - e.g. If you need to create a lambda code, create it inside the lib/folder.
 
 **Note**: Code generation only - no build/test/lint in this phase
+
+- Important: Never remove the templates folder.
