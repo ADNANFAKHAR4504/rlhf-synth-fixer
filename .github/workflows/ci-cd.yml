@@ -788,6 +788,7 @@ jobs:
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
+            aws cloudformation describe-stack-events --stack-name TapStackpr807 && npm run cfn:destroy && aws cloudformation wait stack-delete-complete --stack-name TapStackpr807
             npm run cfn:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi destroy..."
