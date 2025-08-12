@@ -148,7 +148,7 @@ Resources:
             Action: "s3:*"
             Resource:
               - !GetAtt AppS3Bucket.Arn
-              - !Sub "${AppS3Bucket}/*"
+              - !Sub "arn:aws:s3:::${AppS3Bucket}/*"
             Condition:
               Bool:
                 aws:SecureTransport: false
@@ -198,7 +198,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub "${CloudTrailLogsBucket}/AWSLogs/${AWS::AccountId}/*"
+            Resource: !Sub "arn:aws:s3:::${CloudTrailLogsBucket}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -208,7 +208,7 @@ Resources:
             Action: "s3:*"
             Resource:
               - !GetAtt CloudTrailLogsBucket.Arn
-              - !Sub "${CloudTrailLogsBucket}/*"
+              - !Sub "arn:aws:s3:::${CloudTrailLogsBucket}/*"
             Condition:
               Bool:
                 aws:SecureTransport: false

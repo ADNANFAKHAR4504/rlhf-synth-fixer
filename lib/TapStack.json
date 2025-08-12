@@ -211,7 +211,7 @@
                                     ]
                                 },
                                 {
-                                    "Fn::Sub": "${AppS3Bucket}/*"
+                                    "Fn::Sub": "arn:aws:s3:::${AppS3Bucket}/*"
                                 }
                             ],
                             "Condition": {
@@ -303,7 +303,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailLogsBucket}/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailLogsBucket}/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -324,7 +324,7 @@
                                     ]
                                 },
                                 {
-                                    "Fn::Sub": "${CloudTrailLogsBucket}/*"
+                                    "Fn::Sub": "arn:aws:s3:::${CloudTrailLogsBucket}/*"
                                 }
                             ],
                             "Condition": {
