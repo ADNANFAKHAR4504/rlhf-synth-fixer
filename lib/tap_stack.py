@@ -148,7 +148,10 @@ public_route_table = aws.ec2.RouteTable(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Type": "Public"
-    }
+    },
+    opts=pulumi.ResourceOptions(
+        import_="rtb-0cc0f62eb79e75fce"
+    )
 )
 
 # IPv4 route to Internet Gateway
@@ -172,7 +175,10 @@ for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
         get_resource_name(f"public-rta-{i + 1}"),
         subnet_id=subnet.id,
-        route_table_id=public_route_table.id
+        route_table_id=public_route_table.id,
+        opts=pulumi.ResourceOptions(
+            import_=f"rtbassoc-{'0b2fbc1d7a7e9c0b1' if i == 0 else '072b07e94dc3f6abc'}"
+        )
     )
 
 # =============================================================================
@@ -226,7 +232,10 @@ alb_security_group = aws.ec2.SecurityGroup(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "ALB Security Group"
-    }
+    },
+    opts=pulumi.ResourceOptions(
+        import_="sg-0febaf47c80b7b3ec"
+    )
 )
 
 # Security group for EC2 instances
@@ -528,7 +537,10 @@ target_group = aws.lb.TargetGroup(
         "Name": get_resource_name("web-tg"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(
+        import_="arn:aws:elasticloadbalancing:us-east-1:***:targetgroup/dualstack-web-app-pr430-web-tg/f1e329e9894d434e"
+    )
 )
 
 # Attach EC2 instances to target group
@@ -555,7 +567,10 @@ alb = aws.lb.LoadBalancer(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Type": "Application Load Balancer"
-    }
+    },
+    opts=pulumi.ResourceOptions(
+        import_="arn:aws:elasticloadbalancing:us-east-1:***:loadbalancer/app/dualstack-web-app-pr430-web-alb/95ecb86670e0b957"
+    )
 )
 
 # Create HTTP listener
