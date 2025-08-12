@@ -1,20 +1,14 @@
-"""
-test_tap_stack_integration.py
-
-Integration tests for live deployed TapStack Pulumi infrastructure.
-Tests actual AWS resources created by the Pulumi stack.
-"""
-
 # tests/integration/test_tap_stack.py
 
 """
 Integration tests for TapStack (A2 deployment requirement):
 - AWS Lambda (inline code)
-- API Gateway HTTP endpoint
+- API Gateway REST endpoint
 - CloudWatch alarms for errors, throttles, latency
 - SNS alarm topic
 - Environment-aware naming
 """
+
 import unittest
 import os
 import boto3
@@ -34,7 +28,7 @@ class TestTapStackIntegration(unittest.TestCase):
 
     cls.session = boto3.Session(region_name=cls.region)
     cls.lambda_client = cls.session.client("lambda")
-    cls.apigw_client = cls.session.client("apigatewayv2")
+    cls.apigw_client = cls.session.client("apigateway")
     cls.cloudwatch_client = cls.session.client("cloudwatch")
     cls.sns_client = cls.session.client("sns")
 
@@ -58,7 +52,7 @@ class TestTapStackIntegration(unittest.TestCase):
     functions = self.lambda_client.list_functions()["Functions"]
     matching = [
         f for f in functions
-        if f["FunctionName"].startswith(f"lambdaFn-{self.environment_suffix}")
+        if f["FunctionName"].startswith(f"{self.environment_suffix}-items-lambda")
     ]
     self.assertTrue(matching, "No matching lambda function found")
     for fn in matching:
@@ -70,13 +64,13 @@ class TestTapStackIntegration(unittest.TestCase):
     if not self._verify_deployment():
       self.skipTest("Deployment not found in test region")
 
-    apis = self.apigw_client.get_apis()["Items"]
+    apis = self.apigw_client.get_rest_apis()["items"]
     matching = [
         api for api in apis
-        if api["Name"].startswith(f"httpApi-{self.environment_suffix}")
+        if api["name"].startswith(f"{self.environment_suffix}-items-api")
     ]
     self.assertTrue(matching, "No matching API Gateway found")
-    print(f"API Gateway found: {[api['Name'] for api in matching]}")
+    print(f"API Gateway found: {[api['name'] for api in matching]}")
 
   def test_03_cloudwatch_alarms_exist(self):
     """Validate CloudWatch alarms for Lambda errors, throttles, and latency."""
@@ -84,9 +78,9 @@ class TestTapStackIntegration(unittest.TestCase):
       self.skipTest("Deployment not found in test region")
 
     alarm_prefixes = [
-        f"lambdaErrorAlarm-{self.environment_suffix}",
-        f"lambdaThrottleAlarm-{self.environment_suffix}",
-        f"lambdaLatencyAlarm-{self.environment_suffix}",
+        f"lambdaDurationAlarm-{self.environment_suffix}",
+        f"lambdaErrorsAlarm-{self.environment_suffix}",
+        f"lambdaThrottlesAlarm-{self.environment_suffix}",
     ]
     found_names = []
 
@@ -105,7 +99,7 @@ class TestTapStackIntegration(unittest.TestCase):
     if not self._verify_deployment():
       self.skipTest("Deployment not found in test region")
 
-    expected_prefix = f"alarmTopic-{self.environment_suffix}"
+    expected_prefix = f"{self.environment_suffix}-items-alarms"
     topics = self.sns_client.list_topics()["Topics"]
 
     matching_topics = []
@@ -119,18 +113,18 @@ class TestTapStackIntegration(unittest.TestCase):
     print(f"SNS Topics found: {matching_topics}")
 
   def test_05_naming_conventions(self):
-    """Validate naming patterns."""
+    """Validate naming patterns follow the expected prefix rules."""
     args = TapStackArgs(environment_suffix=self.environment_suffix)
     expected_prefixes = [
-        f"lambdaFn-{args.environment_suffix}",
-        f"httpApi-{args.environment_suffix}",
-        f"alarmTopic-{args.environment_suffix}",
+        f"{args.environment_suffix}-items-lambda",
+        f"{args.environment_suffix}-items-api",
+        f"{args.environment_suffix}-items-alarms",
     ]
 
     for prefix in expected_prefixes:
       self.assertTrue(
-          prefix.endswith(f"-{args.environment_suffix}"),
-          f"Expected suffix missing in: {prefix}"
+          prefix.startswith(f"{args.environment_suffix}-"),
+          f"Expected prefix missing in: {prefix}"
       )
     print("Naming conventions validated")
 
