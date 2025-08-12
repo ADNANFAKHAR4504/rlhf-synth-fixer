@@ -45,23 +45,63 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create secure IAM resources
-    // const iamResources =
-    new SecureIAM(this, 'SecureIAM', {
+    const iamResources = new SecureIAM(this, 'SecureIAM', {
       userName: 'secure-user',
       roleName: 'secure-application-role',
       s3BucketArns: [dataBucket.bucket.bucketArn, logsBucket.bucket.bucketArn],
       rdsResourceArns: [database.database.instanceArn],
     });
 
-    // Stack outputs
-    new cdk.CfnOutput(this, 'StackRegion', {
-      value: this.region,
-      description: 'Stack deployment region',
-    });
-
     new cdk.CfnOutput(this, 'SecurityCompliance', {
       value: 'All security requirements implemented',
       description: 'Security compliance status',
+    });
+    new cdk.CfnOutput(this, 'LogsBucketArn', {
+      value: logsBucket.bucket.bucketArn,
+      description: 'Logs bucket ARN',
+    });
+
+    new cdk.CfnOutput(this, 'BucketArn', {
+      value: dataBucket.bucket.bucketArn,
+      description: 'Bucket ARN',
+    });
+    new cdk.CfnOutput(this, 'DatabaseArn', {
+      value: database.database.instanceArn,
+      description: 'Database ARN',
+    });
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: networking.vpc.vpcId,
+      description: 'VPC ID',
+    });
+
+    new cdk.CfnOutput(this, 'S3EndpointId', {
+      value: networking.s3Endpoint.vpcEndpointId,
+      description: 'S3 Endpoint ID',
+    });
+
+    new cdk.CfnOutput(this, 'SecurityGroup', {
+      value: networking.securityGroup.securityGroupId,
+      description: 'Security Group ID',
+    });
+    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+      value: database.database.instanceEndpoint.hostname,
+      description: 'Database Endpoint',
+    });
+
+    new cdk.CfnOutput(this, 'DatabasePort', {
+      value: `${database.database.instanceEndpoint.port}`,
+      description: 'Database Port',
+    });
+
+    new cdk.CfnOutput(this, 'UserArn', {
+      value: iamResources.user.userArn,
+      description: 'User ARN',
+    });
+
+    new cdk.CfnOutput(this, 'RoleArn', {
+      value: iamResources.role.roleArn,
+      description: 'Role ARN',
     });
   }
 }

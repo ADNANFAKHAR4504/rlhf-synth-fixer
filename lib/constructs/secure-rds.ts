@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import { Construct } from 'constructs';
 
 export interface SecureRDSProps {
@@ -21,7 +21,7 @@ export class SecureRDS extends Construct {
 
     // Create KMS key for RDS encryption
     this.encryptionKey = new kms.Key(this, 'RDSEncryptionKey', {
-      description: `KMS key for RDS instance ${props.instanceIdentifier}`,
+      description: 'KMS key for RDS instance encryption',
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
@@ -41,7 +41,7 @@ export class SecureRDS extends Construct {
       'DatabaseParameterGroup',
       {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_3,
+          version: rds.PostgresEngineVersion.VER_15_13,
         }),
         description: 'Secure parameter group for PostgreSQL',
         parameters: {
@@ -73,7 +73,7 @@ export class SecureRDS extends Construct {
     this.database = new rds.DatabaseInstance(this, 'SecureDatabase', {
       instanceIdentifier: props.instanceIdentifier,
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_3,
+        version: rds.PostgresEngineVersion.VER_15_13,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -117,20 +117,10 @@ export class SecureRDS extends Construct {
 
     // Create CloudWatch log group for RDS logs
     new logs.LogGroup(this, 'RDSLogGroup', {
-      logGroupName: `/aws/rds/instance/${props.instanceIdentifier}/postgresql`,
+      logGroupName: `/aws/rds/instance/${props.instanceIdentifier}/postgresql-${Date.now()}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // Output database endpoint
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: this.database.instanceEndpoint.hostname,
-      description: 'RDS instance endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'DatabaseArn', {
-      value: this.database.instanceArn,
-      description: 'RDS instance ARN',
-    });
   }
 }

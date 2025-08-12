@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export interface SecureS3BucketProps {
@@ -20,7 +20,7 @@ export class SecureS3Bucket extends Construct {
     this.encryptionKey =
       (props.encryptionKey as kms.Key) ||
       new kms.Key(this, 'S3EncryptionKey', {
-        description: `KMS key for S3 bucket ${props.bucketName}`,
+        description: 'KMS key for S3 bucket encryption',
         enableKeyRotation: true,
         removalPolicy: cdk.RemovalPolicy.RETAIN,
       });
@@ -57,18 +57,6 @@ export class SecureS3Bucket extends Construct {
         },
       ],
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-    });
-
-    // Add bucket notification for security monitoring
-    this.bucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED
-      // You can add SNS topic or Lambda function here for monitoring
-    );
-
-    // Output the bucket ARN for reference
-    new cdk.CfnOutput(this, 'BucketArn', {
-      value: this.bucket.bucketArn,
-      description: `ARN of the secure S3 bucket ${props.bucketName}`,
     });
   }
 }

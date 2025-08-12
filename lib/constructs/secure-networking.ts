@@ -1,4 +1,3 @@
-import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
@@ -19,7 +18,7 @@ export class SecureNetworking extends Construct {
     // Create VPC with private and public subnets
     this.vpc = new ec2.Vpc(this, 'SecureVPC', {
       vpcName: props.vpcName,
-      cidr: props.cidr,
+      ipAddresses: ec2.IpAddresses.cidr(props.cidr),
       maxAzs: props.maxAzs,
       natGateways: 1, // Minimize costs while maintaining security
       subnetConfiguration: [
@@ -90,15 +89,5 @@ export class SecureNetworking extends Construct {
       destination: ec2.FlowLogDestination.toCloudWatchLogs(),
     });
 
-    // Outputs
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID',
-    });
-
-    new cdk.CfnOutput(this, 'S3EndpointId', {
-      value: this.s3Endpoint.vpcEndpointId,
-      description: 'S3 VPC Endpoint ID',
-    });
   }
 }

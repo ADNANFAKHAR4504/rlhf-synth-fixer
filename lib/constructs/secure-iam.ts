@@ -20,7 +20,7 @@ export class SecureIAM extends Construct {
 
     // Create CloudWatch Log Group for IAM role logging
     this.logGroup = new logs.LogGroup(this, 'IAMRoleLogGroup', {
-      logGroupName: `/aws/iam/roles/${props.roleName}`,
+      logGroupName: `/aws/iam/roles/${props.roleName}-${Date.now()}`,
       retention: logs.RetentionDays.ONE_YEAR,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
@@ -155,16 +155,5 @@ export class SecureIAM extends Construct {
     });
 
     this.user.attachInlinePolicy(mfaPolicy);
-
-    // Output user ARN
-    new cdk.CfnOutput(this, 'UserArn', {
-      value: this.user.userArn,
-      description: `ARN of the secure IAM user ${props.userName}`,
-    });
-
-    new cdk.CfnOutput(this, 'RoleArn', {
-      value: this.role.roleArn,
-      description: `ARN of the secure IAM role ${props.roleName}`,
-    });
   }
 }
