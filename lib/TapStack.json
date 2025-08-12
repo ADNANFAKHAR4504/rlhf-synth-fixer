@@ -132,6 +132,15 @@
             "Type": "String",
             "Description": "ARN of existing CloudTrail trail to use (leave empty to create new trail)",
             "Default": ""
+        },
+        "CreateConfigRecorder": {
+            "Type": "String",
+            "Description": "Create new AWS Config recorder (true|false). Set to false if one already exists in the region.",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
         }
     },
     "Conditions": {
@@ -261,6 +270,14 @@
                         }
                     ]
                 }
+            ]
+        },
+        "CreateNewConfigRecorder": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateConfigRecorder"
+                },
+                "true"
             ]
         }
     },
@@ -1981,6 +1998,7 @@
             }
         },
         "ConfigurationRecorder": {
+            "Condition": "CreateNewConfigRecorder",
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
                 "Name": {
@@ -2016,8 +2034,7 @@
                     "Owner": "AWS",
                     "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
                 }
-            },
-            "DependsOn": "ConfigurationRecorder"
+            }
         },
         "S3BucketPublicReadProhibitedConfigRule": {
             "Type": "AWS::Config::ConfigRule",
@@ -2029,8 +2046,7 @@
                     "Owner": "AWS",
                     "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
                 }
-            },
-            "DependsOn": "ConfigurationRecorder"
+            }
         },
         "IAMUserMFAConfigRule": {
             "Type": "AWS::Config::ConfigRule",
@@ -2042,8 +2058,7 @@
                     "Owner": "AWS",
                     "SourceIdentifier": "IAM_USER_MFA_ENABLED"
                 }
-            },
-            "DependsOn": "ConfigurationRecorder"
+            }
         },
         "RootAccountMFAConfigRule": {
             "Type": "AWS::Config::ConfigRule",
@@ -2055,8 +2070,7 @@
                     "Owner": "AWS",
                     "SourceIdentifier": "ROOT_ACCOUNT_MFA_ENABLED"
                 }
-            },
-            "DependsOn": "ConfigurationRecorder"
+            }
         },
         "VPCDefaultSecurityGroupClosedConfigRule": {
             "Type": "AWS::Config::ConfigRule",
@@ -2068,8 +2082,7 @@
                     "Owner": "AWS",
                     "SourceIdentifier": "VPC_DEFAULT_SECURITY_GROUP_CLOSED"
                 }
-            },
-            "DependsOn": "ConfigurationRecorder"
+            }
         },
         "PatchBaseline": {
             "Type": "AWS::SSM::PatchBaseline",

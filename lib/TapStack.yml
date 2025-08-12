@@ -137,6 +137,12 @@ Parameters:
     Description: 'ARN of existing CloudTrail trail to use (leave empty to create new trail)'
     Default: ''
 
+  CreateConfigRecorder:
+    Type: String
+    Description: 'Create new AWS Config recorder (true|false). Set to false if one already exists in the region.'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
 # ---------------------------
 # CONDITIONS
 # ---------------------------
@@ -161,6 +167,7 @@ Conditions:
         !Equals [!Ref DBEngine, 'aurora-mysql'],
       ],
     ]
+  CreateNewConfigRecorder: !Equals [!Ref CreateConfigRecorder, 'true']
 
 # ---------------------------
 # HELPER & COMMON TAGS (used inline)
@@ -1030,6 +1037,7 @@ Resources:
   # AWS Config: recorder, delivery, conformance pack (CIS)
   # ---------------------------
   ConfigurationRecorder:
+    Condition: CreateNewConfigRecorder
     Type: AWS::Config::ConfigurationRecorder
     Properties:
       Name: !Sub '${Environment}-config-recorder'
@@ -1052,7 +1060,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
-    DependsOn: ConfigurationRecorder
 
   S3BucketPublicReadProhibitedConfigRule:
     Type: AWS::Config::ConfigRule
@@ -1061,7 +1068,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
-    DependsOn: ConfigurationRecorder
 
   IAMUserMFAConfigRule:
     Type: AWS::Config::ConfigRule
@@ -1070,7 +1076,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: IAM_USER_MFA_ENABLED
-    DependsOn: ConfigurationRecorder
 
   RootAccountMFAConfigRule:
     Type: AWS::Config::ConfigRule
@@ -1079,7 +1084,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
-    DependsOn: ConfigurationRecorder
 
   VPCDefaultSecurityGroupClosedConfigRule:
     Type: AWS::Config::ConfigRule
@@ -1088,7 +1092,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
-    DependsOn: ConfigurationRecorder
 
   # ---------------------------
   # Systems Manager Patching (PatchBaseline + MaintenanceWindow + Association)

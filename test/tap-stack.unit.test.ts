@@ -200,10 +200,18 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(p.Type).toBe('String');
       expect(p.Default).toBe('');
     });
+
+    test('CreateConfigRecorder parameter exists with true default', () => {
+      const p = params.CreateConfigRecorder;
+      expect(p).toBeDefined();
+      expect(p.Type).toBe('String');
+      expect(p.Default).toBe('true');
+      expect(p.AllowedValues).toEqual(['true', 'false']);
+    });
   });
 
   describe('Conditions defined properly', () => {
-    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine, HasExistingCloudTrail, CreateNewCloudTrail exist', () => {
+    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine, HasExistingCloudTrail, CreateNewCloudTrail, CreateNewConfigRecorder exist', () => {
       expect(template.Conditions).toBeDefined();
       const conds = template.Conditions;
       expect(conds.UseNatGateways).toBeDefined();
@@ -214,6 +222,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(conds.IsNotAuroraEngine).toBeDefined();
       expect(conds.HasExistingCloudTrail).toBeDefined();
       expect(conds.CreateNewCloudTrail).toBeDefined();
+      expect(conds.CreateNewConfigRecorder).toBeDefined();
     });
   });
 
@@ -490,6 +499,11 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(
         template.Resources.VPCDefaultSecurityGroupClosedConfigRule
       ).toBeDefined();
+
+      // Configuration Recorder is conditional
+      expect(template.Resources.ConfigurationRecorder.Condition).toBe(
+        'CreateNewConfigRecorder'
+      );
 
       const rec = template.Resources.ConfigurationRecorder.Properties;
       expect(rec.RecordingGroup.AllSupported).toBe(true);
