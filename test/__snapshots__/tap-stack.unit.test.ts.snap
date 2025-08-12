@@ -1,0 +1,69 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props and match snapshot 1`] = `
+"{
+  "provider": {
+    "aws": [
+      {
+        "default_tags": [
+          {
+            "tags": {
+              "Owner": "DevOps",
+              "Project": "TAP"
+            }
+          }
+        ],
+        "region": "us-west-1"
+      }
+    ]
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "custom-state-bucket",
+        "encrypt": true,
+        "key": "staging/TestCustomStack.tfstate",
+        "region": "us-east-1",
+        "use_lockfile": true
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.4.0"
+      }
+    }
+  }
+}"
+`;
+
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with default props and match snapshot 1`] = `
+"{
+  "provider": {
+    "aws": [
+      {
+        "default_tags": [
+        ],
+        "region": "us-east-1"
+      }
+    ]
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "iac-rlhf-tf-states",
+        "encrypt": true,
+        "key": "dev/TestDefaultStack.tfstate",
+        "region": "us-east-1",
+        "use_lockfile": true
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.4.0"
+      }
+    }
+  }
+}"
+`;
