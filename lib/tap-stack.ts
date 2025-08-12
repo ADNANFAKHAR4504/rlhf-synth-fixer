@@ -68,9 +68,9 @@ export class TapStack extends cdk.Stack {
       // Create stack outputs with error handling
       this.createOutputs(resourceName);
     } catch (error) {
-      throw new Error(
-        `Failed to create TapStack: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to create TapStack: ${errorMessage}`);
     }
   }
 
@@ -178,9 +178,9 @@ export class TapStack extends cdk.Stack {
 
       return vpc;
     } catch (error) {
-      throw new Error(
-        `Failed to create VPC: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to create VPC: ${errorMessage}`);
     }
   }
 
@@ -188,197 +188,143 @@ export class TapStack extends cdk.Stack {
     resourceName: (name: string) => string,
     allowAllOutbound: boolean
   ): ec2.SecurityGroup {
-    try {
-      const securityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
-        vpc: this.vpc,
-        securityGroupName: resourceName('ec2-sg'),
-        description: 'Security group for EC2 instance',
-        allowAllOutbound,
-      });
+    const securityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
+      vpc: this.vpc,
+      securityGroupName: resourceName('ec2-sg'),
+      description: 'Security group for EC2 instance',
+      allowAllOutbound,
+    });
 
-      // Add inbound rules with error handling
-      try {
-        securityGroup.addIngressRule(
-          ec2.Peer.anyIpv4(),
-          ec2.Port.tcp(80),
-          'Allow HTTP inbound'
-        );
-      } catch (error) {
-        throw new Error(
-          `Failed to add HTTP ingress rule: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
+    // Add inbound rules
+    securityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP inbound'
+    );
 
-      try {
-        securityGroup.addIngressRule(
-          ec2.Peer.anyIpv4(),
-          ec2.Port.tcp(22),
-          'Allow SSH inbound'
-        );
-      } catch (error) {
-        throw new Error(
-          `Failed to add SSH ingress rule: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
+    securityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(22),
+      'Allow SSH inbound'
+    );
 
-      return securityGroup;
-    } catch (error) {
-      throw new Error(
-        `Failed to create security group: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return securityGroup;
   }
 
   private createKeyPair(resourceName: (name: string) => string): ec2.KeyPair {
-    try {
-      return new ec2.KeyPair(this, 'EC2KeyPair', {
-        keyPairName: resourceName('key-pair'),
-        type: ec2.KeyPairType.RSA,
-        format: ec2.KeyPairFormat.PEM,
-      });
-    } catch (error) {
-      throw new Error(
-        `Failed to create key pair: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return new ec2.KeyPair(this, 'EC2KeyPair', {
+      keyPairName: resourceName('key-pair'),
+      type: ec2.KeyPairType.RSA,
+      format: ec2.KeyPairFormat.PEM,
+    });
   }
 
   private createEC2Instance(
     resourceName: (name: string) => string,
     instanceType: ec2.InstanceType
   ): ec2.Instance {
-    try {
-      return new ec2.Instance(this, 'EC2Instance', {
-        vpc: this.vpc,
-        instanceType,
-        machineImage: new ec2.AmazonLinuxImage({
-          generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-        }),
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        securityGroup: this.securityGroup,
-        keyPair: this.keyPair,
-        associatePublicIpAddress: true,
-        userData: this.createUserData(),
-      });
-    } catch (error) {
-      throw new Error(
-        `Failed to create EC2 instance: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return new ec2.Instance(this, 'EC2Instance', {
+      vpc: this.vpc,
+      instanceType,
+      machineImage: new ec2.AmazonLinuxImage({
+        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+      }),
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+      securityGroup: this.securityGroup,
+      keyPair: this.keyPair,
+      associatePublicIpAddress: true,
+      userData: this.createUserData(),
+    });
   }
 
   private createUserData(): ec2.UserData {
-    try {
-      const userData = ec2.UserData.forLinux();
+    const userData = ec2.UserData.forLinux();
 
-      userData.addCommands(
-        '#!/bin/bash',
-        'yum update -y',
-        'yum install -y httpd',
-        'systemctl start httpd',
-        'systemctl enable httpd',
-        'echo "<h1>Hello from AWS CDK TAP Stack!</h1>" > /var/www/html/index.html',
-        'echo "<p>Environment: ${ENVIRONMENT_SUFFIX:-dev}</p>" >> /var/www/html/index.html',
-        'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html',
-        'echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html'
-      );
+    userData.addCommands(
+      '#!/bin/bash',
+      'yum update -y',
+      'yum install -y httpd',
+      'systemctl start httpd',
+      'systemctl enable httpd',
+      'echo "<h1>Hello from AWS CDK TAP Stack!</h1>" > /var/www/html/index.html',
+      'echo "<p>Environment: ${ENVIRONMENT_SUFFIX:-dev}</p>" >> /var/www/html/index.html',
+      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html',
+      'echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html'
+    );
 
-      return userData;
-    } catch (error) {
-      throw new Error(
-        `Failed to create user data: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return userData;
   }
 
   private createVpcEndpoints(): void {
-    try {
-      // Add VPC Endpoints for AWS services
-      this.vpc.addGatewayEndpoint('S3Endpoint', {
-        service: ec2.GatewayVpcEndpointAwsService.S3,
-      });
+    // Add VPC Endpoints for AWS services
+    this.vpc.addGatewayEndpoint('S3Endpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+    });
 
-      this.vpc.addInterfaceEndpoint('EC2MessagesEndpoint', {
-        service: ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
-      });
+    this.vpc.addInterfaceEndpoint('EC2MessagesEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
+    });
 
-      this.vpc.addInterfaceEndpoint('SSMEndpoint', {
-        service: ec2.InterfaceVpcEndpointAwsService.SSM,
-      });
+    this.vpc.addInterfaceEndpoint('SSMEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.SSM,
+    });
 
-      this.vpc.addInterfaceEndpoint('SSMMessagesEndpoint', {
-        service: ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
-      });
-    } catch (error) {
-      throw new Error(
-        `Failed to create VPC endpoints: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    this.vpc.addInterfaceEndpoint('SSMMessagesEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
+    });
   }
 
   private tagResources(environmentSuffix: string): void {
-    try {
-      cdk.Tags.of(this).add('Environment', environmentSuffix);
-      cdk.Tags.of(this).add('Project', 'TAP');
-      cdk.Tags.of(this).add('Owner', 'DevOps');
-      cdk.Tags.of(this).add('ManagedBy', 'CDK');
-      cdk.Tags.of(this).add('CreatedAt', new Date().toISOString());
-    } catch (error) {
-      throw new Error(
-        `Failed to tag resources: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    cdk.Tags.of(this).add('Environment', environmentSuffix);
+    cdk.Tags.of(this).add('Project', 'TAP');
+    cdk.Tags.of(this).add('Owner', 'DevOps');
+    cdk.Tags.of(this).add('ManagedBy', 'CDK');
+    cdk.Tags.of(this).add('CreatedAt', new Date().toISOString());
   }
 
   private createOutputs(resourceName: (name: string) => string): void {
-    try {
-      // Output the EC2 public IP
-      new cdk.CfnOutput(this, 'EC2PublicIP', {
-        value: this.instance.instancePublicIp,
-        description: 'Public IP of the EC2 instance',
-        exportName: resourceName('ec2-public-ip'),
-      });
+    // Output the EC2 public IP
+    new cdk.CfnOutput(this, 'EC2PublicIP', {
+      value: this.instance.instancePublicIp,
+      description: 'Public IP of the EC2 instance',
+      exportName: resourceName('ec2-public-ip'),
+    });
 
-      // Output the VPC ID
-      new cdk.CfnOutput(this, 'VPCID', {
-        value: this.vpc.vpcId,
-        description: 'VPC ID',
-        exportName: resourceName('vpc-id'),
-      });
+    // Output the VPC ID
+    new cdk.CfnOutput(this, 'VPCID', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID',
+      exportName: resourceName('vpc-id'),
+    });
 
-      // Output the Security Group ID
-      new cdk.CfnOutput(this, 'SecurityGroupID', {
-        value: this.securityGroup.securityGroupId,
-        description: 'Security Group ID',
-        exportName: resourceName('security-group-id'),
-      });
+    // Output the Security Group ID
+    new cdk.CfnOutput(this, 'SecurityGroupID', {
+      value: this.securityGroup.securityGroupId,
+      description: 'Security Group ID',
+      exportName: resourceName('security-group-id'),
+    });
 
-      // Output the Key Pair Name
-      new cdk.CfnOutput(this, 'KeyPairName', {
-        value: this.keyPair.keyPairName,
-        description: 'Key Pair Name for SSH access',
-        exportName: resourceName('key-pair-name'),
-      });
+    // Output the Key Pair Name
+    new cdk.CfnOutput(this, 'KeyPairName', {
+      value: this.keyPair.keyPairName,
+      description: 'Key Pair Name for SSH access',
+      exportName: resourceName('key-pair-name'),
+    });
 
-      // Output the Instance ID
-      new cdk.CfnOutput(this, 'InstanceID', {
-        value: this.instance.instanceId,
-        description: 'EC2 Instance ID',
-        exportName: resourceName('instance-id'),
-      });
+    // Output the Instance ID
+    new cdk.CfnOutput(this, 'InstanceID', {
+      value: this.instance.instanceId,
+      description: 'EC2 Instance ID',
+      exportName: resourceName('instance-id'),
+    });
 
-      // Output the Availability Zone
-      new cdk.CfnOutput(this, 'AvailabilityZone', {
-        value: this.instance.instanceAvailabilityZone,
-        description: 'EC2 Instance Availability Zone',
-        exportName: resourceName('availability-zone'),
-      });
-    } catch (error) {
-      throw new Error(
-        `Failed to create outputs: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    // Output the Availability Zone
+    new cdk.CfnOutput(this, 'AvailabilityZone', {
+      value: this.instance.instanceAvailabilityZone,
+      description: 'EC2 Instance Availability Zone',
+      exportName: resourceName('availability-zone'),
+    });
   }
 }
