@@ -90,18 +90,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.MaxValue).toBeDefined();
     });
 
-    test('should have LambdaReservedConcurrency parameter', () => {
-      expect(template.Parameters.LambdaReservedConcurrency).toBeDefined();
-    });
 
-    test('LambdaReservedConcurrency parameter should have correct properties', () => {
-      const param = template.Parameters.LambdaReservedConcurrency;
-      expect(param.Type).toBe('Number');
-      expect(param.Default).toBe(5000);
-      expect(param.Description).toBeDefined();
-      expect(param.MinValue).toBeDefined();
-      expect(param.MaxValue).toBeDefined();
-    });
   });
 
   describe('Conditions', () => {
@@ -380,7 +369,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have the correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6); // EnvironmentSuffix, ApplicationName, Environment, EnableProvisionedConcurrency, LambdaProvisionedConcurrency, LambdaReservedConcurrency
+      expect(parameterCount).toBe(5); // EnvironmentSuffix, ApplicationName, Environment, EnableProvisionedConcurrency, LambdaProvisionedConcurrency
     });
 
     test('should have the correct number of outputs', () => {

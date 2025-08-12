@@ -4,7 +4,7 @@ Here's a comprehensive CloudFormation template that meets all your requirements 
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready serverless infrastructure with Lambda, API Gateway, S3, and CloudWatch - Optimized for 100k+ RPS'
+Description: 'Production-ready serverless infrastructure with Lambda, API Gateway, S3, and CloudWatch - Optimized for 1k+ RPS'
 
 Parameters:
   Environment:

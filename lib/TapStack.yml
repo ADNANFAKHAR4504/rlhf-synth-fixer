@@ -35,13 +35,6 @@ Parameters:
     Description: 'Provisioned concurrency for Lambda functions to avoid cold starts'
     MinValue: 10
     MaxValue: 990
-  
-  LambdaReservedConcurrency:
-    Type: Number
-    Default: 5000
-    MinValue: 100
-    MaxValue: 10000
-    Description: 'Reserved concurrency limit for Lambda functions (set manually via AWS CLI after deployment)'
 
 Conditions:
   EnableProvisionedConcurrency: !Equals [!Ref EnableProvisionedConcurrency, 'true']
