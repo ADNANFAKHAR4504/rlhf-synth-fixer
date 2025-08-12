@@ -872,6 +872,12 @@ def handler(event, context):
       exportName: 'TapWebAclArn',
     });
 
+    new cdk.CfnOutput(this, 'WebAclName', {
+      value: this.webAcl.name!,
+      description: 'WAF WebACL Name for DDoS protection',
+      exportName: 'TapWebAclName',
+    });
+
     new cdk.CfnOutput(this, 'SecurityAlertsTopicArn', {
       value: this.securityAlertsTopic.topicArn,
       description: 'SNS Topic ARN for security alerts',
