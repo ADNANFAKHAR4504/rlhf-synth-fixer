@@ -193,6 +193,50 @@
                     ]
                 }
             ]
+        },
+        "IsAuroraEngine": {
+            "Fn::Or": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBEngine"
+                        },
+                        "aurora"
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBEngine"
+                        },
+                        "aurora-mysql"
+                    ]
+                }
+            ]
+        },
+        "IsNotAuroraEngine": {
+            "Fn::Not": [
+                {
+                    "Fn::Or": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "DBEngine"
+                                },
+                                "aurora"
+                            ]
+                        },
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "DBEngine"
+                                },
+                                "aurora-mysql"
+                            ]
+                        }
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -2106,7 +2150,100 @@
                 ]
             }
         },
+        "RDSAuroraCluster": {
+            "Condition": "IsAuroraEngine",
+            "Type": "AWS::RDS::DBCluster",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Properties": {
+                "DBClusterIdentifier": {
+                    "Fn::Sub": "${Environment}-financial-cluster"
+                },
+                "Engine": {
+                    "Ref": "DBEngine"
+                },
+                "MasterUsername": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DatabaseCredentialsSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseCredentialsSecret}:SecretString:password}}"
+                },
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "PrimaryKmsKey"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DbSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "BackupRetentionPeriod": 7,
+                "DeletionProtection": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSAuroraInstance": {
+            "Condition": "IsAuroraEngine",
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${Environment}-financial-aurora-instance"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "RDSAuroraCluster"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "Engine": {
+                    "Ref": "DBEngine"
+                },
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
         "RDSInstance": {
+            "Condition": "IsNotAuroraEngine",
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
             "UpdateReplacePolicy": "Snapshot",
@@ -2472,6 +2609,37 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${Environment}-DatabaseSecretArn"
+                }
+            }
+        },
+        "RDSClusterIdentifier": {
+            "Condition": "IsAuroraEngine",
+            "Description": "Aurora DB Cluster Identifier",
+            "Value": {
+                "Ref": "RDSAuroraCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-RDSClusterIdentifier"
+                }
+            }
+        },
+        "RDSInstanceIdentifier": {
+            "Description": "RDS Instance Identifier",
+            "Value": {
+                "Fn::If": [
+                    "IsAuroraEngine",
+                    {
+                        "Ref": "RDSAuroraInstance"
+                    },
+                    {
+                        "Ref": "RDSInstance"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-RDSInstanceIdentifier"
                 }
             }
         }

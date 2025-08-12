@@ -196,13 +196,15 @@ describe('TapStack CloudFormation Template (YAML)', () => {
   });
 
   describe('Conditions defined properly', () => {
-    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix exist', () => {
+    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine exist', () => {
       expect(template.Conditions).toBeDefined();
       const conds = template.Conditions;
       expect(conds.UseNatGateways).toBeDefined();
       expect(conds.UseCloudFront).toBeDefined();
       expect(conds.UseCustomCert).toBeDefined();
       expect(conds.HasLogGroupNamePrefix).toBeDefined();
+      expect(conds.IsAuroraEngine).toBeDefined();
+      expect(conds.IsNotAuroraEngine).toBeDefined();
     });
   });
 
@@ -481,16 +483,40 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(mw.Properties.Schedule).toBeDefined();
     });
 
-    test('RDS instance is encrypted, MultiAZ, private and uses secrets', () => {
-      const db = template.Resources.RDSInstance;
-      expect(db).toBeDefined();
-      const p = db.Properties;
-      expect(p.StorageEncrypted).toBe(true);
-      expect(p.MultiAZ).toBe(true);
-      expect(p.PubliclyAccessible).toBe(false);
-      // Master creds resolve via SecretsManager
-      expect(typeof p.MasterUsername).toBeDefined();
-      expect(typeof p.MasterUserPassword).toBeDefined();
+    test('RDS instance is encrypted, private and uses secrets (handles Aurora and non-Aurora)', () => {
+      // Check for Aurora cluster and instance
+      const auroraCluster = template.Resources.RDSAuroraCluster;
+      const auroraInstance = template.Resources.RDSAuroraInstance;
+      const regularInstance = template.Resources.RDSInstance;
+
+      // At least one should exist
+      expect(auroraCluster || regularInstance).toBeDefined();
+
+      if (auroraCluster) {
+        // Aurora cluster should be encrypted and use secrets
+        expect(auroraCluster.Properties.StorageEncrypted).toBe(true);
+        expect(auroraCluster.Properties.PubliclyAccessible).toBeUndefined(); // Aurora clusters don't have this property
+        expect(typeof auroraCluster.Properties.MasterUsername).toBeDefined();
+        expect(
+          typeof auroraCluster.Properties.MasterUserPassword
+        ).toBeDefined();
+
+        // Aurora instance should exist and reference the cluster
+        expect(auroraInstance).toBeDefined();
+        expect(auroraInstance.Properties.DBClusterIdentifier).toBeDefined();
+        expect(auroraInstance.Properties.PubliclyAccessible).toBe(false);
+      }
+
+      if (regularInstance) {
+        // Regular RDS instance should be encrypted, MultiAZ, and private
+        expect(regularInstance.Properties.StorageEncrypted).toBe(true);
+        expect(regularInstance.Properties.MultiAZ).toBe(true);
+        expect(regularInstance.Properties.PubliclyAccessible).toBe(false);
+        expect(typeof regularInstance.Properties.MasterUsername).toBeDefined();
+        expect(
+          typeof regularInstance.Properties.MasterUserPassword
+        ).toBeDefined();
+      }
     });
 
     test('WAF WebACL (CloudFront scope) and CloudFront distribution configured', () => {
@@ -546,6 +572,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
         'PrimaryKmsKeyId',
         'CloudFrontDistributionId', // conditional
         'DatabaseSecretArn',
+        'RDSInstanceIdentifier', // conditional based on engine
       ];
       expected.forEach(o => {
         expect(outputs[o]).toBeDefined();

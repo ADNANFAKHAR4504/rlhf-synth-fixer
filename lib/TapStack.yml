@@ -142,6 +142,18 @@ Conditions:
   HasSecondAZ: !Not [!Equals [!Ref AZCount, 1]]
   HasBucketNamePrefix: !Not [!Equals [!Ref BucketNamePrefix, '']]
   HasLogGroupNamePrefix: !Not [!Equals [!Ref LogGroupNamePrefix, '']]
+  IsAuroraEngine:
+    !Or [
+      !Equals [!Ref DBEngine, 'aurora'],
+      !Equals [!Ref DBEngine, 'aurora-mysql'],
+    ]
+  IsNotAuroraEngine:
+    !Not [
+      !Or [
+        !Equals [!Ref DBEngine, 'aurora'],
+        !Equals [!Ref DBEngine, 'aurora-mysql'],
+      ],
+    ]
 
 # ---------------------------
 # HELPER & COMMON TAGS (used inline)
@@ -1116,7 +1128,57 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
+  # Aurora Cluster (for Aurora engines) or Single Instance (for non-Aurora engines)
+  RDSAuroraCluster:
+    Condition: IsAuroraEngine
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBClusterIdentifier: !Sub '${Environment}-financial-cluster'
+      Engine: !Ref DBEngine
+      MasterUsername:
+        !Join [
+          '',
+          [
+            '{{resolve:secretsmanager:',
+            !Ref DatabaseCredentialsSecret,
+            ':SecretString:username}}',
+          ],
+        ]
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseCredentialsSecret}:SecretString:password}}'
+      StorageEncrypted: true
+      KmsKeyId: !Ref PrimaryKmsKey
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  RDSAuroraInstance:
+    Condition: IsAuroraEngine
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${Environment}-financial-aurora-instance'
+      DBClusterIdentifier: !Ref RDSAuroraCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: !Ref DBEngine
+      PubliclyAccessible: false
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
   RDSInstance:
+    Condition: IsNotAuroraEngine
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
@@ -1332,3 +1394,19 @@ Outputs:
     Value: !Ref DatabaseCredentialsSecret
     Export:
       Name: !Sub '${Environment}-DatabaseSecretArn'
+
+  RDSClusterIdentifier:
+    Condition: IsAuroraEngine
+    Description: Aurora DB Cluster Identifier
+    Value: !Ref RDSAuroraCluster
+    Export:
+      Name: !Sub '${Environment}-RDSClusterIdentifier'
+
+  RDSInstanceIdentifier:
+    Description: RDS Instance Identifier
+    Value: !If
+      - IsAuroraEngine
+      - !Ref RDSAuroraInstance
+      - !Ref RDSInstance
+    Export:
+      Name: !Sub '${Environment}-RDSInstanceIdentifier'
