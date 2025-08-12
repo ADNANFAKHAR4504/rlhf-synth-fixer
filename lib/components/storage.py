@@ -11,6 +11,8 @@ class StorageComponent(pulumi.ComponentResource):
   def __init__(self, name: str, environment: str, region_suffix: str, tags: dict, opts: pulumi.ResourceOptions = None):
     super().__init__("custom:aws:Storage", name, None, opts)
 
+    account_id = aws.get_caller_identity_output().account_id
+
     self.environment = environment
     # S3 Bucket for application data
     self.bucket = aws.s3.Bucket(
@@ -29,6 +31,41 @@ class StorageComponent(pulumi.ComponentResource):
         ),
         opts=pulumi.ResourceOptions(parent=self),
     )
+
+    self.bucket_policy_doc = aws.iam.get_policy_document_output(statements=[
+        # Allow CloudTrail to check bucket ACL
+        aws.iam.GetPolicyDocumentStatementArgs(
+            effect="Allow",
+            principals=[aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+                type="Service", identifiers=["cloudtrail.amazonaws.com"]
+            )],
+            actions=["s3:GetBucketAcl"],
+            resources=[bucket.arn],
+        ),
+        # Allow CloudTrail to put logs with the required ACL
+        aws.iam.GetPolicyDocumentStatementArgs(
+            effect="Allow",
+            principals=[aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+                type="Service", identifiers=["cloudtrail.amazonaws.com"]
+            )],
+            actions=["s3:PutObject"],
+            resources=[pulumi.Output.all(bucket.arn, account_id).apply(
+                lambda x: f"{x[0]}/AWSLogs/{x[1]}/*"  # arn:aws:s3:::<bucket>/AWSLogs/<acct>/*
+            )],
+            conditions=[aws.iam.GetPolicyDocumentStatementConditionArgs(
+                test="StringEquals",
+                variable="s3:x-amz-acl",
+                values=["bucket-owner-full-control"],
+            )],
+        ),
+    ])
+
+    aws.s3.BucketPolicy(
+        f"trail-bucket-policy-{region_suffix}",
+        bucket=self.bucket.id,
+        policy=self.bucket_policy_doc.json,
+    )
+
 
     # S3 Bucket Server-Side Encryption
     self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
