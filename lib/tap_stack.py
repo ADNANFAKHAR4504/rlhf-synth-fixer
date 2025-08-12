@@ -120,7 +120,7 @@ class TapStack(pulumi.ComponentResource):
       self.database[region] = DatabaseComponent(
           f"database-{region_suffix}-{self.environment_suffix}",
           vpc_id=self.networking[region].vpc.id,
-          private_subnet_ids=self.networking[region].private_subnet_ids,
+          private_subnet_ids=self.networking[region].public_subnet_ids,
           database_security_group_id=self.security[region].database_security_group.id,
           region=region,
           is_primary=is_primary,

@@ -16,14 +16,15 @@ def lambda_handler(event, context):
             url = 'https://' + url
         
         # Get timeout from event or use default
-        timeout = event.get('timeout', 10)
+        # timeout = event.get('timeout', 10)
         
         # Create request with timeout
         request = urllib.request.Request(url)
         request.add_header('User-Agent', 'Mozilla/5.0 (compatible; ReachabilityBot/1.0)')
         
         # Attempt to open the URL
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        # with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request) as response:
             status_code = response.getcode()
             
             return {
