@@ -106,17 +106,40 @@ describe('TapStack Cloud Infrastructure Integration Tests', () => {
       );
       expect(sshRule).toBeUndefined();
     });
+    test('web security group should not allow ingress from 0.0.0.0/0 on any port', async () => {
+      const sgId = outputs.WebSecurityGroupId;
+      const res = await ec2.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+      );
+      const sg = res.SecurityGroups?.[0];
+      const openIngress = sg?.IpPermissions?.find(rule =>
+        rule.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
+      );
+      expect(openIngress).toBeUndefined();
+    });
   });
 
   describe('WAF', () => {
+    test('Web ACL ARN should be in correct format', () => {
+      const webAclArn = outputs.WebACLArn;
+      // Example: arn:aws:wafv2:ap-southeast-1:123456789012:regional/webacl/ProductionWebACL/1234abcd-12ab-34cd-56ef-1234567890ab
+      const arnPattern =
+        /^arn:aws:wafv2:[\w-]+:\d+:regional\/webacl\/[\w-]+\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
+      expect(webAclArn).toMatch(arnPattern);
+    });
+
     test('Web ACL should exist and be REGIONAL', async () => {
       const webAclArn = outputs.WebACLArn;
+      // Extract name and id robustly
       const arnParts = webAclArn.split(':');
       const scope = arnParts[5].startsWith('regional')
         ? 'REGIONAL'
         : 'CLOUDFRONT';
-      const name = webAclArn.split('/')[1];
-      const id = webAclArn.split('/')[2];
+      const resourceParts = webAclArn.split('/');
+      const name = resourceParts[resourceParts.length - 2];
+      const id = resourceParts[resourceParts.length - 1];
+      // id must match UUID pattern
+      expect(id).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/);
       const res = await wafv2.send(
         new GetWebACLCommand({ Name: name, Scope: scope, Id: id })
       );
@@ -140,38 +163,53 @@ describe('TapStack Cloud Infrastructure Integration Tests', () => {
         expect(nameTag).toBeDefined();
       }
     });
+    test('database should be in the correct VPC', async () => {
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      const vpcId = outputs.VPCId;
+      const res = await rds.send(new DescribeDBInstancesCommand({}));
+      const db = res.DBInstances?.find(
+        inst => inst.Endpoint?.Address === dbEndpoint
+      );
+      expect(db).toBeDefined();
+      expect(db?.DBSubnetGroup?.VpcId).toBe(vpcId);
+    });
   });
 
   describe('Tagging Compliance', () => {
-    test('VPC, subnets, and security group should have tags for resource management', async () => {
+    test('all resources should have environment tag', async () => {
       const vpcId = outputs.VPCId;
       const publicSubnetId = outputs.PublicSubnetId;
       const privateSubnetId = outputs.PrivateSubnetId;
       const sgId = outputs.WebSecurityGroupId;
+      const tagKey = 'Environment';
+      // VPC
       const vpcTags = await ec2.send(
         new DescribeTagsCommand({
           Filters: [{ Name: 'resource-id', Values: [vpcId] }],
         })
       );
-      expect(vpcTags.Tags?.length).toBeGreaterThan(0);
+      expect(vpcTags.Tags?.some(t => t.Key === tagKey)).toBe(true);
+      // Public Subnet
       const pubTags = await ec2.send(
         new DescribeTagsCommand({
           Filters: [{ Name: 'resource-id', Values: [publicSubnetId] }],
         })
       );
-      expect(pubTags.Tags?.length).toBeGreaterThan(0);
+      expect(pubTags.Tags?.some(t => t.Key === tagKey)).toBe(true);
+      // Private Subnet
       const privTags = await ec2.send(
         new DescribeTagsCommand({
           Filters: [{ Name: 'resource-id', Values: [privateSubnetId] }],
         })
       );
-      expect(privTags.Tags?.length).toBeGreaterThan(0);
+      expect(privTags.Tags?.some(t => t.Key === tagKey)).toBe(true);
+      // Security Group
       const sgTags = await ec2.send(
         new DescribeTagsCommand({
           Filters: [{ Name: 'resource-id', Values: [sgId] }],
         })
       );
-      expect(sgTags.Tags?.length).toBeGreaterThan(0);
+      expect(sgTags.Tags?.some(t => t.Key === tagKey)).toBe(true);
     });
   });
 });
