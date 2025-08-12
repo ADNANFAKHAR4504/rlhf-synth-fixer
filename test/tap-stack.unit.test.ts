@@ -64,8 +64,6 @@ describe('CloudFormation Template Unit Tests', () => {
           rule.ServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms' &&
           typeof rule.ServerSideEncryptionByDefault?.KMSMasterKeyID === 'string'
       );
-
-      // expect(kmsRule).toBeDefined();
     });
 
     test('has SecretsManager secret resource with correct properties', () => {

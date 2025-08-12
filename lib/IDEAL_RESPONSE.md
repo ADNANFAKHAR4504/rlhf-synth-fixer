@@ -17,15 +17,26 @@ Resources:
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Sid: AllowRootAccountFullAccess
+            Effect: Allow
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: 
+            Action: "kms:*"
+            Resource: "*"
+
+          - Sid: AllowAccountToUseKey
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
               - kms:Encrypt
               - kms:Decrypt
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
               - kms:DescribeKey
+              - kms:PutKeyPolicy
+              - kms:GetKeyPolicy
+              - kms:List*
             Resource: "*"
       Tags:
         - Key: Name
@@ -33,6 +44,8 @@ Resources:
         - Key: Environment
           Value: production
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
 
   S3KMSAlias:
     Type: AWS::KMS::Alias
@@ -66,7 +79,7 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: 'password'
-        ExcludeCharacters: '"@/\''
+        ExcludeCharacters: '"@/''\'
       Tags:
         - Key: Name
           Value: MyAppSecret
