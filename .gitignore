@@ -103,11 +103,4 @@ bin/tfplan
 
 
 build
-lib/constructs/*js
-lib/*js
-test/setup.js
-test/constructs/*.unit.test.js
-TEST_COVERAGE_SUMMARY.md
-PRODUCTION_CHANGES_SUMMARY.md
-PRODUCTION_READY_CHANGES.md
-ENHANCEMENTS.md
+tasks.csv
