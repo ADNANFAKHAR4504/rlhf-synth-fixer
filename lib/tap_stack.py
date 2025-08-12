@@ -107,7 +107,7 @@ internet_gateway = aws.ec2.InternetGateway(
         "Project": PROJECT_NAME
     },
     opts=pulumi.ResourceOptions(
-        delete_before_replace=True,
+        retain_on_delete=True,
         custom_timeouts=pulumi.CustomTimeouts(delete="20m")
     )
 )
@@ -232,7 +232,7 @@ alb_security_group = aws.ec2.SecurityGroup(
         "Purpose": "ALB Security Group"
     },
     opts=pulumi.ResourceOptions(
-        delete_before_replace=True,
+        retain_on_delete=True,
         custom_timeouts=pulumi.CustomTimeouts(delete="20m")
     )
 )
@@ -287,7 +287,7 @@ ec2_security_group = aws.ec2.SecurityGroup(
         "Purpose": "EC2 Security Group"
     },
     opts=pulumi.ResourceOptions(
-        delete_before_replace=True,
+        retain_on_delete=True,
         custom_timeouts=pulumi.CustomTimeouts(delete="20m")
     )
 )
@@ -622,11 +622,7 @@ alb = aws.lb.LoadBalancer(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Type": "Application Load Balancer"
-    },
-    opts=pulumi.ResourceOptions(
-        delete_before_replace=True,
-        custom_timeouts=pulumi.CustomTimeouts(delete="20m")
-    )
+    }
 )
 
 # Create HTTP listener
