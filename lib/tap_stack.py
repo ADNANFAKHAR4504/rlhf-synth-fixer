@@ -80,7 +80,7 @@ amazon_linux_ami = aws.ec2.get_ami(
 
 # Create VPC with dual-stack support
 vpc = aws.ec2.Vpc(
-    get_resource_name("vpc"),
+    "web-vpc",
     cidr_block="10.0.0.0/16",
     assign_generated_ipv6_cidr_block=True,
     enable_dns_hostnames=True,
