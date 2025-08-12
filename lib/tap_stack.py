@@ -29,9 +29,7 @@ class WebApplicationStack(Stack):
       vpc_id="vpc-05c4c270ead946104"
     )
 
-    private_subnets = vpc.select_subnets(
-      subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
-    )
+    private_subnets = vpc.select_subnets(subnet_type=ec2.SubnetType.PUBLIC)
 
     # 1. Application Load Balancer
     alb = elbv2.ApplicationLoadBalancer(
