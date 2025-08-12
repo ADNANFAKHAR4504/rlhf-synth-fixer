@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { App } from 'cdktf';
+import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
-const app = new App();
+// Use AWS CDK App (prior version incorrectly used CDKTF App while stacks extend aws-cdk-lib.Stack)
+const app = new cdk.App();
 
 // Get environment variables from the environment or use defaults
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -34,5 +35,5 @@ new TapStack(app, stackName, {
   defaultTags: defaultTags,
 });
 
-// Synthesize the app to generate the Terraform configuration
+// Synthesize CloudFormation templates
 app.synth();
