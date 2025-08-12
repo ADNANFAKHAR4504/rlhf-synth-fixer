@@ -81,11 +81,16 @@ export class TapStack extends cdk.Stack {
       return defaultSuffix;
     }
 
-    // Validate environment suffix format
+    // Check if it's a PR number (starts with 'pr' followed by digits)
+    if (suffix.toLowerCase().startsWith('pr') && /^pr\d+$/.test(suffix.toLowerCase())) {
+      return suffix.toLowerCase();
+    }
+
+    // Validate environment suffix format for standard environments
     const validSuffixes = ['dev', 'staging', 'prod', 'test'];
     if (!validSuffixes.includes(suffix.toLowerCase())) {
       throw new Error(
-        `Invalid environment suffix: ${suffix}. Must be one of: ${validSuffixes.join(', ')}`
+        `Invalid environment suffix: ${suffix}. Must be one of: ${validSuffixes.join(', ')} or a PR number (prXXXX)`
       );
     }
 

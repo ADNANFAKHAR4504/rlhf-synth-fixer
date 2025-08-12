@@ -278,7 +278,25 @@ describe('TapStack', () => {
         new TapStack(customApp, 'InvalidStack', {
           environmentSuffix: 'invalid',
         });
-      }).toThrow('Invalid environment suffix: invalid');
+      }).toThrow('Invalid environment suffix: invalid. Must be one of: dev, staging, prod, test or a PR number (prXXXX)');
+    });
+
+    test('should handle PR number environment suffix', () => {
+      expect(() => {
+        const customApp = new cdk.App();
+        new TapStack(customApp, 'PRStack', {
+          environmentSuffix: 'pr1003',
+        });
+      }).not.toThrow();
+    });
+
+    test('should handle PR number environment suffix with uppercase', () => {
+      expect(() => {
+        const customApp = new cdk.App();
+        new TapStack(customApp, 'PRStack', {
+          environmentSuffix: 'PR1003',
+        });
+      }).not.toThrow();
     });
 
     test('should throw error for invalid VPC CIDR format', () => {
