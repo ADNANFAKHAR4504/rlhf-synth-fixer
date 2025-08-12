@@ -36,7 +36,12 @@ ENVIRONMENT = (
     or config.get("environment")
     or "dev"
 )
-AWS_REGION = aws_config.require("region")
+AWS_REGION = (
+    aws_config.get("region")
+    or os.environ.get("AWS_REGION")
+    or os.environ.get("AWS_DEFAULT_REGION")
+    or "us-east-1"
+)
 INSTANCE_TYPE = config.get("instance-type") or "t3.micro"
 PROJECT_NAME = config.get("project-name") or "dualstack-web-app"
 
