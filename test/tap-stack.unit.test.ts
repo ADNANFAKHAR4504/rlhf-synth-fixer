@@ -27,7 +27,7 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
       expect(param.Default).toBe(
-        'arn:aws:acm:us-east-1:718240086340:certificate/92b736bc-6abe-41ca-a07e-de76eee848b3'
+        'arn:aws:acm:us-west-2:718240086340:certificate/c43e41ee-5b6c-4d2c-80e9-82c1db57289e'
       );
     });
 
