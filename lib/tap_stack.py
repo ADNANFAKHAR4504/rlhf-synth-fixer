@@ -248,7 +248,6 @@ class SecureVPC:
                 }]
             })
         )
-        pulumi.export("flowlogs-inline-policy", policy.arn)
         return role
 
     def _create_flow_logs(self) -> aws.ec2.FlowLog:
