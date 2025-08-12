@@ -281,11 +281,11 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       const cwPolicy = cloudTrailPolicies.find((p: any) => p.PolicyName === 'CloudTrailToCloudWatch');
       expect(cwPolicy).toBeDefined();
 
-      const configRole = template.Resources.ConfigRole;
-      expect(configRole).toBeDefined();
-      expect(configRole.Properties.ManagedPolicyArns).toContain(
-        'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
-      );
+      // AWS Config uses a service-linked role; ensure the recorder references a role ARN
+      const configRecorderRes = template.Resources.ConfigurationRecorder;
+      expect(configRecorderRes).toBeDefined();
+      const roleArnProp = configRecorderRes.Properties.RoleARN;
+      expect(roleArnProp).toBeDefined();
 
       const ec2Role = template.Resources.EC2InstanceRole;
       expect(ec2Role).toBeDefined();

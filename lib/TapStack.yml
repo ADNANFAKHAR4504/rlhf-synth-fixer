@@ -220,7 +220,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 0, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PublicSubnetMask ] ]
+      CidrBlock: !Select [ 0, !Cidr [ !Ref VpcCidr, 6, !Ref PublicSubnetMask ] ]
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
@@ -236,7 +236,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 1, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PublicSubnetMask ] ]
+      CidrBlock: !Select [ 1, !Cidr [ !Ref VpcCidr, 6, !Ref PublicSubnetMask ] ]
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
@@ -252,7 +252,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 0, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PrivateSubnetMask ] ]
+      CidrBlock: !Select [ 2, !Cidr [ !Ref VpcCidr, 6, !Ref PrivateSubnetMask ] ]
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -267,7 +267,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 1, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref PrivateSubnetMask ] ]
+      CidrBlock: !Select [ 3, !Cidr [ !Ref VpcCidr, 6, !Ref PrivateSubnetMask ] ]
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -282,7 +282,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 2, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref IsolatedSubnetMask ] ]
+      CidrBlock: !Select [ 4, !Cidr [ !Ref VpcCidr, 6, !Ref IsolatedSubnetMask ] ]
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -297,7 +297,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [ 3, !Cidr [ !Ref VpcCidr, !Ref AZCount, !Ref IsolatedSubnetMask ] ]
+      CidrBlock: !Select [ 5, !Cidr [ !Ref VpcCidr, 6, !Ref IsolatedSubnetMask ] ]
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
