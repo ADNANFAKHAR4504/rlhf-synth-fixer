@@ -1097,9 +1097,13 @@ Resources:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: !Sub '${Environment} DB subnet group (private/isolated)'
-      SubnetIds:
+      SubnetIds: !If
+      - HasSecondAZ
+      - 
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
+      - 
+        - !Ref PrivateSubnet1
       Tags:
         - Key: Environment
           Value: !Ref Environment
