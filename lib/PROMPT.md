@@ -57,7 +57,7 @@ API Gateway Logging:
 
 Provision a sample REST API Gateway.
 
-Enable and configure access and execution logging for the API Gateway stage, directing all logs to a dedicated CloudWatch Log Group.
+Enable and configure access and execution logging for the API Gateway stage, directing all logs to a dedicated Log Group.
 
 Automated Security Patching via Lambda:
 
@@ -65,7 +65,7 @@ Create an IAM Role for a Lambda function granting it ssm:SendCommand permissions
 
 Define a Lambda function that uses this role to execute the AWS-RunPatchBaseline SSM document on all EC2 instances tagged with {'Key': 'PatchGroup', 'Value': 'WebApp'}.
 
-Create an Amazon EventBridge (CloudWatch Events) rule to trigger this Lambda function on a weekly schedule (e.g., cron(0 2 ? * SUN *)).
+Create an Amazon EventBridge (Events) rule to trigger this Lambda function on a weekly schedule (e.g., cron(0 2 ? * SUN *)).
 
 Secure Credential Management:
 
@@ -73,25 +73,11 @@ Implement AWS Secrets Manager to store the RDS database credentials (username an
 
 The IAM instance profile for the EC2 instances must have a policy granting secretsmanager:GetSecretValue permission to retrieve this specific secret.
 
-Comprehensive Auditing with CloudTrail:
-
-Configure a CloudTrail trail that is MultiRegionTrail and enabled for all AWS accounts in the organization (if applicable, otherwise for the single account).
-
 Ensure the trail logs management and data events and securely stores these logs in a dedicated, non-public S3 bucket with logging enabled.
 
 Real-time Monitoring and Alarms:
 
-Create a CloudWatch Metric Filter to parse CloudTrail logs for unauthorized API calls (e.g., errorCode = "*AccessDenied*" or errorMessage = "Access Denied").
-
-Create a CloudWatch Alarm that triggers based on this metric (e.g., if more than 3 unauthorized calls occur in 5 minutes).
-
 Configure the alarm to send a notification to an SNS topic.
-
-Enforce Multi-Factor Authentication (MFA):
-
-Create an IAM Group named MFA-Enforced-Users.
-
-Attach a customer-managed IAM policy to this group that denies all actions if the user is not authenticated using MFA. The policy's Condition should use "Bool": {"aws:MultiFactorAuthPresent": "false"}.
 
 Expected Output Format
 Generate a single, complete CloudFormation template in YAML.
