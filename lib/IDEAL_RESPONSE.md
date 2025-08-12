@@ -236,4 +236,5 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("api_gateway_id", api_gateway.id)
     pulumi.export("cloudwatch_log_group", log_group.name)
     self.register_outputs({})
+
 ```
