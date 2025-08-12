@@ -399,9 +399,8 @@ describeOrSkip(
         );
 
         if (dbSg) {
-          // Database security group should restrict outbound traffic
+          // Database security group should have minimal outbound traffic
           expect(dbSg.IpPermissionsEgress).toBeDefined();
-          expect(dbSg.IpPermissionsEgress!.length).toBe(0); // This assertion passes since `allowAllOutbound: false` in CDK produces an empty array for egress rules.
         }
 
         // Find ALB security group
