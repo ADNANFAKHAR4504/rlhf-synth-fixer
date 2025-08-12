@@ -148,6 +148,8 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
     test('MFAAdminRole should enforce MFA on assume role', () => {
       const role = template.Resources.MFAAdminRole;
       expect(role).toBeDefined();
+      // Should NOT have a RoleName property (CloudFormation will generate it)
+      expect(role.Properties.RoleName).toBeUndefined();
       const assumeRolePolicy = role.Properties.AssumeRolePolicyDocument;
       const condition = assumeRolePolicy.Statement[0].Condition;
       expect(condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');

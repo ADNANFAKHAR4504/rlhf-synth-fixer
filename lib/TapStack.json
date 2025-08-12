@@ -25,6 +25,7 @@
         "NotificationEmail": {
             "Type": "String",
             "Description": "Email address to receive CloudWatch alarm notifications.",
+            "Default": "default@example.com",
             "AllowedPattern": "^.+@.+$",
             "ConstraintDescription": "Must be a valid email address."
         },
@@ -1033,9 +1034,8 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ProjectNameLower}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${ProjectNameLower}-ctlogs-${AWS::AccountId}-${AWS::Region}"
                 },
-                "AccessControl": "Private",
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "BlockPublicPolicy": true,
@@ -1162,9 +1162,6 @@
         "MFAAdminRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-MFA-AdminRole"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1314,10 +1311,7 @@
         "CloudTrailName": {
             "Description": "The name of the CloudTrail trail",
             "Value": {
-                "Fn::GetAtt": [
-                    "MainCloudTrail",
-                    "TrailArn"
-                ]
+                "Ref": "MainCloudTrail"
             },
             "Export": {
                 "Name": {
