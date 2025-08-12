@@ -89,7 +89,6 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
-    const tags = args.tags || {};
 
     // --- Instantiate Secure Compliant Infrastructure ---
     this.secureInfra = new SecureCompliantInfra(

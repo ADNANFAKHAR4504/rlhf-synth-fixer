@@ -10,7 +10,10 @@ export interface SecureCompliantInfraArgs {
 }
 
 export class SecureCompliantInfra extends pulumi.ComponentResource {
-  public readonly vpcIds: Array<{ region: string; vpcId: pulumi.Output<string> }>;
+  public readonly vpcIds: Array<{
+    region: string;
+    vpcId: pulumi.Output<string>;
+  }>;
   public readonly ec2InstanceIds: Array<{
     region: string;
     instanceIds: pulumi.Output<string>[];
@@ -22,7 +25,10 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
   public readonly cloudtrailArn: pulumi.Output<string>;
   public readonly webAclArn: pulumi.Output<string>;
   public readonly cloudtrailBucketName: pulumi.Output<string>;
-  public readonly kmsKeyArns: Array<{ region: string; keyArn: pulumi.Output<string> }>;
+  public readonly kmsKeyArns: Array<{
+    region: string;
+    keyArn: pulumi.Output<string>;
+  }>;
 
   constructor(
     name: string,
@@ -76,7 +82,10 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           name: `alias/${projectName}-${environment}-${region}`,
           targetKeyId: key.keyId,
         },
-        { provider: providers.find(p => p.region === region)?.provider, parent: this }
+        {
+          provider: providers.find(p => p.region === region)?.provider,
+          parent: this,
+        }
       ),
     }));
 
@@ -88,7 +97,10 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         forceDestroy: true,
         tags: commonTags,
       },
-      { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
     );
 
     // S3 bucket for access logs
@@ -98,7 +110,10 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         bucket: `${environment}-${projectName}-access-logs`,
         tags: commonTags,
       },
-      { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
     );
 
     // Enable access logging on CloudTrail bucket (created but not exported)
@@ -109,7 +124,10 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         targetBucket: accessLogsBucket.id,
         targetPrefix: 'cloudtrail-access-logs/',
       },
-      { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
     );
 
     // CloudTrail bucket policy
@@ -118,103 +136,109 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       {
         bucket: cloudtrailBucket.id,
         policy: pulumi.all([cloudtrailBucket.arn]).apply(([bucketArn]) =>
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AWSCloudTrailAclCheck',
-            Effect: 'Allow',
-            Principal: { Service: 'cloudtrail.amazonaws.com' },
-            Action: 's3:GetBucketAcl',
-            Resource: bucketArn,
-          },
-          {
-            Sid: 'AWSCloudTrailWrite',
-            Effect: 'Allow',
-            Principal: { Service: 'cloudtrail.amazonaws.com' },
-            Action: 's3:PutObject',
-            Resource: `${bucketArn}/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'AWSCloudTrailAclCheck',
+                Effect: 'Allow',
+                Principal: { Service: 'cloudtrail.amazonaws.com' },
+                Action: 's3:GetBucketAcl',
+                Resource: bucketArn,
               },
+              {
+                Sid: 'AWSCloudTrailWrite',
+                Effect: 'Allow',
+                Principal: { Service: 'cloudtrail.amazonaws.com' },
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringEquals: {
+                    's3:x-amz-acl': 'bucket-owner-full-control',
+                  },
+                },
+              },
+            ],
+          })
+        ),
+      },
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
+    );
+
+    // CloudTrail
+    const cloudtrail = new aws.cloudtrail.Trail(
+      `${projectName}-${environment}-cloudtrail`,
+      {
+        name: `${projectName}-${environment}-cloudtrail`,
+        s3BucketName: cloudtrailBucket.bucket,
+        includeGlobalServiceEvents: true,
+        isMultiRegionTrail: true,
+        enableLogging: true,
+        tags: commonTags,
+      },
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        dependsOn: [cloudtrailBucketPolicy],
+        parent: this,
+      }
+    );
+
+    // WAF Web ACL for SQL injection protection
+    const webAcl = new aws.wafv2.WebAcl(
+      `${projectName}-${environment}-waf`,
+      {
+        name: `${projectName}-${environment}-waf`,
+        description: 'WAF for SQL injection protection',
+        scope: 'REGIONAL',
+        defaultAction: {
+          allow: {},
+        },
+        rules: [
+          {
+            name: 'SQLInjectionRule',
+            priority: 1,
+            action: {
+              block: {},
+            },
+            statement: {
+              sqliMatchStatement: {
+                fieldToMatch: {
+                  body: {},
+                },
+                textTransformations: [
+                  {
+                    priority: 0,
+                    type: 'URL_DECODE',
+                  },
+                  {
+                    priority: 1,
+                    type: 'HTML_ENTITY_DECODE',
+                  },
+                ],
+              },
+            },
+            visibilityConfig: {
+              cloudwatchMetricsEnabled: true,
+              metricName: 'SQLInjectionRule',
+              sampledRequestsEnabled: true,
             },
           },
         ],
-      })
-    ),
-  },
-  { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
-);
-
-// CloudTrail
-const cloudtrail = new aws.cloudtrail.Trail(
-  `${projectName}-${environment}-cloudtrail`,
-  {
-    name: `${projectName}-${environment}-cloudtrail`,
-    s3BucketName: cloudtrailBucket.bucket,
-    includeGlobalServiceEvents: true,
-    isMultiRegionTrail: true,
-    enableLogging: true,
-    tags: commonTags,
-  },
-  {
-    provider: providers.find(p => p.region === 'us-east-2')?.provider,
-    dependsOn: [cloudtrailBucketPolicy],
-    parent: this,
-  }
-);
-
-// WAF Web ACL for SQL injection protection
-const webAcl = new aws.wafv2.WebAcl(
-  `${projectName}-${environment}-waf`,
-  {
-    name: `${projectName}-${environment}-waf`,
-    description: 'WAF for SQL injection protection',
-    scope: 'REGIONAL',
-    defaultAction: {
-      allow: {},
-    },
-    rules: [
-      {
-        name: 'SQLInjectionRule',
-        priority: 1,
-        action: {
-          block: {},
-        },
-        statement: {
-          sqliMatchStatement: {
-            fieldToMatch: {
-              body: {},
-            },
-            textTransformations: [
-              {
-                priority: 0,
-                type: 'URL_DECODE',
-              },
-              {
-                priority: 1,
-                type: 'HTML_ENTITY_DECODE',
-              },
-            ],
-          },
-        },
+        tags: commonTags,
         visibilityConfig: {
           cloudwatchMetricsEnabled: true,
-          metricName: 'SQLInjectionRule',
+          metricName: `${projectName}-${environment}-waf`,
           sampledRequestsEnabled: true,
         },
       },
-    ],
-    tags: commonTags,
-    visibilityConfig: {
-      cloudwatchMetricsEnabled: true,
-      metricName: `${projectName}-${environment}-waf`,
-      sampledRequestsEnabled: true,
-    },
-  },
-  { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
-);
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
+    );
 
     // Create infrastructure for each region
     const regionalInfra = providers.map(({ region, provider }) => {
@@ -246,8 +270,8 @@ const webAcl = new aws.wafv2.WebAcl(
         { provider, parent: this }
       );
 
-  // Get availability zones for this region
-  const azs = pulumi.output(aws.getAvailabilityZones({}, { provider }));
+      // Get availability zones for this region
+      const azs = pulumi.output(aws.getAvailabilityZones({}, { provider }));
 
       // Public Subnets
       const publicSubnets = [0, 1].map(
@@ -286,181 +310,181 @@ const webAcl = new aws.wafv2.WebAcl(
           )
       );
 
-  // Route Table for public subnets
-  const publicRouteTable = new aws.ec2.RouteTable(
-    `${projectName}-${environment}-public-rt-${region}`,
-    {
-      vpcId: vpc.id,
-      routes: [
+      // Route Table for public subnets
+      const publicRouteTable = new aws.ec2.RouteTable(
+        `${projectName}-${environment}-public-rt-${region}`,
         {
-          cidrBlock: '0.0.0.0/0',
-          gatewayId: igw.id,
-        },
-      ],
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-public-rt-${region}`,
-      },
-    },
-    { provider }
-  );
-
-  // Associate public subnets with route table (created but not exported)
-  publicSubnets.map(
-    (subnet, i) =>
-      new aws.ec2.RouteTableAssociation(
-        `${projectName}-${environment}-public-rta-${region}-${i}`,
-        {
-          subnetId: subnet.id,
-          routeTableId: publicRouteTable.id,
+          vpcId: vpc.id,
+          routes: [
+            {
+              cidrBlock: '0.0.0.0/0',
+              gatewayId: igw.id,
+            },
+          ],
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-public-rt-${region}`,
+          },
         },
         { provider }
-      )
-  );
+      );
 
-  // Security Group for EC2 instances (restricted SSH)
-  const ec2SecurityGroup = new aws.ec2.SecurityGroup(
-    `${projectName}-${environment}-ec2-sg-${region}`,
-    {
-      name: `${projectName}-${environment}-ec2-sg-${region}`,
-      description: 'Security group for EC2 instances with restricted SSH',
-      vpcId: vpc.id,
-      ingress: [
-        {
-          description: 'SSH from allowed IP range',
-          fromPort: 22,
-          toPort: 22,
-          protocol: 'tcp',
-          cidrBlocks: [allowedSshCidr],
-        },
-        {
-          description: 'HTTP',
-          fromPort: 80,
-          toPort: 80,
-          protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-        {
-          description: 'HTTPS',
-          fromPort: 443,
-          toPort: 443,
-          protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-ec2-sg-${region}`,
-      },
-    },
-    { provider }
-  );
-
-  // Security Group for RDS
-  const rdsSecurityGroup = new aws.ec2.SecurityGroup(
-    `${projectName}-${environment}-rds-sg-${region}`,
-    {
-      name: `${projectName}-${environment}-rds-sg-${region}`,
-      description: 'Security group for RDS instances',
-      vpcId: vpc.id,
-      ingress: [
-        {
-          description: 'MySQL/Aurora',
-          fromPort: 3306,
-          toPort: 3306,
-          protocol: 'tcp',
-          securityGroups: [ec2SecurityGroup.id],
-        },
-      ],
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-rds-sg-${region}`,
-      },
-    },
-    { provider }
-  );
-
-  // IAM Role for EC2 instances (least privilege)
-  const ec2Role = new aws.iam.Role(
-    `${projectName}-${environment}-ec2-role-${region}`,
-    {
-      name: `${projectName}-${environment}-ec2-role-${region}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'ec2.amazonaws.com',
+      // Associate public subnets with route table (created but not exported)
+      publicSubnets.map(
+        (subnet, i) =>
+          new aws.ec2.RouteTableAssociation(
+            `${projectName}-${environment}-public-rta-${region}-${i}`,
+            {
+              subnetId: subnet.id,
+              routeTableId: publicRouteTable.id,
             },
-          },
-        ],
-      }),
-      tags: commonTags,
-    },
-    { provider }
-  );
+            { provider }
+          )
+      );
 
-  // IAM Policy for EC2 role (minimal permissions) - created but not exported
-  new aws.iam.RolePolicy(
-    `${projectName}-${environment}-ec2-policy-${region}`,
-    {
-      name: `${projectName}-${environment}-ec2-policy-${region}`,
-      role: ec2Role.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'logs:CreateLogGroup',
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-              'logs:DescribeLogStreams',
+      // Security Group for EC2 instances (restricted SSH)
+      const ec2SecurityGroup = new aws.ec2.SecurityGroup(
+        `${projectName}-${environment}-ec2-sg-${region}`,
+        {
+          name: `${projectName}-${environment}-ec2-sg-${region}`,
+          description: 'Security group for EC2 instances with restricted SSH',
+          vpcId: vpc.id,
+          ingress: [
+            {
+              description: 'SSH from allowed IP range',
+              fromPort: 22,
+              toPort: 22,
+              protocol: 'tcp',
+              cidrBlocks: [allowedSshCidr],
+            },
+            {
+              description: 'HTTP',
+              fromPort: 80,
+              toPort: 80,
+              protocol: 'tcp',
+              cidrBlocks: ['0.0.0.0/0'],
+            },
+            {
+              description: 'HTTPS',
+              fromPort: 443,
+              toPort: 443,
+              protocol: 'tcp',
+              cidrBlocks: ['0.0.0.0/0'],
+            },
+          ],
+          egress: [
+            {
+              fromPort: 0,
+              toPort: 0,
+              protocol: '-1',
+              cidrBlocks: ['0.0.0.0/0'],
+            },
+          ],
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-ec2-sg-${region}`,
+          },
+        },
+        { provider }
+      );
+
+      // Security Group for RDS
+      const rdsSecurityGroup = new aws.ec2.SecurityGroup(
+        `${projectName}-${environment}-rds-sg-${region}`,
+        {
+          name: `${projectName}-${environment}-rds-sg-${region}`,
+          description: 'Security group for RDS instances',
+          vpcId: vpc.id,
+          ingress: [
+            {
+              description: 'MySQL/Aurora',
+              fromPort: 3306,
+              toPort: 3306,
+              protocol: 'tcp',
+              securityGroups: [ec2SecurityGroup.id],
+            },
+          ],
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-rds-sg-${region}`,
+          },
+        },
+        { provider }
+      );
+
+      // IAM Role for EC2 instances (least privilege)
+      const ec2Role = new aws.iam.Role(
+        `${projectName}-${environment}-ec2-role-${region}`,
+        {
+          name: `${projectName}-${environment}-ec2-role-${region}`,
+          assumeRolePolicy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Action: 'sts:AssumeRole',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'ec2.amazonaws.com',
+                },
+              },
             ],
-            Resource: 'arn:aws:logs:*:*:*',
-          },
-        ],
-      }),
-    },
-    { provider }
-  );
+          }),
+          tags: commonTags,
+        },
+        { provider }
+      );
 
-  // IAM Instance Profile
-  const ec2InstanceProfile = new aws.iam.InstanceProfile(
-    `${projectName}-${environment}-ec2-profile-${region}`,
-    {
-      name: `${projectName}-${environment}-ec2-profile-${region}`,
-      role: ec2Role.name,
-    },
-    { provider }
-  );
+      // IAM Policy for EC2 role (minimal permissions) - created but not exported
+      new aws.iam.RolePolicy(
+        `${projectName}-${environment}-ec2-policy-${region}`,
+        {
+          name: `${projectName}-${environment}-ec2-policy-${region}`,
+          role: ec2Role.id,
+          policy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogStreams',
+                ],
+                Resource: 'arn:aws:logs:*:*:*',
+              },
+            ],
+          }),
+        },
+        { provider }
+      );
 
-  // Get latest Amazon Linux 2 AMI
-  const ami = pulumi.output(
-    aws.ec2.getAmi(
-      {
-        mostRecent: true,
-        owners: ['amazon'],
-        filters: [
+      // IAM Instance Profile
+      const ec2InstanceProfile = new aws.iam.InstanceProfile(
+        `${projectName}-${environment}-ec2-profile-${region}`,
+        {
+          name: `${projectName}-${environment}-ec2-profile-${region}`,
+          role: ec2Role.name,
+        },
+        { provider }
+      );
+
+      // Get latest Amazon Linux 2 AMI
+      const ami = pulumi.output(
+        aws.ec2.getAmi(
           {
-            name: 'name',
-            values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+            mostRecent: true,
+            owners: ['amazon'],
+            filters: [
+              {
+                name: 'name',
+                values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+              },
+            ],
           },
-        ],
-      },
-      { provider }
-    )
-  );
+          { provider }
+        )
+      );
 
       // EC2 Instances (without key pairs for simplicity)
       const ec2Instances = publicSubnets.map(
@@ -483,63 +507,63 @@ const webAcl = new aws.wafv2.WebAcl(
           )
       );
 
-  // RDS Subnet Group
-  const rdsSubnetGroup = new aws.rds.SubnetGroup(
-    `${projectName}-${environment}-rds-subnet-group-${region}`,
-    {
-      name: `${projectName}-${environment}-rds-subnet-group-${region}`,
-      subnetIds: privateSubnets.map(subnet => subnet.id),
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-rds-subnet-group-${region}`,
-      },
-    },
-    { provider }
-  );
+      // RDS Subnet Group
+      const rdsSubnetGroup = new aws.rds.SubnetGroup(
+        `${projectName}-${environment}-rds-subnet-group-${region}`,
+        {
+          name: `${projectName}-${environment}-rds-subnet-group-${region}`,
+          subnetIds: privateSubnets.map(subnet => subnet.id),
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-rds-subnet-group-${region}`,
+          },
+        },
+        { provider }
+      );
 
-  // Get KMS key for this region
-  const regionKmsKey = kmsKeys.find(k => k.region === region)?.key;
+      // Get KMS key for this region
+      const regionKmsKey = kmsKeys.find(k => k.region === region)?.key;
 
-  // RDS Instance with encryption
-  const rdsInstance = new aws.rds.Instance(
-    `${projectName}-${environment}-rds-${region}`,
-    {
-      identifier: `${projectName}-${environment}-rds-${region}`,
-      engine: 'mysql',
-      engineVersion: '8.0',
-      instanceClass: 'db.t3.micro',
-      allocatedStorage: 20,
-      storageType: 'gp2',
-      storageEncrypted: true,
-      kmsKeyId: regionKmsKey?.arn,
-      dbName: `${projectName}db`,
-      username: 'admin',
-      password: 'changeme123!', // In production, use AWS Secrets Manager
-      vpcSecurityGroupIds: [rdsSecurityGroup.id],
-      dbSubnetGroupName: rdsSubnetGroup.name,
-      backupRetentionPeriod: 7,
-      backupWindow: '03:00-04:00',
-      maintenanceWindow: 'sun:04:00-sun:05:00',
-      skipFinalSnapshot: true,
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-rds-${region}`,
-      },
-    },
-    { provider }
-  );
+      // RDS Instance with encryption
+      const rdsInstance = new aws.rds.Instance(
+        `${projectName}-${environment}-rds-${region}`,
+        {
+          identifier: `${projectName}-${environment}-rds-${region}`,
+          engine: 'mysql',
+          engineVersion: '8.0',
+          instanceClass: 'db.t3.micro',
+          allocatedStorage: 20,
+          storageType: 'gp2',
+          storageEncrypted: true,
+          kmsKeyId: regionKmsKey?.arn,
+          dbName: `${projectName}db`,
+          username: 'admin',
+          password: 'changeme123!', // In production, use AWS Secrets Manager
+          vpcSecurityGroupIds: [rdsSecurityGroup.id],
+          dbSubnetGroupName: rdsSubnetGroup.name,
+          backupRetentionPeriod: 7,
+          backupWindow: '03:00-04:00',
+          maintenanceWindow: 'sun:04:00-sun:05:00',
+          skipFinalSnapshot: true,
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-rds-${region}`,
+          },
+        },
+        { provider }
+      );
 
-  return {
-    region,
-    vpc,
-    publicSubnets,
-    privateSubnets,
-    ec2Instances,
-    rdsInstance,
-    ec2SecurityGroup,
-    rdsSecurityGroup,
-  };
-});
+      return {
+        region,
+        vpc,
+        publicSubnets,
+        privateSubnets,
+        ec2Instances,
+        rdsInstance,
+        ec2SecurityGroup,
+        rdsSecurityGroup,
+      };
+    });
 
     // Assign outputs to class properties
     this.vpcIds = regionalInfra.map(infra => ({

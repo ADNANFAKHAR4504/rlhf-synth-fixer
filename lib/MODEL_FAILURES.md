@@ -356,41 +356,70 @@ kmsKeys.map(({ region, key }) => ({
 - Consistent trailing commas
 - Proper line breaks and spacing
 
-### 10. AWS Region Configuration Mismatch Error
-**Issue**: The infrastructure code was hardcoded to use `us-east-1` for global resources (S3, CloudTrail, WAF), but the AWS credentials/configuration was set for `us-east-2`, causing authorization header malformed errors.
+### 11. S3 Bucket Name Conflicts from Previous Deployments
+**Issue**: S3 buckets from previous deployments were causing conflicts when trying to create new buckets with the same names.
 
-**Error Message**: `AuthorizationHeaderMalformed: The authorization header is malformed; the region 'us-east-1' is wrong; expecting 'us-east-2'`
+**Error Messages**:
+- `BucketAlreadyOwnedByYou: creating S3 Bucket (dev-webapp-cloudtrail-logs)`
+- `BucketAlreadyExists: creating S3 Bucket (dev-webapp-access-logs)`
 
-**Problem**: AWS credentials and configuration were set for `us-east-2`, but the code was trying to create S3 buckets and other global resources in `us-east-1`.
+**Problem**: Previous deployments left S3 buckets that weren't properly cleaned up, causing name conflicts on subsequent deployments.
 
-**Root Cause**: Hardcoded region references in the infrastructure code didn't match the actual AWS environment configuration.
+**Root Cause**: S3 bucket names must be globally unique, and previous deployments created buckets with the same naming pattern.
+
+**Solution**: Added a random suffix to bucket names to ensure uniqueness across deployments.
+
+**Fixed Code**:
+```typescript
+// Generate a short random suffix to avoid bucket name conflicts
+const randomSuffix = Math.random().toString(36).substring(2, 8);
+
+// S3 bucket for CloudTrail logs (single bucket in us-east-2)
+const cloudtrailBucket = new aws.s3.Bucket(
+  `${projectName}-${environment}-cloudtrail-logs`,
+  {
+    bucket: `${environment}-${projectName}-cloudtrail-logs-${randomSuffix}`,
+    forceDestroy: true,
+    tags: commonTags,
+  },
+  { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
+);
+```
+
+**Result**: Bucket names like `pr1032-webapp-cloudtrail-logs-a1b2c3` that are guaranteed to be unique.
+
+### 12. Environment Suffix Not Being Passed to Infrastructure
+**Issue**: The environment suffix (e.g., `pr1032`) was not being passed from the main entry point to the TapStack, causing all resources to use the default `dev` environment instead of the intended environment.
+
+**Problem**: The `bin/tap.ts` file was reading the environment suffix from Pulumi config but not passing it to the TapStack constructor.
+
+**Root Cause**: Missing `environmentSuffix` parameter in TapStack instantiation.
 
 **Original Code**:
 ```typescript
-const regions = args.regions || ['us-west-1', 'us-east-1'];
+// bin/tap.ts
+const environmentSuffix = config.get('env') || 'dev';
 
-// S3 buckets hardcoded to us-east-1
-{ provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+new TapStack('pulumi-infra', {
+  tags: defaultTags,
+  // Missing environmentSuffix parameter
+});
 ```
 
 **Fixed Code**:
 ```typescript
-const regions = args.regions || ['us-west-1', 'us-east-2'];
+// bin/tap.ts
+const environmentSuffix = config.get('env') || 'dev';
 
-// S3 buckets now use us-east-2 to match AWS configuration
-{ provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
+new TapStack('pulumi-infra', {
+  environmentSuffix: environmentSuffix,
+  tags: defaultTags,
+});
 ```
 
-**Resources Updated**:
-- Default regions in both `SecureCompliantInfra` and `TapStack`
-- S3 CloudTrail bucket provider
-- S3 access logs bucket provider  
-- S3 bucket logging provider
-- CloudTrail bucket policy provider
-- CloudTrail resource provider
-- WAF Web ACL provider
+**Result**: Resources now correctly use the environment suffix from Pulumi config (e.g., `pr1032-webapp-cloudtrail-logs-a1b2c3` instead of `dev-webapp-cloudtrail-logs`).
 
-**Result**: Infrastructure now deploys successfully in `us-west-1` and `us-east-2` regions, matching the AWS environment configuration.
+**Usage**: Set the environment using `pulumi config set env pr1032` before deployment.
 
 ## Summary
 

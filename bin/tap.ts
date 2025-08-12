@@ -14,9 +14,9 @@ import { TapStack } from '../lib/tap-stack';
 // Initialize Pulumi configuration for the current stack.
 const config = new pulumi.Config();
 
-// Get the environment suffix from the Pulumi config, defaulting to 'dev'.
-// You can set this value using the command: `pulumi config set env <value>`
-const environmentSuffix = config.get('env') || 'dev';
+// Get the environment suffix from the environment variable, defaulting to 'dev'.
+// This is typically set by CI/CD systems or deployment scripts.
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
@@ -36,6 +36,7 @@ const defaultTags = {
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
 new TapStack('pulumi-infra', {
+  environmentSuffix: environmentSuffix,
   tags: defaultTags,
 });
 
