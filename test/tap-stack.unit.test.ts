@@ -157,12 +157,12 @@ describe('TapStack Unit Tests', () => {
               [
                 `secure-data-bucket-${environmentSuffix}-`,
                 {
-                  'Ref': 'AWS::AccountId'
-                }
-              ]
-            ]
-          }
-        }
+                  Ref: 'AWS::AccountId',
+                },
+              ],
+            ],
+          },
+        },
       });
 
       template.hasResource('AWS::S3::Bucket', {
@@ -173,12 +173,12 @@ describe('TapStack Unit Tests', () => {
               [
                 `secure-logs-bucket-${environmentSuffix}-`,
                 {
-                  'Ref': 'AWS::AccountId'
-                }
-              ]
-            ]
-          }
-        }
+                  Ref: 'AWS::AccountId',
+                },
+              ],
+            ],
+          },
+        },
       });
     });
 
