@@ -1,18 +1,11 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure production infrastructure for SecureApp with comprehensive security controls and compliance monitoring - Simplified version",
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "AMI": "ami-0c02fb55956c7d316"
-            }
-        }
-    },
+    "Description": "Secure production infrastructure for SecureApp - Simplified deployment without parameters",
     "Resources": {
         "SecureAppKMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
-                "Description": "KMS key for SecureApp encryption (S3/CloudTrail/Logs/Secrets)",
+                "Description": "KMS key for SecureApp encryption",
                 "KeyPolicy": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -40,38 +33,17 @@
                                 "kms:Decrypt"
                             ],
                             "Resource": "*"
-                        },
-                        {
-                            "Sid": "AllowCloudWatchLogsUseOfKey",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": {
-                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
-                                }
-                            },
-                            "Action": [
-                                "kms:Encrypt",
-                                "kms:Decrypt",
-                                "kms:ReEncrypt*",
-                                "kms:GenerateDataKey*",
-                                "kms:DescribeKey"
-                            ],
-                            "Resource": "*"
                         }
                     ]
                 },
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-kms-key"
+                        "Value": "secureapp-kms-key"
                     },
                     {
                         "Key": "Project",
                         "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
                     }
                 ]
             }
@@ -79,7 +51,9 @@
         "SecureAppKMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
-                "AliasName": "alias/secureapp-prod-kms",
+                "AliasName": {
+                    "Fn::Sub": "alias/secureapp-${AWS::AccountId}"
+                },
                 "TargetKeyId": {
                     "Ref": "SecureAppKMSKey"
                 }
@@ -89,7 +63,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "secureapp-prod-ec2-role-${AWS::AccountId}"
+                    "Fn::Sub": "SecureApp-EC2-Role-${AWS::AccountId}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -113,7 +87,7 @@
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
-                                    "Sid": "ReadAppBucketObjects",
+                                    "Sid": "ReadS3Objects",
                                     "Effect": "Allow",
                                     "Action": [
                                         "s3:GetObject"
@@ -123,7 +97,7 @@
                                     }
                                 },
                                 {
-                                    "Sid": "ReadDBSecret",
+                                    "Sid": "ReadSecrets",
                                     "Effect": "Allow",
                                     "Action": [
                                         "secretsmanager:GetSecretValue"
@@ -135,20 +109,6 @@
                             ]
                         }
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-ec2-role"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
                 ]
             }
         },
@@ -156,7 +116,7 @@
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
-                    "Fn::Sub": "secureapp-prod-ec2-profile-${AWS::AccountId}"
+                    "Fn::Sub": "SecureApp-EC2-Profile-${AWS::AccountId}"
                 },
                 "Roles": [
                     {
@@ -169,9 +129,9 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "secureapp-prod-db-password-${AWS::AccountId}"
+                    "Fn::Sub": "secureapp-db-password-${AWS::AccountId}"
                 },
-                "Description": "RDS credentials for SecureApp",
+                "Description": "Database credentials for SecureApp",
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\":\"dbadmin\"}",
                     "GenerateStringKey": "password",
@@ -180,21 +140,7 @@
                 },
                 "KmsKeyId": {
                     "Ref": "SecureAppKMSKey"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-db-password"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
-                ]
+                }
             }
         },
         "SecureAppVPC": {
@@ -206,15 +152,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-vpc"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-vpc"
                     }
                 ]
             }
@@ -225,15 +163,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-igw"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-igw"
                     }
                 ]
             }
@@ -264,19 +194,11 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": false,
+                "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-public-subnet-1"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-public-subnet-1"
                     }
                 ]
             }
@@ -296,19 +218,11 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": false,
+                "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-public-subnet-2"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-public-subnet-2"
                     }
                 ]
             }
@@ -331,15 +245,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-private-subnet-1"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-private-subnet-1"
                     }
                 ]
             }
@@ -362,15 +268,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-private-subnet-2"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-private-subnet-2"
                     }
                 ]
             }
@@ -393,15 +291,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-db-subnet-1"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-db-subnet-1"
                     }
                 ]
             }
@@ -424,15 +314,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-db-subnet-2"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-db-subnet-2"
                     }
                 ]
             }
@@ -441,21 +323,7 @@
             "Type": "AWS::EC2::EIP",
             "DependsOn": "AttachGateway",
             "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-nat-eip"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
-                ]
+                "Domain": "vpc"
             }
         },
         "NATGateway": {
@@ -469,21 +337,7 @@
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-nat-gateway"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
-                ]
+                }
             }
         },
         "PublicRouteTable": {
@@ -495,15 +349,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-public-rt"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-public-rt"
                     }
                 ]
             }
@@ -517,15 +363,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-private-rt"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-private-rt"
                     }
                 ]
             }
@@ -539,15 +377,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-db-rt"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-db-rt"
                     }
                 ]
             }
@@ -646,7 +476,6 @@
         "ALBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "secureapp-prod-alb-sg",
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
                     "Ref": "SecureAppVPC"
@@ -658,27 +487,12 @@
                         "ToPort": 80,
                         "CidrIp": "0.0.0.0/0",
                         "Description": "HTTP from internet"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTPS from internet"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-alb-sg"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-alb-sg"
                     }
                 ]
             }
@@ -686,7 +500,6 @@
         "WebServerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "secureapp-prod-web-sg",
                 "GroupDescription": "Security group for web servers",
                 "VpcId": {
                     "Ref": "SecureAppVPC"
@@ -715,28 +528,20 @@
                         "FromPort": 80,
                         "ToPort": 80,
                         "CidrIp": "0.0.0.0/0",
-                        "Description": "Outbound HTTP"
+                        "Description": "HTTP outbound"
                     },
                     {
                         "IpProtocol": "tcp",
                         "FromPort": 443,
                         "ToPort": 443,
                         "CidrIp": "0.0.0.0/0",
-                        "Description": "Outbound HTTPS"
+                        "Description": "HTTPS outbound"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-web-sg"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-web-sg"
                     }
                 ]
             }
@@ -744,7 +549,6 @@
         "DatabaseSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "secureapp-prod-db-sg",
                 "GroupDescription": "Security group for RDS database",
                 "VpcId": {
                     "Ref": "SecureAppVPC"
@@ -757,21 +561,13 @@
                         "SourceSecurityGroupId": {
                             "Ref": "WebServerSecurityGroup"
                         },
-                        "Description": "MySQL from web tier"
+                        "Description": "MySQL from web servers"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-db-sg"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-db-sg"
                     }
                 ]
             }
@@ -780,7 +576,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "secureapp-prod-storage-${AWS::AccountId}"
+                    "Fn::Sub": "secureapp-storage-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -790,8 +586,7 @@
                                 "KMSMasterKeyID": {
                                     "Ref": "SecureAppKMSKey"
                                 }
-                            },
-                            "BucketKeyEnabled": true
+                            }
                         }
                     ]
                 },
@@ -803,21 +598,7 @@
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-storage"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
-                ]
+                }
             }
         },
         "S3BucketPolicy": {
@@ -852,56 +633,13 @@
                 }
             }
         },
-        "SecureAppLogBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "secureapp-prod-logs-${AWS::AccountId}"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "SecureAppKMSKey"
-                                }
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-logs"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
-                ]
-            }
-        },
         "DatabaseSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "secureapp-prod-db-subnet-group-${AWS::AccountId}"
+                    "Fn::Sub": "secureapp-db-subnet-group-${AWS::AccountId}"
                 },
-                "DBSubnetGroupDescription": "Subnet group for SecureApp RDS database",
+                "DBSubnetGroupDescription": "Subnet group for SecureApp database",
                 "SubnetIds": [
                     {
                         "Ref": "DatabaseSubnet1"
@@ -909,30 +647,15 @@
                     {
                         "Ref": "DatabaseSubnet2"
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-db-subnet-group"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
                 ]
             }
         },
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
-            "DeletionPolicy": "Snapshot",
-            "UpdateReplacePolicy": "Snapshot",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "secureapp-prod-database-${AWS::AccountId}"
+                    "Fn::Sub": "secureapp-database-${AWS::AccountId}"
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
@@ -958,239 +681,15 @@
                 "BackupRetentionPeriod": 7,
                 "MultiAZ": false,
                 "PubliclyAccessible": false,
-                "DeletionProtection": false,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-database"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
-                ]
-            }
-        },
-        "CloudTrailLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": "/aws/cloudtrail/secureapp-prod",
-                "RetentionInDays": 90,
-                "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "SecureAppKMSKey",
-                        "Arn"
-                    ]
-                }
-            }
-        },
-        "VPCFlowLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": "/aws/vpc/flowlogs/secureapp-prod",
-                "RetentionInDays": 30,
-                "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "SecureAppKMSKey",
-                        "Arn"
-                    ]
-                }
-            }
-        },
-        "CloudTrailRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "secureapp-prod-cloudtrail-role-${AWS::AccountId}"
-                },
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "CloudTrailLogsPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
-                                    ],
-                                    "Resource": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "CloudTrailLogGroup",
-                                                "Arn"
-                                            ]
-                                        },
-                                        {
-                                            "Fn::Sub": "${CloudTrailLogGroup.Arn}:*"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "SecureAppCloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "secureapp-prod-trail-${AWS::AccountId}"
-                },
-                "S3BucketName": {
-                    "Ref": "SecureAppLogBucket"
-                },
-                "S3KeyPrefix": "cloudtrail-logs/",
-                "IncludeGlobalServiceEvents": true,
-                "IsLogging": true,
-                "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": true,
-                "KMSKeyId": {
-                    "Ref": "SecureAppKMSKey"
-                },
-                "CloudWatchLogsLogGroupArn": {
-                    "Fn::GetAtt": [
-                        "CloudTrailLogGroup",
-                        "Arn"
-                    ]
-                },
-                "CloudWatchLogsRoleArn": {
-                    "Fn::GetAtt": [
-                        "CloudTrailRole",
-                        "Arn"
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-cloudtrail"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
-                ]
-            }
-        },
-        "VPCFlowLogRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "secureapp-prod-flowlogs-role-${AWS::AccountId}"
-                },
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "vpc-flow-logs.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "FlowLogsDeliveryPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogGroup"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs/*"
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents",
-                                        "logs:DescribeLogGroups",
-                                        "logs:DescribeLogStreams"
-                                    ],
-                                    "Resource": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "VPCFlowLogGroup",
-                                                "Arn"
-                                            ]
-                                        },
-                                        {
-                                            "Fn::Sub": "${VPCFlowLogGroup.Arn}:*"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "VPCFlowLog": {
-            "Type": "AWS::EC2::FlowLog",
-            "Properties": {
-                "ResourceType": "VPC",
-                "ResourceId": {
-                    "Ref": "SecureAppVPC"
-                },
-                "TrafficType": "ALL",
-                "LogDestinationType": "cloud-watch-logs",
-                "LogGroupName": {
-                    "Ref": "VPCFlowLogGroup"
-                },
-                "DeliverLogsPermissionArn": {
-                    "Fn::GetAtt": [
-                        "VPCFlowLogRole",
-                        "Arn"
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-vpc-flowlog"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
-                ]
+                "DeletionProtection": false
             }
         },
         "ApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
-                "Name": "secureapp-prod-alb",
+                "Name": {
+                    "Fn::Sub": "secureapp-alb-${AWS::AccountId}"
+                },
                 "Scheme": "internet-facing",
                 "Type": "application",
                 "SecurityGroups": [
@@ -1205,27 +704,15 @@
                     {
                         "Ref": "PublicSubnet2"
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-alb"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
                 ]
             }
         },
         "ALBTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
-                "Name": "secureapp-prod-tg",
+                "Name": {
+                    "Fn::Sub": "secureapp-tg-${AWS::AccountId}"
+                },
                 "Port": 80,
                 "Protocol": "HTTP",
                 "VpcId": {
@@ -1250,24 +737,10 @@
                         },
                         "Port": 80
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-tg"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    }
                 ]
             }
         },
-        "ALBListenerHTTP": {
+        "ALBListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
             "Properties": {
                 "DefaultActions": [
@@ -1288,15 +761,7 @@
         "WebServerInstance1": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
-                },
+                "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                 "InstanceType": "t3.micro",
                 "SubnetId": {
                     "Ref": "PrivateSubnet1"
@@ -1310,20 +775,12 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\n# Create content\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 1 - Instance in Private Subnet</h1>\" > /var/www/html/index.html\n\n# Start Apache\nsystemctl enable --now httpd\n"
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 1</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" > /var/www/html/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
                 },
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-web-1"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-web-1"
                     }
                 ]
             }
@@ -1331,15 +788,7 @@
         "WebServerInstance2": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
-                },
+                "ImageId": "ami-0c02fb55956c7d316",
                 "InstanceType": "t3.micro",
                 "SubnetId": {
                     "Ref": "PrivateSubnet2"
@@ -1353,22 +802,99 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\n# Create content\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 2 - Instance in Private Subnet</h1>\" > /var/www/html/index.html\n\n# Start Apache\nsystemctl enable --now httpd\n"
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 2</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" > /var/www/html/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
                 },
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-prod-web-2"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
+                        "Value": "secureapp-web-2"
                     }
                 ]
+            }
+        },
+        "CloudTrailBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "secureapp-cloudtrail-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "SecureAppKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailBucket}"
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailBucket}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SecureAppCloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "CloudTrailBucketPolicy",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "secureapp-trail-${AWS::AccountId}"
+                },
+                "S3BucketName": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "IncludeGlobalServiceEvents": true,
+                "IsLogging": true,
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "KMSKeyId": {
+                    "Ref": "SecureAppKMSKey"
+                }
             }
         }
     },
@@ -1384,14 +910,14 @@
                 }
             }
         },
-        "LoadBalancerDNS": {
-            "Description": "Application Load Balancer DNS name",
+        "LoadBalancerURL": {
+            "Description": "Application Load Balancer URL",
             "Value": {
                 "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+                    "Fn::Sub": "${AWS::StackName}-ALB-URL"
                 }
             }
         },
@@ -1417,28 +943,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-S3-Bucket"
-                }
-            }
-        },
-        "LogsBucketName": {
-            "Description": "S3 Bucket for CloudTrail logs",
-            "Value": {
-                "Ref": "SecureAppLogBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-Logs-Bucket"
-                }
-            }
-        },
-        "KMSKeyId": {
-            "Description": "KMS Key ID for encryption",
-            "Value": {
-                "Ref": "SecureAppKMSKey"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-KMS-Key"
                 }
             }
         }
