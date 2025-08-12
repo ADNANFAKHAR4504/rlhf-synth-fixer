@@ -4,9 +4,10 @@ I need to set up a secure infrastructure for a new web application using AWS CDK
 
 ## Requirements
 
-**Region**: All resources must be deployed to us-west-2 region.
+**Region**: All resources must be deployed to us-west-1 region.
 
 **Security Requirements**:
+
 - All S3 buckets must have server-side encryption enabled and access logging configured
 - Database instances must be private with no public access allowed
 - All sensitive data must be encrypted using AWS KMS customer managed keys
@@ -14,6 +15,7 @@ I need to set up a secure infrastructure for a new web application using AWS CDK
 - IAM policies should follow principle of least privilege
 
 **Infrastructure Components**:
+
 - S3 buckets for web application assets with proper security configurations
 - Private database (RDS) with KMS encryption
 - Application Load Balancer for web traffic
@@ -23,6 +25,7 @@ I need to set up a secure infrastructure for a new web application using AWS CDK
 - GuardDuty S3 Protection for malware detection
 
 **Modern AWS Features**:
+
 - Use S3 Transfer Acceleration to improve upload/download performance
 - Enable GuardDuty S3 Protection for advanced threat detection on S3 buckets
 - Configure CloudTrail with SSE-KMS encryption for enhanced log security

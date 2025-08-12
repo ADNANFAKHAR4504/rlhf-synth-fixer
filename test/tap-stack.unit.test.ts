@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
@@ -10,12 +10,12 @@ describe('TapStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { 
+    stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-west-2',
-      }
+        region: 'us-west-1',
+      },
     });
     template = Template.fromStack(stack);
   });
@@ -41,7 +41,10 @@ describe('TapStack', () => {
               Sid: 'Allow CloudTrail and S3 to use the key',
               Effect: 'Allow',
               Principal: Match.objectLike({
-                Service: Match.arrayWith(['cloudtrail.amazonaws.com', 's3.amazonaws.com'])
+                Service: Match.arrayWith([
+                  'cloudtrail.amazonaws.com',
+                  's3.amazonaws.com',
+                ]),
               }),
             }),
           ]),
@@ -67,7 +70,7 @@ describe('TapStack', () => {
 
     test('should create public subnets', () => {
       template.resourceCountIs('AWS::EC2::Subnet', 6); // 2 public, 2 private, 2 database
-      
+
       // Check for public subnets
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
@@ -111,7 +114,9 @@ describe('TapStack', () => {
   describe('S3 Buckets Configuration', () => {
     test('should create access logs bucket with KMS encryption', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`secure-app-access-logs-${environmentSuffix}-.*`),
+        BucketName: Match.stringLikeRegexp(
+          `secure-app-access-logs-${environmentSuffix}-.*`
+        ),
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
@@ -135,7 +140,9 @@ describe('TapStack', () => {
 
     test('should create web assets bucket with transfer acceleration', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`secure-app-assets-${environmentSuffix}-.*`),
+        BucketName: Match.stringLikeRegexp(
+          `secure-app-assets-${environmentSuffix}-.*`
+        ),
         AccelerateConfiguration: {
           AccelerationStatus: 'Enabled',
         },
@@ -156,7 +163,9 @@ describe('TapStack', () => {
 
     test('should configure web assets bucket with access logging', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`secure-app-assets-${environmentSuffix}-.*`),
+        BucketName: Match.stringLikeRegexp(
+          `secure-app-assets-${environmentSuffix}-.*`
+        ),
         LoggingConfiguration: {
           LogFilePrefix: 'web-assets-access-logs/',
         },
@@ -165,7 +174,9 @@ describe('TapStack', () => {
 
     test('should create CloudTrail bucket with lifecycle policy', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`secure-app-cloudtrail-${environmentSuffix}-.*`),
+        BucketName: Match.stringLikeRegexp(
+          `secure-app-cloudtrail-${environmentSuffix}-.*`
+        ),
         LifecycleConfiguration: {
           Rules: [
             {
@@ -233,7 +244,8 @@ describe('TapStack', () => {
 
     test('should create database subnet group', () => {
       template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        DBSubnetGroupDescription: 'Subnet group for secure application database',
+        DBSubnetGroupDescription:
+          'Subnet group for secure application database',
       });
     });
 
@@ -254,16 +266,21 @@ describe('TapStack', () => {
 
   describe('Application Load Balancer Configuration', () => {
     test('should create ALB with proper configuration', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Type: 'application',
-        Scheme: 'internet-facing',
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Type: 'application',
+          Scheme: 'internet-facing',
+        }
+      );
     });
 
     test('should create ALB security group with HTTP/HTTPS rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
-      const albSG = Object.values(securityGroups).find(sg => 
-        sg.Properties?.GroupDescription === 'Security group for Application Load Balancer'
+      const albSG = Object.values(securityGroups).find(
+        sg =>
+          sg.Properties?.GroupDescription ===
+          'Security group for Application Load Balancer'
       );
       expect(albSG).toBeDefined();
     });
@@ -272,10 +289,12 @@ describe('TapStack', () => {
       // In CDK, ingress rules are often embedded in the security group definition
       // Check that ALB security group exists with proper description
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
-      const albSG = Object.values(securityGroups).find(sg => 
-        sg.Properties?.GroupDescription === 'Security group for Application Load Balancer'
+      const albSG = Object.values(securityGroups).find(
+        sg =>
+          sg.Properties?.GroupDescription ===
+          'Security group for Application Load Balancer'
       );
-      
+
       // Verify ALB security group exists and has proper configuration
       expect(albSG).toBeDefined();
       expect(albSG?.Properties?.SecurityGroupIngress).toBeDefined();
@@ -331,8 +350,8 @@ describe('TapStack', () => {
       const resources = template.toJSON().Resources;
       Object.values(resources).forEach((resource: any) => {
         if (resource.Properties?.Tags) {
-          const envTag = resource.Properties.Tags.find((tag: any) => 
-            tag.Key === 'environment' || tag.Key === 'Environment'
+          const envTag = resource.Properties.Tags.find(
+            (tag: any) => tag.Key === 'environment' || tag.Key === 'Environment'
           );
           expect(envTag).toBeDefined();
           expect(envTag?.Value).toBe('production');
@@ -370,14 +389,16 @@ describe('TapStack', () => {
   describe('Security Best Practices', () => {
     test('should not have any resources with Retain deletion policy', () => {
       const resources = template.toJSON().Resources;
-      Object.entries(resources).forEach(([logicalId, resource]: [string, any]) => {
-        // KMS keys are an exception as they have special handling
-        if (resource.Type !== 'AWS::KMS::Key') {
-          if (resource.DeletionPolicy) {
-            expect(resource.DeletionPolicy).not.toBe('Retain');
+      Object.entries(resources).forEach(
+        ([logicalId, resource]: [string, any]) => {
+          // KMS keys are an exception as they have special handling
+          if (resource.Type !== 'AWS::KMS::Key') {
+            if (resource.DeletionPolicy) {
+              expect(resource.DeletionPolicy).not.toBe('Retain');
+            }
           }
         }
-      });
+      );
     });
 
     test('should encrypt all data at rest', () => {
@@ -385,7 +406,9 @@ describe('TapStack', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
       Object.values(buckets).forEach(bucket => {
         expect(bucket.Properties?.BucketEncryption).toBeDefined();
-        expect(bucket.Properties?.BucketEncryption?.ServerSideEncryptionConfiguration).toBeDefined();
+        expect(
+          bucket.Properties?.BucketEncryption?.ServerSideEncryptionConfiguration
+        ).toBeDefined();
       });
 
       // Check RDS has encryption
@@ -424,12 +447,16 @@ describe('TapStack', () => {
     test('should use customer managed KMS keys for encryption', () => {
       // Verify KMS key exists
       template.resourceCountIs('AWS::KMS::Key', 1);
-      
+
       // Verify it's used by S3 buckets
       const buckets = template.findResources('AWS::S3::Bucket');
       Object.values(buckets).forEach(bucket => {
-        const encryption = bucket.Properties?.BucketEncryption?.ServerSideEncryptionConfiguration?.[0];
-        expect(encryption?.ServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+        const encryption =
+          bucket.Properties?.BucketEncryption
+            ?.ServerSideEncryptionConfiguration?.[0];
+        expect(encryption?.ServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+          'aws:kms'
+        );
       });
     });
   });
@@ -452,8 +479,8 @@ describe('TapStack', () => {
       });
     });
 
-    test('should deploy to us-west-2 region', () => {
-      expect(stack.region).toBe('us-west-2');
+    test('should deploy to us-west-1 region', () => {
+      expect(stack.region).toBe('us-west-1');
     });
   });
 });

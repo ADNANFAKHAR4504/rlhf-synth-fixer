@@ -1,14 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import { Tags } from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { Tags } from 'aws-cdk-lib';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -142,7 +142,7 @@ export class TapStack extends cdk.Stack {
         resources: [cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-2:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
@@ -158,7 +158,7 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-2:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })

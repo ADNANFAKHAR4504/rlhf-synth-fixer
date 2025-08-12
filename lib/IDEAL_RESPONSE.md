@@ -5,6 +5,7 @@ This solution provides a comprehensive, production-ready secure web application 
 ## Complete Infrastructure Implementation
 
 ### bin/tap.ts
+
 ```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
@@ -30,12 +31,13 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
+    region: 'us-west-1',
   },
 });
 ```
 
 ### lib/tap-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -182,7 +184,7 @@ export class TapStack extends cdk.Stack {
         resources: [cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-2:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
@@ -198,7 +200,7 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-2:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
@@ -348,6 +350,7 @@ export class TapStack extends cdk.Stack {
 ## Key Improvements and Features
 
 ### 1. **Security Enhancements**
+
 - ✅ Customer-managed KMS key with automatic rotation
 - ✅ All data encrypted at rest using KMS
 - ✅ CloudTrail with file validation and KMS encryption
@@ -357,6 +360,7 @@ export class TapStack extends cdk.Stack {
 - ✅ All S3 buckets with public access blocked
 
 ### 2. **Resource Management**
+
 - ✅ All resources properly tagged with environment=production
 - ✅ Environment suffix included in all resource names
 - ✅ RemovalPolicy.DESTROY for all resources (no retention)
@@ -364,6 +368,7 @@ export class TapStack extends cdk.Stack {
 - ✅ Database deletion protection disabled for testing
 
 ### 3. **Modern AWS Features**
+
 - ✅ S3 Transfer Acceleration for improved performance
 - ✅ GuardDuty S3 Protection for threat detection
 - ✅ CloudTrail with SSE-KMS encryption
@@ -371,12 +376,14 @@ export class TapStack extends cdk.Stack {
 - ✅ VPC with multi-AZ deployment
 
 ### 4. **Networking Architecture**
+
 - ✅ VPC with public, private, and isolated subnets
 - ✅ NAT gateways for private subnet internet access
 - ✅ Database in isolated subnets
 - ✅ Application Load Balancer in public subnets
 
 ### 5. **Compliance and Governance**
+
 - ✅ CloudTrail for API auditing
 - ✅ S3 access logging for all buckets
 - ✅ Versioning enabled on all S3 buckets
@@ -384,6 +391,7 @@ export class TapStack extends cdk.Stack {
 - ✅ Comprehensive tagging strategy
 
 ### 6. **Operational Excellence**
+
 - ✅ CloudFormation outputs for all critical resources
 - ✅ Proper IAM policies with least privilege
 - ✅ Automated lifecycle management
@@ -392,18 +400,21 @@ export class TapStack extends cdk.Stack {
 ## Deployment Instructions
 
 1. **Bootstrap CDK** (first time only):
+
 ```bash
-export AWS_REGION=us-west-2
+export AWS_REGION=us-west-1
 export ENVIRONMENT_SUFFIX=synthtrainr645
 npm run cdk:bootstrap
 ```
 
 2. **Deploy the stack**:
+
 ```bash
 npm run cdk:deploy
 ```
 
 3. **Run tests**:
+
 ```bash
 # Unit tests with coverage
 npm run test:unit
@@ -413,6 +424,7 @@ CI=1 npm run test:integration
 ```
 
 4. **Destroy resources**:
+
 ```bash
 npm run cdk:destroy
 ```
@@ -420,19 +432,20 @@ npm run cdk:destroy
 ## Testing Coverage
 
 The solution includes:
+
 - **35 comprehensive unit tests** with 100% code coverage
 - **Complete integration test suite** validating deployed infrastructure
 - Tests verify all security requirements and AWS best practices
 
 ## Compliance with Requirements
 
-✅ **Region**: All resources deployed to us-west-2  
+✅ **Region**: All resources deployed to us-west-1  
 ✅ **Security**: KMS encryption, private databases, least privilege IAM  
 ✅ **S3 Security**: Server-side encryption, access logging, public access blocked  
 ✅ **Database**: Private RDS with no public access, KMS encrypted  
 ✅ **Tagging**: All resources tagged with environment=production  
 ✅ **Modern Features**: S3 Transfer Acceleration, GuardDuty S3 Protection, CloudTrail with KMS  
 ✅ **Networking**: VPC with proper subnet isolation  
-✅ **Logging**: CloudTrail for API logging, S3 access logs  
+✅ **Logging**: CloudTrail for API logging, S3 access logs
 
 This production-ready infrastructure follows AWS Well-Architected Framework principles and implements defense-in-depth security controls.

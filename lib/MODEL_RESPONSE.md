@@ -7,13 +7,12 @@ I'll help you create a secure web application infrastructure using AWS CDK TypeS
 The solution includes the following files:
 
 ### cdk.json
+
 ```json
 {
   "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
   "watch": {
-    "include": [
-      "**"
-    ],
+    "include": ["**"],
     "exclude": [
       "README.md",
       "cdk*.json",
@@ -29,10 +28,7 @@ The solution includes the following files:
   "context": {
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target-partitions": [
-      "aws",
-      "aws-cn"
-    ],
+    "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
     "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
     "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
     "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
@@ -108,6 +104,7 @@ The solution includes the following files:
 ```
 
 ### bin/tap.ts
+
 ```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
@@ -133,12 +130,13 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
+    region: 'us-west-1',
   },
 });
 ```
 
 ### lib/tap-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -181,14 +179,14 @@ export class TapStack extends cdk.Stack {
             effect: iam.Effect.ALLOW,
             principals: [
               new iam.ServicePrincipal('cloudtrail.amazonaws.com'),
-              new iam.ServicePrincipal('s3.amazonaws.com')
+              new iam.ServicePrincipal('s3.amazonaws.com'),
             ],
             actions: [
               'kms:Decrypt',
               'kms:DescribeKey',
               'kms:Encrypt',
               'kms:GenerateDataKey*',
-              'kms:ReEncrypt*'
+              'kms:ReEncrypt*',
             ],
             resources: ['*'],
           }),
@@ -281,7 +279,7 @@ export class TapStack extends cdk.Stack {
         resources: [cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-2:${this.account}:trail/SecureAppTrail`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail`,
           },
         },
       })
@@ -297,7 +295,7 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-2:${this.account}:trail/SecureAppTrail`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail`,
           },
         },
       })
@@ -331,18 +329,25 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create database security group
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc,
-      description: 'Security group for secure application database',
-      allowAllOutbound: false,
-    });
+    const dbSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for secure application database',
+        allowAllOutbound: false,
+      }
+    );
 
     // Create RDS instance with encryption
     const database = new rds.DatabaseInstance(this, 'SecureAppDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_8,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [dbSecurityGroup],
@@ -389,19 +394,23 @@ export class TapStack extends cdk.Stack {
     });
 
     // Enable GuardDuty detector (if not already enabled)
-    const guardDutyDetector = new guardduty.CfnDetector(this, 'GuardDutyDetector', {
-      enable: true,
-      dataSources: {
-        s3Logs: {
-          enable: true,
-        },
-        malwareProtection: {
-          scanEc2InstanceWithFindings: {
-            ebsVolumes: true,
+    const guardDutyDetector = new guardduty.CfnDetector(
+      this,
+      'GuardDutyDetector',
+      {
+        enable: true,
+        dataSources: {
+          s3Logs: {
+            enable: true,
+          },
+          malwareProtection: {
+            scanEc2InstanceWithFindings: {
+              ebsVolumes: true,
+            },
           },
         },
-      },
-    });
+      }
+    );
 
     // Output important resource information
     new cdk.CfnOutput(this, 'KMSKeyId', {
