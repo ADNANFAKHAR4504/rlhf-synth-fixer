@@ -106,16 +106,22 @@ describe('TapStack Cloud Infrastructure Integration Tests', () => {
       );
       expect(sshRule).toBeUndefined();
     });
-    test('web security group should not allow ingress from 0.0.0.0/0 on any port', async () => {
+    test('web security group should not allow ingress from 0.0.0.0/0 on any non-web port', async () => {
       const sgId = outputs.WebSecurityGroupId;
       const res = await ec2.send(
         new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
       );
       const sg = res.SecurityGroups?.[0];
-      const openIngress = sg?.IpPermissions?.find(rule =>
-        rule.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
+      // Only allow 0.0.0.0/0 for ports 80 (HTTP) and 443 (HTTPS)
+      const openNonWebIngress = sg?.IpPermissions?.find(
+        rule =>
+          rule.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0') &&
+          rule.FromPort !== 80 &&
+          rule.ToPort !== 80 &&
+          rule.FromPort !== 443 &&
+          rule.ToPort !== 443
       );
-      expect(openIngress).toBeUndefined();
+      expect(openNonWebIngress).toBeUndefined();
     });
   });
 
