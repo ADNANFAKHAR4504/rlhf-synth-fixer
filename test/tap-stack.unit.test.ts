@@ -195,10 +195,10 @@ describe('TapStack CloudFormation Template - Unit Tests (73 total)', () => {
       );
     });
 
-    test('45 - role name has suffix', () => {
-      const rn =
-        template.Resources.LambdaExecutionRole.Properties.RoleName['Fn::Sub'];
-      expect(rn).toContain('${EnvironmentSuffix}');
+    test('45 - role is not explicitly named (no RoleName)', () => {
+      expect(
+        template.Resources.LambdaExecutionRole.Properties.RoleName
+      ).toBeUndefined();
     });
 
     test('46 - has VPCAccess managed policy', () => {
