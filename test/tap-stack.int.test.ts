@@ -1,7 +1,14 @@
-import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2'; // AWS SDK for EC2
-import { DescribeLoadBalancersCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2'; // Correct ALB client
-import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds'; // AWS SDK for RDS
-import { ListHealthChecksCommand, Route53Client } from '@aws-sdk/client-route-53'; // Correct Route53 command
+import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import {
+  ListHealthChecksCommand,
+  ListHealthChecksCommandOutput,
+  Route53Client,
+} from '@aws-sdk/client-route-53';
 import { App, Testing } from 'cdktf';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,13 +22,15 @@ describe('TapStack — Integration Coverage', () => {
     process.env = { ...originalEnv };
     jest.clearAllMocks();
 
-    process.env.ENVIRONMENT_SUFFIX = 'test'; // Use 'test' for integration testing
+    process.env.ENVIRONMENT_SUFFIX = 'test';
     process.env.TERRAFORM_STATE_BUCKET = 'iac-rlhf-tf-states';
     process.env.TERRAFORM_STATE_BUCKET_REGION = 'us-east-1';
     process.env.AWS_REGION_PRIMARY = 'us-east-1';
     process.env.AWS_REGION_SECONDARY = 'eu-west-1';
-    process.env.ACM_CERT_ARN = 'arn:aws:acm:us-east-1:123456789012:certificate/test-primary';
-    process.env.ACM_CERT_ARN_SECONDARY = 'arn:aws:acm:eu-west-1:123456789012:certificate/test-secondary';
+    process.env.ACM_CERT_ARN =
+      'arn:aws:acm:us-east-1:123456789012:certificate/test-primary';
+    process.env.ACM_CERT_ARN_SECONDARY =
+      'arn:aws:acm:eu-west-1:123456789012:certificate/test-secondary';
     process.env.VPC_CIDR_PRIMARY = '10.0.0.0/16';
     process.env.VPC_CIDR_SECONDARY = '10.1.0.0/16';
     process.env.AZ_COUNT = '2';
@@ -70,105 +79,133 @@ describe('TapStack — Integration Coverage', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
 
-    const terraformOutputFile = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    const terraformOutputFile = path.join(
+      __dirname,
+      '..',
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
 
     if (!fs.existsSync(terraformOutputFile)) {
-      throw new Error(`Terraform output file not found at ${terraformOutputFile}. Ensure pipeline deployment step generates it.`);
+      throw new Error(
+        `Terraform output file not found at ${terraformOutputFile}. Ensure pipeline deployment step generates it.`
+      );
     }
 
     const outputs = JSON.parse(fs.readFileSync(terraformOutputFile, 'utf8'));
-    console.log('Terraform Outputs: ', outputs);
-
-    // Dynamically determine stack ID from outputs
     const stackId = Object.keys(outputs)[0] || 'TestLiveEnvironmentDeployment';
-    const stackOutputs = outputs[stackId] || outputs; // Fallback to root if no nesting
-    const primaryVpcId = stackOutputs.primary_vpc_id?.value || stackOutputs.PrimaryVpc_vpc_id_121F1BFC;
+    const stackOutputs = outputs[stackId] || outputs;
+
+    const primaryVpcId =
+      stackOutputs.primary_vpc_id?.value ||
+      stackOutputs.PrimaryVpc_vpc_id_121F1BFC;
     const albDnsName = stackOutputs.PrimaryCompute_alb_dns_F2CE0FBF;
     const albZoneId = stackOutputs.PrimaryCompute_alb_zone_id_82E45AFA;
     const dbInstanceId = stackOutputs.db_instance_id?.value;
     const secondaryVpcId = stackOutputs.secondary_vpc_id?.value;
 
-    // Warn and skip if critical outputs are missing
-    if (!dbInstanceId) console.warn('db_instance_id not found in outputs; RDS validation skipped.');
-    if (!secondaryVpcId) console.warn('secondary_vpc_id not found in outputs; secondary VPC validation skipped.');
-
-    // Ensure required outputs are present
     if (!primaryVpcId || !albDnsName || !albZoneId) {
-      throw new Error(`Required outputs missing: primaryVpcId=${primaryVpcId}, albDnsName=${albDnsName}, albZoneId=${albZoneId}`);
+      throw new Error(
+        `Required outputs missing: primaryVpcId=${primaryVpcId}, albDnsName=${albDnsName}, albZoneId=${albZoneId}`
+      );
     }
 
-    // Primary Region Clients
-    const primaryEc2Client = new EC2Client({ region: process.env.AWS_REGION_PRIMARY });
-    const primaryRdsClient = new RDSClient({ region: process.env.AWS_REGION_PRIMARY });
-    const primaryElbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION_PRIMARY });
-    const route53Client = new Route53Client({ region: process.env.AWS_REGION_PRIMARY });
+    // Clients
+    const primaryEc2Client = new EC2Client({
+      region: process.env.AWS_REGION_PRIMARY,
+    });
+    const primaryRdsClient = new RDSClient({
+      region: process.env.AWS_REGION_PRIMARY,
+    });
+    const primaryElbClient = new ElasticLoadBalancingV2Client({
+      region: process.env.AWS_REGION_PRIMARY,
+    });
+    const route53Client = new Route53Client({
+      // Route53 is global but us-east-1 works fine for SDK config
+      region: process.env.AWS_REGION_PRIMARY,
+    });
+    const secondaryEc2Client = new EC2Client({
+      region: process.env.AWS_REGION_SECONDARY,
+    });
 
-    // Secondary Region Client
-    const secondaryEc2Client = new EC2Client({ region: process.env.AWS_REGION_SECONDARY });
+    // ---- Verify Primary VPC
+    const primaryVpcResponse = await primaryEc2Client.send(
+      new DescribeVpcsCommand({ VpcIds: [primaryVpcId] })
+    );
+    const primaryVpcs = primaryVpcResponse.Vpcs ?? [];
+    if (primaryVpcs.length === 0) {
+      throw new Error('Primary VPC not found or unavailable');
+    }
+    expect(primaryVpcs[0]!.State).toBe('available');
 
-    try {
-      // Verify Primary VPC
-      const primaryVpcResponse = await primaryEc2Client.send(new DescribeVpcsCommand({ VpcIds: [primaryVpcId] }));
-      if (!primaryVpcResponse.Vpcs || primaryVpcResponse.Vpcs.length === 0) {
-        throw new Error('Primary VPC not found or unavailable');
+    // ---- Verify Secondary VPC (optional)
+    if (secondaryVpcId) {
+      const secondaryVpcResponse = await secondaryEc2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [secondaryVpcId] })
+      );
+      const secondaryVpcs = secondaryVpcResponse.Vpcs ?? [];
+      if (secondaryVpcs.length === 0) {
+        throw new Error('Secondary VPC not found or unavailable');
       }
-      expect(primaryVpcResponse.Vpcs[0].State).toBe('available');
+      expect(secondaryVpcs[0]!.State).toBe('available');
+    } else {
+      // not failing test: just log
+      // eslint-disable-next-line no-console
+      console.warn(
+        'secondary_vpc_id not found in outputs; skipping secondary VPC validation.'
+      );
+    }
 
-      // Verify Secondary VPC (multi-region) - skipped if no secondary_vpc_id
-      if (secondaryVpcId) {
-        const secondaryVpcResponse = await secondaryEc2Client.send(new DescribeVpcsCommand({ VpcIds: [secondaryVpcId] }));
-        if (!secondaryVpcResponse.Vpcs || secondaryVpcResponse.Vpcs.length === 0) {
-          throw new Error('Secondary VPC not found or unavailable');
-        }
-        expect(secondaryVpcResponse.Vpcs[0].State).toBe('available');
-      } else {
-        console.warn('secondary_vpc_id not found in outputs; skipping secondary VPC validation.');
-      }
+    // ---- Verify ALB
+    const albResp = await primaryElbClient.send(
+      new DescribeLoadBalancersCommand({
+        Names: [albDnsName.split('.')[0]],
+      })
+    );
+    const lbs = albResp.LoadBalancers ?? [];
+    if (lbs.length === 0) {
+      throw new Error('ALB not found');
+    }
+    const alb = lbs[0]!;
+    expect(alb.Scheme).toBe('internet-facing');
+    expect(alb.Type).toBe('application');
 
-      // Verify ALB
-      const albResponse = await primaryElbClient.send(new DescribeLoadBalancersCommand({ Names: [albDnsName.split('.')[0]] }));
-      if (!albResponse.LoadBalancers || albResponse.LoadBalancers.length === 0) {
-        throw new Error('ALB not found');
-      }
-      const alb = albResponse.LoadBalancers[0];
-      expect(alb.Scheme).toBe('internet-facing');
-      expect(alb.Type).toBe('application');
+    // ---- Verify Route53 health checks (optional)
+    const hcOut = (await route53Client.send(
+      new ListHealthChecksCommand({})
+    )) as ListHealthChecksCommandOutput;
 
-      // Verify Route53 Health Checks (failover) - optional
-      const healthCheckResponse = await route53Client.send(new ListHealthChecksCommand({}));
-      if (healthCheckResponse.HealthChecks && healthCheckResponse.HealthChecks.length > 0) {
-        const healthChecks = (healthCheckResponse.HealthChecks as { Id: string; HealthCheckConfig: { FullyQualifiedDomainName: string; Type: string } }[]).filter(
-          (hc) => hc.HealthCheckConfig.FullyQualifiedDomainName === albDnsName
-        );
-        if (healthChecks.length > 0) {
-          expect(healthChecks[0].HealthCheckConfig.Type).toBe('HTTPS'); // Failover health check
-        } else {
-          console.warn('No matching Route53 health checks found; skipping failover validation.');
-        }
-      } else {
-        console.warn('No Route53 health checks found; skipping failover validation.');
-      }
+    const healthChecks = (hcOut.HealthChecks ?? []).filter(
+      (hc) =>
+        hc.HealthCheckConfig?.FullyQualifiedDomainName === albDnsName
+    );
 
-      // Verify RDS (Multi-AZ, backups enabled) - skipped if no dbInstanceId
-      if (dbInstanceId) {
-        const dbResponse = await primaryRdsClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId }));
-        if (!dbResponse.DBInstances || dbResponse.DBInstances.length === 0) {
-          throw new Error('RDS instance not found');
-        }
-        const dbInstance = dbResponse.DBInstances[0];
-        expect(dbInstance.MultiAZ).toBe(true); // Multi-AZ validation
-        expect(dbInstance.StorageEncrypted).toBe(true); // Encryption
-      } else {
-        console.warn('db_instance_id not found in outputs; skipping RDS validation.');
-      }
+    if (healthChecks.length > 0) {
+      expect(healthChecks[0]!.HealthCheckConfig?.Type).toBe('HTTPS');
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'No matching Route53 health checks found; skipping failover validation.'
+      );
+    }
 
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error('Live resource check failed:', error.message);
-      } else {
-        console.error('Unexpected error:', error);
+    // ---- Verify RDS (optional)
+    if (dbInstanceId) {
+      const dbResponse = await primaryRdsClient.send(
+        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId })
+      );
+      const dbInstances = dbResponse.DBInstances ?? [];
+      if (dbInstances.length === 0) {
+        throw new Error('RDS instance not found');
       }
-      throw error;
+      const dbInstance = dbInstances[0]!;
+      expect(dbInstance.MultiAZ).toBe(true);
+      expect(dbInstance.StorageEncrypted).toBe(true);
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'db_instance_id not found in outputs; skipping RDS validation.'
+      );
     }
   });
 });
