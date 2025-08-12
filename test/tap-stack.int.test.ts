@@ -31,7 +31,12 @@ describe('Infrastructure Integration Tests (AWS SDK v3)', () => {
     );
 
     expect(kmsRule).toBeDefined();
-    expect(kmsRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toContain(kmsKeyArn);
+
+    const kmsKeyIdInRule = kmsRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID;
+    expect(kmsKeyIdInRule).toBeDefined();
+
+    const kmsKeyIdFromArn = kmsKeyArn.split('/').pop(); // Extract the key ID
+    expect(kmsKeyIdInRule).toBe(kmsKeyIdFromArn);
   });
 
   test('KMS alias "alias/s3-bucket-encryption" points to the correct key', async () => {
