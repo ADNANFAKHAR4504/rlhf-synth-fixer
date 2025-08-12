@@ -137,7 +137,7 @@ export class TapStack extends TerraformStack {
       {
         instanceIdentifier: 'rlhfdb',
         dbName: 'rlhfdb',
-        instanceClass: 'db.t3.micro', // Use appropriate size for production
+        instanceClass: 'db.t3.medium', // Use appropriate size for production
         allocatedStorage: 20,
         engine: 'mysql',
         username: 'admin',

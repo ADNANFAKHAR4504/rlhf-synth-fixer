@@ -402,7 +402,7 @@ export class RdsModule extends Construct {
 
       // Performance Configuration
       performanceInsightsEnabled: true,
-      monitoringInterval: 60,
+      monitoringInterval: 0,
 
       tags: {
         ...config.tags,
