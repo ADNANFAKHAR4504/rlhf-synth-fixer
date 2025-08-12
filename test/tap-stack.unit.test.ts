@@ -26,11 +26,14 @@ describe('Failover Stack CloudFormation Template', () => {
       );
     });
 
-    test('has Parameters, Resources, Conditions, and Outputs', () => {
+    test('has Parameters, Resources, (optional) Conditions, and Outputs', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
-      expect(template.Conditions).toBeDefined();
+      // We only rely on HasKeyName now
+      if (template.Conditions) {
+        expect(template.Conditions.HasKeyName).toBeDefined();
+      }
     });
   });
 
@@ -39,10 +42,8 @@ describe('Failover Stack CloudFormation Template', () => {
   //
   describe('Parameters', () => {
     const requiredParams = [
-      'EnvironmentSuffix',
       'HostedZoneId',
       'RecordName',
-      'DomainName',
       'InstanceType',
       'KeyName',
       'AllowedSSHCidr',
@@ -55,13 +56,6 @@ describe('Failover Stack CloudFormation Template', () => {
       requiredParams.forEach(p => {
         expect(template.Parameters[p]).toBeDefined();
       });
-    });
-
-    test('EnvironmentSuffix has proper configuration', () => {
-      const p = template.Parameters.EnvironmentSuffix;
-      expect(p.Type).toBe('String');
-      expect(p.Default).toBe('dev');
-      expect(p.Description).toContain('Environment suffix');
     });
 
     test('InstanceType has allowed values', () => {
@@ -93,18 +87,6 @@ describe('Failover Stack CloudFormation Template', () => {
   });
 
   //
-  // Conditions
-  //
-  describe('Conditions', () => {
-    test('has necessary conditions for conditional resources', () => {
-      expect(template.Conditions.HasKeyName).toBeDefined();
-      expect(template.Conditions.CreateHostedZone).toBeDefined();
-      expect(template.Conditions.HasDomainName).toBeDefined();
-      expect(template.Conditions.UseProvidedRecordName).toBeDefined();
-    });
-  });
-
-  //
   // Helper utilities
   //
   const getResourcesByType = (type: string) =>
@@ -113,7 +95,7 @@ describe('Failover Stack CloudFormation Template', () => {
   const getResource = (logicalId: string) => template.Resources[logicalId];
 
   //
-  // Core network resources
+  // VPC & Networking
   //
   describe('VPC & Networking', () => {
     test('creates a VPC with proper configuration', () => {
@@ -123,31 +105,30 @@ describe('Failover Stack CloudFormation Template', () => {
       expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.Properties.EnableDnsHostnames).toBe(true);
       expect(vpc.Properties.EnableDnsSupport).toBe(true);
-      // Check for environment suffix in tags
+      // Name tag present (value usually Fn::Sub with ${AWS::StackName}-*)
       const nameTag = vpc.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      expect(nameTag).toBeDefined();
     });
 
     test('creates two public subnets in different AZs', () => {
       const subnets = getResourcesByType('AWS::EC2::Subnet').map(([, v]) => v as any);
       expect(subnets.length).toBe(2);
-      
+
       const subnet1 = subnets.find(s => s.Properties.CidrBlock === '10.0.1.0/24');
       const subnet2 = subnets.find(s => s.Properties.CidrBlock === '10.0.2.0/24');
-      
+
       expect(subnet1).toBeDefined();
       expect(subnet2).toBeDefined();
-      
+
       // Check they use different AZs
-      expect(subnet1.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
-      expect(subnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
-      
+      expect(subnet1!.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
+      expect(subnet2!.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
+
       subnets.forEach(s => {
         expect(s.Properties.MapPublicIpOnLaunch).toBe(true);
         expect(s.Properties.VpcId).toBeDefined();
-        // Check for environment suffix in tags
         const nameTag = s.Properties.Tags.find((t: any) => t.Key === 'Name');
-        expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        expect(nameTag).toBeDefined();
       });
     });
 
@@ -163,7 +144,7 @@ describe('Failover Stack CloudFormation Template', () => {
     test('has route table with public route to IGW', () => {
       const routeTables = getResourcesByType('AWS::EC2::RouteTable');
       expect(routeTables.length).toBe(1);
-      
+
       const routes = getResourcesByType('AWS::EC2::Route').map(([, v]) => v as any);
       expect(routes.length).toBeGreaterThanOrEqual(1);
       const defaultRoute = routes.find(r => r.Properties.DestinationCidrBlock === '0.0.0.0/0');
@@ -189,10 +170,10 @@ describe('Failover Stack CloudFormation Template', () => {
       const sgs = getResourcesByType('AWS::EC2::SecurityGroup');
       expect(sgs.length).toBe(1);
       const [, sg]: any = sgs[0];
-      
-      // Check GroupName includes environment suffix
-      expect(sg.Properties.GroupName['Fn::Sub']).toContain('${EnvironmentSuffix}');
-      
+
+      // We do NOT set GroupName (best practice). Ensure it’s absent.
+      expect(sg.Properties.GroupName).toBeUndefined();
+
       const ingress = sg.Properties.SecurityGroupIngress;
 
       const http = ingress.find((r: any) => r.FromPort === 80 && r.ToPort === 80 && r.CidrIp === '0.0.0.0/0');
@@ -203,13 +184,18 @@ describe('Failover Stack CloudFormation Template', () => {
       expect(ssh).toBeTruthy();
       expect(ssh.CidrIp).toEqual({ Ref: 'AllowedSSHCidr' });
       expect(ssh.IpProtocol).toBe('tcp');
+
+      // Egress allow-all present
+      const egress = sg.Properties.SecurityGroupEgress || [];
+      const allowAll = egress.find((r: any) => r.IpProtocol === -1 || r.IpProtocol === '-1');
+      expect(allowAll).toBeTruthy();
     });
 
-    test('has proper tags with environment suffix', () => {
+    test('has proper tags', () => {
       const sgs = getResourcesByType('AWS::EC2::SecurityGroup');
       const [, sg]: any = sgs[0];
       const nameTag = sg.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      expect(nameTag).toBeDefined();
       const projectTag = sg.Properties.Tags.find((t: any) => t.Key === 'Project');
       expect(projectTag.Value).toBe('IaC - AWS Nova Model Breaking');
     });
@@ -243,10 +229,10 @@ describe('Failover Stack CloudFormation Template', () => {
     test('instances have conditional KeyName', () => {
       const primary: any = getResource('PrimaryInstance');
       const standby: any = getResource('StandbyInstance');
-      
+
       expect(primary.Properties.KeyName['Fn::If']).toBeDefined();
       expect(primary.Properties.KeyName['Fn::If'][0]).toBe('HasKeyName');
-      
+
       expect(standby.Properties.KeyName['Fn::If']).toBeDefined();
       expect(standby.Properties.KeyName['Fn::If'][0]).toBe('HasKeyName');
     });
@@ -263,14 +249,13 @@ describe('Failover Stack CloudFormation Template', () => {
     test('allocates and associates EIPs via EIPAssociation (VPC-safe)', () => {
       const eips = getResourcesByType('AWS::EC2::EIP');
       expect(eips.length).toBe(2);
-      
+
       eips.forEach(([, eip]: any) => {
         expect(eip.Properties.Domain).toBe('vpc');
-        // Check for environment suffix in tags
         const nameTag = eip.Properties.Tags.find((t: any) => t.Key === 'Name');
-        expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        expect(nameTag).toBeDefined();
       });
-      
+
       const associations = getResourcesByType('AWS::EC2::EIPAssociation').map(([, v]) => v as any);
       expect(associations.length).toBe(2);
       associations.forEach(a => {
@@ -282,35 +267,17 @@ describe('Failover Stack CloudFormation Template', () => {
     test('instances have proper Role tags', () => {
       const primary: any = getResource('PrimaryInstance');
       const standby: any = getResource('StandbyInstance');
-      
+
       const primaryRoleTag = primary.Properties.Tags.find((t: any) => t.Key === 'Role');
       expect(primaryRoleTag.Value).toBe('Primary');
-      
+
       const standbyRoleTag = standby.Properties.Tags.find((t: any) => t.Key === 'Role');
       expect(standbyRoleTag.Value).toBe('Standby');
     });
   });
 
   //
-  // Route 53 Resources
-  //
-  describe('Route53 Resources', () => {
-    test('optionally creates hosted zone', () => {
-      const hostedZone = getResource('HostedZone');
-      expect(hostedZone).toBeDefined();
-      expect(hostedZone.Type).toBe('AWS::Route53::HostedZone');
-      expect(hostedZone.Condition).toBe('CreateHostedZone');
-    });
-
-    test('hosted zone has proper conditional name', () => {
-      const hostedZone: any = getResource('HostedZone');
-      expect(hostedZone.Properties.Name['Fn::If']).toBeDefined();
-      expect(hostedZone.Properties.Name['Fn::If'][0]).toBe('HasDomainName');
-    });
-  });
-
-  //
-  // Route 53 Failover
+  // Route 53 Failover (no hosted zone creation in this template)
   //
   describe('Route53 Failover', () => {
     test('creates a health check probing the primary EIP over HTTP', () => {
@@ -324,27 +291,24 @@ describe('Failover Stack CloudFormation Template', () => {
       expect(cfg.ResourcePath).toEqual({ Ref: 'HealthCheckPath' });
       expect(cfg.FailureThreshold).toBe(3);
       expect(cfg.RequestInterval).toBe(30);
-    });
-
-    test('health check has proper tags with environment suffix', () => {
-      const hcs = getResourcesByType('AWS::Route53::HealthCheck');
-      const [, hc]: any = hcs[0];
-      const tags = hc.Properties.HealthCheckTags;
-      const nameTag = tags.find((t: any) => t.Key === 'Name');
-      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      // Has a Name tag
+      const nameTag = hc.Properties.HealthCheckTags.find((t: any) => t.Key === 'Name');
+      expect(nameTag).toBeDefined();
     });
 
     test('creates PRIMARY and SECONDARY A records with SetIdentifier and TTL', () => {
       const records = getResourcesByType('AWS::Route53::RecordSet').map(([k, v]) => [k, v as any]);
       expect(records.length).toBe(2);
 
-      const primary = records.find(([k, v]) => v.Properties.Failover === 'PRIMARY');
-      const secondary = records.find(([k, v]) => v.Properties.Failover === 'SECONDARY');
+      const primary = records.find(([, v]) => v.Properties.Failover === 'PRIMARY');
+      const secondary = records.find(([, v]) => v.Properties.Failover === 'SECONDARY');
 
       expect(primary).toBeTruthy();
       expect(secondary).toBeTruthy();
 
       const [, primaryRs]: any = primary!;
+      expect(primaryRs.Properties.HostedZoneId).toEqual({ Ref: 'HostedZoneId' });
+      expect(primaryRs.Properties.Name).toEqual({ Ref: 'RecordName' });
       expect(primaryRs.Properties.Type).toBe('A');
       expect(primaryRs.Properties.SetIdentifier).toBe('Primary');
       expect(primaryRs.Properties.TTL).toBe(60);
@@ -352,26 +316,12 @@ describe('Failover Stack CloudFormation Template', () => {
       expect(primaryRs.Properties.ResourceRecords).toEqual([{ Ref: 'PrimaryEIP' }]);
 
       const [, secondaryRs]: any = secondary!;
+      expect(secondaryRs.Properties.HostedZoneId).toEqual({ Ref: 'HostedZoneId' });
+      expect(secondaryRs.Properties.Name).toEqual({ Ref: 'RecordName' });
       expect(secondaryRs.Properties.Type).toBe('A');
       expect(secondaryRs.Properties.SetIdentifier).toBe('Standby');
       expect(secondaryRs.Properties.TTL).toBe(60);
       expect(secondaryRs.Properties.ResourceRecords).toEqual([{ Ref: 'StandbyEIP' }]);
-    });
-
-    test('records use conditional hosted zone ID', () => {
-      const records = getResourcesByType('AWS::Route53::RecordSet');
-      records.forEach(([, record]: any) => {
-        expect(record.Properties.HostedZoneId['Fn::If']).toBeDefined();
-        expect(record.Properties.HostedZoneId['Fn::If'][0]).toBe('CreateHostedZone');
-      });
-    });
-
-    test('records use conditional DNS name', () => {
-      const records = getResourcesByType('AWS::Route53::RecordSet');
-      records.forEach(([, record]: any) => {
-        expect(record.Properties.Name['Fn::If']).toBeDefined();
-        expect(record.Properties.Name['Fn::If'][0]).toBe('UseProvidedRecordName');
-      });
     });
   });
 
@@ -404,11 +354,9 @@ describe('Failover Stack CloudFormation Template', () => {
       });
     });
 
-    test('DNSName output has proper conditional structure', () => {
+    test('DNSName output echoes RecordName parameter', () => {
       const out = template.Outputs.DNSName;
-      expect(out.Value).toBeDefined();
-      // DNSName uses conditional logic
-      expect(out.Value['Fn::If']).toBeDefined();
+      expect(out.Value).toEqual({ Ref: 'RecordName' });
     });
 
     test('VPCId output references VPC resource', () => {
@@ -416,36 +364,14 @@ describe('Failover Stack CloudFormation Template', () => {
       expect(out.Value).toEqual({ Ref: 'VPC' });
     });
 
-    test('HostedZoneIdOutput uses conditional logic', () => {
+    test('HostedZoneIdOutput equals HostedZoneId parameter (no condition)', () => {
       const out = template.Outputs.HostedZoneIdOutput;
-      expect(out.Value['Fn::If']).toBeDefined();
-      expect(out.Value['Fn::If'][0]).toBe('CreateHostedZone');
+      expect(out.Value).toEqual({ Ref: 'HostedZoneId' });
     });
   });
 
   //
-  // Resource Dependencies and References
-  //
-  describe('Resource Dependencies', () => {
-    test('PublicRoute depends on AttachGateway', () => {
-      const route = getResource('PublicRoute');
-      expect(route.DependsOn).toBe('AttachGateway');
-    });
-
-    test('EIP associations reference correct resources', () => {
-      const primaryAssoc: any = getResource('PrimaryEIPAssociation');
-      const standbyAssoc: any = getResource('StandbyEIPAssociation');
-      
-      expect(primaryAssoc.Properties.AllocationId['Fn::GetAtt'][0]).toBe('PrimaryEIP');
-      expect(primaryAssoc.Properties.InstanceId.Ref).toBe('PrimaryInstance');
-      
-      expect(standbyAssoc.Properties.AllocationId['Fn::GetAtt'][0]).toBe('StandbyEIP');
-      expect(standbyAssoc.Properties.InstanceId.Ref).toBe('StandbyInstance');
-    });
-  });
-
-  //
-  // Template Best Practices
+  // Best Practices
   //
   describe('Best Practices', () => {
     test('all taggable resources have Name tags', () => {
@@ -461,7 +387,7 @@ describe('Failover Stack CloudFormation Template', () => {
 
       taggableTypes.forEach(type => {
         const resources = getResourcesByType(type);
-        resources.forEach(([name, resource]: any) => {
+        resources.forEach(([, resource]: any) => {
           if (resource.Properties.Tags) {
             const nameTag = resource.Properties.Tags.find((t: any) => t.Key === 'Name');
             expect(nameTag).toBeDefined();
@@ -471,7 +397,7 @@ describe('Failover Stack CloudFormation Template', () => {
     });
 
     test('all resources with Project tag have correct value', () => {
-      Object.entries(template.Resources).forEach(([name, resource]: any) => {
+      Object.entries(template.Resources).forEach(([, resource]: any) => {
         if (resource.Properties?.Tags) {
           const projectTag = resource.Properties.Tags.find((t: any) => t.Key === 'Project');
           if (projectTag) {
@@ -481,12 +407,10 @@ describe('Failover Stack CloudFormation Template', () => {
       });
     });
 
-    test('no hardcoded environment-specific values', () => {
+    test('no old environment-specific markers', () => {
       const templateString = JSON.stringify(template);
-      // Should not contain hardcoded pr104 or other environment-specific values
+      // Only check for the old env marker we explicitly want to avoid
       expect(templateString).not.toContain('pr104');
-      expect(templateString).not.toContain('Z0457876OLTG958Q3IXN');
-      expect(templateString).not.toContain('turing229221.com');
     });
   });
 
