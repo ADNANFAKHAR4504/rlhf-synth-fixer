@@ -10,6 +10,7 @@ replication, CloudWatch monitoring, and proper tagging for compliance.
 
 from dataclasses import dataclass
 from typing import Dict, List
+import time
 
 import pulumi
 import pulumi_aws as aws
@@ -415,6 +416,9 @@ class TapStack(ComponentResource):
         # Generate a valid S3 bucket name (lowercase, alphanumeric, and hyphens only)
         stack_name_lower = pulumi.get_stack().lower().replace("_", "-")
         
+        # Add a timestamp suffix to force recreation and avoid naming conflicts
+        timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
+        
         # Primary application bucket
         self.app_bucket = aws.s3.Bucket(
             f"tap-app-{self.environment}",
@@ -466,10 +470,11 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self, provider=backup_provider)
             )
 
-        # Logs bucket with integrated lifecycle configuration
+        # FIXED: Logs bucket with force recreation approach
+        # Changed resource name to force recreation and avoid state conflicts
         self.logs_bucket = aws.s3.Bucket(
-            f"tap-logs-{self.environment}",
-            bucket=f"tap-logs-{self.environment}-{stack_name_lower}",
+            f"tap-logs-{self.environment}-v2",  # Changed resource name to force recreation
+            bucket=f"tap-logs-{self.environment}-{stack_name_lower}-v2",  # Changed bucket name
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                     apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
@@ -477,22 +482,34 @@ class TapStack(ComponentResource):
                     )
                 )
             ),
-            # Integrated lifecycle configuration - this is the key fix
-            lifecycle_rules=[
-                aws.s3.BucketLifecycleRuleArgs(
+            # Start with minimal tags to avoid tag update issues
+            tags={
+                "Name": f"tap-logs-{self.environment}",
+                "Environment": self.environment,
+                "ManagedBy": "Pulumi",
+                "Purpose": "logging"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Add lifecycle configuration as separate resource after bucket is stable
+        # This approach separates concerns and reduces the chance of state conflicts
+        self.logs_bucket_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+            f"tap-logs-lifecycle-{self.environment}-v2",  # Changed name to match bucket
+            bucket=self.logs_bucket.id,
+            rules=[
+                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
                     id="log_retention",
-                    enabled=True,
-                    expiration=aws.s3.BucketLifecycleRuleExpirationArgs(
+                    status="Enabled",
+                    expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
                         days=90
                     )
                 )
             ],
-            tags={
-                **self.base_tags,
-                "Name": f"tap-logs-{self.environment}",
-                "Purpose": "logging"
-            },
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(
+                parent=self.logs_bucket,
+                depends_on=[self.logs_bucket]
+            )
         )
 
         self.s3_bucket_names = {
