@@ -1,9 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { SecureS3Bucket } from './constructs/secure-s3-bucket';
+import { SecureIAM } from './constructs/secure-iam';
 import { SecureNetworking } from './constructs/secure-networking';
 import { SecureRDS } from './constructs/secure-rds';
-import { SecureIAM } from './constructs/secure-iam';
+import { SecureS3Bucket } from './constructs/secure-s3-bucket';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -18,36 +18,39 @@ export class TapStack extends cdk.Stack {
       throw new Error('This stack must be deployed in us-east-1 region');
     }
 
-    // Create secure networking infrastructure
+    // Get environment suffix for unique resource naming
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+
+    // Create secure networking infrastructure with unique names
     const networking = new SecureNetworking(this, 'SecureNetworking', {
-      vpcName: 'secure-vpc',
+      vpcName: `secure-vpc-${environmentSuffix}`,
       cidr: '10.0.0.0/16',
       maxAzs: 2,
     });
 
-    // Create secure S3 buckets
+    // Create secure S3 buckets with unique names
     const dataBucket = new SecureS3Bucket(this, 'DataBucket', {
-      bucketName: `secure-data-bucket-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `secure-data-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
       enableLogging: true,
     });
 
     const logsBucket = new SecureS3Bucket(this, 'LogsBucket', {
-      bucketName: `secure-logs-bucket-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `secure-logs-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
       enableLogging: false,
     });
 
-    // Create secure RDS instance
+    // Create secure RDS instance with unique identifier
     const database = new SecureRDS(this, 'SecureDatabase', {
       vpc: networking.vpc,
-      databaseName: 'securedb',
-      instanceIdentifier: 'secure-postgres-instance',
+      databaseName: `securedb-${environmentSuffix}`,
+      instanceIdentifier: `secure-postgres-instance-${environmentSuffix}`,
       securityGroup: networking.securityGroup,
     });
 
-    // Create secure IAM resources
+    // Create secure IAM resources with unique names
     const iamResources = new SecureIAM(this, 'SecureIAM', {
-      userName: 'secure-user',
-      roleName: 'secure-application-role',
+      userName: `secure-user-${environmentSuffix}`,
+      roleName: `secure-application-role-${environmentSuffix}`,
       s3BucketArns: [dataBucket.bucket.bucketArn, logsBucket.bucket.bucketArn],
       rdsResourceArns: [database.database.instanceArn],
     });
