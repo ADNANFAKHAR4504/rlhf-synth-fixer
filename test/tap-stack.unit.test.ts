@@ -14,12 +14,12 @@ describe('TapStack Unit Tests', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { 
-      env: { 
-        account: '123456789012', 
-        region: 'us-east-1' 
+    stack = new TapStack(app, 'TestTapStack', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
       },
-      environmentSuffix 
+      environmentSuffix,
     });
     template = Template.fromStack(stack);
   });
@@ -34,7 +34,7 @@ describe('TapStack Unit Tests', () => {
     test('Stack has all required outputs', () => {
       template.hasOutput('SecurityCompliance', {
         Value: 'All security requirements implemented',
-        Description: 'Security compliance status'
+        Description: 'Security compliance status',
       });
     });
   });
@@ -48,9 +48,9 @@ describe('TapStack Unit Tests', () => {
         Tags: Match.arrayWith([
           {
             Key: 'Name',
-            Value: 'secure-vpc'
-          }
-        ])
+            Value: 'secure-vpc',
+          },
+        ]),
       });
     });
 
@@ -61,9 +61,9 @@ describe('TapStack Unit Tests', () => {
         Tags: Match.arrayWith([
           {
             Key: 'aws-cdk:subnet-type',
-            Value: 'Private'
-          }
-        ])
+            Value: 'Private',
+          },
+        ]),
       });
     });
 
@@ -76,15 +76,15 @@ describe('TapStack Unit Tests', () => {
             Description: 'Allow HTTPS outbound',
             FromPort: 443,
             IpProtocol: 'tcp',
-            ToPort: 443
+            ToPort: 443,
           },
           {
             CidrIp: '0.0.0.0/0',
             Description: 'Allow HTTP outbound for updates',
             FromPort: 80,
             IpProtocol: 'tcp',
-            ToPort: 80
-          }
+            ToPort: 80,
+          },
         ]),
         SecurityGroupIngress: Match.arrayWith([
           {
@@ -92,15 +92,15 @@ describe('TapStack Unit Tests', () => {
             Description: 'Allow SSH from VPC only',
             FromPort: 22,
             IpProtocol: 'tcp',
-            ToPort: 22
-          }
-        ])
+            ToPort: 22,
+          },
+        ]),
       });
     });
 
     test('S3 VPC Endpoint is created', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Gateway'
+        VpcEndpointType: 'Gateway',
       });
     });
 
@@ -108,7 +108,7 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::EC2::FlowLog', {
         ResourceType: 'VPC',
         TrafficType: 'ALL',
-        LogDestinationType: 'cloud-watch-logs'
+        LogDestinationType: 'cloud-watch-logs',
       });
     });
   });
@@ -117,28 +117,28 @@ describe('TapStack Unit Tests', () => {
     test('Data bucket has correct configuration', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         VersioningConfiguration: {
-          Status: 'Enabled'
+          Status: 'Enabled',
         },
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
-        }
+          RestrictPublicBuckets: true,
+        },
       });
     });
 
     test('Logs bucket has correct configuration', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         VersioningConfiguration: {
-          Status: 'Enabled'
+          Status: 'Enabled',
         },
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
-        }
+          RestrictPublicBuckets: true,
+        },
       });
     });
 
@@ -150,17 +150,17 @@ describe('TapStack Unit Tests', () => {
               Action: 's3:*',
               Condition: {
                 Bool: {
-                  'aws:SecureTransport': 'false'
-                }
+                  'aws:SecureTransport': 'false',
+                },
               },
               Effect: 'Deny',
               Principal: {
-                AWS: '*'
+                AWS: '*',
               },
-              Resource: Match.anyValue()
-            }
-          ])
-        }
+              Resource: Match.anyValue(),
+            },
+          ]),
+        },
       });
     });
 
@@ -174,12 +174,12 @@ describe('TapStack Unit Tests', () => {
               Action: 'kms:*',
               Effect: 'Allow',
               Principal: {
-                AWS: Match.anyValue()
+                AWS: Match.anyValue(),
               },
-              Resource: '*'
-            }
-          ])
-        }
+              Resource: '*',
+            },
+          ]),
+        },
       });
     });
   });
@@ -200,7 +200,7 @@ describe('TapStack Unit Tests', () => {
         EnablePerformanceInsights: true,
         PerformanceInsightsRetentionPeriod: 7,
         EnableCloudwatchLogsExports: ['postgresql'],
-        MonitoringInterval: 60
+        MonitoringInterval: 60,
       });
     });
 
@@ -214,21 +214,21 @@ describe('TapStack Unit Tests', () => {
           shared_preload_libraries: 'pg_stat_statements',
           ssl: '1',
           log_connections: '1',
-          log_disconnections: '1'
-        }
+          log_disconnections: '1',
+        },
       });
     });
 
     test('RDS security group allows PostgreSQL access', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for RDS instance'
+        GroupDescription: 'Security group for RDS instance',
       });
     });
 
     test('RDS KMS key is created', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
         Description: 'KMS key for RDS instance encryption',
-        EnableKeyRotation: true
+        EnableKeyRotation: true,
       });
     });
 
@@ -239,8 +239,8 @@ describe('TapStack Unit Tests', () => {
           ExcludeCharacters: '"@/\\\'',
           GenerateStringKey: 'password',
           PasswordLength: 30,
-          SecretStringTemplate: '{"username":"postgres"}'
-        }
+          SecretStringTemplate: '{"username":"postgres"}',
+        },
       });
     });
   });
@@ -248,7 +248,7 @@ describe('TapStack Unit Tests', () => {
   describe('IAM Resources', () => {
     test('IAM user is created with correct configuration', () => {
       template.hasResourceProperties('AWS::IAM::User', {
-        UserName: 'secure-user'
+        UserName: 'secure-user',
       });
     });
 
@@ -263,11 +263,11 @@ describe('TapStack Unit Tests', () => {
               Action: 'sts:AssumeRole',
               Effect: 'Allow',
               Principal: {
-                Service: 'ec2.amazonaws.com'
-              }
-            }
-          ])
-        }
+                Service: 'ec2.amazonaws.com',
+              },
+            },
+          ]),
+        },
       });
     });
 
@@ -280,13 +280,13 @@ describe('TapStack Unit Tests', () => {
                 'logs:CreateLogGroup',
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
-                'logs:DescribeLogStreams'
+                'logs:DescribeLogStreams',
               ]),
               Effect: 'Allow',
-              Resource: Match.anyValue()
-            }
-          ])
-        }
+              Resource: Match.anyValue(),
+            },
+          ]),
+        },
       });
     });
 
@@ -305,18 +305,18 @@ describe('TapStack Unit Tests', () => {
                 'iam:ListVirtualMFADevices',
                 'iam:ResyncMFADevice',
                 'sts:GetSessionToken',
-                'iam:ChangePassword'
+                'iam:ChangePassword',
               ]),
               Effect: 'Deny',
               Condition: {
                 BoolIfExists: {
-                  'aws:MultiFactorAuthPresent': 'false'
-                }
+                  'aws:MultiFactorAuthPresent': 'false',
+                },
               },
-              Resource: '*'
-            }
-          ])
-        }
+              Resource: '*',
+            },
+          ]),
+        },
       });
     });
   });
@@ -328,21 +328,21 @@ describe('TapStack Unit Tests', () => {
         Tags: Match.arrayWith([
           {
             Key: 'Name',
-            Value: Match.stringLikeRegexp('.*VPCFlowLog.*')
-          }
-        ])
+            Value: Match.stringLikeRegexp('.*VPCFlowLog.*'),
+          },
+        ]),
       });
     });
 
     test('RDS logs log group is created', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 30
+        RetentionInDays: 30,
       });
     });
 
     test('IAM role logs log group is created', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 365
+        RetentionInDays: 365,
       });
     });
   });
@@ -355,10 +355,10 @@ describe('TapStack Unit Tests', () => {
           Tags: Match.arrayWith([
             {
               Key: 'Name',
-              Value: 'secure-vpc'
-            }
-          ])
-        }
+              Value: 'secure-vpc',
+            },
+          ]),
+        },
       });
     });
 
@@ -369,15 +369,15 @@ describe('TapStack Unit Tests', () => {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
-        }
+          RestrictPublicBuckets: true,
+        },
       });
     });
 
     test('Encryption is enabled on all storage', () => {
       // Verify RDS encryption
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        StorageEncrypted: true
+        StorageEncrypted: true,
       });
     });
   });
@@ -391,15 +391,15 @@ describe('SecureNetworking Construct Unit Tests', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new cdk.Stack(app, 'TestStack', {
-      env: { account: '123456789012', region: 'us-east-1' }
+      env: { account: '123456789012', region: 'us-east-1' },
     });
-    
+
     new SecureNetworking(stack, 'TestNetworking', {
       vpcName: 'test-vpc',
       cidr: '10.0.0.0/16',
-      maxAzs: 2
+      maxAzs: 2,
     });
-    
+
     template = Template.fromStack(stack);
   });
 
@@ -407,15 +407,15 @@ describe('SecureNetworking Construct Unit Tests', () => {
     template.hasResourceProperties('AWS::EC2::VPC', {
       CidrBlock: '10.0.0.0/16',
       EnableDnsHostnames: true,
-      EnableDnsSupport: true
+      EnableDnsSupport: true,
     });
   });
 
-      test('Security group has restricted access', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Secure security group with restricted access'
-      });
+  test('Security group has restricted access', () => {
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: 'Secure security group with restricted access',
     });
+  });
 });
 
 describe('SecureS3Bucket Construct Unit Tests', () => {
@@ -426,22 +426,22 @@ describe('SecureS3Bucket Construct Unit Tests', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new cdk.Stack(app, 'TestStack', {
-      env: { account: '123456789012', region: 'us-east-1' }
+      env: { account: '123456789012', region: 'us-east-1' },
     });
-    
+
     new SecureS3Bucket(stack, 'TestBucket', {
       bucketName: 'test-bucket-123456789012',
-      enableLogging: true
+      enableLogging: true,
     });
-    
+
     template = Template.fromStack(stack);
   });
 
   test('S3 bucket has encryption enabled', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       VersioningConfiguration: {
-        Status: 'Enabled'
-      }
+        Status: 'Enabled',
+      },
     });
   });
 
@@ -451,19 +451,17 @@ describe('SecureS3Bucket Construct Unit Tests', () => {
         BlockPublicAcls: true,
         BlockPublicPolicy: true,
         IgnorePublicAcls: true,
-        RestrictPublicBuckets: true
-      }
+        RestrictPublicBuckets: true,
+      },
     });
   });
 
   test('KMS key is created for encryption', () => {
     template.hasResourceProperties('AWS::KMS::Key', {
-      EnableKeyRotation: true
+      EnableKeyRotation: true,
     });
   });
 });
-
-
 
 describe('SecureIAM Construct Unit Tests', () => {
   let app: cdk.App;
@@ -473,34 +471,34 @@ describe('SecureIAM Construct Unit Tests', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new cdk.Stack(app, 'TestStack', {
-      env: { account: '123456789012', region: 'us-east-1' }
+      env: { account: '123456789012', region: 'us-east-1' },
     });
-    
+
     new SecureIAM(stack, 'TestIAM', {
       userName: 'test-user',
       roleName: 'test-role',
       s3BucketArns: ['arn:aws:s3:::test-bucket'],
-      rdsResourceArns: ['arn:aws:rds:us-east-1:123456789012:db:test-db']
+      rdsResourceArns: ['arn:aws:rds:us-east-1:123456789012:db:test-db'],
     });
-    
+
     template = Template.fromStack(stack);
   });
 
   test('IAM user is created', () => {
     template.hasResourceProperties('AWS::IAM::User', {
-      UserName: 'test-user'
+      UserName: 'test-user',
     });
   });
 
   test('IAM role is created', () => {
     template.hasResourceProperties('AWS::IAM::Role', {
-      RoleName: 'test-role'
+      RoleName: 'test-role',
     });
   });
 
   test('MFA policy is attached to user', () => {
     template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyName: 'RequireMFAPolicy'
+      PolicyName: 'RequireMFAPolicy',
     });
   });
 });

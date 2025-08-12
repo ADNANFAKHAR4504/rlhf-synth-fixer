@@ -121,6 +121,5 @@ export class SecureRDS extends Construct {
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
-
   }
 }

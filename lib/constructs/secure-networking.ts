@@ -88,6 +88,5 @@ export class SecureNetworking extends Construct {
       resourceType: ec2.FlowLogResourceType.fromVpc(this.vpc),
       destination: ec2.FlowLogDestination.toCloudWatchLogs(),
     });
-
   }
 }
