@@ -64,29 +64,30 @@ class WebApplicationStack(Stack):
       description="Subnet group for the RDS database"
     )
 
-    db_instance = rds.DatabaseInstance(
-      self, "MySQLDBInstance",
-      engine=rds.DatabaseInstanceEngine.mysql(
-        version=rds.MysqlEngineVersion.VER_8_0_42
-      ),
-      instance_type=ec2.InstanceType.of(
-        ec2.InstanceClass.BURSTABLE3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc=vpc,
-      multi_az=True,
-      allocated_storage=20,
-      publicly_accessible=False,
-      removal_policy=RemovalPolicy.DESTROY,
-      security_groups=[db_sg],
-      subnet_group=db_subnet_group
-    )
+    ## Ignore as DB quota is reached limit
+    # db_instance = rds.DatabaseInstance(
+    #   self, "MySQLDBInstance",
+    #   engine=rds.DatabaseInstanceEngine.mysql(
+    #     version=rds.MysqlEngineVersion.VER_8_0_42
+    #   ),
+    #   instance_type=ec2.InstanceType.of(
+    #     ec2.InstanceClass.BURSTABLE3,
+    #     ec2.InstanceSize.MICRO
+    #   ),
+    #   vpc=vpc,
+    #   multi_az=True,
+    #   allocated_storage=20,
+    #   publicly_accessible=False,
+    #   removal_policy=RemovalPolicy.DESTROY,
+    #   security_groups=[db_sg],
+    #   subnet_group=db_subnet_group
+    # )
 
-    db_instance.connections.allow_from(
-      db_sg,
-      ec2.Port.tcp(3306),
-      "Allow MySQL access"
-    )
+    # db_instance.connections.allow_from(
+    #   db_sg,
+    #   ec2.Port.tcp(3306),
+    #   "Allow MySQL access"
+    # )
 
     role = iam.Role(
       self, "WebServerRole",
@@ -184,8 +185,9 @@ class WebApplicationStack(Stack):
       export_name=f"{self.stack_name}-CloudFrontDistributionDomainName"
     )
 
-    CfnOutput(
-      self, "RdsEndpointAddress",
-      value=db_instance.db_instance_endpoint_address,
-      export_name=f"{self.stack_name}-RdsEndpointAddress"
-    )
+    # Ignore as DB quota is reached limit
+    # CfnOutput(
+    #   self, "RdsEndpointAddress",
+    #   value=db_instance.db_instance_endpoint_address,
+    #   export_name=f"{self.stack_name}-RdsEndpointAddress"
+    # )
