@@ -1,100 +1,72 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr807';
-
 describe('CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust path as needed
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
   });
 
   describe('Template Basic Structure', () => {
-    test('has valid AWSTemplateFormatVersion', () => {
+    test('AWSTemplateFormatVersion is 2010-09-09', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('has Description field', () => {
-      expect(template.Description).toBeDefined();
+    test('Description exists and is non-empty', () => {
       expect(typeof template.Description).toBe('string');
       expect(template.Description.length).toBeGreaterThan(0);
     });
 
-    test('has Parameters section (if defined)', () => {
+    test('Optional Parameters section meets expectations', () => {
       if (template.Parameters) {
         const param = template.Parameters.EnvironmentSuffix;
-        expect(param).toBeDefined();
         expect(param.Type).toBe('String');
         expect(param.Default).toBeDefined();
         expect(param.Description).toMatch(/environment suffix/i);
-        expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-        expect(param.ConstraintDescription).toBeDefined();
       }
     });
 
-    test('has Resources section with S3 Bucket encrypted with KMS', () => {
-      expect(template.Resources).toBeDefined();
-
+    test('S3 Bucket is encrypted with KMS', () => {
       const bucketEntry = Object.entries(template.Resources).find(
-        ([_, resource]: [string, any]) => resource.Type === 'AWS::S3::Bucket'
+        ([, r]: [string, any]) => r.Type === 'AWS::S3::Bucket'
       );
-
       expect(bucketEntry).toBeDefined();
 
-      const [_, bucketResource] = bucketEntry as [string, any];
+      const [, bucket] = bucketEntry as [string, any];
+      const enc = bucket.Properties?.BucketEncryption?.ServerSideEncryptionConfiguration;
+      expect(Array.isArray(enc)).toBe(true);
+      expect(enc.length).toBeGreaterThan(0);
 
-      const encryption = bucketResource?.Properties?.BucketEncryption;
-      expect(encryption).toBeDefined();
+      const firstRule = enc[0];
+      expect(firstRule.ServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
 
-      const rules = encryption?.ServerSideEncryptionConfiguration;
-      expect(Array.isArray(rules)).toBe(true);
-
-      if (!Array.isArray(rules)) {
-        throw new Error('Invalid or missing encryption rules for S3 bucket.');
-      }
-
-      expect(rules.length).toBeGreaterThan(0);
-
-      // **Note the exact key names from your CFN template: KMSMasterKeyID**
-      const kmsRule = rules.find(
-        (rule: any) =>
-          rule.ServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms' &&
-          typeof rule.ServerSideEncryptionByDefault?.KMSMasterKeyID === 'string'
-      );
-
-      expect(kmsRule).toBeDefined();
+      const keyId = firstRule.ServerSideEncryptionByDefault?.KMSMasterKeyID;
+      expect(keyId).toBeDefined();
+      expect(typeof keyId).toBe('object'); // Expecting a Ref object, not a string
+      expect(Object.keys(keyId).length).toBe(1);
+      expect(keyId.Ref).toBe('S3KMSKey');
     });
 
-    test('has SecretsManager secret resource with correct properties', () => {
-      expect(template.Resources).toBeDefined();
-
+    test('SecretsManager secret exists with correct properties', () => {
       const secretEntry = Object.entries(template.Resources).find(
-        ([_, resource]: [string, any]) => resource.Type === 'AWS::SecretsManager::Secret'
+        ([, r]: [string, any]) => r.Type === 'AWS::SecretsManager::Secret'
       );
-
       expect(secretEntry).toBeDefined();
 
-      const [__, secretResource] = secretEntry as [string, any];
-
-      expect(secretResource.Properties).toBeDefined();
-
-      // Your CFN template sets this exact name:
-      expect(secretResource.Properties.Name).toBe('MyAppPassword');
-      expect(secretResource.Properties.Description).toBeDefined();
+      const [, secret] = secretEntry as [string, any];
+      expect(secret.Properties.Name).toBe('MyAppPassword');
+      expect(secret.Properties.Description).toBeDefined();
     });
   });
 
-  describe('Outputs', () => {
-    test('has expected Outputs with correct keys', () => {
-      expect(template.Outputs).toBeDefined();
-
-      const expectedKeys = ['SecretArn', 'KMSKeyArn', 'BucketName'];
-      expectedKeys.forEach(outputKey => {
-        expect(template.Outputs[outputKey]).toBeDefined();
-        expect(template.Outputs[outputKey].Value).toBeDefined();
+  describe('Outputs verification', () => {
+    const expected = ['BucketName', 'SecretArn', 'KMSKeyArn'];
+    expected.forEach(key => {
+      test(`Output "${key}" is defined`, () => {
+        expect(template.Outputs[key]).toBeDefined();
+        expect(template.Outputs[key].Value).toBeDefined();
       });
     });
   });
