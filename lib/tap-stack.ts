@@ -21,7 +21,7 @@ export class TapStack extends cdk.Stack {
     const vpc = new ec2.Vpc(this, 'TapVpc', {
       vpcName: `tap-vpc-${environmentSuffix}`,
       maxAzs: 2,
-      cidr: '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       natGateways: 0, // No NAT gateways for cost efficiency
       subnetConfiguration: [
         {
@@ -91,7 +91,7 @@ export class TapStack extends cdk.Stack {
       machineImage: amiId,
       securityGroup,
       role: ec2Role,
-      keyName: undefined, // No SSH key pair for security
+      // No SSH key pair for security (keyName property removed due to deprecation)
     });
 
     // Outputs
