@@ -227,8 +227,10 @@ describe('Secure Infrastructure Integration Tests', () => {
 
   describe('RDS Database', () => {
     test('RDS instance exists and is properly configured', async () => {
+      // Extract database identifier from the ARN
+      const dbIdentifier = outputs.DatabaseArn.split(':').pop()?.split('/').pop();
       const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: 'secure-postgres-instance',
+        DBInstanceIdentifier: dbIdentifier,
       });
 
       const response = await rdsClient.send(command);
@@ -249,8 +251,9 @@ describe('Secure Infrastructure Integration Tests', () => {
 
     test('Database parameter group has secure settings', async () => {
       // Get the parameter group name from the RDS instance
+      const dbIdentifier = outputs.DatabaseArn.split(':').pop()?.split('/').pop();
       const instanceCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: 'secure-postgres-instance',
+        DBInstanceIdentifier: dbIdentifier,
       });
 
       const instanceResponse = await rdsClient.send(instanceCommand);
@@ -282,7 +285,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const user = response.User;
 
       expect(user).toBeDefined();
-      expect(user?.UserName).toBe('secure-user');
+      expect(user?.UserName).toBe(userName);
       expect(user?.Path).toBe('/');
     });
 
@@ -294,7 +297,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const role = response.Role;
 
       expect(role).toBeDefined();
-      expect(role?.RoleName).toBe('secure-application-role');
+      expect(role?.RoleName).toBe(roleName);
       expect(role?.Description).toContain('Secure role with least privilege');
       expect(role?.MaxSessionDuration).toBe(3600);
 
@@ -351,8 +354,9 @@ describe('Secure Infrastructure Integration Tests', () => {
 
     test('RDS encryption key is properly configured', async () => {
       // Get RDS instance to find KMS key
+      const dbIdentifier = outputs.DatabaseArn.split(':').pop()?.split('/').pop();
       const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: 'secure-postgres-instance',
+        DBInstanceIdentifier: dbIdentifier,
       });
 
       const response = await rdsClient.send(command);
@@ -396,8 +400,9 @@ describe('Secure Infrastructure Integration Tests', () => {
     });
 
     test('RDS logs are properly configured', async () => {
+      const dbIdentifier = outputs.DatabaseArn.split(':').pop()?.split('/').pop();
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/rds/instance/secure-postgres-instance',
+        logGroupNamePrefix: `/aws/rds/instance/${dbIdentifier}`,
       });
 
       const response = await logsClient.send(command);
