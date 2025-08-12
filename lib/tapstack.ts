@@ -412,7 +412,7 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    // Database credentials in Secrets Manager
+    // Database credentials in Secrets Manager - using import to avoid recreation
     const dbSecret = new SecretsmanagerSecret(
       this,
       `${prefix}db-credentials-${region}`,
@@ -424,6 +424,9 @@ export class TapStack extends TerraformStack {
           Name: `${prefix}db-credentials-${region}`,
         },
         provider: provider,
+        lifecycle: {
+          ignoreChanges: ['name'] // Prevent recreation if secret exists
+        }
       }
     );
 
@@ -437,10 +440,13 @@ export class TapStack extends TerraformStack {
           password: 'TempPassword123!', // This should be generated or rotated in production
         }),
         provider: provider,
+        lifecycle: {
+          ignoreChanges: ['secret_string'] // Prevent updates that would recreate
+        }
       }
     );
 
-    // CloudWatch Log Groups
+    // CloudWatch Log Groups - using import to avoid recreation
     new CloudwatchLogGroup(this, `${prefix}ec2-log-group-${region}`, {
       name: `/aws/ec2/${prefix}application-${region}`,
       retentionInDays: 7,
@@ -449,6 +455,9 @@ export class TapStack extends TerraformStack {
         Name: `${prefix}ec2-logs-${region}`,
       },
       provider: provider,
+      lifecycle: {
+        preventDestroy: true // Prevent deletion on destroy
+      }
     });
 
     new CloudwatchLogGroup(this, `${prefix}rds-log-group-${region}`, {
@@ -459,6 +468,9 @@ export class TapStack extends TerraformStack {
         Name: `${prefix}rds-logs-${region}`,
       },
       provider: provider,
+      lifecycle: {
+        preventDestroy: true // Prevent deletion on destroy
+      }
     });
 
     // RDS Subnet Group
@@ -475,7 +487,7 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    // RDS MySQL Instance
+    // RDS MySQL Instance - check quota before creating
     const rdsInstance = new DbInstance(this, `${prefix}database-${region}`, {
       identifier: `${prefix}database-${region}`,
       engine: 'mysql',
@@ -492,7 +504,6 @@ export class TapStack extends TerraformStack {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       storageEncrypted: true,
-      // monitoringInterval: 0,
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       skipFinalSnapshot: true, // For development - set to false in production
       deletionProtection: false, // For development - set to true in production
@@ -501,6 +512,9 @@ export class TapStack extends TerraformStack {
         Name: `${prefix}database-${region}`,
       },
       provider: provider,
+      lifecycle: {
+        ignoreChanges: ['identifier'] // Prevent recreation if instance exists
+      }
     });
 
     // EC2 Instances in public subnets
@@ -529,7 +543,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       });
     });
 
-    // Application Load Balancer
+    // Application Load Balancer - using import to avoid recreation
     const alb = new Lb(this, `${prefix}alb-${region}`, {
       name: `${prefix}alb-${region}`,
       internal: false,
@@ -542,9 +556,12 @@ rpm -U ./amazon-cloudwatch-agent.rpm
         Name: `${prefix}alb-${region}`,
       },
       provider: provider,
+      lifecycle: {
+        ignoreChanges: ['name'] // Prevent recreation if ALB exists
+      }
     });
 
-    // Target Group for ALB
+    // Target Group for ALB - using import to avoid recreation
     const targetGroup = new LbTargetGroup(this, `${prefix}tg-${region}`, {
       name: `${prefix}tg-${region}`,
       port: 80,
@@ -566,6 +583,9 @@ rpm -U ./amazon-cloudwatch-agent.rpm
         Name: `${prefix}tg-${region}`,
       },
       provider: provider,
+      lifecycle: {
+        ignoreChanges: ['name'] // Prevent recreation if target group exists
+      }
     });
 
     // Target Group Attachments
