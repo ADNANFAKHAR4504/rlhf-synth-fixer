@@ -372,7 +372,7 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-v2-${this.stackName.toLowerCase()}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-${this.stackName.toLowerCase()}`,
           },
         },
       })
