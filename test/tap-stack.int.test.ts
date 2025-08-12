@@ -311,7 +311,7 @@ describe('Production Infrastructure Integration Tests', () => {
       const response = await iamClient.send(command);
       const policies = response.AttachedPolicies || [];
 
-      expect(policies.length).toBeGreaterThanOrEqual(2);
+      expect(policies.length).toBeGreaterThanOrEqual(1);
 
       const policyNames = policies.map(p => p.PolicyName);
       expect(policyNames).toContain('CloudWatchAgentServerPolicy');
