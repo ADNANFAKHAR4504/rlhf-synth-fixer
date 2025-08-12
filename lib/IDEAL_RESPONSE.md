@@ -47,11 +47,12 @@ Parameters:
     Default: "true"
     AllowedValues: ["true", "false"]
 
-  CreateCloudTrail:
+  ExistingCloudTrailName:
     Type: String
-    Description: "Whether to create CloudTrail (set to false if you've reached the 5 trail limit)"
-    Default: "true"
-    AllowedValues: ["true", "false"]
+    Description: "Name of existing CloudTrail to use (e.g., CloudTrail-pr797, prod-financial-trail)"
+    Default: "CloudTrail-pr797"
+    AllowedPattern: "^[a-zA-Z0-9_-]+$"
+    ConstraintDescription: "Must be a valid CloudTrail name"
 
 Resources:
   # KMS Customer Master Key for S3 encryption
@@ -212,30 +213,6 @@ Resources:
               Bool:
                 aws:SecureTransport: false
 
-  # CloudTrail for multi-region logging
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Condition: CreateCloudTrailCondition
-    Properties:
-      TrailName: !Sub "my-app-cloudtrail-${EnvironmentSuffix}"
-      S3BucketName: !Ref CloudTrailLogsBucket
-      S3KeyPrefix: "AWSLogs"
-      IsMultiRegionTrail: true
-      IncludeGlobalServiceEvents: true
-      IsLogging: true
-      EnableLogFileValidation: true
-      KMSKeyId: !Ref S3KMSKey
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-      Tags:
-        - Key: Name
-          Value: !Sub "my-app-cloudtrail-${EnvironmentSuffix}"
-        - Key: Purpose
-          Value: "Compliance logging"
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
   # IAM Role for S3 read access
   S3ReadOnlyRole:
     Type: AWS::IAM::Role
@@ -362,7 +339,6 @@ Resources:
 
 Conditions:
   CreateS3BucketCondition: !Equals [!Ref CreateS3Bucket, "true"]
-  CreateCloudTrailCondition: !Equals [!Ref CreateCloudTrail, "true"]
   HasKeyPair: !Not [!Equals [!Ref PublicKeyName, ""]]
 
 Outputs:
@@ -384,13 +360,8 @@ Outputs:
       Name: !Sub "${AWS::StackName}-S3BucketName"
 
   CloudTrailName:
-    Description: "Name of the CloudTrail"
-    Value:
-      !If [
-        CreateCloudTrailCondition,
-        !Ref CloudTrail,
-        !Sub "CloudTrail not created (limit reached) - ${EnvironmentSuffix}",
-      ]
+    Description: "Name of the existing CloudTrail being used"
+    Value: !Ref ExistingCloudTrailName
     Export:
       Name: !Sub "${AWS::StackName}-CloudTrailName"
 

@@ -39,7 +39,7 @@ describe('TapStack Unit Tests', () => {
       expect(parameters).toHaveProperty('PublicKeyName');
       expect(parameters).toHaveProperty('AssumeRoleService');
       expect(parameters).toHaveProperty('CreateS3Bucket');
-      expect(parameters).toHaveProperty('CreateCloudTrail');
+      expect(parameters).toHaveProperty('ExistingCloudTrailName');
     });
 
     test('should have all required resources', () => {
@@ -48,7 +48,6 @@ describe('TapStack Unit Tests', () => {
       expect(resources).toHaveProperty('S3KMSKeyAlias');
       expect(resources).toHaveProperty('AppS3Bucket');
       expect(resources).toHaveProperty('CloudTrailLogsBucket');
-      expect(resources).toHaveProperty('CloudTrail');
       expect(resources).toHaveProperty('S3ReadOnlyRole');
       expect(resources).toHaveProperty('S3ReadOnlyPolicy');
       expect(resources).toHaveProperty('EC2InstanceProfile');
@@ -177,31 +176,7 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
-  describe('CloudTrail Configuration', () => {
-    test('should have CloudTrail with multi-region configuration', () => {
-      const cloudTrail = templateJson.Resources.CloudTrail;
-      expect(cloudTrail.Type).toBe('AWS::CloudTrail::Trail');
-      expect(cloudTrail.Condition).toBe('CreateCloudTrailCondition');
-      expect(cloudTrail.Properties.TrailName['Fn::Sub']).toContain('my-app-cloudtrail-${EnvironmentSuffix}');
-      expect(cloudTrail.Properties.IsMultiRegionTrail).toBe(true);
-      expect(cloudTrail.Properties.IncludeGlobalServiceEvents).toBe(true);
-      expect(cloudTrail.Properties.IsLogging).toBe(true);
-      expect(cloudTrail.Properties.EnableLogFileValidation).toBe(true);
-    });
 
-    test('should have CloudTrail with KMS encryption', () => {
-      const cloudTrail = templateJson.Resources.CloudTrail;
-      expect(cloudTrail.Properties.KMSKeyId.Ref).toBe('S3KMSKey');
-    });
-
-    test('should have CloudTrail with proper event selectors', () => {
-      const cloudTrail = templateJson.Resources.CloudTrail;
-      const eventSelectors = cloudTrail.Properties.EventSelectors;
-      expect(eventSelectors).toHaveLength(1);
-      expect(eventSelectors[0].ReadWriteType).toBe('All');
-      expect(eventSelectors[0].IncludeManagementEvents).toBe(true);
-    });
-  });
 
   describe('IAM Role Configuration', () => {
     test('should have IAM role with proper trust policy', () => {
@@ -324,13 +299,7 @@ describe('TapStack Unit Tests', () => {
       expect(conditions.CreateS3BucketCondition['Fn::Equals'][1]).toBe('true');
     });
 
-    test('should have condition for CloudTrail creation', () => {
-      const conditions = templateJson.Conditions;
-      expect(conditions).toHaveProperty('CreateCloudTrailCondition');
-      expect(conditions.CreateCloudTrailCondition['Fn::Equals']).toHaveLength(2);
-      expect(conditions.CreateCloudTrailCondition['Fn::Equals'][0].Ref).toBe('CreateCloudTrail');
-      expect(conditions.CreateCloudTrailCondition['Fn::Equals'][1]).toBe('true');
-    });
+
   });
 
   describe('Naming Convention', () => {
@@ -344,8 +313,7 @@ describe('TapStack Unit Tests', () => {
       expect(resources.AppS3Bucket.Properties.BucketName['Fn::Sub']).toContain('my-app-bucket-${EnvironmentSuffix}');
       expect(resources.CloudTrailLogsBucket.Properties.BucketName['Fn::Sub']).toContain('my-app-cloudtrail-logs-${EnvironmentSuffix}');
       
-      // Check CloudTrail
-      expect(resources.CloudTrail.Properties.TrailName['Fn::Sub']).toContain('my-app-cloudtrail-${EnvironmentSuffix}');
+
       
       // Check IAM resources
       expect(resources.S3ReadOnlyRole.Properties.RoleName['Fn::Sub']).toContain('my-app-Role-ReadS3-${EnvironmentSuffix}');
@@ -372,7 +340,6 @@ describe('TapStack Unit Tests', () => {
       expect(resources.S3KMSKey.Properties.Tags).toBeDefined();
       expect(resources.AppS3Bucket.Properties.Tags).toBeDefined();
       expect(resources.CloudTrailLogsBucket.Properties.Tags).toBeDefined();
-      expect(resources.CloudTrail.Properties.Tags).toBeDefined();
       expect(resources.S3ReadOnlyRole.Properties.Tags).toBeDefined();
       expect(resources.SubnetA.Properties.Tags).toBeDefined();
       expect(resources.SubnetB.Properties.Tags).toBeDefined();
