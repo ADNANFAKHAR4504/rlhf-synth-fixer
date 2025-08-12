@@ -366,7 +366,7 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "CloudTrail/TapStack${EnvironmentSuffix}"
+      LogGroupName: !Sub "/aws/cloudtrail/TapStack${EnvironmentSuffix}"
       RetentionInDays: 30
 
   CloudTrailLogsRole:
@@ -388,10 +388,13 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}:*"
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}:log-stream:${AWS::AccountId}_CloudTrail_*"
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - CloudTrailLogGroup # ensure group exists
+      - CloudTrailLogsRole # ensure role exists
     Properties:
       TrailName: !Sub "TapStack${EnvironmentSuffix}-CloudTrail"
       S3BucketName: !Ref CloudTrailS3Bucket
@@ -467,6 +470,7 @@ Resources:
   ConfigurationRecorder:
     Condition: CreateConfig
     Type: AWS::Config::ConfigurationRecorder
+    DependsOn: ConfigDeliveryChannel
     Properties:
       Name: !Sub "TapStack${EnvironmentSuffix}-Config-Recorder"
       RoleARN: !GetAtt ConfigServiceRole.Arn
