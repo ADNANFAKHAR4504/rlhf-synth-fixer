@@ -7,12 +7,15 @@ import requests
 from datetime import datetime, timezone
 import pytest
 
-# Load outputs from stack_outputs.json
-# ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-# with open(os.path.join(ROOT, "stack_outputs.json"), "r", encoding="utf-8") as f:
-#     OUT = json.load(f)
-
 OUT = {}
+outputs_file = os.path.join(
+    os.path.dirname(__file__),
+    '../../cfn-outputs/flat-outputs.json'
+)
+if os.path.exists(outputs_file):
+  with open(outputs_file, 'r') as f:
+    OUT = json.load(f)
+
 
 REGION = OUT["api_gateway_execution_arn"].split(":")[3]
 ACCOUNT = OUT["api_gateway_execution_arn"].split(":")[4]
