@@ -133,16 +133,9 @@ public_subnets = []
 for i, az in enumerate(availability_zones):
     # Calculate IPv6 CIDR properly - VPC gives us something like 2600:1f18:25c:300::/56
     # We need to create /64 subnets like 2600:1f18:25c:300::/64, 2600:1f18:25c:301::/64
-    if i == 0:
-        # For first subnet, use the VPC CIDR directly with /64
-        ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-            lambda cidr: cidr.replace("::/56", "::/64")
-        )
-    else:
-        # For second subnet, increment the last hex digit
-        ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-            lambda cidr: cidr.replace("::/56", f"{i}::/64")
-        )
+    ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
+        lambda cidr, subnet_idx=i: cidr.replace("::/56", f":{subnet_idx:x}::/64")
+    )
     
     subnet = aws.ec2.Subnet(
         get_resource_name(f"public-subnet-{i+1}"),  # Now includes unique deployment ID
