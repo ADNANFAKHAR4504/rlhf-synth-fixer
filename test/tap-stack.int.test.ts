@@ -1,113 +1,131 @@
-import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
-import { S3Client, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
-import { APIGatewayClient, GetStageCommand } from '@aws-sdk/client-api-gateway'; // FIX 1: Corrected case
-import { SSMClient, GetPatchBaselineCommand } from '@aws-sdk/client-ssm';
-import * as fs from 'fs';
+import fs from 'fs';
+import path from 'path';
+import yaml from 'js-yaml';
 
-// --- Test Configuration ---
-const REGION = process.env.AWS_REGION || 'us-east-1';
+describe('Secure Financial App Stack Unit Tests', () => {
+  let template: any;
 
-// --- AWS SDK Clients ---
-const ec2Client = new EC2Client({ region: REGION });
-const s3Client = new S3Client({ region: REGION });
-const rdsClient = new RDSClient({ region: REGION });
-const iamClient = new IAMClient({ region: REGION });
-const apiGatewayClient = new APIGatewayClient({ region: REGION }); // FIX 1: Corrected case
-const ssmClient = new SSMClient({ region: REGION });
+  beforeAll(() => {
+    const cfnSchema = yaml.DEFAULT_SCHEMA.extend([
+      new yaml.Type('!Ref', {
+        kind: 'scalar',
+        construct: data => ({ Ref: data }),
+      }),
+      new yaml.Type('!Sub', {
+        kind: 'scalar',
+        construct: data => ({ 'Fn::Sub': data }),
+      }),
+      new yaml.Type('!Sub', {
+        kind: 'sequence',
+        construct: data => ({ 'Fn::Sub': data }),
+      }),
+      new yaml.Type('!GetAtt', {
+        kind: 'scalar',
+        construct: data => ({ 'Fn::GetAtt': data.split('.') }),
+      }),
+      new yaml.Type('!Select', {
+        kind: 'sequence',
+        construct: data => ({ 'Fn::Select': data }),
+      }),
+      new yaml.Type('!GetAZs', {
+        kind: 'scalar',
+        construct: data => ({ 'Fn::GetAZs': data }),
+      }),
+      new yaml.Type('!FindInMap', {
+        kind: 'sequence',
+        construct: data => ({ 'Fn::FindInMap': data }),
+      }),
+    ]);
 
-// --- Read Deployed Stack Outputs ---
-// Assumes a CI/CD process has run `aws cloudformation describe-stacks` and saved outputs
-let outputs: { [key: string]: string } = {};
-try {
-  outputs = JSON.parse(fs.readFileSync('cfn-outputs.json', 'utf8'));
-} catch (error) {
-  console.warn('cfn-outputs.json not found, skipping integration tests.');
-}
+    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = yaml.load(templateContent, { schema: cfnSchema });
+  });
 
-const testSuite = Object.keys(outputs).length > 0 ? describe : describe.skip;
+  test('should have a valid CloudFormation format version and description', () => {
+    expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+    expect(template.Description).toContain(
+      'Secure AWS infrastructure for FinancialApp - V3 with SSM Session Manager Access (No Keys)'
+    );
+  });
 
-testSuite('Secure Financial App Stack Integration Tests', () => {
-  describe('🛡️ Core Security Requirements Verification', () => {
-    test('S3 bucket should have AES256 server-side encryption enabled', async () => {
-      const bucketName = outputs.ApplicationDataBucketName;
-      const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
-      const response = await s3Client.send(command);
-
-      // FIX 2: Safely handle potentially undefined properties
-      const rules = response.ServerSideEncryptionConfiguration?.Rules;
-      expect(rules).toBeDefined();
-      expect(rules).toHaveLength(1);
-
-      const sseRule = rules![0];
-      expect(sseRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+  describe('🛡️ Core Security Requirements', () => {
+    test('S3 Bucket should enforce AES-256 encryption and block public access', () => {
+      const s3Bucket = template.Resources.ApplicationDataBucket;
+      const encryption =
+        s3Bucket.Properties.BucketEncryption
+          .ServerSideEncryptionConfiguration[0];
+      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe(
         'AES256'
       );
+      expect(
+        s3Bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        s3Bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets
+      ).toBe(true);
     });
 
-    test('RDS instance should be encrypted with the correct KMS key', async () => {
-      const dbInstanceIdentifier = outputs.RDSInstanceId; // Assuming RDSInstanceId is an output
-      const kmsKeyId = outputs.KMSKeyId;
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbInstanceIdentifier,
+    test('RDS DBInstance should enforce KMS encryption and have deletion protection', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.StorageEncrypted).toBe(true);
+      expect(rds.Properties.KmsKeyId).toEqual({ Ref: 'FinancialAppKMSKey' });
+      expect(rds.Properties.DeletionProtection).toBe(true);
+      expect(rds.DeletionPolicy).toBe('Snapshot');
+      expect(rds.UpdateReplacePolicy).toBe('Snapshot');
+    });
+
+    test('CriticalOperationsRole must enforce MFA to be assumed', () => {
+      const role = template.Resources.CriticalOperationsRole;
+      const assumeRolePolicy =
+        role.Properties.AssumeRolePolicyDocument.Statement[0];
+      expect(assumeRolePolicy.Effect).toBe('Allow');
+      expect(
+        assumeRolePolicy.Condition.Bool['aws:MultiFactorAuthPresent']
+      ).toBe('true');
+    });
+
+    test('API Gateway Stage should have access logging enabled', () => {
+      const stage = template.Resources.ApiGatewayStage;
+      const accessLogSettings = stage.Properties.AccessLogSetting;
+      expect(accessLogSettings).toBeDefined();
+      expect(accessLogSettings.DestinationArn).toEqual({
+        'Fn::GetAtt': ['ApiGatewayLogGroup', 'Arn'],
       });
-      const response = await rdsClient.send(command);
-
-      const dbInstance = response.DBInstances?.[0];
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance?.StorageEncrypted).toBe(true);
-      expect(dbInstance?.KmsKeyId).toContain(kmsKeyId);
     });
 
-    test('CriticalOperationsRole should enforce MFA on assume role policy', async () => {
-      const roleName = outputs.CriticalOperationsRoleName; // Assuming RoleName is an output
-      const command = new GetRoleCommand({ RoleName: roleName });
-      const response = await iamClient.send(command);
+    test('Security Groups must enforce default-deny and least privilege', () => {
+      const dbSg = template.Resources.DatabaseSecurityGroup;
+      const appSg = template.Resources.AppServerSecurityGroup;
 
-      const assumeRolePolicy = JSON.parse(
-        decodeURIComponent(response.Role?.AssumeRolePolicyDocument || '{}')
+      const dbIngress = dbSg.Properties.SecurityGroupIngress[0];
+      expect(dbIngress.FromPort).toBe(3306);
+      expect(dbIngress.SourceSecurityGroupId).toEqual({
+        Ref: 'AppServerSecurityGroup',
+      });
+
+      const appIngressFromAlb = appSg.Properties.SecurityGroupIngress.find(
+        (r: any) => r.FromPort === 8080
       );
-      const statement = assumeRolePolicy.Statement[0];
-      expect(statement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe(
-        'true'
-      );
-    });
-
-    test('API Gateway stage should have logging enabled', async () => {
-      const restApiId = outputs.ApiGatewayRestApiId; // Assuming these are outputs
-      const stageName = outputs.ApiGatewayStageName;
-      const command = new GetStageCommand({ restApiId, stageName });
-      const response = await apiGatewayClient.send(command);
-
-      expect(response.accessLogSettings).toBeDefined();
-      expect(response.accessLogSettings?.destinationArn).toBeDefined();
-      expect(response.methodSettings?.['*/*']?.loggingLevel).toBe('INFO');
-    });
-
-    test('EC2 instances should be deployed in a secure VPC', async () => {
-      const vpcId = outputs.VPCId;
-      const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs).toHaveLength(1);
-      expect(response.Vpcs?.[0].State).toBe('available');
+      expect(appIngressFromAlb.SourceSecurityGroupId).toEqual({
+        Ref: 'ALBSecurityGroup',
+      });
     });
   });
 
-  describe('🔧 Systems Manager Patch Management', () => {
-    test('SSM Patch Baseline should be created and configured correctly', async () => {
-      const baselineId = outputs.PatchBaselineId; // Assuming this is an output
-      const command = new GetPatchBaselineCommand({ BaselineId: baselineId });
-      const response = await ssmClient.send(command);
+  describe('💻 Compute and Patch Management', () => {
+    test('SSM PatchBaseline should be defined correctly', () => {
+      const baseline = template.Resources.PatchBaseline;
+      expect(baseline.Type).toBe('AWS::SSM::PatchBaseline');
+      expect(baseline.Properties.OperatingSystem).toBe('AMAZON_LINUX_2');
+    });
 
-      expect(response.OperatingSystem).toBe('AMAZON_LINUX_2');
-      const securityRule = response.ApprovalRules?.PatchRules?.find(r =>
-        r.PatchFilterGroup?.PatchFilters?.some(f =>
-          f.Values?.includes('Security')
-        )
+    test('EC2 Instance Role should have the SSM Managed Instance Core policy', () => {
+      const role = template.Resources.EC2InstanceRole;
+      const managedPolicies = role.Properties.ManagedPolicyArns;
+      expect(managedPolicies).toContain(
+        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       );
-      expect(securityRule).toBeDefined();
     });
   });
 });

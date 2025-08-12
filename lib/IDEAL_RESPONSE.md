@@ -1,6 +1,6 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure AWS infrastructure for FinancialApp - Multi-tier architecture with comprehensive security controls.'
+Description: 'Secure AWS infrastructure for FinancialApp - V3 with SSM Session Manager Access (No Keys)'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -22,7 +22,6 @@ Metadata:
           default: 'Compute & Database Configuration'
         Parameters:
           - InstanceType
-          - KeyPairName
           - DBInstanceClass
           - DBUsername
 
@@ -88,10 +87,6 @@ Parameters:
     Default: 't3.micro'
     Description: 'EC2 instance type for application servers'
     AllowedValues: ['t3.micro', 't3.small', 't3.medium', 't3.large']
-
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'EC2 Key Pair for SSH access'
 
 Resources:
   # ==============================================
@@ -342,11 +337,6 @@ Resources:
           ToPort: 8080
           SourceSecurityGroupId: !Ref ALBSecurityGroup
           Description: 'Application port from ALB'
-        - IpProtocol: 'tcp'
-          FromPort: 22
-          ToPort: 22
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
-          Description: 'SSH access from Bastion'
       Tags:
         - Key: 'Name'
           Value: !Sub 'FinancialApp-AppServer-SecurityGroup-${EnvironmentSuffix}'
@@ -365,21 +355,6 @@ Resources:
       Tags:
         - Key: 'Name'
           Value: !Sub 'FinancialApp-Database-SecurityGroup-${EnvironmentSuffix}'
-
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for Bastion Host - Default Deny'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: 'tcp'
-          FromPort: 22
-          ToPort: 22
-          CidrIp: '0.0.0.0/0' # WARNING: Restrict this in a real production environment
-          Description: 'SSH access from internet (restrict this in production)'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'FinancialApp-Bastion-SecurityGroup-${EnvironmentSuffix}'
 
   # ==============================================
   # S3 BUCKET WITH AES-256 ENCRYPTION
@@ -778,7 +753,6 @@ Resources:
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -847,29 +821,6 @@ Resources:
       Tags:
         - Key: 'Name'
           Value: !Sub 'FinancialApp-Server-2-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref Environment
-        - Key: 'PatchGroup'
-          Value: !Sub '${AWS::StackName}-patch-group-${EnvironmentSuffix}'
-
-  BastionHost:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
-      InstanceType: 't3.micro'
-      KeyName: !Ref KeyPairName
-      SubnetId: !Ref PublicSubnet1
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          yum update -y
-          yum install -y amazon-cloudwatch-agent
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'FinancialApp-Bastion-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
         - Key: 'PatchGroup'
@@ -1085,18 +1036,6 @@ Outputs:
     Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
     Export:
       Name: !Sub '${AWS::StackName}-API-URL'
-
-  BastionHostPublicIP:
-    Description: 'Bastion Host Public IP'
-    Value: !GetAtt BastionHost.PublicIp
-    Export:
-      Name: !Sub '${AWS::StackName}-Bastion-PublicIP'
-
-  KMSKeyId:
-    Description: 'KMS Key ID for Encryption'
-    Value: !Ref FinancialAppKMSKey
-    Export:
-      Name: !Sub '${AWS::StackName}-KMS-KeyID'
 
   CriticalOperationsRoleArn:
     Description: 'MFA-Required Role for Critical Operations'
