@@ -83,7 +83,7 @@ Since engineers don't have direct access to the AWS Console, an EC2 instance has
 **Login to the EC2 instance:**
 
 ```bash
-ssh -o PreferredAuthentications=password devuser@34.231.140.94
+ssh -o PreferredAuthentications=password trainer@52.201.128.13
 ```
 
 **Password**: Ask your team leader for the password.
