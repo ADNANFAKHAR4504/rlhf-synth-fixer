@@ -497,7 +497,6 @@ class TapStack(pulumi.ComponentResource):
         "prod-web-server",
         ami=ami.id,
         instance_type="t3.micro",
-        key_name="prod-web-key",  # You'll need to create this key pair manually
         vpc_security_group_ids=[web_security_group.id],
         subnet_id=public_subnet.id,
         iam_instance_profile=instance_profile.name,
@@ -515,7 +514,6 @@ class TapStack(pulumi.ComponentResource):
         "prod-private-server",
         ami=ami.id,
         instance_type="t3.micro",
-        key_name="prod-private-key",  # You'll need to create this key pair manually
         vpc_security_group_ids=[private_security_group.id],
         subnet_id=private_subnet.id,
         iam_instance_profile=instance_profile.name,
