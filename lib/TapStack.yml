@@ -9,11 +9,11 @@ Parameters:
   DynamoDBTableArnParameter:
     Type: String
     Description: The ARN of the DynamoDB table for the Lambda function to access.
-    Default: 'arn:aws:dynamodb:us-east-1:123456789012:table/MyExampleTable'
+    Default: 'arn:aws:dynamodb:*:*:table/placeholder-table' # Default placeholder ARN
   ECRImageUriParameter:
     Type: String
     Description: The URI of the container image for the Lambda function.
-    Default: 'public.ecr.aws/nginx/nginx:latest'
+    Default: 'public.ecr.aws/lambda/nodejs:20' # AWS-provided public Lambda runtime image
 
 Resources:
   # ------------------------------------------------------------#
@@ -441,6 +441,14 @@ Resources:
       PackageType: Image
       Code:
         ImageUri: !Ref ECRImageUriParameter
+      Timeout: 30
+      MemorySize: 512
+      ImageConfig:
+        Command:
+          - index.handler
+        EntryPoint:
+          - /lambda-entrypoint.sh
+        WorkingDirectory: /var/task
       VpcConfig:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup

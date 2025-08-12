@@ -1,6 +1,6 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready stack for a highly available web application. Provisions VPC, Subnets, ALB, RDS, S3, IAM Role, and Lambda. (web-app-stack.yml) - v4 Corrected'
+Description: 'Production-ready stack for a highly available web application. Provisions VPC, Subnets, ALB, RDS, S3, IAM Role, and Lambda.'
 
 Parameters:
   DBMasterUsername:
@@ -10,11 +10,11 @@ Parameters:
   DynamoDBTableArnParameter:
     Type: String
     Description: The ARN of the DynamoDB table for the Lambda function to access.
-    Default: 'arn:aws:dynamodb:us-east-1:123456789012:table/MyExampleTable'
+    Default: 'arn:aws:dynamodb:*:*:table/placeholder-table'  # Default placeholder ARN
   ECRImageUriParameter:
     Type: String
-    Description: The URI of the ECR container image for the Lambda function.
-    Default: '123456789012.dkr.ecr.us-east-1.amazonaws.com/my-web-app:latest'
+    Description: The URI of the container image for the Lambda function.
+    Default: 'public.ecr.aws/lambda/nodejs:20'  # AWS-provided public Lambda runtime image
 
 Resources:
   # ------------------------------------------------------------#
@@ -294,7 +294,6 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: WebApp-TG
       VpcId: !Ref VPC
       Protocol: HTTP
       Port: 80
@@ -325,7 +324,6 @@ Resources:
     Properties:
       Description: 'Credentials for the WebApp RDS Database'
       GenerateSecretString:
-        # FIX: Ensure DBMasterUsername parameter is used here
         SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 16
@@ -357,7 +355,6 @@ Resources:
       EngineVersion: '16.3'
       DBInstanceClass: db.t3.micro
       AllocatedStorage: '20'
-      # FIX: Ensure DBMasterUsername parameter is used here
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword:
         !Join [
@@ -406,7 +403,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: WebApp-Lambda-Execution-Role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -426,7 +422,7 @@ Resources:
   LambdaDynamoDBPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: WebApp-Lambda-DynamoDB-ReadOnly-Policy
+      PolicyName: !Sub '${AWS::StackName}-DynamoDBReadPolicy'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -434,7 +430,6 @@ Resources:
             Action:
               - dynamodb:GetItem
               - dynamodb:Scan
-            # FIX: Ensure DynamoDBTableArnParameter is used here
             Resource: !Ref DynamoDBTableArnParameter
       Roles:
         - !Ref LambdaExecutionRole
@@ -446,8 +441,15 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       PackageType: Image
       Code:
-        # FIX: Ensure ECRImageUriParameter is used here
         ImageUri: !Ref ECRImageUriParameter
+      Timeout: 30
+      MemorySize: 512
+      ImageConfig:
+        Command:
+          - index.handler
+        EntryPoint:
+          - /lambda-entrypoint.sh
+        WorkingDirectory: /var/task
       VpcConfig:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup

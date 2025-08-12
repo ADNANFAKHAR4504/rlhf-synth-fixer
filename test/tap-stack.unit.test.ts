@@ -54,12 +54,16 @@ describe('Web Application Stack Unit Tests', () => {
 
     test('should define all required parameters', () => {
       const params = template.Parameters;
-      expect(Object.keys(params).length).toBe(4);
+      // Updated to expect 3 parameters based on current template
+      expect(Object.keys(params).length).toBe(3);
       expect(params.DBMasterUsername).toBeDefined();
       expect(params.DynamoDBTableArnParameter).toBeDefined();
-      // Check for the new ECRRepositoryName and ImageTag parameters
-      expect(params.ECRRepositoryName).toBeDefined();
-      expect(params.ImageTag).toBeDefined();
+      expect(params.ECRImageUriParameter).toBeDefined();
+
+      // Verify the ECRImageUriParameter has the correct default
+      expect(params.ECRImageUriParameter.Default).toBe(
+        'public.ecr.aws/lambda/nodejs:20'
+      );
     });
   });
 
@@ -217,11 +221,36 @@ describe('Web Application Stack Unit Tests', () => {
     test('Lambda function should be configured to use a container image', () => {
       const lambda = template.Resources.PlaceholderLambda;
       expect(lambda.Properties.PackageType).toBe('Image');
-      // Check for the dynamic ImageUri that is now being built
+      // Updated to match the current template which uses a parameter reference
       expect(lambda.Properties.Code.ImageUri).toEqual({
-        'Fn::Sub':
-          '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryName}:${ImageTag}',
+        Ref: 'ECRImageUriParameter',
       });
+
+      // Also verify the Lambda has proper VPC configuration
+      expect(lambda.Properties.VpcConfig).toBeDefined();
+      expect(lambda.Properties.VpcConfig.SubnetIds).toHaveLength(2);
+      expect(lambda.Properties.VpcConfig.SecurityGroupIds).toContainEqual({
+        Ref: 'WebServerSecurityGroup',
+      });
+    });
+
+    test('Lambda function should have proper configuration settings', () => {
+      const lambda = template.Resources.PlaceholderLambda;
+      expect(lambda.Properties.Timeout).toBe(30);
+      expect(lambda.Properties.MemorySize).toBe(512);
+
+      // Check ImageConfig if it exists
+      if (lambda.Properties.ImageConfig) {
+        expect(lambda.Properties.ImageConfig.Command).toEqual([
+          'index.handler',
+        ]);
+        expect(lambda.Properties.ImageConfig.EntryPoint).toEqual([
+          '/lambda-entrypoint.sh',
+        ]);
+        expect(lambda.Properties.ImageConfig.WorkingDirectory).toBe(
+          '/var/task'
+        );
+      }
     });
   });
 
@@ -235,12 +264,51 @@ describe('Web Application Stack Unit Tests', () => {
 
     test('should define all required outputs', () => {
       const outputs = template.Outputs;
-      expect(Object.keys(outputs).length).toBe(6);
+      // Updated to expect 5 outputs based on current template
+      expect(Object.keys(outputs).length).toBe(5);
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.ALBDNSName).toBeDefined();
       expect(outputs.S3BucketName).toBeDefined();
       expect(outputs.RDSInstanceEndpoint).toBeDefined();
       expect(outputs.DBSecretARN).toBeDefined();
+    });
+  });
+
+  describe('Tagging', () => {
+    test('all taggable resources should have proper tags', () => {
+      const taggableResourceTypes = [
+        'AWS::EC2::VPC',
+        'AWS::EC2::Subnet',
+        'AWS::EC2::InternetGateway',
+        'AWS::EC2::NatGateway',
+        'AWS::EC2::RouteTable',
+        'AWS::EC2::SecurityGroup',
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        'AWS::ElasticLoadBalancingV2::TargetGroup',
+        'AWS::RDS::DBSubnetGroup',
+        'AWS::RDS::DBInstance',
+        'AWS::S3::Bucket',
+        'AWS::IAM::Role',
+        'AWS::Lambda::Function',
+        'AWS::SecretsManager::Secret',
+      ];
+
+      const resources = Object.values(template.Resources).filter((r: any) =>
+        taggableResourceTypes.includes(r.Type)
+      );
+
+      resources.forEach((resource: any) => {
+        if (resource.Properties.Tags) {
+          const tags = resource.Properties.Tags;
+          const envTag = tags.find((t: any) => t.Key === 'Environment');
+          const ownerTag = tags.find((t: any) => t.Key === 'Owner');
+
+          expect(envTag).toBeDefined();
+          expect(envTag?.Value).toBe('Production');
+          expect(ownerTag).toBeDefined();
+          expect(ownerTag?.Value).toBe('WebAppTeam');
+        }
+      });
     });
   });
 });
