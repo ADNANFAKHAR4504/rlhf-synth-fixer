@@ -268,7 +268,6 @@
     "EC2InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": "ProductionEC2Role",
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -327,7 +326,6 @@
     "ConfigRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": "ProductionConfigRole",
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [

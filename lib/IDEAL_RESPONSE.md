@@ -273,7 +273,6 @@ Here's a comprehensive CloudFormation template that meets all your requirements:
     "EC2InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": "ProductionEC2Role",
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -332,7 +331,6 @@ Here's a comprehensive CloudFormation template that meets all your requirements:
     "ConfigRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": "ProductionConfigRole",
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
