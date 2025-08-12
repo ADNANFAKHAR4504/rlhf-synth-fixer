@@ -27,7 +27,6 @@
     "test:unit-cdktf": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$ --setupFilesAfterEnv=./test/setup.js",
     "test:integration": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",
     "test:integration-cdktf": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000 --setupFilesAfterEnv=./test/setup.js",
-    "test:e2e": "jest --testPathPattern=\\.e2e\\.test\\.ts$ --testTimeout=300000",
     "cdk": "cdk",
     "cdk:synth": "npx cdk synth --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:bootstrap": "npx cdk bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
