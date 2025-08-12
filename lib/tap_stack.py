@@ -410,49 +410,50 @@ class TapStack(pulumi.ComponentResource):
             self.security_groups[f"db-{region}"] = db_sg
     
     def _create_database_infrastructure(self):
-        """Create managed database with encryption and automated backups."""
-        
-        for region in self.args.regions:
-            provider = self.providers[region]
-            
-            # Create DB subnet group
-            db_subnet_group = aws.rds.SubnetGroup(
-                self.args.get_resource_name(f"db-subnet-group-{region}"),
-                subnet_ids=[subnet.id for subnet in self.subnets[region]["private"]],
-                tags={**self.default_tags, "Name": self.args.get_resource_name(f"db-subnet-group-{region}")},
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Create RDS instance
-            db_instance = aws.rds.Instance(
-                self.args.get_resource_name(f"postgres-{region}"),
-                allocated_storage=20,
-                max_allocated_storage=100,
-                storage_type="gp2",
-                storage_encrypted=True,
-                engine="postgres",
-                engine_version="13.7",
-                instance_class="db.t3.micro",
-                db_name="tapdb",
-                username="tapuser",
-                password="ChangeMe123!",  # In production, use AWS Secrets Manager
-                vpc_security_group_ids=[self.security_groups[f"db-{region}"].id],
-                db_subnet_group_name=db_subnet_group.name,
-                backup_retention_period=7,
-                backup_window="03:00-04:00",
-                maintenance_window="sun:04:00-sun:05:00",
-                auto_minor_version_upgrade=True,
-                deletion_protection=True,
-                skip_final_snapshot=False,
-                final_snapshot_identifier=self.args.get_resource_name(f"postgres-final-snapshot-{region}"),
-                copy_tags_to_snapshot=True,
-                performance_insights_enabled=True,
-                monitoring_interval=60,
-                monitoring_role_arn=self.iam_roles["rds_role"].arn,
-                tags=self.default_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            self.databases[region] = db_instance
+      """Create managed database with encryption and automated backups."""
+      
+      for region in self.args.regions:
+          provider = self.providers[region]
+          
+          # Create DB subnet group
+          db_subnet_group = aws.rds.SubnetGroup(
+              self.args.get_resource_name(f"db-subnet-group-{region}"),
+              subnet_ids=[subnet.id for subnet in self.subnets[region]["private"]],
+              tags={**self.default_tags, "Name": self.args.get_resource_name(f"db-subnet-group-{region}")},
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Create RDS instance with updated PostgreSQL version
+          db_instance = aws.rds.Instance(
+              self.args.get_resource_name(f"postgres-{region}"),
+              allocated_storage=20,
+              max_allocated_storage=100,
+              storage_type="gp2",
+              storage_encrypted=True,
+              engine="postgres",
+              engine_version="15.7",  # Updated to PostgreSQL 15.7 (currently supported)
+              instance_class="db.t3.micro",
+              db_name="tapdb",
+              username="tapuser",
+              password="ChangeMe123!",  # In production, use AWS Secrets Manager
+              vpc_security_group_ids=[self.security_groups[f"db-{region}"].id],
+              db_subnet_group_name=db_subnet_group.name,
+              backup_retention_period=7,
+              backup_window="03:00-04:00",
+              maintenance_window="sun:04:00-sun:05:00",
+              auto_minor_version_upgrade=True,
+              deletion_protection=True,
+              skip_final_snapshot=False,
+              final_snapshot_identifier=self.args.get_resource_name(f"postgres-final-snapshot-{region}"),
+              copy_tags_to_snapshot=True,
+              performance_insights_enabled=True,
+              monitoring_interval=60,
+              monitoring_role_arn=self.iam_roles["rds_role"].arn,
+              tags=self.default_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          self.databases[region] = db_instance
+
     
     def _create_compute_infrastructure(self):
         """Create auto-scaling compute resources with load balancers."""
