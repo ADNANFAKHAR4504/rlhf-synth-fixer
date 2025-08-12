@@ -32,6 +32,7 @@ Resources:
         - Key: Environment
           Value: production
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   S3KMSAlias:
     Type: AWS::KMS::Alias
