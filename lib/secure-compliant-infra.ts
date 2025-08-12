@@ -1,93 +1,123 @@
-// secureCompliantInfra.ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-// Configuration variables
-const config = new pulumi.Config();
-const projectName = config.get('projectName') || 'webapp';
-const environment = config.get('environment') || 'prod';
-const allowedSshCidr = config.get('allowedSshCidr') || '203.0.113.0/24';
-const vpcCidr = config.get('vpcCidr') || '10.0.0.0/16';
+export interface SecureCompliantInfraArgs {
+  projectName?: string;
+  environment?: string;
+  allowedSshCidr?: string;
+  vpcCidr?: string;
+  regions?: string[];
+}
 
-// Common tags for all resources
-const commonTags = {
-  Project: projectName,
-  Environment: environment,
-};
+export class SecureCompliantInfra extends pulumi.ComponentResource {
+  public readonly vpcIds: Array<{ region: string; vpcId: pulumi.Output<string> }>;
+  public readonly ec2InstanceIds: Array<{
+    region: string;
+    instanceIds: pulumi.Output<string>[];
+  }>;
+  public readonly rdsEndpoints: Array<{
+    region: string;
+    endpoint: pulumi.Output<string>;
+  }>;
+  public readonly cloudtrailArn: pulumi.Output<string>;
+  public readonly webAclArn: pulumi.Output<string>;
+  public readonly cloudtrailBucketName: pulumi.Output<string>;
+  public readonly kmsKeyArns: Array<{ region: string; keyArn: pulumi.Output<string> }>;
 
-// Regions for multi-region deployment
-const regions = ['us-west-1', 'us-east-1'];
+  constructor(
+    name: string,
+    args: SecureCompliantInfraArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('tap:infra:SecureCompliantInfra', name, args, opts);
 
-// Create providers for each region
-const providers = regions.map(region => ({
-  region,
-  provider: new aws.Provider(`provider-${region}`, { region }),
-}));
+    // Configuration variables with defaults
+    const projectName = args.projectName || 'webapp';
+    const environment = args.environment || 'prod';
+    const allowedSshCidr = args.allowedSshCidr || '203.0.113.0/24';
+    const vpcCidr = args.vpcCidr || '10.0.0.0/16';
+    const regions = args.regions || ['us-west-1', 'us-east-1'];
 
-// KMS Key for encryption (per region)
-const kmsKeys = providers.map(({ region, provider }) => ({
-  region,
-  key: new aws.kms.Key(
-    `${projectName}-${environment}-kms-${region}`,
-    {
-      description: `KMS key for ${projectName} ${environment} in ${region}`,
-      tags: commonTags,
-    },
-    { provider }
-  ),
-}));
+    // Common tags for all resources
+    const commonTags = {
+      Project: projectName,
+      Environment: environment,
+    };
 
-// KMS Key Aliases (created but not exported)
-kmsKeys.map(({ region, key }) => ({
-  region,
-  alias: new aws.kms.Alias(
-    `${projectName}-${environment}-kms-alias-${region}`,
-    {
-      name: `alias/${projectName}-${environment}-${region}`,
-      targetKeyId: key.keyId,
-    },
-    { provider: providers.find(p => p.region === region)?.provider }
-  ),
-}));
+    // Create providers for each region
+    const providers = regions.map(region => ({
+      region,
+      provider: new aws.Provider(
+        `provider-${region}`,
+        { region },
+        { parent: this }
+      ),
+    }));
 
-// S3 bucket for CloudTrail logs (single bucket in us-east-1)
-const cloudtrailBucket = new aws.s3.Bucket(
-  `${projectName}-${environment}-cloudtrail-logs`,
-  {
-    bucket: `${environment}-${projectName}-cloudtrail-logs`,
-    forceDestroy: true,
-    tags: commonTags,
-  },
-  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
-);
+    // KMS Key for encryption (per region)
+    const kmsKeys = providers.map(({ region, provider }) => ({
+      region,
+      key: new aws.kms.Key(
+        `${projectName}-${environment}-kms-${region}`,
+        {
+          description: `KMS key for ${projectName} ${environment} in ${region}`,
+          tags: commonTags,
+        },
+        { provider, parent: this }
+      ),
+    }));
 
-// S3 bucket for access logs
-const accessLogsBucket = new aws.s3.Bucket(
-  `${projectName}-${environment}-access-logs`,
-  {
-    bucket: `${environment}-${projectName}-access-logs`,
-    tags: commonTags,
-  },
-  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
-);
+    // KMS Key Aliases (created but not exported)
+    kmsKeys.map(({ region, key }) => ({
+      region,
+      alias: new aws.kms.Alias(
+        `${projectName}-${environment}-kms-alias-${region}`,
+        {
+          name: `alias/${projectName}-${environment}-${region}`,
+          targetKeyId: key.keyId,
+        },
+        { provider: providers.find(p => p.region === region)?.provider, parent: this }
+      ),
+    }));
 
-// Enable access logging on CloudTrail bucket (created but not exported)
-new aws.s3.BucketLogging(
-  `${projectName}-${environment}-cloudtrail-logging`,
-  {
-    bucket: cloudtrailBucket.id,
-    targetBucket: accessLogsBucket.id,
-    targetPrefix: 'cloudtrail-access-logs/',
-  },
-  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
-);
+    // S3 bucket for CloudTrail logs (single bucket in us-east-1)
+    const cloudtrailBucket = new aws.s3.Bucket(
+      `${projectName}-${environment}-cloudtrail-logs`,
+      {
+        bucket: `${environment}-${projectName}-cloudtrail-logs`,
+        forceDestroy: true,
+        tags: commonTags,
+      },
+      { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+    );
 
-// CloudTrail bucket policy
-const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(
-  `${projectName}-${environment}-cloudtrail-policy`,
-  {
-    bucket: cloudtrailBucket.id,
-    policy: pulumi.all([cloudtrailBucket.arn]).apply(([bucketArn]) =>
+    // S3 bucket for access logs
+    const accessLogsBucket = new aws.s3.Bucket(
+      `${projectName}-${environment}-access-logs`,
+      {
+        bucket: `${environment}-${projectName}-access-logs`,
+        tags: commonTags,
+      },
+      { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+    );
+
+    // Enable access logging on CloudTrail bucket (created but not exported)
+    new aws.s3.BucketLogging(
+      `${projectName}-${environment}-cloudtrail-logging`,
+      {
+        bucket: cloudtrailBucket.id,
+        targetBucket: accessLogsBucket.id,
+        targetPrefix: 'cloudtrail-access-logs/',
+      },
+      { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+    );
+
+    // CloudTrail bucket policy
+    const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(
+      `${projectName}-${environment}-cloudtrail-policy`,
+      {
+        bucket: cloudtrailBucket.id,
+        policy: pulumi.all([cloudtrailBucket.arn]).apply(([bucketArn]) =>
       JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -114,7 +144,7 @@ const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(
       })
     ),
   },
-  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
+  { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
 );
 
 // CloudTrail
@@ -131,6 +161,7 @@ const cloudtrail = new aws.cloudtrail.Trail(
   {
     provider: providers.find(p => p.region === 'us-east-1')?.provider,
     dependsOn: [cloudtrailBucketPolicy],
+    parent: this,
   }
 );
 
@@ -182,78 +213,78 @@ const webAcl = new aws.wafv2.WebAcl(
       sampledRequestsEnabled: true,
     },
   },
-  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
+  { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
 );
 
-// Create infrastructure for each region
-const regionalInfra = providers.map(({ region, provider }) => {
-  // VPC
-  const vpc = new aws.ec2.Vpc(
-    `${projectName}-${environment}-vpc-${region}`,
-    {
-      cidrBlock: vpcCidr,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-vpc-${region}`,
-      },
-    },
-    { provider }
-  );
+    // Create infrastructure for each region
+    const regionalInfra = providers.map(({ region, provider }) => {
+      // VPC
+      const vpc = new aws.ec2.Vpc(
+        `${projectName}-${environment}-vpc-${region}`,
+        {
+          cidrBlock: vpcCidr,
+          enableDnsHostnames: true,
+          enableDnsSupport: true,
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-vpc-${region}`,
+          },
+        },
+        { provider, parent: this }
+      );
 
-  // Internet Gateway
-  const igw = new aws.ec2.InternetGateway(
-    `${projectName}-${environment}-igw-${region}`,
-    {
-      vpcId: vpc.id,
-      tags: {
-        ...commonTags,
-        Name: `${projectName}-${environment}-igw-${region}`,
-      },
-    },
-    { provider }
-  );
+      // Internet Gateway
+      const igw = new aws.ec2.InternetGateway(
+        `${projectName}-${environment}-igw-${region}`,
+        {
+          vpcId: vpc.id,
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-igw-${region}`,
+          },
+        },
+        { provider, parent: this }
+      );
 
   // Get availability zones for this region
   const azs = pulumi.output(aws.getAvailabilityZones({}, { provider }));
 
-  // Public Subnets
-  const publicSubnets = [0, 1].map(
-    i =>
-      new aws.ec2.Subnet(
-        `${projectName}-${environment}-public-subnet-${region}-${i}`,
-        {
-          vpcId: vpc.id,
-          cidrBlock: `10.0.${i + 1}.0/24`,
-          availabilityZone: azs.names[i],
-          mapPublicIpOnLaunch: true,
-          tags: {
-            ...commonTags,
-            Name: `${projectName}-${environment}-public-subnet-${region}-${i}`,
-          },
-        },
-        { provider }
-      )
-  );
+      // Public Subnets
+      const publicSubnets = [0, 1].map(
+        i =>
+          new aws.ec2.Subnet(
+            `${projectName}-${environment}-public-subnet-${region}-${i}`,
+            {
+              vpcId: vpc.id,
+              cidrBlock: `10.0.${i + 1}.0/24`,
+              availabilityZone: azs.names[i],
+              mapPublicIpOnLaunch: true,
+              tags: {
+                ...commonTags,
+                Name: `${projectName}-${environment}-public-subnet-${region}-${i}`,
+              },
+            },
+            { provider, parent: this }
+          )
+      );
 
-  // Private Subnets
-  const privateSubnets = [0, 1].map(
-    i =>
-      new aws.ec2.Subnet(
-        `${projectName}-${environment}-private-subnet-${region}-${i}`,
-        {
-          vpcId: vpc.id,
-          cidrBlock: `10.0.${i + 10}.0/24`,
-          availabilityZone: azs.names[i],
-          tags: {
-            ...commonTags,
-            Name: `${projectName}-${environment}-private-subnet-${region}-${i}`,
-          },
-        },
-        { provider }
-      )
-  );
+      // Private Subnets
+      const privateSubnets = [0, 1].map(
+        i =>
+          new aws.ec2.Subnet(
+            `${projectName}-${environment}-private-subnet-${region}-${i}`,
+            {
+              vpcId: vpc.id,
+              cidrBlock: `10.0.${i + 10}.0/24`,
+              availabilityZone: azs.names[i],
+              tags: {
+                ...commonTags,
+                Name: `${projectName}-${environment}-private-subnet-${region}-${i}`,
+              },
+            },
+            { provider, parent: this }
+          )
+      );
 
   // Route Table for public subnets
   const publicRouteTable = new aws.ec2.RouteTable(
@@ -431,26 +462,26 @@ const regionalInfra = providers.map(({ region, provider }) => {
     )
   );
 
-  // EC2 Instances
-  const ec2Instances = publicSubnets.map(
-    (subnet, i) =>
-      new aws.ec2.Instance(
-        `${projectName}-${environment}-ec2-${region}-${i}`,
-        {
-          ami: ami.id,
-          instanceType: 't3.micro',
-          keyName: `${projectName}-${environment}-key-${region}`, // Assumes key pair exists
-          vpcSecurityGroupIds: [ec2SecurityGroup.id],
-          subnetId: subnet.id,
-          iamInstanceProfile: ec2InstanceProfile.name,
-          tags: {
-            ...commonTags,
-            Name: `${projectName}-${environment}-ec2-${region}-${i}`,
-          },
-        },
-        { provider }
-      )
-  );
+      // EC2 Instances (without key pairs for simplicity)
+      const ec2Instances = publicSubnets.map(
+        (subnet, i) =>
+          new aws.ec2.Instance(
+            `${projectName}-${environment}-ec2-${region}-${i}`,
+            {
+              ami: ami.id,
+              instanceType: 't3.micro',
+              // keyName: removed to avoid key pair dependency
+              vpcSecurityGroupIds: [ec2SecurityGroup.id],
+              subnetId: subnet.id,
+              iamInstanceProfile: ec2InstanceProfile.name,
+              tags: {
+                ...commonTags,
+                Name: `${projectName}-${environment}-ec2-${region}-${i}`,
+              },
+            },
+            { provider, parent: this }
+          )
+      );
 
   // RDS Subnet Group
   const rdsSubnetGroup = new aws.rds.SubnetGroup(
@@ -510,28 +541,41 @@ const regionalInfra = providers.map(({ region, provider }) => {
   };
 });
 
-// Outputs
-export const vpcIds = regionalInfra.map(infra => ({
-  region: infra.region,
-  vpcId: infra.vpc.id,
-}));
+    // Assign outputs to class properties
+    this.vpcIds = regionalInfra.map(infra => ({
+      region: infra.region,
+      vpcId: infra.vpc.id,
+    }));
 
-export const ec2InstanceIds = regionalInfra.map(infra => ({
-  region: infra.region,
-  instanceIds: infra.ec2Instances.map(instance => instance.id),
-}));
+    this.ec2InstanceIds = regionalInfra.map(infra => ({
+      region: infra.region,
+      instanceIds: infra.ec2Instances.map(instance => instance.id),
+    }));
 
-export const rdsEndpoints = regionalInfra.map(infra => ({
-  region: infra.region,
-  endpoint: infra.rdsInstance.endpoint,
-}));
+    this.rdsEndpoints = regionalInfra.map(infra => ({
+      region: infra.region,
+      endpoint: infra.rdsInstance.endpoint,
+    }));
 
-export const cloudtrailArn = cloudtrail.arn;
-export const webAclArn = webAcl.arn;
-export const cloudtrailBucketName = cloudtrailBucket.bucket;
+    this.cloudtrailArn = cloudtrail.arn;
+    this.webAclArn = webAcl.arn;
+    this.cloudtrailBucketName = cloudtrailBucket.bucket;
 
-// Export KMS key ARNs
-export const kmsKeyArns = kmsKeys.map(({ region, key }) => ({
-  region,
-  keyArn: key.arn,
-}));
+    // Assign KMS key ARNs
+    this.kmsKeyArns = kmsKeys.map(({ region, key }) => ({
+      region,
+      keyArn: key.arn,
+    }));
+
+    // Register outputs
+    this.registerOutputs({
+      vpcIds: this.vpcIds,
+      ec2InstanceIds: this.ec2InstanceIds,
+      rdsEndpoints: this.rdsEndpoints,
+      cloudtrailArn: this.cloudtrailArn,
+      webAclArn: this.webAclArn,
+      cloudtrailBucketName: this.cloudtrailBucketName,
+      kmsKeyArns: this.kmsKeyArns,
+    });
+  }
+}

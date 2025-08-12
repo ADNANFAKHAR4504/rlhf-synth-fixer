@@ -15,7 +15,7 @@ import { ResourceOptions } from '@pulumi/pulumi';
 // import { DynamoDBStack } from "./dynamodb-stack";
 
 // Import the secure compliant infrastructure
-import * as secureInfra from './secure-compliant-infra';
+import { SecureCompliantInfra } from './secure-compliant-infra';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -31,6 +31,26 @@ export interface TapStackArgs {
    * Optional default tags to apply to resources.
    */
   tags?: pulumi.Input<{ [key: string]: string }>;
+
+  /**
+   * Project name for resource naming.
+   */
+  projectName?: string;
+
+  /**
+   * CIDR block for SSH access restriction.
+   */
+  allowedSshCidr?: string;
+
+  /**
+   * VPC CIDR block.
+   */
+  vpcCidr?: string;
+
+  /**
+   * AWS regions for multi-region deployment.
+   */
+  regions?: string[];
 }
 
 /**
@@ -47,14 +67,17 @@ export class TapStack extends pulumi.ComponentResource {
   // Example of a public property for a nested resource's output.
   // public readonly table: pulumi.Output<string>;
 
-  // Secure compliant infrastructure outputs
-  public readonly vpcIds: typeof secureInfra.vpcIds;
-  public readonly ec2InstanceIds: typeof secureInfra.ec2InstanceIds;
-  public readonly rdsEndpoints: typeof secureInfra.rdsEndpoints;
-  public readonly cloudtrailArn: typeof secureInfra.cloudtrailArn;
-  public readonly webAclArn: typeof secureInfra.webAclArn;
-  public readonly cloudtrailBucketName: typeof secureInfra.cloudtrailBucketName;
-  public readonly kmsKeyArns: typeof secureInfra.kmsKeyArns;
+  // Secure compliant infrastructure instance
+  public readonly secureInfra: SecureCompliantInfra;
+
+  // Expose infrastructure outputs for backward compatibility
+  public readonly vpcIds: typeof this.secureInfra.vpcIds;
+  public readonly ec2InstanceIds: typeof this.secureInfra.ec2InstanceIds;
+  public readonly rdsEndpoints: typeof this.secureInfra.rdsEndpoints;
+  public readonly cloudtrailArn: typeof this.secureInfra.cloudtrailArn;
+  public readonly webAclArn: typeof this.secureInfra.webAclArn;
+  public readonly cloudtrailBucketName: typeof this.secureInfra.cloudtrailBucketName;
+  public readonly kmsKeyArns: typeof this.secureInfra.kmsKeyArns;
 
   /**
    * Creates a new TapStack component.
@@ -65,38 +88,34 @@ export class TapStack extends pulumi.ComponentResource {
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
-    // The following variables are commented out as they are only used in example code.
-    // To use them, uncomment the lines below and the corresponding example code.
-    // const environmentSuffix = args.environmentSuffix || 'dev';
-    // const tags = args.tags || {};
+    const environmentSuffix = args.environmentSuffix || 'dev';
+    const tags = args.tags || {};
 
-    // --- Instantiate Nested Components Here ---
-    // This is where you would create instances of your other component resources,
-    // passing them the necessary configuration.
-
-    // Example of instantiating a DynamoDBStack component:
-    // const dynamoDBStack = new DynamoDBStack("tap-dynamodb", {
-    //   environmentSuffix: environmentSuffix,
-    //   tags: tags,
-    // }, { parent: this });
-
-    // Example of creating a resource directly (for truly global resources only):
-    // const bucket = new aws.s3.Bucket(`tap-global-bucket-${environmentSuffix}`, {
-    //   tags: tags,
-    // }, { parent: this });
+    // --- Instantiate Secure Compliant Infrastructure ---
+    this.secureInfra = new SecureCompliantInfra(
+      'secure-infra',
+      {
+        projectName: args.projectName || 'webapp',
+        environment: environmentSuffix,
+        allowedSshCidr: args.allowedSshCidr || '203.0.113.0/24',
+        vpcCidr: args.vpcCidr || '10.0.0.0/16',
+        regions: args.regions || ['us-west-1', 'us-east-1'],
+      },
+      { parent: this }
+    );
 
     // --- Expose Outputs from Nested Components ---
     // Make outputs from your nested components available as outputs of this main stack.
     // this.table = dynamoDBStack.table;
 
-    // Initialize secure compliant infrastructure outputs
-    this.vpcIds = secureInfra.vpcIds;
-    this.ec2InstanceIds = secureInfra.ec2InstanceIds;
-    this.rdsEndpoints = secureInfra.rdsEndpoints;
-    this.cloudtrailArn = secureInfra.cloudtrailArn;
-    this.webAclArn = secureInfra.webAclArn;
-    this.cloudtrailBucketName = secureInfra.cloudtrailBucketName;
-    this.kmsKeyArns = secureInfra.kmsKeyArns;
+    // Initialize secure compliant infrastructure outputs for backward compatibility
+    this.vpcIds = this.secureInfra.vpcIds;
+    this.ec2InstanceIds = this.secureInfra.ec2InstanceIds;
+    this.rdsEndpoints = this.secureInfra.rdsEndpoints;
+    this.cloudtrailArn = this.secureInfra.cloudtrailArn;
+    this.webAclArn = this.secureInfra.webAclArn;
+    this.cloudtrailBucketName = this.secureInfra.cloudtrailBucketName;
+    this.kmsKeyArns = this.secureInfra.kmsKeyArns;
 
     // Register the outputs of this component.
     this.registerOutputs({
