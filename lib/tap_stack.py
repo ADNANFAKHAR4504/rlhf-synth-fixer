@@ -4,6 +4,7 @@ Creates VPC, subnets, ALB, EC2 instance, and CloudWatch dashboard.
 """
 
 import json
+import ipaddress
 from base64 import b64encode
 
 try:
@@ -21,13 +22,20 @@ def create_infrastructure():
 
   aws_provider = aws.Provider("aws", region=region)
 
+  # Pick two available AZs dynamically for this account/region
+  azs = aws.get_availability_zones(
+    state="available",
+    opts=pulumi.InvokeOptions(provider=aws_provider)
+  )
+
   vpc = aws.ec2.Vpc(
     "web-vpc",
     cidr_block="10.0.0.0/16",
     enable_dns_support=True,
     enable_dns_hostnames=True,
+    assign_generated_ipv6_cidr_block=True,
     tags={"Name": "web-vpc"},
-  opts=pulumi.ResourceOptions(provider=aws_provider, retain_on_delete=True)
+    opts=pulumi.ResourceOptions(provider=aws_provider)
   )
 
   igw = aws.ec2.InternetGateway(
@@ -44,17 +52,32 @@ def create_infrastructure():
       aws.ec2.RouteTableRouteArgs(
         cidr_block="0.0.0.0/0",
         gateway_id=igw.id
+      ),
+      aws.ec2.RouteTableRouteArgs(
+        ipv6_cidr_block="::/0",
+        gateway_id=igw.id
       )
     ],
     tags={"Name": "public-route-table"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
   )
 
+  # Compute two /64 IPv6 subnets from the VPC's /56 IPv6 block
+  subnet1_ipv6 = vpc.ipv6_cidr_block.apply(
+    lambda cidr: str(list(ipaddress.ip_network(cidr).subnets(new_prefix=64))[0])
+  )
+  subnet2_ipv6 = vpc.ipv6_cidr_block.apply(
+    lambda cidr: str(list(ipaddress.ip_network(cidr).subnets(new_prefix=64))[1])
+  )
+
   subnet1 = aws.ec2.Subnet(
     "public-subnet-1",
     vpc_id=vpc.id,
     cidr_block="10.0.101.0/24",
-    availability_zone=f"{region}a",
+    ipv6_cidr_block=subnet1_ipv6,
+    assign_ipv6_address_on_creation=True,
+    availability_zone=azs.names[0],
+    map_public_ip_on_launch=True,
     tags={"Name": "public-subnet-1"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
   )
@@ -63,19 +86,22 @@ def create_infrastructure():
     "public-subnet-2",
     vpc_id=vpc.id,
     cidr_block="10.0.102.0/24",
-    availability_zone=f"{region}b",
+    ipv6_cidr_block=subnet2_ipv6,
+    assign_ipv6_address_on_creation=True,
+    availability_zone=azs.names[1],
+    map_public_ip_on_launch=True,
     tags={"Name": "public-subnet-2"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
   )
 
-  aws.ec2.RouteTableAssociation(
+  rta1 = aws.ec2.RouteTableAssociation(
     "route-table-assoc-1",
     subnet_id=subnet1.id,
     route_table_id=public_route_table.id,
     opts=pulumi.ResourceOptions(provider=aws_provider)
   )
 
-  aws.ec2.RouteTableAssociation(
+  rta2 = aws.ec2.RouteTableAssociation(
     "route-table-assoc-2",
     subnet_id=subnet2.id,
     route_table_id=public_route_table.id,
@@ -141,7 +167,8 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
         protocol="-1",
         from_port=0,
         to_port=0,
-        cidr_blocks=["0.0.0.0/0"]
+  cidr_blocks=["0.0.0.0/0"],
+  ipv6_cidr_blocks=["::/0"]
       )
     ],
     tags={"Name": "ec2-sg"},
@@ -158,6 +185,7 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
         from_port=80,
         to_port=80,
         cidr_blocks=["0.0.0.0/0"],
+        ipv6_cidr_blocks=["::/0"],
         description="Allow HTTP from anywhere"
       )
     ],
@@ -192,9 +220,10 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
     ami=ami_id,
     subnet_id=subnet1.id,
     associate_public_ip_address=True,
+    ipv6_address_count=1,
   vpc_security_group_ids=[ec2_sg.id],
     iam_instance_profile=instance_profile.name,
-    user_data=b64encode(user_data.encode()).decode(),
+    user_data=user_data,
     monitoring=True,
     tags={"Name": "web-instance"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
@@ -206,10 +235,10 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
     load_balancer_type="application",
     security_groups=[alb_sg.id],
     subnets=[subnet1.id, subnet2.id],
-    ip_address_type="ipv4",
+    ip_address_type="dualstack",
     enable_deletion_protection=False,
     tags={"Name": "web-alb"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(provider=aws_provider, depends_on=[rta1, rta2])
   )
 
   target_group = aws.lb.TargetGroup(
