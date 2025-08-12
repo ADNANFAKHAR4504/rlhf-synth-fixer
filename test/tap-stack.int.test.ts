@@ -44,6 +44,8 @@ import {
   GetParameterCommand,
   SSMClient,
 } from '@aws-sdk/client-ssm';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Read the deployment outputs
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
