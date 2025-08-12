@@ -5,7 +5,6 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as waf from 'aws-cdk-lib/aws-wafv2';
@@ -84,7 +83,12 @@ export class TapStack extends cdk.Stack {
           new iam.PolicyStatement({
             sid: 'AllowCloudWatchLogsAccess',
             principals: [new iam.ServicePrincipal('logs.amazonaws.com')],
-            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
+            actions: [
+              'kms:Decrypt',
+              'kms:GenerateDataKey',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+            ],
             resources: ['*'],
           }),
         ],
@@ -231,15 +235,8 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // Create CloudWatch Logs group for CloudTrail
-    const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
-      logGroupName: `/aws/cloudtrail/tap-${environmentSuffix}-trail`,
-      retention: logs.RetentionDays.ONE_YEAR,
-      encryptionKey,
-    });
-
     // Create CloudTrail for API logging
-    const cloudTrail = new cloudtrail.Trail(this, 'FinancialInstitutionTrail', {
+    new cloudtrail.Trail(this, 'FinancialInstitutionTrail', {
       trailName: `tap-${environmentSuffix}-trail`,
       bucket: dataLogsBucket,
       s3KeyPrefix: 'cloudtrail-logs/',
@@ -247,14 +244,8 @@ export class TapStack extends cdk.Stack {
       isMultiRegionTrail: true,
       enableFileValidation: true,
       encryptionKey,
-      sendToCloudWatchLogs: true,
-      cloudWatchLogsRetention: logs.RetentionDays.ONE_YEAR,
-      cloudWatchLogGroup: cloudTrailLogGroup,
+      sendToCloudWatchLogs: false,
     });
-
-    // Add dependency to ensure CloudTrail is created after the bucket and KMS key
-    cloudTrail.node.addDependency(dataLogsBucket);
-    cloudTrail.node.addDependency(encryptionKey);
 
     // Create IAM role for Lambda with minimal permissions
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
