@@ -17,7 +17,6 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-
     // Create KMS key for encryption
     const kmsKey = new kms.Key(this, 'SecureAppKey', {
       description: 'KMS key for secure web application encryption',
