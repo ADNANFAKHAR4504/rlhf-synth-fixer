@@ -101,8 +101,7 @@ class TapStack(pulumi.ComponentResource):
       range_key="timestamp",
       attributes=[
         {"name": "id", "type": "S"},
-        {"name": "timestamp", "type": "S"},
-        {"name": "user_id", "type": "S"}
+        {"name": "timestamp", "type": "S"}
       ],
       tags={
         **common_tags,
