@@ -75,7 +75,7 @@ const environment = process.env.ENVIRONMENT || 'production';
 const outputsPath = process.env.CFN_OUTPUTS_PATH || path.join(process.cwd(), 'cfn-outputs/flat-outputs.json');
 const ENABLE_LIVE = process.env.FORCE_LIVE === 'true' || fs.existsSync(outputsPath) || !!process.env.STACK_NAME;
 
-let outputs: Record<string, string> = {};
+let outputs: any = {};
 
 function normalizeOutputs(obj: any): Record<string, string> {
   if (!obj) return {};

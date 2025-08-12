@@ -85,8 +85,9 @@ describe('TapStack CloudFormation Template (YAML)', () => {
           execSync(`python -m cfn_flip "${ymlPath}" "${jsonPath}"`, { stdio: 'pipe' });
         } catch (e2) {
           try {
-            // Try cfn-flip CLI if available
-            execSync(`cfn-flip "${ymlPath}" > "${jsonPath}"`, { stdio: 'pipe', shell: true });
+            // Try cfn-flip CLI if available; capture stdout and write file
+            const out = execSync(`cfn-flip "${ymlPath}"`, { stdio: 'pipe' });
+            fs.writeFileSync(jsonPath, out.toString('utf8'));
           } catch (e3) {
             // Give up; handled below
           }
