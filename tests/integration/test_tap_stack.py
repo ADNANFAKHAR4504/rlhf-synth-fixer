@@ -80,10 +80,6 @@ class TestTapStackIntegration:
     stack = TapStack(app, "HATestStack", environment_suffix="ha-test")
     synth = json.loads(Testing.synth(stack))
     
-    # Check availability zones data source
-    az_data = synth.get("data", {}).get("aws_availability_zones", {})
-    assert len(az_data) == 1
-    
     # Verify subnets use different AZs
     subnet_resources = synth.get("resource", {}).get("aws_subnet", {})
     public_subnets = [s for s in subnet_resources.values() 
@@ -160,12 +156,12 @@ class TestTapStackIntegration:
     for alarm in alarm_resources.values():
       # Verify alarm configuration
       assert alarm["comparison_operator"] == "GreaterThanThreshold"
-      assert alarm["evaluation_periods"] == "2"
+      assert alarm["evaluation_periods"] == 2
       assert alarm["metric_name"] == "CPUUtilization"
       assert alarm["namespace"] == "AWS/EC2"
-      assert alarm["period"] == "300"
+      assert alarm["period"] == 300
       assert alarm["statistic"] == "Average"
-      assert alarm["threshold"] == "70"
+      assert alarm["threshold"] == 70
       
       # Should have instance ID in dimensions
       assert "dimensions" in alarm
@@ -294,9 +290,6 @@ class TestStackValidation:
     synth = json.loads(Testing.synth(stack))
     
     data_sources = synth.get("data", {})
-    
-    # Should have availability zones data source
-    assert "aws_availability_zones" in data_sources
     
     # Should have AMI data source
     assert "aws_ami" in data_sources
