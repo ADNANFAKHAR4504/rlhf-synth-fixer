@@ -1,6 +1,6 @@
-# Prompt: Generate Terraform HCL (`secure_compliant_infra.tf`)
+# Prompt: Generate Pulumi TypeScript (`secureCompliantInfra.ts`)
 
-You are an expert Terraform engineer with 10+ years of experience. Your task is to generate a **Terraform HCL configuration file** named `secure_compliant_infra.tf` that meets the **exact requirements** listed in the "Provided Data" section.  
+You are an expert Pulumi engineer with 10+ years of experience. Your task is to generate a **Pulumi TypeScript configuration file** named `secureCompliantInfra.ts` that meets the **exact requirements** listed in the "Provided Data" section.  
 **Do not modify, remove, or reword any part of the Provided Data** — it is immutable and must be used exactly as given.
 
 ---
@@ -9,7 +9,7 @@ You are an expert Terraform engineer with 10+ years of experience. Your task is 
 
 **Constraints:**
 
-Use only Terraform version 1.3.0 or above.  
+Use only Pulumi with AWS provider compatible with AWS SDK v3.  
 Ensure all AWS resources are tagged with `Environment` and `Project`.  
 Implement IAM roles to comply with least privilege principle.  
 Restrict SSH access to the EC2 instances to IP address `203.0.113.0/24`.  
@@ -25,7 +25,7 @@ Implement AWS WAF rules to protect against SQL injection attacks.
 
 **Environment:**
 
-You are tasked with setting up a secure AWS infrastructure using Terraform that adheres to the following specifications:
+You are tasked with setting up a secure AWS infrastructure using Pulumi that adheres to the following specifications:
 
 1. Make sure all AWS resources are tagged with `Environment` and `Project` to facilitate resource tracking and billing.  
 2. Implement IAM roles that follow the least privilege principle.  
@@ -40,9 +40,9 @@ You are tasked with setting up a secure AWS infrastructure using Terraform that 
 ---
 
 **Expected Output:**  
-Write a valid Terraform HCL file named `secure_compliant_infra.tf` that defines the configurations meeting all the above requirements.  
-Ensure the Terraform code is verified, region-aware, and deployable without any manual modifications.  
-The configuration must pass `terraform validate` and work successfully with `terraform plan` and `terraform apply`.  
+Write a valid Pulumi TypeScript file named `secureCompliantInfra.ts` that defines the configurations meeting all the above requirements.  
+Ensure the Pulumi code is verified, region-aware, and deployable without any manual modifications.  
+The configuration must pass `pulumi preview` and work successfully with `pulumi up`.  
 All AWS accounts and both specified regions must reflect the intended design.
 
 ---
@@ -54,8 +54,8 @@ The infrastructure is built for a secure, multi-region web application running i
 
 ## GENERATION RULES
 
-1. Output only the **Terraform HCL file** for `secure_compliant_infra.tf`.  
-2. Use **Terraform v1.3.0+** syntax.  
+1. Output only the **Pulumi TypeScript file** for `secureCompliantInfra.ts`.  
+2. Use **Pulumi with AWS provider v5+ syntax (compatible with AWS SDK v3)**.  
 3. Include **variables** for configurable values:  
    - VPC CIDRs  
    - Allowed IP ranges for SSH (must default to `203.0.113.0/24`)  
@@ -70,6 +70,6 @@ The infrastructure is built for a secure, multi-region web application running i
    - **CloudTrail** with log delivery to an **S3 bucket with access logging enabled**  
    - **AWS WAF** with SQL injection mitigation rules  
 5. Tag all resources with `Project` and `Environment`.  
-6. Use `terraform validate`-compliant syntax with outputs and modules if needed.  
+6. Use `pulumi preview`-compliant syntax with outputs and component abstraction if needed.  
 7. All configurations must work seamlessly across `us-west-1` and `us-east-1`.  
 8. Ensure the code is **modular**, **production-ready**, and **fully automated**.
