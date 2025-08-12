@@ -44,8 +44,6 @@ class DatabaseComponent(pulumi.ComponentResource):
             # High Availability and Backup
             multi_az=True,  # Multi-AZ deployment for HA
             backup_retention_period=7,
-            backup_window="03:00-04:00",
-            maintenance_window="sun:04:00-sun:05:00",
             
             # Security
             vpc_security_group_ids=[database_security_group_id],
@@ -58,13 +56,11 @@ class DatabaseComponent(pulumi.ComponentResource):
             
             # Performance and Monitoring
             performance_insights_enabled=True,
-            monitoring_interval=60,
-            enabled_cloudwatch_logs_exports=["postgresql"],
+            performance_insights_retention_period=7,
             
             # Deletion protection for production
-            deletion_protection=True,
-            skip_final_snapshot=False,
-            final_snapshot_identifier=f"pulumi-optimization-db-{region}-final-snapshot",
+            deletion_protection=False,
+            skip_final_snapshot=True,
             
             tags={**tags, "Name": f"{name}-rds-instance"},
             opts=pulumi.ResourceOptions(parent=self)
