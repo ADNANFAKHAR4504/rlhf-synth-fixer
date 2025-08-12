@@ -40,16 +40,15 @@ new TapStack(app, stackName, {
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { Tags } from 'aws-cdk-lib';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -59,10 +58,8 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    // Apply production environment tag to all resources in stack
-    Tags.of(this).add('environment', 'production');
-
-    // Create KMS key for encryption with comprehensive permissions
+    cdk.Tags.of(this).add('environment', 'production');
+    // Create KMS key for encryption
     const kmsKey = new kms.Key(this, 'SecureAppKey', {
       description: 'KMS key for secure web application encryption',
       enableKeyRotation: true,
@@ -95,13 +92,12 @@ export class TapStack extends cdk.Stack {
       }),
     });
 
-    // Create KMS alias for easier key management
     new kms.Alias(this, 'SecureAppKeyAlias', {
       aliasName: `alias/secure-app-${props.environmentSuffix}`,
       targetKey: kmsKey,
     });
 
-    // Create VPC with public, private, and isolated subnets
+    // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, 'SecureAppVpc', {
       maxAzs: 2,
       natGateways: 2,
@@ -124,7 +120,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // Create S3 bucket for access logs with lifecycle management
+    // Create S3 bucket for access logs
     const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
       bucketName: `secure-app-access-logs-${props.environmentSuffix}-${this.account}`,
       encryption: s3.BucketEncryption.KMS,
@@ -142,7 +138,7 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // Create S3 bucket for web application assets with advanced features
+    // Create S3 bucket for web application assets
     const webAssetsBucket = new s3.Bucket(this, 'WebAssetsBucket', {
       bucketName: `secure-app-assets-${props.environmentSuffix}-${this.account}`,
       encryption: s3.BucketEncryption.KMS,
@@ -156,7 +152,7 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // Create CloudTrail bucket with proper retention
+    // Create CloudTrail bucket
     const cloudTrailBucket = new s3.Bucket(this, 'CloudTrailBucket', {
       bucketName: `secure-app-cloudtrail-${props.environmentSuffix}-${this.account}`,
       encryption: s3.BucketEncryption.KMS,
@@ -174,7 +170,7 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // Configure CloudTrail bucket policy for service access
+    // Configure CloudTrail bucket policy
     cloudTrailBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: 'AWSCloudTrailAclCheck',
@@ -184,7 +180,7 @@ export class TapStack extends cdk.Stack {
         resources: [cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
@@ -200,13 +196,13 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
     );
 
-    // Create CloudTrail with KMS encryption and file validation
+    // Create CloudTrail with KMS encryption
     const trail = new cloudtrail.Trail(this, 'SecureAppTrail', {
       trailName: `SecureAppTrail-${props.environmentSuffix}`,
       bucket: cloudTrailBucket,
@@ -216,7 +212,7 @@ export class TapStack extends cdk.Stack {
       enableFileValidation: true,
     });
 
-    // Add S3 data events monitoring
+    // Add data events for S3 buckets
     trail.addS3EventSelector([
       {
         bucket: webAssetsBucket,
@@ -224,7 +220,7 @@ export class TapStack extends cdk.Stack {
       },
     ]);
 
-    // Create database subnet group in isolated subnets
+    // Create database subnet group
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
       vpc,
       description: 'Subnet group for secure application database',
@@ -233,7 +229,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Create database security group with restricted access
+    // Create database security group
     const dbSecurityGroup = new ec2.SecurityGroup(
       this,
       'DatabaseSecurityGroup',
@@ -244,7 +240,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Create encrypted RDS PostgreSQL instance
+    // Create RDS instance with encryption
     const database = new rds.DatabaseInstance(this, 'SecureAppDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_8,
@@ -269,7 +265,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Create ALB security group with HTTP/HTTPS access
+    // Create ALB security group
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
       description: 'Security group for Application Load Balancer',
@@ -298,7 +294,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Enable GuardDuty with S3 protection and malware scanning
+    // Enable GuardDuty detector (if not already enabled)
     new guardduty.CfnDetector(this, 'GuardDutyDetector', {
       enable: true,
       dataSources: {
@@ -313,7 +309,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Output critical resource information
+    // Output important resource information
     new cdk.CfnOutput(this, 'KMSKeyId', {
       value: kmsKey.keyId,
       description: 'KMS Key ID for encryption',
@@ -342,6 +338,11 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CloudTrailArn', {
       value: trail.trailArn,
       description: 'CloudTrail ARN',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailBucketName', {
+      value: cloudTrailBucket.bucketName,
+      description: 'S3 bucket for CloudTrail logs',
     });
   }
 }

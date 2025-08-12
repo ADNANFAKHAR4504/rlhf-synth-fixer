@@ -17,6 +17,7 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
+    cdk.Tags.of(this).add('environment', 'production');
     // Create KMS key for encryption
     const kmsKey = new kms.Key(this, 'SecureAppKey', {
       description: 'KMS key for secure web application encryption',
@@ -138,7 +139,7 @@ export class TapStack extends cdk.Stack {
         resources: [cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
@@ -154,7 +155,7 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
