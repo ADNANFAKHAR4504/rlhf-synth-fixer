@@ -287,7 +287,7 @@ export class ComputeModule extends Construct {
       port: 443,
       protocol: 'HTTPS',
       sslPolicy: 'ELBSecurityPolicy-2016-08',
-      certificateArn: '<YOUR-ACM-CERTIFICATE-ARN>', // Replace with your certificate ARN
+      certificateArn: 'arn:aws:acm:us-east-1:718240086340:certificate/1c3986ff-2aed-4eeb-ac19-79e08aace09c', // Replace with your certificate ARN
       defaultAction: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
     });
 
