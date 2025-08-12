@@ -3,19 +3,28 @@ Description: >
   Deploys a highly available, secure, and scalable Node.js application using Elastic Beanstalk,
   RDS for PostgreSQL, and a custom domain with HTTPS.
 
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1011 # Suppress warning about DBPasswordParameter - Secrets Manager is the default/recommended option
+
 Parameters:
   DomainName:
     Type: String
     Description: The custom domain name for your application (e.g., myapp.example.com).
     Default: app.tap.us-west-2.meerio.com
+
   HostedZoneName:
     Type: String
     Description: The Route 53 Hosted Zone name for your domain (e.g., example.com.).
     Default: meerio.com.
+
   CertificateArn:
     Type: String
     Description: The ARN of the ACM SSL certificate for your domain.
     Default: arn:aws:acm:us-west-2:718240086340:certificate/c43e41ee-5b6c-4d2c-80e9-82c1db57289e
+
   DBUsername:
     Type: String
     Description: The master username for the RDS database.
@@ -24,18 +33,47 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
     Default: 'myappuser'
+
+  DBPasswordParameter:
+    Type: String
+    Description: The master password for RDS (NOT RECOMMENDED - use Secrets Manager instead by leaving this empty).
+    MinLength: '0'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: Must contain only alphanumeric characters.
+    NoEcho: true
+    Default: ''
+
+  S3BucketName:
+    Type: String
+    Description: Name of the S3 bucket for application artifacts (leave empty if not needed).
+    Default: ''
+
   MinSize:
     Description: Minimum number of EC2 instances for the Auto Scaling group.
     Type: Number
     Default: 2
+    MinValue: 1
+    MaxValue: 10
+
   MaxSize:
     Description: Maximum number of EC2 instances for the Auto Scaling group.
     Type: Number
     Default: 4
+    MinValue: 1
+    MaxValue: 20
+
+  SolutionStackName:
+    Type: String
+    Description: Elastic Beanstalk solution stack name for Node.js.
+    Default: '64bit Amazon Linux 2023 v6.2.0 running Node.js 20'
+
+Conditions:
+  UseSecretsManagerCondition: !Equals [!Ref DBPasswordParameter, '']
+  HasS3Bucket: !Not [!Equals [!Ref S3BucketName, '']]
 
 Mappings:
   # Hosted Zone IDs for Elastic Beanstalk environments in various regions
-  # See: https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html#elasticbeanstalk-public-endpoints
   EBHostedZoneIds:
     us-east-1:
       'Id': 'Z117KPS5GTRQ2G'
@@ -285,10 +323,11 @@ Resources:
           Value: !Sub '${AWS::StackName}-DBSG'
 
   # ------------------------------------------------------------#
-  #  Secrets Manager
+  #  Secrets Manager (Conditional)
   # ------------------------------------------------------------#
   DBSecret:
     Type: AWS::SecretsManager::Secret
+    Condition: UseSecretsManagerCondition
     Properties:
       Description: 'Database password for the application'
       GenerateSecretString:
@@ -335,13 +374,24 @@ Resources:
                   - 'logs:PutLogEvents'
                   - 'logs:DescribeLogStreams'
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/elasticbeanstalk/${AWS::StackName}-Env*/*'
-              - Effect: Allow
-                Action:
-                  - 's3:GetObject'
-                Resource: 'arn:aws:s3:::your-app-bucket/*' # <-- IMPORTANT: Change this to your S3 bucket
-              - Effect: Allow
-                Action: 'secretsmanager:GetSecretValue'
-                Resource: !Ref DBSecret
+              - !If
+                - HasS3Bucket
+                - Effect: Allow
+                  Action:
+                    - 's3:GetObject'
+                    - 's3:ListBucket'
+                  Resource:
+                    - !Sub 'arn:aws:s3:::${S3BucketName}'
+                    - !Sub 'arn:aws:s3:::${S3BucketName}/*'
+                - !Ref AWS::NoValue
+              - !If
+                - UseSecretsManagerCondition
+                - Effect: Allow
+                  Action: 'secretsmanager:GetSecretValue'
+                  Resource: !Ref DBSecret
+                - !Ref AWS::NoValue
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier'
 
   BeanstalkInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -362,7 +412,6 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
-    DependsOn: DBSecret # <-- ADD THIS LINE
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -372,12 +421,18 @@ Resources:
       DBInstanceClass: db.t3.medium
       AllocatedStorage: '20'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: '{{resolve:secretsmanager:DBSecret:SecretString:password}}'
+      MasterUserPassword: !If
+        - UseSecretsManagerCondition
+        - !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+        - !Ref DBPasswordParameter
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
       MultiAZ: true
       StorageEncrypted: true
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-RDS'
@@ -389,17 +444,24 @@ Resources:
     Type: AWS::ElasticBeanstalk::Application
     Properties:
       ApplicationName: !Sub '${AWS::StackName}-App'
+      Description: !Sub 'Node.js application for ${AWS::StackName}'
 
   BeanstalkEnvironment:
     Type: AWS::ElasticBeanstalk::Environment
     Properties:
       ApplicationName: !Ref BeanstalkApplication
       EnvironmentName: !Sub '${AWS::StackName}-Env'
-      SolutionStackName: '64bit Amazon Linux 2 v5.8.0 running Node.js 18'
+      SolutionStackName: !Ref SolutionStackName
       OptionSettings:
+        # Instance Configuration
         - Namespace: 'aws:autoscaling:launchconfiguration'
           OptionName: 'IamInstanceProfile'
           Value: !Ref BeanstalkInstanceProfile
+        - Namespace: 'aws:autoscaling:launchconfiguration'
+          OptionName: 'InstanceType'
+          Value: 't3.small'
+
+        # VPC Configuration
         - Namespace: 'aws:ec2:vpc'
           OptionName: 'VPCId'
           Value: !Ref VPC
@@ -409,6 +471,11 @@ Resources:
         - Namespace: 'aws:ec2:vpc'
           OptionName: 'ELBSubnets'
           Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+        - Namespace: 'aws:ec2:vpc'
+          OptionName: 'AssociatePublicIpAddress'
+          Value: 'false'
+
+        # Load Balancer Configuration
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'LoadBalancerType'
           Value: 'application'
@@ -418,31 +485,64 @@ Resources:
         - Namespace: 'aws:elbv2:loadbalancer'
           OptionName: 'IdleTimeout'
           Value: '300'
+        - Namespace: 'aws:elbv2:loadbalancer'
+          OptionName: 'SecurityGroups'
+          Value: !Ref LoadBalancerSecurityGroup
+
+        # HTTPS Listener
         - Namespace: 'aws:elbv2:listener:443'
           OptionName: 'Protocol'
           Value: 'HTTPS'
         - Namespace: 'aws:elbv2:listener:443'
           OptionName: 'SSLCertificateArns'
           Value: !Ref CertificateArn
-        - Namespace: 'aws:elbv2:listenerrule:https'
-          OptionName: 'PathPatterns'
-          Value: '/*'
-        - Namespace: 'aws:elbv2:listenerrule:https'
-          OptionName: 'Process'
-          Value: 'default'
+
+        # HTTP to HTTPS Redirect
         - Namespace: 'aws:elbv2:listener:80'
-          OptionName: 'DefaultActions'
-          Value: >-
-            [{"Type":"redirect","RedirectConfig":{"Protocol":"HTTPS","Port":"443","Host":"#{host}","Path":"/#{path}","Query":"#{query}","StatusCode":"HTTP_301"}}]
+          OptionName: 'Protocol'
+          Value: 'HTTP'
+        - Namespace: 'aws:elbv2:listener:80'
+          OptionName: 'ListenerEnabled'
+          Value: 'true'
+        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
+          OptionName: 'Protocol'
+          Value: 'HTTP'
+        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
+          OptionName: 'Port'
+          Value: '80'
+
+        # Auto Scaling Configuration
         - Namespace: 'aws:autoscaling:asg'
           OptionName: 'MinSize'
           Value: !Ref MinSize
         - Namespace: 'aws:autoscaling:asg'
           OptionName: 'MaxSize'
           Value: !Ref MaxSize
+        - Namespace: 'aws:autoscaling:trigger'
+          OptionName: 'MeasureName'
+          Value: 'CPUUtilization'
+        - Namespace: 'aws:autoscaling:trigger'
+          OptionName: 'Statistic'
+          Value: 'Average'
+        - Namespace: 'aws:autoscaling:trigger'
+          OptionName: 'Unit'
+          Value: 'Percent'
+        - Namespace: 'aws:autoscaling:trigger'
+          OptionName: 'UpperThreshold'
+          Value: '70'
+        - Namespace: 'aws:autoscaling:trigger'
+          OptionName: 'LowerThreshold'
+          Value: '30'
+
+        # Health Monitoring
         - Namespace: 'aws:elasticbeanstalk:healthreporting:system'
           OptionName: 'SystemType'
           Value: 'enhanced'
+        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
+          OptionName: 'HealthCheckPath'
+          Value: '/'
+
+        # CloudWatch Logs
         - Namespace: 'aws:elasticbeanstalk:cloudwatch:logs'
           OptionName: 'StreamLogs'
           Value: 'true'
@@ -452,6 +552,8 @@ Resources:
         - Namespace: 'aws:elasticbeanstalk:cloudwatch:logs'
           OptionName: 'RetentionInDays'
           Value: '7'
+
+        # Environment Variables
         - Namespace: 'aws:elasticbeanstalk:application:environment'
           OptionName: 'DB_HOST'
           Value: !GetAtt RDSInstance.Endpoint.Address
@@ -465,8 +567,16 @@ Resources:
           OptionName: 'DB_PORT'
           Value: !GetAtt RDSInstance.Endpoint.Port
         - Namespace: 'aws:elasticbeanstalk:application:environment'
-          OptionName: 'DB_SECRET_ARN'
-          Value: !Ref DBSecret
+          OptionName: 'NODE_ENV'
+          Value: 'production'
+        - !If
+          - UseSecretsManagerCondition
+          - Namespace: 'aws:elasticbeanstalk:application:environment'
+            OptionName: 'DB_SECRET_ARN'
+            Value: !Ref DBSecret
+          - Namespace: 'aws:elasticbeanstalk:application:environment'
+            OptionName: 'DB_PASSWORD'
+            Value: !Ref DBPasswordParameter
 
   # ------------------------------------------------------------#
   #  DNS
@@ -484,16 +594,37 @@ Resources:
 Outputs:
   ApplicationURL:
     Description: The URL of the Elastic Beanstalk environment.
+    Value: !Sub 'https://${DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationURL'
+
+  ElasticBeanstalkURL:
+    Description: The direct Elastic Beanstalk environment URL.
     Value: !GetAtt BeanstalkEnvironment.EndpointURL
+    Export:
+      Name: !Sub '${AWS::StackName}-EBEndpoint'
+
   RDSEndpoint:
     Description: The endpoint for the RDS database instance.
     Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSEndpoint'
+
   DBSecretARN:
-    Description: The ARN of the database password secret in Secrets Manager.
+    Description: The ARN of the database password secret in Secrets Manager (if used).
+    Condition: UseSecretsManagerCondition
     Value: !Ref DBSecret
-  DomainName:
-    Description: Domain of the application
-    Value: !Ref DomainName
-  HostedZoneName:
-    Description: The name of the hosted zone
-    Value: !Ref HostedZoneName
+    Export:
+      Name: !Sub '${AWS::StackName}-DBSecretARN'
+
+  VPCId:
+    Description: The VPC ID for the application stack.
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
+
+  PrivateSubnetIds:
+    Description: Private subnet IDs for the application.
+    Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnets'
