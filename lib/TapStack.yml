@@ -1066,6 +1066,8 @@ Resources:
                 - Key: CLASSIFICATION
                   Values:
                     - Security
+                - Key: SEVERITY
+                  Values:
                     - Critical
             ApproveAfterDays: 0
       ApprovedPatchesComplianceLevel: CRITICAL
