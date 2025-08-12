@@ -23,12 +23,11 @@ describe('TapStack Template Tests', () => {
   // (They’ll still run as they do now)
 
   // 🔹 NEW: VPC Tests
-  test('VPC uses VpcCidr parameter for CIDR block', () => {
+  test('VPC uses hardcoded CIDR block', () => {
     template.hasResourceProperties('AWS::EC2::VPC', {
-      CidrBlock: { Ref: 'VpcCidr' },
+      CidrBlock: "10.0.0.0/16",
     });
-  });
-  
+  }); 
   // Check subnet exists
   test('At least two subnets exist', () => {
     const subnets = template.findResources('AWS::EC2::Subnet');
