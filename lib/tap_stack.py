@@ -52,10 +52,13 @@ aws_provider = aws.Provider(
 # =============================================================================
 
 # Get available AZs in the region
-availability_zones = aws.get_availability_zones(
+availability_zones_data = aws.get_availability_zones(
     state="available",
     opts=pulumi.InvokeOptions(provider=aws_provider)
 )
+
+# Extract first 2 availability zones
+availability_zones = availability_zones_data.names[:2]
 
 # Get the latest Amazon Linux 2 AMI
 amazon_linux_ami = aws.ec2.get_ami(
@@ -106,7 +109,7 @@ internet_gateway = aws.ec2.InternetGateway(
 
 # Create public subnets (IPv4 only for simplicity)
 public_subnets = []
-for i, az in enumerate(availability_zones[:2]):
+for i, az in enumerate(availability_zones):
     subnet = aws.ec2.Subnet(
         get_resource_name(f"public-subnet-{i+1}"),
         vpc_id=vpc.id,
