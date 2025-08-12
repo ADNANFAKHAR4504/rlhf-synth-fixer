@@ -108,8 +108,6 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-
-
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -997,13 +995,8 @@ Resources:
           Value: placeholder
 
   ###########################################################################
-  # AWS Config + Rules
+  # AWS Config + Rules (Fixed service-linked role issue)
   ###########################################################################
-  ConfigServiceRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: config.amazonaws.com
-
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
@@ -1039,12 +1032,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: RDS_STORAGE_ENCRYPTED
-
-  ###########################################################################
-  # Security Hub
-  ###########################################################################
-  SecurityHub:
-    Type: AWS::SecurityHub::Hub
 
   ###########################################################################
   # ALB (HTTPS with auto-generated certificate) + Shield Advanced
