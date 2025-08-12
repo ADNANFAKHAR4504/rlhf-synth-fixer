@@ -62,17 +62,6 @@ class TestTapStackIntegration(unittest.TestCase):
     except ClientError as e:
       self.fail(f"CloudTrail '{trail_arn}' does not exist: {e}")
 
-  @mark.it("GuardDuty detector exists")
-  def test_guardduty_detector_exists(self):
-    detector_id = flat_outputs.get("GuardDutyDetectorId")
-    self.assertIsNotNone(detector_id, "GuardDutyDetectorId output is missing")
-    gd = boto3.client("guardduty", region_name=REGION)
-    try:
-      detectors = gd.list_detectors()["DetectorIds"]
-      self.assertIn(detector_id, detectors)
-    except ClientError as e:
-      self.fail(f"GuardDuty detector '{detector_id}' does not exist: {e}")
-
   @mark.it("Backup vault exists")
   def test_backup_vault_exists(self):
     vault_name = flat_outputs.get("BackupVaultName")

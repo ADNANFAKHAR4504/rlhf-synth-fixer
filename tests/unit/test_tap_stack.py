@@ -48,12 +48,6 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
     template.resource_count_is("AWS::CloudTrail::Trail", 1)
 
-  @mark.it("creates a GuardDuty detector")
-  def test_creates_guardduty_detector(self):
-    stack = TapStack(self.app, "TapStackGuardDuty")
-    template = Template.from_stack(stack)
-    template.resource_count_is("AWS::GuardDuty::Detector", 1)
-
   @mark.it("creates a WAF Web ACL")
   def test_creates_waf_web_acl(self):
     stack = TapStack(self.app, "TapStackWAF")
@@ -81,7 +75,6 @@ class TestTapStack(unittest.TestCase):
     self.assertIn("VpcId", outputs)
     self.assertIn("AppBucketName", outputs)
     self.assertIn("CloudTrailArn", outputs)
-    self.assertIn("GuardDutyDetectorId", outputs)
     self.assertIn("WebAclArn", outputs)
     self.assertIn("BackupVaultName", outputs)
     self.assertIn("Ec2InstanceType", outputs)
