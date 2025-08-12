@@ -75,15 +75,10 @@ describe('CloudFormation Template Unit Tests', () => {
         ([_, resource]: [string, any]) => resource.Type === 'AWS::SecretsManager::Secret'
       );
 
-      // expect(secretEntry).toBeDefined();
-
       const [__, secretResource] = secretEntry as [string, any];
-
-      // expect(secretResource.Properties).toBeDefined();
 
       // Your CFN template sets this exact name:
       expect(secretResource.Properties.Name).toBe('MyAppPassword');
-      // expect(secretResource.Properties.Description).toBeDefined();
     });
   });
 
