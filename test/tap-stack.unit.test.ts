@@ -19,34 +19,73 @@ describe('TapStack', () => {
   });
 
   test('Creates a Lambda function with correct properties', () => {
-    template.hasResourceProperties('AWS::Lambda::Function', {
-      FunctionName: 'lambda-nova-team-development',
-      Runtime: 'nodejs18.x',
-      Handler: 'index.handler',
-      MemorySize: 1024,
-      Timeout: 30,
-      Description: expect.stringContaining('High-performance Lambda function'),
-      Environment: {
-        Variables: {
-          NODE_ENV: 'development',
-          LOG_LEVEL: 'info'
-        }
-      }
+    const lambdas = template.findResources('AWS::Lambda::Function');
+    const found = Object.values(lambdas).some((lambda: any) => {
+      const props = lambda.Properties;
+      return (
+        props.FunctionName === 'lambda-nova-team-development' &&
+        props.Runtime === 'nodejs18.x' &&
+        props.Handler === 'index.handler' &&
+        props.MemorySize === 1024 &&
+        props.Timeout === 30 &&
+        typeof props.Description === 'string' &&
+        props.Description.includes('High-performance Lambda function') &&
+        props.Environment &&
+        props.Environment.Variables &&
+        props.Environment.Variables.NODE_ENV === 'development' &&
+        props.Environment.Variables.LOG_LEVEL === 'info'
+      );
     });
+    expect(found).toBe(true);
   });
 
   test('Creates an API Gateway HTTP API', () => {
-    template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
-      Name: 'api-gateway-nova-team-development',
-      ProtocolType: 'HTTP',
-      Description: expect.stringContaining('HTTP API Gateway for nova-team development environment')
+    const apis = template.findResources('AWS::ApiGatewayV2::Api');
+    const found = Object.values(apis).some((api: any) => {
+      const props = api.Properties;
+      return (
+        props.Name === 'api-gateway-nova-team-development' &&
+        props.ProtocolType === 'HTTP' &&
+        typeof props.Description === 'string' &&
+        props.Description.includes('HTTP API Gateway for nova-team development environment')
+      );
     });
+    expect(found).toBe(true);
   });
 
   test('Creates Lambda alias for provisioned concurrency', () => {
-    template.hasResourceProperties('AWS::Lambda::Alias', {
-      Name: 'live',
-      Description: expect.stringContaining('Live alias for production traffic')
+    const aliases = template.findResources('AWS::Lambda::Alias');
+    const found = Object.values(aliases).some((alias: any) => {
+      const props = alias.Properties;
+      return (
+        props.Name === 'live' &&
+        typeof props.Description === 'string' &&
+        props.Description.includes('Live alias for production traffic') &&
+        props.ProvisionedConcurrencyConfig &&
+        props.ProvisionedConcurrencyConfig.ProvisionedConcurrentExecutions === 1000
+      );
+    });
+    expect(found).toBe(true);
+  });
+
+  test('Creates IAM Role for Lambda execution', () => {
+    template.resourceCountIs('AWS::IAM::Role', 2); // LambdaExecutionRole and AutoScalingRole
+    // Check that at least one role has the lambda principal
+    const roles = template.findResources('AWS::IAM::Role');
+    const hasLambdaPrincipal = Object.values(roles).some((role: any) => {
+      return role.Properties.AssumeRolePolicyDocument.Statement.some((stmt: any) => {
+        return stmt.Principal && stmt.Principal.Service === 'lambda.amazonaws.com';
+      });
+    });
+    expect(hasLambdaPrincipal).toBe(true);
+  });
+
+  test('Creates Application Auto Scaling Target', () => {
+    template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
+      ServiceNamespace: 'lambda',
+      ScalableDimension: 'lambda:function:ProvisionedConcurrency',
+      MinCapacity: 50,
+      MaxCapacity: 1000
     });
   });
 

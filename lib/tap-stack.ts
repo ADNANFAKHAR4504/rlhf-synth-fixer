@@ -101,11 +101,7 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal(
         'application-autoscaling.amazonaws.com'
       ),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSApplicationAutoscalingLambdaConcurrencyPolicy'
-        ),
-      ],
+      // No managedPolicies property; AWSApplicationAutoscalingLambdaConcurrencyPolicy does not exist
     });
     Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(autoScalingRole).add(k, v));
 
