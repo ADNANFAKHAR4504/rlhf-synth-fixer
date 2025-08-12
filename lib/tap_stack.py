@@ -30,12 +30,16 @@ config = pulumi.Config()
 ENVIRONMENT = config.get("environment") or "dev"
 AWS_REGION = "us-east-1"  # Fixed region to avoid configuration issues
 INSTANCE_TYPE = "t3.micro"
-PROJECT_NAME = "dualstack-web-app-v3"  # Changed to v3 for fresh deployment
+PROJECT_NAME = "dualstack-web-app-v4"  # Changed to v4 for completely clean deployment
 
-# Resource naming convention
+# Add timestamp-based suffix for unique naming
+import time
+DEPLOYMENT_ID = str(int(time.time()))[-6:]  # Use last 6 digits of timestamp
+
+# Resource naming convention with unique deployment ID
 def get_resource_name(resource_type: str) -> str:
     """Generate consistent resource names following naming convention."""
-    return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}"
+    return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}-{DEPLOYMENT_ID}"
 
 # =============================================================================
 # AWS Provider Configuration
@@ -81,7 +85,7 @@ amazon_linux_ami = aws.ec2.get_ami(
 # Networking Infrastructure
 # =============================================================================
 
-# Create VPC with dual-stack support (following working pattern)
+# Create VPC with dual-stack support (with proper cleanup handling)
 vpc = aws.ec2.Vpc(
     get_resource_name("vpc"),
     cidr_block="10.0.0.0/16",
@@ -94,7 +98,11 @@ vpc = aws.ec2.Vpc(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
     },
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+    opts=pulumi.ResourceOptions(
+        provider=aws_provider,
+        protect=False,  # Allow deletion when needed
+        delete_before_replace=True  # Delete old before creating new to avoid conflicts
+    )
 )
 
 # Internet Gateway for public internet access
@@ -109,7 +117,7 @@ internet_gateway = aws.ec2.InternetGateway(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Create public subnets with dual-stack support (fresh v3 deployment)
+# Create public subnets with dual-stack support (v4 with unique deployment ID)
 public_subnets = []
 for i, az in enumerate(availability_zones):
     # Calculate IPv6 CIDR properly to avoid conflicts - use different subnet ranges
@@ -123,19 +131,25 @@ for i, az in enumerate(availability_zones):
         )
     
     subnet = aws.ec2.Subnet(
-        get_resource_name(f"public-subnet-v3-{i+1}"),  # Fresh v3 naming
+        get_resource_name(f"public-subnet-{i+1}"),  # Now includes unique deployment ID
         vpc_id=vpc.id,
-        cidr_block=f"10.0.{30+i}.0/24",  # Changed to 30+i for completely new CIDR range
+        cidr_block=f"10.0.{40+i}.0/24",  # Changed to 40+i for completely fresh CIDR range
         availability_zone=az,
         assign_ipv6_address_on_creation=True,
         ipv6_cidr_block=ipv6_cidr_calc,
         map_public_ip_on_launch=True,
         tags={
-            "Name": get_resource_name(f"public-subnet-v3-{i+1}"),
+            "Name": get_resource_name(f"public-subnet-{i+1}"),
             "Environment": ENVIRONMENT,
-            "Type": "Public"
+            "Type": "Public",
+            "DeploymentID": DEPLOYMENT_ID
         },
-        opts=pulumi.ResourceOptions(provider=aws_provider)
+        opts=pulumi.ResourceOptions(
+            provider=aws_provider,
+            protect=False,  # Allow deletion when needed
+            delete_before_replace=True,  # Clean deletion order
+            depends_on=[vpc]  # Explicit dependency
+        )
     )
     public_subnets.append(subnet)
 
@@ -170,13 +184,17 @@ ipv6_route = aws.ec2.Route(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Associate route table with public subnets (v3 fresh deployment)
+# Associate route table with public subnets (v4 with unique deployment ID)
 for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
-        get_resource_name(f"public-rta-v3-{i + 1}"),  # Fresh v3 naming
+        get_resource_name(f"public-rta-{i + 1}"),  # Now includes unique deployment ID
         subnet_id=subnet.id,
         route_table_id=public_route_table.id,
-        opts=pulumi.ResourceOptions(provider=aws_provider)
+        opts=pulumi.ResourceOptions(
+            provider=aws_provider,
+            protect=False,  # Allow deletion when needed
+            depends_on=[subnet, public_route_table]  # Explicit dependencies
+        )
     )
 
 # =============================================================================
