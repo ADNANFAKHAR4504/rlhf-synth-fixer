@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { App, TerraformStack } from 'cdktf';
+import { TerraformStack } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
