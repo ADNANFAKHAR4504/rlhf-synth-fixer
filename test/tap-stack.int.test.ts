@@ -157,16 +157,23 @@ describe('Serverless API Integration Tests', () => {
   });
 
   describe('CloudWatch Monitoring Tests', () => {
+    // Set timeout to 2 minutes for all tests in this suite
+    jest.setTimeout(120000);
     beforeAll(async () => {
-    // Invoke Lambda to ensure we have metrics
-    const command = new InvokeCommand({
-      FunctionName: outputs.LambdaFunctionName,
-      Payload: JSON.stringify({ test: true })
-    });
-    await lambdaClient.send(command);
-    
-    // Wait for metrics to propagate
-    await new Promise(resolve => setTimeout(resolve, 60000)); // 1 minute delay
+      try {
+        // Invoke Lambda to ensure we have metrics
+      const command = new InvokeCommand({
+        FunctionName: outputs.LambdaFunctionName,
+        Payload: JSON.stringify({ test: true })
+      });
+      await lambdaClient.send(command);
+      
+      // Wait for metrics to propagate (45 seconds should be enough)
+      await new Promise(resolve => setTimeout(resolve, 45000));
+      } catch (error) {
+        console.error('Error in beforeAll:', error);
+        throw error;
+      }
     });
     
     test('CloudWatch dashboard should be accessible', async () => {
