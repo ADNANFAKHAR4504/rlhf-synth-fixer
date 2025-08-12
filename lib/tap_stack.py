@@ -1,620 +1,595 @@
+#!/usr/bin/env python3
 """
-IaC - AWS Nova Model Breaking - Multi-region, highly available, secure AWS infrastructure
+TAP Stack Infrastructure Module
+
+This module implements a highly available, secure, and scalable AWS infrastructure
+using Pulumi and Python. The infrastructure spans multiple AWS regions and includes
+VPCs, subnets, security groups, IAM roles, auto-scaling compute resources, managed
+databases, and comprehensive monitoring solutions.
 """
 
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, List, Any
+from pulumi import Input, Output, ResourceOptions
+from typing import Dict, List, Optional, Any
 import json
+import base64
 
-# CI/CD GitHub Actions Workflow (paste into .github/workflows/deploy.yml):
-"""
-name: Deploy Infrastructure
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-      - run: pip install -r requirements.txt
-      - run: pytest tests/unit/ tests/integration/
-      
-  deploy:
-    needs: test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-      - run: pip install -r requirements.txt
-      - uses: pulumi/actions@v4
-        with:
-          command: preview
-          stack-name: prod
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - uses: pulumi/actions@v4
-        with:
-          command: up
-          stack-name: prod
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-"""
-
-class TapStack:
-    def __init__(self):
-        # Validate and load configuration
-        self.config = pulumi.Config()
-        
-        # Required config with validation
-        self.team_name = self.config.require("teamName")
-        self.environment = self.config.require("environment")
-        regions_str = self.config.require("aws:regions")
-        self.regions = [r.strip() for r in regions_str.split(",")]
-        self.allowed_ssh_cidr = self.config.require("allowed_ssh_cidr")
-        
-        # Validate minimum 3 regions
-        if len(self.regions) < 3:
-            raise Exception(f"At least 3 regions required, got {len(self.regions)}: {self.regions}")
-        
-        # Optional config with defaults
-        self.db_backup_retention_days = self.config.get_int("db_backup_retention_days") or 7
-        self.log_retention_days = self.config.get_int("log_retention_days") or 30
-        self.min_capacity = self.config.get_int("min_capacity") or 1
-        self.max_capacity = self.config.get_int("max_capacity") or 3
-        
-        # Common tags
-        self.common_tags = {
-            "Owner": self.team_name,
-            "Purpose": "IaC - AWS Nova Model Breaking",
-            "Environment": self.environment,
-            "CostCenter": f"{self.team_name}-{self.environment}",
-        }
-        
-        # Deploy infrastructure
-        self.deploy_infrastructure()
+class TapStackArgs:
+    """Arguments for configuring the TAP Stack deployment."""
     
-    def deploy_infrastructure(self):
-        # Create KMS key for encryption
-        self.kms_key = aws.kms.Key(
-            f"{self.team_name}-{self.environment}-kms-key",
-            description="KMS key for encryption",
-            tags=self.common_tags
-        )
+    def __init__(self, environment_suffix: str = "dev"):
+        self.environment_suffix = environment_suffix
+        self.team_name = "tap"
+        self.project_name = "iac-aws-nova-model-breaking"
+        self.regions = ["us-east-1", "us-west-2", "eu-west-1"]
+        self.availability_zones_per_region = 3
         
-        # Create SNS topic for alerts
-        self.sns_topic = aws.sns.Topic(
-            f"{self.team_name}-{self.environment}-alerts",
-            tags=self.common_tags
-        )
+    def get_resource_name(self, service_name: str) -> str:
+        """Generate resource name following the naming convention."""
+        return f"{self.team_name}-{self.environment_suffix}-{service_name}"
+    
+    def get_default_tags(self) -> Dict[str, str]:
+        """Generate default tags for all resources."""
+        return {
+            "Owner": "tap-team",
+            "Purpose": "iac-aws-nova-model-breaking",
+            "Environment": self.environment_suffix,
+            "Project": self.project_name,
+            "ManagedBy": "pulumi"
+        }
+
+
+class TapStack(pulumi.ComponentResource):
+    """
+    TAP Stack - Highly Available AWS Infrastructure
+    
+    This stack creates:
+    - Multi-region VPC infrastructure with public/private subnets
+    - Auto-scaling compute resources
+    - Managed RDS database with encryption and backups
+    - IAM roles and policies
+    - Security groups with restricted access
+    - CloudWatch logging and monitoring
+    - CI/CD pipeline integration capabilities
+    """
+    
+    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
+        super().__init__("custom:infrastructure:TapStack", name, {}, opts)
         
-        # Deploy per region
-        self.region_resources = {}
-        for region in self.regions:
-            self.region_resources[region] = self.deploy_region(region)
+        self.args = args
+        self.default_tags = args.get_default_tags()
         
-        # Create RDS subnet group across all regions (use first region's subnets)
-        first_region = self.regions[0]
-        private_subnet_ids = [
-            subnet.id for subnet in self.region_resources[first_region]["private_subnets"]
-        ]
+        # Store created resources
+        self.vpcs: Dict[str, aws.ec2.Vpc] = {}
+        self.subnets: Dict[str, Dict[str, List[aws.ec2.Subnet]]] = {}
+        self.security_groups: Dict[str, aws.ec2.SecurityGroup] = {}
+        self.iam_roles: Dict[str, aws.iam.Role] = {}
+        self.auto_scaling_groups: Dict[str, aws.autoscaling.Group] = {}
+        self.databases: Dict[str, aws.rds.Instance] = {}
+        self.load_balancers: Dict[str, aws.lb.LoadBalancer] = {}
         
-        self.db_subnet_group = aws.rds.SubnetGroup(
-            f"{self.team_name}-{self.environment}-db-subnet-group",
-            subnet_ids=private_subnet_ids,
-            tags=self.common_tags,
-            opts=pulumi.ResourceOptions(provider=self.region_resources[first_region]["provider"])
-        )
+        # Create infrastructure
+        self._create_iam_resources()
+        self._create_vpc_infrastructure()
+        self._create_security_groups()
+        self._create_database_infrastructure()
+        self._create_compute_infrastructure()
+        self._create_monitoring_infrastructure()
         
-        # Create RDS instance in first region
-        self.database = self.create_database(first_region)
-        
-        # Create CloudWatch dashboard
-        self.create_cloudwatch_dashboard()
-        
-        # Export outputs
-        pulumi.export("regions", self.regions)
-        pulumi.export("database_endpoint", self.database.endpoint)
-        pulumi.export("load_balancer_dns", {
-            region: resources["alb"].dns_name 
-            for region, resources in self.region_resources.items()
+        # Register outputs
+        self.register_outputs({
+            "vpc_ids": {region: vpc.id for region, vpc in self.vpcs.items()},
+            "database_endpoints": {region: db.endpoint for region, db in self.databases.items()},
+            "load_balancer_dns": {region: lb.dns_name for region, lb in self.load_balancers.items()},
         })
     
-    def deploy_region(self, region: str) -> Dict[str, Any]:
-        # Create provider for this region
-        provider = aws.Provider(f"provider-{region}", region=region)
+    def _create_iam_resources(self):
+        """Create IAM roles and policies for the infrastructure."""
         
-        # Get AZs for this region
-        azs = aws.get_availability_zones(
-            state="available",
-            opts=pulumi.InvokeOptions(provider=provider)
+        # EC2 Service Role
+        ec2_assume_role_policy = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {"Service": "ec2.amazonaws.com"}
+            }]
+        })
+        
+        self.iam_roles["ec2_role"] = aws.iam.Role(
+            self.args.get_resource_name("ec2-role"),
+            assume_role_policy=ec2_assume_role_policy,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
         )
         
-        # Create VPC
-        vpc = aws.ec2.Vpc(
-            f"{self.team_name}-{self.environment}-vpc-{region}",
-            cidr_block="10.0.0.0/16",
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-vpc-{region}"},
-            opts=pulumi.ResourceOptions(provider=provider)
+        # Attach necessary policies to EC2 role
+        aws.iam.RolePolicyAttachment(
+            self.args.get_resource_name("ec2-cloudwatch-policy"),
+            role=self.iam_roles["ec2_role"].name,
+            policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+            opts=ResourceOptions(parent=self)
         )
         
-        # Create Internet Gateway
-        igw = aws.ec2.InternetGateway(
-            f"{self.team_name}-{self.environment}-igw-{region}",
-            vpc_id=vpc.id,
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-igw-{region}"},
-            opts=pulumi.ResourceOptions(provider=provider)
+        # Instance profile for EC2
+        self.ec2_instance_profile = aws.iam.InstanceProfile(
+            self.args.get_resource_name("ec2-instance-profile"),
+            role=self.iam_roles["ec2_role"].name,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
         )
         
-        # Create public subnets (2 AZs)
-        public_subnets = []
-        private_subnets = []
-        nat_gateways = []
+        # RDS Service Role
+        rds_assume_role_policy = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {"Service": "rds.amazonaws.com"}
+            }]
+        })
         
-        for i in range(2):  # 2 AZs per region
-            # Public subnet
-            public_subnet = aws.ec2.Subnet(
-                f"{self.team_name}-{self.environment}-public-subnet-{region}-{i+1}",
-                vpc_id=vpc.id,
-                cidr_block=f"10.0.{i+1}.0/24",
-                availability_zone=azs.names[i],
-                map_public_ip_on_launch=True,
-                tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-public-subnet-{region}-{i+1}"},
-                opts=pulumi.ResourceOptions(provider=provider)
+        self.iam_roles["rds_role"] = aws.iam.Role(
+            self.args.get_resource_name("rds-role"),
+            assume_role_policy=rds_assume_role_policy,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+    
+    def _create_vpc_infrastructure(self):
+        """Create VPC infrastructure across multiple regions."""
+        
+        for region in self.args.regions:
+            provider = aws.Provider(
+                f"provider-{region}",
+                region=region,
+                opts=ResourceOptions(parent=self)
             )
-            public_subnets.append(public_subnet)
             
-            # Private subnet
-            private_subnet = aws.ec2.Subnet(
-                f"{self.team_name}-{self.environment}-private-subnet-{region}-{i+1}",
-                vpc_id=vpc.id,
-                cidr_block=f"10.0.{i+10}.0/24",
-                availability_zone=azs.names[i],
-                tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-private-subnet-{region}-{i+1}"},
-                opts=pulumi.ResourceOptions(provider=provider)
+            # Create VPC
+            vpc = aws.ec2.Vpc(
+                self.args.get_resource_name(f"vpc-{region}"),
+                cidr_block="10.0.0.0/16",
+                enable_dns_hostnames=True,
+                enable_dns_support=True,
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"vpc-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
             )
-            private_subnets.append(private_subnet)
+            self.vpcs[region] = vpc
             
-            # Elastic IP for NAT Gateway
-            eip = aws.ec2.Eip(
-                f"{self.team_name}-{self.environment}-eip-{region}-{i+1}",
+            # Get availability zones for the region
+            azs = aws.get_availability_zones(
+                state="available",
+                opts=pulumi.InvokeOptions(provider=provider)
+            )
+            
+            # Initialize subnet dictionaries for this region
+            self.subnets[region] = {"public": [], "private": []}
+            
+            # Create Internet Gateway
+            igw = aws.ec2.InternetGateway(
+                self.args.get_resource_name(f"igw-{region}"),
+                vpc_id=vpc.id,
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"igw-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create NAT Gateway and Elastic IP
+            nat_eip = aws.ec2.Eip(
+                self.args.get_resource_name(f"nat-eip-{region}"),
                 domain="vpc",
-                tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-eip-{region}-{i+1}"},
-                opts=pulumi.ResourceOptions(provider=provider)
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self, provider=provider)
             )
             
-            # NAT Gateway
-            nat_gw = aws.ec2.NatGateway(
-                f"{self.team_name}-{self.environment}-nat-{region}-{i+1}",
-                allocation_id=eip.id,
-                subnet_id=public_subnet.id,
-                tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-nat-{region}-{i+1}"},
-                opts=pulumi.ResourceOptions(provider=provider)
+            # Create subnets across availability zones
+            for i in range(min(self.args.availability_zones_per_region, len(azs.names))):
+                az = azs.names[i]
+                
+                # Public subnet
+                public_subnet = aws.ec2.Subnet(
+                    self.args.get_resource_name(f"public-subnet-{region}-{i}"),
+                    vpc_id=vpc.id,
+                    cidr_block=f"10.0.{i * 2}.0/24",
+                    availability_zone=az,
+                    map_public_ip_on_launch=True,
+                    tags={**self.default_tags, "Name": self.args.get_resource_name(f"public-subnet-{region}-{i}")},
+                    opts=ResourceOptions(parent=self, provider=provider)
+                )
+                self.subnets[region]["public"].append(public_subnet)
+                
+                # Private subnet
+                private_subnet = aws.ec2.Subnet(
+                    self.args.get_resource_name(f"private-subnet-{region}-{i}"),
+                    vpc_id=vpc.id,
+                    cidr_block=f"10.0.{i * 2 + 1}.0/24",
+                    availability_zone=az,
+                    tags={**self.default_tags, "Name": self.args.get_resource_name(f"private-subnet-{region}-{i}")},
+                    opts=ResourceOptions(parent=self, provider=provider)
+                )
+                self.subnets[region]["private"].append(private_subnet)
+            
+            # Create NAT Gateway in first public subnet
+            nat_gateway = aws.ec2.NatGateway(
+                self.args.get_resource_name(f"nat-{region}"),
+                allocation_id=nat_eip.id,
+                subnet_id=self.subnets[region]["public"][0].id,
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"nat-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
             )
-            nat_gateways.append(nat_gw)
-        
-        # Create route tables
-        public_rt = aws.ec2.RouteTable(
-            f"{self.team_name}-{self.environment}-public-rt-{region}",
-            vpc_id=vpc.id,
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-public-rt-{region}"},
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Public route to IGW
-        aws.ec2.Route(
-            f"{self.team_name}-{self.environment}-public-route-{region}",
-            route_table_id=public_rt.id,
-            destination_cidr_block="0.0.0.0/0",
-            gateway_id=igw.id,
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Associate public subnets with public route table
-        for i, subnet in enumerate(public_subnets):
-            aws.ec2.RouteTableAssociation(
-                f"{self.team_name}-{self.environment}-public-rta-{region}-{i+1}",
-                subnet_id=subnet.id,
-                route_table_id=public_rt.id,
-                opts=pulumi.ResourceOptions(provider=provider)
-            )
-        
-        # Create private route tables and routes
-        for i, (subnet, nat_gw) in enumerate(zip(private_subnets, nat_gateways)):
-            private_rt = aws.ec2.RouteTable(
-                f"{self.team_name}-{self.environment}-private-rt-{region}-{i+1}",
+            
+            # Create route tables
+            public_rt = aws.ec2.RouteTable(
+                self.args.get_resource_name(f"public-rt-{region}"),
                 vpc_id=vpc.id,
-                tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-private-rt-{region}-{i+1}"},
-                opts=pulumi.ResourceOptions(provider=provider)
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"public-rt-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            private_rt = aws.ec2.RouteTable(
+                self.args.get_resource_name(f"private-rt-{region}"),
+                vpc_id=vpc.id,
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"private-rt-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create routes
+            aws.ec2.Route(
+                self.args.get_resource_name(f"public-route-{region}"),
+                route_table_id=public_rt.id,
+                destination_cidr_block="0.0.0.0/0",
+                gateway_id=igw.id,
+                opts=ResourceOptions(parent=self, provider=provider)
             )
             
             aws.ec2.Route(
-                f"{self.team_name}-{self.environment}-private-route-{region}-{i+1}",
+                self.args.get_resource_name(f"private-route-{region}"),
                 route_table_id=private_rt.id,
                 destination_cidr_block="0.0.0.0/0",
-                nat_gateway_id=nat_gw.id,
-                opts=pulumi.ResourceOptions(provider=provider)
+                nat_gateway_id=nat_gateway.id,
+                opts=ResourceOptions(parent=self, provider=provider)
             )
             
-            aws.ec2.RouteTableAssociation(
-                f"{self.team_name}-{self.environment}-private-rta-{region}-{i+1}",
-                subnet_id=subnet.id,
-                route_table_id=private_rt.id,
-                opts=pulumi.ResourceOptions(provider=provider)
+            # Associate subnets with route tables
+            for i, subnet in enumerate(self.subnets[region]["public"]):
+                aws.ec2.RouteTableAssociation(
+                    self.args.get_resource_name(f"public-rta-{region}-{i}"),
+                    subnet_id=subnet.id,
+                    route_table_id=public_rt.id,
+                    opts=ResourceOptions(parent=self, provider=provider)
+                )
+            
+            for i, subnet in enumerate(self.subnets[region]["private"]):
+                aws.ec2.RouteTableAssociation(
+                    self.args.get_resource_name(f"private-rta-{region}-{i}"),
+                    subnet_id=subnet.id,
+                    route_table_id=private_rt.id,
+                    opts=ResourceOptions(parent=self, provider=provider)
+                )
+    
+    def _create_security_groups(self):
+        """Create security groups with restricted access."""
+        
+        for region in self.args.regions:
+            provider = aws.Provider(f"provider-{region}", region=region)
+            vpc = self.vpcs[region]
+            
+            # Web server security group
+            web_sg = aws.ec2.SecurityGroup(
+                self.args.get_resource_name(f"web-sg-{region}"),
+                vpc_id=vpc.id,
+                description="Security group for web servers",
+                ingress=[
+                    {
+                        "protocol": "tcp",
+                        "from_port": 80,
+                        "to_port": 80,
+                        "cidr_blocks": ["0.0.0.0/0"]
+                    },
+                    {
+                        "protocol": "tcp",
+                        "from_port": 443,
+                        "to_port": 443,
+                        "cidr_blocks": ["0.0.0.0/0"]
+                    },
+                    {
+                        "protocol": "tcp",
+                        "from_port": 22,
+                        "to_port": 22,
+                        "cidr_blocks": ["10.0.0.0/16"]  # Restrict SSH to VPC
+                    }
+                ],
+                egress=[{
+                    "protocol": "-1",
+                    "from_port": 0,
+                    "to_port": 0,
+                    "cidr_blocks": ["0.0.0.0/0"]
+                }],
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"web-sg-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
             )
+            self.security_groups[f"web-{region}"] = web_sg
+            
+            # Database security group
+            db_sg = aws.ec2.SecurityGroup(
+                self.args.get_resource_name(f"db-sg-{region}"),
+                vpc_id=vpc.id,
+                description="Security group for database servers",
+                ingress=[{
+                    "protocol": "tcp",
+                    "from_port": 5432,
+                    "to_port": 5432,
+                    "security_groups": [web_sg.id]  # Only allow access from web servers
+                }],
+                egress=[{
+                    "protocol": "-1",
+                    "from_port": 0,
+                    "to_port": 0,
+                    "cidr_blocks": ["0.0.0.0/0"]
+                }],
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"db-sg-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            self.security_groups[f"db-{region}"] = db_sg
+    
+    def _create_database_infrastructure(self):
+        """Create managed database with encryption and automated backups."""
         
-        # Create security groups
-        alb_sg = aws.ec2.SecurityGroup(
-            f"{self.team_name}-{self.environment}-alb-sg-{region}",
-            vpc_id=vpc.id,
-            description="ALB Security Group",
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=80,
-                    to_port=80,
-                    cidr_blocks=["0.0.0.0/0"]
-                ),
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=443,
-                    to_port=443,
-                    cidr_blocks=["0.0.0.0/0"]
-                )
-            ],
-            egress=[
-                aws.ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"]
-                )
-            ],
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-alb-sg-{region}"},
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
+        for region in self.args.regions:
+            provider = aws.Provider(f"provider-{region}", region=region)
+            
+            # Create DB subnet group
+            db_subnet_group = aws.rds.SubnetGroup(
+                self.args.get_resource_name(f"db-subnet-group-{region}"),
+                subnet_ids=[subnet.id for subnet in self.subnets[region]["private"]],
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"db-subnet-group-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create RDS instance
+            db_instance = aws.rds.Instance(
+                self.args.get_resource_name(f"postgres-{region}"),
+                allocated_storage=20,
+                max_allocated_storage=100,
+                storage_type="gp2",
+                storage_encrypted=True,
+                engine="postgres",
+                engine_version="13.7",
+                instance_class="db.t3.micro",
+                db_name="tapdb",
+                username="tapuser",
+                password="ChangeMe123!",  # In production, use AWS Secrets Manager
+                vpc_security_group_ids=[self.security_groups[f"db-{region}"].id],
+                db_subnet_group_name=db_subnet_group.name,
+                backup_retention_period=7,
+                backup_window="03:00-04:00",
+                maintenance_window="sun:04:00-sun:05:00",
+                auto_minor_version_upgrade=True,
+                deletion_protection=True,
+                skip_final_snapshot=False,
+                final_snapshot_identifier=self.args.get_resource_name(f"postgres-final-snapshot-{region}"),
+                copy_tags_to_snapshot=True,
+                performance_insights_enabled=True,
+                monitoring_interval=60,
+                monitoring_role_arn=self.iam_roles["rds_role"].arn,
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            self.databases[region] = db_instance
+    
+    def _create_compute_infrastructure(self):
+        """Create auto-scaling compute resources with load balancers."""
         
-        ec2_sg = aws.ec2.SecurityGroup(
-            f"{self.team_name}-{self.environment}-ec2-sg-{region}",
-            vpc_id=vpc.id,
-            description="EC2 Security Group",
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=22,
-                    to_port=22,
-                    cidr_blocks=[self.allowed_ssh_cidr]
-                ),
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=80,
-                    to_port=80,
-                    security_groups=[alb_sg.id]
-                )
-            ],
-            egress=[
-                aws.ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"]
-                )
-            ],
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-ec2-sg-{region}"},
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create IAM role for EC2 instances
-        ec2_role = aws.iam.Role(
-            f"{self.team_name}-{self.environment}-ec2-role-{region}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {"Service": "ec2.amazonaws.com"}
-                }]
-            }),
-            tags=self.common_tags,
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Attach CloudWatch agent policy
-        aws.iam.RolePolicyAttachment(
-            f"{self.team_name}-{self.environment}-ec2-cloudwatch-policy-{region}",
-            role=ec2_role.name,
-            policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create instance profile
-        instance_profile = aws.iam.InstanceProfile(
-            f"{self.team_name}-{self.environment}-ec2-profile-{region}",
-            role=ec2_role.name,
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create launch template
-        launch_template = aws.ec2.LaunchTemplate(
-            f"{self.team_name}-{self.environment}-lt-{region}",
-            image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI (update as needed)
-            instance_type="t3.micro",
-            vpc_security_group_ids=[ec2_sg.id],
-            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-                name=instance_profile.name
-            ),
-            user_data=pulumi.Output.from_input("""#!/bin/bash
+        for region in self.args.regions:
+            provider = aws.Provider(f"provider-{region}", region=region)
+            
+            # Get latest Amazon Linux 2 AMI
+            ami = aws.ec2.get_ami(
+                most_recent=True,
+                owners=["amazon"],
+                filters=[{"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}],
+                opts=pulumi.InvokeOptions(provider=provider)
+            )
+            
+            # Create Application Load Balancer
+            alb = aws.lb.LoadBalancer(
+                self.args.get_resource_name(f"alb-{region}"),
+                load_balancer_type="application",
+                subnets=[subnet.id for subnet in self.subnets[region]["public"]],
+                security_groups=[self.security_groups[f"web-{region}"].id],
+                enable_deletion_protection=False,
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            self.load_balancers[region] = alb
+            
+            # Create target group
+            target_group = aws.lb.TargetGroup(
+                self.args.get_resource_name(f"tg-{region}"),
+                port=80,
+                protocol="HTTP",
+                vpc_id=self.vpcs[region].id,
+                health_check={
+                    "enabled": True,
+                    "healthy_threshold": 2,
+                    "unhealthy_threshold": 2,
+                    "timeout": 5,
+                    "interval": 30,
+                    "path": "/health",
+                    "matcher": "200"
+                },
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create ALB listener
+            aws.lb.Listener(
+                self.args.get_resource_name(f"alb-listener-{region}"),
+                load_balancer_arn=alb.arn,
+                port="80",
+                protocol="HTTP",
+                default_actions=[{
+                    "type": "forward",
+                    "target_group_arn": target_group.arn
+                }],
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create launch template
+            user_data = """#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
-""").apply(lambda x: __import__('base64').b64encode(x.encode()).decode()),
-            block_device_mappings=[
-                aws.ec2.LaunchTemplateBlockDeviceMappingArgs(
-                    device_name="/dev/xvda",
-                    ebs=aws.ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
-                        volume_size=20,
-                        volume_type="gp3",
-                        encrypted=True,
-                        kms_key_id=self.kms_key.arn
-                    )
-                )
-            ],
-            tag_specifications=[
-                aws.ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="instance",
-                    tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-instance-{region}"}
-                )
-            ],
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-lt-{region}"},
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create ALB
-        alb = aws.lb.LoadBalancer(
-            f"{self.team_name}-{self.environment}-alb-{region}",
-            load_balancer_type="application",
-            subnets=[subnet.id for subnet in public_subnets],
-            security_groups=[alb_sg.id],
-            enable_deletion_protection=False,
-            access_logs=aws.lb.LoadBalancerAccessLogsArgs(
-                enabled=False  # Would need S3 bucket for logs
-            ),
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-alb-{region}"},
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create target group
-        target_group = aws.lb.TargetGroup(
-            f"{self.team_name}-{self.environment}-tg-{region}",
-            port=80,
-            protocol="HTTP",
-            vpc_id=vpc.id,
-            health_check=aws.lb.TargetGroupHealthCheckArgs(
-                enabled=True,
-                healthy_threshold=2,
-                interval=30,
-                matcher="200",
-                path="/",
-                port="traffic-port",
-                protocol="HTTP",
-                timeout=5,
-                unhealthy_threshold=2
-            ),
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-tg-{region}"},
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create ALB listener
-        aws.lb.Listener(
-            f"{self.team_name}-{self.environment}-listener-{region}",
-            load_balancer_arn=alb.arn,
-            port=80,
-            protocol="HTTP",
-            default_actions=[
-                aws.lb.ListenerDefaultActionArgs(
-                    type="forward",
-                    target_group_arn=target_group.arn
-                )
-            ],
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create Auto Scaling Group
-        asg = aws.autoscaling.Group(
-            f"{self.team_name}-{self.environment}-asg-{region}",
-            vpc_zone_identifiers=[subnet.id for subnet in private_subnets],
-            target_group_arns=[target_group.arn],
-            health_check_type="ELB",
-            health_check_grace_period=300,
-            min_size=self.min_capacity,
-            max_size=self.max_capacity,
-            desired_capacity=self.min_capacity,
-            launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
-                id=launch_template.id,
-                version="$Latest"
-            ),
-            tags=[
-                aws.autoscaling.GroupTagArgs(
-                    key=key,
-                    value=value,
-                    propagate_at_launch=True
-                ) for key, value in {**self.common_tags, "Name": f"{self.team_name}-{self.environment}-asg-{region}"}.items()
-            ],
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create scaling policies
-        scale_up_policy = aws.autoscaling.Policy(
-            f"{self.team_name}-{self.environment}-scale-up-{region}",
-            scaling_adjustment=1,
-            adjustment_type="ChangeInCapacity",
-            cooldown=300,
-            autoscaling_group_name=asg.name,
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        scale_down_policy = aws.autoscaling.Policy(
-            f"{self.team_name}-{self.environment}-scale-down-{region}",
-            scaling_adjustment=-1,
-            adjustment_type="ChangeInCapacity",
-            cooldown=300,
-            autoscaling_group_name=asg.name,
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create CloudWatch alarms
-        aws.cloudwatch.MetricAlarm(
-            f"{self.team_name}-{self.environment}-cpu-high-{region}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="CPUUtilization",
-            namespace="AWS/EC2",
-            period=120,
-            statistic="Average",
-            threshold=60.0,
-            alarm_description="This metric monitors ec2 cpu utilization",
-            alarm_actions=[scale_up_policy.arn, self.sns_topic.arn],
-            dimensions={"AutoScalingGroupName": asg.name},
-            tags=self.common_tags,
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        aws.cloudwatch.MetricAlarm(
-            f"{self.team_name}-{self.environment}-cpu-low-{region}",
-            comparison_operator="LessThanThreshold",
-            evaluation_periods=2,
-            metric_name="CPUUtilization",
-            namespace="AWS/EC2",
-            period=120,
-            statistic="Average",
-            threshold=10.0,
-            alarm_description="This metric monitors ec2 cpu utilization",
-            alarm_actions=[scale_down_policy.arn],
-            dimensions={"AutoScalingGroupName": asg.name},
-            tags=self.common_tags,
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create CloudWatch log group
-        log_group = aws.cloudwatch.LogGroup(
-            f"{self.team_name}-{self.environment}-logs-{region}",
-            retention_in_days=self.log_retention_days,
-            kms_key_id=self.kms_key.arn,
-            tags=self.common_tags,
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        return {
-            "provider": provider,
-            "vpc": vpc,
-            "public_subnets": public_subnets,
-            "private_subnets": private_subnets,
-            "alb": alb,
-            "asg": asg,
-            "target_group": target_group,
-            "log_group": log_group,
-            "ec2_sg": ec2_sg
-        }
+echo "<h1>TAP Infrastructure - Region: """ + region + """</h1>" > /var/www/html/index.html
+echo "OK" > /var/www/html/health
+"""
+            
+            launch_template = aws.ec2.LaunchTemplate(
+                self.args.get_resource_name(f"lt-{region}"),
+                name_prefix=self.args.get_resource_name(f"lt-{region}"),
+                image_id=ami.id,
+                instance_type="t3.micro",
+                vpc_security_group_ids=[self.security_groups[f"web-{region}"].id],
+                iam_instance_profile={"name": self.ec2_instance_profile.name},
+                user_data=pulumi.Output.from_input(user_data).apply(
+                    lambda ud: base64.b64encode(ud.encode()).decode()
+                ),
+                monitoring={"enabled": True},
+                metadata_options={
+                    "http_endpoint": "enabled",
+                    "http_tokens": "required",
+                    "http_put_response_hop_limit": 1
+                },
+                tag_specifications=[{
+                    "resource_type": "instance",
+                    "tags": self.default_tags
+                }],
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create Auto Scaling Group
+            asg = aws.autoscaling.Group(
+                self.args.get_resource_name(f"asg-{region}"),
+                min_size=1,
+                max_size=6,
+                desired_capacity=2,
+                vpc_zone_identifiers=[subnet.id for subnet in self.subnets[region]["private"]],
+                target_group_arns=[target_group.arn],
+                health_check_type="ELB",
+                health_check_grace_period=300,
+                launch_template={
+                    "id": launch_template.id,
+                    "version": "$Latest"
+                },
+                tag=[{
+                    "key": key,
+                    "value": value,
+                    "propagate_at_launch": True
+                } for key, value in self.default_tags.items()],
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            self.auto_scaling_groups[region] = asg
+            
+            # Create scaling policies
+            scale_up_policy = aws.autoscaling.Policy(
+                self.args.get_resource_name(f"scale-up-policy-{region}"),
+                scaling_adjustment=1,
+                adjustment_type="ChangeInCapacity",
+                cooldown=300,
+                autoscaling_group_name=asg.name,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            scale_down_policy = aws.autoscaling.Policy(
+                self.args.get_resource_name(f"scale-down-policy-{region}"),
+                scaling_adjustment=-1,
+                adjustment_type="ChangeInCapacity",
+                cooldown=300,
+                autoscaling_group_name=asg.name,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create CloudWatch alarms
+            aws.cloudwatch.MetricAlarm(
+                self.args.get_resource_name(f"cpu-high-{region}"),
+                comparison_operator="GreaterThanThreshold",
+                evaluation_periods="2",
+                metric_name="CPUUtilization",
+                namespace="AWS/EC2",
+                period="120",
+                statistic="Average",
+                threshold="70.0",
+                alarm_description="This metric monitors ec2 cpu utilization",
+                alarm_actions=[scale_up_policy.arn],
+                dimensions={"AutoScalingGroupName": asg.name},
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            aws.cloudwatch.MetricAlarm(
+                self.args.get_resource_name(f"cpu-low-{region}"),
+                comparison_operator="LessThanThreshold",
+                evaluation_periods="2",
+                metric_name="CPUUtilization",
+                namespace="AWS/EC2",
+                period="120",
+                statistic="Average",
+                threshold="20.0",
+                alarm_description="This metric monitors ec2 cpu utilization",
+                alarm_actions=[scale_down_policy.arn],
+                dimensions={"AutoScalingGroupName": asg.name},
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
     
-    def create_database(self, region: str):
-        provider = self.region_resources[region]["provider"]
+    def _create_monitoring_infrastructure(self):
+        """Create CloudWatch logging and monitoring infrastructure."""
         
-        # Create DB security group
-        db_sg = aws.ec2.SecurityGroup(
-            f"{self.team_name}-{self.environment}-db-sg",
-            vpc_id=self.region_resources[region]["vpc"].id,
-            description="RDS Security Group",
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=3306,
-                    to_port=3306,
-                    security_groups=[self.region_resources[region]["ec2_sg"].id]
-                )
-            ],
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-db-sg"},
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        # Create RDS instance
-        db_instance = aws.rds.Instance(
-            f"{self.team_name}-{self.environment}-database",
-            allocated_storage=20,
-            max_allocated_storage=100,
-            storage_type="gp2",
-            storage_encrypted=True,
-            kms_key_id=self.kms_key.arn,
-            engine="mysql",
-            engine_version="8.0",
-            instance_class="db.t3.micro",
-            db_name="appdb",
-            username="admin",
-            password="changeme123!",  # In production, use Pulumi secrets
-            vpc_security_group_ids=[db_sg.id],
-            db_subnet_group_name=self.db_subnet_group.name,
-            backup_retention_period=self.db_backup_retention_days,
-            backup_window="03:00-04:00",
-            maintenance_window="sun:04:00-sun:05:00",
-            multi_az=True,
-            publicly_accessible=False,
-            skip_final_snapshot=True,
-            deletion_protection=False,
-            tags={**self.common_tags, "Name": f"{self.team_name}-{self.environment}-database"},
-            opts=pulumi.ResourceOptions(provider=provider)
-        )
-        
-        return db_instance
-    
-    def create_cloudwatch_dashboard(self):
-        # Create CloudWatch dashboard
-        dashboard_body = {
-            "widgets": [
-                {
-                    "type": "metric",
-                    "x": 0,
-                    "y": 0,
-                    "width": 12,
-                    "height": 6,
-                    "properties": {
-                        "metrics": [
-                            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", 
-                             self.region_resources[self.regions[0]]["alb"].arn_suffix],
-                            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", 
-                             self.region_resources[self.regions[0]]["alb"].arn_suffix]
-                        ],
-                        "period": 300,
-                        "stat": "Average",
-                        "region": self.regions[0],
-                        "title": "ALB Metrics"
+        for region in self.args.regions:
+            provider = aws.Provider(f"provider-{region}", region=region)
+            
+            # Create CloudWatch Log Group
+            log_group = aws.cloudwatch.LogGroup(
+                self.args.get_resource_name(f"log-group-{region}"),
+                retention_in_days=14,
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create CloudWatch Dashboard
+            dashboard_body = pulumi.Output.all(
+                asg_name=self.auto_scaling_groups[region].name,
+                alb_arn_suffix=self.load_balancers[region].arn_suffix,
+                db_identifier=self.databases[region].id
+            ).apply(lambda args: json.dumps({
+                "widgets": [
+                    {
+                        "type": "metric",
+                        "x": 0, "y": 0,
+                        "width": 12, "height": 6,
+                        "properties": {
+                            "metrics": [
+                                ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", args["asg_name"]],
+                                ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", args["alb_arn_suffix"]],
+                                ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", args["db_identifier"]]
+                            ],
+                            "view": "timeSeries",
+                            "stacked": False,
+                            "region": region,
+                            "title": f"Infrastructure Metrics - {region}",
+                            "period": 300
+                        }
                     }
-                }
-            ]
-        }
-        
-        aws.cloudwatch.Dashboard(
-            f"{self.team_name}-{self.environment}-dashboard",
-            dashboard_name=f"{self.team_name}-{self.environment}-dashboard",
-            dashboard_body=pulumi.Output.from_input(dashboard_body).apply(lambda x: json.dumps(x)),
-            opts=pulumi.ResourceOptions(provider=self.region_resources[self.regions[0]]["provider"])
-        )
+                ]
+            }))
+            
+            aws.cloudwatch.Dashboard(
+                self.args.get_resource_name(f"dashboard-{region}"),
+                dashboard_name=self.args.get_resource_name(f"dashboard-{region}"),
+                dashboard_body=dashboard_body,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
 
-# Create the stack
-stack = TapStack()
+
+
