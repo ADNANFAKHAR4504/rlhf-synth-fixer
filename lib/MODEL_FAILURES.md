@@ -356,6 +356,42 @@ kmsKeys.map(({ region, key }) => ({
 - Consistent trailing commas
 - Proper line breaks and spacing
 
+### 10. AWS Region Configuration Mismatch Error
+**Issue**: The infrastructure code was hardcoded to use `us-east-1` for global resources (S3, CloudTrail, WAF), but the AWS credentials/configuration was set for `us-east-2`, causing authorization header malformed errors.
+
+**Error Message**: `AuthorizationHeaderMalformed: The authorization header is malformed; the region 'us-east-1' is wrong; expecting 'us-east-2'`
+
+**Problem**: AWS credentials and configuration were set for `us-east-2`, but the code was trying to create S3 buckets and other global resources in `us-east-1`.
+
+**Root Cause**: Hardcoded region references in the infrastructure code didn't match the actual AWS environment configuration.
+
+**Original Code**:
+```typescript
+const regions = args.regions || ['us-west-1', 'us-east-1'];
+
+// S3 buckets hardcoded to us-east-1
+{ provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+```
+
+**Fixed Code**:
+```typescript
+const regions = args.regions || ['us-west-1', 'us-east-2'];
+
+// S3 buckets now use us-east-2 to match AWS configuration
+{ provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
+```
+
+**Resources Updated**:
+- Default regions in both `SecureCompliantInfra` and `TapStack`
+- S3 CloudTrail bucket provider
+- S3 access logs bucket provider  
+- S3 bucket logging provider
+- CloudTrail bucket policy provider
+- CloudTrail resource provider
+- WAF Web ACL provider
+
+**Result**: Infrastructure now deploys successfully in `us-west-1` and `us-east-2` regions, matching the AWS environment configuration.
+
 ## Summary
 
 All issues have been successfully resolved:
@@ -365,10 +401,11 @@ All issues have been successfully resolved:
 - ✅ Deprecated S3 resource replaced with current version
 - ✅ S3 bucket naming simplified to use clean environment-project pattern
 - ✅ EC2 key pair dependency removed (SSH access can be added later if needed)
+- ✅ AWS region configuration mismatch resolved (us-east-1 → us-east-2)
 - ✅ Infrastructure refactored into proper class-based architecture
 - ✅ Environment configuration now passed from TapStack to SecureCompliantInfra
 - ✅ Resource hierarchy properly managed with parent relationships
 - ✅ Infrastructure code maintains all original functionality
 - ✅ Test files updated to match actual interface definitions
 
-The infrastructure code now follows the project's coding standards, uses proper architectural patterns, and should deploy successfully across multiple regions with clean resource names like `prod-webapp-cloudtrail-logs` and proper configuration management.
+The infrastructure code now follows the project's coding standards, uses proper architectural patterns, and should deploy successfully across `us-west-1` and `us-east-2` regions with clean resource names and proper configuration management that matches the AWS environment setup.

@@ -99,7 +99,7 @@ export class TapStack extends pulumi.ComponentResource {
         environment: environmentSuffix,
         allowedSshCidr: args.allowedSshCidr || '203.0.113.0/24',
         vpcCidr: args.vpcCidr || '10.0.0.0/16',
-        regions: args.regions || ['us-west-1', 'us-east-1'],
+        regions: args.regions || ['us-west-1', 'us-east-2'],
       },
       { parent: this }
     );

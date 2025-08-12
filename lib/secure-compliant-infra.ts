@@ -36,7 +36,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
     const environment = args.environment || 'prod';
     const allowedSshCidr = args.allowedSshCidr || '203.0.113.0/24';
     const vpcCidr = args.vpcCidr || '10.0.0.0/16';
-    const regions = args.regions || ['us-west-1', 'us-east-1'];
+    const regions = args.regions || ['us-west-1', 'us-east-2'];
 
     // Common tags for all resources
     const commonTags = {
@@ -80,7 +80,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       ),
     }));
 
-    // S3 bucket for CloudTrail logs (single bucket in us-east-1)
+    // S3 bucket for CloudTrail logs (single bucket in us-east-2)
     const cloudtrailBucket = new aws.s3.Bucket(
       `${projectName}-${environment}-cloudtrail-logs`,
       {
@@ -88,7 +88,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         forceDestroy: true,
         tags: commonTags,
       },
-      { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+      { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
     );
 
     // S3 bucket for access logs
@@ -98,7 +98,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         bucket: `${environment}-${projectName}-access-logs`,
         tags: commonTags,
       },
-      { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+      { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
     );
 
     // Enable access logging on CloudTrail bucket (created but not exported)
@@ -109,7 +109,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         targetBucket: accessLogsBucket.id,
         targetPrefix: 'cloudtrail-access-logs/',
       },
-      { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+      { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
     );
 
     // CloudTrail bucket policy
@@ -144,7 +144,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       })
     ),
   },
-  { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+  { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
 );
 
 // CloudTrail
@@ -159,7 +159,7 @@ const cloudtrail = new aws.cloudtrail.Trail(
     tags: commonTags,
   },
   {
-    provider: providers.find(p => p.region === 'us-east-1')?.provider,
+    provider: providers.find(p => p.region === 'us-east-2')?.provider,
     dependsOn: [cloudtrailBucketPolicy],
     parent: this,
   }
@@ -213,7 +213,7 @@ const webAcl = new aws.wafv2.WebAcl(
       sampledRequestsEnabled: true,
     },
   },
-  { provider: providers.find(p => p.region === 'us-east-1')?.provider, parent: this }
+  { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
 );
 
     // Create infrastructure for each region
