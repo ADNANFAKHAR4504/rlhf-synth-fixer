@@ -31,11 +31,6 @@ Parameters:
     Default: db.t3.micro
     Description: RDS instance class
 
-  VpcCidr:
-    Type: String
-    Default: "10.0.0.0/16"
-    Description: "CIDR block for the VPC"
-
   ApplicationName:
     Type: String
     Default: "secure-app"
@@ -67,7 +62,7 @@ Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: "10.0.0.0/16"
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
@@ -185,7 +180,21 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable MySQL access from EC2
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref InstanceSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-rds-sg"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
   AppLogBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -229,7 +238,7 @@ Resources:
     Properties:
       ImageId: ami-084a7d336e816906b
       InstanceType: !Ref InstanceType
-      SubnetId: !Ref PublicSubnet1
+      SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds: [!Ref InstanceSecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
 
@@ -253,7 +262,7 @@ Resources:
       Engine: mysql
       MasterUsername: !Join [ "", [ "{{resolve:secretsmanager:", !Ref RDSSecret, ":SecretString:username}}" ] ]
       MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", !Ref RDSSecret, ":SecretString:password}}" ] ]
-      VPCSecurityGroups: [!Ref InstanceSecurityGroup]
+      VPCSecurityGroups: [!Ref RDSSecurityGroup]
       DBSubnetGroupName: !Ref RDSSubnetGroup
       BackupRetentionPeriod: 7
       MultiAZ: false
