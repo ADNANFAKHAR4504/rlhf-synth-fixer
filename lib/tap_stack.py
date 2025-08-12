@@ -131,9 +131,10 @@ internet_gateway = aws.ec2.InternetGateway(
 # Create public subnets with dual-stack support (v5 with unique deployment ID)
 public_subnets = []
 for i, az in enumerate(availability_zones):
-    # Calculate IPv6 CIDR properly using the working pattern
+    # Calculate IPv6 CIDR properly - VPC gives us something like 2600:1f18:25c:300::/56
+    # We need to create /64 subnets like 2600:1f18:25c:300::/64, 2600:1f18:25c:301::/64
     ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-        lambda cidr: f"{cidr[:-5]}{i}::/64"  # Use index for subnet differentiation
+        lambda cidr, subnet_index=i: f"{cidr[:-5]}{hex(subnet_index)[2:]}::/64"
     )
     
     subnet = aws.ec2.Subnet(
