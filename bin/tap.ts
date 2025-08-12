@@ -45,5 +45,9 @@ export const albDnsName = stack.albDnsName;
 export const rdsEndpoint = stack.rdsEndpoint;
 export const s3BucketName = stack.s3BucketName;
 export const vpcId = stack.webAppStack.vpc.id;
-export const publicSubnetIds = stack.webAppStack.publicSubnets.map(subnet => subnet.id);
-export const privateSubnetIds = stack.webAppStack.privateSubnets.map(subnet => subnet.id);
+export const publicSubnetIds = stack.webAppStack.publicSubnets.map(
+  subnet => subnet.id
+);
+export const privateSubnetIds = stack.webAppStack.privateSubnets.map(
+  subnet => subnet.id
+);

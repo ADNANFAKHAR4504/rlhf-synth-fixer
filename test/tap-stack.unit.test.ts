@@ -11,7 +11,9 @@ jest.mock('@pulumi/pulumi', () => ({
       // Mock implementation
     }
   },
-  all: jest.fn(),
+  all: jest.fn().mockImplementation((values) => ({
+    apply: jest.fn().mockImplementation((fn) => fn(['mock-bucket-arn', 'mock-bucket-name'])),
+  })),
   Output: jest.fn(),
 }));
 
@@ -107,12 +109,28 @@ jest.mock('@pulumi/aws', () => ({
   s3: {
     Bucket: jest.fn().mockImplementation(() => ({
       id: 'mock-bucket-id',
+      arn: 'mock-bucket-arn',
+      bucket: 'mock-bucket-name',
     })),
     BucketVersioningV2: jest.fn().mockImplementation(() => ({
       id: 'mock-versioning-id',
     })),
     BucketPublicAccessBlock: jest.fn().mockImplementation(() => ({
       id: 'mock-pab-id',
+    })),
+    BucketServerSideEncryptionConfigurationV2: jest.fn().mockImplementation(() => ({
+      id: 'mock-encryption-id',
+    })),
+  },
+  secretsmanager: {
+    Secret: jest.fn().mockImplementation(() => ({
+      id: 'mock-secret-id',
+      arn: {
+        apply: jest.fn().mockImplementation((fn) => fn('mock-secret-arn')),
+      },
+    })),
+    SecretVersion: jest.fn().mockImplementation(() => ({
+      id: 'mock-secret-version-id',
     })),
   },
   getAvailabilityZones: jest.fn().mockResolvedValue({

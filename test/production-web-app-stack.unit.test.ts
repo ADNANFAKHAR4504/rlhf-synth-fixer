@@ -11,7 +11,9 @@ jest.mock('@pulumi/pulumi', () => ({
       // Mock implementation
     }
   },
-  all: jest.fn(),
+  all: jest.fn().mockImplementation((values) => ({
+    apply: jest.fn().mockImplementation((fn) => fn(['mock-bucket-arn', 'mock-bucket-name'])),
+  })),
   Output: jest.fn(),
 }));
 
@@ -107,12 +109,28 @@ jest.mock('@pulumi/aws', () => ({
   s3: {
     Bucket: jest.fn().mockImplementation(() => ({
       id: 'mock-bucket-id',
+      arn: 'mock-bucket-arn',
+      bucket: 'mock-bucket-name',
     })),
     BucketVersioningV2: jest.fn().mockImplementation(() => ({
       id: 'mock-versioning-id',
     })),
     BucketPublicAccessBlock: jest.fn().mockImplementation(() => ({
       id: 'mock-pab-id',
+    })),
+    BucketServerSideEncryptionConfigurationV2: jest.fn().mockImplementation(() => ({
+      id: 'mock-encryption-id',
+    })),
+  },
+  secretsmanager: {
+    Secret: jest.fn().mockImplementation(() => ({
+      id: 'mock-secret-id',
+      arn: {
+        apply: jest.fn().mockImplementation((fn) => fn('mock-secret-arn')),
+      },
+    })),
+    SecretVersion: jest.fn().mockImplementation(() => ({
+      id: 'mock-secret-version-id',
     })),
   },
   getAvailabilityZones: jest.fn().mockResolvedValue({
@@ -147,13 +165,6 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(stack).toBeDefined();
     });
 
-    it('should create stack with custom SSH allowed CIDR', () => {
-      const stack = new ProductionWebAppStack('test-web-app', {
-        sshAllowedCidr: '10.0.0.0/8',
-      });
-      expect(stack).toBeDefined();
-    });
-
     it('should create stack with custom project name', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
         projectName: 'custom-project',
@@ -179,7 +190,6 @@ describe('ProductionWebAppStack Component Tests', () => {
     it('should create stack with all custom parameters', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
         vpcCidr: '192.168.0.0/16',
-        sshAllowedCidr: '192.168.1.0/24',
         projectName: 'full-custom-app',
         environmentSuffix: 'prod',
         tags: {
@@ -232,7 +242,6 @@ describe('ProductionWebAppStack Component Tests', () => {
     it('should handle empty string values', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
         vpcCidr: '', // Should fall back to default
-        sshAllowedCidr: '', // Should fall back to default
         projectName: '', // Should fall back to default
         environmentSuffix: '',
       });
@@ -266,8 +275,8 @@ describe('ProductionWebAppStack Component Tests', () => {
           enableDnsHostnames: true,
           enableDnsSupport: true,
           tags: expect.objectContaining({
-            Name: 'test-project-vpc',
-            Environment: 'Production',
+            Name: 'test-project-test-vpc',
+            Environment: 'Test',
             Project: 'test-project',
           }),
         }),
@@ -282,7 +291,7 @@ describe('ProductionWebAppStack Component Tests', () => {
         expect.objectContaining({
           vpcId: 'mock-vpc-id',
           tags: expect.objectContaining({
-            Name: 'test-project-igw',
+            Name: 'test-project-test-igw',
           }),
         }),
         expect.objectContaining({ parent: stack })
@@ -300,7 +309,7 @@ describe('ProductionWebAppStack Component Tests', () => {
           cidrBlock: '10.0.1.0/24',
           mapPublicIpOnLaunch: true,
           tags: expect.objectContaining({
-            Name: 'test-project-public-subnet-1',
+            Name: 'test-project-test-public-subnet-1',
             Type: 'Public',
           }),
         }),
@@ -314,7 +323,7 @@ describe('ProductionWebAppStack Component Tests', () => {
           vpcId: 'mock-vpc-id',
           cidrBlock: '10.0.10.0/24',
           tags: expect.objectContaining({
-            Name: 'test-project-private-subnet-1',
+            Name: 'test-project-test-private-subnet-1',
             Type: 'Private',
           }),
         }),
@@ -330,7 +339,7 @@ describe('ProductionWebAppStack Component Tests', () => {
         expect.objectContaining({
           domain: 'vpc',
           tags: expect.objectContaining({
-            Name: 'test-project-nat-eip-1',
+            Name: 'test-project-test-nat-eip-1',
           }),
         }),
         expect.objectContaining({ parent: stack })
@@ -342,7 +351,7 @@ describe('ProductionWebAppStack Component Tests', () => {
           allocationId: 'mock-eip-id',
           subnetId: 'mock-subnet-id',
           tags: expect.objectContaining({
-            Name: 'test-project-nat-gateway-1',
+            Name: 'test-project-test-nat-gateway-1',
           }),
         }),
         expect.objectContaining({ parent: stack })
@@ -356,7 +365,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.ec2.SecurityGroup).toHaveBeenCalledWith(
         'alb-sg',
         expect.objectContaining({
-          name: 'test-project-alb-sg',
+          name: 'test-project-test-alb-sg',
           description: 'Security group for Application Load Balancer',
           vpcId: 'mock-vpc-id',
           ingress: expect.arrayContaining([
@@ -377,19 +386,19 @@ describe('ProductionWebAppStack Component Tests', () => {
         expect.objectContaining({ parent: stack })
       );
 
-      // EC2 Security Group
+      // EC2 Security Group (No SSH - Session Manager only)
       expect(aws.ec2.SecurityGroup).toHaveBeenCalledWith(
         'ec2-sg',
         expect.objectContaining({
-          name: 'test-project-ec2-sg',
-          description: 'Security group for EC2 instances',
+          name: 'test-project-test-ec2-sg',
+          description: 'Security group for EC2 instances - ALB access only',
           vpcId: 'mock-vpc-id',
           ingress: expect.arrayContaining([
             expect.objectContaining({
-              fromPort: 22,
-              toPort: 22,
+              fromPort: 80,
+              toPort: 80,
               protocol: 'tcp',
-              cidrBlocks: ['0.0.0.0/0'],
+              securityGroups: ['mock-sg-id'],
             }),
           ]),
         }),
@@ -400,7 +409,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.ec2.SecurityGroup).toHaveBeenCalledWith(
         'rds-sg',
         expect.objectContaining({
-          name: 'test-project-rds-sg',
+          name: 'test-project-test-rds-sg',
           description: 'Security group for RDS MySQL instance',
           vpcId: 'mock-vpc-id',
           ingress: expect.arrayContaining([
@@ -422,18 +431,33 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.iam.Role).toHaveBeenCalledWith(
         'ec2-role',
         expect.objectContaining({
-          name: 'test-project-ec2-role',
+          name: 'test-project-test-ec2-role',
           assumeRolePolicy: expect.stringContaining('ec2.amazonaws.com'),
+          managedPolicyArns: expect.arrayContaining([
+            'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+          ]),
         }),
         expect.objectContaining({ parent: stack })
       );
 
+      // Should create least privilege S3 policy
       expect(aws.iam.RolePolicy).toHaveBeenCalledWith(
-        'ec2-policy',
+        'ec2-s3-policy',
         expect.objectContaining({
-          name: 'test-project-ec2-policy',
+          name: 'test-project-test-ec2-s3-policy',
           role: 'mock-role-id',
           policy: expect.stringContaining('s3:GetObject'),
+        }),
+        expect.objectContaining({ parent: stack })
+      );
+
+      // Should create Secrets Manager policy
+      expect(aws.iam.RolePolicy).toHaveBeenCalledWith(
+        'ec2-secrets-policy',
+        expect.objectContaining({
+          name: 'test-project-test-ec2-secrets-policy',
+          role: 'mock-role-id',
+          policy: expect.stringContaining('secretsmanager:GetSecretValue'),
         }),
         expect.objectContaining({ parent: stack })
       );
@@ -441,7 +465,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.iam.InstanceProfile).toHaveBeenCalledWith(
         'ec2-instance-profile',
         expect.objectContaining({
-          name: 'test-project-ec2-instance-profile',
+          name: 'test-project-test-ec2-instance-profile',
           role: 'mock-role-name',
         }),
         expect.objectContaining({ parent: stack })
@@ -456,7 +480,7 @@ describe('ProductionWebAppStack Component Tests', () => {
         expect.objectContaining({
           description: 'KMS key for RDS encryption',
           tags: expect.objectContaining({
-            Name: 'test-project-rds-kms-key',
+            Name: 'test-project-test-rds-kms-key',
           }),
         }),
         expect.objectContaining({ parent: stack })
@@ -465,7 +489,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.kms.Alias).toHaveBeenCalledWith(
         'rds-kms-alias',
         expect.objectContaining({
-          name: 'alias/test-project-rds-key',
+          name: 'alias/test-project-test-rds-key',
           targetKeyId: 'mock-key-id',
         }),
         expect.objectContaining({ parent: stack })
@@ -478,7 +502,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.rds.SubnetGroup).toHaveBeenCalledWith(
         'rds-subnet-group',
         expect.objectContaining({
-          name: 'test-project-rds-subnet-group',
+          name: 'test-project-test-rds-subnet-group',
           subnetIds: ['mock-subnet-id', 'mock-subnet-id', 'mock-subnet-id'],
         }),
         expect.objectContaining({ parent: stack })
@@ -487,17 +511,21 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.rds.Instance).toHaveBeenCalledWith(
         'mysql-instance',
         expect.objectContaining({
-          identifier: 'test-project-mysql',
+          identifier: 'test-project-test-mysql',
           engine: 'mysql',
           engineVersion: '8.0',
           instanceClass: 'db.t3.micro',
           allocatedStorage: 20,
+          maxAllocatedStorage: 100,
           storageType: 'gp2',
           storageEncrypted: true,
           kmsKeyId: 'mock-key-arn',
           dbName: 'production',
           username: 'admin',
-          password: 'changeme123!',
+          password: 'TempPassword123!', // Temporary - should use Secrets Manager in production
+          skipFinalSnapshot: false,
+          backupRetentionPeriod: 7,
+          deletionProtection: false, // Set to true for production
         }),
         expect.objectContaining({ parent: stack })
       );
@@ -509,7 +537,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.ec2.LaunchTemplate).toHaveBeenCalledWith(
         'launch-template',
         expect.objectContaining({
-          name: 'test-project-launch-template',
+          name: 'test-project-test-launch-template',
           instanceType: 't3.micro',
           vpcSecurityGroupIds: ['mock-sg-id'],
           iamInstanceProfile: expect.objectContaining({
@@ -527,7 +555,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.lb.LoadBalancer).toHaveBeenCalledWith(
         'app-lb',
         expect.objectContaining({
-          name: 'test-project-alb',
+          name: 'test-project-test-alb',
           loadBalancerType: 'application',
           securityGroups: ['mock-sg-id'],
           subnets: ['mock-subnet-id', 'mock-subnet-id', 'mock-subnet-id'],
@@ -538,7 +566,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.lb.TargetGroup).toHaveBeenCalledWith(
         'app-tg',
         expect.objectContaining({
-          name: 'test-project-tg',
+          name: 'test-project-test-tg',
           port: 80,
           protocol: 'HTTP',
           vpcId: 'mock-vpc-id',
@@ -559,7 +587,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.autoscaling.Group).toHaveBeenCalledWith(
         'app-asg',
         expect.objectContaining({
-          name: 'test-project-asg',
+          name: 'test-project-test-asg',
           vpcZoneIdentifiers: ['mock-subnet-id', 'mock-subnet-id', 'mock-subnet-id'],
           targetGroupArns: ['mock-tg-arn'],
           healthCheckType: 'ELB',
@@ -582,9 +610,9 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(aws.s3.Bucket).toHaveBeenCalledWith(
         'app-bucket',
         expect.objectContaining({
-          bucket: expect.stringContaining('test-project-bucket-'),
+          bucket: expect.stringContaining('test-project-test-bucket-'),
           tags: expect.objectContaining({
-            Name: 'test-project-bucket',
+            Name: 'test-project-test-bucket',
           }),
         }),
         expect.objectContaining({ parent: stack })
@@ -612,6 +640,21 @@ describe('ProductionWebAppStack Component Tests', () => {
         }),
         expect.objectContaining({ parent: stack })
       );
+
+      expect(aws.s3.BucketServerSideEncryptionConfigurationV2).toHaveBeenCalledWith(
+        'app-bucket-encryption',
+        expect.objectContaining({
+          bucket: 'mock-bucket-id',
+          rules: expect.arrayContaining([
+            expect.objectContaining({
+              applyServerSideEncryptionByDefault: expect.objectContaining({
+                sseAlgorithm: 'AES256',
+              }),
+            }),
+          ]),
+        }),
+        expect.objectContaining({ parent: stack })
+      );
     });
   });
 
@@ -634,12 +677,12 @@ describe('ProductionWebAppStack Component Tests', () => {
 
       const aws = require('@pulumi/aws');
       
-      // Check that resources are named consistently
+      // Check that resources are named consistently with environment suffix
       expect(aws.ec2.Vpc).toHaveBeenCalledWith(
         'main-vpc',
         expect.objectContaining({
           tags: expect.objectContaining({
-            Name: 'naming-test-vpc',
+            Name: 'naming-test-dev-vpc',
           }),
         }),
         expect.any(Object)

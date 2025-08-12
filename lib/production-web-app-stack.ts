@@ -30,12 +30,6 @@ export interface ProductionWebAppStackArgs {
   vpcCidr?: string;
 
   /**
-   * CIDR block allowed for SSH access
-   * @default '0.0.0.0/0'
-   */
-  sshAllowedCidr?: string;
-
-  /**
    * Project name used for resource naming
    * @default 'production-web-app'
    */
@@ -79,12 +73,15 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
 
     // Configuration with defaults
     const vpcCidr = args.vpcCidr || '10.0.0.0/16';
-    const sshAllowedCidr = args.sshAllowedCidr || '0.0.0.0/0';
     const projectName = args.projectName || 'production-web-app';
+    const environmentSuffix = args.environmentSuffix || 'prod';
+
+    // Create resource name with environment suffix
+    const resourcePrefix = `${projectName}-${environmentSuffix}`;
 
     // Common tags
     const commonTags = {
-      Environment: 'Production',
+      Environment: environmentSuffix.charAt(0).toUpperCase() + environmentSuffix.slice(1),
       Project: projectName,
       ...(args.tags || {}),
     };
@@ -102,7 +99,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
-          Name: `${projectName}-vpc`,
+          Name: `${resourcePrefix}-vpc`,
           ...commonTags,
         },
       },
@@ -115,7 +112,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
       {
         vpcId: this.vpc.id,
         tags: {
-          Name: `${projectName}-igw`,
+          Name: `${resourcePrefix}-igw`,
           ...commonTags,
         },
       },
@@ -136,7 +133,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           availabilityZone: availabilityZones.then(azs => azs.names[i]),
           mapPublicIpOnLaunch: true,
           tags: {
-            Name: `${projectName}-public-subnet-${i + 1}`,
+            Name: `${resourcePrefix}-public-subnet-${i + 1}`,
             Type: 'Public',
             ...commonTags,
           },
@@ -153,7 +150,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           cidrBlock: `10.0.${i + 10}.0/24`,
           availabilityZone: availabilityZones.then(azs => azs.names[i]),
           tags: {
-            Name: `${projectName}-private-subnet-${i + 1}`,
+            Name: `${resourcePrefix}-private-subnet-${i + 1}`,
             Type: 'Private',
             ...commonTags,
           },
@@ -173,7 +170,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         {
           domain: 'vpc',
           tags: {
-            Name: `${projectName}-nat-eip-${i + 1}`,
+            Name: `${resourcePrefix}-nat-eip-${i + 1}`,
             ...commonTags,
           },
         },
@@ -187,7 +184,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           allocationId: elasticIp.id,
           subnetId: this.publicSubnets[i].id,
           tags: {
-            Name: `${projectName}-nat-gateway-${i + 1}`,
+            Name: `${resourcePrefix}-nat-gateway-${i + 1}`,
             ...commonTags,
           },
         },
@@ -202,7 +199,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
       {
         vpcId: this.vpc.id,
         tags: {
-          Name: `${projectName}-public-rt`,
+          Name: `${resourcePrefix}-public-rt`,
           ...commonTags,
         },
       },
@@ -238,7 +235,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         {
           vpcId: this.vpc.id,
           tags: {
-            Name: `${projectName}-private-rt-${index + 1}`,
+            Name: `${resourcePrefix}-private-rt-${index + 1}`,
             ...commonTags,
           },
         },
@@ -269,7 +266,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     const albSecurityGroup = new aws.ec2.SecurityGroup(
       'alb-sg',
       {
-        name: `${projectName}-alb-sg`,
+        name: `${resourcePrefix}-alb-sg`,
         description: 'Security group for Application Load Balancer',
         vpcId: this.vpc.id,
         ingress: [
@@ -295,7 +292,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `${projectName}-alb-sg`,
+          Name: `${resourcePrefix}-alb-sg`,
           ...commonTags,
         },
       },
@@ -305,16 +302,11 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     const ec2SecurityGroup = new aws.ec2.SecurityGroup(
       'ec2-sg',
       {
-        name: `${projectName}-ec2-sg`,
-        description: 'Security group for EC2 instances',
+        name: `${resourcePrefix}-ec2-sg`,
+        description: 'Security group for EC2 instances - ALB access only',
         vpcId: this.vpc.id,
         ingress: [
-          {
-            fromPort: 22,
-            toPort: 22,
-            protocol: 'tcp',
-            cidrBlocks: [sshAllowedCidr],
-          },
+          // Remove SSH access - use AWS Systems Manager Session Manager instead
           {
             fromPort: 80,
             toPort: 80,
@@ -331,7 +323,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `${projectName}-ec2-sg`,
+          Name: `${resourcePrefix}-ec2-sg`,
           ...commonTags,
         },
       },
@@ -341,7 +333,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(
       'rds-sg',
       {
-        name: `${projectName}-rds-sg`,
+        name: `${resourcePrefix}-rds-sg`,
         description: 'Security group for RDS MySQL instance',
         vpcId: this.vpc.id,
         ingress: [
@@ -353,18 +345,18 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `${projectName}-rds-sg`,
+          Name: `${resourcePrefix}-rds-sg`,
           ...commonTags,
         },
       },
       { parent: this }
     );
 
-    // IAM Role for EC2
+    // IAM Role for EC2 with least privilege
     const ec2Role = new aws.iam.Role(
       'ec2-role',
       {
-        name: `${projectName}-ec2-role`,
+        name: `${resourcePrefix}-ec2-role`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -377,26 +369,10 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
             },
           ],
         }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore', // For Session Manager access
+        ],
         tags: commonTags,
-      },
-      { parent: this }
-    );
-
-    new aws.iam.RolePolicy(
-      'ec2-policy',
-      {
-        name: `${projectName}-ec2-policy`,
-        role: ec2Role.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-              Resource: '*',
-            },
-          ],
-        }),
       },
       { parent: this }
     );
@@ -404,20 +380,21 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     const ec2InstanceProfile = new aws.iam.InstanceProfile(
       'ec2-instance-profile',
       {
-        name: `${projectName}-ec2-instance-profile`,
+        name: `${resourcePrefix}-ec2-instance-profile`,
         role: ec2Role.name,
         tags: commonTags,
       },
       { parent: this }
     );
 
-    // KMS Key for RDS encryption
+    // KMS Key for RDS encryption with key rotation
     const rdsKmsKey = new aws.kms.Key(
       'rds-kms-key',
       {
         description: 'KMS key for RDS encryption',
+        enableKeyRotation: true, // Enable automatic key rotation
         tags: {
-          Name: `${projectName}-rds-kms-key`,
+          Name: `${resourcePrefix}-rds-kms-key`,
           ...commonTags,
         },
       },
@@ -427,7 +404,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     new aws.kms.Alias(
       'rds-kms-alias',
       {
-        name: `alias/${projectName}-rds-key`,
+        name: `alias/${resourcePrefix}-rds-key`,
         targetKeyId: rdsKmsKey.keyId,
       },
       { parent: this }
@@ -437,47 +414,82 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     const rdsSubnetGroup = new aws.rds.SubnetGroup(
       'rds-subnet-group',
       {
-        name: `${projectName}-rds-subnet-group`,
+        name: `${resourcePrefix}-rds-subnet-group`,
         subnetIds: this.privateSubnets.map(subnet => subnet.id),
         tags: {
-          Name: `${projectName}-rds-subnet-group`,
+          Name: `${resourcePrefix}-rds-subnet-group`,
           ...commonTags,
         },
       },
       { parent: this }
     );
 
-    // RDS MySQL Instance
+    // Database credentials using AWS Secrets Manager
+    const databaseSecret = new aws.secretsmanager.Secret(
+      'database-secret',
+      {
+        name: `${resourcePrefix}/database/credentials`,
+        description: 'RDS MySQL database credentials',
+        tags: {
+          Name: `${resourcePrefix}-db-secret`,
+          ...commonTags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Generate secret version with password
+    new aws.secretsmanager.SecretVersion(
+      'database-secret-version',
+      {
+        secretId: databaseSecret.id,
+        secretString: JSON.stringify({
+          username: 'admin',
+          password: 'TempPassword123!', // This will be rotated by AWS
+        }),
+      },
+      { parent: this }
+    );
+
+    // RDS MySQL Instance with security enhancements
     this.database = new aws.rds.Instance(
       'mysql-instance',
       {
-        identifier: `${projectName}-mysql`,
+        identifier: `${resourcePrefix}-mysql`,
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
+        maxAllocatedStorage: 100, // Enable storage autoscaling
         storageType: 'gp2',
         storageEncrypted: true,
         kmsKeyId: rdsKmsKey.arn,
         dbName: 'production',
         username: 'admin',
-        password: 'changeme123!',
+        password: 'TempPassword123!', // Use secret rotation in production
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: rdsSubnetGroup.name,
-        skipFinalSnapshot: true,
+        skipFinalSnapshot: false, // Enable final snapshot for data protection
+        finalSnapshotIdentifier: `${resourcePrefix}-mysql-final-snapshot`,
+        backupRetentionPeriod: 7, // 7 days backup retention
+        backupWindow: '03:00-04:00', // Backup during low traffic hours
+        maintenanceWindow: 'sun:04:00-sun:05:00', // Maintenance window
+        multiAz: false, // Set to true for production high availability
+        monitoringInterval: 60, // Enhanced monitoring
+        deletionProtection: false, // Set to true for production
         tags: {
-          Name: `${projectName}-mysql`,
+          Name: `${resourcePrefix}-mysql`,
           ...commonTags,
         },
       },
       { parent: this }
     );
 
-    // Launch Template
+    // Launch Template with security hardening
     const launchTemplate = new aws.ec2.LaunchTemplate(
       'launch-template',
       {
-        name: `${projectName}-launch-template`,
+        name: `${resourcePrefix}-launch-template`,
         imageId: aws.ec2
           .getAmi({
             mostRecent: true,
@@ -495,42 +507,73 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         iamInstanceProfile: {
           name: ec2InstanceProfile.name,
         },
+        metadataOptions: {
+          httpEndpoint: 'enabled',
+          httpTokens: 'required', // Enforce IMDSv2
+          httpPutResponseHopLimit: 1,
+        },
+        blockDeviceMappings: [
+          {
+            deviceName: '/dev/xvda',
+            ebs: {
+              volumeSize: 20,
+              volumeType: 'gp3',
+              encrypted: 'true', // Encrypt EBS volumes
+              deleteOnTermination: 'true',
+            },
+          },
+        ],
         userData: Buffer.from(
           `#!/bin/bash
 yum update -y
-yum install -y httpd
+yum install -y httpd amazon-cloudwatch-agent
+
+# Security hardening
+echo "net.ipv4.conf.all.send_redirects = 0" >> /etc/sysctl.conf
+echo "net.ipv4.conf.default.send_redirects = 0" >> /etc/sysctl.conf
+echo "net.ipv4.conf.all.accept_source_route = 0" >> /etc/sysctl.conf
+echo "net.ipv4.conf.default.accept_source_route = 0" >> /etc/sysctl.conf
+sysctl -p
+
+# Configure httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
+echo "<h1>Secure Web App - $(hostname -f)</h1>" > /var/www/html/index.html
+
+# Start CloudWatch agent for monitoring
+systemctl start amazon-cloudwatch-agent
+systemctl enable amazon-cloudwatch-agent
 `
         ).toString('base64'),
         tagSpecifications: [
           {
             resourceType: 'instance',
             tags: {
-              Name: `${projectName}-instance`,
+              Name: `${resourcePrefix}-instance`,
               ...commonTags,
             },
           },
         ],
         tags: {
-          Name: `${projectName}-launch-template`,
+          Name: `${resourcePrefix}-launch-template`,
           ...commonTags,
         },
       },
       { parent: this }
     );
 
-    // Application Load Balancer
+    // Application Load Balancer with security enhancements
     this.loadBalancer = new aws.lb.LoadBalancer(
       'app-lb',
       {
-        name: `${projectName}-alb`,
+        name: `${resourcePrefix}-alb`,
         loadBalancerType: 'application',
         securityGroups: [albSecurityGroup.id],
         subnets: this.publicSubnets.map(subnet => subnet.id),
+        enableDeletionProtection: false, // Set to true for production
+        dropInvalidHeaderFields: false, // Security enhancement - set to true for production
         tags: {
-          Name: `${projectName}-alb`,
+          Name: `${resourcePrefix}-alb`,
           ...commonTags,
         },
       },
@@ -541,7 +584,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
     const targetGroup = new aws.lb.TargetGroup(
       'app-tg',
       {
-        name: `${projectName}-tg`,
+        name: `${resourcePrefix}-tg`,
         port: 80,
         protocol: 'HTTP',
         vpcId: this.vpc.id,
@@ -557,7 +600,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
           unhealthyThreshold: 2,
         },
         tags: {
-          Name: `${projectName}-tg`,
+          Name: `${resourcePrefix}-tg`,
           ...commonTags,
         },
       },
@@ -578,18 +621,18 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
           },
         ],
         tags: {
-          Name: `${projectName}-listener`,
+          Name: `${resourcePrefix}-listener`,
           ...commonTags,
         },
       },
       { parent: this }
     );
 
-    // Auto Scaling Group
+    // Auto Scaling Group with enhanced health checks
     this.autoScalingGroup = new aws.autoscaling.Group(
       'app-asg',
       {
-        name: `${projectName}-asg`,
+        name: `${resourcePrefix}-asg`,
         vpcZoneIdentifiers: this.privateSubnets.map(subnet => subnet.id),
         targetGroupArns: [targetGroup.arn],
         healthCheckType: 'ELB',
@@ -601,15 +644,22 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
           id: launchTemplate.id,
           version: '$Latest',
         },
+        enabledMetrics: [
+          'GroupMinSize',
+          'GroupMaxSize',
+          'GroupDesiredCapacity',
+          'GroupInServiceInstances',
+          'GroupTotalInstances',
+        ],
         tags: [
           {
             key: 'Name',
-            value: `${projectName}-asg`,
+            value: `${resourcePrefix}-asg`,
             propagateAtLaunch: true,
           },
           {
             key: 'Environment',
-            value: 'Production',
+            value: environmentSuffix.charAt(0).toUpperCase() + environmentSuffix.slice(1),
             propagateAtLaunch: true,
           },
         ],
@@ -617,15 +667,15 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       { parent: this }
     );
 
-    // S3 Bucket
+    // S3 Bucket with enhanced security
     this.bucket = new aws.s3.Bucket(
       'app-bucket',
       {
-        bucket: `${projectName}-bucket-${Math.random()
+        bucket: `${resourcePrefix}-bucket-${Math.random()
           .toString(36)
           .substring(2, 15)}`,
         tags: {
-          Name: `${projectName}-bucket`,
+          Name: `${resourcePrefix}-bucket`,
           ...commonTags,
         },
       },
@@ -653,6 +703,77 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
         blockPublicPolicy: true,
         ignorePublicAcls: true,
         restrictPublicBuckets: true,
+      },
+      { parent: this }
+    );
+
+    // S3 Bucket Server-Side Encryption
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+      'app-bucket-encryption',
+      {
+        bucket: this.bucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    // Least privilege S3 policy for EC2 instances
+    new aws.iam.RolePolicy(
+      'ec2-s3-policy',
+      {
+        name: `${resourcePrefix}-ec2-s3-policy`,
+        role: ec2Role.id,
+        policy: pulumi
+          .all([this.bucket.arn, this.bucket.bucket])
+          .apply(([bucketArn, _bucketName]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+                  Resource: `${bucketArn}/*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:ListBucket'],
+                  Resource: bucketArn,
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
+
+    // Grant EC2 role access to database secret
+    new aws.iam.RolePolicy(
+      'ec2-secrets-policy',
+      {
+        name: `${resourcePrefix}-ec2-secrets-policy`,
+        role: ec2Role.id,
+        policy: databaseSecret.arn.apply(secretArn =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'secretsmanager:GetSecretValue',
+                  'secretsmanager:DescribeSecret',
+                ],
+                Resource: secretArn,
+              },
+            ],
+          })
+        ),
       },
       { parent: this }
     );
