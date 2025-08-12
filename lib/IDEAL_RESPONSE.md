@@ -15,8 +15,8 @@ import base64
 from typing import Optional
 
 import pulumi
-from pulumi import ResourceOptions
 import pulumi_aws as aws
+from pulumi import ResourceOptions
 
 # Import your nested stacks here
 # from .dynamodb_stack import DynamoDBStack
@@ -434,22 +434,23 @@ class TapStack(pulumi.ComponentResource):
     # EC2 Instances with User Data
     # ============================================================================
 
-    # Get the latest Amazon Linux 2 AMI
+    # Get the latest Amazon Linux 2023 AMI
     ami = aws.ec2.get_ami(
         most_recent=True,
         owners=["amazon"],
         filters=[
                 aws.ec2.GetAmiFilterArgs(
                     name="name",
-                    values=["amzn2-ami-hvm-*-x86_64-gp2"]
+                    values=["al2023-ami-*-x86_64"]
             )
-            ]
+            ],
+        opts=pulumi.InvokeOptions(provider=aws_provider)
     )
 
     # User data script for web server setup
     user_data_script = """#!/bin/bash
-        yum update -y
-        yum install -y httpd
+        dnf update -y
+        dnf install -y httpd
         systemctl start httpd
         systemctl enable httpd
 
@@ -519,8 +520,8 @@ class TapStack(pulumi.ComponentResource):
         subnet_id=private_subnet.id,
         iam_instance_profile=instance_profile.name,
         user_data=base64.b64encode("""#!/bin/bash
-        yum update -y
-        yum install -y htop
+        dnf update -y
+        dnf install -y htop
         echo "Private server initialized at $(date)" > /home/ec2-user/server-info.txt
         """.encode()).decode(),
         tags={
@@ -545,4 +546,5 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("web_server_url", web_instance.public_ip.apply(lambda ip: f"http://{ip}"))
     pulumi.export("region", aws_region)
     self.register_outputs({})
+
 ```
