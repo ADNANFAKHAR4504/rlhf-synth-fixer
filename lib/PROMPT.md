@@ -27,7 +27,6 @@ This prompt is designed to instruct an AI model in generating a CDK Typescript p
    - Implement an Auto Scaling group in each region, configured to use the launch template. The group should have a minimum of 2 instances and a maximum of 5\.
 5. **Load Balancing:**
    - Provision an Application Load Balancer (ALB) in each region, placing it in the public subnets.
-   - Configure listeners on the ALB to accept traffic on ports 80 and 443\.
    - Attach the Auto Scaling group from each region to the respective ALB's target group.
 
 ### **Testing Requirements**

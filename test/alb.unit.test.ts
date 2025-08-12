@@ -6,7 +6,7 @@ import { WebAsg } from '../lib/constructs/asg';
 import { WebLaunchTemplate } from '../lib/constructs/launch-template';
 
 describe('WebAlb', () => {
-  it('creates an ALB with HTTP and HTTPS listeners and correct targets', () => {
+  it('creates an ALB with only HTTP listener and correct targets', () => {
     const stack = new cdk.Stack();
     const vpc = new ec2.Vpc(stack, 'Vpc');
     const albSg = new ec2.SecurityGroup(stack, 'AlbSg', { vpc });
@@ -16,23 +16,21 @@ describe('WebAlb', () => {
       securityGroup: appSg,
     });
     const asg = new WebAsg(stack, 'ASG', { vpc, launchTemplate: lt.lt });
-    const certArn = 'arn:aws:acm:us-east-1:123456789012:certificate/abc123';
     new WebAlb(stack, 'ALB', {
       vpc,
       albSecurityGroup: albSg,
       appAsg: asg.asg,
       stage: 'baz',
-      certificateArn: certArn,
     });
     const template = Template.fromStack(stack);
     template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
-    template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 2);
-    // Check that both HTTP and HTTPS listeners exist
+    template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 1);
+    // Check that only HTTP listener exists
     const listeners = template.findResources(
       'AWS::ElasticLoadBalancingV2::Listener'
     );
     const ports = Object.values(listeners).map((l: any) => l.Properties.Port);
-    expect(ports).toEqual(expect.arrayContaining([80, 443]));
+    expect(ports).toEqual([80]);
   });
 
   it('creates an ALB with only HTTP listener when no certificateArn is provided', () => {

@@ -7,7 +7,7 @@ import { WebSecurityGroups } from '../lib/constructs/security-groups';
 import { WebVpc } from '../lib/constructs/vpc';
 
 describe('WebAlb Integration', () => {
-  it('creates an ALB and listeners, connected to the ASG', () => {
+  it('creates an ALB and HTTP listener, connected to the ASG', () => {
     const app = new cdk.App();
     const stack = new cdk.Stack(app, 'TestStack');
     const vpc = new WebVpc(stack, 'WebVpc', { stage: 'int' }).vpc;
@@ -28,10 +28,9 @@ describe('WebAlb Integration', () => {
       albSecurityGroup: sgs.albSg,
       appAsg: asg,
       stage: 'int',
-      certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/abc123',
     });
     const template = Template.fromStack(stack);
     template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
-    template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 2);
+    template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 1);
   });
 });

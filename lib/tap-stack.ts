@@ -9,7 +9,6 @@ import { WebVpc } from './constructs/vpc';
 interface TapStackProps extends StackProps {
   stage: string;
   appName?: string;
-  certificateArn?: string;
 }
 
 export class TapStack extends Stack {
@@ -35,7 +34,6 @@ export class TapStack extends Stack {
       albSecurityGroup: sgs.albSg,
       appAsg: asg,
       stage,
-      certificateArn: props?.certificateArn,
     });
     Tags.of(this).add('App', appName);
     Tags.of(this).add('Stage', stage);
