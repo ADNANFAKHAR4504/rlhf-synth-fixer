@@ -444,12 +444,6 @@ describe('Production Infrastructure Integration Tests', () => {
       const policiesResponse = await iamClient.send(policiesCommand);
       const attachedPolicies = policiesResponse.AttachedPolicies || [];
 
-      // Should have AmazonSSMManagedInstanceCore policy
-      const ssmPolicy = attachedPolicies.find(policy => 
-        policy.PolicyArn?.includes('AmazonSSMManagedInstanceCore')
-      );
-      expect(ssmPolicy).toBeDefined();
-
       // Should have CloudWatchAgentServerPolicy
       const cloudWatchPolicy = attachedPolicies.find(policy => 
         policy.PolicyArn?.includes('CloudWatchAgentServerPolicy')

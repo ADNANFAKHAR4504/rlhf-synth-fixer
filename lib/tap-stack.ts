@@ -21,9 +21,7 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    const prefix = 'tf';
-
-    // Instantiate the child stack
+    // Instantiate the secure stack (not relying on outputs directly anymore)
     new SecureWebAppStack(this, 'TfSecureWebAppStack', {
       environment: environmentSuffix,
       env: {
@@ -32,44 +30,6 @@ export class TapStack extends cdk.Stack {
       },
       description:
         'Secure web application infrastructure with production-ready security configurations',
-    });
-
-    // Export outputs under exact names used in integration tests
-    this.exportOutput(
-      'LoadBalancerDNS',
-      `${prefix}-${environmentSuffix}-alb-dns`,
-      'LoadBalancerDNS'
-    );
-    this.exportOutput(
-      'S3BucketName',
-      `${prefix}-${environmentSuffix}-s3-bucket-name`,
-      'S3BucketName'
-    );
-    this.exportOutput(
-      'VPCId',
-      `${prefix}-${environmentSuffix}-vpc-id`,
-      'VPCId'
-    );
-    this.exportOutput(
-      'KMSKeyId',
-      `${prefix}-${environmentSuffix}-kms-key-id`,
-      'KMSKeyId'
-    );
-    this.exportOutput(
-      'AutoScalingGroupName',
-      `${prefix}-${environmentSuffix}-asg-name`,
-      'AutoScalingGroupName'
-    );
-  }
-
-  private exportOutput(
-    logicalId: string,
-    importName: string,
-    outputKey: string
-  ) {
-    new cdk.CfnOutput(this, outputKey, {
-      value: cdk.Fn.importValue(importName),
-      description: `Imported and re-exported value for ${outputKey}`,
     });
   }
 }
