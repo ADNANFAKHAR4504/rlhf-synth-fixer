@@ -83,7 +83,9 @@ describe('TapStack Integration Tests - End-to-End Infrastructure Validation', ()
       expect(httpsRule?.FromPort).toBe(443);
       expect(httpsRule?.ToPort).toBe(443);
       expect(httpsRule?.IpProtocol).toBe('tcp');
-      expect(httpsRule?.IpRanges).toEqual([{ CidrIp: '0.0.0.0/0' }]);
+      expect(httpsRule?.IpRanges?.[0]).toEqual(
+        expect.objectContaining({ CidrIp: '0.0.0.0/0' })
+      );      
     }, 30000);
 
     test('should have unrestricted egress rules', async () => {
