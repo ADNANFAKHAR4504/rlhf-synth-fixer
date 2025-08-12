@@ -44,7 +44,7 @@ export class TapStack extends cdk.Stack {
     // Create secure RDS instance with unique identifier
     const database = new SecureRDS(this, 'SecureDatabase', {
       vpc: networking.vpc,
-      databaseName: `securedb-${environmentSuffix}`,
+      databaseName: `securedb${environmentSuffix.replace(/-/g, '')}`,
       instanceIdentifier: `secure-postgres-instance-${environmentSuffix}`,
       securityGroup: networking.securityGroup,
       environmentSuffix: environmentSuffix,
