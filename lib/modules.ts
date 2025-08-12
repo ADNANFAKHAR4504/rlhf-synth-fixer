@@ -273,7 +273,7 @@ export class ComputeModule extends Construct {
       sslPolicy: 'ELBSecurityPolicy-2016-08',
       // IMPORTANT: Replace with a valid certificate ARN from the us-west-2 region
       certificateArn:
-        'arn:aws:acm:us-west-2:718240086340:certificate/1f32e8c9-8648-4234-a4d0-fdf46bed8bba',
+        'arn:aws:acm:us-west-2:718240086340:certificate/3f5a0b13-d908-4118-8aeb-c08275a95565',
       defaultAction: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
     });
 
