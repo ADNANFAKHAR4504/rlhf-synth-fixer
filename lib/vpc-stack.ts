@@ -2,17 +2,17 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
-interface VpcStackProps extends cdk.StackProps {
+interface VpcStackProps {
   environmentSuffix?: string;
 }
 
-export class VpcStack extends cdk.Stack {
+export class VpcStack extends Construct {
   public readonly vpc: ec2.Vpc;
   public readonly publicSubnet: ec2.ISubnet;
   public readonly privateSubnet: ec2.ISubnet;
 
   constructor(scope: Construct, id: string, props?: VpcStackProps) {
-    super(scope, id, props);
+    super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
@@ -55,21 +55,5 @@ export class VpcStack extends cdk.Stack {
       'Name',
       `subnetPrivate${environmentSuffix}`
     );
-
-    // Output important information
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID',
-    });
-
-    new cdk.CfnOutput(this, 'PublicSubnetId', {
-      value: this.publicSubnet.subnetId,
-      description: 'Public Subnet ID',
-    });
-
-    new cdk.CfnOutput(this, 'PrivateSubnetId', {
-      value: this.privateSubnet.subnetId,
-      description: 'Private Subnet ID',
-    });
   }
 }

@@ -2,7 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
-interface ComputeStackProps extends cdk.StackProps {
+interface ComputeStackProps {
   vpc: ec2.Vpc;
   publicSubnet: ec2.ISubnet;
   privateSubnet: ec2.ISubnet;
@@ -11,12 +11,13 @@ interface ComputeStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
 
-export class ComputeStack extends cdk.Stack {
+export class ComputeStack extends Construct {
   public readonly publicInstance: ec2.Instance;
   public readonly privateInstance: ec2.Instance;
+  public readonly keyPair: ec2.KeyPair;
 
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
-    super(scope, id, props);
+    super(scope, id);
 
     const environmentSuffix = props.environmentSuffix || 'dev';
 
@@ -27,7 +28,7 @@ export class ComputeStack extends cdk.Stack {
     });
 
     // Create key pair for EC2 instances
-    const keyPair = new ec2.KeyPair(this, 'keyPairBasic', {
+    this.keyPair = new ec2.KeyPair(this, 'keyPairBasic', {
       keyPairName: `keyPairBasic${environmentSuffix}`,
       type: ec2.KeyPairType.RSA,
       format: ec2.KeyPairFormat.PEM,
@@ -45,7 +46,7 @@ export class ComputeStack extends cdk.Stack {
         subnets: [props.publicSubnet],
       },
       securityGroup: props.securityGroupPublic,
-      keyPair: keyPair,
+      keyPair: this.keyPair,
       associatePublicIpAddress: true,
       instanceName: `instancePublic${environmentSuffix}`,
     });
@@ -62,7 +63,7 @@ export class ComputeStack extends cdk.Stack {
         subnets: [props.privateSubnet],
       },
       securityGroup: props.securityGroupPrivate,
-      keyPair: keyPair,
+      keyPair: this.keyPair,
       associatePublicIpAddress: false,
       instanceName: `instancePrivate${environmentSuffix}`,
     });
@@ -80,33 +81,7 @@ export class ComputeStack extends cdk.Stack {
       `instancePrivate${environmentSuffix}`
     );
 
-    cdk.Tags.of(keyPair).add('Environment', 'Development');
-    cdk.Tags.of(keyPair).add('Name', `keyPairBasic${environmentSuffix}`);
-
-    // Outputs
-    new cdk.CfnOutput(this, 'PublicInstanceId', {
-      value: this.publicInstance.instanceId,
-      description: 'Public EC2 Instance ID',
-    });
-
-    new cdk.CfnOutput(this, 'PublicInstancePublicIp', {
-      value: this.publicInstance.instancePublicIp,
-      description: 'Public EC2 Instance Public IP',
-    });
-
-    new cdk.CfnOutput(this, 'PrivateInstanceId', {
-      value: this.privateInstance.instanceId,
-      description: 'Private EC2 Instance ID',
-    });
-
-    new cdk.CfnOutput(this, 'PrivateInstancePrivateIp', {
-      value: this.privateInstance.instancePrivateIp,
-      description: 'Private EC2 Instance Private IP',
-    });
-
-    new cdk.CfnOutput(this, 'KeyPairName', {
-      value: keyPair.keyPairName,
-      description: 'EC2 Key Pair Name',
-    });
+    cdk.Tags.of(this.keyPair).add('Environment', 'Development');
+    cdk.Tags.of(this.keyPair).add('Name', `keyPairBasic${environmentSuffix}`);
   }
 }

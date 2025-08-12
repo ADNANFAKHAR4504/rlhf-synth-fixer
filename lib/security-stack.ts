@@ -2,17 +2,17 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
-interface SecurityStackProps extends cdk.StackProps {
+interface SecurityStackProps {
   vpc: ec2.Vpc;
   environmentSuffix?: string;
 }
 
-export class SecurityStack extends cdk.Stack {
+export class SecurityStack extends Construct {
   public readonly securityGroupPublic: ec2.SecurityGroup;
   public readonly securityGroupPrivate: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props: SecurityStackProps) {
-    super(scope, id, props);
+    super(scope, id);
 
     const environmentSuffix = props.environmentSuffix || 'dev';
 
@@ -73,16 +73,5 @@ export class SecurityStack extends cdk.Stack {
       'Name',
       `securityGroupPrivate${environmentSuffix}`
     );
-
-    // Outputs
-    new cdk.CfnOutput(this, 'PublicSecurityGroupId', {
-      value: this.securityGroupPublic.securityGroupId,
-      description: 'Public Security Group ID',
-    });
-
-    new cdk.CfnOutput(this, 'PrivateSecurityGroupId', {
-      value: this.securityGroupPrivate.securityGroupId,
-      description: 'Private Security Group ID',
-    });
   }
 }
