@@ -6,21 +6,19 @@ import {
   GetTemplateCommand,
 } from '@aws-sdk/client-cloudformation';
 import fs from 'fs';
+import path from 'path';
 
 // Load the CloudFormation template
-const templatePath = '../lib/TapStack.json';
+// const templatePath = '../lib/TapStack.json';
 let template: any;
 
 describe('SecureApp CloudFormation Template Unit Tests', () => {
   
-  beforeAll(() => {
-    try {
-      const templateContent = fs.readFileSync(templatePath, 'utf8');
-      template = JSON.parse(templateContent);
-    } catch (error) {
-      console.error('Failed to load CloudFormation template:', error);
-      throw error;
-    }
+   beforeAll(() => {
+    // Load the JSON template that was converted from YAML
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
   });
 
   describe('Template Structure Validation', () => {
