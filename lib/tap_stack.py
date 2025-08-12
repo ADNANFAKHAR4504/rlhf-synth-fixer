@@ -134,7 +134,7 @@ for i, az in enumerate(availability_zones):
     # Calculate IPv6 CIDR properly - VPC gives us something like 2600:1f18:25c:300::/56
     # We need to create /64 subnets like 2600:1f18:25c:300::/64, 2600:1f18:25c:301::/64
     ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-        lambda cidr, subnet_index=i: f"{cidr[:-5]}{hex(subnet_index)[2:]}::/64"
+        lambda cidr, subnet_index=i: f"{cidr[:-5]}{subnet_index:x}::/64"  # Use proper hex formatting
     )
     
     subnet = aws.ec2.Subnet(
