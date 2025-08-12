@@ -20,6 +20,7 @@ cdk.out/
 
 # IDE/Editor files
 .vscode/settings.local.json
+.claude/settings.local.json
 .idea/
 *.swp
 *.swo
@@ -84,8 +85,9 @@ imports/*
 cdktf.out
 cdktf.log
 *terraform.*.tfstate*
-.genpackage-lock.json
 .gen
+bin/.terraform.lock.hcl
+.genpackage-lock.json
 .gen/providers/*
 
 __pycache__/
@@ -97,3 +99,4 @@ bin/.terraform.lock.hcl
 bin/tfplan
 
 build
+tasks.csv
