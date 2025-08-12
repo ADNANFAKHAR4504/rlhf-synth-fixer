@@ -30,12 +30,12 @@ export class TapStack extends cdk.Stack {
 
     // Create secure S3 buckets with unique names
     const dataBucket = new SecureS3Bucket(this, 'DataBucket', {
-      bucketName: `secure-data-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `secure-data-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${this.stackName}`,
       enableLogging: true,
     });
 
     const logsBucket = new SecureS3Bucket(this, 'LogsBucket', {
-      bucketName: `secure-logs-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `secure-logs-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${this.stackName}`,
       enableLogging: false,
     });
 

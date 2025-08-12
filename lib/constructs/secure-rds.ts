@@ -117,7 +117,7 @@ export class SecureRDS extends Construct {
 
     // Create CloudWatch log group for RDS logs
     new logs.LogGroup(this, 'RDSLogGroup', {
-      logGroupName: `/aws/rds/instance/${props.instanceIdentifier}/postgresql-${Date.now()}`,
+      logGroupName: `/aws/rds/instance/${props.instanceIdentifier}/postgresql`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
