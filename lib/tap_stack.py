@@ -8,6 +8,7 @@ It orchestrates the instantiation of other resource-specific components
 and manages environment-specific configurations.
 """
 import json
+import time
 from typing import Optional
 
 import pulumi
@@ -61,19 +62,24 @@ class TapStack(pulumi.ComponentResource):
     self.environment_suffix = args.environment_suffix
     self.tags = args.tags
 
+    # Generate unique suffix for resource names to avoid conflicts
+    timestamp = str(int(time.time()))
+    unique_suffix = f"{self.environment_suffix}-{timestamp}"
+
     # Configure the AWS provider for us-west-2 region
     aws_provider = aws.Provider("aws-provider", region="us-west-2")
 
     # Create the S3 bucket for file processing
+    bucket_name = f"file-processing-bucket-{unique_suffix}"
     file_processing_bucket = aws.s3.Bucket(
-            "file-processing-bucket",
-            bucket="file-processing-bucket",
+            f"file-processing-bucket-{unique_suffix}",
+            bucket=bucket_name,
             opts=pulumi.ResourceOptions(provider=aws_provider)
         )
 
     # Block public access to the S3 bucket for security
     aws.s3.BucketPublicAccessBlock(
-        "file-processing-bucket-pab",
+        f"file-processing-bucket-pab-{unique_suffix}",
         bucket=file_processing_bucket.id,
         block_public_acls=True,
         block_public_policy=True,
@@ -83,16 +89,17 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # Create CloudWatch Log Group for Lambda function
+    lambda_function_name = f"file-processor-lambda-{unique_suffix}"
     lambda_log_group = aws.cloudwatch.LogGroup(
-        "file-processing-bucket-log-group",
-        name="/aws/lambda/file-processor-lambda",
+        f"file-processing-log-group-{unique_suffix}",
+        name=f"/aws/lambda/{lambda_function_name}",
         retention_in_days=14,
         opts=pulumi.ResourceOptions(provider=aws_provider)
     )
 
     # Create IAM role for Lambda function
     lambda_role = aws.iam.Role(
-        "file-processor-lambda-role",
+        f"file-processor-lambda-role-{unique_suffix}",
         assume_role_policy=json.dumps({
             "Version": "2012-10-17",
             "Statement": [
@@ -110,7 +117,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create IAM policy for Lambda function with least privilege access
     lambda_policy = aws.iam.Policy(
-            "file-processor-lambda-policy",
+            f"file-processor-lambda-policy-{unique_suffix}",
             policy=pulumi.Output.all(file_processing_bucket.arn, lambda_log_group.arn).apply(
                 lambda args: json.dumps({
                     "Version": "2012-10-17",
@@ -148,7 +155,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Attach the policy to the Lambda role
     lambda_role_policy_attachment = aws.iam.RolePolicyAttachment(
-            "file-processor-lambda-policy-attachment",
+            f"file-processor-lambda-policy-attachment-{unique_suffix}",
             role=lambda_role.name,
             policy_arn=lambda_policy.arn,
             opts=pulumi.ResourceOptions(provider=aws_provider)
@@ -282,7 +289,8 @@ class TapStack(pulumi.ComponentResource):
 
     # Create the Lambda function
     file_processor_lambda = aws.lambda_.Function(
-            "file-processor-lambda",
+            lambda_function_name,
+            name=lambda_function_name,
             role=lambda_role.arn,
             code=pulumi.AssetArchive({
                 "lambda_function.py": pulumi.StringAsset(lambda_function_code)
@@ -304,7 +312,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create Lambda permission for S3 to invoke the function
     lambda_permission = aws.lambda_.Permission(
-            "file-processor-lambda-s3-permission",
+            f"file-processor-lambda-s3-permission-{unique_suffix}",
             statement_id="AllowExecutionFromS3Bucket",
             action="lambda:InvokeFunction",
             function=file_processor_lambda.name,
@@ -315,7 +323,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create S3 bucket notification to trigger Lambda on object creation
     aws.s3.BucketNotification(
-            "file-processing-bucket-notification",
+            f"file-processing-bucket-notification-{unique_suffix}",
             bucket=file_processing_bucket.id,
             lambda_functions=[
                 aws.s3.BucketNotificationLambdaFunctionArgs(
