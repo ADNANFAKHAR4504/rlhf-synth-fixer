@@ -87,13 +87,11 @@ describe('TapStack — Integration Coverage', () => {
       'flat-outputs.json'
     );
 
+    // HARD REQUIREMENT: no early return; fail if outputs are missing
     if (!fs.existsSync(terraformOutputFile)) {
-      // Soft skip if artifact isn’t present (first run or dry-run PRs)
-      // eslint-disable-next-line no-console
-      console.warn(
-        `Outputs file not found at ${terraformOutputFile}; skipping live validation.`
+      throw new Error(
+        `Outputs file not found at ${terraformOutputFile}. The deploy step must write this file (it does in CI).`
       );
-      return;
     }
 
     const outputs = JSON.parse(fs.readFileSync(terraformOutputFile, 'utf8'));
@@ -119,7 +117,7 @@ describe('TapStack — Integration Coverage', () => {
       region: process.env.AWS_REGION_PRIMARY,
     });
     const route53Client = new Route53Client({
-      region: process.env.AWS_REGION_PRIMARY, // OK for Route53
+      region: process.env.AWS_REGION_PRIMARY, // fine for Route53
     });
     const secondaryEc2Client = new EC2Client({
       region: process.env.AWS_REGION_SECONDARY,
@@ -155,9 +153,9 @@ describe('TapStack — Integration Coverage', () => {
       );
     }
 
-    // Everything below is **soft** to avoid CI flakiness but still exercises live APIs
+    // Everything below is soft (still live, but won’t fail CI if timing/race)
     try {
-      // ----- ALB (soft; tolerate not-found during CI)
+      // ----- ALB (soft)
       if (albDnsName && albZoneId) {
         let alb: LoadBalancer | undefined;
         try {
