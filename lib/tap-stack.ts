@@ -124,7 +124,7 @@ export class TapStack extends cdk.Stack {
             resources: ['*'],
             conditions: {
               StringEquals: {
-                'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-${this.stackName.toLowerCase()}`,
+                'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-v2-${this.stackName.toLowerCase()}`,
               },
             },
           }),
@@ -356,7 +356,7 @@ export class TapStack extends cdk.Stack {
         resources: [bucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-${this.stackName.toLowerCase()}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-v2-${this.stackName.toLowerCase()}`,
           },
         },
       })
@@ -372,7 +372,7 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-${this.stackName.toLowerCase()}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-v2-${this.stackName.toLowerCase()}`,
           },
         },
       })
@@ -524,7 +524,7 @@ export class TapStack extends cdk.Stack {
     // The service has built-in permissions to write to CloudWatch Logs
 
     const trail = new cloudtrail.Trail(this, 'TapCloudTrail', {
-      trailName: `tap-financial-services-trail-${this.stackName.toLowerCase()}`,
+      trailName: `tap-financial-services-trail-v2-${this.stackName.toLowerCase()}`,
       bucket: this.s3Bucket,
       s3KeyPrefix: 'cloudtrail-logs/',
       includeGlobalServiceEvents: true,
