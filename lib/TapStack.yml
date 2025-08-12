@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure with comprehensive security controls (Updated to use an existing certificate)'
+Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure using auto-named IAM resources'
 
 # Parameters section for customizable values
 Parameters:
@@ -53,7 +53,6 @@ Resources:
   # 1. VPC AND NETWORK ISOLATION
   # ========================================
   
-  # Main VPC with 10.0.0.0/16 CIDR
   MainVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -66,7 +65,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Internet Gateway for public internet access
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -76,14 +74,12 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Attach Internet Gateway to VPC
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref MainVPC
 
-  # Public Subnet in AZ-1 for internet-facing resources
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -97,7 +93,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Public Subnet in AZ-2 for high availability
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -111,7 +106,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Private App Subnet in AZ-1 for application tier
   PrivateAppSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -124,7 +118,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Private App Subnet in AZ-2 for high availability
   PrivateAppSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -137,7 +130,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Private Data Subnet in AZ-1 for database tier
   PrivateDataSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -150,7 +142,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Private Data Subnet in AZ-2 for high availability
   PrivateDataSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -163,7 +154,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Elastic IP for NAT Gateway in AZ-1
   NatGateway1EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
@@ -173,7 +163,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-NAT-EIP-AZ1'
 
-  # Elastic IP for NAT Gateway in AZ-2
   NatGateway2EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
@@ -183,7 +172,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-NAT-EIP-AZ2'
 
-  # NAT Gateway in Public Subnet AZ-1
   NatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -193,7 +181,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-NAT-Gateway-AZ1'
 
-  # NAT Gateway in Public Subnet AZ-2
   NatGateway2:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -203,7 +190,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-NAT-Gateway-AZ2'
 
-  # Public Route Table for internet access
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -212,7 +198,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-Public-Routes'
 
-  # Default public route to Internet Gateway
   DefaultPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
@@ -221,21 +206,18 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
-  # Associate Public Subnet 1 with Public Route Table
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
 
-  # Associate Public Subnet 2 with Public Route Table
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
-  # Private Route Table for AZ-1
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -244,7 +226,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-Private-Routes-AZ1'
 
-  # Default private route to NAT Gateway AZ-1
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
     Properties:
@@ -252,21 +233,18 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NatGateway1
 
-  # Associate Private App Subnet 1 with Private Route Table 1
   PrivateAppSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateAppSubnet1
 
-  # Associate Private Data Subnet 1 with Private Route Table 1
   PrivateDataSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateDataSubnet1
 
-  # Private Route Table for AZ-2
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -275,7 +253,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-Private-Routes-AZ2'
 
-  # Default private route to NAT Gateway AZ-2
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
     Properties:
@@ -283,14 +260,12 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NatGateway2
 
-  # Associate Private App Subnet 2 with Private Route Table 2
   PrivateAppSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateAppSubnet2
 
-  # Associate Private Data Subnet 2 with Private Route Table 2
   PrivateDataSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -301,7 +276,6 @@ Resources:
   # 2. IAM ROLE FOR TAG-BASED S3 ACCESS
   # ========================================
 
-  # S3 bucket for application data
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -321,11 +295,10 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # IAM Role for EC2 instances with tag-based S3 access
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-EC2-Role'
+      # RoleName property removed to allow CloudFormation to generate a unique name
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -336,7 +309,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
-        # Tag-based S3 access policy - only allows access if EC2 has S3Access=Approved tag
         - PolicyName: TagBasedS3Access
           PolicyDocument:
             Version: '2012-10-17'
@@ -349,7 +321,6 @@ Resources:
                 Condition:
                   StringEquals:
                     'ec2:ResourceTag/S3Access': 'Approved'
-        # Secrets Manager access for database credentials
         - PolicyName: SecretsManagerAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -364,11 +335,10 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Instance Profile for EC2 instances
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-EC2-Profile'
+      # InstanceProfileName property removed to allow CloudFormation to generate a unique name
       Roles:
         - !Ref EC2InstanceRole
 
@@ -376,7 +346,6 @@ Resources:
   # 3. APPLICATION AND DATABASE SECURITY GROUPS
   # ========================================
 
-  # ALB Security Group - allows HTTPS traffic from internet
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -404,7 +373,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Web Security Group - allows HTTPS from ALB and SSH from specified CIDR
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -432,7 +400,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Database Security Group - allows MySQL traffic only from Web Security Group
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -455,7 +422,6 @@ Resources:
   # 4. DATA ENCRYPTION IN TRANSIT (SSL/TLS)
   # ========================================
 
-  # DB Subnet Group for RDS
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -470,7 +436,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # RDS Parameter Group enforcing SSL/TLS connections
   DatabaseParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties:
@@ -485,7 +450,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Secrets Manager secret for database credentials
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -502,7 +466,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # RDS MySQL instance with SSL/TLS enforcement
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
@@ -510,7 +473,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-mysql-db'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.37'
+      EngineVersion: '8.0.36'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
@@ -534,7 +497,6 @@ Resources:
   # 5. AWS WAF INTEGRATION
   # ========================================
 
-  # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -552,7 +514,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Target Group for ALB
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -570,7 +531,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # ALB Listener
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -583,7 +543,6 @@ Resources:
       Certificates:
         - CertificateArn: !Ref ExistingCertificateArn
 
-  # WAFv2 WebACL with OWASP Top 10 protection
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -592,7 +551,6 @@ Resources:
       DefaultAction:
         Allow: {}
       Rules:
-        # AWS Managed Rules - Common Rule Set (OWASP Top 10)
         - Name: CommonRuleSet
           Priority: 1
           OverrideAction:
@@ -605,7 +563,6 @@ Resources:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: CommonRuleSetMetric
-        # AWS Managed Rules - SQL Injection Rule Set
         - Name: SQLiRuleSet
           Priority: 2
           OverrideAction:
@@ -628,7 +585,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Associate WebACL with ALB
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
@@ -639,7 +595,6 @@ Resources:
   # 6. API GATEWAY LOGGING
   # ========================================
 
-  # CloudWatch Log Group for API Gateway
   APIGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -651,11 +606,10 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # IAM Role for API Gateway logging
   APIGatewayLoggingRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-APIGateway-Logging-Role'
+      # RoleName property removed to allow CloudFormation to generate a unique name
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -671,13 +625,11 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # API Gateway Account configuration for logging
   APIGatewayAccount:
     Type: AWS::ApiGateway::Account
     Properties:
       CloudWatchRoleArn: !GetAtt APIGatewayLoggingRole.Arn
 
-  # Sample REST API Gateway
   SampleRestAPI:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -692,7 +644,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # API Gateway Resource
   APIResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -700,7 +651,6 @@ Resources:
       ParentId: !GetAtt SampleRestAPI.RootResourceId
       PathPart: 'sample'
 
-  # API Gateway Method
   APIMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -719,7 +669,6 @@ Resources:
       MethodResponses:
         - StatusCode: 200
 
-  # API Gateway Deployment
   APIDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
@@ -728,7 +677,6 @@ Resources:
       RestApiId: !Ref SampleRestAPI
       StageName: prod
 
-  # API Gateway Stage with comprehensive logging
   APIStage:
     Type: AWS::ApiGateway::Stage
     Properties:
@@ -754,11 +702,10 @@ Resources:
   # 7. AUTOMATED SECURITY PATCHING VIA LAMBDA
   # ========================================
 
-  # IAM Role for Lambda function with SSM permissions
   LambdaPatchingRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-Lambda-Patching-Role'
+      # RoleName property removed to allow CloudFormation to generate a unique name
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -785,7 +732,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Lambda function for automated patching
   PatchingLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -801,7 +747,7 @@ Resources:
           
           def lambda_handler(event, context):
               ssm_client = boto3.client('ssm')
-              ec2_client = botoe3.client('ec2')
+              ec2_client = boto3.client('ec2')
               
               try:
                   # Get instances with PatchGroup=WebApp tag
@@ -861,7 +807,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # EventBridge rule for weekly patching schedule
   PatchingScheduleRule:
     Type: AWS::Events::Rule
     Properties:
@@ -871,7 +816,8 @@ Resources:
       Targets:
         - Arn: !GetAtt PatchingLambdaFunction.Arn
           Id: !Sub '${ProjectName}-PatchingLambdaTarget'
-          
+
+# Outputs section for Integration Tests
 Outputs:
   VpcId:
     Description: The ID of the VPC
