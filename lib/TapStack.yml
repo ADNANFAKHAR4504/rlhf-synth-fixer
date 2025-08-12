@@ -30,6 +30,7 @@ Parameters:
   NotificationEmail:
     Type: String
     Description: 'Email address to receive CloudWatch alarm notifications.'
+    Default: 'default@example.com'
     AllowedPattern: '^.+@.+$'
     ConstraintDescription: 'Must be a valid email address.'
 
@@ -663,9 +664,9 @@ Resources:
 
   CloudTrailLogBucket:
     Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectNameLower}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
-      AccessControl: Private
+    Properties:s
+      # S3 bucket names must be <= 63 characters
+      BucketName: !Sub '${ProjectNameLower}-ctlogs-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -825,7 +826,7 @@ Outputs:
   # New outputs for added components
   CloudTrailName:
     Description: The name of the CloudTrail trail
-    Value: !GetAtt MainCloudTrail.TrailArn
+    Value: !Ref MainCloudTrail
     Export:
       Name: !Sub "${AWS::StackName}-CloudTrailName"
       
