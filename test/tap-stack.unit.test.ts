@@ -45,15 +45,15 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(bucketEntry).toBeDefined();
 
       const [_, bucketResource] = bucketEntry as [string, any];
+
       const encryption = bucketResource?.Properties?.BucketEncryption;
-
       expect(encryption).toBeDefined();
-      expect(encryption?.ServerSideEncryptionConfiguration).toBeDefined();
 
-      const rules = encryption.ServerSideEncryptionConfiguration?.Rules;
+      const rules = encryption?.ServerSideEncryptionConfiguration;
+
+      expect(Array.isArray(rules)).toBe(true);
 
       if (!Array.isArray(rules)) {
-        console.error('⚠️ ServerSideEncryptionConfiguration.Rules is not an array:', rules);
         throw new Error('Invalid or missing encryption rules for S3 bucket.');
       }
 
@@ -61,8 +61,8 @@ describe('CloudFormation Template Unit Tests', () => {
 
       const kmsRule = rules.find(
         (rule: any) =>
-          rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms' &&
-          typeof rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID === 'string'
+          rule.ServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms' &&
+          typeof rule.ServerSideEncryptionByDefault.KMSMasterKeyId === 'string'
       );
 
       expect(kmsRule).toBeDefined();
@@ -80,6 +80,8 @@ describe('CloudFormation Template Unit Tests', () => {
       const [__, secretResource] = secretEntry as [string, any];
 
       expect(secretResource.Properties).toBeDefined();
+
+      // Your template explicitly names the secret "MyAppPassword"
       expect(secretResource.Properties.Name).toBe('MyAppPassword');
       expect(secretResource.Properties.Description).toBeDefined();
     });
