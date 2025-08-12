@@ -13,7 +13,7 @@ Description: 'Secure AWS cloud environment with API Gateway, S3, IAM, WAF, and V
 Parameters:
   ProjectName:
     Type: String
-    Default: 'secure-api-project'
+    Default: 'secure-api'
     Description: 'Name prefix for all resources'
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
@@ -27,7 +27,26 @@ Parameters:
   LogRetentionDays:
     Type: Number
     Default: 30
-    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    AllowedValues:
+      [
+        1,
+        3,
+        5,
+        7,
+        14,
+        30,
+        60,
+        90,
+        120,
+        150,
+        180,
+        365,
+        400,
+        545,
+        731,
+        1827,
+        3653,
+      ]
     Description: 'CloudWatch Logs retention period in days'
 
 # =============================================================================

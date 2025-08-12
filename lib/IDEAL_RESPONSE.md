@@ -13,7 +13,7 @@ Description: 'Secure AWS cloud environment with API Gateway, S3, IAM, WAF, and V
 Parameters:
   ProjectName:
     Type: String
-    Default: 'secure-api-project'
+    Default: 'secure-api'
     Description: 'Name prefix for all resources'
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
@@ -34,7 +34,26 @@ Parameters:
   LogRetentionDays:
     Type: Number
     Default: 30
-    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    AllowedValues:
+      [
+        1,
+        3,
+        5,
+        7,
+        14,
+        30,
+        60,
+        90,
+        120,
+        150,
+        180,
+        365,
+        400,
+        545,
+        731,
+        1827,
+        3653,
+      ]
     Description: 'CloudWatch Logs retention period in days'
 
 # =============================================================================
@@ -803,24 +822,28 @@ Outputs:
 ## Key Features Implemented
 
 ### 1. **API Gateway with CloudWatch Logging**
+
 - Configured REST API with REGIONAL endpoint
 - Enabled comprehensive access logging to CloudWatch
 - Implemented health check and secure endpoints
 - Full request/response logging with detailed format
 
 ### 2. **S3 Buckets with AES-256 Encryption**
+
 - Server-side encryption enabled on all buckets
 - Public access completely blocked
 - Bucket policies enforce HTTPS and VPC-only access
 - Lifecycle policies for cost optimization
 
 ### 3. **IAM Roles with Least Privilege**
+
 - Separate roles for API Gateway and Lambda
 - Minimal permissions granted
 - Resource-specific access restrictions
 - No wildcard permissions on sensitive actions
 
 ### 4. **AWS WAF Protection**
+
 - Protects against SQL injection attacks
 - Protects against XSS attacks
 - Blocks known bad inputs
@@ -828,12 +851,14 @@ Outputs:
 - Full logging to CloudWatch
 
 ### 5. **VPC Networking**
+
 - Single VPC containing all components
 - Public and private subnets across multiple AZs
 - NAT Gateway for private subnet internet access
 - VPC endpoints for S3 and API Gateway
 
 ### 6. **Additional Security Features**
+
 - Environment suffix for resource isolation
 - No Retain deletion policies (all resources destroyable)
 - Comprehensive tagging strategy
@@ -864,6 +889,7 @@ aws cloudformation describe-stacks \
 ## Testing
 
 The solution includes comprehensive unit and integration tests:
+
 - **Unit Tests**: Validate template structure, parameters, resources, and security configurations
 - **Integration Tests**: Verify deployed resources, API endpoints, and infrastructure workflows
 - **Coverage**: 90%+ test coverage achieved
@@ -871,6 +897,7 @@ The solution includes comprehensive unit and integration tests:
 ## Compliance
 
 This solution meets all specified requirements:
+
 - ✅ API Gateway with CloudWatch logging
 - ✅ S3 buckets with AES-256 encryption and public access blocked
 - ✅ IAM roles following least privilege principle
