@@ -53,6 +53,29 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
             actions: ['kms:*'],
             resources: ['*'],
           }),
+          new iam.PolicyStatement({
+            sid: 'Allow CloudWatch Logs',
+            effect: iam.Effect.ALLOW,
+            principals: [
+              new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+            ],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+            conditions: {
+              ArnLike: {
+                'kms:EncryptionContext:aws:logs:arn': [
+                  `arn:aws:logs:${this.region}:${this.account}:log-group:${this.stackName}-*`,
+                  `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/application/secure-app*`,
+                ],
+              },
+            },
+          }),
         ],
       }),
     });
