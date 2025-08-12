@@ -89,7 +89,12 @@ vpc = aws.ec2.Vpc(
         "Name": get_resource_name("vpc"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(
+        # If the VPC must be replaced, keep the old one to avoid transient AWS dependency violations
+        retain_on_delete=True,
+        custom_timeouts=pulumi.CustomTimeouts(delete="20m")
+    )
 )
 
 # Internet Gateway for public internet access
@@ -179,6 +184,7 @@ alb_security_group = aws.ec2.SecurityGroup(
     name=get_resource_name("alb-sg"),
     description="Security group for Application Load Balancer - allows HTTP traffic from internet",
     vpc_id=vpc.id,
+    revoke_rules_on_delete=True,
     ingress=[
         # Allow HTTP traffic from anywhere (IPv4)
         aws.ec2.SecurityGroupIngressArgs(
@@ -229,6 +235,7 @@ ec2_security_group = aws.ec2.SecurityGroup(
     name=get_resource_name("ec2-sg"),
     description="Security group for EC2 instances - allows HTTP traffic only from ALB",
     vpc_id=vpc.id,
+    revoke_rules_on_delete=True,
     ingress=[
         # Allow HTTP traffic only from ALB security group
         aws.ec2.SecurityGroupIngressArgs(
