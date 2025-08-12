@@ -335,7 +335,8 @@ Resources:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 100
+      RuleNumber: 110
+      Egress: true
       Protocol: 6
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
@@ -349,6 +350,7 @@ Resources:
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 100
+      Egress: false
       Protocol: 6
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
@@ -356,21 +358,24 @@ Resources:
         From: 1024
         To: 65535
 
-  # Allow VPC internal traffic
+  # Allow VPC internal traffic inbound
   PrivateNetworkAclEntryInboundVPC:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 200
+      Egress: false
       Protocol: -1
       RuleAction: allow
       CidrBlock: !Ref VpcCidr
 
+  # Allow VPC internal traffic outbound
   PrivateNetworkAclEntryOutboundVPC:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 200
+      Egress: true
       Protocol: -1
       RuleAction: allow
       CidrBlock: !Ref VpcCidr
@@ -498,7 +503,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-secure-bucket-${AWS::AccountId}'
+      BucketName: !Sub 'secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -532,7 +537,7 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${S3Bucket}/*'
+              - !Sub '${S3Bucket.Arn}/*'
               - !GetAtt S3Bucket.Arn
             Condition:
               StringNotEquals:
@@ -548,7 +553,7 @@ Resources:
               - 's3:DeleteObject'
               - 's3:ListBucket'
             Resource:
-              - !Sub '${S3Bucket}/*'
+              - !Sub '${S3Bucket.Arn}/*'
               - !GetAtt S3Bucket.Arn
 
   # CloudTrail S3 Bucket
@@ -557,7 +562,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -594,7 +599,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket}/*'
+            Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
@@ -664,11 +669,11 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                   - 's3:DeleteObject'
-                Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-secure-bucket-${AWS::AccountId}/*'
+                Resource: !Sub 'arn:aws:s3:::secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
-                Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-secure-bucket-${AWS::AccountId}'
+                Resource: !Sub 'arn:aws:s3:::secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
         # KMS access for S3 encryption/decryption
         - PolicyName: KMSAccess
           PolicyDocument:

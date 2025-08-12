@@ -129,5 +129,26 @@ The model successfully delivered a production-quality, secure CloudFormation tem
 - **Security best practices** (least privilege, encryption, monitoring)
 - **Operational readiness** (validation, testing, documentation)
 - **Maintainability** (well-structured, commented, parameterized)
+- **Deployment compatibility** (CAPABILITY_IAM support, Network ACL rule fixes)
 
 **No failures or deviations from requirements were identified.** The template is ready for deployment in production environments with appropriate security controls.
+
+## Deployment Notes
+
+### Network ACL Configuration
+The template includes properly configured Network ACL rules with unique rule numbers:
+- **Rule 100**: HTTPS outbound (egress) and ephemeral ports inbound (ingress)
+- **Rule 200**: VPC internal traffic (both inbound and outbound)
+
+### IAM Capabilities
+The template uses `CAPABILITY_IAM` (not `CAPABILITY_NAMED_IAM`) with auto-generated resource names for IAM roles and security groups.
+
+### S3 Bucket Naming
+Both S3 buckets use lowercase naming conventions with environment suffix to ensure compliance with S3 bucket naming requirements and provide environment-specific uniqueness:
+- **Main S3 Bucket**: `secure-bucket-{accountId}-us-west-2-tapstack-{environment}`
+- **CloudTrail S3 Bucket**: `cloudtrail-logs-{accountId}-us-west-2-tapstack-{environment}`
+
+### S3 Bucket Policy Configuration
+Both S3 bucket policies use proper ARN references to ensure valid resource references:
+- **Main S3 Bucket Policy**: Uses `${S3Bucket.Arn}/*` for proper ARN references
+- **CloudTrail S3 Bucket Policy**: Uses `${CloudTrailS3Bucket.Arn}/*` for proper ARN references
