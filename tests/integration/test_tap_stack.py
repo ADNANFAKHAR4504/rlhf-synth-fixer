@@ -126,7 +126,7 @@ def test_vpc_connectivity_via_lambda_ping(pulumi_outputs, lambda_client):
   success_message = body_data.get('message', '')
   assert 'Successfully reached' in success_message, f"Expected success message but got: {success_message}"
 
-  print("✅ VPC Connectivity Test PASSED:")
+  print("VPC Connectivity Test PASSED:")
   print(f"   - Lambda function successfully invoked: {lambda_arn}")
   print(f"   - RDS endpoint reachable across VPC peering")
   print(f"   - Multi-region network connectivity confirmed")
