@@ -438,19 +438,14 @@ def handler(event, context):
           'iam:CreateAccessKey',
           'iam:DeleteAccessKey',
         ],
-        resources: [
-          `arn:aws:iam::${this.account}:user/*`,
-        ],
+        resources: [`arn:aws:iam::${this.account}:user/*`],
       })
     );
 
     keyRotationFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: [
-          'secretsmanager:CreateSecret',
-          'secretsmanager:UpdateSecret',
-        ],
+        actions: ['secretsmanager:CreateSecret', 'secretsmanager:UpdateSecret'],
         resources: [
           `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
         ],
@@ -460,11 +455,7 @@ def handler(event, context):
     keyRotationFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: [
-          'kms:Encrypt',
-          'kms:Decrypt',
-          'kms:GenerateDataKey',
-        ],
+        actions: ['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey'],
         resources: [kmsKey.keyArn],
       })
     );
