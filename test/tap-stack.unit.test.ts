@@ -22,6 +22,56 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Configuration', () => {
+    test('should use environmentSuffix from props when provided', () => {
+      const app2 = new cdk.App();
+      const stack2 = new TapStack(app2, 'TestTapStackProps', {
+        environmentSuffix: 'props-test',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const template2 = Template.fromStack(stack2);
+      
+      template2.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: 'myapp-webserver-props-test'
+      });
+    });
+
+    test('should use environmentSuffix from context when props not provided', () => {
+      const app3 = new cdk.App();
+      app3.node.setContext('environmentSuffix', 'context-test');
+      const stack3 = new TapStack(app3, 'TestTapStackContext', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const template3 = Template.fromStack(stack3);
+      
+      template3.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: 'myapp-webserver-context-test'
+      });
+    });
+
+    test('should default to "dev" when no environmentSuffix provided', () => {
+      const app4 = new cdk.App();
+      // No context or props environmentSuffix set
+      const stack4 = new TapStack(app4, 'TestTapStackDefault', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const template4 = Template.fromStack(stack4);
+      
+      template4.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: 'myapp-webserver-dev'
+      });
+    });
+  });
+
   describe('VPC Configuration', () => {
     test('should create VPC with environment suffix', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
