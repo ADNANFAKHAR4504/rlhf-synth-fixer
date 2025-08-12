@@ -137,7 +137,9 @@ The model successfully delivered a production-quality, secure CloudFormation tem
 
 ### Network ACL Configuration
 The template includes properly configured Network ACL rules with unique rule numbers:
-- **Rule 100**: HTTPS outbound (egress) and ephemeral ports inbound (ingress)
+- **Rule 100**: Ephemeral ports inbound (ingress) for HTTPS responses
+- **Rule 110**: HTTPS outbound (egress) for Lambda and NAT Gateway
+- **Rule 120**: HTTP outbound (egress) for NAT Gateway functionality
 - **Rule 200**: VPC internal traffic (both inbound and outbound)
 
 ### IAM Capabilities

@@ -14,6 +14,7 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure multi-AZ VPC with Lambda, S3 VPC Endpoint, KMS encryption, and CloudTrail logging'
+# Note: This template uses CAPABILITY_IAM (not CAPABILITY_NAMED_IAM) - IAM resources use auto-generated names
 
 Parameters:
   VpcCidr:
@@ -348,7 +349,8 @@ Resources:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 100
+      RuleNumber: 110
+      Egress: true
       Protocol: 6
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
@@ -362,6 +364,7 @@ Resources:
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 100
+      Egress: false
       Protocol: 6
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
@@ -369,21 +372,24 @@ Resources:
         From: 1024
         To: 65535
 
-  # Allow VPC internal traffic
+  # Allow VPC internal traffic inbound
   PrivateNetworkAclEntryInboundVPC:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 200
+      Egress: false
       Protocol: -1
       RuleAction: allow
       CidrBlock: !Ref VpcCidr
 
+  # Allow VPC internal traffic outbound
   PrivateNetworkAclEntryOutboundVPC:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 200
+      Egress: true
       Protocol: -1
       RuleAction: allow
       CidrBlock: !Ref VpcCidr
@@ -416,11 +422,11 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          # Allow Lambda role to use the key for S3 operations
-          - Sid: Allow Lambda Role
+          # Allow Lambda service to use the key for S3 operations
+          - Sid: Allow Lambda Service
             Effect: Allow
             Principal:
-              AWS: !GetAtt LambdaExecutionRole.Arn
+              Service: lambda.amazonaws.com
             Action:
               - 'kms:Decrypt'
               - 'kms:Encrypt'
@@ -509,8 +515,9 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-secure-bucket-${AWS::AccountId}'
+      BucketName: !Sub 'secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -544,7 +551,7 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${S3Bucket}/*'
+              - !Sub '${S3Bucket.Arn}/*'
               - !GetAtt S3Bucket.Arn
             Condition:
               StringNotEquals:
@@ -560,15 +567,16 @@ Resources:
               - 's3:DeleteObject'
               - 's3:ListBucket'
             Resource:
-              - !Sub '${S3Bucket}/*'
+              - !Sub '${S3Bucket.Arn}/*'
               - !GetAtt S3Bucket.Arn
 
   # CloudTrail S3 Bucket
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -605,7 +613,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket}/*'
+            Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
@@ -614,7 +622,6 @@ Resources:
   PublicSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-Public-SG'
       GroupDescription: 'Security group for public resources - HTTPS only'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -638,7 +645,6 @@ Resources:
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-Lambda-SG'
       GroupDescription: 'Security group for Lambda function'
       VpcId: !Ref VPC
       SecurityGroupEgress:
@@ -657,7 +663,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-Lambda-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -678,11 +683,11 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                   - 's3:DeleteObject'
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
-                Resource: !GetAtt S3Bucket.Arn
+                Resource: !Sub 'arn:aws:s3:::secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
         # KMS access for S3 encryption/decryption
         - PolicyName: KMSAccess
           PolicyDocument:
@@ -704,7 +709,7 @@ Resources:
 
   # Lambda Function
   LambdaFunction:
-    Type: AWS::LC::Function
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${FunctionNamePrefix}-${AWS::StackName}-Function'
       Runtime: !Ref LambdaRuntime
@@ -795,4 +800,111 @@ Resources:
     DependsOn: CloudTrailS3BucketPolicy
     Properties:
       TrailName: !Sub '${AWS::StackName}-CloudTrail'
-      S3Bucket
+      S3BucketName: !Ref CloudTrailS3Bucket
+      KMSKeyId: !Ref CloudTrailKMSKey
+      IsLogging: true
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-CloudTrail'
+        - Key: Environment
+          Value: !Ref Environment
+
+# ========================================
+# Outputs for Resource References
+# ========================================
+Outputs:
+  # VPC and Network Resources
+  VPCId:
+    Description: 'ID of the VPC'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  PublicSubnet1Id:
+    Description: 'ID of the first public subnet'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-Public-Subnet-1-ID'
+
+  PublicSubnet2Id:
+    Description: 'ID of the second public subnet'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-Public-Subnet-2-ID'
+
+  PrivateSubnet1Id:
+    Description: 'ID of the first private subnet'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-Subnet-1-ID'
+
+  PrivateSubnet2Id:
+    Description: 'ID of the second private subnet'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-Subnet-2-ID'
+
+  # Security Groups
+  LambdaSecurityGroupId:
+    Description: 'ID of the Lambda security group'
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Lambda-SecurityGroup-ID'
+
+  # S3 Resources
+  S3BucketName:
+    Description: 'Name of the S3 bucket'
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-Bucket-Name'
+
+  CloudTrailS3BucketName:
+    Description: 'Name of the CloudTrail S3 bucket'
+    Value: !Ref CloudTrailS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-S3-Bucket-Name'
+
+  # KMS Keys
+  S3KMSKeyArn:
+    Description: 'ARN of the S3 KMS key'
+    Value: !GetAtt S3KMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-KMS-Key-ARN'
+
+  CloudTrailKMSKeyArn:
+    Description: 'ARN of the CloudTrail KMS key'
+    Value: !GetAtt CloudTrailKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-KMS-Key-ARN'
+
+  # Lambda Resources
+  LambdaFunctionArn:
+    Description: 'ARN of the Lambda function'
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-Lambda-Function-ARN'
+
+  LambdaExecutionRoleArn:
+    Description: 'ARN of the Lambda execution role'
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-Lambda-Execution-Role-ARN'
+
+  # CloudTrail
+  CloudTrailArn:
+    Description: 'ARN of the CloudTrail'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+
+  # VPC Endpoints
+  S3VPCEndpointId:
+    Description: 'ID of the S3 VPC Endpoint'
+    Value: !Ref S3VPCEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-VPC-Endpoint-ID'

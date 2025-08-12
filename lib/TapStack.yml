@@ -330,7 +330,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Allow HTTPS outbound for Lambda
+  # Allow HTTPS outbound for Lambda and NAT Gateway
   PrivateNetworkAclEntryOutboundHTTPS:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -343,6 +343,20 @@ Resources:
       PortRange:
         From: 443
         To: 443
+
+  # Allow HTTP outbound for NAT Gateway functionality
+  PrivateNetworkAclEntryOutboundHTTP:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 120
+      Egress: true
+      Protocol: 6
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 80
+        To: 80
 
   # Allow ephemeral ports inbound for HTTPS responses
   PrivateNetworkAclEntryInboundEphemeral:
