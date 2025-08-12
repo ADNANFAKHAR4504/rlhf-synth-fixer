@@ -121,77 +121,12 @@ class DatabaseComponent(pulumi.ComponentResource):
             # The replica will be created by the secondary region deployment
             pass
         
-        account_id = aws.get_caller_identity_output().account_id
-        dest_vault_arn = account_id.apply(
-            lambda aid: f"arn:aws:backup:{secondary_region if is_primary else 'us-east-1'}:{aid}:backup-vault:Default"
-        )
+        # account_id = aws.get_caller_identity_output().account_id
+        # dest_vault_arn = account_id.apply(
+        #     lambda aid: f"arn:aws:backup:{secondary_region if is_primary else 'us-east-1'}:{aid}:backup-vault:Default"
+        # )
 
 
-        # Create DynamoDB backup vault for additional protection
-        self.dynamodb_backup = aws.backup.Plan(
-            f"{name}-dynamodb-backup-plan",
-            rules=[
-                aws.backup.PlanRuleArgs(
-                    rule_name="daily_backup",
-                    target_vault_name="default",  # Use default backup vault
-                    schedule="cron(0 2 ? * * *)",  # Daily at 2 AM
-                    start_window=60,  # 1 hour
-                    completion_window=120,  # 2 hours
-                    lifecycle=aws.backup.PlanRuleLifecycleArgs(
-                        cold_storage_after=30,
-                        delete_after=365
-                    ),
-                    copy_actions=[
-                        aws.backup.PlanRuleCopyActionArgs(
-                            # destination_vault_arn=f"arn:aws:backup:{secondary_region if is_primary else 'us-east-1'}:{account_id}:backup-vault:default",
-                            destination_vault_arn=dest_vault_arn,
-                            # destination_vault_arn=f"arn:aws:backup:us-east-1:*:backup-vault:default",
-                            lifecycle=aws.backup.PlanRuleCopyActionLifecycleArgs(
-                                cold_storage_after=30,
-                                delete_after=365
-                            )
-                        )
-                    ] if is_primary else []
-                )
-            ],
-            tags=tags,
-            opts=pulumi.ResourceOptions(parent=self)
-        )
         
-        # IAM role for backup service
-        backup_role = aws.iam.Role(
-            f"{name}-backup-role",
-            assume_role_policy="""{
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Action": "sts:AssumeRole",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "backup.amazonaws.com"
-                        }
-                    }
-                ]
-            }""",
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-        
-        # Attach AWS managed backup policy
-        aws.iam.RolePolicyAttachment(
-            f"{name}-backup-policy-attachment",
-            role=backup_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-        
-        # Create backup selection for DynamoDB table
-        self.backup_selection = aws.backup.Selection(
-            f"{name}-dynamodb-backup-selection",
-            iam_role_arn=backup_role.arn,
-            name=f"{name}-dynamodb-backup-selection",
-            plan_id=self.dynamodb_backup.id,
-            resources=[self.dynamodb_table.arn],
-            opts=pulumi.ResourceOptions(parent=self)
-        )
         
         self.register_outputs({})
