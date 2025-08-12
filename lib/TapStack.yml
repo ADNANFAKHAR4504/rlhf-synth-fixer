@@ -13,6 +13,10 @@ Metadata:
           default: "Database Configuration"
         Parameters:
           - DatabaseUsername
+      - Label:
+          default: "Security Configuration"
+        Parameters:
+          - CreateCloudTrail
 
 Parameters:
   EnvironmentSuffix:
@@ -33,6 +37,15 @@ Parameters:
     Description: "Database username for Secrets Manager"
     MinLength: 1
     MaxLength: 64
+
+  CreateCloudTrail:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: "Whether to create CloudTrail (set to false if you already have 5 trails in the region)"
+
+Conditions:
+  ShouldCreateCloudTrail: !Equals [!Ref CreateCloudTrail, "true"]
 
 Resources:
   # =========================================================================
@@ -131,28 +144,28 @@ Resources:
       VpcId: !Ref SecureVPC
       InternetGatewayId: !Ref InternetGateway
 
-  # NAT Gateway for private subnet outbound access - TEMPORARILY DISABLED TO AVOID EIP LIMITS
-  # NATGatewayEIP:
-  #   Type: AWS::EC2::EIP
-  #   DependsOn: AttachGateway
-  #   Properties:
-  #     Domain: vpc
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub "NATGatewayEIP-${EnvironmentSuffix}"
-  #       - Key: Environment
-  #         Value: Production
+  # NAT Gateway for private subnet outbound access
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "NATGatewayEIP-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: Production
 
-  # NATGateway:
-  #   Type: AWS::EC2::NatGateway
-  #   Properties:
-  #     AllocationId: !GetAtt NATGatewayEIP.AllocationId
-  #     SubnetId: !Ref PublicSubnet
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub "NATGateway-${EnvironmentSuffix}"
-  #       - Key: Environment
-  #         Value: Production
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "NATGateway-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: Production
 
   # Route Tables
   PublicRouteTable:
@@ -183,13 +196,13 @@ Resources:
       DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref InternetGateway
 
-  # PrivateRoute - DISABLED DUE TO NAT Gateway removal
-  # PrivateRoute:
-  #   Type: AWS::EC2::Route
-  #   Properties:
-  #     RouteTableId: !Ref PrivateRouteTable
-  #     DestinationCidrBlock: "0.0.0.0/0"
-  #     NatGatewayId: !Ref NATGateway
+  # Private route for outbound connectivity through NAT Gateway
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NATGateway
 
   PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -285,6 +298,75 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnet
       NetworkAclId: !Ref SecureNetworkACL
+
+  PrivateSubnetNetworkACLAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      NetworkAclId: !Ref SecureNetworkACL
+
+  # =========================================================================
+  # VPC Endpoints for Systems Manager (SSM)
+  # =========================================================================
+  SSMVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref SecureVPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      PrivateDnsEnabled: true
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - "ssm:*"
+            Resource: "*"
+
+  SSMMessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref SecureVPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssmmessages"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      PrivateDnsEnabled: true
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - "ssmmessages:*"
+            Resource: "*"
+
+  EC2MessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref SecureVPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ec2messages"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      PrivateDnsEnabled: true
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - "ec2messages:*"
+            Resource: "*"
 
   # =========================================================================
   # Security Groups with Minimal Rules
@@ -530,10 +612,11 @@ Resources:
           Value: DatabaseCredentials
 
   # =========================================================================
-  # CloudTrail for S3 Activity Logging
+  # CloudTrail for S3 Activity Logging (Optional)
   # =========================================================================
   CloudTrailKMSKey:
     Type: AWS::KMS::Key
+    Condition: ShouldCreateCloudTrail
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -563,6 +646,7 @@ Resources:
 
   CloudTrailKMSKeyAlias:
     Type: AWS::KMS::Alias
+    Condition: ShouldCreateCloudTrail
     Properties:
       AliasName: !Sub "alias/cloudtrail-key-${EnvironmentSuffix}-${AWS::StackName}"
       TargetKeyId: !Ref CloudTrailKMSKey
@@ -570,6 +654,7 @@ Resources:
   # CloudTrail logging bucket (local account)
   CloudTrailLogsBucket:
     Type: AWS::S3::Bucket
+    Condition: ShouldCreateCloudTrail
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -587,6 +672,7 @@ Resources:
 
   CloudTrailLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateCloudTrail
     Properties:
       Bucket: !Ref CloudTrailLogsBucket
       PolicyDocument:
@@ -614,6 +700,7 @@ Resources:
 
   SecurityAuditTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: ShouldCreateCloudTrail
     DependsOn: CloudTrailLogsBucketPolicy
     Properties:
       TrailName: !Sub "SecurityAuditTrail-${EnvironmentSuffix}"
@@ -810,8 +897,9 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-DatabaseSecretArn"
 
-  # CloudTrail Output
+  # CloudTrail Output (Conditional)
   CloudTrailArn:
+    Condition: ShouldCreateCloudTrail
     Description: "ARN of the CloudTrail"
     Value: !GetAtt SecurityAuditTrail.Arn
     Export:
