@@ -31,6 +31,14 @@ export class TapStack extends cdk.Stack {
   public readonly securityGroup: ec2.SecurityGroup;
   public readonly database: rds.DatabaseInstance;
   public readonly s3Bucket: s3.Bucket;
+  public readonly ec2Instance: ec2.Instance;
+  public readonly cloudTrail: cloudtrail.Trail;
+  public readonly flowLogsGroup: logs.LogGroup;
+  public readonly cloudTrailLogGroup: logs.LogGroup;
+  public readonly mfaPolicy: iam.ManagedPolicy;
+  public readonly financeGroup: iam.Group;
+  public readonly webAcl: wafv2.CfnWebACL;
+  public readonly securityAlertsTopic: cdk.aws_sns.Topic;
   private readonly deploymentId: string;
 
   constructor(scope: Construct, id: string, props: TapStackProps) {
@@ -50,7 +58,9 @@ export class TapStack extends cdk.Stack {
     this.kmsKey = this.createKmsKey();
 
     // 2. Create VPC with Flow Logs
-    this.vpc = this.createVpcWithFlowLogs();
+    const vpcResult = this.createVpcWithFlowLogs();
+    this.vpc = vpcResult.vpc;
+    this.flowLogsGroup = vpcResult.flowLogsGroup;
 
     // 3. Create Security Groups with restricted access
     this.securityGroup = this.createSecurityGroups(props.allowedIpAddresses);
@@ -62,19 +72,23 @@ export class TapStack extends cdk.Stack {
     this.database = this.createPrivateRdsInstance(props.databaseConfig);
 
     // 6. Create EC2 instance with security groups
-    this.createSecureEc2Instance();
+    this.ec2Instance = this.createSecureEc2Instance();
 
     // 7. Enable CloudTrail for all regions
-    this.enableCloudTrail();
+    const cloudTrailResult = this.enableCloudTrail();
+    this.cloudTrail = cloudTrailResult.trail;
+    this.cloudTrailLogGroup = cloudTrailResult.logGroup;
 
     // 8. Create IAM policies for MFA enforcement
-    this.createMfaEnforcementPolicies();
+    const iamResult = this.createMfaEnforcementPolicies();
+    this.mfaPolicy = iamResult.mfaPolicy;
+    this.financeGroup = iamResult.financeGroup;
 
     // 9. Enable AWS Shield Advanced and WAF
-    this.enableDdosProtection();
+    this.webAcl = this.enableDdosProtection();
 
     // 10. Add additional security configurations
-    this.addSecurityConfigurations();
+    this.securityAlertsTopic = this.addSecurityConfigurations();
 
     // Output important resource information
     this.createOutputs();
@@ -146,7 +160,10 @@ export class TapStack extends cdk.Stack {
     return key;
   }
 
-  private createVpcWithFlowLogs(): ec2.Vpc {
+  private createVpcWithFlowLogs(): {
+    vpc: ec2.Vpc;
+    flowLogsGroup: logs.LogGroup;
+  } {
     // Create VPC Flow Logs CloudWatch Log Group
     const flowLogsGroup = new logs.LogGroup(this, 'VpcFlowLogsGroup', {
       logGroupName: `/tap/${this.stackName.toLowerCase()}-${this.deploymentId}/vpc/flowlogs`,
@@ -220,7 +237,7 @@ export class TapStack extends cdk.Stack {
       service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
     });
 
-    return vpc;
+    return { vpc, flowLogsGroup };
   }
 
   private createSecurityGroups(
@@ -491,7 +508,10 @@ export class TapStack extends cdk.Stack {
     return instance;
   }
 
-  private enableCloudTrail(): void {
+  private enableCloudTrail(): {
+    trail: cloudtrail.Trail;
+    logGroup: logs.LogGroup;
+  } {
     // Create CloudWatch Log Group for CloudTrail
     const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
       logGroupName: `/tap/${this.stackName.toLowerCase()}-${this.deploymentId}/cloudtrail/logs`,
@@ -503,7 +523,7 @@ export class TapStack extends cdk.Stack {
     // Note: CloudTrail doesn't require a separate role when using CloudWatch Logs
     // The service has built-in permissions to write to CloudWatch Logs
 
-    new cloudtrail.Trail(this, 'TapCloudTrail', {
+    const trail = new cloudtrail.Trail(this, 'TapCloudTrail', {
       trailName: `tap-financial-services-trail-${this.stackName.toLowerCase()}`,
       bucket: this.s3Bucket,
       s3KeyPrefix: 'cloudtrail-logs/',
@@ -513,9 +533,14 @@ export class TapStack extends cdk.Stack {
       encryptionKey: this.kmsKey,
       cloudWatchLogGroup: cloudTrailLogGroup,
     });
+
+    return { trail, logGroup: cloudTrailLogGroup };
   }
 
-  private createMfaEnforcementPolicies(): void {
+  private createMfaEnforcementPolicies(): {
+    mfaPolicy: iam.ManagedPolicy;
+    financeGroup: iam.Group;
+  } {
     // Create MFA enforcement policy
     const mfaPolicy = new iam.ManagedPolicy(this, 'TapMfaEnforcementPolicy', {
       managedPolicyName: `TapMfaEnforcementPolicy-${this.stackName}`,
@@ -575,7 +600,6 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create a group for financial services users
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const financeGroup = new iam.Group(this, 'TapFinanceGroup', {
       groupName: `TapFinanceUsers-${this.stackName}`,
       managedPolicies: [mfaPolicy],
@@ -650,13 +674,14 @@ def handler(event, context):
         ).functionArn,
       }
     );
+
+    return { mfaPolicy, financeGroup };
   }
 
-  private enableDdosProtection(): void {
+  private enableDdosProtection(): wafv2.CfnWebACL {
     // Note: AWS Shield Advanced requires manual activation and has costs
     // This creates the WAF WebACL for additional protection
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const webAcl = new wafv2.CfnWebACL(this, 'TapWebAcl', {
       scope: 'CLOUDFRONT',
       defaultAction: { allow: {} },
@@ -718,9 +743,11 @@ def handler(event, context):
         metricName: 'TapWebAclMetric',
       },
     });
+
+    return webAcl;
   }
 
-  private addSecurityConfigurations(): void {
+  private addSecurityConfigurations(): cdk.aws_sns.Topic {
     // Note: AWS Config can be manually enabled in the AWS Console for compliance monitoring
     // Note: GuardDuty requires manual activation in the AWS Console
     // This section focuses on other security configurations that can be automated
@@ -756,6 +783,8 @@ def handler(event, context):
     unauthorizedApiCallsAlarm.addAlarmAction(
       new cdk.aws_cloudwatch_actions.SnsAction(securityAlertsTopic)
     );
+
+    return securityAlertsTopic;
   }
 
   private createOutputs(): void {
@@ -787,6 +816,102 @@ def handler(event, context):
       value: this.securityGroup.securityGroupId,
       description: 'Security Group ID for application instances',
       exportName: 'TapSecurityGroupId',
+    });
+
+    new cdk.CfnOutput(this, 'EC2InstanceId', {
+      value: this.ec2Instance.instanceId,
+      description: 'EC2 Instance ID for TAP application',
+      exportName: 'TapEC2InstanceId',
+    });
+
+    new cdk.CfnOutput(this, 'EC2PrivateIP', {
+      value: this.ec2Instance.instancePrivateIp,
+      description: 'EC2 Instance Private IP',
+      exportName: 'TapEC2PrivateIP',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailArn', {
+      value: this.cloudTrail.trailArn,
+      description: 'CloudTrail ARN for audit logging',
+      exportName: 'TapCloudTrailArn',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailLogGroupName', {
+      value: this.cloudTrailLogGroup.logGroupName,
+      description: 'CloudTrail CloudWatch Log Group name',
+      exportName: 'TapCloudTrailLogGroupName',
+    });
+
+    new cdk.CfnOutput(this, 'VpcFlowLogsGroupName', {
+      value: this.flowLogsGroup.logGroupName,
+      description: 'VPC Flow Logs CloudWatch Log Group name',
+      exportName: 'TapVpcFlowLogsGroupName',
+    });
+
+    new cdk.CfnOutput(this, 'MfaPolicyArn', {
+      value: this.mfaPolicy.managedPolicyArn,
+      description: 'MFA Enforcement Policy ARN',
+      exportName: 'TapMfaPolicyArn',
+    });
+
+    new cdk.CfnOutput(this, 'FinanceGroupName', {
+      value: this.financeGroup.groupName,
+      description: 'Finance Users IAM Group name',
+      exportName: 'TapFinanceGroupName',
+    });
+
+    new cdk.CfnOutput(this, 'WebAclId', {
+      value: this.webAcl.attrId,
+      description: 'WAF WebACL ID for DDoS protection',
+      exportName: 'TapWebAclId',
+    });
+
+    new cdk.CfnOutput(this, 'WebAclArn', {
+      value: this.webAcl.attrArn,
+      description: 'WAF WebACL ARN for DDoS protection',
+      exportName: 'TapWebAclArn',
+    });
+
+    new cdk.CfnOutput(this, 'SecurityAlertsTopicArn', {
+      value: this.securityAlertsTopic.topicArn,
+      description: 'SNS Topic ARN for security alerts',
+      exportName: 'TapSecurityAlertsTopicArn',
+    });
+
+    new cdk.CfnOutput(this, 'KmsKeyArn', {
+      value: this.kmsKey.keyArn,
+      description: 'KMS Key ARN for encryption',
+      exportName: 'TapKmsKeyArn',
+    });
+
+    new cdk.CfnOutput(this, 'DatabasePort', {
+      value: this.database.instanceEndpoint.port.toString(),
+      description: 'RDS Database Port',
+      exportName: 'TapDatabasePort',
+    });
+
+    new cdk.CfnOutput(this, 'VpcCidr', {
+      value: this.vpc.vpcCidrBlock,
+      description: 'VPC CIDR block',
+      exportName: 'TapVpcCidr',
+    });
+
+    new cdk.CfnOutput(this, 'PublicSubnetIds', {
+      value: this.vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
+      description: 'Public subnet IDs (comma-separated)',
+      exportName: 'TapPublicSubnetIds',
+    });
+
+    new cdk.CfnOutput(this, 'PrivateSubnetIds', {
+      value: this.vpc.privateSubnets.map(subnet => subnet.subnetId).join(','),
+      description: 'Private subnet IDs (comma-separated)',
+      exportName: 'TapPrivateSubnetIds',
+    });
+
+    new cdk.CfnOutput(this, 'IsolatedSubnetIds', {
+      value: this.vpc.isolatedSubnets.map(subnet => subnet.subnetId).join(','),
+      description: 'Isolated subnet IDs (comma-separated)',
+      exportName: 'TapIsolatedSubnetIds',
     });
   }
 }
