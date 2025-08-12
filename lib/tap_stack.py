@@ -8,11 +8,12 @@ includes VPC with multi-AZ deployment, security groups, S3 storage with cross-re
 replication, CloudWatch monitoring, and proper tagging for compliance.
 """
 
-import pulumi
-import pulumi_aws as aws
-from pulumi import ComponentResource, ResourceOptions, Output
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+
+import pulumi
+import pulumi_aws as aws
+from pulumi import ComponentResource, Output, ResourceOptions
 
 
 @dataclass
@@ -583,8 +584,7 @@ class TapStack(ComponentResource):
               iam_role_arn=self.flow_logs_role.arn,
               log_destination_type="cloud-watch-logs",
               log_destination=self.infra_log_group.arn,
-              resource_ids=[self.vpc.id],  # Changed from resource_id to resource_ids (list)
-              resource_type="VPC",
+              vpc_id=self.vpc.id,
               traffic_type="ALL",
               tags={
                   **self.base_tags,
@@ -592,6 +592,7 @@ class TapStack(ComponentResource):
               },
               opts=ResourceOptions(parent=self.vpc)
           )
+
 
 
     @property
