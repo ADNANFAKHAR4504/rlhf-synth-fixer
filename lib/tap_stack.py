@@ -98,6 +98,7 @@ class TapStack(pulumi.ComponentResource):
             self.storage = StorageComponent(
                 f"storage-{region_suffix}-{self.environment_suffix}",
                 environment=self.environment_suffix,
+                region_suffix=region_suffix,
                 tags=self.tags,
                 opts=provider_opts()
             )

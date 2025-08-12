@@ -8,15 +8,15 @@ import pulumi_aws as aws
 
 
 class StorageComponent(pulumi.ComponentResource):
-  def __init__(self, name: str, environment: str, tags: dict, opts: pulumi.ResourceOptions = None):
+  def __init__(self, name: str, environment: str, region_suffix: str, tags: dict, opts: pulumi.ResourceOptions = None):
     super().__init__("custom:aws:Storage", name, None, opts)
 
     self.environment = environment
     # S3 Bucket for application data
     self.bucket = aws.s3.Bucket(
-        f"{name}-app-bucket-{environment}",
-        bucket=f"apprlhfturing{environment}",
-        tags={**tags, "Name": f"rlhfbucketturing{environment}"},
+        f"{name}-app-bucket-{region_suffix}",
+        bucket=f"apprlhfturing{region_suffix}",
+        tags={**tags, "Name": f"rlhfbucketturing{region_suffix}"},
         opts=pulumi.ResourceOptions(parent=self),
     )
 
