@@ -24,7 +24,9 @@ describe('TapStack', () => {
     });
 
     test('uses environment suffix from props or context', () => {
-      const customApp = new cdk.App({ context: { environmentSuffix: 'custom' } });
+      const customApp = new cdk.App({
+        context: { environmentSuffix: 'custom' },
+      });
       const customStack = new TapStack(customApp, 'CustomStack');
       expect(customStack).toBeDefined();
     });
@@ -70,7 +72,7 @@ describe('ServerlessStack', () => {
     });
 
     test('creates IAM roles with correct policies for Lambda functions', () => {
-      template.resourceCountIs('AWS::IAM::Role', 6); // 2 main function roles + 1 metrics collector role + 1 cold start optimized function role + 1 monitoring role + 1 application signals role
+      template.resourceCountIs('AWS::IAM::Role', 5); // 2 main function roles + 1 metrics collector role + 1 cold start optimized function role + 1 monitoring role
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
           Statement: [
@@ -138,7 +140,10 @@ describe('ServerlessStack', () => {
     test('creates POST methods for each resource', () => {
       // POST methods + OPTIONS methods
       // Using a simple check for methods existence instead of specific count
-      template.hasResourceProperties('AWS::ApiGateway::Method', Match.anyValue());
+      template.hasResourceProperties(
+        'AWS::ApiGateway::Method',
+        Match.anyValue()
+      );
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: 'POST',
       });
@@ -166,10 +171,12 @@ describe('ServerlessStack', () => {
   describe('Monitoring and Alarms', () => {
     test('creates CloudWatch alarms for Lambda functions', () => {
       // Each function has 3 alarms (error, duration, throttle) x 3 functions = 9
-      const alarmCount = template.toJSON().Resources ? 
-        Object.keys(template.toJSON().Resources).filter(key => 
-          template.toJSON().Resources[key].Type === 'AWS::CloudWatch::Alarm'
-        ).length : 0;
+      const alarmCount = template.toJSON().Resources
+        ? Object.keys(template.toJSON().Resources).filter(
+            key =>
+              template.toJSON().Resources[key].Type === 'AWS::CloudWatch::Alarm'
+          ).length
+        : 0;
       expect(alarmCount).toBeGreaterThanOrEqual(9);
     });
 
@@ -245,7 +252,7 @@ describe('MonitoringConstruct', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new cdk.Stack(app, 'TestStack');
-    
+
     // Create mock Lambda functions
     const mockFunction = new cdk.aws_lambda.Function(stack, 'MockFunction', {
       runtime: cdk.aws_lambda.Runtime.PYTHON_3_11,
@@ -305,11 +312,11 @@ describe('Infrastructure Compliance', () => {
     template.hasResourceProperties('AWS::Logs::LogGroup', {
       LogGroupName: Match.anyValue(),
     });
-    
+
     // Note: CDK automatically adds DeletionPolicy for resources
     const jsonTemplate = template.toJSON();
     const resources = jsonTemplate.Resources || {};
-    
+
     // Check that no resources have Retain deletion policy
     Object.keys(resources).forEach(resourceKey => {
       const resource = resources[resourceKey];

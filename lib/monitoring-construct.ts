@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -278,47 +277,21 @@ export class MonitoringConstruct extends Construct {
       }
     );
 
-    // Create IAM role for Application Signals to access Lambda functions
-    new iam.Role(this, 'ApplicationSignalsRole', {
-      assumedBy: new iam.ServicePrincipal('application-signals.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'CloudWatchApplicationSignalsServiceRolePolicy'
-        ),
-      ],
-      inlinePolicies: {
-        ApplicationSignalsAccess: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'lambda:ListFunctions',
-                'lambda:GetFunction',
-                'lambda:GetFunctionConfiguration',
-                'xray:GetServiceGraph',
-                'xray:GetTraceSummaries',
-                'xray:GetTraceGraph',
-                'cloudwatch:PutMetricData',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
-              resources: [
-                ...functions.map(func => func.functionArn),
-                applicationSignalsLogGroup.logGroupArn,
-                '*',
-              ],
-            }),
-          ],
-        }),
-      },
-    });
-
-    // Add tags to identify Application Signals enabled resources
+    // Application Signals is automatically enabled when CloudWatch is configured
+    // No need for a separate IAM role - it uses the existing CloudWatch permissions
+    // Just add tags to identify Application Signals enabled resources
     functions.forEach(func => {
       cdk.Tags.of(func).add('ApplicationSignals', 'enabled');
       cdk.Tags.of(func).add('ServiceMap', 'true');
       cdk.Tags.of(func).add('APMMonitoring', 'active');
     });
+
+    // Tag the log group as well
+    cdk.Tags.of(applicationSignalsLogGroup).add(
+      'ApplicationSignals',
+      'enabled'
+    );
+    cdk.Tags.of(applicationSignalsLogGroup).add('ServiceMap', 'true');
   }
 
   private createApplicationSignalsMonitoring(
