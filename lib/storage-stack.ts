@@ -154,6 +154,7 @@ export class StorageStack extends cdk.Stack {
 
     databaseConfigs.forEach(config => {
       new rds.DatabaseInstance(this, `Database${config.id}`, {
+        removalPolicy: cdk.RemovalPolicy.DESTROY,  // Add this line
         engine: rds.DatabaseInstanceEngine.postgres({
           version: rds.PostgresEngineVersion.VER_15_7,
         }),
