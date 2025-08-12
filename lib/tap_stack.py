@@ -503,7 +503,7 @@ for i, subnet in enumerate(public_subnets):
 # Create target group for EC2 instances
 target_group = aws.lb.TargetGroup(
     get_resource_name("web-tg"),
-    name_prefix=f"tg-{ENVIRONMENT}-",
+    name_prefix="tg-",
     port=80,
     protocol="HTTP",
     vpc_id=vpc.id,
@@ -537,7 +537,7 @@ for i, instance in enumerate(ec2_instances):
 # Create Application Load Balancer with dual-stack support
 alb = aws.lb.LoadBalancer(
     get_resource_name("web-alb"),
-    name_prefix=f"alb-{ENVIRONMENT}-",
+    name_prefix="alb-",
     load_balancer_type="application",
     ip_address_type="dualstack",  # Enable dual-stack (IPv4 and IPv6)
     internal=False,  # Internet-facing ALB
