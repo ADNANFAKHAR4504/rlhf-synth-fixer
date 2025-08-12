@@ -1,6 +1,6 @@
-# Secure Production Environment Infrastructure - Ideal Response
+# Secure Production Environment Infrastructure with Enhanced AWS Features
 
-This solution provides a comprehensive, production-ready AWS infrastructure using AWS CDK TypeScript with proper security controls, high availability, and enterprise-grade monitoring.
+This solution provides a comprehensive secure production environment on AWS using CDK TypeScript with enhanced features including AWS Lambda Powertools v2 for observability and Amazon VPC Lattice for modern service-to-service communication.
 
 ## bin/tap.ts
 ```typescript
@@ -39,6 +39,8 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as synthetics from 'aws-cdk-lib/aws-synthetics';
 import * as applicationSignals from 'aws-cdk-lib/aws-applicationinsights';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
 import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
@@ -53,7 +55,7 @@ export class TapStack extends cdk.Stack {
     const environmentSuffix =
       props?.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-    // KMS Key for encryption
+    // KMS Key for encryption with DESTROY policy for development
     const kmsKey = new kms.Key(this, 'ProductionKMSKey', {
       description: 'KMS key for production environment encryption',
       enableKeyRotation: true,
@@ -136,7 +138,6 @@ export class TapStack extends cdk.Stack {
       'Allow traffic from ALB'
     );
 
-    // Add SSH access with IP restrictions
     ec2SecurityGroup.addIngressRule(
       ec2.Peer.ipv4('10.0.0.0/16'),
       ec2.Port.tcp(22),
@@ -165,12 +166,8 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'CloudWatchAgentServerPolicy'
-        ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonSSMManagedInstanceCore'
-        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
       ],
       inlinePolicies: {
         S3Access: new iam.PolicyDocument({
@@ -178,9 +175,7 @@ export class TapStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['s3:GetObject', 's3:PutObject'],
-              resources: [
-                `arn:aws:s3:::production-app-bucket-${environmentSuffix}-*/*`,
-              ],
+              resources: [`arn:aws:s3:::production-app-bucket-${environmentSuffix}-*/*`],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -205,7 +200,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(ec2Role).add('Environment', 'Production');
 
     // Instance Profile
-    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
       role: ec2Role,
     });
 
@@ -217,87 +212,66 @@ export class TapStack extends cdk.Stack {
       'systemctl start httpd',
       'systemctl enable httpd',
       'echo "<h1>Production Web Server</h1>" > /var/www/html/index.html',
-      'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
-      JSON.stringify(
-        {
-          agent: {
-            metrics_collection_interval: 60,
-            run_as_user: 'cwagent',
-          },
-          logs: {
-            logs_collected: {
-              files: {
-                collect_list: [
-                  {
-                    file_path: '/var/log/httpd/access_log',
-                    log_group_name: logGroup.logGroupName,
-                    log_stream_name: '{instance_id}/httpd/access_log',
-                  },
-                  {
-                    file_path: '/var/log/httpd/error_log',
-                    log_group_name: logGroup.logGroupName,
-                    log_stream_name: '{instance_id}/httpd/error_log',
-                  },
-                ],
-              },
-            },
-          },
-          metrics: {
-            namespace: 'Production/Application',
-            metrics_collected: {
-              cpu: {
-                measurement: [
-                  'cpu_usage_idle',
-                  'cpu_usage_iowait',
-                  'cpu_usage_user',
-                  'cpu_usage_system',
-                ],
-                metrics_collection_interval: 60,
-              },
-              disk: {
-                measurement: ['used_percent'],
-                metrics_collection_interval: 60,
-                resources: ['*'],
-              },
-              mem: {
-                measurement: ['mem_used_percent'],
-                metrics_collection_interval: 60,
-              },
-            },
-          },
-        },
-        null,
-        2
-      ),
-      'EOF',
+      `cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "run_as_user": "cwagent"
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/httpd/access_log",
+            "log_group_name": "${logGroup.logGroupName}",
+            "log_stream_name": "{instance_id}/httpd/access_log"
+          }
+        ]
+      }
+    }
+  },
+  "metrics": {
+    "namespace": "Production/Application",
+    "metrics_collected": {
+      "cpu": {
+        "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+        "metrics_collection_interval": 60
+      },
+      "disk": {
+        "measurement": ["used_percent"],
+        "metrics_collection_interval": 60,
+        "resources": ["*"]
+      },
+      "mem": {
+        "measurement": ["mem_used_percent"],
+        "metrics_collection_interval": 60
+      }
+    }
+  }
+}
+EOF`,
       '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
     );
 
     // Launch Template with encrypted EBS
-    const launchTemplate = new ec2.LaunchTemplate(
-      this,
-      'ProductionLaunchTemplate',
-      {
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MEDIUM
-        ),
-        machineImage: ec2.MachineImage.latestAmazonLinux2(),
-        userData,
-        securityGroup: ec2SecurityGroup,
-        role: ec2Role,
-        blockDevices: [
-          {
-            deviceName: '/dev/xvda',
-            volume: ec2.BlockDeviceVolume.ebs(20, {
-              encrypted: true,
-              kmsKey: kmsKey,
-              deleteOnTermination: true,
-            }),
-          },
-        ],
-      }
-    );
+    const launchTemplate = new ec2.LaunchTemplate(this, 'ProductionLaunchTemplate', {
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
+      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+      userData,
+      securityGroup: ec2SecurityGroup,
+      role: ec2Role,
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: ec2.BlockDeviceVolume.ebs(20, {
+            encrypted: true,
+            kmsKey: kmsKey,
+            deleteOnTermination: true,
+          }),
+        },
+      ],
+    });
     cdk.Tags.of(launchTemplate).add('Environment', 'Production');
 
     // Application Load Balancer
@@ -329,38 +303,326 @@ export class TapStack extends cdk.Stack {
     // Auto Scaling Policy - Scale on CPU > 70%
     asg.scaleOnCpuUtilization('CPUScaling', {
       targetUtilizationPercent: 70,
-      cooldown: cdk.Duration.minutes(5),
+      scaleInCooldown: cdk.Duration.minutes(5),
+      scaleOutCooldown: cdk.Duration.minutes(5),
     });
 
     cdk.Tags.of(asg).add('Environment', 'Production');
 
     // Target Group
-    const targetGroup = new elbv2.ApplicationTargetGroup(
-      this,
-      'ProductionTargetGroup',
-      {
-        vpc,
-        port: 80,
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        targets: [asg],
-        healthCheck: {
-          enabled: true,
-          healthyHttpCodes: '200',
-          path: '/index.html',
-          protocol: elbv2.Protocol.HTTP,
-          healthyThresholdCount: 2,
-          unhealthyThresholdCount: 5,
-          timeout: cdk.Duration.seconds(10),
-          interval: cdk.Duration.seconds(30),
-        },
-      }
-    );
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'ProductionTargetGroup', {
+      vpc,
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targets: [asg],
+      healthCheck: {
+        enabled: true,
+        healthyHttpCodes: '200',
+        path: '/index.html',
+        protocol: elbv2.Protocol.HTTP,
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 5,
+        timeout: cdk.Duration.seconds(10),
+        interval: cdk.Duration.seconds(30),
+      },
+    });
     cdk.Tags.of(targetGroup).add('Environment', 'Production');
 
     // ALB Listener
     alb.addListener('HTTPListener', {
       port: 80,
       defaultTargetGroups: [targetGroup],
+    });
+
+    // Lambda Layer for Powertools v2
+    const powertoolsLayer = lambda.LayerVersion.fromLayerVersionArn(
+      this,
+      'PowertoolsLayer',
+      `arn:aws:lambda:${this.region}:094274105915:layer:AWSLambdaPowertoolsTypeScriptV2:11`
+    );
+
+    // IAM Role for Lambda functions with enhanced permissions
+    const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
+      ],
+      inlinePolicies: {
+        EnhancedObservability: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'cloudwatch:PutMetricData',
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'xray:PutTraceSegments',
+                'xray:PutTelemetryRecords',
+                'ssm:GetParameter',
+                'ssm:GetParameters',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:GetObject', 's3:PutObject'],
+              resources: [`arn:aws:s3:::production-app-bucket-${environmentSuffix}-*/*`],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['rds:DescribeDBInstances', 'rds:Connect'],
+              resources: [`arn:aws:rds-db:${this.region}:${this.account}:dbuser:*/*`],
+            }),
+          ],
+        }),
+      },
+    });
+    cdk.Tags.of(lambdaRole).add('Environment', 'Production');
+
+    // API Gateway Lambda Function with Powertools
+    const apiFunction = new lambda.Function(this, 'ApiFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      role: lambdaRole,
+      code: lambda.Code.fromInline(`
+const { Logger } = require('@aws-lambda-powertools/logger');
+const { Tracer } = require('@aws-lambda-powertools/tracer');
+const { Metrics } = require('@aws-lambda-powertools/metrics');
+
+const logger = new Logger({ serviceName: 'api-service' });
+const tracer = new Tracer({ serviceName: 'api-service' });
+const metrics = new Metrics({ serviceName: 'api-service', namespace: 'Production/Lambda' });
+
+exports.handler = tracer.captureLambdaHandler(async (event, context) => {
+    metrics.addMetric('ApiInvocations', 'Count', 1);
+    
+    logger.info('Processing API request', {
+        requestId: context.awsRequestId,
+        method: event.httpMethod || 'GET',
+        path: event.path || '/api',
+        userAgent: event.headers?.['User-Agent'] || 'Unknown'
+    });
+    
+    try {
+        const response = {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify({
+                message: 'API Gateway with Lambda Powertools v2',
+                timestamp: new Date().toISOString(),
+                version: '2.0.0',
+                service: 'production-api',
+                environmentSuffix: '${environmentSuffix}'
+            })
+        };
+        
+        logger.info('API request processed successfully', { statusCode: 200 });
+        metrics.addMetric('ApiSuccess', 'Count', 1);
+        return response;
+        
+    } catch (error) {
+        logger.error('API request failed', { error: error.message });
+        metrics.addMetric('ApiErrors', 'Count', 1);
+        
+        return {
+            statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify({
+                error: 'Internal server error',
+                timestamp: new Date().toISOString()
+            })
+        };
+    } finally {
+        metrics.publishStoredMetrics();
+    }
+});
+      `),
+      environment: {
+        POWERTOOLS_SERVICE_NAME: 'api-service',
+        POWERTOOLS_METRICS_NAMESPACE: 'Production/Lambda',
+        LOG_LEVEL: 'INFO',
+        ENVIRONMENT_SUFFIX: environmentSuffix,
+      },
+      layers: [powertoolsLayer],
+      tracing: lambda.Tracing.ACTIVE,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      vpc: vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [ec2SecurityGroup],
+    });
+    cdk.Tags.of(apiFunction).add('Environment', 'Production');
+
+    // Data Processing Lambda Function with Powertools
+    const dataProcessorFunction = new lambda.Function(this, 'DataProcessorFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      role: lambdaRole,
+      code: lambda.Code.fromInline(`
+const { Logger } = require('@aws-lambda-powertools/logger');
+const { Tracer } = require('@aws-lambda-powertools/tracer');
+const { Metrics } = require('@aws-lambda-powertools/metrics');
+
+const logger = new Logger({ 
+    serviceName: 'data-processor',
+    logLevel: 'INFO'
+});
+const tracer = new Tracer({ serviceName: 'data-processor' });
+const metrics = new Metrics({ 
+    serviceName: 'data-processor', 
+    namespace: 'Production/DataProcessing',
+    defaultDimensions: {
+        'Environment': 'Production'
+    }
+});
+
+exports.handler = tracer.captureLambdaHandler(async (event, context) => {
+    metrics.addMetric('ProcessingJobs', 'Count', 1);
+    
+    logger.info('Starting data processing job', {
+        requestId: context.awsRequestId,
+        eventType: event.eventType || 'batch-process',
+        recordCount: event.records?.length || 0
+    });
+    
+    try {
+        const subsegment = tracer.getSegment().addNewSubsegment('database-query');
+        
+        const startTime = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const processingTime = Date.now() - startTime;
+        
+        subsegment.close();
+        
+        logger.info('Data processing completed', {
+            processingTimeMs: processingTime,
+            status: 'success'
+        });
+        
+        metrics.addMetric('ProcessingLatency', 'Milliseconds', processingTime);
+        metrics.addMetric('ProcessingSuccess', 'Count', 1);
+        
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                message: 'Data processing completed successfully',
+                processingTimeMs: processingTime,
+                timestamp: new Date().toISOString(),
+                environmentSuffix: '${environmentSuffix}'
+            })
+        };
+        
+    } catch (error) {
+        logger.error('Data processing failed', { 
+            error: error.message,
+            stack: error.stack 
+        });
+        metrics.addMetric('ProcessingErrors', 'Count', 1);
+        
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: 'Data processing failed',
+                timestamp: new Date().toISOString()
+            })
+        };
+    } finally {
+        metrics.publishStoredMetrics();
+    }
+});
+      `),
+      environment: {
+        POWERTOOLS_SERVICE_NAME: 'data-processor',
+        POWERTOOLS_METRICS_NAMESPACE: 'Production/DataProcessing',
+        LOG_LEVEL: 'INFO',
+        ENVIRONMENT_SUFFIX: environmentSuffix,
+      },
+      layers: [powertoolsLayer],
+      tracing: lambda.Tracing.ACTIVE,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      vpc: vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [ec2SecurityGroup],
+    });
+    cdk.Tags.of(dataProcessorFunction).add('Environment', 'Production');
+
+    // VPC Lattice Service Network
+    const latticeServiceNetwork = new vpclattice.CfnServiceNetwork(this, 'ProductionServiceNetwork', {
+      name: `production-service-network-${environmentSuffix}`,
+      authType: 'AWS_IAM',
+    });
+    cdk.Tags.of(latticeServiceNetwork).add('Environment', 'Production');
+
+    // VPC Lattice Service Network VPC Association
+    const latticeVpcAssociation = new vpclattice.CfnServiceNetworkVpcAssociation(this, 'LatticeVpcAssociation', {
+      serviceNetworkIdentifier: latticeServiceNetwork.attrArn,
+      vpcIdentifier: vpc.vpcId,
+    });
+
+    // VPC Lattice Service for API Function
+    const apiLatticeService = new vpclattice.CfnService(this, 'ApiLatticeService', {
+      name: `api-service-${environmentSuffix}`,
+      authType: 'AWS_IAM',
+    });
+    cdk.Tags.of(apiLatticeService).add('Environment', 'Production');
+
+    // VPC Lattice Target Group for Lambda
+    const apiTargetGroup = new vpclattice.CfnTargetGroup(this, 'ApiTargetGroup', {
+      name: `api-targets-${environmentSuffix}`,
+      type: 'LAMBDA',
+      targets: [
+        {
+          id: apiFunction.functionArn,
+        },
+      ],
+    });
+
+    // VPC Lattice Service Association
+    const apiServiceAssociation = new vpclattice.CfnServiceNetworkServiceAssociation(this, 'ApiServiceAssociation', {
+      serviceIdentifier: apiLatticeService.attrArn,
+      serviceNetworkIdentifier: latticeServiceNetwork.attrArn,
+    });
+
+    // VPC Lattice Listener for API Service
+    const apiListener = new vpclattice.CfnListener(this, 'ApiListener', {
+      serviceIdentifier: apiLatticeService.attrArn,
+      protocol: 'HTTPS',
+      port: 443,
+      defaultAction: {
+        forward: {
+          targetGroups: [
+            {
+              targetGroupIdentifier: apiTargetGroup.attrArn,
+              weight: 100,
+            },
+          ],
+        },
+      },
+    });
+
+    // Lambda Resource Policy for VPC Lattice
+    apiFunction.addPermission('AllowVpcLatticeInvoke', {
+      principal: new iam.ServicePrincipal('vpc-lattice.amazonaws.com'),
+      action: 'lambda:InvokeFunction',
+    });
+
+    dataProcessorFunction.addPermission('AllowVpcLatticeInvokeProcessor', {
+      principal: new iam.ServicePrincipal('vpc-lattice.amazonaws.com'),
+      action: 'lambda:InvokeFunction',
     });
 
     // RDS Subnet Group
@@ -379,10 +641,7 @@ export class TapStack extends cdk.Stack {
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
       port: 3306,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
         excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
         secretName: `production-db-credentials-${environmentSuffix}`,
@@ -423,39 +682,24 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(s3Bucket).add('Environment', 'Production');
 
     // Systems Manager Parameters
-    const dbEndpointParameter = new ssm.StringParameter(
-      this,
-      'DBEndpointParameter',
-      {
-        parameterName: `/production-${environmentSuffix}/database/endpoint`,
-        stringValue: database.instanceEndpoint.hostname,
-        description: 'RDS database endpoint for production environment',
-      }
-    );
+    const dbEndpointParameter = new ssm.StringParameter(this, 'DBEndpointParameter', {
+      parameterName: `/production-${environmentSuffix}/database/endpoint`,
+      stringValue: database.instanceEndpoint.hostname,
+      description: 'RDS database endpoint for production environment',
+    });
 
-    const s3BucketParameter = new ssm.StringParameter(
-      this,
-      'S3BucketParameter',
-      {
-        parameterName: `/production-${environmentSuffix}/s3bucket/name`,
-        stringValue: s3Bucket.bucketName,
-        description: 'S3 bucket name for production environment',
-      }
-    );
+    const s3BucketParameter = new ssm.StringParameter(this, 'S3BucketParameter', {
+      parameterName: `/production-${environmentSuffix}/s3bucket/name`,
+      stringValue: s3Bucket.bucketName,
+      description: 'S3 bucket name for production environment',
+    });
 
     cdk.Tags.of(dbEndpointParameter).add('Environment', 'Production');
     cdk.Tags.of(s3BucketParameter).add('Environment', 'Production');
 
     // CloudWatch Alarms
     const cpuAlarm = new cloudwatch.Alarm(this, 'HighCPUAlarm', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/EC2',
-        metricName: 'CPUUtilization',
-        dimensionsMap: {
-          AutoScalingGroupName: asg.autoScalingGroupName,
-        },
-        statistic: 'Average',
-      }),
+      metric: asg.metricCpuUtilization(),
       threshold: 80,
       evaluationPeriods: 2,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
@@ -464,7 +708,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(cpuAlarm).add('Environment', 'Production');
 
     const databaseCpuAlarm = new cloudwatch.Alarm(this, 'DatabaseCPUAlarm', {
-      metric: database.metricCPUUtilization(),
+      metric: database.metricCpuUtilization(),
       threshold: 75,
       evaluationPeriods: 2,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
@@ -476,12 +720,8 @@ export class TapStack extends cdk.Stack {
     const canaryRole = new iam.Role(this, 'CanaryRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSLambdaBasicExecutionRole'
-        ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'CloudWatchSyntheticsExecutionRolePolicy'
-        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchSyntheticsExecutionRolePolicy'),
       ],
     });
 
@@ -492,7 +732,6 @@ export class TapStack extends cdk.Stack {
         code: synthetics.Code.fromInline(`
 const synthetics = require('Synthetics');
 const log = require('SyntheticsLogger');
-const syntheticsConfiguration = synthetics.getConfiguration();
 
 const checkEndpoint = async function () {
     return await synthetics.executeStep('checkEndpoint', async function () {
@@ -527,41 +766,54 @@ exports.handler = async () => {
     });
     cdk.Tags.of(syntheticsCanary).add('Environment', 'Production');
 
-    // Application Signals - Application Insights
-    const appInsights = new applicationSignals.CfnApplication(
-      this,
-      'ProductionAppInsights',
-      {
-        resourceGroupName: `production-application-resources-${environmentSuffix}`,
-        autoConfigurationEnabled: true,
-        cweMonitorEnabled: true,
-      }
-    );
+    // Application Insights
+    const appInsights = new applicationSignals.CfnApplication(this, 'ProductionAppInsights', {
+      resourceGroupName: `production-application-resources-${environmentSuffix}`,
+      autoConfigurationEnabled: true,
+      cweMonitorEnabled: true,
+      autoCreate: true,
+    });
     cdk.Tags.of(appInsights).add('Environment', 'Production');
 
     // Outputs
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
       description: 'Application Load Balancer DNS name',
-      exportName: `${id}-ALB-DNS`,
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
       description: 'RDS database endpoint',
-      exportName: `${id}-DB-Endpoint`,
     });
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: s3Bucket.bucketName,
       description: 'S3 bucket name for application storage',
-      exportName: `${id}-S3-Bucket`,
     });
 
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID for the production environment',
-      exportName: `${id}-VPC-Id`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiLambdaFunctionArn', {
+      value: apiFunction.functionArn,
+      description: 'ARN of the API Lambda function with Powertools',
+    });
+
+    new cdk.CfnOutput(this, 'DataProcessorFunctionArn', {
+      value: dataProcessorFunction.functionArn,
+      description: 'ARN of the data processor Lambda function with Powertools',
+    });
+
+    new cdk.CfnOutput(this, 'VpcLatticeServiceNetworkArn', {
+      value: latticeServiceNetwork.attrArn,
+      description: 'ARN of the VPC Lattice service network',
+    });
+
+    new cdk.CfnOutput(this, 'VpcLatticeServiceArn', {
+      value: apiLatticeService.attrArn,
+      description: 'ARN of the VPC Lattice API service',
     });
   }
 }
@@ -569,50 +821,41 @@ exports.handler = async () => {
 
 ## Key Improvements in the Ideal Solution
 
-### 1. Environment Isolation
-- Proper environment suffix support throughout all resources
-- Dynamic stack naming with environment suffix
-- Parameterized resource naming to prevent conflicts
+1. **Enhanced Observability with Lambda Powertools v2**:
+   - Structured logging with contextual information
+   - Distributed tracing with AWS X-Ray integration
+   - Custom metrics for business and operational insights
+   - Automatic error handling and metric publishing
 
-### 2. Security Enhancements
-- KMS encryption for all data at rest (EBS, RDS, S3, CloudWatch Logs)
-- Least privilege IAM policies with specific resource ARNs
-- Security groups with minimal required access
-- ALB security group with explicit egress rules
-- Added KMS permissions to EC2 role for encryption operations
-- SSH access controls with VPC-only IP restrictions
-- RDS encryption in transit with SSL/TLS port configuration
+2. **Modern Service Mesh with VPC Lattice**:
+   - Service-to-service communication without traditional load balancers
+   - IAM-based authentication for zero-trust networking
+   - Service discovery and routing within the VPC
+   - Simplified microservices architecture
 
-### 3. High Availability
-- Multi-AZ RDS deployment
-- Two NAT gateways across availability zones
-- Auto Scaling Group with 2 minimum instances
-- Isolated subnets for database tier
+3. **Comprehensive Security**:
+   - All data encrypted at rest with KMS
+   - Network isolation with proper security groups
+   - IAM roles with least privilege access
+   - No root account usage
+   - SSH access restricted to VPC CIDR
 
-### 4. Operational Excellence
-- CloudWatch Agent configuration for detailed metrics
-- Application and error log collection
-- CloudWatch Synthetics for endpoint monitoring
-- Application Insights for automatic application monitoring
-- SSM parameters for configuration management
+4. **High Availability**:
+   - Multi-AZ deployment across 2 availability zones
+   - Auto-scaling based on CPU utilization (70% threshold)
+   - RDS Multi-AZ for database failover
+   - Multiple NAT gateways for redundancy
 
-### 5. Deployment Safety
-- All resources have DESTROY removal policy for clean teardown
-- Deletion protection disabled for non-production environments
-- Auto-delete objects enabled for S3 bucket
-- Proper stack outputs with export names
+5. **Operational Excellence**:
+   - CloudWatch monitoring and alarms
+   - Application Insights for automatic monitoring
+   - Synthetics canary for endpoint health checks
+   - SSM parameters for configuration management
 
-### 6. Monitoring and Observability
-- CPU alarms for both ASG and RDS
-- Detailed CloudWatch metrics collection
-- Log aggregation with encryption
-- Synthetic monitoring every 5 minutes
-- Application Insights for automatic issue detection
+6. **Deployment Flexibility**:
+   - Environment suffix support for multiple deployments
+   - Destroyable resources for development environments
+   - Proper tagging for resource management
+   - CDK outputs for integration and testing
 
-### 7. Cost Optimization
-- T3 instances for compute (burstable performance)
-- Lifecycle rules for S3 object management
-- Auto Scaling based on actual usage
-- Log retention set to 30 days
-
-This solution provides a production-ready, secure, and scalable infrastructure that follows AWS best practices and CDK patterns.
+This solution represents a production-ready, secure, and scalable infrastructure that leverages the latest AWS features for enhanced observability and modern networking patterns.

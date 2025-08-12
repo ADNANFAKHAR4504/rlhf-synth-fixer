@@ -485,6 +485,161 @@ describe('TapStack', () => {
     });
   });
 
+  describe('Lambda Functions with Powertools v2', () => {
+    test('should create API Lambda function with Powertools layer', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.handler',
+        Runtime: 'nodejs20.x',
+        Timeout: 30,
+        MemorySize: 256,
+        TracingConfig: {
+          Mode: 'Active',
+        },
+        Environment: {
+          Variables: Match.objectLike({
+            POWERTOOLS_SERVICE_NAME: 'api-service',
+            POWERTOOLS_METRICS_NAMESPACE: 'Production/Lambda',
+            LOG_LEVEL: 'INFO',
+            ENVIRONMENT_SUFFIX: testEnvironmentSuffix,
+          }),
+        },
+      });
+    });
+
+    test('should create Data Processor Lambda function with Powertools layer', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.handler',
+        Runtime: 'nodejs20.x',
+        Timeout: 300,
+        MemorySize: 512,
+        TracingConfig: {
+          Mode: 'Active',
+        },
+        Environment: {
+          Variables: Match.objectLike({
+            POWERTOOLS_SERVICE_NAME: 'data-processor',
+            POWERTOOLS_METRICS_NAMESPACE: 'Production/DataProcessing',
+            LOG_LEVEL: 'INFO',
+            ENVIRONMENT_SUFFIX: testEnvironmentSuffix,
+          }),
+        },
+      });
+    });
+
+    test('should create Lambda execution role with proper policies', () => {
+      // Check for Lambda execution role
+      const resources = template.toJSON().Resources;
+      const lambdaRole = Object.entries(resources).find(([key, value]: [string, any]) => 
+        value.Type === 'AWS::IAM::Role' && 
+        key.includes('LambdaExecutionRole')
+      );
+      
+      expect(lambdaRole).toBeDefined();
+      const roleProperties = (lambdaRole![1] as any).Properties;
+      
+      // Check assume role policy
+      expect(roleProperties.AssumeRolePolicyDocument).toBeDefined();
+      expect(roleProperties.AssumeRolePolicyDocument.Statement).toBeDefined();
+      const assumeStatement = roleProperties.AssumeRolePolicyDocument.Statement[0];
+      expect(assumeStatement.Action).toBe('sts:AssumeRole');
+      expect(assumeStatement.Principal.Service).toBe('lambda.amazonaws.com');
+      
+      // Check managed policies
+      expect(roleProperties.ManagedPolicyArns).toBeDefined();
+      expect(roleProperties.ManagedPolicyArns.length).toBe(3);
+      
+      // Check the policies contain expected patterns
+      const policiesStr = JSON.stringify(roleProperties.ManagedPolicyArns);
+      expect(policiesStr).toContain('AWSLambdaBasicExecutionRole');
+      expect(policiesStr).toContain('AWSXRayDaemonWriteAccess');
+      expect(policiesStr).toContain('AWSLambdaVPCAccessExecutionRole');
+    });
+
+    test('Lambda functions should have VPC configuration', () => {
+      // Count Lambda functions with VPC configuration
+      const resources = template.toJSON().Resources;
+      const lambdaFunctions = Object.entries(resources).filter(([key, value]: [string, any]) => 
+        value.Type === 'AWS::Lambda::Function' && 
+        value.Properties?.VpcConfig
+      );
+      
+      expect(lambdaFunctions.length).toBeGreaterThanOrEqual(2); // At least API and Data Processor functions
+      
+      // Check VPC configuration exists
+      lambdaFunctions.forEach(([key, func]: [string, any]) => {
+        expect(func.Properties.VpcConfig).toBeDefined();
+        expect(func.Properties.VpcConfig.SubnetIds).toBeDefined();
+        expect(func.Properties.VpcConfig.SecurityGroupIds).toBeDefined();
+      });
+    });
+  });
+
+  describe('VPC Lattice Configuration', () => {
+    test('should create VPC Lattice service network', () => {
+      template.hasResourceProperties('AWS::VpcLattice::ServiceNetwork', {
+        Name: `production-service-network-${testEnvironmentSuffix}`,
+        AuthType: 'AWS_IAM',
+      });
+    });
+
+    test('should create VPC Lattice service network VPC association', () => {
+      template.hasResourceProperties('AWS::VpcLattice::ServiceNetworkVpcAssociation', {
+        ServiceNetworkIdentifier: Match.anyValue(),
+        VpcIdentifier: Match.anyValue(),
+      });
+    });
+
+    test('should create VPC Lattice service for API', () => {
+      template.hasResourceProperties('AWS::VpcLattice::Service', {
+        Name: `api-service-${testEnvironmentSuffix}`,
+        AuthType: 'AWS_IAM',
+      });
+    });
+
+    test('should create VPC Lattice target group for Lambda', () => {
+      template.hasResourceProperties('AWS::VpcLattice::TargetGroup', {
+        Name: `api-targets-${testEnvironmentSuffix}`,
+        Type: 'LAMBDA',
+        Targets: Match.arrayWith([
+          Match.objectLike({
+            Id: Match.anyValue(),
+          }),
+        ]),
+      });
+    });
+
+    test('should create VPC Lattice listener', () => {
+      template.hasResourceProperties('AWS::VpcLattice::Listener', {
+        Protocol: 'HTTPS',
+        Port: 443,
+        DefaultAction: Match.objectLike({
+          Forward: Match.objectLike({
+            TargetGroups: Match.arrayWith([
+              Match.objectLike({
+                TargetGroupIdentifier: Match.anyValue(),
+                Weight: 100,
+              }),
+            ]),
+          }),
+        }),
+      });
+    });
+
+    test('should create VPC Lattice service association', () => {
+      template.hasResourceProperties('AWS::VpcLattice::ServiceNetworkServiceAssociation', {
+        ServiceIdentifier: Match.anyValue(),
+        ServiceNetworkIdentifier: Match.anyValue(),
+      });
+    });
+
+    test('Lambda functions should have VPC Lattice invoke permissions', () => {
+      template.hasResourceProperties('AWS::Lambda::Permission', {
+        Action: 'lambda:InvokeFunction',
+        Principal: 'vpc-lattice.amazonaws.com',
+      });
+    });
+  });
+
   describe('Stack Outputs', () => {
     test('should have load balancer DNS output', () => {
       template.hasOutput('LoadBalancerDNS', {
@@ -507,6 +662,30 @@ describe('TapStack', () => {
     test('should have VPC ID output', () => {
       template.hasOutput('VPCId', {
         Description: 'VPC ID for the production environment',
+      });
+    });
+
+    test('should have API Lambda function ARN output', () => {
+      template.hasOutput('ApiLambdaFunctionArn', {
+        Description: 'ARN of the API Lambda function with Powertools',
+      });
+    });
+
+    test('should have Data Processor function ARN output', () => {
+      template.hasOutput('DataProcessorFunctionArn', {
+        Description: 'ARN of the data processor Lambda function with Powertools',
+      });
+    });
+
+    test('should have VPC Lattice service network ARN output', () => {
+      template.hasOutput('VpcLatticeServiceNetworkArn', {
+        Description: 'ARN of the VPC Lattice service network',
+      });
+    });
+
+    test('should have VPC Lattice service ARN output', () => {
+      template.hasOutput('VpcLatticeServiceArn', {
+        Description: 'ARN of the VPC Lattice API service',
       });
     });
   });

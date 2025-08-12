@@ -11,6 +11,8 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as synthetics from 'aws-cdk-lib/aws-synthetics';
 import * as applicationSignals from 'aws-cdk-lib/aws-applicationinsights';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
 import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
@@ -335,6 +337,346 @@ export class TapStack extends cdk.Stack {
       defaultTargetGroups: [targetGroup],
     });
 
+    // Lambda Layer for Powertools v2
+    const powertoolsLayer = lambda.LayerVersion.fromLayerVersionArn(
+      this,
+      'PowertoolsLayer',
+      `arn:aws:lambda:${this.region}:094274105915:layer:AWSLambdaPowertoolsTypeScriptV2:11`
+    );
+
+    // IAM Role for Lambda functions with enhanced permissions
+    const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
+      ],
+      inlinePolicies: {
+        EnhancedObservability: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'cloudwatch:PutMetricData',
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'xray:PutTraceSegments',
+                'xray:PutTelemetryRecords',
+                'ssm:GetParameter',
+                'ssm:GetParameters',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:GetObject', 's3:PutObject'],
+              resources: [
+                `arn:aws:s3:::production-app-bucket-${environmentSuffix}-*/*`,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['rds:DescribeDBInstances', 'rds:Connect'],
+              resources: [
+                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:*/*`,
+              ],
+            }),
+          ],
+        }),
+      },
+    });
+    cdk.Tags.of(lambdaRole).add('Environment', 'Production');
+
+    // API Gateway Lambda Function with Powertools
+    const apiFunction = new lambda.Function(this, 'ApiFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      role: lambdaRole,
+      code: lambda.Code.fromInline(`
+const { Logger } = require('@aws-lambda-powertools/logger');
+const { Tracer } = require('@aws-lambda-powertools/tracer');
+const { Metrics } = require('@aws-lambda-powertools/metrics');
+
+// Initialize Powertools
+const logger = new Logger({ serviceName: 'api-service' });
+const tracer = new Tracer({ serviceName: 'api-service' });
+const metrics = new Metrics({ serviceName: 'api-service', namespace: 'Production/Lambda' });
+
+exports.handler = tracer.captureLambdaHandler(async (event, context) => {
+    // Add custom metrics
+    metrics.addMetric('ApiInvocations', 'Count', 1);
+    
+    // Structured logging
+    logger.info('Processing API request', {
+        requestId: context.awsRequestId,
+        method: event.httpMethod || 'GET',
+        path: event.path || '/api',
+        userAgent: event.headers?.['User-Agent'] || 'Unknown'
+    });
+    
+    try {
+        // Simulate processing
+        const response = {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify({
+                message: 'API Gateway with Lambda Powertools v2',
+                timestamp: new Date().toISOString(),
+                version: '2.0.0',
+                service: 'production-api',
+                environmentSuffix: '${environmentSuffix}'
+            })
+        };
+        
+        logger.info('API request processed successfully', { statusCode: 200 });
+        metrics.addMetric('ApiSuccess', 'Count', 1);
+        return response;
+        
+    } catch (error) {
+        logger.error('API request failed', { error: error.message });
+        metrics.addMetric('ApiErrors', 'Count', 1);
+        
+        return {
+            statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify({
+                error: 'Internal server error',
+                timestamp: new Date().toISOString()
+            })
+        };
+    } finally {
+        // Publish metrics
+        metrics.publishStoredMetrics();
+    }
+});
+      `),
+      environment: {
+        POWERTOOLS_SERVICE_NAME: 'api-service',
+        POWERTOOLS_METRICS_NAMESPACE: 'Production/Lambda',
+        LOG_LEVEL: 'INFO',
+        ENVIRONMENT_SUFFIX: environmentSuffix,
+      },
+      layers: [powertoolsLayer],
+      tracing: lambda.Tracing.ACTIVE,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      vpc: vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [ec2SecurityGroup],
+    });
+    cdk.Tags.of(apiFunction).add('Environment', 'Production');
+
+    // Data Processing Lambda Function with Powertools
+    const dataProcessorFunction = new lambda.Function(
+      this,
+      'DataProcessorFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'index.handler',
+        role: lambdaRole,
+        code: lambda.Code.fromInline(`
+const { Logger } = require('@aws-lambda-powertools/logger');
+const { Tracer } = require('@aws-lambda-powertools/tracer');
+const { Metrics } = require('@aws-lambda-powertools/metrics');
+
+// Initialize Powertools with custom configuration
+const logger = new Logger({ 
+    serviceName: 'data-processor',
+    logLevel: 'INFO'
+});
+const tracer = new Tracer({ serviceName: 'data-processor' });
+const metrics = new Metrics({ 
+    serviceName: 'data-processor', 
+    namespace: 'Production/DataProcessing',
+    defaultDimensions: {
+        'Environment': 'Production'
+    }
+});
+
+exports.handler = tracer.captureLambdaHandler(async (event, context) => {
+    // Add processing metrics
+    metrics.addMetric('ProcessingJobs', 'Count', 1);
+    
+    logger.info('Starting data processing job', {
+        requestId: context.awsRequestId,
+        eventType: event.eventType || 'batch-process',
+        recordCount: event.records?.length || 0
+    });
+    
+    try {
+        // Create subsegment for database operations
+        const subsegment = tracer.getSegment().addNewSubsegment('database-query');
+        
+        // Simulate data processing
+        const startTime = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 100)); // Simulate processing
+        const processingTime = Date.now() - startTime;
+        
+        subsegment.close();
+        
+        // Log processing metrics
+        logger.info('Data processing completed', {
+            processingTimeMs: processingTime,
+            status: 'success'
+        });
+        
+        // Add custom metrics
+        metrics.addMetric('ProcessingLatency', 'Milliseconds', processingTime);
+        metrics.addMetric('ProcessingSuccess', 'Count', 1);
+        
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                message: 'Data processing completed successfully',
+                processingTimeMs: processingTime,
+                timestamp: new Date().toISOString(),
+                environmentSuffix: '${environmentSuffix}'
+            })
+        };
+        
+    } catch (error) {
+        logger.error('Data processing failed', { 
+            error: error.message,
+            stack: error.stack 
+        });
+        metrics.addMetric('ProcessingErrors', 'Count', 1);
+        
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: 'Data processing failed',
+                timestamp: new Date().toISOString()
+            })
+        };
+    } finally {
+        // Always publish metrics
+        metrics.publishStoredMetrics();
+    }
+});
+      `),
+        environment: {
+          POWERTOOLS_SERVICE_NAME: 'data-processor',
+          POWERTOOLS_METRICS_NAMESPACE: 'Production/DataProcessing',
+          LOG_LEVEL: 'INFO',
+          ENVIRONMENT_SUFFIX: environmentSuffix,
+        },
+        layers: [powertoolsLayer],
+        tracing: lambda.Tracing.ACTIVE,
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        vpc: vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        securityGroups: [ec2SecurityGroup],
+      }
+    );
+    cdk.Tags.of(dataProcessorFunction).add('Environment', 'Production');
+
+    // VPC Lattice Service Network
+    const latticeServiceNetwork = new vpclattice.CfnServiceNetwork(
+      this,
+      'ProductionServiceNetwork',
+      {
+        name: `production-service-network-${environmentSuffix}`,
+        authType: 'AWS_IAM',
+      }
+    );
+    cdk.Tags.of(latticeServiceNetwork).add('Environment', 'Production');
+
+    // VPC Lattice Service Network VPC Association
+    const latticeVpcAssociation =
+      new vpclattice.CfnServiceNetworkVpcAssociation(
+        this,
+        'LatticeVpcAssociation',
+        {
+          serviceNetworkIdentifier: latticeServiceNetwork.attrArn,
+          vpcIdentifier: vpc.vpcId,
+        }
+      );
+    void latticeVpcAssociation; // Resource needs to be created but not referenced
+
+    // VPC Lattice Service for API Function
+    const apiLatticeService = new vpclattice.CfnService(
+      this,
+      'ApiLatticeService',
+      {
+        name: `api-service-${environmentSuffix}`,
+        authType: 'AWS_IAM',
+      }
+    );
+    cdk.Tags.of(apiLatticeService).add('Environment', 'Production');
+
+    // VPC Lattice Target Group for Lambda
+    const apiTargetGroup = new vpclattice.CfnTargetGroup(
+      this,
+      'ApiTargetGroup',
+      {
+        name: `api-targets-${environmentSuffix}`,
+        type: 'LAMBDA',
+        targets: [
+          {
+            id: apiFunction.functionArn,
+          },
+        ],
+      }
+    );
+
+    // VPC Lattice Service Association
+    const apiServiceAssociation =
+      new vpclattice.CfnServiceNetworkServiceAssociation(
+        this,
+        'ApiServiceAssociation',
+        {
+          serviceIdentifier: apiLatticeService.attrArn,
+          serviceNetworkIdentifier: latticeServiceNetwork.attrArn,
+        }
+      );
+    void apiServiceAssociation; // Resource needs to be created but not referenced
+
+    // VPC Lattice Listener for API Service
+    const apiListener = new vpclattice.CfnListener(this, 'ApiListener', {
+      serviceIdentifier: apiLatticeService.attrArn,
+      protocol: 'HTTPS',
+      port: 443,
+      defaultAction: {
+        forward: {
+          targetGroups: [
+            {
+              targetGroupIdentifier: apiTargetGroup.attrArn,
+              weight: 100,
+            },
+          ],
+        },
+      },
+    });
+    void apiListener; // Resource needs to be created but not referenced
+
+    // Lambda Resource Policy for VPC Lattice
+    apiFunction.addPermission('AllowVpcLatticeInvoke', {
+      principal: new iam.ServicePrincipal('vpc-lattice.amazonaws.com'),
+      action: 'lambda:InvokeFunction',
+    });
+
+    dataProcessorFunction.addPermission('AllowVpcLatticeInvokeProcessor', {
+      principal: new iam.ServicePrincipal('vpc-lattice.amazonaws.com'),
+      action: 'lambda:InvokeFunction',
+    });
+
     // RDS Subnet Group
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DBSubnetGroup', {
       vpc,
@@ -530,6 +872,26 @@ exports.handler = async () => {
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID for the production environment',
+    });
+
+    new cdk.CfnOutput(this, 'ApiLambdaFunctionArn', {
+      value: apiFunction.functionArn,
+      description: 'ARN of the API Lambda function with Powertools',
+    });
+
+    new cdk.CfnOutput(this, 'DataProcessorFunctionArn', {
+      value: dataProcessorFunction.functionArn,
+      description: 'ARN of the data processor Lambda function with Powertools',
+    });
+
+    new cdk.CfnOutput(this, 'VpcLatticeServiceNetworkArn', {
+      value: latticeServiceNetwork.attrArn,
+      description: 'ARN of the VPC Lattice service network',
+    });
+
+    new cdk.CfnOutput(this, 'VpcLatticeServiceArn', {
+      value: apiLatticeService.attrArn,
+      description: 'ARN of the VPC Lattice API service',
     });
   }
 }

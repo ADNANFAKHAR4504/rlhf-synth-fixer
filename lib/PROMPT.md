@@ -1,40 +1,18 @@
-# Secure Production Environment Infrastructure
+Create a secure production environment on AWS using CDK TypeScript. I need to deploy multiple integrated AWS services with the following requirements:
 
-I need help creating a secure production environment on AWS with a multi-tier architecture. The infrastructure should be robust, scalable, and follow AWS security best practices.
+1. Deploy EC2 instances (t3.medium), RDS databases, S3 buckets, and Application Load Balancer
+2. Encrypt all data at rest using KMS keys  
+3. Set up IAM roles for services - no root account usage
+4. Deploy across two availability zones for high availability
+5. Restrict SSH access to EC2 instances to specific IP ranges
+6. Ensure S3 buckets block all public access
+7. Configure CloudWatch logging and monitoring for all services
+8. Auto-scale EC2 instances when CPU utilization exceeds 70%
+9. Use Application Load Balancer for traffic distribution
+10. Create VPC with public and private subnets following security best practices
+11. Configure RDS with Multi-AZ deployment and encryption in transit
+12. Include CDK outputs for database connection strings and access keys
 
-## Core Requirements
+Use AWS Application Signals for enhanced application monitoring and AWS Shield network security posture management for network security analysis. Additionally, integrate AWS Lambda Powertools for TypeScript v2 for enhanced observability with structured logging, distributed tracing, and custom metrics collection. Implement Amazon VPC Lattice for secure service-to-service communication between application components without requiring traditional load balancers. Tag all resources with Environment:Production.
 
-Please create a complete AWS infrastructure with the following components:
-
-**Networking & Security:**
-- VPC with public and private subnets across two availability zones for high availability
-- Internet Gateway and NAT Gateways for secure internet access
-- Security groups with least privilege access
-- All resources must be tagged with 'Environment:Production'
-
-**Compute & Application Layer:**
-- EC2 instances in private subnets behind an Application Load Balancer
-- Auto Scaling Group that scales based on CPU utilization above 70%
-- Application Load Balancer in public subnets to distribute traffic
-- All EBS volumes must be encrypted using AWS managed KMS keys
-
-**Database & Storage:**
-- RDS MySQL database in private subnets with Multi-AZ deployment for high availability
-- S3 bucket with server-side encryption enabled
-- Database should be accessible only from the application instances
-
-**Monitoring & Observability:**
-- CloudWatch Logs for application and system monitoring
-- CloudWatch alarms for key metrics like CPU utilization
-- Include AWS Application Signals for automatic application monitoring
-- CloudWatch Synthetics canary for endpoint monitoring
-
-**Security & Compliance:**
-- IAM roles and policies following least privilege principle
-- KMS keys for encryption at rest
-- Restrict database access to application tier only
-- Secure parameter store for configuration management
-
-The infrastructure should be deployed in us-east-1 region and support a production workload with proper security controls and monitoring.
-
-Please provide the complete infrastructure code with proper AWS CDK TypeScript implementation. Each component should be in a separate code block for different files as needed.
+Please provide infrastructure code with one code block per file. Make sure all components integrate properly and follow AWS security best practices.
