@@ -2,12 +2,10 @@ import fs from 'fs';
 import path from 'path';
 
 describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
-  let template;
+  let template: any; // FIX 1: Explicitly type the template variable
 
   beforeAll(() => {
     // Ensure the template is in JSON format.
-    // You can convert your YAML template to JSON using a tool like cfn-flip.
-    // e.g., cfn-flip iac-template.yaml > iac-template.json
     const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust the path to your JSON template
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -53,14 +51,15 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
 
     test('should define two public and four private subnets', () => {
       const resources = template.Resources;
+      // FIX 2: Add 'any' type to lambda parameters
       const subnets = Object.values(resources).filter(
-        r => r.Type === 'AWS::EC2::Subnet'
+        (r: any) => r.Type === 'AWS::EC2::Subnet'
       );
       const publicSubnets = subnets.filter(
-        s => s.Properties.MapPublicIpOnLaunch === true
+        (s: any) => s.Properties.MapPublicIpOnLaunch === true
       );
       const privateSubnets = subnets.filter(
-        s => s.Properties.MapPublicIpOnLaunch !== true
+        (s: any) => s.Properties.MapPublicIpOnLaunch !== true
       );
 
       expect(publicSubnets.length).toBe(2);
@@ -89,8 +88,9 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
 
     test('WebSecurityGroup should only allow HTTPS from the ALB', () => {
       const sg = template.Resources.WebSecurityGroup;
+      // FIX 2: Add 'any' type to lambda parameters
       const httpsRule = sg.Properties.SecurityGroupIngress.find(
-        r => r.FromPort === 443
+        (r: any) => r.FromPort === 443
       );
       expect(httpsRule.SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
     });
@@ -108,8 +108,9 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
     test('EC2InstanceRole should grant access to Secrets Manager and S3 based on tags', () => {
       const role = template.Resources.EC2InstanceRole;
       const policies = role.Properties.Policies;
-      const secretsPolicy = policies.find(p => p.PolicyName === 'SecretsManagerAccess');
-      const s3Policy = policies.find(p => p.PolicyName === 'TagBasedS3Access');
+      // FIX 2: Add 'any' type to lambda parameters
+      const secretsPolicy = policies.find((p: any) => p.PolicyName === 'SecretsManagerAccess');
+      const s3Policy = policies.find((p: any) => p.PolicyName === 'TagBasedS3Access');
 
       expect(secretsPolicy.PolicyDocument.Statement[0].Action).toContain(
         'secretsmanager:GetSecretValue'
@@ -148,8 +149,9 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
     test('WebACL should include AWS Managed Rules for common vulnerabilities', () => {
       const waf = template.Resources.WebACL;
       const rules = waf.Properties.Rules;
-      const commonRule = rules.find(r => r.Name === 'CommonRuleSet');
-      const sqliRule = rules.find(r => r.Name === 'SQLiRuleSet');
+      // FIX 2: Add 'any' type to lambda parameters
+      const commonRule = rules.find((r: any) => r.Name === 'CommonRuleSet');
+      const sqliRule = rules.find((r: any) => r.Name === 'SQLiRuleSet');
 
       expect(commonRule.Statement.ManagedRuleGroupStatement.Name).toBe('AWSManagedRulesCommonRuleSet');
       expect(sqliRule.Statement.ManagedRuleGroupStatement.Name).toBe('AWSManagedRulesSQLiRuleSet');
