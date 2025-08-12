@@ -108,6 +108,11 @@ export class TapStack extends cdk.Stack {
               'kms:Decrypt',
             ],
             resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-${this.stackName.toLowerCase()}`,
+              },
+            },
           }),
           new iam.PolicyStatement({
             sid: 'Allow CloudWatch Logs to encrypt logs',
@@ -319,6 +324,38 @@ export class TapStack extends cdk.Stack {
         conditions: {
           Bool: {
             'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
+    // Add bucket policy for CloudTrail access
+    bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailAclCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl'],
+        resources: [bucket.bucketArn],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-${this.stackName.toLowerCase()}`,
+          },
+        },
+      })
+    );
+
+    bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailWrite',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${bucket.bucketArn}/cloudtrail-logs/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/tap-financial-services-trail-${this.stackName.toLowerCase()}`,
           },
         },
       })
