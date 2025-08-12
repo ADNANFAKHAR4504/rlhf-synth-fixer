@@ -139,19 +139,13 @@ export class SecurityModule extends Construct {
       vpcId: props.vpcId,
       description: 'Allow web traffic to ALB',
       ingress: [
-        {
-          protocol: 'tcp',
-          fromPort: 443,
-          toPort: 443,
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow HTTPS',
-        },
+        // MODIFIED: Removed HTTPS rule, only allow HTTP
         {
           protocol: 'tcp',
           fromPort: 80,
           toPort: 80,
           cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow HTTP for redirect',
+          description: 'Allow HTTP',
         },
       ],
       tags: { Name: `${props.projectName}-alb-sg` },
@@ -187,6 +181,16 @@ export class SecurityModule extends Construct {
         },
       ],
       tags: { Name: `${props.projectName}-ec2-sg` },
+    });
+
+    new aws.securityGroupRule.SecurityGroupRule(this, 'AlbEgressToEc2', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      securityGroupId: this.albSg.id,
+      sourceSecurityGroupId: this.ec2Sg.id,
+      description: 'Allow all outbound traffic from ALB to EC2 SG',
     });
 
     const ec2Role = new aws.iamRole.IamRole(this, 'Ec2Role', {
@@ -266,25 +270,16 @@ export class ComputeModule extends Construct {
       tags: { Name: `${props.projectName}-tg` },
     });
 
-    new aws.lbListener.LbListener(this, 'HttpsListener', {
-      loadBalancerArn: this.alb.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-2016-08',
-      // IMPORTANT: Replace with a valid certificate ARN from the us-west-2 region
-      certificateArn:
-        'arn:aws:acm:us-west-2:718240086340:certificate/3f5a0b13-d908-4118-8aeb-c08275a95565',
-      defaultAction: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
-    });
-
+    // MODIFIED: Removed the HTTPS listener and the HTTP redirect listener.
+    // This new listener forwards HTTP traffic directly to the target group.
     new aws.lbListener.LbListener(this, 'HttpListener', {
       loadBalancerArn: this.alb.arn,
       port: 80,
       protocol: 'HTTP',
       defaultAction: [
         {
-          type: 'redirect',
-          redirect: { protocol: 'HTTPS', port: '443', statusCode: 'HTTP_301' },
+          type: 'forward',
+          targetGroupArn: targetGroup.arn,
         },
       ],
     });
@@ -310,12 +305,11 @@ export class ComputeModule extends Construct {
             ebs: {
               volumeSize: 8,
               volumeType: 'gp3',
-              encrypted: 'true',
+              // encrypted: true,
               kmsKeyId: props.kmsKey.arn,
             },
           },
         ],
-        // CORRECTED: Use the correct function name 'Fn.base64'
         userData: Fn.base64encode(
           `#!/bin/bash
                  yum update -y
