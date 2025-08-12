@@ -78,7 +78,7 @@ describe('Node.js Production Stack Unit Tests', () => {
 
     test('should define all required parameters with correct types', () => {
       const params = template.Parameters;
-      expect(Object.keys(params).length).toBe(8); // Updated count
+      expect(Object.keys(params).length).toBe(9);
       expect(params.DomainName).toBeDefined();
       expect(params.HostedZoneName).toBeDefined();
       expect(params.CertificateArn).toBeDefined();
