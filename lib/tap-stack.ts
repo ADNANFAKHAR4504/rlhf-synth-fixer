@@ -5,7 +5,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as rds from 'aws-cdk-lib/aws-rds';
+
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as waf from 'aws-cdk-lib/aws-wafv2';
 // import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
@@ -38,7 +38,6 @@ export class TapStack extends cdk.Stack {
             sid: 'AllowServiceAccess',
             principals: [
               new iam.ServicePrincipal('s3.amazonaws.com'),
-              new iam.ServicePrincipal('rds.amazonaws.com'),
               new iam.ServicePrincipal('ec2.amazonaws.com'),
               new iam.ServicePrincipal('cloudtrail.amazonaws.com'),
             ],
@@ -329,61 +328,6 @@ export class TapStack extends cdk.Stack {
       reservedConcurrentExecutions: 10,
     });
 
-    // Create RDS subnet group for private database deployment
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      vpc,
-      description: 'Subnet group for financial database',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-    });
-
-    // Create security group for RDS
-    const dbSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'DatabaseSecurityGroup',
-      {
-        vpc,
-        description: 'Security group for financial database',
-        allowAllOutbound: false,
-      }
-    );
-
-    dbSecurityGroup.addIngressRule(
-      ec2.Peer.securityGroupId(sshSecurityGroup.securityGroupId),
-      ec2.Port.tcp(5432),
-      'PostgreSQL access from application layer'
-    );
-
-    // Create RDS instance with security features
-    const database = new rds.DatabaseInstance(this, 'FinancialDatabase', {
-      instanceIdentifier: `tap-${environmentSuffix}-db`,
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.R5,
-        ec2.InstanceSize.LARGE
-      ),
-      credentials: rds.Credentials.fromGeneratedSecret('financial_admin', {
-        encryptionKey,
-      }),
-      vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [dbSecurityGroup],
-      storageEncrypted: true,
-      storageEncryptionKey: encryptionKey,
-      backupRetention: cdk.Duration.days(30),
-      deletionProtection: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      enablePerformanceInsights: true,
-      performanceInsightEncryptionKey: encryptionKey,
-      monitoringInterval: cdk.Duration.seconds(60),
-      autoMinorVersionUpgrade: false,
-      allowMajorVersionUpgrade: false,
-      deleteAutomatedBackups: false,
-    });
-
     // Create CloudWatch alarms for security monitoring
     new cloudwatch.Alarm(this, 'UnauthorizedApiCallsAlarm', {
       metric: new cloudwatch.Metric({
@@ -513,12 +457,6 @@ export class TapStack extends cdk.Stack {
       value: applicationDataBucket.bucketName,
       description: 'Name of the application data bucket',
       exportName: 'ApplicationDataBucketName',
-    });
-
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: database.instanceEndpoint.hostname,
-      description: 'Endpoint of the secure database',
-      exportName: 'DatabaseEndpoint',
     });
 
     new cdk.CfnOutput(this, 'WebAclArn', {

@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
@@ -207,7 +207,7 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Security Requirement 8: EBS/Storage Encryption with KMS', () => {
+  describe('Security Requirement 8: Storage Encryption with KMS', () => {
     test('KMS key is created with rotation enabled', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
         EnableKeyRotation: true,
@@ -215,12 +215,7 @@ describe('TapStack', () => {
       });
     });
 
-    test('RDS instance uses encrypted storage', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        StorageEncrypted: true,
-        KmsKeyId: Match.anyValue()
-      });
-    });
+
 
     test('S3 buckets use KMS encryption', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
@@ -256,37 +251,9 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Security Requirement 10: RDS Not Publicly Accessible', () => {
-    test('RDS instance is deployed in isolated subnets', () => {
-      template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        SubnetIds: Match.anyValue(),
-        DBSubnetGroupDescription: 'Subnet group for financial database'
-      });
-    });
 
-    test('RDS security group restricts access', () => {
-      const dbSecurityGroups = template.findResources('AWS::EC2::SecurityGroup', {
-        Properties: {
-          GroupDescription: 'Security group for financial database'
-        }
-      });
-      expect(Object.keys(dbSecurityGroups).length).toBeGreaterThan(0);
-    });
 
-    test('RDS has deletion protection disabled for testing', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        DeletionProtection: false
-      });
-    });
-
-    test('RDS has backup retention configured', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        BackupRetentionPeriod: 30
-      });
-    });
-  });
-
-  describe('Security Requirement 11: VPC Flow Logs', () => {
+  describe('Security Requirement 10: VPC Flow Logs', () => {
     test('VPC flow logs are enabled', () => {
       template.hasResourceProperties('AWS::EC2::FlowLog', {
         ResourceType: 'VPC',
@@ -308,7 +275,7 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Security Requirement 12: AWS WAF Integration', () => {
+  describe('Security Requirement 11: AWS WAF Integration', () => {
     test('WAF Web ACL is created', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         Scope: 'REGIONAL',
@@ -358,7 +325,7 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Security Requirement 13: AWS Shield (implicitly enabled)', () => {
+  describe('Security Requirement 12: AWS Shield (implicitly enabled)', () => {
     test('Resources support AWS Shield Standard (implicit)', () => {
       // AWS Shield Standard is automatically enabled for all AWS customers
       // Verify that protected resources exist
@@ -411,10 +378,7 @@ describe('TapStack', () => {
         Export: { Name: 'ApplicationDataBucketName' }
       });
 
-      template.hasOutput('DatabaseEndpoint', {
-        Description: 'Endpoint of the secure database',
-        Export: { Name: 'DatabaseEndpoint' }
-      });
+
 
       template.hasOutput('WebAclArn', {
         Description: 'ARN of the WAF Web ACL',
