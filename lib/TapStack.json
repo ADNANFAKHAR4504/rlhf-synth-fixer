@@ -112,9 +112,23 @@
             "Type": "CommaDelimitedList",
             "Default": "0.0.0.0/0",
             "Description": "Comma-delimited list of CIDR blocks allowed to access the ALB (e.g., 203.0.113.0/24,198.51.100.0/24). Use 0.0.0.0/0 for unrestricted access."
+        },
+        "EnableHighAvailabilityNAT": {
+            "Type": "String",
+            "Default": "false",
+            "Description": "Enable second NAT Gateway for high availability (incurs additional cost). Set to true for production environments.",
+            "AllowedValues": ["true", "false"]
         }
     },
     "Conditions": {
+        "EnableHighAvailabilityNATCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableHighAvailabilityNAT"
+                },
+                "true"
+            ]
+        },
         "EnableHTTPSCondition": {
             "Fn::And": [
                 {
@@ -147,6 +161,44 @@
                             "Ref": "DBInstanceClass"
                         },
                         "db.t3.micro"
+                    ]
+                }
+            ]
+        },
+        "HasMultipleCIDRs": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Fn::Select": [
+                                1,
+                                {
+                                    "Ref": "AllowedCIDRs"
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            ]
+        },
+        "HasThreeCIDRs": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Fn::Select": [
+                                2,
+                                {
+                                    "Ref": "AllowedCIDRs"
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
                     ]
                 }
             ]
@@ -572,6 +624,45 @@
                 ]
             }
         },
+        "NatGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "EnableHighAvailabilityNATCondition",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapNatGW2EIP-229157-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "EnableHighAvailabilityNATCondition",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapNatGW2-229157-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
         "PublicRouteTable": {
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
@@ -686,7 +777,15 @@
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
-                    "Ref": "NatGateway1"
+                    "Fn::If": [
+                        "EnableHighAvailabilityNATCondition",
+                        {
+                            "Ref": "NatGateway2"
+                        },
+                        {
+                            "Ref": "NatGateway1"
+                        }
+                    ]
                 }
             }
         },
@@ -901,7 +1000,7 @@
                 ]
             }
         },
-        "ALBSecurityGroupHTTPRule": {
+        "ALBSecurityGroupHTTPRule0": {
             "Type": "AWS::EC2::SecurityGroupIngress",
             "Properties": {
                 "GroupId": {
@@ -918,10 +1017,52 @@
                         }
                     ]
                 },
-                "Description": "Allow HTTP traffic from allowed IPs"
+                "Description": "Allow HTTP traffic from allowed IPs - CIDR 0"
             }
         },
-        "ALBSecurityGroupHTTPSRule": {
+        "ALBSecurityGroupHTTPRule1": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Condition": "HasMultipleCIDRs",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "ALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 80,
+                "ToPort": 80,
+                "CidrIp": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "AllowedCIDRs"
+                        }
+                    ]
+                },
+                "Description": "Allow HTTP traffic from allowed IPs - CIDR 1"
+            }
+        },
+        "ALBSecurityGroupHTTPRule2": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Condition": "HasThreeCIDRs",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "ALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 80,
+                "ToPort": 80,
+                "CidrIp": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Ref": "AllowedCIDRs"
+                        }
+                    ]
+                },
+                "Description": "Allow HTTP traffic from allowed IPs - CIDR 2"
+            }
+        },
+        "ALBSecurityGroupHTTPSRule0": {
             "Type": "AWS::EC2::SecurityGroupIngress",
             "Properties": {
                 "GroupId": {
@@ -938,7 +1079,49 @@
                         }
                     ]
                 },
-                "Description": "Allow HTTPS traffic from allowed IPs"
+                "Description": "Allow HTTPS traffic from allowed IPs - CIDR 0"
+            }
+        },
+        "ALBSecurityGroupHTTPSRule1": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Condition": "HasMultipleCIDRs",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "ALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "CidrIp": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "AllowedCIDRs"
+                        }
+                    ]
+                },
+                "Description": "Allow HTTPS traffic from allowed IPs - CIDR 1"
+            }
+        },
+        "ALBSecurityGroupHTTPSRule2": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Condition": "HasThreeCIDRs",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "ALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "CidrIp": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Ref": "AllowedCIDRs"
+                        }
+                    ]
+                },
+                "Description": "Allow HTTPS traffic from allowed IPs - CIDR 2"
             }
         },
         "EC2SecurityGroup": {
@@ -2461,6 +2644,7 @@
             }
         }
     },
+    
     "Outputs": {
         "VPCId": {
             "Description": "ID of the VPC",
@@ -2525,6 +2709,18 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-NatGateway1Id"
+                }
+            }
+        },
+        "NatGateway2Id": {
+            "Description": "ID of the second NAT Gateway (only available when high availability is enabled)",
+            "Condition": "EnableHighAvailabilityNATCondition",
+            "Value": {
+                "Ref": "NatGateway2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NatGateway2Id"
                 }
             }
         },

@@ -84,6 +84,46 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
 
   });
 
+  describe('Conditions', () => {
+    test('should have EnableHighAvailabilityNATCondition for NAT Gateway configuration', () => {
+      const condition = template.Conditions.EnableHighAvailabilityNATCondition;
+      expect(condition).toBeDefined();
+      expect(condition['Fn::Equals']).toBeDefined();
+      expect(condition['Fn::Equals'][0]).toEqual({ Ref: 'EnableHighAvailabilityNAT' });
+      expect(condition['Fn::Equals'][1]).toBe('true');
+    });
+
+    test('should have EnableHTTPSCondition for SSL/TLS configuration', () => {
+      const condition = template.Conditions.EnableHTTPSCondition;
+      expect(condition).toBeDefined();
+      expect(condition['Fn::And']).toBeDefined();
+    });
+
+    test('should have SupportsPerformanceInsights condition for RDS', () => {
+      const condition = template.Conditions.SupportsPerformanceInsights;
+      expect(condition).toBeDefined();
+      expect(condition['Fn::Not']).toBeDefined();
+    });
+
+    test('should have HasMultipleCIDRs condition for ALB security group rules', () => {
+      const condition = template.Conditions.HasMultipleCIDRs;
+      expect(condition).toBeDefined();
+      expect(condition['Fn::Not']).toBeDefined();
+      expect(condition['Fn::Not'][0]['Fn::Equals']).toBeDefined();
+      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Select'][0]).toBe(1);
+      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Select'][1]).toEqual({ Ref: 'AllowedCIDRs' });
+    });
+
+    test('should have HasThreeCIDRs condition for ALB security group rules', () => {
+      const condition = template.Conditions.HasThreeCIDRs;
+      expect(condition).toBeDefined();
+      expect(condition['Fn::Not']).toBeDefined();
+      expect(condition['Fn::Not'][0]['Fn::Equals']).toBeDefined();
+      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Select'][0]).toBe(2);
+      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Select'][1]).toEqual({ Ref: 'AllowedCIDRs' });
+    });
+  });
+
   describe('KMS Resources', () => {
     test('should create KMS key with comprehensive policy', () => {
       const kmsKey = template.Resources.KMSKey;
@@ -189,15 +229,19 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(eip1.Properties.Domain).toBe('vpc');
       expect(eip1.DependsOn).toBe('InternetGatewayAttachment');
 
-      // Second EIP should not exist
-      expect(eip2).toBeUndefined();
+      // Second EIP is conditional for high availability
+      expect(eip2).toBeDefined();
+      expect(eip2.Type).toBe('AWS::EC2::EIP');
+      expect(eip2.Condition).toBe('EnableHighAvailabilityNATCondition');
 
       expect(nat1).toBeDefined();
       expect(nat1.Type).toBe('AWS::EC2::NatGateway');
       expect(nat1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
 
-      // Second NAT Gateway should not exist
-      expect(nat2).toBeUndefined();
+      // Second NAT Gateway is conditional for high availability
+      expect(nat2).toBeDefined();
+      expect(nat2.Type).toBe('AWS::EC2::NatGateway');
+      expect(nat2.Condition).toBe('EnableHighAvailabilityNATCondition');
     });
 
     test('should create route tables with proper routes', () => {
@@ -219,7 +263,14 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(privateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
 
       expect(privateRoute2.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
+      // PrivateRoute2 uses conditional logic for high availability NAT Gateway
+      expect(privateRoute2.Properties.NatGatewayId).toEqual({
+        'Fn::If': [
+          'EnableHighAvailabilityNATCondition',
+          { Ref: 'NatGateway2' },
+          { Ref: 'NatGateway1' }
+        ]
+      });
     });
   });
 
@@ -268,21 +319,50 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(sg).toBeDefined();
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
       
-      // Check separate ingress rule resources
-      const httpRule = template.Resources.ALBSecurityGroupHTTPRule;
-      const httpsRule = template.Resources.ALBSecurityGroupHTTPSRule;
+      // Check separate ingress rule resources - now with indexed names for multiple CIDRs
+      const httpRule0 = template.Resources.ALBSecurityGroupHTTPRule0;
+      const httpsRule0 = template.Resources.ALBSecurityGroupHTTPSRule0;
+      const httpRule1 = template.Resources.ALBSecurityGroupHTTPRule1;
+      const httpsRule1 = template.Resources.ALBSecurityGroupHTTPSRule1;
+      const httpRule2 = template.Resources.ALBSecurityGroupHTTPRule2;
+      const httpsRule2 = template.Resources.ALBSecurityGroupHTTPSRule2;
 
-      expect(httpRule).toBeDefined();
-      expect(httpRule.Type).toBe('AWS::EC2::SecurityGroupIngress');
-      expect(httpRule.Properties.FromPort).toBe(80);
-      expect(httpRule.Properties.ToPort).toBe(80);
-      expect(httpRule.Properties.IpProtocol).toBe('tcp');
+      // First set of rules (always created)
+      expect(httpRule0).toBeDefined();
+      expect(httpRule0.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpRule0.Properties.FromPort).toBe(80);
+      expect(httpRule0.Properties.ToPort).toBe(80);
+      expect(httpRule0.Properties.IpProtocol).toBe('tcp');
+      expect(httpRule0.Properties.Description).toContain('CIDR 0');
 
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule.Type).toBe('AWS::EC2::SecurityGroupIngress');
-      expect(httpsRule.Properties.FromPort).toBe(443);
-      expect(httpsRule.Properties.ToPort).toBe(443);
-      expect(httpsRule.Properties.IpProtocol).toBe('tcp');
+      expect(httpsRule0).toBeDefined();
+      expect(httpsRule0.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpsRule0.Properties.FromPort).toBe(443);
+      expect(httpsRule0.Properties.ToPort).toBe(443);
+      expect(httpsRule0.Properties.IpProtocol).toBe('tcp');
+      expect(httpsRule0.Properties.Description).toContain('CIDR 0');
+
+      // Second set of rules (conditional)
+      expect(httpRule1).toBeDefined();
+      expect(httpRule1.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpRule1.Condition).toBe('HasMultipleCIDRs');
+      expect(httpRule1.Properties.Description).toContain('CIDR 1');
+
+      expect(httpsRule1).toBeDefined();
+      expect(httpsRule1.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpsRule1.Condition).toBe('HasMultipleCIDRs');
+      expect(httpsRule1.Properties.Description).toContain('CIDR 1');
+
+      // Third set of rules (conditional)
+      expect(httpRule2).toBeDefined();
+      expect(httpRule2.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpRule2.Condition).toBe('HasThreeCIDRs');
+      expect(httpRule2.Properties.Description).toContain('CIDR 2');
+
+      expect(httpsRule2).toBeDefined();
+      expect(httpsRule2.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpsRule2.Condition).toBe('HasThreeCIDRs');
+      expect(httpsRule2.Properties.Description).toContain('CIDR 2');
     });
 
     test('should create EC2 security group with outbound rules', () => {
@@ -614,19 +694,30 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(rds.Properties.MultiAZ).toBe(true);
     });
 
-    test('should have single NAT Gateway for cost optimization', () => {
+    test('should have conditional NAT Gateway configuration for cost optimization', () => {
       const nat1 = template.Resources.NatGateway1;
       const nat2 = template.Resources.NatGateway2;
       
       expect(nat1).toBeDefined();
-      expect(nat2).toBeUndefined();
       expect(nat1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
       
-      // Both private routes should use the same NAT Gateway
+      // Second NAT Gateway is conditional for high availability
+      expect(nat2).toBeDefined();
+      expect(nat2.Condition).toBe('EnableHighAvailabilityNATCondition');
+      
+      // Private route tables handle both single and dual NAT Gateway scenarios
       const privateRoute1 = template.Resources.DefaultPrivateRoute1;
       const privateRoute2 = template.Resources.DefaultPrivateRoute2;
       expect(privateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
-      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
+      
+      // PrivateRoute2 conditionally uses NatGateway2 or falls back to NatGateway1
+      expect(privateRoute2.Properties.NatGatewayId).toEqual({
+        'Fn::If': [
+          'EnableHighAvailabilityNATCondition',
+          { Ref: 'NatGateway2' },
+          { Ref: 'NatGateway1' }
+        ]
+      });
     });
   });
 
@@ -752,15 +843,27 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       const albSecurityGroup = template.Resources.ALBSecurityGroup;
       expect(albSecurityGroup).toBeDefined();
       
-      const httpRule = template.Resources.ALBSecurityGroupHTTPRule;
-      expect(httpRule.Properties.FromPort).toBe(80);
-      expect(httpRule.Properties.ToPort).toBe(80);
-      expect(httpRule.Properties.IpProtocol).toBe('tcp');
+      // Check the primary HTTP and HTTPS rules (always created)
+      const httpRule0 = template.Resources.ALBSecurityGroupHTTPRule0;
+      expect(httpRule0).toBeDefined();
+      expect(httpRule0.Properties.FromPort).toBe(80);
+      expect(httpRule0.Properties.ToPort).toBe(80);
+      expect(httpRule0.Properties.IpProtocol).toBe('tcp');
       
-      const httpsRule = template.Resources.ALBSecurityGroupHTTPSRule;
-      expect(httpsRule.Properties.FromPort).toBe(443);
-      expect(httpsRule.Properties.ToPort).toBe(443);
-      expect(httpsRule.Properties.IpProtocol).toBe('tcp');
+      const httpsRule0 = template.Resources.ALBSecurityGroupHTTPSRule0;
+      expect(httpsRule0).toBeDefined();
+      expect(httpsRule0.Properties.FromPort).toBe(443);
+      expect(httpsRule0.Properties.ToPort).toBe(443);
+      expect(httpsRule0.Properties.IpProtocol).toBe('tcp');
+
+      // Check conditional rules exist but have proper conditions
+      const httpRule1 = template.Resources.ALBSecurityGroupHTTPRule1;
+      expect(httpRule1).toBeDefined();
+      expect(httpRule1.Condition).toBe('HasMultipleCIDRs');
+      
+      const httpsRule1 = template.Resources.ALBSecurityGroupHTTPSRule1;
+      expect(httpsRule1).toBeDefined();
+      expect(httpsRule1.Condition).toBe('HasMultipleCIDRs');
 
       // EC2 Security Group should only allow traffic from ALB
       const ec2FromAlbRule = template.Resources.EC2FromALBSecurityGroupRule;
