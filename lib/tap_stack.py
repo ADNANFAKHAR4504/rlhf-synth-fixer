@@ -15,6 +15,7 @@ Features:
 - IAM roles with minimal permissions
 """
 
+import os
 import pulumi
 import pulumi_aws as aws
 from typing import List, Dict, Any
@@ -28,7 +29,13 @@ config = pulumi.Config()
 aws_config = pulumi.Config("aws")
 
 # Environment-specific configuration
-ENVIRONMENT = config.get("environment") or "dev"
+# Prefer Pulumi config key "env", then ENVIRONMENT_SUFFIX env var, then legacy "environment" key, else default to "dev".
+ENVIRONMENT = (
+    config.get("env")
+    or os.environ.get("ENVIRONMENT_SUFFIX")
+    or config.get("environment")
+    or "dev"
+)
 AWS_REGION = aws_config.require("region")
 INSTANCE_TYPE = config.get("instance-type") or "t3.micro"
 PROJECT_NAME = config.get("project-name") or "dualstack-web-app"
@@ -799,6 +806,9 @@ pulumi.export("deployment_summary", {
     "security_hardened": True
 })
 
+# Also export the environment suffix explicitly for downstream jobs/tests
+pulumi.export("EnvironmentSuffix", ENVIRONMENT)
+
 # =============================================================================
 # Deployment Instructions and Verification
 # =============================================================================
@@ -833,3 +843,18 @@ print("   • IAM roles with minimal permissions")
 print("   • CloudWatch monitoring and dashboards")
 print("   • Automated health checks and alarms")
 print("=" * 50)
+
+
+# =============================================================================
+# Testing Helper
+# =============================================================================
+def create_infrastructure() -> Dict[str, Any]:
+    """Return key resources for unit tests without altering deployment behavior."""
+    return {
+        "vpc": vpc,
+        "alb": alb,
+        "ec2_instance": ec2_instances[0] if ec2_instances else None,
+        "ec2_sg": ec2_security_group,
+        "alb_sg": alb_security_group,
+        "dashboard": cloudwatch_dashboard,
+    }
