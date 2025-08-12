@@ -48,7 +48,7 @@ describe('TapStack Template Tests', () => {
     });
   });
 
-  // 🔹 NEW: S3 Tests
+  // 🔹 NEW: S3 Tests to check bucket
   test('S3 bucket exists', () => {
     template.hasResource('AWS::S3::Bucket', {});
   });
