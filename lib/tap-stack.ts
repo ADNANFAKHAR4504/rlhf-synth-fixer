@@ -7,6 +7,10 @@ import { VpcStack } from './vpc-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  stateBucket?: string; // currently unused (CDKTF concept) but accepted to satisfy caller
+  stateBucketRegion?: string; // unused placeholder
+  awsRegion?: string; // unused placeholder (region usually comes from env in aws-cdk)
+  defaultTags?: { tags: Record<string, string> }; // mimic previously used structure
 }
 
 export class TapStack extends cdk.Stack {
@@ -21,6 +25,13 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
+
+    // Apply provided default tags (if any) at the stack scope
+    if (props?.defaultTags?.tags) {
+      Object.entries(props.defaultTags.tags).forEach(([k, v]) => {
+        if (v != null) cdk.Tags.of(this).add(k, v);
+      });
+    }
 
     // ? Add your stack instantiations here
     // ! Do NOT create resources directly in this stack.
