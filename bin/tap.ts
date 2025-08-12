@@ -71,7 +71,7 @@
 // app.synth();
 
 import { App, TerraformOutput } from 'cdktf';
-import { TapStack } from '../lib/tapstack';
+import { TapStack } from '../lib/tap-stack';
 
 // Create CDKTF app
 const app = new App();

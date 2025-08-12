@@ -425,8 +425,8 @@ export class TapStack extends TerraformStack {
         },
         provider: provider,
         lifecycle: {
-          ignoreChanges: ['name'] // Prevent recreation if secret exists
-        }
+          ignoreChanges: ['name'], // Prevent recreation if secret exists
+        },
       }
     );
 
@@ -441,8 +441,8 @@ export class TapStack extends TerraformStack {
         }),
         provider: provider,
         lifecycle: {
-          ignoreChanges: ['secret_string'] // Prevent updates that would recreate
-        }
+          ignoreChanges: ['secret_string'], // Prevent updates that would recreate
+        },
       }
     );
 
@@ -456,8 +456,8 @@ export class TapStack extends TerraformStack {
       },
       provider: provider,
       lifecycle: {
-        preventDestroy: true // Prevent deletion on destroy
-      }
+        preventDestroy: true, // Prevent deletion on destroy
+      },
     });
 
     new CloudwatchLogGroup(this, `${prefix}rds-log-group-${region}`, {
@@ -469,8 +469,8 @@ export class TapStack extends TerraformStack {
       },
       provider: provider,
       lifecycle: {
-        preventDestroy: true // Prevent deletion on destroy
-      }
+        preventDestroy: true, // Prevent deletion on destroy
+      },
     });
 
     // RDS Subnet Group
@@ -513,8 +513,8 @@ export class TapStack extends TerraformStack {
       },
       provider: provider,
       lifecycle: {
-        ignoreChanges: ['identifier'] // Prevent recreation if instance exists
-      }
+        ignoreChanges: ['identifier'], // Prevent recreation if instance exists
+      },
     });
 
     // EC2 Instances in public subnets
@@ -557,8 +557,8 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       },
       provider: provider,
       lifecycle: {
-        ignoreChanges: ['name'] // Prevent recreation if ALB exists
-      }
+        ignoreChanges: ['name'], // Prevent recreation if ALB exists
+      },
     });
 
     // Target Group for ALB - using import to avoid recreation
@@ -584,8 +584,8 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       },
       provider: provider,
       lifecycle: {
-        ignoreChanges: ['name'] // Prevent recreation if target group exists
-      }
+        ignoreChanges: ['name'], // Prevent recreation if target group exists
+      },
     });
 
     // Target Group Attachments
