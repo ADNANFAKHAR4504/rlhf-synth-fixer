@@ -28,6 +28,8 @@ export class TapStack extends cdk.Stack {
       retention: logs.RetentionDays.THREE_MONTHS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+    // Explicitly tag log group
+    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaLogGroup).add(k, v));
 
     // IAM Role for Lambda
     const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
@@ -54,13 +56,15 @@ export class TapStack extends cdk.Stack {
         }),
       },
     });
+    // Explicitly tag IAM role
+    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaExecutionRole).add(k, v));
 
     // Lambda Function
     const lambdaFunction = new lambda.Function(this, 'ProcessingLambda', {
       functionName: 'lambda-nova-team-development',
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
       role: lambdaExecutionRole,
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
@@ -68,10 +72,12 @@ export class TapStack extends cdk.Stack {
         NODE_ENV: 'development',
         LOG_LEVEL: 'info',
       },
-      reservedConcurrentExecutions: 1000,
+      // reservedConcurrentExecutions removed; provisioned concurrency is managed by alias
       description:
         'High-performance Lambda function for processing web requests in nova-team development environment',
     });
+    // Explicitly tag Lambda function
+    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaFunction).add(k, v));
 
     // Lambda Alias for Provisioned Concurrency
     const lambdaAlias = new lambda.Alias(this, 'LambdaAlias', {
@@ -79,16 +85,18 @@ export class TapStack extends cdk.Stack {
       version: lambdaFunction.currentVersion,
       description:
         'Live alias for production traffic with provisioned concurrency',
+      provisionedConcurrentExecutions: 1000, // Explicitly set initial provisioned concurrency
     });
+    // Explicitly tag Lambda alias
+    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaAlias).add(k, v));
 
-    // Provisioned Concurrency (use provisionedConcurrentExecutions on version or alias if needed)
-    // If you want provisioned concurrency, set it on the alias or version directly:
+    // Provisioned Concurrency Auto Scaling
     lambdaAlias.addAutoScaling({
-      minCapacity: 1,
-      maxCapacity: 100,
+      minCapacity: 50,
+      maxCapacity: 1000,
     });
 
-    // Application Auto Scaling Role (created if not already present)
+    // Application Auto Scaling Role
     const autoScalingRole = new iam.Role(this, 'AutoScalingRole', {
       assumedBy: new iam.ServicePrincipal(
         'application-autoscaling.amazonaws.com'
@@ -99,6 +107,7 @@ export class TapStack extends cdk.Stack {
         ),
       ],
     });
+    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(autoScalingRole).add(k, v));
 
     // Application Auto Scaling Target
     const scalableTarget = new applicationautoscaling.ScalableTarget(
@@ -114,6 +123,7 @@ export class TapStack extends cdk.Stack {
       }
     );
     scalableTarget.node.addDependency(lambdaAlias);
+    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(scalableTarget).add(k, v));
 
     // Auto Scaling Policy
     new applicationautoscaling.TargetTrackingScalingPolicy(
@@ -153,8 +163,8 @@ export class TapStack extends cdk.Stack {
           'X-Amz-Security-Token',
         ],
       },
-      // Removed defaultThrottle: not supported in HttpApiProps
     });
+    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(httpApi).add(k, v));
 
     // Lambda Integration with API Gateway
     const lambdaIntegration = new apigatewayIntegrations.HttpLambdaIntegration(
