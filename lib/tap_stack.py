@@ -91,7 +91,7 @@ vpc = aws.ec2.Vpc(
         "Project": PROJECT_NAME
     },
     opts=pulumi.ResourceOptions(
-        aliases=[pulumi.Alias(name="web-vpc")]
+        import_="vpc-05300f8d7d38968b2"
     )
 )
 
@@ -133,7 +133,7 @@ for i in range(min(2, len(availability_zones.names))):
             "AZ": az
         },
         opts=pulumi.ResourceOptions(
-            aliases=[pulumi.Alias(name=get_resource_name(f"public-subnet-{i + 1}"))]
+            import_=f"subnet-{['0c34ba646fc5ea9a0', '0f5a6f79069db57ea'][i]}"
         )
     )
     
@@ -148,10 +148,7 @@ public_route_table = aws.ec2.RouteTable(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Type": "Public"
-    },
-    opts=pulumi.ResourceOptions(
-        aliases=[pulumi.Alias(name=get_resource_name("public-rt"))]
-    )
+    }
 )
 
 # IPv4 route to Internet Gateway
@@ -229,10 +226,7 @@ alb_security_group = aws.ec2.SecurityGroup(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "ALB Security Group"
-    },
-    opts=pulumi.ResourceOptions(
-        aliases=[pulumi.Alias(name=get_resource_name("alb-sg"))]
-    )
+    }
 )
 
 # Security group for EC2 instances
@@ -274,10 +268,7 @@ ec2_security_group = aws.ec2.SecurityGroup(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "EC2 Security Group"
-    },
-    opts=pulumi.ResourceOptions(
-        aliases=[pulumi.Alias(name=get_resource_name("ec2-sg"))]
-    )
+    }
 )
 
 # =============================================================================
