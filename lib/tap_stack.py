@@ -58,28 +58,6 @@ class SecureVPC:
             tags={**self.tags, "Name": f"{self.name_prefix}-vpc"},
         )
 
-    # Read and base64-encode environment variables
-    import base64
-    import os
-    access_key = os.getenv("AWS_ACCESS_KEY_ID")
-    secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-
-    b64_access = base64.b64encode(access_key.encode()).decode()
-    b64_secret = base64.b64encode(secret_key.encode()).decode()
-
-    # Create an AWS Secrets Manager secret (metadata-only)
-    secret = aws.secretsmanager.Secret("aws-nova-breaking01-secret-test",
-                                       name="nova-breaking01-secret-test"
-                                       )
-
-    # Store a new version of the secret with the encoded keys
-    secret_version = aws.secretsmanager.SecretVersion("secrettestversionawsnova",
-                                                      secret_id=secret.id,
-                                                      secret_string=json.dumps({
-                                                          "AWS_ACCESS_KEY_ID": b64_access,
-                                                          "AWS_SECRET_ACCESS_KEY": b64_secret
-                                                      })
-                                                      )
     def _create_internet_gateway(self) -> aws.ec2.InternetGateway:
         return aws.ec2.InternetGateway(
             f"{self.name_prefix}-igw",
@@ -251,11 +229,26 @@ class SecureVPC:
             assume_role_policy=assume_policy,
             tags={**self.tags, "Name": f"{self.name_prefix}-flowlogs-role"},
         )
-        aws.iam.RolePolicyAttachment(
-            f"{self.name_prefix}-flowlogs-policy",
-            role=role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy",
+        # Define inline policy with required permissions
+        policy = aws.iam.RolePolicy(
+            f"{self.name_prefix}-flowlogs-inline-policy",
+            role=role.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents",
+                        "logs:DescribeLogGroups",
+                        "logs:DescribeLogStreams",
+                    ],
+                    "Resource": "*"
+                }]
+            })
         )
+        pulumi.export("flowlogs-inline-policy", policy.arn)
         return role
 
     def _create_flow_logs(self) -> aws.ec2.FlowLog:
