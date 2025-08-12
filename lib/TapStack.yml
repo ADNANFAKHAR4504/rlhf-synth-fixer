@@ -65,7 +65,7 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: 'password'
-        ExcludeCharacters: '"@/\''
+        ExcludeCharacters: '"@/''\'
       Tags:
         - Key: Name
           Value: MyAppSecret
