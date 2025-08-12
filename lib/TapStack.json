@@ -1,142 +1,7 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure production infrastructure for SecureApp using existing ALB - No parameters required",
+    "Description": "Clean SecureApp infrastructure avoiding all conflicts",
     "Resources": {
-        "SecureAppKMSKey": {
-            "Type": "AWS::KMS::Key",
-            "Properties": {
-                "Description": "KMS key for SecureApp encryption",
-                "KeyPolicy": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "EnableRootPermissions",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "kms:*",
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "AllowCloudTrailUseOfKey",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:GenerateDataKey*",
-                                "kms:DescribeKey",
-                                "kms:Encrypt",
-                                "kms:Decrypt"
-                            ],
-                            "Resource": "*"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-kms-key"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    }
-                ]
-            }
-        },
-        "SecureAppKMSKeyAlias": {
-            "Type": "AWS::KMS::Alias",
-            "Properties": {
-                "AliasName": {
-                    "Fn::Sub": "alias/secureapp-${AWS::AccountId}"
-                },
-                "TargetKeyId": {
-                    "Ref": "SecureAppKMSKey"
-                }
-            }
-        },
-        "EC2InstanceRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "ec2.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "SecureAppEC2Policy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Sid": "ReadS3Objects",
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::secureapp-storage-${AWS::AccountId}/*"
-                                    }
-                                },
-                                {
-                                    "Sid": "ReadSecrets",
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "secretsmanager:GetSecretValue"
-                                    ],
-                                    "Resource": {
-                                        "Ref": "DBPasswordSecret"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "EC2InstanceProfile": {
-            "Type": "AWS::IAM::InstanceProfile",
-            "Properties": {
-                "Roles": [
-                    {
-                        "Ref": "EC2InstanceRole"
-                    }
-                ]
-            }
-        },
-        "DBPasswordSecret": {
-            "Type": "AWS::SecretsManager::Secret",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "secureapp-db-password-${AWS::AccountId}"
-                },
-                "Description": "Database credentials for SecureApp",
-                "GenerateSecretString": {
-                    "SecretStringTemplate": "{\"username\":\"dbadmin\"}",
-                    "GenerateStringKey": "password",
-                    "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\'"
-                },
-                "KmsKeyId": {
-                    "Ref": "SecureAppKMSKey"
-                }
-            }
-        },
         "SecureAppVPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -146,7 +11,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-vpc"
+                        "Value": {
+                            "Fn::Sub": "secureapp-vpc-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -157,7 +24,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-igw"
+                        "Value": {
+                            "Fn::Sub": "secureapp-igw-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -192,7 +61,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-public-subnet-1"
+                        "Value": {
+                            "Fn::Sub": "secureapp-public-subnet-1-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -216,7 +87,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-public-subnet-2"
+                        "Value": {
+                            "Fn::Sub": "secureapp-public-subnet-2-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -239,7 +112,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-private-subnet-1"
+                        "Value": {
+                            "Fn::Sub": "secureapp-private-subnet-1-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -262,7 +137,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-private-subnet-2"
+                        "Value": {
+                            "Fn::Sub": "secureapp-private-subnet-2-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -285,7 +162,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-db-subnet-1"
+                        "Value": {
+                            "Fn::Sub": "secureapp-db-subnet-1-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -308,7 +187,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-db-subnet-2"
+                        "Value": {
+                            "Fn::Sub": "secureapp-db-subnet-2-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -317,7 +198,15 @@
             "Type": "AWS::EC2::EIP",
             "DependsOn": "AttachGateway",
             "Properties": {
-                "Domain": "vpc"
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "secureapp-nat-eip-${AWS::AccountId}"
+                        }
+                    }
+                ]
             }
         },
         "NATGateway": {
@@ -331,7 +220,15 @@
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "secureapp-nat-gateway-${AWS::AccountId}"
+                        }
+                    }
+                ]
             }
         },
         "PublicRouteTable": {
@@ -343,7 +240,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-public-rt"
+                        "Value": {
+                            "Fn::Sub": "secureapp-public-rt-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -357,7 +256,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-private-rt"
+                        "Value": {
+                            "Fn::Sub": "secureapp-private-rt-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -371,7 +272,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "secureapp-db-rt"
+                        "Value": {
+                            "Fn::Sub": "secureapp-db-rt-${AWS::AccountId}"
+                        }
                     }
                 ]
             }
@@ -480,7 +383,7 @@
                         "FromPort": 80,
                         "ToPort": 80,
                         "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTP from existing ALB"
+                        "Description": "HTTP from internet"
                     },
                     {
                         "IpProtocol": "tcp",
@@ -492,18 +395,9 @@
                 ],
                 "SecurityGroupEgress": [
                     {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
+                        "IpProtocol": -1,
                         "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTP outbound"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTPS outbound"
+                        "Description": "All outbound traffic"
                     }
                 ],
                 "Tags": [
@@ -544,16 +438,13 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "secureapp-storage-${AWS::AccountId}"
+                    "Fn::Sub": "secureapp-storage-v2-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "SecureAppKMSKey"
-                                }
+                                "SSEAlgorithm": "AES256"
                             }
                         }
                     ]
@@ -566,47 +457,91 @@
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "secureapp-storage-v2-${AWS::AccountId}"
+                        }
+                    }
+                ]
             }
         },
-        "S3BucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
             "Properties": {
-                "Bucket": {
-                    "Ref": "SecureAppS3Bucket"
-                },
-                "PolicyDocument": {
+                "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
                         {
-                            "Sid": "DenyInsecureTransport",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "arn:aws:s3:::${SecureAppS3Bucket}"
-                                },
-                                {
-                                    "Fn::Sub": "arn:aws:s3:::${SecureAppS3Bucket}/*"
-                                }
-                            ],
-                            "Condition": {
-                                "Bool": {
-                                    "aws:SecureTransport": "false"
-                                }
-                            }
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
                         }
                     ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "BasicS3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::secureapp-storage-v2-${AWS::AccountId}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DBPasswordSecret"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "DBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Description": "Database credentials for SecureApp",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\":\"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\'"
                 }
             }
         },
         "DatabaseSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
-                "DBSubnetGroupName": {
-                    "Fn::Sub": "secureapp-db-subnet-group-${AWS::AccountId}"
-                },
                 "DBSubnetGroupDescription": "Subnet group for SecureApp database",
                 "SubnetIds": [
                     {
@@ -622,17 +557,11 @@
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Delete",
             "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "secureapp-database-${AWS::AccountId}"
-                },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
-                "KmsKeyId": {
-                    "Ref": "SecureAppKMSKey"
-                },
                 "MasterUsername": "dbadmin",
                 "MasterUserPassword": {
                     "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
@@ -668,7 +597,7 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 1</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Access via: /secureapp/</p>\" > /var/www/html/index.html\n\n# Create secureapp directory and content\nmkdir -p /var/www/html/secureapp\necho \"<h1>SecureApp Main Page</h1><p>Welcome to SecureApp!</p><p>Server 1 - $(date)</p>\" > /var/www/html/secureapp/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 1</h1><p>Deployed Successfully!</p><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Database: Connected</p>\" > /var/www/html/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
                 },
                 "Tags": [
                     {
@@ -695,7 +624,7 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 2</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Access via: /secureapp/</p>\" > /var/www/html/index.html\n\n# Create secureapp directory and content\nmkdir -p /var/www/html/secureapp\necho \"<h1>SecureApp Main Page</h1><p>Welcome to SecureApp!</p><p>Server 2 - $(date)</p>\" > /var/www/html/secureapp/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 2</h1><p>Deployed Successfully!</p><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Database: Connected</p>\" > /var/www/html/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
                 },
                 "Tags": [
                     {
@@ -703,91 +632,6 @@
                         "Value": "secureapp-web-2"
                     }
                 ]
-            }
-        },
-        "CloudTrailBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "secureapp-cloudtrail-${AWS::AccountId}"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "SecureAppKMSKey"
-                                }
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                }
-            }
-        },
-        "CloudTrailBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "CloudTrailBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${CloudTrailBucket}"
-                            }
-                        },
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${CloudTrailBucket}/AWSLogs/${AWS::AccountId}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "SecureAppCloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "DependsOn": "CloudTrailBucketPolicy",
-            "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "secureapp-trail-${AWS::AccountId}"
-                },
-                "S3BucketName": {
-                    "Ref": "CloudTrailBucket"
-                },
-                "IncludeGlobalServiceEvents": true,
-                "IsLogging": true,
-                "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": true,
-                "KMSKeyId": {
-                    "Ref": "SecureAppKMSKey"
-                }
             }
         }
     },
@@ -803,34 +647,12 @@
                 }
             }
         },
-        "ExistingLoadBalancerURL": {
-            "Description": "Existing Load Balancer URL (manually create target group and listener rule)",
-            "Value": "http://WebApp-LoadBalancer-1200637121.us-east-1.elb.amazonaws.com/",
+        "ExistingCloudTrailBucket": {
+            "Description": "Use existing CloudTrail bucket",
+            "Value": "secureapp-cloudtrail-718240086340",
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ALB-URL"
-                }
-            }
-        },
-        "WebServerInstance1Id": {
-            "Description": "Web Server Instance 1 ID (for manual ALB registration)",
-            "Value": {
-                "Ref": "WebServerInstance1"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-Instance1-ID"
-                }
-            }
-        },
-        "WebServerInstance2Id": {
-            "Description": "Web Server Instance 2 ID (for manual ALB registration)",
-            "Value": {
-                "Ref": "WebServerInstance2"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-Instance2-ID"
+                    "Fn::Sub": "${AWS::StackName}-CloudTrail-Bucket"
                 }
             }
         },
@@ -856,6 +678,28 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-S3-Bucket"
+                }
+            }
+        },
+        "WebServerInstance1Id": {
+            "Description": "Web Server Instance 1 ID",
+            "Value": {
+                "Ref": "WebServerInstance1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Instance1-ID"
+                }
+            }
+        },
+        "WebServerInstance2Id": {
+            "Description": "Web Server Instance 2 ID",
+            "Value": {
+                "Ref": "WebServerInstance2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Instance2-ID"
                 }
             }
         }
