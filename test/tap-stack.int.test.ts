@@ -133,7 +133,14 @@ describeOrSkip(
       }, 30000);
 
       test('should have CloudTrail bucket with lifecycle policy', async () => {
-        const bucketName = `secure-app-cloudtrail-${environmentSuffix}-${process.env.CDK_DEFAULT_ACCOUNT || ''}`;
+        if (!outputs.CloudTrailBucketName) {
+          console.warn(
+            'CloudTrailBucketName not found in outputs, skipping test'
+          );
+          return;
+        }
+
+        const bucketName = outputs.CloudTrailBucketName;
 
         try {
           // Verify bucket exists
@@ -394,7 +401,7 @@ describeOrSkip(
         if (dbSg) {
           // Database security group should restrict outbound traffic
           expect(dbSg.IpPermissionsEgress).toBeDefined();
-          expect(dbSg.IpPermissionsEgress!.length).toBe(0); // No outbound rules means all outbound is blocked
+          expect(dbSg.IpPermissionsEgress!.length).toBe(0); // This assertion passes since `allowAllOutbound: false` in CDK produces an empty array for egress rules.
         }
 
         // Find ALB security group
@@ -424,6 +431,7 @@ describeOrSkip(
           'LoadBalancerDNS',
           'VPCId',
           'CloudTrailArn',
+          'CloudTrailBucketName',
         ];
 
         expectedOutputs.forEach(output => {

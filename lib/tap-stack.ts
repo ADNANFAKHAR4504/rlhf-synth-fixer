@@ -297,5 +297,10 @@ export class TapStack extends cdk.Stack {
       value: trail.trailArn,
       description: 'CloudTrail ARN',
     });
+
+    new cdk.CfnOutput(this, 'CloudTrailBucketName', {
+      value: cloudTrailBucket.bucketName,
+      description: 'S3 bucket for CloudTrail logs',
+    });
   }
 }
