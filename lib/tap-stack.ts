@@ -1,5 +1,4 @@
 import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -18,8 +17,6 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    // Apply production environment tag to all resources in stack
-    Tags.of(this).add('environment', 'production');
 
     // Create KMS key for encryption
     const kmsKey = new kms.Key(this, 'SecureAppKey', {
