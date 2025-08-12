@@ -80,7 +80,7 @@ amazon_linux_ami = aws.ec2.get_ami(
 
 # Create VPC with dual-stack support
 vpc = aws.ec2.Vpc(
-    "web-vpc",
+    get_resource_name("vpc"),
     cidr_block="10.0.0.0/16",
     assign_generated_ipv6_cidr_block=True,
     enable_dns_hostnames=True,
@@ -89,7 +89,10 @@ vpc = aws.ec2.Vpc(
         "Name": get_resource_name("vpc"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(
+        aliases=[pulumi.Alias(name="web-vpc")]
+    )
 )
 
 # Internet Gateway for public internet access
