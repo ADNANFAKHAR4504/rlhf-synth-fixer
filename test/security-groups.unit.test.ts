@@ -14,8 +14,7 @@ describe('WebSecurityGroups', () => {
     const resources = template.findResources('AWS::EC2::SecurityGroup');
     const albSg = Object.values(resources).find(
       (r: any) =>
-        r.Properties.GroupDescription ===
-        'ALB SG allowing inbound 80/443 from anywhere'
+        r.Properties.GroupDescription === 'ALB SG allowing inbound 80/443 only'
     );
     expect(albSg).toBeDefined();
     if (albSg) {

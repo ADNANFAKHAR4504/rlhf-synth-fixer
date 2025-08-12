@@ -10,13 +10,13 @@ export interface WebAlbProps {
   albSecurityGroup: ec2.ISecurityGroup;
   appAsg: import('aws-cdk-lib').aws_autoscaling.AutoScalingGroup;
   stage: string;
-  certificateArn: string; // Required to create HTTPS (443) listener
+  certificateArn?: string; // now optional
 }
 
 export class WebAlb extends Construct {
   public readonly alb: elbv2.ApplicationLoadBalancer;
   public readonly httpListener: elbv2.ApplicationListener;
-  public readonly httpsListener: elbv2.ApplicationListener;
+  public readonly httpsListener?: elbv2.ApplicationListener;
 
   constructor(scope: Construct, id: string, props: WebAlbProps) {
     super(scope, id);
@@ -25,11 +25,11 @@ export class WebAlb extends Construct {
       vpc: props.vpc,
       internetFacing: true,
       securityGroup: props.albSecurityGroup,
-      loadBalancerName: `${props.stage}-${scope.node.tryGetContext('aws:region') || 'region'}-alb`,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      loadBalancerName: `${props.stage}-${scope.node.tryGetContext('aws:region') || 'region'}-alb`,
     });
 
-    // HTTP 80
+    // Always create HTTP (80)
     this.httpListener = this.alb.addListener('Http', { port: 80, open: false });
     this.httpListener.addTargets('HttpTargets', {
       port: 80,
@@ -37,22 +37,32 @@ export class WebAlb extends Construct {
       healthCheck: { path: '/', healthyHttpCodes: '200' },
     });
 
-    // HTTPS 443
-    const cert = acm.Certificate.fromCertificateArn(
-      this,
-      'HttpsCert',
-      props.certificateArn
-    );
-    this.httpsListener = this.alb.addListener('Https', {
-      port: 443,
-      certificates: [cert],
-      sslPolicy: elbv2.SslPolicy.TLS12_EXT,
-      open: false,
-    });
-    this.httpsListener.addTargets('HttpsTargets', {
-      port: 80, // terminate TLS at ALB, forward to instance:80
-      targets: [props.appAsg],
-      healthCheck: { path: '/', healthyHttpCodes: '200' },
-    });
+    // Create HTTPS (443) only if a cert is supplied
+    if (props.certificateArn) {
+      const cert = acm.Certificate.fromCertificateArn(
+        this,
+        'HttpsCert',
+        props.certificateArn
+      );
+      this.httpsListener = this.alb.addListener('Https', {
+        port: 443,
+        certificates: [cert],
+        sslPolicy: elbv2.SslPolicy.TLS12_EXT,
+        open: false,
+      });
+      this.httpsListener.addTargets('HttpsTargets', {
+        port: 80, // TLS terminated at ALB
+        targets: [props.appAsg],
+        healthCheck: { path: '/', healthyHttpCodes: '200' },
+      });
+
+      // Optional: 80 → 443 redirect (only when HTTPS exists)
+      this.httpListener.addAction('RedirectToHttps', {
+        action: elbv2.ListenerAction.redirect({
+          protocol: 'HTTPS',
+          port: '443',
+        }),
+      });
+    }
   }
 }

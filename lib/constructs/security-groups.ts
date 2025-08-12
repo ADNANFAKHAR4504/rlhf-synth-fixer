@@ -15,7 +15,7 @@ export class WebSecurityGroups extends Construct {
 
     this.albSg = new ec2.SecurityGroup(this, 'AlbSg', {
       vpc: props.vpc,
-      description: 'ALB SG allowing inbound 80/443 from anywhere',
+      description: 'ALB SG allowing inbound 80/443 only',
       allowAllOutbound: true,
     });
     this.albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
