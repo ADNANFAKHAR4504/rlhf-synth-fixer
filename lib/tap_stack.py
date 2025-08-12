@@ -371,96 +371,102 @@ class TapStack(ComponentResource):
         }
 
     def _create_s3_buckets(self):
-        """Create S3 buckets with encryption and cross-region replication."""
-        
-        # Primary application bucket
-        self.app_bucket = aws.s3.Bucket(
-            f"tap-app-{self.environment}",
-            bucket=f"tap-app-{self.environment}-{pulumi.get_stack()}",
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256"
-                    )
-                )
-            ),
-            versioning=aws.s3.BucketVersioningArgs(
-                enabled=True
-            ),
-            tags={
-                **self.base_tags,
-                "Name": f"tap-app-{self.environment}",
-                "Purpose": "application-data"
-            },
-            opts=ResourceOptions(parent=self)
-        )
+      """Create S3 buckets with encryption and cross-region replication."""
+      
+      # Primary application bucket
+      self.app_bucket = aws.s3.Bucket(
+          f"tap-app-{self.environment}",
+          bucket=f"tap-app-{self.environment}-{pulumi.get_stack()}",
+          server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+              rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                  apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                      sse_algorithm="AES256"
+                  )
+              )
+          ),
+          versioning=aws.s3.BucketVersioningArgs(
+              enabled=True
+          ),
+          tags={
+              **self.base_tags,
+              "Name": f"tap-app-{self.environment}",
+              "Purpose": "application-data"
+          },
+          opts=ResourceOptions(parent=self)
+      )
 
-        # Backup bucket in secondary region (if cross-region replication is enabled)
-        if self.args.enable_cross_region_replication:
-            backup_provider = aws.Provider(
-                f"backup-provider-{self.environment}",
-                region=self.args.backup_region,
-                opts=ResourceOptions(parent=self)
-            )
+      # Backup bucket in secondary region (if cross-region replication is enabled)
+      if self.args.enable_cross_region_replication:
+          backup_provider = aws.Provider(
+              f"backup-provider-{self.environment}",
+              region=self.args.backup_region,
+              opts=ResourceOptions(parent=self)
+          )
 
-            self.backup_bucket = aws.s3.Bucket(
-                f"tap-app-backup-{self.environment}",
-                bucket=f"tap-app-backup-{self.environment}-{pulumi.get_stack()}",
-                server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                    rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                            sse_algorithm="AES256"
-                        )
-                    )
-                ),
-                versioning=aws.s3.BucketVersioningArgs(
-                    enabled=True
-                ),
-                tags={
-                    **self.base_tags,
-                    "Name": f"tap-app-backup-{self.environment}",
-                    "Purpose": "backup-replication"
-                },
-                opts=ResourceOptions(parent=self, provider=backup_provider)
-            )
+          self.backup_bucket = aws.s3.Bucket(
+              f"tap-app-backup-{self.environment}",
+              bucket=f"tap-app-backup-{self.environment}-{pulumi.get_stack()}",
+              server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                  rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                      apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                          sse_algorithm="AES256"
+                      )
+                  )
+              ),
+              versioning=aws.s3.BucketVersioningArgs(
+                  enabled=True
+              ),
+              tags={
+                  **self.base_tags,
+                  "Name": f"tap-app-backup-{self.environment}",
+                  "Purpose": "backup-replication"
+              },
+              opts=ResourceOptions(parent=self, provider=backup_provider)
+          )
 
-        # Logs bucket
-        self.logs_bucket = aws.s3.Bucket(
-            f"tap-logs-{self.environment}",
-            bucket=f"tap-logs-{self.environment}-{pulumi.get_stack()}",
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256"
-                    )
-                )
-            ),
-            lifecycle_configuration=aws.s3.BucketLifecycleConfigurationArgs(
-                rules=[
-                    aws.s3.BucketLifecycleConfigurationRuleArgs(
-                        id="log_retention",
-                        status="Enabled",
-                        expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(
-                            days=90
-                        )
-                    )
-                ]
-            ),
-            tags={
-                **self.base_tags,
-                "Name": f"tap-logs-{self.environment}",
-                "Purpose": "logging"
-            },
-            opts=ResourceOptions(parent=self)
-        )
+      # Logs bucket with lifecycle policy using separate resource
+      self.logs_bucket = aws.s3.Bucket(
+          f"tap-logs-{self.environment}",
+          bucket=f"tap-logs-{self.environment}-{pulumi.get_stack()}",
+          server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+              rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                  apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                      sse_algorithm="AES256"
+                  )
+              )
+          ),
+          tags={
+              **self.base_tags,
+              "Name": f"tap-logs-{self.environment}",
+              "Purpose": "logging"
+          },
+          opts=ResourceOptions(parent=self)
+      )
 
-        self.s3_bucket_names = {
-            "app": self.app_bucket.bucket,
-            "logs": self.logs_bucket.bucket
-        }
-        
-        if self.args.enable_cross_region_replication:
-            self.s3_bucket_names["backup"] = self.backup_bucket.bucket
+      # Create lifecycle configuration as separate resource
+      self.logs_bucket_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+          f"tap-logs-lifecycle-{self.environment}",
+          bucket=self.logs_bucket.id,
+          rules=[
+              aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                  id="log_retention",
+                  status="Enabled",
+                  expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
+                      days=90
+                  )
+              )
+          ],
+          opts=ResourceOptions(parent=self.logs_bucket)
+      )
+
+      self.s3_bucket_names = {
+          "app": self.app_bucket.bucket,
+          "logs": self.logs_bucket.bucket
+      }
+      
+      if self.args.enable_cross_region_replication:
+          self.s3_bucket_names["backup"] = self.backup_bucket.bucket
+
 
     def _create_iam_roles(self):
         """Create IAM roles and policies for various services."""
