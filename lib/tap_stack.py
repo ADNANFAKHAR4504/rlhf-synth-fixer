@@ -109,23 +109,23 @@ internet_gateway = aws.ec2.InternetGateway(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Create public subnets with dual-stack support (forcing recreation with new names)
+# Create public subnets with dual-stack support (forcing recreation with new CIDR blocks)
 public_subnets = []
 for i, az in enumerate(availability_zones):
-    # Calculate IPv6 CIDR properly to avoid conflicts
+    # Calculate IPv6 CIDR properly to avoid conflicts - use different subnet ranges
     if i == 0:
         ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-            lambda cidr: cidr.replace("/56", "/64")
+            lambda cidr: f"{cidr[:-6]}a::/64"  # Use 'a' for first subnet
         )
     else:
         ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-            lambda cidr: f"{cidr[:-6]}{i}::/64"
+            lambda cidr: f"{cidr[:-6]}b::/64"  # Use 'b' for second subnet
         )
     
     subnet = aws.ec2.Subnet(
         get_resource_name(f"public-subnet-v2-{i+1}"),  # New name to force recreation
         vpc_id=vpc.id,
-        cidr_block=f"10.0.{10+i}.0/24",
+        cidr_block=f"10.0.{20+i}.0/24",  # Changed from 10+i to 20+i to avoid conflicts
         availability_zone=az,
         assign_ipv6_address_on_creation=True,
         ipv6_cidr_block=ipv6_cidr_calc,
