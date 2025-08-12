@@ -18,7 +18,7 @@ Parameters:
 
   Environment:
     Type: String
-    Description: Deployment environment (affects names/tags)
+    Description: "Deployment environment (affects names/tags)"
     Default: production
     AllowedValues:
       - production
@@ -27,66 +27,66 @@ Parameters:
 
   Owner:
     Type: String
-    Description: Owner/team tag to apply to resources
+    Description: "Owner/team tag to apply to resources"
     Default: security-team
 
   BucketNamePrefix:
     Type: String
-    Description: Optional prefix to guarantee bucket-name uniqueness (leave empty to let CFN generate names)
+    Description: "Optional prefix to guarantee bucket-name uniqueness (leave empty to let CFN generate names)"
     Default: ''
 
   VpcCidr:
     Type: String
-    Description: VPC CIDR block
+    Description: "VPC CIDR block"
     Default: 10.0.0.0/16
 
   AZCount:
     Type: Number
-    Description: Number of AZs to use (1-3)
+    Description: "Number of AZs to use (1-3)"
     Default: 2
     MinValue: 1
     MaxValue: 3
 
   PublicSubnetMask:
     Type: Number
-    Description: Additional subnet bits for Fn::Cidr (public). Example: 8 -> /24 when VPC is /16
+    Description: "Additional subnet bits for Fn::Cidr (public). Example: 8 -> /24 when VPC is /16"
     Default: 8
     MinValue: 0
     MaxValue: 16
 
   PrivateSubnetMask:
     Type: Number
-    Description: Additional subnet bits for Fn::Cidr (private). Example: 8 -> /24 when VPC is /16
+    Description: "Additional subnet bits for Fn::Cidr (private). Example: 8 -> /24 when VPC is /16"
     Default: 8
     MinValue: 0
     MaxValue: 16
 
   IsolatedSubnetMask:
     Type: Number
-    Description: Additional subnet bits for Fn::Cidr (isolated). Example: 8 -> /24 when VPC is /16
+    Description: "Additional subnet bits for Fn::Cidr (isolated). Example: 8 -> /24 when VPC is /16"
     Default: 8
     MinValue: 0
     MaxValue: 16
 
   CreateNatGateways:
     Type: String
-    Description: Create NAT Gateways for private subnets? (true|false)
+    Description: "Create NAT Gateways for private subnets? (true|false)"
     Default: 'true'
     AllowedValues: ['true','false']
 
   PatchWindowCron:
     Type: String
-    Description: Cron schedule for the patch maintenance window (SSM). Use CloudWatch cron format.
+    Description: "Cron schedule for the patch maintenance window (SSM). Use CloudWatch cron format."
     Default: 'cron(0 2 ? * SUN *)'
 
   PatchWindowTimezone:
     Type: String
-    Description: Timezone for the maintenance window schedule (e.g., UTC, US/Eastern)
+    Description: "Timezone for the maintenance window schedule (e.g., UTC, US/Eastern)"
     Default: 'UTC'
 
   DBInstanceClass:
     Type: String
-    Description: RDS instance class
+    Description: "RDS instance class"
     Default: db.t3.medium
     AllowedValues:
       - db.t3.micro
@@ -97,7 +97,7 @@ Parameters:
 
   DBEngine:
     Type: String
-    Description: RDS engine
+    Description: "RDS engine"
     Default: aurora-mysql
     AllowedValues:
       - aurora
@@ -107,25 +107,25 @@ Parameters:
 
   DBAllocatedStorage:
     Type: Number
-    Description: Allocated storage for DB (GB), ignored for Aurora where appropriate
+    Description: "Allocated storage for DB (GB), ignored for Aurora where appropriate"
     Default: 20
     MinValue: 20
     MaxValue: 65536
 
   CreateCloudFront:
     Type: String
-    Description: Create CloudFront distribution + WAF for public-facing content (true|false)
+    Description: "Create CloudFront distribution + WAF for public-facing content (true|false)"
     Default: 'true'
     AllowedValues: ['true','false']
 
   ACMCertificateArn:
     Type: String
-    Description: (Optional) ACM certificate ARN (must be in us-east-1 for CloudFront). Leave empty to use CloudFront default cert.
+    Description: "(Optional) ACM certificate ARN (must be in us-east-1 for CloudFront). Leave empty to use CloudFront default cert."
     Default: ''
 
   AdminCIDR:
     Type: String
-    Description: CIDR block for admin access (SSH/management). Strongly recommended to supply secure CIDR.
+    Description: "CIDR block for admin access (SSH/management). Strongly recommended to supply secure CIDR."
     Default: 0.0.0.0/0
 
 # ---------------------------
