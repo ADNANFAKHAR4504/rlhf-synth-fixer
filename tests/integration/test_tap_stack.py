@@ -584,27 +584,64 @@ class TestTapStackScalingBehavior(unittest.TestCase):
     """Set up mocks specifically for scaling tests."""
     self.scaling_resources = []
 
-    def track_scaling_resource(name, **kwargs):
-      resource = Mock()
-      resource.id = f"scaling-{name}"
-      resource.name = name
-      for key, value in kwargs.items():
-        setattr(resource, key, value)
-      self.scaling_resources.append((name, resource, kwargs))
-      return resource
+    def track_scaling_resource(resource_type):
+      def creator(name, **kwargs):
+        resource = Mock()
+        resource.id = f"{resource_type}-{name}"
+        resource.name = name
+        resource.resource_type = resource_type  # Track resource type explicitly
+        
+        # Set resource-specific default parameters for proper testing
+        if resource_type == 'alarm':
+          # Add default alarm parameters if not provided
+          alarm_defaults = {
+            'comparison_operator': kwargs.get('comparison_operator', 'GreaterThanThreshold'),
+            'evaluation_periods': kwargs.get('evaluation_periods', '2'),
+            'metric_name': kwargs.get('metric_name', 'CPUUtilization'),
+            'threshold': kwargs.get('threshold', '70.0')
+          }
+          kwargs.update(alarm_defaults)
+        elif resource_type == 'scaling_policy':
+          # Add default scaling policy parameters
+          policy_defaults = {
+            'scaling_adjustment': kwargs.get('scaling_adjustment', 1),
+            'adjustment_type': kwargs.get('adjustment_type', 'ChangeInCapacity'),
+            'cooldown': kwargs.get('cooldown', 300)
+          }
+          kwargs.update(policy_defaults)
+        elif resource_type == 'asg':
+          # Add default ASG parameters
+          asg_defaults = {
+            'min_size': kwargs.get('min_size', 1),
+            'max_size': kwargs.get('max_size', 6),
+            'desired_capacity': kwargs.get('desired_capacity', 2)
+          }
+          kwargs.update(asg_defaults)
+        elif resource_type == 'alb':
+          # Add default ALB parameters  
+          alb_defaults = {
+            'load_balancer_type': kwargs.get('load_balancer_type', 'application')
+          }
+          kwargs.update(alb_defaults)
+        
+        for key, value in kwargs.items():
+          setattr(resource, key, value)
+        self.scaling_resources.append((name, resource, kwargs, resource_type))
+        return resource
+      return creator
 
-    # Mock scaling-related resources
+    # Mock scaling-related resources with proper type tracking
     self.patches.extend([
       patch('pulumi_aws.autoscaling.Group',
-            side_effect=track_scaling_resource),
+            side_effect=track_scaling_resource('asg')),
       patch('pulumi_aws.autoscaling.Policy',
-            side_effect=track_scaling_resource),
+            side_effect=track_scaling_resource('scaling_policy')),
       patch('pulumi_aws.cloudwatch.MetricAlarm',
-            side_effect=track_scaling_resource),
+            side_effect=track_scaling_resource('alarm')),
       patch('pulumi_aws.lb.LoadBalancer',
-            side_effect=track_scaling_resource),
+            side_effect=track_scaling_resource('alb')),
       patch('pulumi_aws.lb.TargetGroup',
-            side_effect=track_scaling_resource),
+            side_effect=track_scaling_resource('target_group')),
     ])
         
     # Mock other required resources
@@ -653,13 +690,13 @@ class TestTapStackScalingBehavior(unittest.TestCase):
 
     # Find ASG resources
     asg_resources = [
-      (name, resource, kwargs) for name, resource, kwargs in self.scaling_resources
-      if 'asg' in name.lower()
+      (name, resource, kwargs, resource_type) for name, resource, kwargs, resource_type in self.scaling_resources
+      if resource_type == 'asg'
     ]
 
     self.assertGreater(len(asg_resources), 0, "Should create auto scaling groups")
 
-    for name, resource, kwargs in asg_resources:
+    for name, resource, kwargs, resource_type in asg_resources:
       with self.subTest(asg=name):
         # Check scaling parameters
         self.assertIn('min_size', kwargs)
@@ -689,8 +726,8 @@ class TestTapStackScalingBehavior(unittest.TestCase):
 
     # Find scaling policy resources
     policy_resources = [
-      (name, resource, kwargs) for name, resource, kwargs in self.scaling_resources
-      if 'policy' in name.lower()
+      (name, resource, kwargs, resource_type) for name, resource, kwargs, resource_type in self.scaling_resources
+      if resource_type == 'scaling_policy'
     ]
 
     self.assertGreater(len(policy_resources), 0, "Should create scaling policies")
@@ -703,7 +740,7 @@ class TestTapStackScalingBehavior(unittest.TestCase):
     self.assertGreater(len(scale_down_policies), 0, "Should have scale down policies")
 
     # Check policy parameters
-    for name, resource, kwargs in policy_resources:
+    for name, resource, kwargs, resource_type in policy_resources:
       with self.subTest(policy=name):
         self.assertIn('scaling_adjustment', kwargs)
         self.assertIn('adjustment_type', kwargs)
@@ -724,10 +761,10 @@ class TestTapStackScalingBehavior(unittest.TestCase):
     args = TapStackArgs(environment_suffix="alarms")
     stack = TapStack("alarms-test", args)  # pylint: disable=unused-variable
 
-    # Find alarm resources
+    # Find alarm resources by resource type
     alarm_resources = [
-      (name, resource, kwargs) for name, resource, kwargs in self.scaling_resources
-      if 'alarm' in name.lower() or 'cpu' in name.lower()
+      (name, resource, kwargs, resource_type) for name, resource, kwargs, resource_type in self.scaling_resources
+      if resource_type == 'alarm'
     ]
 
     self.assertGreater(len(alarm_resources), 0, "Should create CloudWatch alarms")
@@ -740,7 +777,7 @@ class TestTapStackScalingBehavior(unittest.TestCase):
     self.assertGreater(len(cpu_low_alarms), 0, "Should have low CPU alarms")
 
     # Check alarm parameters
-    for name, resource, kwargs in alarm_resources:
+    for name, resource, kwargs, resource_type in alarm_resources:
       with self.subTest(alarm=name):
         self.assertIn('comparison_operator', kwargs)
         self.assertIn('evaluation_periods', kwargs)
@@ -764,20 +801,20 @@ class TestTapStackScalingBehavior(unittest.TestCase):
 
     # Find load balancer resources
     lb_resources = [
-      (name, resource, kwargs) for name, resource, kwargs in self.scaling_resources
-      if 'alb' in name.lower() or 'loadbalancer' in name.lower()
+      (name, resource, kwargs, resource_type) for name, resource, kwargs, resource_type in self.scaling_resources
+      if resource_type == 'alb'
     ]
 
     tg_resources = [
-      (name, resource, kwargs) for name, resource, kwargs in self.scaling_resources
-      if 'tg' in name.lower() or 'targetgroup' in name.lower()
+      (name, resource, kwargs, resource_type) for name, resource, kwargs, resource_type in self.scaling_resources
+      if resource_type == 'target_group'
     ]
 
     self.assertGreater(len(lb_resources), 0, "Should create load balancers")
     self.assertGreater(len(tg_resources), 0, "Should create target groups")
 
     # Check load balancer configuration
-    for name, resource, kwargs in lb_resources:
+    for name, resource, kwargs, resource_type in lb_resources:
       with self.subTest(lb=name):
         self.assertIn('load_balancer_type', kwargs)
         self.assertEqual(kwargs['load_balancer_type'], "application")
@@ -791,7 +828,7 @@ class TestTapStackScalingBehavior(unittest.TestCase):
           )
 
     # Check target group health checks
-    for name, resource, kwargs in tg_resources:
+    for name, resource, kwargs, resource_type in tg_resources:
       with self.subTest(tg=name):
         if 'health_check' in kwargs:
           health_check = kwargs['health_check']
