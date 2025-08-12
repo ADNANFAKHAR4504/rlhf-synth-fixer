@@ -576,22 +576,23 @@ class TapStack(ComponentResource):
         )
 
     def _create_vpc_flow_logs(self):
-        """Create VPC Flow Logs for security monitoring."""
-        if self.args.enable_flow_logs:
-            self.vpc_flow_logs = aws.ec2.FlowLog(
-                f"tap-vpc-flow-logs-{self.environment}",
-                iam_role_arn=self.flow_logs_role.arn,
-                log_destination_type="cloud-watch-logs",
-                log_destination=self.infra_log_group.arn,
-                resource_id=self.vpc.id,
-                resource_type="VPC",
-                traffic_type="ALL",
-                tags={
-                    **self.base_tags,
-                    "Name": f"tap-vpc-flow-logs-{self.environment}"
-                },
-                opts=ResourceOptions(parent=self.vpc)
-            )
+      """Create VPC Flow Logs for security monitoring."""
+      if self.args.enable_flow_logs:
+          self.vpc_flow_logs = aws.ec2.FlowLog(
+              f"tap-vpc-flow-logs-{self.environment}",
+              iam_role_arn=self.flow_logs_role.arn,
+              log_destination_type="cloud-watch-logs",
+              log_destination=self.infra_log_group.arn,
+              resource_ids=[self.vpc.id],  # Changed from resource_id to resource_ids (list)
+              resource_type="VPC",
+              traffic_type="ALL",
+              tags={
+                  **self.base_tags,
+                  "Name": f"tap-vpc-flow-logs-{self.environment}"
+              },
+              opts=ResourceOptions(parent=self.vpc)
+          )
+
 
     @property
     def outputs(self):
