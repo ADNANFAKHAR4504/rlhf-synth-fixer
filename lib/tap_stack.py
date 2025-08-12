@@ -81,12 +81,14 @@ amazon_linux_ami = aws.ec2.get_ami(
 # Networking Infrastructure
 # =============================================================================
 
-# Create VPC with IPv4 support (simplified for reliable deployment)
+# Create VPC with dual-stack support (following working pattern)
 vpc = aws.ec2.Vpc(
     get_resource_name("vpc"),
     cidr_block="10.0.0.0/16",
+    instance_tenancy="default",
     enable_dns_hostnames=True,
     enable_dns_support=True,
+    assign_generated_ipv6_cidr_block=True,
     tags={
         "Name": get_resource_name("vpc"),
         "Environment": ENVIRONMENT,
@@ -107,7 +109,7 @@ internet_gateway = aws.ec2.InternetGateway(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Create public subnets (IPv4 only for simplicity)
+# Create public subnets with dual-stack support (following working pattern)
 public_subnets = []
 for i, az in enumerate(availability_zones):
     subnet = aws.ec2.Subnet(
@@ -115,6 +117,10 @@ for i, az in enumerate(availability_zones):
         vpc_id=vpc.id,
         cidr_block=f"10.0.{10+i}.0/24",
         availability_zone=az,
+        assign_ipv6_address_on_creation=True,
+        ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+            lambda cidr: f"{cidr[:-6]}{i}::/64"
+        ),
         map_public_ip_on_launch=True,
         tags={
             "Name": get_resource_name(f"public-subnet-{i+1}"),
@@ -143,6 +149,15 @@ ipv4_route = aws.ec2.Route(
     get_resource_name("ipv4-route"),
     route_table_id=public_route_table.id,
     destination_cidr_block="0.0.0.0/0",
+    gateway_id=internet_gateway.id,
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+)
+
+# IPv6 route to Internet Gateway (following working pattern)
+ipv6_route = aws.ec2.Route(
+    get_resource_name("ipv6-route"),
+    route_table_id=public_route_table.id,
+    destination_ipv6_cidr_block="::/0",
     gateway_id=internet_gateway.id,
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
@@ -380,6 +395,7 @@ for i, subnet in enumerate(public_subnets):
         vpc_security_group_ids=[ec2_security_group.id],
         iam_instance_profile=ec2_instance_profile.name,
         user_data=user_data_script,
+        ipv6_address_count=1,  # Enable IPv6 support following working pattern
         monitoring=True,  # Enable detailed monitoring
         tags={
             "Name": get_resource_name(f"web-server-{i + 1}"),
@@ -397,13 +413,14 @@ for i, subnet in enumerate(public_subnets):
 # Application Load Balancer
 # =============================================================================
 
-# Create target group for EC2 instances
+# Create target group for EC2 instances with dual-stack support
 target_group = aws.lb.TargetGroup(
     get_resource_name("web-tg"),
     name=get_resource_name("web-tg"),
     port=80,
     protocol="HTTP",
     vpc_id=vpc.id,
+    ip_address_type="dualstack",  # Enable dual-stack support following working pattern
     health_check=aws.lb.TargetGroupHealthCheckArgs(
         enabled=True,
         healthy_threshold=2,
@@ -433,12 +450,13 @@ for i, instance in enumerate(ec2_instances):
         opts=pulumi.ResourceOptions(provider=aws_provider)
     )
 
-# Create Application Load Balancer (IPv4 only for simplicity)
+# Create Application Load Balancer with dual-stack support
 alb = aws.lb.LoadBalancer(
     get_resource_name("web-alb"),
     name=get_resource_name("web-alb"),
     load_balancer_type="application",
     internal=False,  # internet-facing (False = internet-facing, True = internal)
+    ip_address_type="dualstack",  # Enable dual-stack support following working pattern
     security_groups=[alb_security_group.id],
     subnets=[subnet.id for subnet in public_subnets],
     enable_deletion_protection=False,  # Set to True for production
