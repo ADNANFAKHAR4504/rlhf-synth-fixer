@@ -128,18 +128,13 @@ internet_gateway = aws.ec2.InternetGateway(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Create public subnets with dual-stack support (v4 with unique deployment ID)
+# Create public subnets with dual-stack support (v5 with unique deployment ID)
 public_subnets = []
 for i, az in enumerate(availability_zones):
-    # Calculate IPv6 CIDR properly to avoid conflicts - use different subnet ranges
-    if i == 0:
-        ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-            lambda cidr: f"{cidr[:-6]}a::/64"  # Use 'a' for first subnet
-        )
-    else:
-        ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-            lambda cidr: f"{cidr[:-6]}b::/64"  # Use 'b' for second subnet
-        )
+    # Calculate IPv6 CIDR properly using the working pattern
+    ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
+        lambda cidr: f"{cidr[:-5]}{i}::/64"  # Use index for subnet differentiation
+    )
     
     subnet = aws.ec2.Subnet(
         get_resource_name(f"public-subnet-{i+1}"),  # Now includes unique deployment ID
