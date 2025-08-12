@@ -1,5 +1,5 @@
-Model Response is as below
-```
+Model Provided Response is as below
+``` yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure with comprehensive security controls'
 
