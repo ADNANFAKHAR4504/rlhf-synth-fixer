@@ -226,7 +226,6 @@ Resources:
   WebAppInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: 'WebApp-Instance-Profile'
       Roles:
         - !Ref WebAppEC2Role
 
