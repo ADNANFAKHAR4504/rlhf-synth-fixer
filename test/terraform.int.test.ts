@@ -1,7 +1,7 @@
-// tests/int-tests.ts
+// tests/terraform.int.test.ts
 // LIVE integration tests (EC2/VPC/NAT/Routes/SG + PEM sanity) using Terraform structured outputs.
-// NO Terraform CLI usage. Requires AWS creds with READ permissions.
-// Run: AWS_REGION=us-west-2 npx jest --runInBand --detectOpenHandles
+// Requires AWS creds with read permissions.
+// Run with: AWS_REGION=us-west-2 npx jest --runInBand --detectOpenHandles --testTimeout=60000
 
 import * as fs from "fs";
 import * as path from "path";
@@ -15,8 +15,6 @@ import {
   DescribeSecurityGroupsCommand,
   IpPermission,
 } from "@aws-sdk/client-ec2";
-
-/* ----------------------------- Utilities ----------------------------- */
 
 type TfOutputValue<T> = { sensitive: boolean; type: any; value: T };
 type StructuredOutputs = {
@@ -89,19 +87,21 @@ function portRangeMatch(p: IpPermission, port: number) {
   return p.IpProtocol === "tcp" && p.FromPort === port && p.ToPort === port;
 }
 
-/* ----------------------------- Tests ----------------------------- */
-
 describe("LIVE: Terraform-provisioned network & compute (from structured outputs)", () => {
-  /* Bastion EC2 */
+  jest.setTimeout(60000); // 60s timeout per test (increase if needed)
+
   test("Bastion instance exists by public IP, is t3.micro, in public subnet, tagged", async () => {
     const res = await retry(() =>
       ec2.send(
         new DescribeInstancesCommand({
-          Filters: [{ Name: "network-interface.addresses.association.public-ip", Values: [o.bastionIp] }],
+          // Use 'ip-address' filter for public IPv4 address lookup, more reliable
+          Filters: [{ Name: "ip-address", Values: [o.bastionIp] }],
         })
       )
     );
+
     const inst = pickFirstInstance(res);
+
     expect(inst).toBeTruthy();
 
     expect(inst!.PublicIpAddress).toBe(o.bastionIp);
@@ -114,11 +114,9 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     expect(tags["Name"]).toBe("project-bastion");
   });
 
-  /* Private EC2 */
   test("Private instances exist, no public IPs, t3.micro, in private subnets, with name tags", async () => {
-    const res = await retry(() =>
-      ec2.send(new DescribeInstancesCommand({ InstanceIds: o.privateInstanceIds }))
-    );
+    const res = await retry(() => ec2.send(new DescribeInstancesCommand({ InstanceIds: o.privateInstanceIds })));
+
     const instances = (res.Reservations || []).flatMap((r) => r.Instances || []);
     expect(instances.length).toBe(o.privateInstanceIds.length);
 
@@ -133,7 +131,6 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     }
   });
 
-  /* VPC, IGW, NAT, Routes, Subnets */
   test("VPC has IGW attached; NAT exists in first public subnet; routes are correct", async () => {
     // IGW attached
     const igwRes = await retry(() =>
@@ -151,7 +148,7 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     const natRes = await retry(() =>
       ec2.send(
         new DescribeNatGatewaysCommand({
-          Filter: [{ Name: "subnet-id", Values: [o.publicSubnetIds[0]] }], // <-- singular Filter here
+          Filter: [{ Name: "subnet-id", Values: [o.publicSubnetIds[0]] }],
         })
       )
     );
@@ -201,13 +198,12 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     }
   });
 
-  /* Security Groups */
   test("Security groups: bastion (22 open to world), private (22 from bastion SG only), both full egress", async () => {
     // Discover bastion SG from bastion instance
     const bastionRes = await retry(() =>
       ec2.send(
         new DescribeInstancesCommand({
-          Filters: [{ Name: "network-interface.addresses.association.public-ip", Values: [o.bastionIp] }],
+          Filters: [{ Name: "ip-address", Values: [o.bastionIp] }],
         })
       )
     );
@@ -226,10 +222,12 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     const bastionIngress = bastionSg.IpPermissions || [];
     const bastionSSH = bastionIngress.find((p) => portRangeMatch(p, 22));
     expect(bastionSSH).toBeTruthy();
+
     const v4Open = (bastionSSH!.IpRanges || []).some((r) => r.CidrIp === "0.0.0.0/0");
     const v6Open = (bastionSSH!.Ipv6Ranges || []).some((r) => r.CidrIpv6 === "::/0");
     expect(v4Open).toBe(true);
     expect(v6Open).toBe(true);
+
     const bastionEgress = bastionSg.IpPermissionsEgress || [];
     expect(bastionEgress.some((p) => p.IpProtocol === "-1")).toBe(true);
 
@@ -250,6 +248,7 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     const privIngress = privateSg.IpPermissions || [];
     const privSSH = privIngress.find((p) => portRangeMatch(p, 22));
     expect(privSSH).toBeTruthy();
+
     const fromGroups = privSSH!.UserIdGroupPairs || [];
     const allowsFromBastion = fromGroups.some((g) => g.GroupId === bastionSgId);
     expect(allowsFromBastion).toBe(true);
@@ -258,7 +257,6 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     expect(privEgress.some((p) => p.IpProtocol === "-1")).toBe(true);
   });
 
-  /* PEM sanity */
   test("Bastion private key PEM has RSA header/footer and plausible length", () => {
     const pem = o.bastionPrivateKeyPem;
     expect(pem.startsWith("-----BEGIN RSA PRIVATE KEY-----")).toBe(true);
