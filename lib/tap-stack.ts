@@ -21,9 +21,7 @@ export class TapStack extends Stack {
     const stage = props?.stage || 'dev';
     const appName = props?.appName || 'webapp';
 
-    if (!props?.certificateArn) {
-      throw new Error('certificateArn is required');
-    }
+    // certificateArn is now optional; ALB construct will handle HTTP-only or HTTP+HTTPS
 
     const vpc = new WebVpc(this, 'WebVpc', { stage }).vpc;
     const sgs = new WebSecurityGroups(this, 'SecurityGroups', { vpc, stage });
@@ -37,7 +35,7 @@ export class TapStack extends Stack {
       albSecurityGroup: sgs.albSg,
       appAsg: asg,
       stage,
-      certificateArn: props.certificateArn,
+      certificateArn: props?.certificateArn,
     });
     Tags.of(this).add('App', appName);
     Tags.of(this).add('Stage', stage);

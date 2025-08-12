@@ -20,7 +20,7 @@ describe('TapStack', () => {
     const defaultCertArn =
       'arn:aws:acm:us-east-1:123456789012:certificate/abc123';
 
-    it('creates all resources and tags with valid props', () => {
+    it('creates all resources and tags with valid props (with and without certificateArn)', () => {
       // Test with certificateArn (HTTPS + HTTP)
       {
         const app = new cdk.App();
@@ -62,17 +62,42 @@ describe('TapStack', () => {
         );
       }
 
-      // Test without certificateArn (should throw)
+      // Test without certificateArn (HTTP only)
       {
         const app = new cdk.App();
-        expect(() => {
-          new TapStack(app, 'TestStackNoCert', {
-            env: defaultEnv,
-            stage: 'test',
-            appName: 'webapp',
-            // certificateArn omitted
-          });
-        }).toThrow(/certificateArn is required/);
+        const stackNoCert = new TapStack(app, 'TestStackNoCert', {
+          env: defaultEnv,
+          stage: 'test',
+          appName: 'webapp',
+          // certificateArn omitted
+        });
+        const templateNoCert = Template.fromStack(stackNoCert);
+        templateNoCert.resourceCountIs('AWS::EC2::VPC', 1);
+        templateNoCert.resourceCountIs('AWS::EC2::SecurityGroup', 2);
+        templateNoCert.resourceCountIs('AWS::EC2::LaunchTemplate', 1);
+        templateNoCert.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+        templateNoCert.resourceCountIs(
+          'AWS::ElasticLoadBalancingV2::LoadBalancer',
+          1
+        );
+        templateNoCert.resourceCountIs(
+          'AWS::ElasticLoadBalancingV2::Listener',
+          1
+        );
+        // Tags: check on VPC resource (tags are propagated)
+        const vpcResourcesNoCert =
+          templateNoCert.findResources('AWS::EC2::VPC');
+        const vpcNoCert = Object.values(vpcResourcesNoCert)[0];
+        expect(vpcNoCert.Properties.Tags).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ Key: 'Stage', Value: 'test' }),
+            expect.objectContaining({ Key: 'Region', Value: 'us-east-1' }),
+            expect.objectContaining({
+              Key: 'ProblemID',
+              Value: 'Web_Application_Deployment_CDK_Typescript_04o8y7hfeks8',
+            }),
+          ])
+        );
       }
     });
 

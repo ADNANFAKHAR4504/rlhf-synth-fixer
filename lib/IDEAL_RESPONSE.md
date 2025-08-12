@@ -625,17 +625,6 @@ describe('TapStack', () => {
     );
   });
 
-  it('throws if certificateArn is missing', () => {
-    const app = new cdk.App();
-    expect(
-      () =>
-        new TapStack(app, 'TestStackNoCert', {
-          env: defaultEnv,
-          stage: 'test',
-        } as any)
-    ).toThrow(/certificateArn is required/);
-  });
-
   it('defaults stage to dev if not provided', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestStackNoStage', {
@@ -666,7 +655,7 @@ describe('TapStack Integration', () => {
   const defaultCertArn =
     'arn:aws:acm:us-east-1:123456789012:certificate/abc123';
 
-  it('synthesizes all major resources and propagates tags (HTTP+HTTPS only, certificateArn required)', () => {
+  it('synthesizes all major resources and propagates tags (with and without certificateArn)', () => {
     // HTTP+HTTPS (certificateArn provided)
     {
       const app = new cdk.App();
@@ -703,6 +692,43 @@ describe('TapStack Integration', () => {
       );
       const ports = Object.values(listeners).map((l: any) => l.Properties.Port);
       expect(ports).toEqual(expect.arrayContaining([80, 443]));
+    }
+    // HTTP only (certificateArn omitted)
+    {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TapStackIntNoCert', {
+        env: defaultEnv,
+        stage: 'integration',
+        appName: 'webapp',
+        // certificateArn omitted
+      });
+      const template = Template.fromStack(stack);
+      // Major resources
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
+      template.resourceCountIs('AWS::EC2::LaunchTemplate', 1);
+      template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 1);
+      // Tag propagation (check on VPC)
+      const vpcResources = template.findResources('AWS::EC2::VPC');
+      const vpc = Object.values(vpcResources)[0];
+      expect(vpc.Properties.Tags).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ Key: 'Stage', Value: 'integration' }),
+          expect.objectContaining({ Key: 'Region', Value: 'us-east-1' }),
+          expect.objectContaining({
+            Key: 'ProblemID',
+            Value: 'Web_Application_Deployment_CDK_Typescript_04o8y7hfeks8',
+          }),
+        ])
+      );
+      // Listener ports check
+      const listeners = template.findResources(
+        'AWS::ElasticLoadBalancingV2::Listener'
+      );
+      const ports = Object.values(listeners).map((l: any) => l.Properties.Port);
+      expect(ports).toEqual(expect.arrayContaining([80]));
     }
   });
 
