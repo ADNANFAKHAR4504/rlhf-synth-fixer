@@ -1,13 +1,13 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as waf from 'aws-cdk-lib/aws-wafv2';
 // import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
@@ -41,6 +41,7 @@ export class TapStack extends cdk.Stack {
               new iam.ServicePrincipal('s3.amazonaws.com'),
               new iam.ServicePrincipal('rds.amazonaws.com'),
               new iam.ServicePrincipal('ec2.amazonaws.com'),
+              new iam.ServicePrincipal('cloudtrail.amazonaws.com'),
             ],
             actions: [
               'kms:Decrypt',
@@ -49,6 +50,41 @@ export class TapStack extends cdk.Stack {
               'kms:CreateGrant',
               'kms:DescribeKey',
             ],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'AllowCloudTrailS3Access',
+            principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+            actions: [
+              'kms:Decrypt',
+              'kms:GenerateDataKey',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+              'kms:ListGrants',
+              'kms:RetireGrant',
+            ],
+            resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'kms:ViaService': 's3.amazonaws.com',
+              },
+            },
+          }),
+          new iam.PolicyStatement({
+            sid: 'AllowCloudTrailAccess',
+            principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+            actions: [
+              'kms:Decrypt',
+              'kms:GenerateDataKey',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+            ],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'AllowCloudWatchLogsAccess',
+            principals: [new iam.ServicePrincipal('logs.amazonaws.com')],
+            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
             resources: ['*'],
           }),
         ],
@@ -156,6 +192,16 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
+    // Add bucket policy to allow CloudTrail to write logs
+    dataLogsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl', 's3:PutObject'],
+        resources: [dataLogsBucket.bucketArn, `${dataLogsBucket.bucketArn}/*`],
+      })
+    );
+
     const applicationDataBucket = new s3.Bucket(this, 'ApplicationDataBucket', {
       bucketName: `tap-${environmentSuffix}-app-data-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -185,8 +231,15 @@ export class TapStack extends cdk.Stack {
       })
     );
 
+    // Create CloudWatch Logs group for CloudTrail
+    const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
+      logGroupName: `/aws/cloudtrail/tap-${environmentSuffix}-trail`,
+      retention: logs.RetentionDays.ONE_YEAR,
+      encryptionKey,
+    });
+
     // Create CloudTrail for API logging
-    new cloudtrail.Trail(this, 'FinancialInstitutionTrail', {
+    const cloudTrail = new cloudtrail.Trail(this, 'FinancialInstitutionTrail', {
       trailName: `tap-${environmentSuffix}-trail`,
       bucket: dataLogsBucket,
       s3KeyPrefix: 'cloudtrail-logs/',
@@ -196,7 +249,12 @@ export class TapStack extends cdk.Stack {
       encryptionKey,
       sendToCloudWatchLogs: true,
       cloudWatchLogsRetention: logs.RetentionDays.ONE_YEAR,
+      cloudWatchLogGroup: cloudTrailLogGroup,
     });
+
+    // Add dependency to ensure CloudTrail is created after the bucket and KMS key
+    cloudTrail.node.addDependency(dataLogsBucket);
+    cloudTrail.node.addDependency(encryptionKey);
 
     // Create IAM role for Lambda with minimal permissions
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
