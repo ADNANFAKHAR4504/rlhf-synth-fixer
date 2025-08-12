@@ -104,8 +104,6 @@ bin/tfplan
 build
 PRODUCTION_READY_CHANGES.md
 lib/constructs/*.js
-
-.gitignore
 test/*/*.test.js
 
 test/setup.js
