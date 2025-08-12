@@ -1,10 +1,6 @@
 import fs from 'fs';
 import { load } from 'js-yaml';
 import path from 'path';
-import { schema } from 'yaml-cfn';
-
-const filePath = path.resolve(__dirname, '../lib/TapStack.yml');
-const fileContent = fs.readFileSync(filePath, 'utf8');
 
 process.env.AWS_REGION = 'us-east-1';
 process.env.AWS_ACCOUNT_ID = '123456789012';
@@ -13,13 +9,17 @@ describe('Secure Infrastructure CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    console.log('File content length:', fileContent.length); // Debug
-    try {
-      template = load(fileContent, { schema });
-      console.log('Parsed template:', JSON.stringify(template, null, 2)); // Debug
-    } catch (error) {
-      console.error('YAML parsing error:', error);
-      throw error;
+    const jsonPath = path.resolve(__dirname, '..', 'lib', 'TapStack.json');
+    const yamlPath = path.resolve(__dirname, '..', 'lib', 'TapStack.yml');
+
+    if (fs.existsSync(jsonPath)) {
+      // CI path: unit-test job creates this via cfn-flip-to-json
+      const raw = fs.readFileSync(jsonPath, 'utf8');
+      template = JSON.parse(raw);
+    } else {
+      // Local fallback: parse YAML (uses long-form Fn:: keys which js-yaml can handle)
+      const raw = fs.readFileSync(yamlPath, 'utf8');
+      template = load(raw);
     }
   });
 
@@ -148,9 +148,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       ).toBe(true);
       expect(
         bucket.Properties.LoggingConfiguration.DestinationBucketName
-      ).toEqual({
-        Ref: 'S3AccessLogsBucket',
-      });
+      ).toEqual({ Ref: 'S3AccessLogsBucket' });
     });
 
     test('should have ApplicationLogsBucket resource with encryption and public access blocked', () => {
@@ -163,9 +161,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       ).toBe(true);
       expect(
         bucket.Properties.LoggingConfiguration.DestinationBucketName
-      ).toEqual({
-        Ref: 'S3AccessLogsBucket',
-      });
+      ).toEqual({ Ref: 'S3AccessLogsBucket' });
     });
 
     test('should have BackupDataBucket resource with encryption and public access blocked', () => {
@@ -178,9 +174,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       ).toBe(true);
       expect(
         bucket.Properties.LoggingConfiguration.DestinationBucketName
-      ).toEqual({
-        Ref: 'S3AccessLogsBucket',
-      });
+      ).toEqual({ Ref: 'S3AccessLogsBucket' });
     });
 
     test('should have EC2SecurityGroup resource', () => {
@@ -191,9 +185,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(
         template.Resources.EC2SecurityGroup.Properties.SecurityGroupIngress[0]
           .CidrIp
-      ).toEqual({
-        Ref: 'YourPublicIP',
-      });
+      ).toEqual({ Ref: 'YourPublicIP' });
     });
 
     test('should have SecureEC2Instance resource with encrypted EBS', () => {
