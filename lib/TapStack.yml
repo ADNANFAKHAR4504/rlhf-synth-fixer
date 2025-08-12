@@ -1044,25 +1044,50 @@ Resources:
       Name: !Sub '${Environment}-config-delivery-channel'
       S3BucketName: !Ref ConfigBucket
 
-  CISConformancePack:
-    Type: AWS::Config::ConformancePack
-    Properties:
-      ConformancePackName: !Sub '${Environment}-cis-foundations'
-      DeliveryS3Bucket: !Ref ConfigBucket
-      TemplateS3Uri: 's3://aws-config-conformance-packs-us-east-1/aws-cis-foundations-conformance-pack.template'
-      # Note: using AWS-managed/template location. If your environment disallows, replace with managed rules set below.
-    DependsOn:
-      - ConfigurationRecorder
-      - ConfigDeliveryChannel
-
-  # Fallback / additional AWS Config managed rules (examples)
+  # AWS Config managed rules (CIS Foundations equivalent)
   S3BucketEncryptionConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: s3-bucket-server-side-encryption-enabled
+      ConfigRuleName: !Sub '${Environment}-s3-bucket-server-side-encryption-enabled'
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+    DependsOn: ConfigurationRecorder
+
+  S3BucketPublicReadProhibitedConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-s3-bucket-public-read-prohibited'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+    DependsOn: ConfigurationRecorder
+
+  IAMUserMFAConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-iam-user-mfa-enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_MFA_ENABLED
+    DependsOn: ConfigurationRecorder
+
+  RootAccountMFAConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-root-account-mfa-enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
+    DependsOn: ConfigurationRecorder
+
+  VPCDefaultSecurityGroupClosedConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-vpc-default-security-group-closed'
+      Source:
+        Owner: AWS
+        SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
     DependsOn: ConfigurationRecorder
 
   # ---------------------------

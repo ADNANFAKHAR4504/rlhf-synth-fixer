@@ -476,10 +476,20 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       }
     });
 
-    test('AWS Config recorder, delivery channel and conformance pack exist', () => {
+    test('AWS Config recorder, delivery channel and managed rules exist', () => {
       expect(template.Resources.ConfigurationRecorder).toBeDefined();
       expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
-      expect(template.Resources.CISConformancePack).toBeDefined();
+
+      // Check for managed rules instead of conformance pack
+      expect(template.Resources.S3BucketEncryptionConfigRule).toBeDefined();
+      expect(
+        template.Resources.S3BucketPublicReadProhibitedConfigRule
+      ).toBeDefined();
+      expect(template.Resources.IAMUserMFAConfigRule).toBeDefined();
+      expect(template.Resources.RootAccountMFAConfigRule).toBeDefined();
+      expect(
+        template.Resources.VPCDefaultSecurityGroupClosedConfigRule
+      ).toBeDefined();
 
       const rec = template.Resources.ConfigurationRecorder.Properties;
       expect(rec.RecordingGroup.AllSupported).toBe(true);
