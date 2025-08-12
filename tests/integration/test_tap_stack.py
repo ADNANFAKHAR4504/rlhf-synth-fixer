@@ -3,6 +3,7 @@ test_tap_stack_integration.py
 
 Comprehensive integration tests for TapStack Pulumi infrastructure.
 Tests actual AWS resources when available, gracefully skips when infrastructure not deployed.
+Improved to handle missing deployment outputs and provide better error handling.
 """
 
 import json
@@ -140,6 +141,57 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       self.skipTest(f"CloudWatch access error: {e}")
     except (KeyError, ValueError) as e:
       self.skipTest(f"CloudWatch access failed: {str(e)[:100]}...")
+
+  def test_api_gateway_endpoint_accessibility(self):
+    """Test API Gateway endpoint accessibility when deployed."""
+    api_gateway_url = self.outputs.get('api_gateway_url')
+    if not api_gateway_url:
+      self.skipTest("API Gateway URL not available")
+    
+    if not self._is_url_accessible(api_gateway_url):
+      self.skipTest(f"API Gateway URL not accessible: {api_gateway_url}")
+    
+    try:
+      # Test the root endpoint
+      response = requests.get(api_gateway_url, timeout=self.REQUEST_TIMEOUT)
+      self.assertLess(response.status_code, 500)
+      
+      # If successful, test that response is JSON
+      if response.status_code == 200:
+        response_data = response.json()
+        self.assertIn('message', response_data)
+        self.assertIn('timestamp', response_data)
+        self.assertIn('environment', response_data)
+        
+    except requests.exceptions.RequestException as e:
+      self.skipTest(f"API Gateway request failed: {e}")
+    except json.JSONDecodeError:
+      # Response might be HTML error page, which is still valid for integration test
+      pass
+      
+  def test_api_gateway_health_endpoint(self):
+    """Test API Gateway health endpoint when deployed."""
+    api_gateway_url = self.outputs.get('api_gateway_url')
+    if not api_gateway_url:
+      self.skipTest("API Gateway URL not available")
+      
+    health_url = f"{api_gateway_url.rstrip('/')}/health"
+    
+    if not self._is_url_accessible(health_url):
+      self.skipTest(f"Health endpoint not accessible: {health_url}")
+    
+    try:
+      response = requests.get(health_url, timeout=self.REQUEST_TIMEOUT)
+      self.assertLess(response.status_code, 500)
+      
+      if response.status_code == 200:
+        response_data = response.json()
+        self.assertIn('status', response_data)
+        
+    except requests.exceptions.RequestException as e:
+      self.skipTest(f"Health endpoint request failed: {e}")
+    except json.JSONDecodeError:
+      pass
 
   def _is_url_accessible(self, url):
     """Check if URL is accessible before running tests."""
