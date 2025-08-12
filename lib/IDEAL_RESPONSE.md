@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Production-ready secure infrastructure with VPC, EC2 Auto Scaling, monitoring, and compliance features (NO AWS Config resources)"
 
@@ -681,3 +682,4 @@ Outputs:
   NATGatewayEipAddress:
     Description: Public IP address of the NAT Gateway EIP
     Value: !GetAtt NATGatewayEIP.PublicIp
+```
