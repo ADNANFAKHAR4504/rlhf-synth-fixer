@@ -1,14 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as cloudwatchactions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchactions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
@@ -344,7 +344,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm`),
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
-          ec2.InstanceSize.MICRO
+          ec2.InstanceSize.SMALL
         ),
         vpc,
         subnetGroup: dbSubnetGroup,
@@ -371,7 +371,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm`),
         sourceDatabaseInstance: database,
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
-          ec2.InstanceSize.MICRO
+          ec2.InstanceSize.SMALL
         ),
         vpc,
         securityGroups: [databaseSecurityGroup],
