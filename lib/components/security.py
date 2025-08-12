@@ -91,13 +91,6 @@ class SecurityComponent(pulumi.ComponentResource):
         ],
         egress=[
             # Allow HTTPS for AWS API calls (S3, DynamoDB)
-            aws.ec2.SecurityGroupEgressArgs(
-                from_port=443,
-                to_port=443,
-                protocol="tcp",
-                cidr_blocks=["0.0.0.0/0"],
-                description="HTTPS for AWS APIs"
-            ),
             # Allow MySQL/PostgreSQL to RDS
             aws.ec2.SecurityGroupEgressArgs(
                 from_port=5432,
@@ -106,13 +99,13 @@ class SecurityComponent(pulumi.ComponentResource):
                 cidr_blocks=VPC_CIDRS,
                 description="PostgreSQL to RDS"
             ),
-            aws.ec2.SecurityGroupEgressArgs(
-                protocol="icmp",        # ICMP
-                # ICMP type (8 = Echo Request). Use -1 for all types
-                from_port=-1,
-                to_port=-1,             # ICMP code (-1 = all codes)
-                cidr_blocks=VPC_CIDRS
-            )
+            # aws.ec2.SecurityGroupEgressArgs(
+            #     protocol="icmp",        # ICMP
+            #     # ICMP type (8 = Echo Request). Use -1 for all types
+            #     from_port=-1,
+            #     to_port=-1,             # ICMP code (-1 = all codes)
+            #     cidr_blocks=VPC_CIDRS
+            # )
 
         ],
         tags={**tags, "Name": f"{name}-lambda-sg"},

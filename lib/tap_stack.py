@@ -194,6 +194,17 @@ class TapStack(pulumi.ComponentResource):
         opts=ResourceOptions(provider=self.providers['us-west-2'], parent=self)
     )
 
+    aws.ec2.VpcPeeringConnectionAccepter("peer",
+                                         region="us-west-2",
+                                         vpc_peering_connection_id=peer_connection.id,
+                                         auto_accept=True,
+                                         tags={
+                                             "Side": "Accepter",
+                                         },
+                                         opts=ResourceOptions(
+                                             provider=self.providers['us-west-2'], parent=self)
+                                         )
+
     # Multi-region summary
     pulumi.export("deployed_regions", self.regions)
     pulumi.export("total_regions", len(self.regions))
