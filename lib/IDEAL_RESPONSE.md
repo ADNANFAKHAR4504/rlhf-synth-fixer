@@ -217,7 +217,6 @@ Resources:
   S3ReadOnlyRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "my-app-Role-ReadS3-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -239,7 +238,7 @@ Resources:
   S3ReadOnlyPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub "my-app-S3ReadOnlyPolicy-${EnvironmentSuffix}"
+      PolicyName: "S3ReadOnlyPolicy"
       Roles:
         - !Ref S3ReadOnlyRole
       PolicyDocument:
@@ -262,7 +261,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "my-app-EC2InstanceProfile-${EnvironmentSuffix}"
       Roles:
         - !Ref S3ReadOnlyRole
 
@@ -300,7 +298,6 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "my-app-EC2SecurityGroup-${EnvironmentSuffix}"
       GroupDescription: "Security group for EC2 instances"
       VpcId: !Ref ExistingVPCId
       SecurityGroupIngress:

@@ -340,9 +340,6 @@
         "S3ReadOnlyRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "my-app-Role-ReadS3-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -383,9 +380,7 @@
         "S3ReadOnlyPolicy": {
             "Type": "AWS::IAM::Policy",
             "Properties": {
-                "PolicyName": {
-                    "Fn::Sub": "my-app-S3ReadOnlyPolicy-${EnvironmentSuffix}"
-                },
+                "PolicyName": "S3ReadOnlyPolicy",
                 "Roles": [
                     {
                         "Ref": "S3ReadOnlyRole"
@@ -423,9 +418,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "my-app-EC2InstanceProfile-${EnvironmentSuffix}"
-                },
                 "Roles": [
                     {
                         "Ref": "S3ReadOnlyRole"
@@ -506,9 +498,6 @@
         "EC2SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "my-app-EC2SecurityGroup-${EnvironmentSuffix}"
-                },
                 "GroupDescription": "Security group for EC2 instances",
                 "VpcId": {
                     "Ref": "ExistingVPCId"
