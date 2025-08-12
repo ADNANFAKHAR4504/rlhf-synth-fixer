@@ -1,12 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { MonitoringConstruct } from './monitoring-construct';
@@ -54,16 +54,16 @@ export class ServerlessStack extends cdk.Stack {
       'processing_handler.py'
     );
 
-    // Create Java Lambda function with SnapStart for cold start optimization demonstration
-    const javaSnapStartFunction = this.createJavaSnapStartFunction(
-      'JavaSnapStartFunction'
+    // Create Python Lambda function with provisioned concurrency for cold start optimization
+    const coldStartOptimizedFunction = this.createColdStartOptimizedFunction(
+      'ColdStartOptimizedFunction'
     );
 
-    // Store functions in array (include Java function for full monitoring)
+    // Store functions in array (include cold start optimized function for full monitoring)
     this.lambdaFunctions = [
       sampleFunction,
       processingFunction,
-      javaSnapStartFunction,
+      coldStartOptimizedFunction,
     ];
 
     // Initialize Application Signals for APM monitoring
@@ -102,8 +102,8 @@ export class ServerlessStack extends cdk.Stack {
       }
     );
 
-    const javaSnapStartIntegration = new apigateway.LambdaIntegration(
-      javaSnapStartFunction,
+    const coldStartOptimizedIntegration = new apigateway.LambdaIntegration(
+      coldStartOptimizedFunction,
       {
         requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
       }
@@ -112,8 +112,8 @@ export class ServerlessStack extends cdk.Stack {
     api.root.addResource('sample').addMethod('POST', sampleIntegration);
     api.root.addResource('process').addMethod('POST', processingIntegration);
     api.root
-      .addResource('java-snapstart')
-      .addMethod('POST', javaSnapStartIntegration);
+      .addResource('coldstart-optimized')
+      .addMethod('POST', coldStartOptimizedIntegration);
 
     // Store API endpoint
     this.apiEndpoint = api.url;
@@ -143,10 +143,10 @@ export class ServerlessStack extends cdk.Stack {
       exportName: `${this.stackName}-ProcessingFunctionArn`,
     });
 
-    new cdk.CfnOutput(this, 'JavaSnapStartFunctionArn', {
-      value: javaSnapStartFunction.functionArn,
-      description: 'Java Lambda function with SnapStart ARN',
-      exportName: `${this.stackName}-JavaSnapStartFunctionArn`,
+    new cdk.CfnOutput(this, 'ColdStartOptimizedFunctionArn', {
+      value: coldStartOptimizedFunction.functionArn,
+      description: 'Python Lambda function with cold start optimization ARN',
+      exportName: `${this.stackName}-ColdStartOptimizedFunctionArn`,
     });
 
     new cdk.CfnOutput(this, 'LogGroupName', {
@@ -264,9 +264,11 @@ export class ServerlessStack extends cdk.Stack {
     return func;
   }
 
-  private createJavaSnapStartFunction(functionName: string): lambda.Function {
-    // Role with optimized permissions for Java Lambda with SnapStart
-    const javaLambdaRole = new iam.Role(this, `${functionName}Role`, {
+  private createColdStartOptimizedFunction(
+    functionName: string
+  ): lambda.Function {
+    // Role with optimized permissions for Python Lambda with cold start optimization
+    const pythonLambdaRole = new iam.Role(this, `${functionName}Role`, {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -293,19 +295,17 @@ export class ServerlessStack extends cdk.Stack {
       },
     });
 
-    // Java Lambda function with SnapStart configuration
-    // For Java functions, we need to provide a JAR file, not inline code
-    // Creating a simple placeholder JAR for demonstration
-    const javaFunc = new lambda.Function(this, functionName, {
-      runtime: lambda.Runtime.JAVA_17, // Java 17 runtime for SnapStart support
-      handler: 'com.example.Handler::handleRequest',
-      code: lambda.Code.fromAsset('lib/lambda-handlers/java-snapstart.jar'),
-      role: javaLambdaRole,
+    // Python Lambda function with cold start optimization using provisioned concurrency
+    const pythonFunc = new lambda.Function(this, functionName, {
+      runtime: lambda.Runtime.PYTHON_3_9, // Python 3.9 runtime for optimal performance
+      handler: 'coldstart_optimized_handler.handler',
+      code: lambda.Code.fromAsset('lib/lambda-handlers'),
+      role: pythonLambdaRole,
       logGroup: this.logGroup,
       timeout: cdk.Duration.minutes(15),
-      memorySize: 1024, // Optimized memory for Java
-      reservedConcurrentExecutions: 25, // Lower concurrency for demonstration
-      architecture: lambda.Architecture.X86_64, // SnapStart requires x86_64
+      memorySize: 1024, // Optimized memory for Python
+      reservedConcurrentExecutions: 25, // Reserve concurrency for consistent performance
+      architecture: lambda.Architecture.X86_64, // Optimal for Python
       tracing: lambda.Tracing.ACTIVE, // Enable X-Ray tracing for Application Signals
       environment: {
         LOG_LEVEL: 'INFO',
@@ -315,63 +315,67 @@ export class ServerlessStack extends cdk.Stack {
         // Application Signals environment variables
         OTEL_SERVICE_NAME: functionName.toLowerCase(),
         OTEL_RESOURCE_ATTRIBUTES: `service.name=${functionName.toLowerCase()},service.version=1.0`,
-        JAVA_TOOL_OPTIONS: '-XX:+TieredCompilation -XX:TieredStopAtLevel=1',
+        PYTHONPATH: '/opt/python',
+        // Cold start optimization environment variables
+        COLD_START_OPTIMIZED: 'true',
+        PROVISIONED_CONCURRENCY: 'enabled',
       },
     });
 
-    // Configure SnapStart on the Java function
-    const cfnFunction = javaFunc.node.defaultChild as lambda.CfnFunction;
-    if (cfnFunction) {
-      cfnFunction.snapStart = {
-        applyOn: 'PublishedVersions', // SnapStart is applied to published versions
-      };
-
-      // Add tags for SnapStart identification
-      cdk.Tags.of(javaFunc).add('SnapStart', 'enabled');
-      cdk.Tags.of(javaFunc).add('Runtime', 'java17');
-      cdk.Tags.of(javaFunc).add('ColdStartOptimization', 'active');
-    }
-
-    // Create a version for SnapStart (required for SnapStart to work)
-    const javaVersion = new lambda.Version(this, `${functionName}Version`, {
-      lambda: javaFunc,
-      description: 'Version with SnapStart enabled',
+    // Create a version for provisioned concurrency
+    const pythonVersion = new lambda.Version(this, `${functionName}Version`, {
+      lambda: pythonFunc,
+      description: 'Version with cold start optimization enabled',
     });
 
-    // Create an alias pointing to the version
-    const javaAlias = new lambda.Alias(this, `${functionName}Alias`, {
-      aliasName: 'snapstart',
-      version: javaVersion,
-      description: 'Alias for SnapStart enabled function',
+    // Create an alias pointing to the version for provisioned concurrency
+    const pythonAlias = new lambda.Alias(this, `${functionName}Alias`, {
+      aliasName: 'coldstart-optimized',
+      version: pythonVersion,
+      description: 'Alias for cold start optimized function',
     });
 
-    // CloudWatch alarms for the Java function with SnapStart
+    // Configure provisioned concurrency on the alias for cold start optimization
+    pythonAlias.addAutoScaling({
+      minCapacity: 5, // Keep at least 5 instances warm
+      maxCapacity: 20, // Scale up to 20 instances based on demand
+    });
+
+    // Add tags for cold start optimization identification
+    cdk.Tags.of(pythonFunc).add('ColdStartOptimization', 'enabled');
+    cdk.Tags.of(pythonFunc).add('Runtime', 'python3.9');
+    cdk.Tags.of(pythonFunc).add(
+      'OptimizationTechnique',
+      'provisioned_concurrency'
+    );
+
+    // CloudWatch alarms for the Python function with cold start optimization
     new cloudwatch.Alarm(this, `${functionName}ColdStartAlarm`, {
-      metric: javaFunc.metricDuration({
+      metric: pythonFunc.metricDuration({
         period: cdk.Duration.minutes(1),
         statistic: 'p99',
       }),
-      threshold: 2000, // 2 seconds - with SnapStart should be much lower
+      threshold: 1000, // 1 second - with provisioned concurrency should be much lower
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       alarmDescription:
-        'Monitor cold start performance with SnapStart optimization',
+        'Monitor cold start performance with provisioned concurrency optimization',
     });
 
-    // Output SnapStart configuration details
-    new cdk.CfnOutput(this, `${functionName}SnapStartEnabled`, {
+    // Output cold start optimization configuration details
+    new cdk.CfnOutput(this, `${functionName}ColdStartOptimized`, {
       value: 'true',
-      description: `SnapStart enabled for ${functionName}`,
-      exportName: `${this.stackName}-${functionName}-SnapStart`,
+      description: `Cold start optimization enabled for ${functionName}`,
+      exportName: `${this.stackName}-${functionName}-ColdStartOptimized`,
     });
 
     new cdk.CfnOutput(this, `${functionName}AliasArn`, {
-      value: javaAlias.functionArn,
-      description: `${functionName} alias ARN with SnapStart`,
+      value: pythonAlias.functionArn,
+      description: `${functionName} alias ARN with cold start optimization`,
       exportName: `${this.stackName}-${functionName}-AliasArn`,
     });
 
-    return javaFunc;
+    return pythonFunc;
   }
 
   private createMonitoringIntegration(): string {

@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
-import { ServerlessStack } from '../lib/serverless-stack';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { MonitoringConstruct } from '../lib/monitoring-construct';
+import { ServerlessStack } from '../lib/serverless-stack';
+import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
@@ -45,8 +45,8 @@ describe('ServerlessStack', () => {
   });
 
   describe('Lambda Functions', () => {
-    test('creates two Lambda functions with Python 3.11 runtime', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 4); // 2 main functions + 1 metrics collector + 1 Java SnapStart
+    test('creates three Lambda functions with Python runtime', () => {
+      template.resourceCountIs('AWS::Lambda::Function', 4); // 2 main functions + 1 metrics collector + 1 cold start optimized
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'python3.11',
         MemorySize: 1024,
@@ -70,7 +70,7 @@ describe('ServerlessStack', () => {
     });
 
     test('creates IAM roles with correct policies for Lambda functions', () => {
-      template.resourceCountIs('AWS::IAM::Role', 5); // 2 main function roles + 1 metrics collector role + 1 Java function role + 1 monitoring role
+      template.resourceCountIs('AWS::IAM::Role', 6); // 2 main function roles + 1 metrics collector role + 1 cold start optimized function role + 1 monitoring role + 1 application signals role
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
           Statement: [
@@ -83,6 +83,32 @@ describe('ServerlessStack', () => {
             },
           ],
         },
+      });
+    });
+
+    test('creates cold start optimized Lambda function with provisioned concurrency', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Runtime: 'python3.9',
+        Handler: 'coldstart_optimized_handler.handler',
+        MemorySize: 1024,
+        Timeout: 900,
+        ReservedConcurrentExecutions: 25,
+        Architectures: ['x86_64'],
+        Environment: {
+          Variables: Match.objectLike({
+            COLD_START_OPTIMIZED: 'true',
+            PROVISIONED_CONCURRENCY: 'enabled',
+          }),
+        },
+      });
+    });
+
+    test('creates Lambda version and alias for cold start optimization', () => {
+      template.resourceCountIs('AWS::Lambda::Version', 1);
+      template.resourceCountIs('AWS::Lambda::Alias', 1);
+      template.hasResourceProperties('AWS::Lambda::Alias', {
+        Name: 'coldstart-optimized',
+        Description: 'Alias for cold start optimized function',
       });
     });
   });
@@ -100,7 +126,7 @@ describe('ServerlessStack', () => {
     });
 
     test('creates API resources and methods', () => {
-      template.resourceCountIs('AWS::ApiGateway::Resource', 3); // /sample, /process, and /java-snapstart
+      template.resourceCountIs('AWS::ApiGateway::Resource', 3); // /sample, /process, and /coldstart-optimized
       template.hasResourceProperties('AWS::ApiGateway::Resource', {
         PathPart: 'sample',
       });
@@ -129,7 +155,7 @@ describe('ServerlessStack', () => {
 
   describe('CloudWatch Logging', () => {
     test('creates centralized log group with correct retention', () => {
-      template.resourceCountIs('AWS::Logs::LogGroup', 1);
+      template.resourceCountIs('AWS::Logs::LogGroup', 2); // 1 main log group + 1 application signals log group
       template.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: Match.stringLikeRegexp('/aws/lambda/serverless-'),
         RetentionInDays: 7,
@@ -139,12 +165,12 @@ describe('ServerlessStack', () => {
 
   describe('Monitoring and Alarms', () => {
     test('creates CloudWatch alarms for Lambda functions', () => {
-      // Each function has 3 alarms (error, duration, throttle) x 2 functions = 6
+      // Each function has 3 alarms (error, duration, throttle) x 3 functions = 9
       const alarmCount = template.toJSON().Resources ? 
         Object.keys(template.toJSON().Resources).filter(key => 
           template.toJSON().Resources[key].Type === 'AWS::CloudWatch::Alarm'
         ).length : 0;
-      expect(alarmCount).toBeGreaterThanOrEqual(6);
+      expect(alarmCount).toBeGreaterThanOrEqual(9);
     });
 
     test('creates cost monitoring alarm', () => {
@@ -180,6 +206,7 @@ describe('ServerlessStack', () => {
       expect(outputs).toHaveProperty('ApiEndpoint');
       expect(outputs).toHaveProperty('SampleFunctionArn');
       expect(outputs).toHaveProperty('ProcessingFunctionArn');
+      expect(outputs).toHaveProperty('ColdStartOptimizedFunctionArn');
       expect(outputs).toHaveProperty('LogGroupName');
       expect(outputs).toHaveProperty('MonitoringTopicArn');
     });

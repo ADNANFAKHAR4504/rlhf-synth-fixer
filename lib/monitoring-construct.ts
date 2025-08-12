@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 
 export interface MonitoringConstructProps {
@@ -25,11 +25,7 @@ export class MonitoringConstruct extends Construct {
     });
     alertsTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
-    // Create comprehensive dashboard
-    new cloudwatch.Dashboard(this, 'ServerlessDashboard', {
-      dashboardName: `serverless-monitoring-${props.environmentSuffix}`,
-      widgets: [this.createDashboardWidgets(props.lambdaFunctions)],
-    });
+    // Dashboard will be created later with all widgets
 
     // Create composite alarms for overall health
     this.createCompositeAlarms(
@@ -37,6 +33,18 @@ export class MonitoringConstruct extends Construct {
       alertsTopic,
       props.environmentSuffix
     );
+
+    // Enable Application Signals monitoring
+    this.enableApplicationSignalsServiceMap(props.lambdaFunctions);
+
+    // Add Application Signals widgets to dashboard
+    const dashboard = new cloudwatch.Dashboard(this, 'ServerlessDashboard', {
+      dashboardName: `serverless-monitoring-${props.environmentSuffix}`,
+      widgets: [
+        this.createDashboardWidgets(props.lambdaFunctions),
+        this.createApplicationSignalsWidgets(props.lambdaFunctions)
+      ],
+    });
   }
 
   private createDashboardWidgets(
