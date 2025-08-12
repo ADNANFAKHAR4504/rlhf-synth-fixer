@@ -12,7 +12,7 @@ from typing import Optional
 
 import pulumi
 from pulumi import ResourceOptions
-from pulumi_aws import aws  # example import for any AWS resource
+import pulumi_aws as aws
 
 # Import your nested stacks here
 # from .dynamodb_stack import DynamoDBStack
@@ -23,7 +23,8 @@ class TapStackArgs:
   TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
   Args:
-    environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+    environment_suffix (Optional[str]): An optional suffix for identifying the 
+      deployment environment (e.g., 'dev', 'prod').
     tags (Optional[dict]): Optional default tags to apply to resources.
   """
 
@@ -33,82 +34,82 @@ class TapStackArgs:
 
 
 class TapStack(pulumi.ComponentResource):
-    """
-    Represents the main Pulumi component resource for the TAP project.
+  """
+  Represents the main Pulumi component resource for the TAP project.
 
-    This component orchestrates the instantiation of other resource-specific components
-    and manages the environment suffix used for naming and configuration.
+  This component orchestrates the instantiation of other resource-specific components
+  and manages the environment suffix used for naming and configuration.
 
-    Note:
-        - DO NOT create resources directly here unless they are truly global.
-        - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
+  Note:
+      - DO NOT create resources directly here unless they are truly global.
+      - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
 
-    Args:
-        name (str): The logical name of this Pulumi component.
-        args (TapStackArgs): Configuration arguments including environment suffix and tags.
-        opts (ResourceOptions): Pulumi options.
-    """
+  Args:
+      name (str): The logical name of this Pulumi component.
+      args (TapStackArgs): Configuration arguments including environment suffix and tags.
+      opts (ResourceOptions): Pulumi options.
+  """
 
-    def __init__(
-        self,
-        name: str,
-        args: TapStackArgs,
-        opts: Optional[ResourceOptions] = None
-    ):
-        super().__init__('tap:stack:TapStack', name, None, opts)
+  def __init__(
+      self,
+      name: str,
+      args: TapStackArgs,
+      opts: Optional[ResourceOptions] = None
+  ):
+    super().__init__('tap:stack:TapStack', name, None, opts)
 
-        self.environment_suffix = args.environment_suffix
-        self.tags = args.tags
+    self.environment_suffix = args.environment_suffix
+    self.tags = args.tags
 
-      # Configure the AWS provider for us-west-2 region
-        aws_provider = aws.Provider("aws-provider", region="us-west-2")
+    # Configure the AWS provider for us-west-2 region
+    aws_provider = aws.Provider("aws-provider", region="us-west-2")
 
-        # Create the S3 bucket for file processing
-        file_processing_bucket = aws.s3.Bucket(
+    # Create the S3 bucket for file processing
+    file_processing_bucket = aws.s3.Bucket(
             "file-processing-bucket",
             bucket="file-processing-bucket",
             opts=pulumi.ResourceOptions(provider=aws_provider)
         )
 
-        # Block public access to the S3 bucket for security
-        aws.s3.BucketPublicAccessBlock(
-            "file-processing-bucket-pab",
-            bucket=file_processing_bucket.id,
-            block_public_acls=True,
-            block_public_policy=True,
-            ignore_public_acls=True,
-            restrict_public_buckets=True,
-            opts=pulumi.ResourceOptions(provider=aws_provider)
-        )
+    # Block public access to the S3 bucket for security
+    aws.s3.BucketPublicAccessBlock(
+        "file-processing-bucket-pab",
+        bucket=file_processing_bucket.id,
+        block_public_acls=True,
+        block_public_policy=True,
+        ignore_public_acls=True,
+        restrict_public_buckets=True,
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+    )
 
-        # Create CloudWatch Log Group for Lambda function
-        lambda_log_group = aws.cloudwatch.LogGroup(
-            "file-processing-bucket-log-group",
-            name="/aws/lambda/file-processor-lambda",
-            retention_in_days=14,
-            opts=pulumi.ResourceOptions(provider=aws_provider)
-        )
+    # Create CloudWatch Log Group for Lambda function
+    lambda_log_group = aws.cloudwatch.LogGroup(
+        "file-processing-bucket-log-group",
+        name="/aws/lambda/file-processor-lambda",
+        retention_in_days=14,
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+    )
 
-        # Create IAM role for Lambda function
-        lambda_role = aws.iam.Role(
-            "file-processor-lambda-role",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Action": "sts:AssumeRole",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "lambda.amazonaws.com"
-                        }
+    # Create IAM role for Lambda function
+    lambda_role = aws.iam.Role(
+        "file-processor-lambda-role",
+        assume_role_policy=json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
                     }
-                ]
-            }),
-            opts=pulumi.ResourceOptions(provider=aws_provider)
-        )
+                }
+            ]
+        }),
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+    )
 
-        # Create IAM policy for Lambda function with least privilege access
-        lambda_policy = aws.iam.Policy(
+    # Create IAM policy for Lambda function with least privilege access
+    lambda_policy = aws.iam.Policy(
             "file-processor-lambda-policy",
             policy=pulumi.Output.all(file_processing_bucket.arn, lambda_log_group.arn).apply(
                 lambda args: json.dumps({
@@ -145,16 +146,16 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(provider=aws_provider)
         )
 
-        # Attach the policy to the Lambda role
-        lambda_role_policy_attachment = aws.iam.RolePolicyAttachment(
+    # Attach the policy to the Lambda role
+    lambda_role_policy_attachment = aws.iam.RolePolicyAttachment(
             "file-processor-lambda-policy-attachment",
             role=lambda_role.name,
             policy_arn=lambda_policy.arn,
             opts=pulumi.ResourceOptions(provider=aws_provider)
         )
 
-        # Lambda function code
-        lambda_function_code = """
+    # Lambda function code
+    lambda_function_code = """
         import json
         import boto3
         import os
@@ -279,8 +280,8 @@ class TapStack(pulumi.ComponentResource):
                 }
         """
 
-        # Create the Lambda function
-        file_processor_lambda = aws.lambda_.Function(
+    # Create the Lambda function
+    file_processor_lambda = aws.lambda_.Function(
             "file-processor-lambda",
             role=lambda_role.arn,
             code=pulumi.AssetArchive({
@@ -300,8 +301,8 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(provider=aws_provider)
         )
 
-        # Create Lambda permission for S3 to invoke the function
-        lambda_permission = aws.lambda_.Permission(
+    # Create Lambda permission for S3 to invoke the function
+    lambda_permission = aws.lambda_.Permission(
             "file-processor-lambda-s3-permission",
             statement_id="AllowExecutionFromS3Bucket",
             action="lambda:InvokeFunction",
@@ -311,8 +312,8 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(provider=aws_provider)
         )
 
-        # Create S3 bucket notification to trigger Lambda on object creation
-        aws.s3.BucketNotification(
+    # Create S3 bucket notification to trigger Lambda on object creation
+    aws.s3.BucketNotification(
             "file-processing-bucket-notification",
             bucket=file_processing_bucket.id,
             lambda_functions=[
@@ -325,9 +326,9 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(provider=aws_provider)
         )
 
-        # Export important resource information
-        pulumi.export("bucket_name", file_processing_bucket.bucket)
-        pulumi.export("lambda_function_name", file_processor_lambda.name)
-        pulumi.export("lambda_function_arn", file_processor_lambda.arn)
-        pulumi.export("log_group_name", lambda_log_group.name)
-        self.register_outputs({})
+    # Export important resource information
+    pulumi.export("bucket_name", file_processing_bucket.bucket)
+    pulumi.export("lambda_function_name", file_processor_lambda.name)
+    pulumi.export("lambda_function_arn", file_processor_lambda.arn)
+    pulumi.export("log_group_name", lambda_log_group.name)
+    self.register_outputs({})
