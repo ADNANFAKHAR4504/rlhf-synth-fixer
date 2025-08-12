@@ -5,6 +5,7 @@ export interface SecureNetworkingProps {
   vpcName: string;
   cidr: string;
   maxAzs: number;
+  environmentSuffix?: string;
 }
 
 export class SecureNetworking extends Construct {
@@ -24,17 +25,17 @@ export class SecureNetworking extends Construct {
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: 'Public',
+          name: `Public-${props.environmentSuffix || 'dev'}`,
           subnetType: ec2.SubnetType.PUBLIC,
         },
         {
           cidrMask: 24,
-          name: 'Private',
+          name: `Private-${props.environmentSuffix || 'dev'}`,
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,
-          name: 'Database',
+          name: `Database-${props.environmentSuffix || 'dev'}`,
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],

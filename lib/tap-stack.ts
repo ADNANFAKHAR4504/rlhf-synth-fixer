@@ -26,16 +26,18 @@ export class TapStack extends cdk.Stack {
       vpcName: `secure-vpc-${environmentSuffix}`,
       cidr: '10.0.0.0/16',
       maxAzs: 2,
+      environmentSuffix: environmentSuffix,
     });
 
-    // Create secure S3 buckets with unique names
+    // Create secure S3 buckets with unique names (all lowercase)
+    const uniqueId = this.node.addr.substring(0, 8).toLowerCase();
     const dataBucket = new SecureS3Bucket(this, 'DataBucket', {
-      bucketName: `secure-data-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${this.stackName}`,
+      bucketName: `secure-data-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${uniqueId}`,
       enableLogging: true,
     });
 
     const logsBucket = new SecureS3Bucket(this, 'LogsBucket', {
-      bucketName: `secure-logs-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${this.stackName}`,
+      bucketName: `secure-logs-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${uniqueId}`,
       enableLogging: false,
     });
 
@@ -45,6 +47,7 @@ export class TapStack extends cdk.Stack {
       databaseName: `securedb-${environmentSuffix}`,
       instanceIdentifier: `secure-postgres-instance-${environmentSuffix}`,
       securityGroup: networking.securityGroup,
+      environmentSuffix: environmentSuffix,
     });
 
     // Create secure IAM resources with unique names

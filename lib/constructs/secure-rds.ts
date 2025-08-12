@@ -10,6 +10,7 @@ export interface SecureRDSProps {
   databaseName: string;
   instanceIdentifier: string;
   securityGroup: ec2.ISecurityGroup;
+  environmentSuffix?: string;
 }
 
 export class SecureRDS extends Construct {
@@ -30,6 +31,7 @@ export class SecureRDS extends Construct {
     const subnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
       vpc: props.vpc,
       description: 'Subnet group for secure RDS instance',
+      subnetGroupName: `secure-db-subnet-group-${props.environmentSuffix || 'dev'}`.toLowerCase(),
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       },

@@ -159,7 +159,7 @@ describe('TapStack Unit Tests', () => {
                 {
                   Ref: 'AWS::AccountId',
                 },
-                '-TestTapStack',
+                '-c81cbb2d',
               ],
             ],
           },
@@ -176,7 +176,7 @@ describe('TapStack Unit Tests', () => {
                 {
                   Ref: 'AWS::AccountId',
                 },
-                '-TestTapStack',
+                '-c81cbb2d',
               ],
             ],
           },

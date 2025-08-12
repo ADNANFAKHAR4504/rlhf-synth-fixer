@@ -20,7 +20,7 @@ export class SecureIAM extends Construct {
 
     // Create CloudWatch Log Group for IAM role logging
     this.logGroup = new logs.LogGroup(this, 'IAMRoleLogGroup', {
-      logGroupName: `/aws/iam/roles/${props.roleName}-${Date.now()}`,
+      logGroupName: `/aws/iam/roles/${props.roleName}`,
       retention: logs.RetentionDays.ONE_YEAR,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
