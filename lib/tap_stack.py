@@ -460,7 +460,7 @@ alb = aws.lb.LoadBalancer(
     name=get_resource_name("web-alb"),
     load_balancer_type="application",
     ip_address_type="dualstack",  # Enable dual-stack (IPv4 and IPv6)
-    scheme="internet-facing",
+    internal=False,  # internet-facing (False = internet-facing, True = internal)
     security_groups=[alb_security_group.id],
     subnets=[subnet.id for subnet in public_subnets],
     enable_deletion_protection=False,  # Set to True for production
