@@ -181,13 +181,13 @@ export interface WebAlbProps {
   albSecurityGroup: ec2.ISecurityGroup;
   appAsg: import('aws-cdk-lib').aws_autoscaling.AutoScalingGroup;
   stage: string;
-  certificateArn: string;
+  certificateArn?: string; // Optional, for HTTP-only or HTTPS
 }
 
 export class WebAlb extends Construct {
   public readonly alb: elbv2.ApplicationLoadBalancer;
   public readonly httpListener: elbv2.ApplicationListener;
-  public readonly httpsListener: elbv2.ApplicationListener;
+  public readonly httpsListener?: elbv2.ApplicationListener;
 
   constructor(scope: Construct, id: string, props: WebAlbProps) {
     super(scope, id);
@@ -204,22 +204,30 @@ export class WebAlb extends Construct {
       targets: [props.appAsg],
       healthCheck: { path: '/', healthyHttpCodes: '200' },
     });
-    const cert = acm.Certificate.fromCertificateArn(
-      this,
-      'HttpsCert',
-      props.certificateArn
-    );
-    this.httpsListener = this.alb.addListener('Https', {
-      port: 443,
-      certificates: [cert],
-      sslPolicy: elbv2.SslPolicy.TLS12_EXT,
-      open: false,
-    });
-    this.httpsListener.addTargets('HttpsTargets', {
-      port: 80,
-      targets: [props.appAsg],
-      healthCheck: { path: '/', healthyHttpCodes: '200' },
-    });
+    if (props.certificateArn) {
+      const cert = acm.Certificate.fromCertificateArn(
+        this,
+        'HttpsCert',
+        props.certificateArn
+      );
+      this.httpsListener = this.alb.addListener('Https', {
+        port: 443,
+        certificates: [cert],
+        sslPolicy: elbv2.SslPolicy.TLS12_EXT,
+        open: false,
+      });
+      this.httpsListener.addTargets('HttpsTargets', {
+        port: 80,
+        targets: [props.appAsg],
+        healthCheck: { path: '/', healthyHttpCodes: '200' },
+      });
+      this.httpListener.addAction('RedirectToHttps', {
+        action: elbv2.ListenerAction.redirect({
+          protocol: 'HTTPS',
+          port: '443',
+        }),
+      });
+    }
   }
 }
 ```
@@ -237,7 +245,8 @@ import { WebVpc } from './constructs/vpc';
 
 interface TapStackProps extends StackProps {
   stage: string;
-  certificateArn: string | undefined;
+  appName?: string;
+  certificateArn?: string;
 }
 
 export class TapStack extends Stack {
@@ -245,6 +254,7 @@ export class TapStack extends Stack {
     super(scope, id, props);
     const region = this.region;
     const stage = props?.stage || 'dev';
+    const appName = props?.appName || 'webapp';
     const vpc = new WebVpc(this, 'WebVpc', { stage }).vpc;
     const sgs = new WebSecurityGroups(this, 'SecurityGroups', { vpc, stage });
     const lt = new WebLaunchTemplate(this, 'WebLaunchTemplate', {
@@ -252,18 +262,14 @@ export class TapStack extends Stack {
       securityGroup: sgs.appSg,
     }).lt;
     const asg = new WebAsg(this, 'WebAsg', { vpc, launchTemplate: lt }).asg;
-    if (!props?.certificateArn) {
-      throw new Error(
-        `certificateArn is required to create HTTPS listener in ${region}`
-      );
-    }
     new WebAlb(this, 'WebAlb', {
       vpc,
       albSecurityGroup: sgs.albSg,
       appAsg: asg,
       stage,
-      certificateArn: props.certificateArn,
+      certificateArn: props?.certificateArn,
     });
+    Tags.of(this).add('App', appName);
     Tags.of(this).add('Stage', stage);
     Tags.of(this).add('Region', region);
     Tags.of(this).add(
@@ -281,20 +287,27 @@ import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
 const stage = (app.node.tryGetContext('stage') as string) || 'dev';
-const eastCertArn = app.node.tryGetContext('eastCertArn') as string | undefined;
-const westCertArn = app.node.tryGetContext('westCertArn') as string | undefined;
+const appName = (app.node.tryGetContext('appName') as string) ?? 'webapp';
 
-new TapStack(app, `Web-${stage}-Use1`, {
+new TapStack(app, `${stackName}-Use1`, {
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
   stage,
-  certificateArn: eastCertArn,
+  appName,
+  certificateArn: app.node.tryGetContext('certificateArn') as
+    | string
+    | undefined,
 });
 
-new TapStack(app, `Web-${stage}-Usw2`, {
+new TapStack(app, `${stackName}-Usw2`, {
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-west-2' },
   stage,
-  certificateArn: westCertArn,
+  appName,
+  certificateArn: app.node.tryGetContext('certificateArn') as
+    | string
+    | undefined,
 });
 ```
 

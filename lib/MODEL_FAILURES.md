@@ -1,15 +1,13 @@
 # Model Failures for MODEL_RESPONSE.md
 
-1. **Lack of Modular, Per-Resource Test Files**
-   - The model groups tests by construct type (e.g., `networking.test.ts`, `security.test.ts`) and places them in a `test/unit/` directory, with only a single integration test. The ideal solution provides one test file per construct and per test type (e.g., `vpc.unit.test.ts`, `alb.int.test.ts`), all at the top level of the `test/` directory, ensuring better maintainability and full coverage.
+1. **Incorrect/Incomplete ALB Listener and Certificate Handling**
+   - The model's `LoadBalancer` construct always creates both HTTP (port 80) and HTTPS (port 443) listeners, but the HTTPS listener is configured with protocol HTTP and does not use an ACM certificate. There is no logic for conditional HTTPS, no ACM certificate resource, and no redirect from HTTP to HTTPS.
+   - The ideal solution uses an ACM certificate for HTTPS, conditionally creates the HTTPS listener only if a certificateArn is provided, and configures a redirect from HTTP to HTTPS. The protocol for the HTTPS listener is correctly set to HTTPS, not HTTP.
 
-2. **Missing or Incomplete Edge Case/Error Handling in Tests**
-   - The model's tests do not cover error or edge cases, such as missing required properties or expected exceptions (e.g., missing certificate ARN for ALB). The ideal solution includes explicit tests for these scenarios, which are critical for robust infrastructure code.
+2. **Missing Tagging and Naming Conventions**
+   - The model's resources (VPC, security groups, ASG, ALB, etc.) do not consistently apply tags such as `Stage`, `Region`, `App`, or `ProblemID`. Naming conventions for resources are inconsistent or missing, and tags are not propagated as required.
+   - The ideal solution applies tags for `App`, `Stage`, `Region`, and `ProblemID` to all resources, ensuring traceability and compliance with best practices. Resource names follow a strict convention using stage and region.
 
-3. **Resource Implementation and Test Coverage Gaps**
-   - The model omits best practices and details present in the ideal solution, such as:
-     - No tagging of resources for stage, region, or problem ID.
-     - No propagation of tags across all resources.
-     - The ALB's HTTPS listener is configured as HTTP and does not use ACM certificates or enforce SSL, which is a security and compliance gap.
-     - VPC and subnet configuration is less explicit and may not match requirements for public/private subnets as in the ideal.
-   - The ideal solution ensures all resources are tagged, listeners are properly configured (with ACM certificates for HTTPS), and all resource properties and security controls are explicit and correct.
+3. **Lack of Modular, Reusable Constructs and Interface Compliance**
+   - The model's constructs (networking, security, compute, load balancer) do not match the modular, interface-driven structure of the ideal solution. For example, the model uses a single stack with large, monolithic constructs and does not expose or require the same interfaces (e.g., missing `appName`, missing optional `certificateArn` in stack props, etc.).
+   - The ideal solution is highly modular, with each construct (VPC, security groups, launch template, ASG, ALB) in its own file, using clear interfaces and props. The stack and constructs are reusable and parameterized, supporting both HTTP-only and HTTPS scenarios.
