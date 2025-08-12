@@ -477,12 +477,12 @@ def create_api_gateway(kms_key: aws.kms.Key, tags: Dict[str, str]) -> Dict[str, 
     )
 
     deployment = aws.apigateway.Deployment(
-        "nova-api-deployment", depends_on=[integration_response], rest_api=api.id, stage_name="prod"
+        "nova-api-deployment", rest_api=api.id
     )
 
     stage = aws.apigateway.Stage(
         "nova-api-stage",
-        deployment_id=deployment.id,
+        deployment=deployment.id,
         rest_api=api.id,
         stage_name="prod",
         access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
