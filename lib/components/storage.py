@@ -14,9 +14,9 @@ class StorageComponent(pulumi.ComponentResource):
     self.environment = environment
     # S3 Bucket for application data
     self.bucket = aws.s3.Bucket(
-        f"{name}-app-bucket",
-        bucket=f"apprlhfturing",
-        tags={**tags, "Name": f"rlhfbucketturing"},
+        f"{name}-app-bucket-{environment}",
+        bucket=f"apprlhfturing{environment}",
+        tags={**tags, "Name": f"rlhfbucketturing{environment}"},
         opts=pulumi.ResourceOptions(parent=self),
     )
 
