@@ -386,7 +386,7 @@ Resources:
       LogGroupName: !Sub '/aws/s3/${ProjectName}-${Environment}'
       RetentionInDays: !Ref LogRetentionDays
 
-  # CloudWatch Log Group for WAF logs
+  # CloudWatch Log Group for WAF logs - FIXED
   WAFLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -549,13 +549,13 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # WAF Logging Configuration
+  # WAF Logging Configuration - FIXED
   WAFLoggingConfiguration:
     Type: AWS::WAFv2::LoggingConfiguration
     Properties:
       ResourceArn: !GetAtt WebACL.Arn
       LogDestinationConfigs:
-        - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/waf/${ProjectName}-${Environment}'
+        - !GetAtt WAFLogGroup.Arn
 
   # ---------------------------------------------------------------------------
   # API GATEWAY CONFIGURATION
@@ -836,3 +836,9 @@ Outputs:
     Value: !GetAtt LambdaExecutionRole.Arn
     Export:
       Name: !Sub '${ProjectName}-${Environment}-lambda-role-arn'
+
+  APIGatewayRoleArn:
+    Description: 'API Gateway CloudWatch role ARN'
+    Value: !GetAtt APIGatewayCloudWatchRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-apigateway-role-arn'
