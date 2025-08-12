@@ -117,7 +117,8 @@ describe('TapStack Unit Tests', () => {
       expect(iamPolicies).toBeDefined();
 
       const dynamoPolicy = Object.values(iamPolicies).find(
-        (policy: any) => policy.name && policy.name.includes('lambda-dynamodb-policy')
+        (policy: any) =>
+          policy.name && policy.name.includes('lambda-dynamodb-policy')
       );
 
       expect(dynamoPolicy).toBeDefined();
@@ -144,10 +145,7 @@ describe('TapStack Unit Tests', () => {
       const logGroups = synthesized.resource.aws_cloudwatch_log_group;
       expect(logGroups).toBeDefined();
 
-      const expectedLogGroups = [
-        '/aws/apigateway/',
-        '/aws/lambda/',
-      ];
+      const expectedLogGroups = ['/aws/apigateway/', '/aws/lambda/'];
 
       expectedLogGroups.forEach(expectedPrefix => {
         const logGroup = Object.values(logGroups).find(
@@ -169,7 +167,9 @@ describe('TapStack Unit Tests', () => {
 
       expectedFunctions.forEach(expectedFunc => {
         const lambdaFunc = Object.values(lambdaFunctions).find(
-          (func: any) => func.function_name && func.function_name.includes(expectedFunc.pattern)
+          (func: any) =>
+            func.function_name &&
+            func.function_name.includes(expectedFunc.pattern)
         );
 
         expect(lambdaFunc).toBeDefined();

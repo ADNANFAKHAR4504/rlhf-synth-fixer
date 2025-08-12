@@ -42,7 +42,9 @@ describe('TapStack Integration Tests', () => {
       const s = synthParsed(stack);
 
       expect(s.provider).toBeDefined();
-      expect(Object.keys(s.provider)).toEqual(expect.arrayContaining(['aws', 'archive']));
+      expect(Object.keys(s.provider)).toEqual(
+        expect.arrayContaining(['aws', 'archive'])
+      );
       expect(s.provider.aws[0].region).toBe('us-east-1');
     });
   });
@@ -146,9 +148,17 @@ describe('TapStack Integration Tests', () => {
 
     test('creates resources, methods, and integrations for users/sessions/health', () => {
       const resources = s.resource.aws_api_gateway_resource;
-      const expectedParts = ['users', '{userId}', 'sessions', '{sessionId}', 'health'];
+      const expectedParts = [
+        'users',
+        '{userId}',
+        'sessions',
+        '{sessionId}',
+        'health',
+      ];
       expectedParts.forEach(part => {
-        const found = Object.values(resources).find((r: any) => r.path_part === part);
+        const found = Object.values(resources).find(
+          (r: any) => r.path_part === part
+        );
         expect(found).toBeDefined();
       });
 
@@ -183,8 +193,12 @@ describe('TapStack Integration Tests', () => {
         expect(fn.timeout).toBeDefined();
         expect(fn.memory_size).toBeDefined();
         expect(fn.environment).toBeDefined();
-        expect(fn.environment.variables.USER_TABLE_NAME).toContain('aws_dynamodb_table.prod-service-user-table.name');
-        expect(fn.environment.variables.SESSION_TABLE_NAME).toContain('aws_dynamodb_table.prod-service-session-table.name');
+        expect(fn.environment.variables.USER_TABLE_NAME).toContain(
+          'aws_dynamodb_table.prod-service-user-table.name'
+        );
+        expect(fn.environment.variables.SESSION_TABLE_NAME).toContain(
+          'aws_dynamodb_table.prod-service-session-table.name'
+        );
         expect(fn.depends_on).toBeDefined();
         expect(Array.isArray(fn.depends_on)).toBe(true);
         expect(fn.depends_on.length).toBeGreaterThan(0);
@@ -201,7 +215,9 @@ describe('TapStack Integration Tests', () => {
         expect(p.principal).toBe('apigateway.amazonaws.com');
         // CDKTF uses interpolation for execution_arn; verify the pattern rather than literal "execute-api"
         expect(typeof p.source_arn).toBe('string');
-        expect(p.source_arn).toMatch(/\$\{aws_api_gateway_rest_api\.[^.}]+\.execution_arn}\/\*\/\*/);
+        expect(p.source_arn).toMatch(
+          /\$\{aws_api_gateway_rest_api\.[^.}]+\.execution_arn}\/\*\/\*/
+        );
       });
     });
 
@@ -212,7 +228,11 @@ describe('TapStack Integration Tests', () => {
       expect(Object.keys(archives).length).toBe(3);
       Object.values(archives).forEach((a: any) => expect(a.type).toBe('zip'));
 
-      const expectedKeys = ['user-handler.zip', 'session-handler.zip', 'health-check.zip'];
+      const expectedKeys = [
+        'user-handler.zip',
+        'session-handler.zip',
+        'health-check.zip',
+      ];
       expectedKeys.forEach(k => {
         const found = Object.values(objs).find((o: any) => o.key === k);
         expect(found).toBeDefined();
@@ -286,11 +306,17 @@ describe('TapStack Integration Tests', () => {
       expected.forEach(name => {
         expect(s.output[name]).toBeDefined();
         expect(s.output[name].description).toBeDefined();
-        expect((s.output[name].description as string).length).toBeGreaterThan(0);
+        expect((s.output[name].description as string).length).toBeGreaterThan(
+          0
+        );
       });
 
-      expect(s.output.api_gateway_url.value).toContain('${aws_api_gateway_rest_api');
-      expect(s.output.health_check_url.value).toContain('${aws_api_gateway_rest_api');
+      expect(s.output.api_gateway_url.value).toContain(
+        '${aws_api_gateway_rest_api'
+      );
+      expect(s.output.health_check_url.value).toContain(
+        '${aws_api_gateway_rest_api'
+      );
     });
   });
 });
