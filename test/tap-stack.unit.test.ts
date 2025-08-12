@@ -31,6 +31,11 @@ describe('TapStack Unit Tests', () => {
       expect(stack.account).toBe('123456789012');
     });
 
+    test('Stack has environment suffix configured', () => {
+      expect(environmentSuffix).toBeDefined();
+      expect(typeof environmentSuffix).toBe('string');
+    });
+
     test('Stack has all required outputs', () => {
       template.hasOutput('SecurityCompliance', {
         Value: 'All security requirements implemented',
@@ -48,7 +53,7 @@ describe('TapStack Unit Tests', () => {
         Tags: Match.arrayWith([
           {
             Key: 'Name',
-            Value: 'secure-vpc',
+            Value: `secure-vpc-${environmentSuffix}`,
           },
         ]),
       });
@@ -142,6 +147,41 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
+    test('S3 buckets have correct naming pattern', () => {
+      // Check that buckets are created with the correct naming pattern
+      template.hasResource('AWS::S3::Bucket', {
+        Properties: {
+          BucketName: {
+            'Fn::Join': [
+              '',
+              [
+                `secure-data-bucket-${environmentSuffix}-`,
+                {
+                  'Ref': 'AWS::AccountId'
+                }
+              ]
+            ]
+          }
+        }
+      });
+
+      template.hasResource('AWS::S3::Bucket', {
+        Properties: {
+          BucketName: {
+            'Fn::Join': [
+              '',
+              [
+                `secure-logs-bucket-${environmentSuffix}-`,
+                {
+                  'Ref': 'AWS::AccountId'
+                }
+              ]
+            ]
+          }
+        }
+      });
+    });
+
     test('S3 bucket policies enforce secure transport', () => {
       template.hasResourceProperties('AWS::S3::BucketPolicy', {
         PolicyDocument: {
@@ -187,7 +227,8 @@ describe('TapStack Unit Tests', () => {
   describe('RDS Database', () => {
     test('RDS instance has correct configuration', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        DBInstanceIdentifier: 'secure-postgres-instance',
+        DBInstanceIdentifier: `secure-postgres-instance-${environmentSuffix}`,
+        DBName: `securedb-${environmentSuffix}`,
         Engine: 'postgres',
         EngineVersion: '15.13',
         DBInstanceClass: 'db.t3.micro',
@@ -234,7 +275,7 @@ describe('TapStack Unit Tests', () => {
 
     test('Secrets Manager secret is created for database credentials', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: 'secure-postgres-instance-credentials',
+        Name: `secure-postgres-instance-${environmentSuffix}-credentials`,
         GenerateSecretString: {
           ExcludeCharacters: '"@/\\\'',
           GenerateStringKey: 'password',
@@ -248,13 +289,13 @@ describe('TapStack Unit Tests', () => {
   describe('IAM Resources', () => {
     test('IAM user is created with correct configuration', () => {
       template.hasResourceProperties('AWS::IAM::User', {
-        UserName: 'secure-user',
+        UserName: `secure-user-${environmentSuffix}`,
       });
     });
 
     test('IAM role is created with correct configuration', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'secure-application-role',
+        RoleName: `secure-application-role-${environmentSuffix}`,
         Description: 'Secure role with least privilege access',
         MaxSessionDuration: 3600,
         AssumeRolePolicyDocument: {
@@ -355,7 +396,7 @@ describe('TapStack Unit Tests', () => {
           Tags: Match.arrayWith([
             {
               Key: 'Name',
-              Value: 'secure-vpc',
+              Value: `secure-vpc-${environmentSuffix}`,
             },
           ]),
         },
