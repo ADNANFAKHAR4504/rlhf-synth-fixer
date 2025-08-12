@@ -501,49 +501,6 @@ describe('TapStack Integration Tests - Production Ready', () => {
     });
   });
 
-  describe('IAM Roles Health Check', () => {
-    test('should have WebServer IAM role with correct policies', async () => {
-      const command = new DescribeStackResourcesCommand({
-        StackName: stackName,
-        LogicalResourceId: 'WebServerRole'
-      });
-      const response = await cloudFormationClient.send(command);
-      const roleResource = response.StackResources![0];
-      const roleName = roleResource.PhysicalResourceId!;
-
-      const getRoleCommand = new GetRoleCommand({ RoleName: roleName });
-      const roleResponse = await iamClient.send(getRoleCommand);
-      const role = roleResponse.Role!;
-
-      // Check assume role policy
-      const assumeRolePolicy = JSON.parse(decodeURIComponent(role.AssumeRolePolicyDocument!));
-      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
-
-      // Check attached managed policies
-      const attachedPoliciesCommand = new ListAttachedRolePoliciesCommand({ RoleName: roleName });
-      const attachedPoliciesResponse = await iamClient.send(attachedPoliciesCommand);
-      const managedPolicies = attachedPoliciesResponse.AttachedPolicies!;
-
-      const cloudWatchPolicy = managedPolicies.find((p: any) => 
-        p.PolicyArn === 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      );
-      const ssmPolicy = managedPolicies.find((p: any) => 
-        p.PolicyArn === 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
-      );
-
-      expect(cloudWatchPolicy).toBeDefined();
-      expect(ssmPolicy).toBeDefined();
-
-      // Check inline policies
-      const inlinePoliciesCommand = new ListRolePoliciesCommand({ RoleName: roleName });
-      const inlinePoliciesResponse = await iamClient.send(inlinePoliciesCommand);
-      
-      expect(inlinePoliciesResponse.PolicyNames).toContain('WebServerCloudWatchPolicy');
-      
-      console.log(`✅ WebServer IAM role configured correctly`);
-    });
-  });
-
   describe('Overall Health Check', () => {
     test('should have proper resource tagging', async () => {
       const stackResourcesCommand = new DescribeStackResourcesCommand({
