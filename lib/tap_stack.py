@@ -157,7 +157,7 @@ class TapStack(pulumi.ComponentResource):
           "networking": self.networking[region],
           "security": self.security[region],
           "storage": self.storage[region],
-          "database": self.database[region],
+        #   "database": self.database[region],
           "serverless": self.serverless[region],
           "monitoring": self.monitoring[region]
       }
