@@ -230,7 +230,7 @@ describe('TapStack Unit Tests', () => {
     test('RDS instance has correct configuration', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         DBInstanceIdentifier: `secure-postgres-instance-${environmentSuffix}`,
-        DBName: `securedb-${environmentSuffix}`,
+        DBName: `securedb${environmentSuffix.replace(/-/g, '')}`,
         Engine: 'postgres',
         EngineVersion: '15.13',
         DBInstanceClass: 'db.t3.micro',
