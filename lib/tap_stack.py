@@ -600,3 +600,11 @@ class TapStack(TerraformStack):
         if enable_database and rds is not None:
             TerraformOutput(self, "rds_identifier", value=rds.id)
             TerraformOutput(self, "rds_endpoint", value=rds.address)
+
+if __name__ == "__main__":
+    # Create an app, instantiate the stack, and synthesize
+    from cdktf import App
+
+    app = App()
+    TapStack(app, "tap")
+    app.synth()
