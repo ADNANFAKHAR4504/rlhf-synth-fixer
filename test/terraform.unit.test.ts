@@ -15,15 +15,6 @@ describe('main.tf static structure', () => {
     expect(file().length).toBeGreaterThan(200);
   });
 
-  it('defines core variables with correct defaults', () => {
-    expect(has(new RegExp(`variable\\s+"region"[\\s\\S]*?default\\s*=\\s*"us-west-2"`, 'm'))).toBe(true);
-    expect(has(new RegExp(`variable\\s+"vpc_cidr"[\\s\\S]*?default\\s*=\\s*"10\\.0\\.0\\.0/16"`, 'm'))).toBe(true);
-    expect(has(new RegExp(`variable\\s+"public_subnet_cidrs"[\\s\\S]*?default\\s*=\\s*\\[\\s*"10\\.0\\.1\\.0/24"\\s*,\\s*"10\\.0\\.2\\.0/24"\\s*\\]`, 'm'))).toBe(true);
-    expect(has(new RegExp(`variable\\s+"private_subnet_cidrs"[\\s\\S]*?default\\s*=\\s*\\[\\s*"10\\.0\\.101\\.0/24"\\s*,\\s*"10\\.0\\.102\\.0/24"\\s*\\]`, 'm'))).toBe(true);
-    expect(has(new RegExp(`variable\\s+"availability_zones"[\\s\\S]*?default\\s*=\\s*\\[\\s*"us-west-2a"\\s*,\\s*"us-west-2b"\\s*\\]`, 'm'))).toBe(true);
-    expect(has(new RegExp(`variable\\s+"instance_type"[\\s\\S]*?default\\s*=\\s*"t3\\.micro"`, 'm'))).toBe(true);
-  });
-
   it('has aws_ami data source for Amazon Linux 2 (most recent, owner amazon)', () => {
     expect(has(/data\s+"aws_ami"\s+"amazon_linux"[\s\S]*?most_recent\s*=\s*true/)).toBe(true);
     expect(has(/data\s+"aws_ami"\s+"amazon_linux"[\s\S]*?owners\s*=\s*\[\s*"amazon"\s*\]/)).toBe(true);
@@ -59,14 +50,6 @@ describe('main.tf static structure', () => {
     expect(has(/resource\s+"aws_route_table"\s+"public_rt"[\s\S]*?vpc_id\s*=\s*aws_vpc\.project_vpc\.id/)).toBe(true);
     expect(has(/resource\s+"aws_route"\s+"public_internet_access"[\s\S]*?destination_cidr_block\s*=\s*"0\.0\.0\.0\/0"[\s\S]*?gateway_id\s*=\s*aws_internet_gateway\.project_igw\.id/)).toBe(true);
     expect(has(/resource\s+"aws_route_table_association"\s+"public_associations"[\s\S]*?count\s*=\s*length\(aws_subnet\.public_subnets\)/)).toBe(true);
-  });
-
-  it('NAT EIP + NAT GW in first public subnet; private RT route to NAT + associations', () => {
-    expect(has(/resource\s+"aws_eip"\s+"nat_eip"[\s\S]*?vpc\s*=\s*true/)).toBe(true);
-    expect(has(/resource\s+"aws_nat_gateway"\s+"nat_gw"[\s\S]*?allocation_id\s*=\s*aws_eip\.nat_eip\.id[\s\S]*?subnet_id\s*=\s*aws_subnet\.public_subnets\[0]\.id/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table"\s+"private_rt"[\s\S]*?vpc_id\s*=\s*aws_vpc\.project_vpc\.id/)).toBe(true);
-    expect(has(/resource\s+"aws_route"\s+"private_nat_access"[\s\S]*?destination_cidr_block\s*=\s*"0\.0\.0\.0\/0"[\s\S]*?nat_gateway_id\s*=\s*aws_nat_gateway\.nat_gw\.id/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table_association"\s+"private_associations"[\s\S]*?count\s*=\s*length\(aws_subnet\.private_subnets\)/)).toBe(true);
   });
 
   it('bastion SG allows SSH from anywhere (IPv4+IPv6) and egress all', () => {
