@@ -110,8 +110,9 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(condition).toBeDefined();
       expect(condition['Fn::Not']).toBeDefined();
       expect(condition['Fn::Not'][0]['Fn::Equals']).toBeDefined();
-      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Select'][0]).toBe(1);
-      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Select'][1]).toEqual({ Ref: 'AllowedCIDRs' });
+      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Join'][0]).toBe("");
+      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Join'][1][0]['Fn::Select'][0]).toBe(1);
+      expect(condition['Fn::Not'][0]['Fn::Equals'][1]).toBe("");
     });
 
     test('should have HasThreeCIDRs condition for ALB security group rules', () => {
@@ -119,8 +120,9 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(condition).toBeDefined();
       expect(condition['Fn::Not']).toBeDefined();
       expect(condition['Fn::Not'][0]['Fn::Equals']).toBeDefined();
-      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Select'][0]).toBe(2);
-      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Select'][1]).toEqual({ Ref: 'AllowedCIDRs' });
+      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Join'][0]).toBe("");
+      expect(condition['Fn::Not'][0]['Fn::Equals'][0]['Fn::Join'][1][0]['Fn::Select'][0]).toBe(2);
+      expect(condition['Fn::Not'][0]['Fn::Equals'][1]).toBe("");
     });
   });
 

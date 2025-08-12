@@ -170,16 +170,31 @@
                 {
                     "Fn::Equals": [
                         {
-                            "Fn::Select": [
-                                1,
-                                {
-                                    "Ref": "AllowedCIDRs"
-                                }
+                            "Fn::Join": [
+                                "",
+                                [
+                                    {
+                                        "Fn::Select": [
+                                            1,
+                                            {
+                                                "Fn::Split": [
+                                                    ",",
+                                                    {
+                                                        "Fn::Join": [
+                                                            ",",
+                                                            {
+                                                                "Ref": "AllowedCIDRs"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
                             ]
                         },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
+                        ""
                     ]
                 }
             ]
@@ -189,16 +204,31 @@
                 {
                     "Fn::Equals": [
                         {
-                            "Fn::Select": [
-                                2,
-                                {
-                                    "Ref": "AllowedCIDRs"
-                                }
+                            "Fn::Join": [
+                                "",
+                                [
+                                    {
+                                        "Fn::Select": [
+                                            2,
+                                            {
+                                                "Fn::Split": [
+                                                    ",",
+                                                    {
+                                                        "Fn::Join": [
+                                                            ",",
+                                                            {
+                                                                "Ref": "AllowedCIDRs"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
                             ]
                         },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
+                        ""
                     ]
                 }
             ]
