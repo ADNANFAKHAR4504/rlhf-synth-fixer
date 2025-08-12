@@ -492,11 +492,6 @@ items_post_method, items_post_integration = create_method_and_integration(
     "items", items_resource.id, "POST", "Create new item"
 )
 
-# GET /items/{ItemId} (list items by ItemId)
-item_id_get_method, item_id_get_integration = create_method_and_integration(
-    "item-id", item_id_resource.id, "GET", "List items by ItemId"
-)
-
 # GET /items/{ItemId}/{CreatedAt} (get specific item)
 item_detail_get_method, item_detail_get_integration = create_method_and_integration(
     "item-detail", item_detail_resource.id, "GET", "Get specific item by ItemId and CreatedAt"

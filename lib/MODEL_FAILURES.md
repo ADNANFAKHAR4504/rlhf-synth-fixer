@@ -1,51 +1,64 @@
-# Nova Model – A2 Prompt Gaps & Failures
+# Revised Model Failures (Minor Issues Only)
 
-## 1. Single-File Requirement
+## 1. DynamoDB Query Expression (Correctness)
 
-- Did not meet the explicit requirement for all code to be contained within a **single file**.
-- Referenced an external `lambda_function.zip` file instead of embedding Lambda code inline.
+- The Lambda handler uses:
 
-## 2. Missing API Gateway Integration
+  ```python
+  KeyConditionExpression='ItemId = :item_id'
+  ```
 
-- No creation or configuration of an **API Gateway** to expose the Lambda function.
-- No method, resource, or deployment stage setup for REST or HTTP API.
+  in table.query().
 
-## 3. No Scaling Configuration
+      This is not the boto3-recommended form — use:
 
-- Did not implement scaling to handle **1000 requests per minute**.
-- No usage of **Reserved Concurrency** or **Provisioned Concurrency** settings in Lambda.
-- Lacked autoscaling policies or request throttling configuration.
+      from boto3.dynamodb.conditions import Key
+      response = table.query(KeyConditionExpression=Key('ItemId').eq(item_id))
 
-## 4. Missing CloudWatch Alarms
+      This ensures compatibility with boto3’s typed query expressions.
 
-- Did not set up **CloudWatch alarms** for:
-  - Function errors
-  - Throttles
-  - Latency
-- No SNS topic or notification mechanism for alerts.
+2. Scan/Query Response Safety (Robustness)
 
-## 5. Absent Tagging
+   The code assumes response['Count'] and response['Items'] always exist.
 
-- No application of **resource tags** for cost allocation, ownership tracking, or environment labeling.
+   Defensive coding or pagination handling would make the handler more resilient for large datasets.
 
-## 6. Weak IAM Security Practices
+3. Provisioned Concurrency Qualifier Stability
 
-- Used a generic `AWSLambdaBasicExecutionRole` without least-privilege permissions.
-- Did not restrict IAM policies to only the needed AWS services and actions.
+   ProvisionedConcurrencyConfig uses qualifier=lambda_function.version.
 
-## 7. Lack of Inline Documentation
+   Some Pulumi/AWS provider versions require the Lambda to be explicitly published or versioned.
 
-- Minimal or no code comments explaining:
-  - Resource purposes
-  - Configuration choices
-  - Potential impact of parameters
+   Fix: Set publish=True on the Lambda or create a aws.lambda\_.Version resource and use that as the qualifier.
 
-## 8. Missing Context Features
+4. API Gateway Request Parameters (Clarity)
 
-- Did not handle **environment variables** for runtime customization.
-- No mention of logging configuration for debugging and monitoring.
+   The request_parameters dict in create_method_and_integration() is built with string checks.
 
----
+   While functional, explicitly constructing only required parameters would improve readability.
 
-**Summary:**  
-Nova produced a partially functional Pulumi + Python script that creates a Lambda function but fails to satisfy the majority of the A2 prompt’s functional and structural requirements. Significant additions and modifications are necessary to meet the full deployment specification.
+5. Lambda Permission Scope (Security Suggestion)
+
+   The lambda_permission resource grants API Gateway access with:
+
+   source_arn = api_gateway.execution_arn + "/_/_"
+
+   For tighter security, restrict to specific methods and the prod stage.
+
+6. DELETE Response Semantics (Minor API Nicety)
+
+   DELETE currently returns 204 with an empty string in the body.
+
+   For strict HTTP compliance, omit the body entirely when using status 204.
+
+7. App Auto Scaling Note
+
+   Current scaling approach is via ProvisionedConcurrencyConfig and API Gateway throttling.
+
+   If App Auto Scaling resources are added later, deployment IAM permissions must be updated accordingly.
+
+8. Single-File Maintainability
+
+   The single-file requirement is met.
+
+   For maintainability, consider factoring the inline Lambda handler into a module or string template, keeping tests close to the handler logic.
