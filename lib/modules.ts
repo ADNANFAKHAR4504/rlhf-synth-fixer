@@ -3,7 +3,7 @@
 // a highly-available VPC (public + private subnets across two AZs) and an IAM role limited to the
 // S3 state bucket.
 
-import { TerraformStack } from 'cdktf';
+import { TerraformStack, Fn } from 'cdktf';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
@@ -116,7 +116,7 @@ export function createHighAvailabilityVpc(
   const natGateways: NatGateway[] = [];
 
   for (let i = 0; i < azCount; i++) {
-    const az = azs.names[i];
+    const az = Fn.element(azs.names, i);
     const pubSubnet = new Subnet(stack, `${id}-pub-subnet-${i}`, {
       vpcId: vpc.id,
       cidrBlock: `10.0.${i}.0/24`,
