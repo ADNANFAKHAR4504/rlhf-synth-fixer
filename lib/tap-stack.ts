@@ -43,9 +43,9 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // ===========================================
+    // ==========================================
     // S3 Bucket for Source Code Repository
-    // ===========================================
+    // ==========================================
     const sourceCodeBucket = new s3.Bucket(this, 'SourceCodeBucket', {
       bucketName: `nodejs-app-source-${environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
