@@ -1,4 +1,5 @@
 import { Construct } from 'constructs';
+import { Fn } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';
 
 const availabilityZones = ['us-west-2a', 'us-west-2b'];
@@ -39,16 +40,13 @@ export class NetworkModule extends Construct {
       tags: { Name: `${props.projectName}-public-rt` },
     });
 
-    // FIXED: Create Route resource separately
     new aws.route.Route(this, 'PublicRouteToIgw', {
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
       gatewayId: igw.id,
     });
 
-    // --- Create resources in each Availability Zone for High Availability ---
     availabilityZones.forEach((az, i) => {
-      // Create a public subnet
       const publicSubnet = new aws.subnet.Subnet(this, `PublicSubnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i * 2}.0/24`,
@@ -67,7 +65,6 @@ export class NetworkModule extends Construct {
         }
       );
 
-      // Create a private subnet
       const privateSubnet = new aws.subnet.Subnet(this, `PrivateSubnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i * 2 + 1}.0/24`,
@@ -76,7 +73,6 @@ export class NetworkModule extends Construct {
       });
       this.privateSubnets.push(privateSubnet);
 
-      // --- Highly Available NAT Gateway Setup (one per AZ) ---
       const eip = new aws.eip.Eip(this, `NatEip-${i}`, {
         domain: 'vpc',
         tags: { Name: `${props.projectName}-nateip-${az}` },
@@ -84,11 +80,10 @@ export class NetworkModule extends Construct {
 
       const natGw = new aws.natGateway.NatGateway(this, `NatGateway-${i}`, {
         allocationId: eip.id,
-        subnetId: publicSubnet.id, // Place NAT GW in the public subnet of the same AZ
+        subnetId: publicSubnet.id,
         tags: { Name: `${props.projectName}-natgw-${az}` },
       });
 
-      // Create a dedicated route table for the private subnet in this AZ
       const privateRouteTable = new aws.routeTable.RouteTable(
         this,
         `PrivateRT-${i}`,
@@ -98,11 +93,10 @@ export class NetworkModule extends Construct {
         }
       );
 
-      // FIXED: Create Route resource separately
       new aws.route.Route(this, `PrivateRouteToNat-${i}`, {
         routeTableId: privateRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: natGw.id, // Route to the NAT Gateway in this AZ
+        natGatewayId: natGw.id,
       });
 
       new aws.routeTableAssociation.RouteTableAssociation(
@@ -119,9 +113,6 @@ export class NetworkModule extends Construct {
 
 // =============================================================================
 // ## Security Module
-//
-// Creates all security-related resources: Security Groups with strict rules,
-// a customer-managed KMS key for encryption, and a least-privilege IAM role.
 // =============================================================================
 export interface SecurityModuleProps {
   vpcId: string;
@@ -137,14 +128,12 @@ export class SecurityModule extends Construct {
   constructor(scope: Construct, id: string, props: SecurityModuleProps) {
     super(scope, id);
 
-    // --- Customer-Managed KMS Key for EBS Encryption ---
     this.kmsKey = new aws.kmsKey.KmsKey(this, 'EbsKmsKey', {
       description: `KMS key for ${props.projectName} EBS volumes`,
       enableKeyRotation: true,
       tags: { Name: `${props.projectName}-ebs-key` },
     });
 
-    // --- ALB Security Group ---
     this.albSg = new aws.securityGroup.SecurityGroup(this, 'AlbSG', {
       name: `${props.projectName}-alb-sg`,
       vpcId: props.vpcId,
@@ -168,7 +157,6 @@ export class SecurityModule extends Construct {
       tags: { Name: `${props.projectName}-alb-sg` },
     });
 
-    // --- EC2 Instance Security Group ---
     this.ec2Sg = new aws.securityGroup.SecurityGroup(this, 'Ec2SG', {
       name: `${props.projectName}-ec2-sg`,
       vpcId: props.vpcId,
@@ -201,7 +189,6 @@ export class SecurityModule extends Construct {
       tags: { Name: `${props.projectName}-ec2-sg` },
     });
 
-    // --- Least-Privilege IAM Role for EC2 ---
     const ec2Role = new aws.iamRole.IamRole(this, 'Ec2Role', {
       name: `${props.projectName}-ec2-role`,
       assumeRolePolicy: JSON.stringify({
@@ -239,9 +226,6 @@ export class SecurityModule extends Construct {
 
 // =============================================================================
 // ## Compute Module
-//
-// Creates the application layer: ALB, Target Group, Listeners, Launch Template,
-// and Auto Scaling Group.
 // =============================================================================
 export interface ComputeModuleProps {
   vpcId: string;
@@ -287,8 +271,9 @@ export class ComputeModule extends Construct {
       port: 443,
       protocol: 'HTTPS',
       sslPolicy: 'ELBSecurityPolicy-2016-08',
+      // IMPORTANT: Replace with a valid certificate ARN from the us-west-2 region
       certificateArn:
-        'arn:aws:acm:us-east-1:718240086340:certificate/1c3986ff-2aed-4eeb-ac19-79e08aace09c', // Replace with your certificate ARN
+        'arn:aws:acm:us-west-2:718240086340:certificate/1f32e8c9-8648-4234-a4d0-fdf46bed8bba',
       defaultAction: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
     });
 
@@ -325,18 +310,20 @@ export class ComputeModule extends Construct {
             ebs: {
               volumeSize: 8,
               volumeType: 'gp3',
-              encrypted: 'true',
+              encrypted: 'true', // This should be a boolean, not a string
               kmsKeyId: props.kmsKey.arn,
             },
           },
         ],
-        // FIXED: Use Fn.toBase64
-        userData: `#!/bin/bash
+        // FIXED: Use Fn.toBase64 to correctly encode the user data
+        userData: Fn.base64encode(
+          `#!/bin/bash
                  yum update -y
                  yum install -y httpd
                  systemctl start httpd
                  systemctl enable httpd
-                 echo "<h1>Deployed via CDKTF</h1>" > /var/www/html/index.html`,
+                 echo "<h1>Deployed via CDKTF</h1>" > /var/www/html/index.html`
+        ),
       }
     );
 
@@ -353,7 +340,6 @@ export class ComputeModule extends Construct {
       targetGroupArns: [targetGroup.arn],
       healthCheckType: 'ELB',
       healthCheckGracePeriod: 300,
-      // FIXED: Use the correct 'tag' block structure
       tag: [
         {
           key: 'Name',
