@@ -22,6 +22,11 @@ describe('EnterpriseStack Unit Tests', () => {
       expect(vpc.tags.Name).toBe('test-vpc-main');
       expect(vpc.lifecycle.prevent_destroy).toBe(true);
     });
+
+    it('should create a NAT Gateway for private subnets', () => {
+      const natGateway: any = findResource('aws_nat_gateway', () => true);
+      expect(natGateway).toBeDefined();
+    });
   });
 
   describe('Compute', () => {
@@ -38,17 +43,42 @@ describe('EnterpriseStack Unit Tests', () => {
       expect(rds).toBeDefined();
       expect(rds.identifier).toContain('test-rds-main-');
     });
+
+    it('should create a random password for the database', () => {
+      const password: any = findResource('random_password', () => true);
+      expect(password).toBeDefined();
+    });
   });
 
-  describe('Remote Backend', () => {
-    it('should create an S3 bucket and DynamoDB table with dynamic names', () => {
-      const bucket: any = findResource('aws_s3_bucket', () => true);
-      expect(bucket).toBeDefined();
-      expect(bucket.bucket).toContain('enterprise-tfstate-bucket-test-');
+  describe('Remote Backend S3 Bucket', () => {
+    it('should have versioning enabled', () => {
+      const versioning: any = findResource(
+        'aws_s3_bucket_versioning', // FIX: Removed the "_a" suffix
+        () => true
+      );
+      expect(versioning).toBeDefined();
+      expect(versioning.versioning_configuration.status).toBe('Enabled');
+    });
 
-      const table: any = findResource('aws_dynamodb_table', () => true);
-      expect(table).toBeDefined();
-      expect(table.name).toContain('enterprise-terraform-locks-test-');
+    it('should have server-side encryption enabled', () => {
+      const encryption: any = findResource(
+        'aws_s3_bucket_server_side_encryption_configuration', // FIX: Removed the "_a" suffix
+        () => true
+      );
+      expect(encryption).toBeDefined();
+      expect(
+        encryption.rule[0].apply_server_side_encryption_by_default.sse_algorithm
+      ).toBe('AES256');
+    });
+
+    it('should have public access blocked', () => {
+      const publicBlock: any = findResource(
+        'aws_s3_bucket_public_access_block',
+        () => true
+      );
+      expect(publicBlock).toBeDefined();
+      expect(publicBlock.block_public_acls).toBe(true);
+      expect(publicBlock.block_public_policy).toBe(true);
     });
   });
 });

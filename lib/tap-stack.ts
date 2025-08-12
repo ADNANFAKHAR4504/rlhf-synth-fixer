@@ -3,6 +3,9 @@ import { TerraformStack, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
@@ -14,6 +17,12 @@ import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
+import { Password } from '@cdktf/provider-random/lib/password';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 
 // --- Naming Convention Helper ---
 const createResourceName = (
@@ -30,17 +39,41 @@ export class EnterpriseStack extends TerraformStack {
     super(scope, id);
 
     new AwsProvider(this, 'aws', { region: 'us-east-1' });
+    new RandomProvider(this, 'random');
+
+    const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
 
     // --- Remote State Management Resources ---
-    new S3Bucket(this, 'TerraformStateBucket', {
-      bucket: `enterprise-tfstate-bucket-${env}-${Fn.substr(Fn.uuid(), 0, 4)}`,
-      versioning: {
-        enabled: true,
-      },
+    const backendBucket = new S3Bucket(this, 'TerraformStateBucket', {
+      bucket: `enterprise-tfstate-bucket-${env}-${uniqueSuffix}`,
+    });
+
+    new S3BucketVersioningA(this, 'StateBucketVersioning', {
+      bucket: backendBucket.id,
+      versioningConfiguration: { status: 'Enabled' },
+    });
+
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'StateBucketEncryption',
+      {
+        bucket: backendBucket.id,
+        rule: [
+          { applyServerSideEncryptionByDefault: { sseAlgorithm: 'AES256' } },
+        ],
+      }
+    );
+
+    new S3BucketPublicAccessBlock(this, 'StateBucketPublicAccessBlock', {
+      bucket: backendBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
     });
 
     new DynamodbTable(this, 'TerraformLockTable', {
-      name: `enterprise-terraform-locks-${env}-${Fn.substr(Fn.uuid(), 0, 4)}`,
+      name: `enterprise-terraform-locks-${env}-${uniqueSuffix}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'LockID',
       attribute: [{ name: 'LockID', type: 'S' }],
@@ -50,25 +83,12 @@ export class EnterpriseStack extends TerraformStack {
     const vpc = new Vpc(this, 'Vpc', {
       cidrBlock: '10.0.0.0/16',
       tags: { Name: createResourceName(env, 'vpc', 'main') },
-      lifecycle: {
-        preventDestroy: true,
-      },
+      lifecycle: { preventDestroy: true },
     });
 
     const igw = new InternetGateway(this, 'Igw', {
       vpcId: vpc.id,
       tags: { Name: createResourceName(env, 'igw', 'main') },
-    });
-
-    const publicRouteTable = new RouteTable(this, 'PublicRouteTable', {
-      vpcId: vpc.id,
-      tags: { Name: createResourceName(env, 'rt', 'public') },
-    });
-
-    new Route(this, 'DefaultRoute', {
-      routeTableId: publicRouteTable.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      gatewayId: igw.id,
     });
 
     const appSubnets = [
@@ -86,13 +106,6 @@ export class EnterpriseStack extends TerraformStack {
       }),
     ];
 
-    appSubnets.forEach((subnet, index) => {
-      new RouteTableAssociation(this, `AppRta${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
-    });
-
     const dbSubnets = [
       new Subnet(this, 'DbSubnetA', {
         vpcId: vpc.id,
@@ -108,42 +121,91 @@ export class EnterpriseStack extends TerraformStack {
       }),
     ];
 
-    // --- Compute Module ---
-    const latestAmi = new DataAwsAmi(this, 'LatestAmazonLinux', {
-      mostRecent: true,
-      owners: ['amazon'],
-      filter: [
+    // --- NAT Gateways and Routing for Private Subnets ---
+    const natGatewayEip = new Eip(this, 'NatGatewayEip', { domain: 'vpc' });
+    const natGateway = new NatGateway(this, 'NatGateway', {
+      allocationId: natGatewayEip.id,
+      subnetId: appSubnets[0].id, // Place NAT Gateway in a public subnet
+    });
+
+    const privateRouteTable = new RouteTable(this, 'PrivateRouteTable', {
+      vpcId: vpc.id,
+      tags: { Name: createResourceName(env, 'rt', 'private') },
+    });
+
+    new Route(this, 'PrivateDefaultRoute', {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: natGateway.id,
+    });
+
+    dbSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `DbRta${index}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      });
+    });
+
+    const publicRouteTable = new RouteTable(this, 'PublicRouteTable', {
+      vpcId: vpc.id,
+      tags: { Name: createResourceName(env, 'rt', 'public') },
+    });
+    new Route(this, 'PublicDefaultRoute', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: igw.id,
+    });
+    appSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `AppRta${index}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+    });
+
+    // --- Security Groups ---
+    const appSg = new SecurityGroup(this, 'AppSg', {
+      name: createResourceName(env, 'sg', 'app'),
+      vpcId: vpc.id,
+      egress: [
+        { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
+      ],
+    });
+    const dbSg = new SecurityGroup(this, 'DbSg', {
+      name: createResourceName(env, 'sg', 'db'),
+      vpcId: vpc.id,
+      ingress: [
         {
-          name: 'name',
-          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-        },
-        {
-          name: 'virtualization-type',
-          values: ['hvm'],
+          fromPort: 5432,
+          toPort: 5432,
+          protocol: 'tcp',
+          securityGroups: [appSg.id],
         },
       ],
     });
 
+    // --- Compute Module ---
+    const latestAmi = new DataAwsAmi(this, 'LatestAmazonLinux', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [{ name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] }],
+    });
+
     const launchTemplate = new LaunchTemplate(this, 'AppLaunchTemplate', {
-      name: `${createResourceName(env, 'lt', 'app')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
+      name: `${createResourceName(env, 'lt', 'app')}-${uniqueSuffix}`,
       imageId: latestAmi.id,
       instanceType: 't3.micro',
+      vpcSecurityGroupIds: [appSg.id],
       tags: { Name: createResourceName(env, 'lt', 'app') },
-      lifecycle: {
-        preventDestroy: true,
-      },
+      lifecycle: { preventDestroy: true },
     });
 
     new AutoscalingGroup(this, 'AppAsg', {
-      name: `${createResourceName(env, 'asg', 'app')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
+      name: `${createResourceName(env, 'asg', 'app')}-${uniqueSuffix}`,
       minSize: 2,
       maxSize: 5,
       desiredCapacity: 2,
       vpcZoneIdentifier: appSubnets.map(s => s.id),
-      launchTemplate: {
-        id: launchTemplate.id,
-        version: '$Latest',
-      },
+      launchTemplate: { id: launchTemplate.id, version: '$Latest' },
       tag: [
         {
           key: 'Name',
@@ -154,26 +216,36 @@ export class EnterpriseStack extends TerraformStack {
     });
 
     // --- Database Module ---
+    const dbPassword = new Password(this, 'DbPassword', {
+      length: 16,
+      special: true,
+      overrideSpecial: '_-.',
+    });
+
     const dbSubnetGroup = new DbSubnetGroup(this, 'DbSubnetGroup', {
-      name: `${createResourceName(env, 'dbsubnetgroup', 'main')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
+      name: `${createResourceName(env, 'dbsubnetgroup', 'main')}-${uniqueSuffix}`,
       subnetIds: dbSubnets.map(s => s.id),
       tags: { Name: createResourceName(env, 'dbsubnetgroup', 'main') },
     });
 
+    new CloudwatchLogGroup(this, 'RdsLogGroup', {
+      name: `/aws/rds/instance/${createResourceName(env, 'rds', 'main')}/postgresql`,
+      retentionInDays: 7,
+    });
+
     new DbInstance(this, 'RdsInstance', {
-      identifier: `${createResourceName(env, 'rds', 'main')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
+      identifier: `${createResourceName(env, 'rds', 'main')}-${uniqueSuffix}`,
       engine: 'postgres',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       multiAz: true,
       dbSubnetGroupName: dbSubnetGroup.name,
+      vpcSecurityGroupIds: [dbSg.id],
       username: 'dbadmin',
-      password: 'a-secure-password-from-secrets-manager', // Placeholder
+      password: dbPassword.result,
       skipFinalSnapshot: true,
       tags: { Name: createResourceName(env, 'rds', 'main') },
-      lifecycle: {
-        preventDestroy: true,
-      },
+      lifecycle: { preventDestroy: true },
     });
   }
 }

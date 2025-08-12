@@ -40,4 +40,17 @@ describe('EnterpriseStack Integration Tests', () => {
     )[0];
     expect(rds.lifecycle.prevent_destroy).toBe(true);
   });
+
+  it('should create networking resources including a NAT Gateway', () => {
+    expect(Object.keys(synthesized.resource.aws_vpc || {}).length).toBe(1);
+    expect(Object.keys(synthesized.resource.aws_nat_gateway || {}).length).toBe(
+      1
+    );
+  });
+
+  it('should create a random password resource', () => {
+    expect(Object.keys(synthesized.resource.random_password || {}).length).toBe(
+      1
+    );
+  });
 });
