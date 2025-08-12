@@ -112,15 +112,23 @@ internet_gateway = aws.ec2.InternetGateway(
 # Create public subnets with dual-stack support (following working pattern)
 public_subnets = []
 for i, az in enumerate(availability_zones):
+    # Calculate IPv6 CIDR properly to avoid conflicts
+    if i == 0:
+        ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
+            lambda cidr: cidr.replace("/56", "/64")
+        )
+    else:
+        ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
+            lambda cidr: f"{cidr[:-6]}{i}::/64"
+        )
+    
     subnet = aws.ec2.Subnet(
         get_resource_name(f"public-subnet-{i+1}"),
         vpc_id=vpc.id,
         cidr_block=f"10.0.{10+i}.0/24",
         availability_zone=az,
         assign_ipv6_address_on_creation=True,
-        ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-            lambda cidr: f"{cidr[:-6]}{i}::/64"
-        ),
+        ipv6_cidr_block=ipv6_cidr_calc,
         map_public_ip_on_launch=True,
         tags={
             "Name": get_resource_name(f"public-subnet-{i+1}"),
