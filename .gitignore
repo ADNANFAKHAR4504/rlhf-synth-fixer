@@ -85,9 +85,8 @@ imports/*
 cdktf.out
 cdktf.log
 *terraform.*.tfstate*
-.gen
-bin/.terraform.lock.hcl
 .genpackage-lock.json
+.gen
 .gen/providers/*
 
 
