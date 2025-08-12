@@ -117,6 +117,14 @@ sys.modules["pulumi"].invoke = MagicMock(return_value=MagicMock())
 sys.modules["pulumi_aws"] = create_mock_package("pulumi_aws")
 sys.modules["pulumi_aws"].Provider = MockProvider
 
+# Add missing AWS functions
+mock_caller_identity = MagicMock()
+mock_caller_identity.account_id = MockOutput("123456789012")
+mock_caller_identity.arn = MockOutput("arn:aws:iam::123456789012:root")
+mock_caller_identity.user_id = MockOutput("123456789012")
+sys.modules["pulumi_aws"].get_caller_identity_output = MagicMock(
+    return_value=mock_caller_identity)
+
 # Mock all AWS services with enhanced mocking
 for service in ["ec2", "rds", "iam", "apigateway", "lambda_", "s3", "cloudtrail", "dynamodb"]:
   service_mock = create_mock_package(f"pulumi_aws.{service}")
