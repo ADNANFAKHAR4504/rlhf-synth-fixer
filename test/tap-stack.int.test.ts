@@ -1,9 +1,11 @@
 import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand } from '@aws-sdk/client-ec2';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeListenersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { WAFV2Client, GetWebACLForResourceCommand } from '@aws-sdk/client-wafv2';
 import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
+import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
+import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
 import fs from 'fs';
 import path from 'path';
 
@@ -12,13 +14,12 @@ const outputs: Record<string, string> = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../cfn-outputs/flat-outputs.json'), 'utf8')
 );
 
-// Patch outputs to use the real account ID for ARNs (replace **** or *** with 718240086340)
+// NOTE: This patching logic is a workaround for potentially redacted outputs.
+// Ideally, the output file should contain complete, valid ARNs.
 Object.keys(outputs).forEach((key) => {
-  if (typeof outputs[key] === 'string') {
-    outputs[key] = outputs[key]
-      .replace(/arn:aws:iam::\*{4}/g, 'arn:aws:iam::718240086340')
-      .replace(/arn:aws:iam::\*{3}/g, 'arn:aws:iam::718240086340')
-      .replace(/arn:aws:elasticloadbalancing:[^:]+:\*{3,}:loadbalancer/g, 'arn:aws:elasticloadbalancing:us-west-2:718240086340:loadbalancer');
+  if (typeof outputs[key] === 'string' && outputs[key].includes('***')) {
+     // A more robust regex might be needed depending on how ARNs are redacted
+    outputs[key] = outputs[key].replace(/\*\*\*/g, '718240086340');
   }
 });
 
@@ -29,6 +30,8 @@ const iam = new IAMClient({});
 const elbv2 = new ElasticLoadBalancingV2Client({});
 const wafv2 = new WAFV2Client({});
 const lambda = new LambdaClient({});
+const cloudtrail = new CloudTrailClient({});
+const cloudwatch = new CloudWatchClient({});
 
 describe('IaC Stack Integration Tests', () => {
 
@@ -93,7 +96,6 @@ describe('IaC Stack Integration Tests', () => {
     const albArn = outputs.ALBArn;
     const { WebACL } = await wafv2.send(new GetWebACLForResourceCommand({ ResourceArn: albArn }));
     
-    // Check that a WebACL is associated, since the name is not in the outputs file.
     expect(WebACL).toBeDefined();
   });
 
@@ -107,11 +109,64 @@ describe('IaC Stack Integration Tests', () => {
     expect(Configuration!.State).toBe('Active');
   });
 
-  // Final check for all outputs
-  test('All CloudFormation output values should be defined and non-empty', () => {
-    Object.values(outputs).forEach((value: string) => {
-      expect(value).toBeDefined();
-      expect(value.length).toBeGreaterThan(0);
-    });
+});
+
+describe('Security and Monitoring Integration Tests', () => {
+
+  test('CloudTrail trail should be active and multi-region', async () => {
+    // The output for the trail is its ARN, but the API can find it by name.
+    const trailArn = outputs.CloudTrailName;
+    const trailName = trailArn.split('/')[1]; // Extract name from ARN
+    
+    const { trailList } = await cloudtrail.send(new DescribeTrailsCommand({
+        trailNameList: [trailName],
+    }));
+
+    expect(trailList).toBeDefined();
+    expect(trailList!.length).toBe(1);
+    const trail = trailList![0];
+
+    expect(trail.IsMultiRegionTrail).toBe(true);
+    expect(trail.S3BucketName).toBeDefined();
   });
+
+  test('CloudWatch alarm for RDS CPU should be active and correctly configured', async () => {
+    const alarmName = outputs.RDSCPUAlarmName;
+    const { MetricAlarms } = await cloudwatch.send(new DescribeAlarmsCommand({
+        AlarmNames: [alarmName],
+    }));
+
+    expect(MetricAlarms).toBeDefined();
+    expect(MetricAlarms!.length).toBe(1);
+    const alarm = MetricAlarms![0];
+
+    expect(['OK', 'INSUFFICIENT_DATA']).toContain(alarm.StateValue);
+    expect(alarm.MetricName).toBe('CPUUtilization');
+    expect(alarm.Namespace).toBe('AWS/RDS');
+    expect(alarm.Threshold).toBe(80);
+  });
+
+  test('MFAAdminRole should exist and enforce MFA on assume role', async () => {
+    const roleName = outputs.MFAAdminRoleName;
+    const { Role } = await iam.send(new GetRoleCommand({ RoleName: roleName }));
+
+    expect(Role).toBeDefined();
+
+    // The AssumeRolePolicyDocument is a URL-encoded JSON string
+    const decodedPolicy = decodeURIComponent(Role!.AssumeRolePolicyDocument!);
+    const assumeRolePolicy = JSON.parse(decodedPolicy);
+    const condition = assumeRolePolicy.Statement[0].Condition;
+
+    expect(condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');
+  });
+
+});
+
+describe('Final Output Validation', () => {
+    test('All expected output values should be defined and non-empty', () => {
+        Object.values(outputs).forEach((value: string) => {
+          expect(value).toBeDefined();
+          expect(value.length).toBeGreaterThan(0);
+        });
+      });
 });

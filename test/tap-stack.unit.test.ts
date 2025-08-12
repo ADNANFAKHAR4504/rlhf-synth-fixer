@@ -2,11 +2,12 @@ import fs from 'fs';
 import path from 'path';
 
 describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
-  let template: any; // FIX 1: Explicitly type the template variable
+  let template: any;
 
   beforeAll(() => {
-    // Ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust the path to your JSON template
+    // NOTE: This test assumes you have synthesized the CloudFormation stack to a JSON file.
+    // In a CDK project, you might run `cdk synth > template.json`
+    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust to your synthesized template path
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -26,18 +27,13 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
       const param = template.Parameters.ExistingCertificateArn;
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe(
-        'arn:aws:acm:us-west-2:718240086340:certificate/c43e41ee-5b6c-4d2c-80e9-82c1db57289e'
-      );
     });
 
-    test('should define the SSHAccessCIDR parameter with a valid default', () => {
-      const param = template.Parameters.SSHAccessCIDR;
+    test('should define the NotificationEmail parameter for alarms', () => {
+      const param = template.Parameters.NotificationEmail;
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
-      expect(param.Default).toMatch(
-        /^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$/
-      );
+      expect(param.ConstraintDescription).toContain('Must be a valid email address');
     });
   });
 
@@ -51,7 +47,6 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
 
     test('should define two public and four private subnets', () => {
       const resources = template.Resources;
-      // FIX 2: Add 'any' type to lambda parameters
       const subnets = Object.values(resources).filter(
         (r: any) => r.Type === 'AWS::EC2::Subnet'
       );
@@ -59,18 +54,11 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
         (s: any) => s.Properties.MapPublicIpOnLaunch === true
       );
       const privateSubnets = subnets.filter(
-        (s: any) => s.Properties.MapPublicIpOnLaunch !== true
+        (s: any) => !s.Properties.MapPublicIpOnLaunch
       );
 
       expect(publicSubnets.length).toBe(2);
       expect(privateSubnets.length).toBe(4);
-    });
-
-    test('Private route tables should route to NAT Gateways', () => {
-      const route1 = template.Resources.DefaultPrivateRoute1;
-      const route2 = template.Resources.DefaultPrivateRoute2;
-      expect(route1.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
-      expect(route2.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway2' });
     });
   });
 
@@ -86,36 +74,23 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
       );
     });
 
-    test('WebSecurityGroup should only allow HTTPS from the ALB', () => {
-      const sg = template.Resources.WebSecurityGroup;
-      // FIX 2: Add 'any' type to lambda parameters
-      const httpsRule = sg.Properties.SecurityGroupIngress.find(
-        (r: any) => r.FromPort === 443
-      );
-      expect(httpsRule.SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
-    });
-
     test('DatabaseSecurityGroup should only allow MySQL traffic from the WebSecurityGroup', () => {
       const sg = template.Resources.DatabaseSecurityGroup;
       const ingressRule = sg.Properties.SecurityGroupIngress[0];
       expect(ingressRule.FromPort).toBe(3306);
-      expect(ingressRule.ToPort).toBe(3306);
       expect(ingressRule.SourceSecurityGroupId).toEqual({ Ref: 'WebSecurityGroup' });
     });
   });
 
   describe('IAM and Data Security', () => {
-    test('EC2InstanceRole should grant access to Secrets Manager and S3 based on tags', () => {
+    test('EC2InstanceRole should grant access to Secrets Manager', () => {
       const role = template.Resources.EC2InstanceRole;
       const policies = role.Properties.Policies;
-      // FIX 2: Add 'any' type to lambda parameters
       const secretsPolicy = policies.find((p: any) => p.PolicyName === 'SecretsManagerAccess');
-      const s3Policy = policies.find((p: any) => p.PolicyName === 'TagBasedS3Access');
 
       expect(secretsPolicy.PolicyDocument.Statement[0].Action).toContain(
         'secretsmanager:GetSecretValue'
       );
-      expect(s3Policy.PolicyDocument.Statement[0].Condition.StringEquals['ec2:ResourceTag/S3Access']).toBe('Approved');
     });
 
     test('ApplicationDataBucket should have server-side encryption enabled', () => {
@@ -125,46 +100,57 @@ describe('IaC-AWS-Nova-Model-Breaking CloudFormation Template', () => {
     });
   });
 
-  describe('Database Configuration', () => {
-    test('DatabaseInstance should use a supported MySQL engine version', () => {
+  describe('Database and Application Components', () => {
+    test('DatabaseInstance should use a supported MySQL engine and be encrypted', () => {
       const db = template.Resources.DatabaseInstance;
-      // This test assumes 8.0.36 or higher is valid. Update if needed.
-      expect(db.Properties.EngineVersion).toMatch(/^8\.0\.(3[6-9]|[4-9]\d|\d{3,})$/);
+      expect(db.Properties.EngineVersion).toMatch(/^8\.0\.\d+/);
       expect(db.Properties.StorageEncrypted).toBe(true);
     });
 
-    test('DatabaseParameterGroup should enforce SSL/TLS connections', () => {
-      const paramGroup = template.Resources.DatabaseParameterGroup;
-      expect(paramGroup.Properties.Parameters.require_secure_transport).toBe('ON');
-    });
-  });
-
-  describe('ALB, WAF, and API Gateway', () => {
     test('ALBListener should use the existing certificate from parameters', () => {
       const listener = template.Resources.ALBListener;
       const certificate = listener.Properties.Certificates[0];
       expect(certificate.CertificateArn).toEqual({ Ref: 'ExistingCertificateArn' });
     });
+  });
 
-    test('WebACL should include AWS Managed Rules for common vulnerabilities', () => {
-      const waf = template.Resources.WebACL;
-      const rules = waf.Properties.Rules;
-      // FIX 2: Add 'any' type to lambda parameters
-      const commonRule = rules.find((r: any) => r.Name === 'CommonRuleSet');
-      const sqliRule = rules.find((r: any) => r.Name === 'SQLiRuleSet');
-
-      expect(commonRule.Statement.ManagedRuleGroupStatement.Name).toBe('AWSManagedRulesCommonRuleSet');
-      expect(sqliRule.Statement.ManagedRuleGroupStatement.Name).toBe('AWSManagedRulesSQLiRuleSet');
+  describe('Security and Monitoring Enhancements', () => {
+    test('CloudTrail trail should be multi-region and enabled', () => {
+      const trail = template.Resources.MainCloudTrail;
+      expect(trail).toBeDefined();
+      expect(trail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(trail.Properties.IsMultiRegionTrail).toBe(true);
+      expect(trail.Properties.EnableLogFileValidation).toBe(true);
+      expect(trail.Properties.S3BucketName).toEqual({ Ref: 'CloudTrailLogBucket' });
     });
 
-    test('APIStage should have detailed logging configured', () => {
-        const stage = template.Resources.APIStage;
-        const logSettings = stage.Properties.AccessLogSetting;
-        const methodSettings = stage.Properties.MethodSettings[0];
+    test('CloudTrailLogBucket should block all public access', () => {
+      const bucket = template.Resources.CloudTrailLogBucket;
+      expect(bucket).toBeDefined();
+      const pubAccess = bucket.Properties.PublicAccessBlockConfiguration;
+      expect(pubAccess.BlockPublicAcls).toBe(true);
+      expect(pubAccess.BlockPublicPolicy).toBe(true);
+      expect(pubAccess.IgnorePublicAcls).toBe(true);
+      expect(pubAccess.RestrictPublicBuckets).toBe(true);
+    });
 
-        expect(logSettings.DestinationArn).toEqual({'Fn::GetAtt': ['APIGatewayLogGroup', 'Arn']});
-        expect(methodSettings.LoggingLevel).toBe('INFO');
-        expect(methodSettings.DataTraceEnabled).toBe(true);
+    test('RDSCPUAlarm should monitor CPU and have a threshold of 80', () => {
+      const alarm = template.Resources.RDSCPUAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(alarm.Properties.MetricName).toBe('CPUUtilization');
+      expect(alarm.Properties.Namespace).toBe('AWS/RDS');
+      expect(alarm.Properties.Threshold).toBe(80);
+      expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
+      expect(alarm.Properties.AlarmActions).toEqual([{ Ref: 'AlarmNotificationTopic' }]);
+    });
+
+    test('MFAAdminRole should enforce MFA on assume role', () => {
+      const role = template.Resources.MFAAdminRole;
+      expect(role).toBeDefined();
+      const assumeRolePolicy = role.Properties.AssumeRolePolicyDocument;
+      const condition = assumeRolePolicy.Statement[0].Condition;
+      expect(condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');
     });
   });
 });

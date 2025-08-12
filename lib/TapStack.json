@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure using auto-named IAM resources",
+    "Description": "IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure with CloudTrail, CloudWatch Alarms, and MFA enforcement.",
     "Parameters": {
         "ExistingCertificateArn": {
             "Type": "String",
@@ -21,6 +21,12 @@
             "MinLength": 1,
             "MaxLength": 16,
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address to receive CloudWatch alarm notifications.",
+            "AllowedPattern": "^.+@.+$",
+            "ConstraintDescription": "Must be a valid email address."
         },
         "ProjectName": {
             "Type": "String",
@@ -55,12 +61,6 @@
                         "Value": {
                             "Fn::Sub": "${ProjectName}-VPC"
                         }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
                     }
                 ]
             }
@@ -73,12 +73,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${ProjectName}-IGW"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
                         }
                     }
                 ]
@@ -117,12 +111,6 @@
                         "Value": {
                             "Fn::Sub": "${ProjectName}-Public-Subnet-AZ1"
                         }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
                     }
                 ]
             }
@@ -149,12 +137,6 @@
                         "Value": {
                             "Fn::Sub": "${ProjectName}-Public-Subnet-AZ2"
                         }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
                     }
                 ]
             }
@@ -179,12 +161,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${ProjectName}-Private-App-Subnet-AZ1"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
                         }
                     }
                 ]
@@ -211,12 +187,6 @@
                         "Value": {
                             "Fn::Sub": "${ProjectName}-Private-App-Subnet-AZ2"
                         }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
                     }
                 ]
             }
@@ -241,12 +211,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${ProjectName}-Private-Data-Subnet-AZ1"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
                         }
                     }
                 ]
@@ -273,12 +237,6 @@
                         "Value": {
                             "Fn::Sub": "${ProjectName}-Private-Data-Subnet-AZ2"
                         }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
                     }
                 ]
             }
@@ -287,30 +245,14 @@
             "Type": "AWS::EC2::EIP",
             "DependsOn": "InternetGatewayAttachment",
             "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-NAT-EIP-AZ1"
-                        }
-                    }
-                ]
+                "Domain": "vpc"
             }
         },
         "NatGateway2EIP": {
             "Type": "AWS::EC2::EIP",
             "DependsOn": "InternetGatewayAttachment",
             "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-NAT-EIP-AZ2"
-                        }
-                    }
-                ]
+                "Domain": "vpc"
             }
         },
         "NatGateway1": {
@@ -324,15 +266,7 @@
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-NAT-Gateway-AZ1"
-                        }
-                    }
-                ]
+                }
             }
         },
         "NatGateway2": {
@@ -346,15 +280,7 @@
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-NAT-Gateway-AZ2"
-                        }
-                    }
-                ]
+                }
             }
         },
         "PublicRouteTable": {
@@ -362,15 +288,7 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "MainVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-Public-Routes"
-                        }
-                    }
-                ]
+                }
             }
         },
         "DefaultPublicRoute": {
@@ -413,15 +331,7 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "MainVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-Private-Routes-AZ1"
-                        }
-                    }
-                ]
+                }
             }
         },
         "DefaultPrivateRoute1": {
@@ -463,15 +373,7 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "MainVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-Private-Routes-AZ2"
-                        }
-                    }
-                ]
+                }
             }
         },
         "DefaultPrivateRoute2": {
@@ -528,21 +430,7 @@
                     "BlockPublicPolicy": true,
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-ApplicationData"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                }
             }
         },
         "EC2InstanceRole": {
@@ -604,20 +492,6 @@
                             ]
                         }
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-EC2-Role"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
                 ]
             }
         },
@@ -646,36 +520,13 @@
                         "IpProtocol": "tcp",
                         "FromPort": 443,
                         "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTPS traffic from internet"
+                        "CidrIp": "0.0.0.0/0"
                     },
                     {
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTP traffic from internet (for redirect to HTTPS)"
-                    }
-                ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "All outbound traffic"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-ALB-SecurityGroup"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ]
             }
@@ -697,8 +548,7 @@
                         "ToPort": 443,
                         "SourceSecurityGroupId": {
                             "Ref": "ALBSecurityGroup"
-                        },
-                        "Description": "HTTPS traffic from ALB only"
+                        }
                     },
                     {
                         "IpProtocol": "tcp",
@@ -706,28 +556,6 @@
                         "ToPort": 22,
                         "CidrIp": {
                             "Ref": "SSHAccessCIDR"
-                        },
-                        "Description": "SSH access from specified CIDR"
-                    }
-                ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "All outbound traffic"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-Web-SecurityGroup"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
                         }
                     }
                 ]
@@ -750,21 +578,6 @@
                         "ToPort": 3306,
                         "SourceSecurityGroupId": {
                             "Ref": "WebSecurityGroup"
-                        },
-                        "Description": "MySQL traffic from web tier only"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-Database-SecurityGroup"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
                         }
                     }
                 ]
@@ -784,20 +597,6 @@
                     {
                         "Ref": "PrivateDataSubnet2"
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-DatabaseSubnetGroup"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
                 ]
             }
         },
@@ -811,21 +610,7 @@
                 "Family": "mysql8.0",
                 "Parameters": {
                     "require_secure_transport": "ON"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-DatabaseParameterGroup"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                }
             }
         },
         "DatabaseSecret": {
@@ -842,21 +627,7 @@
                     "GenerateStringKey": "password",
                     "PasswordLength": 16,
                     "ExcludeCharacters": "\"@/\\"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-DatabaseSecret"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                }
             }
         },
         "DatabaseInstance": {
@@ -892,21 +663,7 @@
                 "BackupRetentionPeriod": 7,
                 "MultiAZ": false,
                 "PubliclyAccessible": false,
-                "DeletionProtection": false,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-Database"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                "DeletionProtection": false
             }
         },
         "ApplicationLoadBalancer": {
@@ -929,20 +686,6 @@
                     {
                         "Ref": "ALBSecurityGroup"
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-ApplicationLoadBalancer"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
                 ]
             }
         },
@@ -960,21 +703,7 @@
                 "HealthCheckEnabled": true,
                 "HealthCheckPath": "/health",
                 "HealthCheckProtocol": "HTTPS",
-                "TargetType": "instance",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-TargetGroup"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                "TargetType": "instance"
             }
         },
         "ALBListener": {
@@ -1056,21 +785,7 @@
                     "MetricName": {
                         "Fn::Sub": "${ProjectName}-WebACL"
                     }
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-WebACL"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                }
             }
         },
         "WebACLAssociation": {
@@ -1093,21 +808,7 @@
                 "LogGroupName": {
                     "Fn::Sub": "/aws/apigateway/${ProjectName}"
                 },
-                "RetentionInDays": 14,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-APIGateway-LogGroup"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                "RetentionInDays": 14
             }
         },
         "APIGatewayLoggingRole": {
@@ -1127,20 +828,6 @@
                 },
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-APIGateway-Logging-Role"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
                 ]
             }
         },
@@ -1166,21 +853,7 @@
                     "Types": [
                         "REGIONAL"
                     ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-RestAPI"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                }
             }
         },
         "APIResource": {
@@ -1271,20 +944,6 @@
                         "DataTraceEnabled": true,
                         "MetricsEnabled": true
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-API-Stage"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
                 ]
             }
         },
@@ -1324,20 +983,6 @@
                             ]
                         }
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-Lambda-Patching-Role"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
                 ]
             }
         },
@@ -1357,22 +1002,8 @@
                 },
                 "Timeout": 300,
                 "Code": {
-                    "ZipFile": "import boto3\nimport json\n\ndef lambda_handler(event, context):\n    ssm_client = boto3.client('ssm')\n    ec2_client = boto3.client('ec2')\n    \n    try:\n        # Get instances with PatchGroup=WebApp tag\n        response = ec2_client.describe_instances(\n            Filters=[\n                {\n                    'Name': 'tag:PatchGroup',\n                    'Values': ['WebApp']\n                },\n                {\n                    'Name': 'instance-state-name',\n                    'Values': ['running']\n                }\n            ]\n        )\n        \n        instance_ids = []\n        for reservation in response['Reservations']:\n            for instance in reservation['Instances']:\n                instance_ids.append(instance['InstanceId'])\n        \n        if instance_ids:\n            # Send patch baseline command\n            command_response = ssm_client.send_command(\n                InstanceIds=instance_ids,\n                DocumentName='AWS-RunPatchBaseline',\n                Parameters={\n                    'Operation': ['Install']\n                }\n            )\n            \n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': f'Patching initiated for {len(instance_ids)} instances',\n                    'commandId': command_response['Command']['CommandId']\n                })\n            }\n        else:\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': 'No instances found with PatchGroup=WebApp tag'\n                })\n            }\n            \n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': str(e)\n            })\n        }\n"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-Patching-Lambda"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                    "ZipFile": "import boto3\nimport json\n\ndef lambda_handler(event, context):\n    ssm_client = boto3.client('ssm')\n    ec2_client = boto3.client('ec2')\n    \n    try:\n        response = ec2_client.describe_instances(\n            Filters=[\n                {'Name': 'tag:PatchGroup', 'Values': ['WebApp']},\n                {'Name': 'instance-state-name', 'Values': ['running']}\n            ]\n        )\n        instance_ids = [\n            instance['InstanceId'] \n            for reservation in response['Reservations'] \n            for instance in reservation['Instances']\n        ]\n        \n        if instance_ids:\n            command_response = ssm_client.send_command(\n                InstanceIds=instance_ids,\n                DocumentName='AWS-RunPatchBaseline',\n                Parameters={'Operation': ['Install']}\n            )\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': f'Patching initiated for {len(instance_ids)} instances',\n                    'commandId': command_response['Command']['CommandId']\n                })\n            }\n        return {'statusCode': 200, 'body': json.dumps({'message': 'No instances found'})}\n    except Exception as e:\n        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}\n"
+                }
             }
         },
         "PatchingScheduleRule": {
@@ -1393,6 +1024,182 @@
                         },
                         "Id": {
                             "Fn::Sub": "${ProjectName}-PatchingLambdaTarget"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailLogBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectNameLower}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}"
+                },
+                "AccessControl": "Private",
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "CloudTrailLogBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailLogBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailLogBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "MainCloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "${ProjectName}-MainTrail"
+                },
+                "IsLogging": true,
+                "IsMultiRegionTrail": true,
+                "S3BucketName": {
+                    "Ref": "CloudTrailLogBucket"
+                },
+                "IncludeGlobalServiceEvents": true,
+                "EnableLogFileValidation": true
+            }
+        },
+        "AlarmNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "DisplayName": {
+                    "Fn::Sub": "${ProjectName} Alarm Notifications"
+                },
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-AlarmTopic"
+                }
+            }
+        },
+        "AlarmEmailSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "NotificationEmail"
+                },
+                "TopicArn": {
+                    "Ref": "AlarmNotificationTopic"
+                }
+            }
+        },
+        "RDSCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-RDS-High-CPU"
+                },
+                "AlarmDescription": "Alarm for high RDS CPU utilization",
+                "Namespace": "AWS/RDS",
+                "MetricName": "CPUUtilization",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "DatabaseInstance"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlarmNotificationTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "AlarmNotificationTopic"
+                    }
+                ]
+            }
+        },
+        "MFAAdminRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-MFA-AdminRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "Bool": {
+                                    "aws:MultiFactorAuthPresent": "true"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "MFA-ReadOnly-Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:Describe*",
+                                        "rds:Describe*",
+                                        "s3:List*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
                         }
                     }
                 ]
@@ -1460,20 +1267,6 @@
                 }
             }
         },
-        "EC2InstanceRoleArn": {
-            "Description": "The ARN of the IAM Role for EC2 instances",
-            "Value": {
-                "Fn::GetAtt": [
-                    "EC2InstanceRole",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EC2InstanceRoleArn"
-                }
-            }
-        },
         "ALBArn": {
             "Description": "The ARN of the Application Load Balancer",
             "Value": {
@@ -1507,20 +1300,6 @@
                 }
             }
         },
-        "WebACLName": {
-            "Description": "The name of the WAFv2 WebACL",
-            "Value": {
-                "Fn::GetAtt": [
-                    "WebACL",
-                    "Name"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-WebACLName"
-                }
-            }
-        },
         "PatchingLambdaFunctionName": {
             "Description": "The name of the automated patching Lambda function",
             "Value": {
@@ -1529,6 +1308,42 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-PatchingLambdaFunctionName"
+                }
+            }
+        },
+        "CloudTrailName": {
+            "Description": "The name of the CloudTrail trail",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MainCloudTrail",
+                    "TrailArn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailName"
+                }
+            }
+        },
+        "RDSCPUAlarmName": {
+            "Description": "The name of the RDS CPU CloudWatch Alarm",
+            "Value": {
+                "Ref": "RDSCPUAlarm"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RDSCPUAlarmName"
+                }
+            }
+        },
+        "MFAAdminRoleName": {
+            "Description": "The name of the MFA-enforced Admin Role",
+            "Value": {
+                "Ref": "MFAAdminRole"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFAAdminRoleName"
                 }
             }
         }
