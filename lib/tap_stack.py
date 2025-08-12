@@ -4,14 +4,13 @@ TapStack Component for the A2 deployment requirement:
 - API Gateway HTTP endpoint
 - Scaling to handle ~1000 requests/min
 - CloudWatch alarms for errors, throttles, latency
-- Resource tagging
+- Resource tagging.
 - Environment-aware naming.
 """
 
 from typing import Optional
 
 import pulumi
-import pulumi_aws as aws
 from pulumi import Output, ResourceOptions
 from pulumi.asset import AssetArchive, StringAsset
 from pulumi_aws import apigatewayv2, cloudwatch, iam, lambda_, s3, sns
@@ -192,6 +191,5 @@ def handler(event, context):
         "api_endpoint": stage.invoke_url.apply(lambda url: f"{url}"),
         "lambda_name": lambda_fn.name,
         "alarm_topic_arn": alarm_topics.arn,
-        "aws_region": aws.config.region,
         "environment_suffix": self.environment_suffix,
     })
