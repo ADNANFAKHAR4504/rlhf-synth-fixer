@@ -40,7 +40,7 @@ class StorageComponent(pulumi.ComponentResource):
                 type="Service", identifiers=["cloudtrail.amazonaws.com"]
             )],
             actions=["s3:GetBucketAcl"],
-            resources=[bucket.arn],
+            resources=[self.bucket.arn],
         ),
         # Allow CloudTrail to put logs with the required ACL
         aws.iam.GetPolicyDocumentStatementArgs(
@@ -49,7 +49,7 @@ class StorageComponent(pulumi.ComponentResource):
                 type="Service", identifiers=["cloudtrail.amazonaws.com"]
             )],
             actions=["s3:PutObject"],
-            resources=[pulumi.Output.all(bucket.arn, account_id).apply(
+            resources=[pulumi.Output.all(self.bucket.arn, account_id).apply(
                 lambda x: f"{x[0]}/AWSLogs/{x[1]}/*"  # arn:aws:s3:::<bucket>/AWSLogs/<acct>/*
             )],
             conditions=[aws.iam.GetPolicyDocumentStatementConditionArgs(
