@@ -170,16 +170,16 @@
                 {
                     "Fn::Equals": [
                         {
-                            "Fn::Join": [
-                                "",
-                                [
-                                    {
-                                        "Fn::Select": [
-                                            1,
-                                            {
-                                                "Fn::Split": [
-                                                    ",",
-                                                    {
+                            "Fn::Select": [
+                                1,
+                                {
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Fn::Sub": [
+                                                "${list},,",
+                                                {
+                                                    "list": {
                                                         "Fn::Join": [
                                                             ",",
                                                             {
@@ -187,11 +187,11 @@
                                                             }
                                                         ]
                                                     }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
                             ]
                         },
                         ""
@@ -200,35 +200,42 @@
             ]
         },
         "HasThreeCIDRs": {
-            "Fn::Not": [
+            "Fn::And": [
                 {
-                    "Fn::Equals": [
+                    "Condition": "HasMultipleCIDRs"
+                },
+                {
+                    "Fn::Not": [
                         {
-                            "Fn::Join": [
-                                "",
-                                [
-                                    {
-                                        "Fn::Select": [
-                                            2,
-                                            {
-                                                "Fn::Split": [
-                                                    ",",
-                                                    {
-                                                        "Fn::Join": [
-                                                            ",",
-                                                            {
-                                                                "Ref": "AllowedCIDRs"
+                            "Fn::Equals": [
+                                {
+                                    "Fn::Select": [
+                                        2,
+                                        {
+                                            "Fn::Split": [
+                                                ",",
+                                                {
+                                                    "Fn::Sub": [
+                                                        "${list},,",
+                                                        {
+                                                            "list": {
+                                                                "Fn::Join": [
+                                                                    ",",
+                                                                    {
+                                                                        "Ref": "AllowedCIDRs"
+                                                                    }
+                                                                ]
                                                             }
-                                                        ]
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                ""
                             ]
-                        },
-                        ""
+                        }
                     ]
                 }
             ]
@@ -1064,7 +1071,24 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Ref": "AllowedCIDRs"
+                            "Fn::Split": [
+                                ",",
+                                {
+                                    "Fn::Sub": [
+                                        "${list},0.0.0.0/0,0.0.0.0/0",
+                                        {
+                                            "list": {
+                                                "Fn::Join": [
+                                                    ",",
+                                                    {
+                                                        "Ref": "AllowedCIDRs"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
                         }
                     ]
                 },
@@ -1085,7 +1109,24 @@
                     "Fn::Select": [
                         2,
                         {
-                            "Ref": "AllowedCIDRs"
+                            "Fn::Split": [
+                                ",",
+                                {
+                                    "Fn::Sub": [
+                                        "${list},0.0.0.0/0,0.0.0.0/0",
+                                        {
+                                            "list": {
+                                                "Fn::Join": [
+                                                    ",",
+                                                    {
+                                                        "Ref": "AllowedCIDRs"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
                         }
                     ]
                 },
@@ -1126,7 +1167,24 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Ref": "AllowedCIDRs"
+                            "Fn::Split": [
+                                ",",
+                                {
+                                    "Fn::Sub": [
+                                        "${list},0.0.0.0/0,0.0.0.0/0",
+                                        {
+                                            "list": {
+                                                "Fn::Join": [
+                                                    ",",
+                                                    {
+                                                        "Ref": "AllowedCIDRs"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
                         }
                     ]
                 },
@@ -1147,7 +1205,24 @@
                     "Fn::Select": [
                         2,
                         {
-                            "Ref": "AllowedCIDRs"
+                            "Fn::Split": [
+                                ",",
+                                {
+                                    "Fn::Sub": [
+                                        "${list},0.0.0.0/0,0.0.0.0/0",
+                                        {
+                                            "list": {
+                                                "Fn::Join": [
+                                                    ",",
+                                                    {
+                                                        "Ref": "AllowedCIDRs"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
                         }
                     ]
                 },
