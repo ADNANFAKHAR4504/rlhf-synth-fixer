@@ -66,6 +66,58 @@ stack = new TapStack("TestTapStackDefault");
 stack = new TapStack("TestTapStackDefault", {});
 ```
 
+## Runtime Deployment Errors
+
+### 4. Availability Zone Region Mismatch Error
+**Issue**: The availability zones lookup was not using the region-specific provider, causing it to return availability zones from the default region instead of the target region. This resulted in trying to create subnets in `us-east-1a` and `us-east-1b` when deploying to the `us-west-1` region.
+
+**Error Messages**:
+- `InvalidParameterValue: Value (us-east-1a) for parameter availabilityZone is invalid. Subnets can currently only be created in the following availability zones: us-west-1a, us-west-1c.`
+- `InvalidParameterValue: Value (us-east-1b) for parameter availabilityZone is invalid. Subnets can currently only be created in the following availability zones: us-west-1a, us-west-1c.`
+
+**Original Code**:
+```typescript
+// Get availability zones for this region
+const azs = pulumi.output(aws.getAvailabilityZones({}));
+```
+
+**Fixed Code**:
+```typescript
+// Get availability zones for this region
+const azs = pulumi.output(aws.getAvailabilityZones({}, { provider }));
+```
+
+### 5. Deprecated S3 BucketLoggingV2 Warning
+**Issue**: The model used the deprecated `aws.s3.BucketLoggingV2` resource instead of the current `aws.s3.BucketLogging` resource.
+
+**Warning Message**: `BucketLoggingV2 is deprecated: aws.s3/bucketloggingv2.BucketLoggingV2 has been deprecated in favor of aws.s3/bucketlogging.BucketLogging`
+
+**Original Code**:
+```typescript
+new aws.s3.BucketLoggingV2(
+  `${projectName}-${environment}-cloudtrail-logging`,
+  {
+    bucket: cloudtrailBucket.id,
+    targetBucket: accessLogsBucket.id,
+    targetPrefix: 'cloudtrail-access-logs/',
+  },
+  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
+);
+```
+
+**Fixed Code**:
+```typescript
+new aws.s3.BucketLogging(
+  `${projectName}-${environment}-cloudtrail-logging`,
+  {
+    bucket: cloudtrailBucket.id,
+    targetBucket: accessLogsBucket.id,
+    targetPrefix: 'cloudtrail-access-logs/',
+  },
+  { provider: providers.find(p => p.region === 'us-east-1')?.provider }
+);
+```
+
 ## Lint Errors (Code Style and Quality)
 
 ### 1. Quote Style Inconsistency
@@ -115,7 +167,9 @@ kmsKeys.map(({ region, key }) => ({
 All issues have been successfully resolved:
 - ✅ TypeScript compilation passes (`npm run build`)
 - ✅ Linting passes (`npm run lint`)
+- ✅ Availability zone region mismatch fixed
+- ✅ Deprecated S3 resource replaced with current version
 - ✅ Infrastructure code maintains all original functionality
 - ✅ Test files updated to match actual interface definitions
 
-The infrastructure code now follows the project's coding standards while preserving all the security and compliance features specified in the original MODEL_RESPONSE.md.
+The infrastructure code now follows the project's coding standards while preserving all the security and compliance features specified in the original MODEL_RESPONSE.md, and should deploy successfully across multiple regions.

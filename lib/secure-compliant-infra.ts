@@ -71,7 +71,7 @@ const accessLogsBucket = new aws.s3.Bucket(
 );
 
 // Enable access logging on CloudTrail bucket (created but not exported)
-new aws.s3.BucketLoggingV2(
+new aws.s3.BucketLogging(
   `${projectName}-${environment}-cloudtrail-logging`,
   {
     bucket: cloudtrailBucket.id,
@@ -215,7 +215,7 @@ const regionalInfra = providers.map(({ region, provider }) => {
   );
 
   // Get availability zones for this region
-  const azs = pulumi.output(aws.getAvailabilityZones({}));
+  const azs = pulumi.output(aws.getAvailabilityZones({}, { provider }));
 
   // Public Subnets
   const publicSubnets = [0, 1].map(
