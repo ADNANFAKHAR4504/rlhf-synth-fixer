@@ -195,7 +195,6 @@ class TapStack(pulumi.ComponentResource):
     )
 
     aws.ec2.VpcPeeringConnectionAccepter("peer",
-                                         region="us-west-2",
                                          vpc_peering_connection_id=peer_connection.id,
                                          auto_accept=True,
                                          tags={
