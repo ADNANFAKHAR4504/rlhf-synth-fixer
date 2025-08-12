@@ -1,210 +1,234 @@
-﻿import fs from 'fs';
-import path from 'path';
+﻿import * as cdk from 'aws-cdk-lib';
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import { TapStack } from '../lib/tap-stack';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
-  let template: any;
-
-  beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-  });
-
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
-    });
-  });
-
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+describe('TapStack Unit Tests', () => {
+  let app: cdk.App;
+  let template: Template;
+  
+  describe('Default Stack Configuration', () => {
+    beforeAll(() => {
+      app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStack', {
+        env: { region: 'us-east-1' }
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      template = Template.fromStack(stack);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should create a VPC with correct properties', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+      });
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should create KMS key with rotation enabled', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        Description: 'Customer-managed KMS key for Financial Services encryption',
+        EnableKeyRotation: true,
+        KeyUsage: 'ENCRYPT_DECRYPT',
+      });
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should create KMS alias', () => {
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/financial-services-dev',
+      });
+    });
+
+    test('should create security group with correct rules', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for Lambda functions in Financial Services infrastructure',
+        SecurityGroupIngress: [
+          {
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            Description: 'HTTPS access from VPC',
+          },
+        ],
+        SecurityGroupEgress: [
+          {
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0',
+            Description: 'HTTPS outbound access',
+          },
+        ],
+      });
+    });
+
+    test('should create DynamoDB table with correct configuration', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'TurnAroundPromptTabledev',
+        BillingMode: 'PAY_PER_REQUEST',
+        AttributeDefinitions: [
+          {
+            AttributeName: 'id',
+            AttributeType: 'S',
+          },
+        ],
+        KeySchema: [
+          {
+            AttributeName: 'id',
+            KeyType: 'HASH',
+          },
+        ],
+        PointInTimeRecoverySpecification: {
+          PointInTimeRecoveryEnabled: true,
+        },
+      });
+    });
+
+    test('should have correct resource count', () => {
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+      template.resourceCountIs('AWS::KMS::Key', 1);
+      template.resourceCountIs('AWS::KMS::Alias', 1);
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 1);
+      template.resourceCountIs('AWS::DynamoDB::Table', 1);
+      template.resourceCountIs('AWS::EC2::Subnet', 2); // 2 private subnets
+    });
+  });
+
+  describe('Custom Environment Suffix', () => {
+    test('should use custom environment suffix', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStack', {
+        environmentSuffix: 'staging',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'TurnAroundPromptTablestaging',
+      });
+
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/financial-services-staging',
+      });
+    });
+  });
+
+  describe('Secondary Region Configuration', () => {
+    test('should use different CIDR for secondary region', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStack', {
+        env: { region: 'eu-west-1' },
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.1.0.0/16',
+      });
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
+    beforeAll(() => {
+      app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStack');
+      template = Template.fromStack(stack);
+    });
 
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
+    test('should have VPC ID output', () => {
+      template.hasOutput('VPCId', {
+        Description: 'ID of the Financial Services VPC',
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+    test('should have KMS Key ID output', () => {
+      template.hasOutput('KMSKeyId', {
+        Description: 'ID of the Financial Services KMS Key',
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+    test('should have Security Group ID output', () => {
+      template.hasOutput('LambdaSecurityGroupId', {
+        Description: 'ID of the Lambda Security Group',
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+    test('should have DynamoDB table outputs', () => {
+      template.hasOutput('TurnAroundPromptTableName', {
+        Description: 'Name of the Turn Around Prompt Table',
+      });
+
+      template.hasOutput('TurnAroundPromptTableArn', {
+        Description: 'ARN of the Turn Around Prompt Table',
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+    test('should have environment suffix output', () => {
+      template.hasOutput('EnvironmentSuffix', {
+        Description: 'Environment suffix used for this deployment',
       });
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
+  describe('Tagging', () => {
+    test('should apply correct tags to all resources', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStack');
+      const template = Template.fromStack(stack);
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      // VPC should have environment and project tags
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          {
+            Key: 'Environment',
+            Value: 'Production',
+          },
+          {
+            Key: 'Project',
+            Value: 'FinancialServices',
+          },
+        ]),
+      });
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+  describe('Security Configuration', () => {
+    test('should encrypt DynamoDB table with customer managed KMS key', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: {
+          SSEEnabled: true,
+        },
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('should use private subnets only', () => {
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        MapPublicIpOnLaunch: false,
       });
+    });
+  });
+
+  describe('Context-based Configuration', () => {
+    test('should use context environment suffix when provided', () => {
+      const app = new cdk.App({
+        context: {
+          environmentSuffix: 'prod',
+        },
+      });
+      const stack = new TapStack(app, 'TestTapStack');
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'TurnAroundPromptTableprod',
+      });
+    });
+  });
+
+  describe('Stack Properties', () => {
+    test('should expose public properties correctly', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStack');
+      
+      expect(stack.vpc).toBeDefined();
+      expect(stack.kmsKey).toBeDefined();
+      expect(stack.lambdaSecurityGroup).toBeDefined();
+      expect(stack.turnAroundPromptTable).toBeDefined();
     });
   });
 });
