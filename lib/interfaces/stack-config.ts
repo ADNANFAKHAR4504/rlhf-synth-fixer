@@ -83,7 +83,7 @@ export const REGION_CONFIGS: { [region: string]: StackConfig } = {
     database: {
       instanceClass: 'db.t3.micro',
       engine: 'mysql',
-      engineVersion: '8.0.35',
+      engineVersion: '8.0.37',
       allocatedStorage: 20,
       multiAz: true,
       backupRetention: 7,
@@ -140,7 +140,7 @@ export const REGION_CONFIGS: { [region: string]: StackConfig } = {
     database: {
       instanceClass: 'db.t3.micro',
       engine: 'mysql',
-      engineVersion: '8.0.35',
+      engineVersion: '8.0.37',
       allocatedStorage: 20,
       multiAz: true,
       backupRetention: 7,

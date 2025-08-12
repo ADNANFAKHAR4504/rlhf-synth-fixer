@@ -25,6 +25,7 @@ multi-region-app/
 ## 1. Package Configuration
 
 ### `package.json`
+
 ```json
 {
   "name": "multi-region-app",
@@ -57,15 +58,13 @@ multi-region-app/
 ```
 
 ### `tsconfig.json`
+
 ```json
 {
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "lib": [
-      "es2020",
-      "dom"
-    ],
+    "lib": ["es2020", "dom"],
     "declaration": true,
     "strict": true,
     "noImplicitAny": true,
@@ -80,25 +79,19 @@ multi-region-app/
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
-    "typeRoots": [
-      "./node_modules/@types"
-    ]
+    "typeRoots": ["./node_modules/@types"]
   },
-  "exclude": [
-    "node_modules",
-    "cdk.out"
-  ]
+  "exclude": ["node_modules", "cdk.out"]
 }
 ```
 
 ### `cdk.json`
+
 ```json
 {
   "app": "npx ts-node --prefer-ts-exts bin/multi-region-app.ts",
   "watch": {
-    "include": [
-      "**"
-    ],
+    "include": ["**"],
     "exclude": [
       "README.md",
       "cdk*.json",
@@ -128,6 +121,7 @@ multi-region-app/
 ## 2. Interfaces and Configuration
 
 ### `lib/interfaces/stack-config.ts`
+
 ```typescript
 /**
  * Configuration interface for multi-region stack deployment
@@ -136,13 +130,13 @@ multi-region-app/
 export interface StackConfig {
   /** AWS region for deployment */
   region: string;
-  
+
   /** Environment name (e.g., production, staging) */
   environment: string;
-  
+
   /** VPC CIDR block for the region */
   vpcCidr: string;
-  
+
   /** Database configuration */
   database: {
     instanceClass: string;
@@ -152,7 +146,7 @@ export interface StackConfig {
     multiAz: boolean;
     backupRetention: number;
   };
-  
+
   /** EC2 Auto Scaling configuration */
   autoScaling: {
     instanceType: string;
@@ -160,7 +154,7 @@ export interface StackConfig {
     maxCapacity: number;
     desiredCapacity: number;
   };
-  
+
   /** Common tags applied to all resources */
   tags: { [key: string]: string };
 }
@@ -176,23 +170,23 @@ export const REGION_CONFIGS: { [region: string]: StackConfig } = {
     database: {
       instanceClass: 'db.t3.micro',
       engine: 'mysql',
-      engineVersion: '8.0.35',
+      engineVersion: '8.0.37',
       allocatedStorage: 20,
       multiAz: true,
-      backupRetention: 7
+      backupRetention: 7,
     },
     autoScaling: {
       instanceType: 't3.micro',
       minCapacity: 2,
       maxCapacity: 10,
-      desiredCapacity: 3
+      desiredCapacity: 3,
     },
     tags: {
       Environment: 'Production',
       Project: 'MultiRegionApp',
       Owner: 'Prakhar-Jain',
-      Region: 'us-east-1'
-    }
+      Region: 'us-east-1',
+    },
   },
   'us-west-2': {
     region: 'us-west-2',
@@ -201,30 +195,31 @@ export const REGION_CONFIGS: { [region: string]: StackConfig } = {
     database: {
       instanceClass: 'db.t3.micro',
       engine: 'mysql',
-      engineVersion: '8.0.35',
+      engineVersion: '8.0.37',
       allocatedStorage: 20,
       multiAz: true,
-      backupRetention: 7
+      backupRetention: 7,
     },
     autoScaling: {
       instanceType: 't3.micro',
       minCapacity: 2,
       maxCapacity: 10,
-      desiredCapacity: 3
+      desiredCapacity: 3,
     },
     tags: {
       Environment: 'Production',
       Project: 'MultiRegionApp',
       Owner: 'Prakhar-Jain',
-      Region: 'us-west-2'
-    }
-  }
+      Region: 'us-west-2',
+    },
+  },
 };
 ```
 
 ## 3. VPC Construct
 
 ### `lib/constructs/vpc-construct.ts`
+
 ```typescript
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -249,30 +244,30 @@ export class VpcConstruct extends Construct {
       maxAzs: 3, // Use 3 AZs for high availability
       enableDnsHostnames: true,
       enableDnsSupport: true,
-      
+
       // Define subnet configuration for network segregation
       subnetConfiguration: [
         {
           cidrMask: 24,
           name: 'PublicSubnet',
           subnetType: ec2.SubnetType.PUBLIC,
-          mapPublicIpOnLaunch: true
+          mapPublicIpOnLaunch: true,
         },
         {
           cidrMask: 24,
           name: 'PrivateSubnet',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 28,
           name: 'DatabaseSubnet',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED
-        }
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
       ],
 
       // Configure NAT Gateway for private subnet internet access
       natGateways: 2, // Deploy NAT gateways in 2 AZs for redundancy
-      natGatewayProvider: ec2.NatProvider.gateway()
+      natGatewayProvider: ec2.NatProvider.gateway(),
     });
 
     // Store subnet references for use by other constructs
@@ -283,7 +278,7 @@ export class VpcConstruct extends Construct {
     new ec2.FlowLog(this, 'VpcFlowLog', {
       resourceType: ec2.FlowLogResourceType.fromVpc(this.vpc),
       destination: ec2.FlowLogDestination.toCloudWatchLogs(),
-      trafficType: ec2.FlowLogTrafficType.ALL
+      trafficType: ec2.FlowLogTrafficType.ALL,
     });
 
     // Apply tags to VPC and all subnets
@@ -294,12 +289,18 @@ export class VpcConstruct extends Construct {
 
     // Tag subnets for better identification
     this.publicSubnets.forEach((subnet, index) => {
-      cdk.Tags.of(subnet).add('Name', `PublicSubnet-${index + 1}-${config.region}`);
+      cdk.Tags.of(subnet).add(
+        'Name',
+        `PublicSubnet-${index + 1}-${config.region}`
+      );
       cdk.Tags.of(subnet).add('SubnetType', 'Public');
     });
 
     this.privateSubnets.forEach((subnet, index) => {
-      cdk.Tags.of(subnet).add('Name', `PrivateSubnet-${index + 1}-${config.region}`);
+      cdk.Tags.of(subnet).add(
+        'Name',
+        `PrivateSubnet-${index + 1}-${config.region}`
+      );
       cdk.Tags.of(subnet).add('SubnetType', 'Private');
     });
   }
@@ -309,6 +310,7 @@ export class VpcConstruct extends Construct {
 ## 4. Database Tier Construct
 
 ### `lib/constructs/database-tier-construct.ts`
+
 ```typescript
 import { Construct } from 'constructs';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -329,69 +331,74 @@ export class DatabaseTierConstruct extends Construct {
 
     // Create security group for RDS database
     // This follows the principle of least privilege
-    this.databaseSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc,
-      description: 'Security group for RDS database - allows MySQL/Aurora access from application tier',
-      allowAllOutbound: false // Explicitly deny all outbound traffic
-    });
+    this.databaseSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        vpc,
+        description:
+          'Security group for RDS database - allows MySQL/Aurora access from application tier',
+        allowAllOutbound: false, // Explicitly deny all outbound traffic
+      }
+    );
 
     // Create DB subnet group using isolated subnets for maximum security
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
       vpc,
       description: 'Subnet group for RDS database in isolated subnets',
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED
-      }
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
     });
 
     // Generate a secure random password for the database
     const databaseCredentials = rds.Credentials.fromGeneratedSecret('admin', {
       description: `Database credentials for MultiRegionApp in ${config.region}`,
-      excludeCharacters: '"@/\\'
+      excludeCharacters: '"@/\\',
     });
 
     // Create RDS database instance with high availability configuration
     this.database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35
+        version: rds.MysqlEngineVersion.VER_8_0_35,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE3,
         ec2.InstanceSize.MICRO
       ),
       credentials: databaseCredentials,
-      
+
       // High availability and backup configuration
       multiAz: config.database.multiAz,
       allocatedStorage: config.database.allocatedStorage,
       storageType: rds.StorageType.GP2,
       storageEncrypted: true, // Enable encryption at rest
-      
+
       // Backup and maintenance configuration
       backupRetention: cdk.Duration.days(config.database.backupRetention),
       deleteAutomatedBackups: false,
       deletionProtection: true, // Prevent accidental deletion
-      
+
       // Network configuration
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [this.databaseSecurityGroup],
-      
+
       // Monitoring and logging
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: true,
       performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
-      
+
       // Maintenance window (during low-traffic hours)
       preferredMaintenanceWindow: 'sun:03:00-sun:04:00',
       preferredBackupWindow: '02:00-03:00',
-      
+
       // Parameter group for optimization
       parameterGroup: rds.ParameterGroup.fromParameterGroupName(
         this,
         'DefaultParameterGroup',
         'default.mysql8.0'
-      )
+      ),
     });
 
     // Apply comprehensive tagging
@@ -400,15 +407,23 @@ export class DatabaseTierConstruct extends Construct {
       cdk.Tags.of(this.databaseSecurityGroup).add(key, value);
     });
 
-    cdk.Tags.of(this.database).add('Name', `MultiRegionApp-Database-${config.region}`);
-    cdk.Tags.of(this.databaseSecurityGroup).add('Name', `MultiRegionApp-DB-SG-${config.region}`);
+    cdk.Tags.of(this.database).add(
+      'Name',
+      `MultiRegionApp-Database-${config.region}`
+    );
+    cdk.Tags.of(this.databaseSecurityGroup).add(
+      'Name',
+      `MultiRegionApp-DB-SG-${config.region}`
+    );
   }
 
   /**
    * Allow inbound connections from application tier security group
    * This method should be called after the application tier is created
    */
-  public allowConnectionsFrom(applicationSecurityGroup: ec2.SecurityGroup): void {
+  public allowConnectionsFrom(
+    applicationSecurityGroup: ec2.SecurityGroup
+  ): void {
     this.databaseSecurityGroup.addIngressRule(
       applicationSecurityGroup,
       ec2.Port.tcp(3306),
@@ -421,6 +436,7 @@ export class DatabaseTierConstruct extends Construct {
 ## 5. Application Tier Construct
 
 ### `lib/constructs/application-tier-construct.ts`
+
 ```typescript
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -444,11 +460,16 @@ export class ApplicationTierConstruct extends Construct {
     super(scope, id);
 
     // Create security group for Application Load Balancer
-    this.loadBalancerSecurityGroup = new ec2.SecurityGroup(this, 'LoadBalancerSecurityGroup', {
-      vpc,
-      description: 'Security group for Application Load Balancer - allows HTTP/HTTPS from internet',
-      allowAllOutbound: true
-    });
+    this.loadBalancerSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'LoadBalancerSecurityGroup',
+      {
+        vpc,
+        description:
+          'Security group for Application Load Balancer - allows HTTP/HTTPS from internet',
+        allowAllOutbound: true,
+      }
+    );
 
     // Allow HTTP and HTTPS traffic from the internet to ALB
     this.loadBalancerSecurityGroup.addIngressRule(
@@ -463,11 +484,16 @@ export class ApplicationTierConstruct extends Construct {
     );
 
     // Create security group for EC2 instances
-    this.applicationSecurityGroup = new ec2.SecurityGroup(this, 'ApplicationSecurityGroup', {
-      vpc,
-      description: 'Security group for application EC2 instances - allows traffic from ALB',
-      allowAllOutbound: true // Allow outbound for package updates and external API calls
-    });
+    this.applicationSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'ApplicationSecurityGroup',
+      {
+        vpc,
+        description:
+          'Security group for application EC2 instances - allows traffic from ALB',
+        allowAllOutbound: true, // Allow outbound for package updates and external API calls
+      }
+    );
 
     // Allow traffic from ALB to EC2 instances on port 80
     this.applicationSecurityGroup.addIngressRule(
@@ -488,16 +514,24 @@ export class ApplicationTierConstruct extends Construct {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances in the application tier',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
-      ]
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
+      ],
     });
 
     // Create instance profile for EC2 role
-    const instanceProfile = new iam.CfnInstanceProfile(this, 'EC2InstanceProfile', {
-      roles: [ec2Role.roleName],
-      instanceProfileName: `MultiRegionApp-EC2-Profile-${config.region}`
-    });
+    const instanceProfile = new iam.CfnInstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        roles: [ec2Role.roleName],
+        instanceProfileName: `MultiRegionApp-EC2-Profile-${config.region}`,
+      }
+    );
 
     // User data script for EC2 instances
     const userData = ec2.UserData.forLinux();
@@ -507,18 +541,18 @@ export class ApplicationTierConstruct extends Construct {
       'yum install -y httpd mysql',
       'systemctl start httpd',
       'systemctl enable httpd',
-      
+
       // Install CloudWatch agent
       'wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm',
       'rpm -U ./amazon-cloudwatch-agent.rpm',
-      
+
       // Create a simple web page
       'echo "<html><body><h1>Multi-Region Application</h1>" > /var/www/html/index.html',
       `echo "<p>Region: ${config.region}</p>" >> /var/www/html/index.html`,
       'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html',
       'echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html',
       'echo "</body></html>" >> /var/www/html/index.html',
-      
+
       // Configure CloudWatch agent
       'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
       JSON.stringify({
@@ -526,19 +560,24 @@ export class ApplicationTierConstruct extends Construct {
           namespace: 'MultiRegionApp/EC2',
           metrics_collected: {
             cpu: {
-              measurement: ['cpu_usage_idle', 'cpu_usage_iowait', 'cpu_usage_user', 'cpu_usage_system'],
-              metrics_collection_interval: 60
+              measurement: [
+                'cpu_usage_idle',
+                'cpu_usage_iowait',
+                'cpu_usage_user',
+                'cpu_usage_system',
+              ],
+              metrics_collection_interval: 60,
             },
             disk: {
               measurement: ['used_percent'],
               metrics_collection_interval: 60,
-              resources: ['*']
+              resources: ['*'],
             },
             mem: {
               measurement: ['mem_used_percent'],
-              metrics_collection_interval: 60
-            }
-          }
+              metrics_collection_interval: 60,
+            },
+          },
         },
         logs: {
           logs_collected: {
@@ -547,20 +586,20 @@ export class ApplicationTierConstruct extends Construct {
                 {
                   file_path: '/var/log/httpd/access_log',
                   log_group_name: `/aws/ec2/multiregionapp/${config.region}/httpd/access`,
-                  log_stream_name: '{instance_id}'
+                  log_stream_name: '{instance_id}',
                 },
                 {
                   file_path: '/var/log/httpd/error_log',
                   log_group_name: `/aws/ec2/multiregionapp/${config.region}/httpd/error`,
-                  log_stream_name: '{instance_id}'
-                }
-              ]
-            }
-          }
-        }
+                  log_stream_name: '{instance_id}',
+                },
+              ],
+            },
+          },
+        },
       }),
       'EOF',
-      
+
       // Start CloudWatch agent
       '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
     );
@@ -572,60 +611,68 @@ export class ApplicationTierConstruct extends Construct {
       securityGroup: this.applicationSecurityGroup,
       userData,
       role: ec2Role,
-      
+
       // Enable detailed monitoring
       detailedMonitoring: true,
-      
+
       // Instance metadata service configuration
       requireImdsv2: true,
       httpTokens: ec2.LaunchTemplateHttpTokens.REQUIRED,
-      httpPutResponseHopLimit: 2
+      httpPutResponseHopLimit: 2,
     });
 
     // Create Auto Scaling Group
-    this.autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'AutoScalingGroup', {
-      vpc,
-      launchTemplate,
-      minCapacity: config.autoScaling.minCapacity,
-      maxCapacity: config.autoScaling.maxCapacity,
-      desiredCapacity: config.autoScaling.desiredCapacity,
-      
-      // Deploy instances in private subnets for security
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      
-      // Health check configuration
-      healthCheck: autoscaling.HealthCheck.elb({
-        grace: cdk.Duration.seconds(300)
-      }),
-      
-      // Instance replacement policy
-      updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
-        maxBatchSize: 1,
-        minInstancesInService: config.autoScaling.minCapacity,
-        pauseTime: cdk.Duration.seconds(300)
-      })
-    });
+    this.autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'AutoScalingGroup',
+      {
+        vpc,
+        launchTemplate,
+        minCapacity: config.autoScaling.minCapacity,
+        maxCapacity: config.autoScaling.maxCapacity,
+        desiredCapacity: config.autoScaling.desiredCapacity,
+
+        // Deploy instances in private subnets for security
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+
+        // Health check configuration
+        healthCheck: autoscaling.HealthCheck.elb({
+          grace: cdk.Duration.seconds(300),
+        }),
+
+        // Instance replacement policy
+        updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
+          maxBatchSize: 1,
+          minInstancesInService: config.autoScaling.minCapacity,
+          pauseTime: cdk.Duration.seconds(300),
+        }),
+      }
+    );
 
     // Configure Auto Scaling policies based on CPU utilization
     this.autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
       targetUtilizationPercent: 70,
       scaleInCooldown: cdk.Duration.seconds(300),
-      scaleOutCooldown: cdk.Duration.seconds(300)
+      scaleOutCooldown: cdk.Duration.seconds(300),
     });
 
     // Create Application Load Balancer
-    this.loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'ApplicationLoadBalancer', {
-      vpc,
-      internetFacing: true,
-      securityGroup: this.loadBalancerSecurityGroup,
-      
-      // Deploy ALB in public subnets
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC
+    this.loadBalancer = new elbv2.ApplicationLoadBalancer(
+      this,
+      'ApplicationLoadBalancer',
+      {
+        vpc,
+        internetFacing: true,
+        securityGroup: this.loadBalancerSecurityGroup,
+
+        // Deploy ALB in public subnets
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
       }
-    });
+    );
 
     // Create target group for Auto Scaling Group
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
@@ -633,7 +680,7 @@ export class ApplicationTierConstruct extends Construct {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [this.autoScalingGroup],
-      
+
       // Health check configuration
       healthCheck: {
         enabled: true,
@@ -643,18 +690,18 @@ export class ApplicationTierConstruct extends Construct {
         protocol: elbv2.Protocol.HTTP,
         timeout: cdk.Duration.seconds(5),
         unhealthyThresholdCount: 3,
-        healthyThresholdCount: 2
+        healthyThresholdCount: 2,
       },
-      
+
       // Deregistration delay
-      deregistrationDelay: cdk.Duration.seconds(30)
+      deregistrationDelay: cdk.Duration.seconds(30),
     });
 
     // Create listener for ALB
     this.loadBalancer.addListener('HttpListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultTargetGroups: [targetGroup]
+      defaultTargetGroups: [targetGroup],
     });
 
     // Apply comprehensive tagging
@@ -664,7 +711,7 @@ export class ApplicationTierConstruct extends Construct {
       this.applicationSecurityGroup,
       this.loadBalancerSecurityGroup,
       launchTemplate,
-      targetGroup
+      targetGroup,
     ];
 
     resources.forEach(resource => {
@@ -674,10 +721,22 @@ export class ApplicationTierConstruct extends Construct {
     });
 
     // Add specific name tags
-    cdk.Tags.of(this.loadBalancer).add('Name', `MultiRegionApp-ALB-${config.region}`);
-    cdk.Tags.of(this.autoScalingGroup).add('Name', `MultiRegionApp-ASG-${config.region}`);
-    cdk.Tags.of(this.applicationSecurityGroup).add('Name', `MultiRegionApp-App-SG-${config.region}`);
-    cdk.Tags.of(this.loadBalancerSecurityGroup).add('Name', `MultiRegionApp-ALB-SG-${config.region}`);
+    cdk.Tags.of(this.loadBalancer).add(
+      'Name',
+      `MultiRegionApp-ALB-${config.region}`
+    );
+    cdk.Tags.of(this.autoScalingGroup).add(
+      'Name',
+      `MultiRegionApp-ASG-${config.region}`
+    );
+    cdk.Tags.of(this.applicationSecurityGroup).add(
+      'Name',
+      `MultiRegionApp-App-SG-${config.region}`
+    );
+    cdk.Tags.of(this.loadBalancerSecurityGroup).add(
+      'Name',
+      `MultiRegionApp-ALB-SG-${config.region}`
+    );
   }
 }
 ```
@@ -685,6 +744,7 @@ export class ApplicationTierConstruct extends Construct {
 ## 6. Monitoring Construct
 
 ### `lib/constructs/monitoring-construct.ts`
+
 ```typescript
 import { Construct } from 'constructs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -804,3 +864,4 @@ export class MonitoringConstruct extends Construct {
     // Add RDS metrics to dashboard
     this.dashboard.addWidgets(
       new cloudwatch
+```
