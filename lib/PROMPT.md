@@ -34,8 +34,8 @@ Ensure high availability and fault tolerance for critical infrastructure compone
 
 Automate deployment using CDKTF CLI and scripts to manage environments via environment-specific config.
 
-Use Terraform state management to tarack and protect infrastructure state.
+Use Terraform state management to track and protect infrastructure state.
 
 Validate all infrastructure changes against company compliance and security standards.
 
-Write and organize all test cases under the test directory to verify correct infrastructure deployment.
+Write and organize all the test cases under the test directory to verify correct infrastructure deployment.
