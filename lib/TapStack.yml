@@ -655,24 +655,10 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*
 
-  ConfigRole:
-    Type: AWS::IAM::Role
+  ConfigServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
-      Path: '/'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+      AWSServiceName: config.amazonaws.com
 
   EC2InstanceRole:
     Type: AWS::IAM::Role
@@ -1018,7 +1004,7 @@ Resources:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
       Name: !Sub '${Environment}-config-recorder'
-      RoleARN: !GetAtt ConfigRole.Arn
+      RoleARN: !GetAtt ConfigServiceLinkedRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
