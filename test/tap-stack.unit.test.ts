@@ -83,6 +83,32 @@ describe('TapStack', () => {
         );
       });
     });
+    it('should work when tags are not provided (uses default empty object)', () => {
+      const app = Testing.app();
+      const stack = new TapStack(app, 'test-tap-stack-no-tags', {
+        region: 'us-east-1',
+        environmentSuffix: 'test',
+        // tags intentionally omitted
+      });
+
+      // Just validate that the stack can be synthesized without errors
+      expect(stack).toBeDefined();
+
+      const synthesized = Testing.synth(stack);
+      const parsed = JSON.parse(synthesized);
+
+      // Terraform resources live under `parsed.resource`
+      const resources = parsed.resource || {};
+      const vpcResources = resources.aws_vpc || {};
+
+      // Get the first VPC resource (if any)
+      const vpc = Object.values(vpcResources)[0] as
+        | { tags?: { Name?: string } }
+        | undefined;
+
+      expect(vpc).toBeTruthy();
+      expect(vpc?.tags?.Name).toContain('prod-test-vpc-us-east-1');
+    });
 
     it('should create internet gateway with correct configuration', () => {
       const synthesized = Testing.synth(stack);
