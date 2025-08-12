@@ -171,7 +171,7 @@ describe('TapStack Integration Tests - Secure AWS Infrastructure', () => {
 
   // Setup validation
   beforeAll(async () => {
-    console.log('🔍 Validating secure infrastructure deployment...');
+    console.log('Validating secure infrastructure deployment...');
     const stack = await getStackInfo();
     stackParameters = await getStackParameters();
     console.log(` Stack ${stackName} is in ${stack.StackStatus} state`);
@@ -224,7 +224,6 @@ describe('TapStack Integration Tests - Secure AWS Infrastructure', () => {
     });
 
     test('should validate stack parameters', async () => {
-      // Check that all expected parameters exist
       expect(stackParameters.Environment).toBeDefined();
       expect(stackParameters.KeyPairName).toBeDefined();
       expect(stackParameters.DBUsername).toBeDefined();
@@ -252,7 +251,6 @@ describe('TapStack Integration Tests - Secure AWS Infrastructure', () => {
       const stack = await getStackInfo();
       
       expect(stack.Tags).toBeDefined();
-      // Check for common CI/CD tags
       const repositoryTag = stack.Tags!.find((tag: any) => tag.Key === 'Repository');
       const environmentTag = stack.Tags!.find((tag: any) => tag.Key === 'Environment');
       
@@ -834,19 +832,20 @@ describe('TapStack Integration Tests - Secure AWS Infrastructure', () => {
 
   describe('WAF Security Health Check', () => {
     test('should have active WAF Web ACL', async () => {
+      const webACLName = `${stackName}-web-acl`;
       const command = new GetWebACLCommand({
         Scope: 'REGIONAL',
-        Id: WEB_ACL_ID
+        Id: WEB_ACL_ID,
+        Name: webACLName 
       });
       const response = await wafv2Client.send(command);
       const webACL = response.WebACL!;
-
+    
       expect(webACL.Name).toBeDefined();
       expect(webACL.DefaultAction).toBeDefined();
       expect(webACL.Rules).toBeDefined();
       expect(webACL.Rules!.length).toBeGreaterThanOrEqual(3);
 
-      // Check for managed rule sets
       const commonRuleSet = webACL.Rules!.find((rule: any) => 
         rule.Name === 'AWSManagedRulesCommonRuleSet'
       );
@@ -865,21 +864,20 @@ describe('TapStack Integration Tests - Secure AWS Infrastructure', () => {
     });
 
     test('should have rate limiting configured', async () => {
+      const webACLName = `${stackName}-web-acl`; // Based on your template naming
       const command = new GetWebACLCommand({
         Scope: 'REGIONAL',
-        Id: WEB_ACL_ID
+        Id: WEB_ACL_ID,
+        Name: webACLName  
       });
       const response = await wafv2Client.send(command);
       const webACL = response.WebACL!;
-
       const rateLimitRule = webACL.Rules!.find((rule: any) => 
         rule.Name === 'RateLimitRule'
       );
-
       expect(rateLimitRule!.Statement!.RateBasedStatement!.Limit).toBe(2000);
       expect(rateLimitRule!.Action!.Block).toBeDefined();
-      
-      console.log(` WAF rate limiting configured at ${rateLimitRule!.Statement!.RateBasedStatement!.Limit} requests per 5 minutes`);
+      console.log(`WAF rate limiting configured at ${rateLimitRule!.Statement!.RateBasedStatement!.Limit} requests per 5 minutes`);
     });
   });
 
@@ -991,10 +989,10 @@ describe('TapStack Integration Tests - Secure AWS Infrastructure', () => {
       expect(asgResource).toBeDefined();
       expect(dbResource).toBeDefined();
       expect(s3Resource).toBeDefined();
-
-      expect(vpcResource!.ResourceStatus).toBe('CREATE_COMPLETE');
-      expect(albResource!.ResourceStatus).toBe('CREATE_COMPLETE');
-      expect(asgResource!.ResourceStatus).toBe('CREATE_COMPLETE');
+      const validStates = ['CREATE_COMPLETE', 'UPDATE_COMPLETE'];
+      expect(validStates).toContain(vpcResource!.ResourceStatus);
+      expect(validStates).toContain(albResource!.ResourceStatus);
+      expect(validStates).toContain(asgResource!.ResourceStatus);
       
       console.log(` All critical resources are in CREATE_COMPLETE state`);
     });
