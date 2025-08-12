@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { TerraformStack, S3Backend } from 'cdktf';
+import { App, TerraformStack } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
@@ -31,26 +31,18 @@ export class EnterpriseStack extends TerraformStack {
     new AwsProvider(this, 'aws', { region: 'us-east-1' });
 
     // --- Remote State Management Resources ---
-    const backendBucket = new S3Bucket(this, 'TerraformStateBucket', {
+    new S3Bucket(this, 'TerraformStateBucket', {
       bucket: `enterprise-tfstate-bucket-${env}`,
       versioning: {
         enabled: true,
       },
     });
 
-    const lockTable = new DynamodbTable(this, 'TerraformLockTable', {
+    new DynamodbTable(this, 'TerraformLockTable', {
       name: `enterprise-terraform-locks-${env}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'LockID',
       attribute: [{ name: 'LockID', type: 'S' }],
-    });
-
-    new S3Backend(this, {
-      bucket: backendBucket.bucket,
-      key: 'enterprise-stack.tfstate',
-      region: 'us-east-1',
-      dynamodbTable: lockTable.name,
-      encrypt: true,
     });
 
     // --- Networking Module ---

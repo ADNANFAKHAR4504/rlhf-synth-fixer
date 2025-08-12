@@ -14,14 +14,6 @@ describe('EnterpriseStack Integration Tests', () => {
     expect(synthesized).toBeDefined();
   });
 
-  it('should configure the S3 backend correctly', () => {
-    const backend = synthesized.terraform.backend.s3;
-    expect(backend).toBeDefined();
-    expect(backend.bucket).toBe('${aws_s3_bucket.TerraformStateBucket.bucket}');
-    expect(backend.key).toBe('enterprise-stack.tfstate');
-    expect(backend.region).toBe('us-east-1');
-  });
-
   it('should create all required resources with correct naming conventions', () => {
     const vpc: any = Object.values(synthesized.resource.aws_vpc || {})[0];
     expect(vpc.tags.Name).toBe('prod-vpc-main');
