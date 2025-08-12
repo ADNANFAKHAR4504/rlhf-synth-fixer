@@ -2,6 +2,7 @@ import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import {
   DescribeLoadBalancersCommand,
   ElasticLoadBalancingV2Client,
+  LoadBalancer,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
@@ -121,7 +122,7 @@ describe('TapStack — Integration Coverage', () => {
       region: process.env.AWS_REGION_PRIMARY,
     });
     const route53Client = new Route53Client({
-      region: process.env.AWS_REGION_PRIMARY, // R53 is global; region is fine here
+      region: process.env.AWS_REGION_PRIMARY,
     });
     const secondaryEc2Client = new EC2Client({
       region: process.env.AWS_REGION_SECONDARY,
@@ -154,17 +155,11 @@ describe('TapStack — Integration Coverage', () => {
       );
     }
 
-    // ---- Verify ALB (soft check; tolerate not-found during CI)
-    let alb:
-      | Awaited<
-          ReturnType<
-            ElasticLoadBalancingV2Client['send']
-          >
-        >['LoadBalancers'] extends (infer T)[] ? T : never
-      | undefined;
+    // ---- Verify ALB (soft; tolerate not-found during CI)
+    let alb: LoadBalancer | undefined;
 
     try {
-      // First try by Name (outputs may only have DNS)
+      // Try by "name" (first label of DNS)
       const byName = await primaryElbClient.send(
         new DescribeLoadBalancersCommand({
           Names: [String(albDnsName).split('.')[0]],
