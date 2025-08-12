@@ -1,14 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr807'; // match your stack suffix
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr807';
 
 describe('CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    // Load your compiled CloudFormation template JSON here
-    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // adjust path if needed
+    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust path if needed
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -25,7 +24,6 @@ describe('CloudFormation Template Unit Tests', () => {
     });
 
     test('has Parameters section (if defined)', () => {
-      // Optional, only test if parameters are defined
       if (template.Parameters) {
         const param = template.Parameters.EnvironmentSuffix;
         expect(param).toBeDefined();
@@ -40,15 +38,15 @@ describe('CloudFormation Template Unit Tests', () => {
     test('has Resources section with S3 Bucket encrypted with KMS', () => {
       expect(template.Resources).toBeDefined();
 
-      // Find a resource of type S3::Bucket
       const bucketEntry = Object.entries(template.Resources).find(
-        ([_, resource]: any) => resource.Type === 'AWS::S3::Bucket'
+        ([_, resource]: [string, any]) => resource.Type === 'AWS::S3::Bucket'
       );
 
       expect(bucketEntry).toBeDefined();
-      const [bucketLogicalId, bucket] = bucketEntry!;
 
-      const encryption = bucket.Properties?.BucketEncryption;
+      const [_, bucketResource] = bucketEntry as [string, any];
+      const encryption = bucketResource.Properties?.BucketEncryption;
+
       expect(encryption).toBeDefined();
       expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
 
@@ -67,21 +65,17 @@ describe('CloudFormation Template Unit Tests', () => {
     test('has SecretsManager secret resource with correct properties', () => {
       expect(template.Resources).toBeDefined();
 
-      // Find a resource of type SecretsManager::Secret
       const secretEntry = Object.entries(template.Resources).find(
-        ([_, resource]: any) => resource.Type === 'AWS::SecretsManager::Secret'
+        ([_, resource]: [string, any]) => resource.Type === 'AWS::SecretsManager::Secret'
       );
 
       expect(secretEntry).toBeDefined();
-      const [_, secret] = secretEntry!;
 
-      expect(secret.Properties).toBeDefined();
+      const [__, secretResource] = secretEntry as [string, any];
 
-      const secretName = secret.Properties.Name;
-      expect(secretName).toBeDefined();
-      expect(secretName).toMatch(new RegExp(environmentSuffix));
-
-      expect(secret.Properties.Description).toBeDefined();
+      expect(secretResource.Properties).toBeDefined();
+      expect(secretResource.Properties.Name).toMatch(new RegExp(environmentSuffix));
+      expect(secretResource.Properties.Description).toBeDefined();
     });
   });
 
