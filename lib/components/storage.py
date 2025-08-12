@@ -56,32 +56,6 @@ class StorageComponent(pulumi.ComponentResource):
         opts=pulumi.ResourceOptions(parent=self),
     )
 
-    # S3 Bucket Policy for secure access
-    self.bucket_policy = aws.s3.BucketPolicy(
-        f"{name}-bucket-policy",
-        bucket=self.bucket.id,
-        policy=self.bucket.arn.apply(
-            lambda arn: json.dumps(
-                {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "DenyInsecureConnections",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [arn, f"{arn}/*"],
-                            "Condition": {"Bool": {"aws:SecureTransport": "false"}},
-                        }
-                    ],
-                }
-            )
-        ),
-        opts=pulumi.ResourceOptions(
-            parent=self, depends_on=[self.bucket_public_access_block]
-        ),
-    )
-
     # S3 Bucket Lifecycle Configuration
     self.bucket_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
         f"{name}-bucket-lifecycle",
