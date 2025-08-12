@@ -101,19 +101,19 @@ const WEB_ACL_ID = outputs[`${stackName}-WebACL-ID`] || outputs['WebACLId'];
 const PUBLIC_SUBNETS = outputs[`${stackName}-Public-Subnets`] || outputs['PublicSubnets'];
 const PRIVATE_SUBNETS = outputs[`${stackName}-Private-Subnets`] || outputs['PrivateSubnets'];
 
-// AWS SDK v3 clients - Updated to us-west-2 region
-const ec2Client = new EC2Client({ region: 'us-west-2' });
-const elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
-const rdsClient = new RDSClient({ region: 'us-west-2' });
-const s3Client = new S3Client({ region: 'us-west-2' });
-const cloudWatchClient = new CloudWatchClient({ region: 'us-west-2' });
-const autoScalingClient = new AutoScalingClient({ region: 'us-west-2' });
-const cloudFormationClient = new CloudFormationClient({ region: 'us-west-2' });
-const iamClient = new IAMClient({ region: 'us-west-2' });
-const kmsClient = new KMSClient({ region: 'us-west-2' });
-const wafv2Client = new WAFV2Client({ region: 'us-west-2' });
-const logsClient = new CloudWatchLogsClient({ region: 'us-west-2' });
-const secretsClient = new SecretsManagerClient({ region: 'us-west-2' });
+// AWS SDK v3 clients - Updated to us-east-1 region
+const ec2Client = new EC2Client({ region: 'us-east-1' });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+const rdsClient = new RDSClient({ region: 'us-east-1' });
+const s3Client = new S3Client({ region: 'us-east-1' });
+const cloudWatchClient = new CloudWatchClient({ region: 'us-east-1' });
+const autoScalingClient = new AutoScalingClient({ region: 'us-east-1' });
+const cloudFormationClient = new CloudFormationClient({ region: 'us-east-1' });
+const iamClient = new IAMClient({ region: 'us-east-1' });
+const kmsClient = new KMSClient({ region: 'us-east-1' });
+const wafv2Client = new WAFV2Client({ region: 'us-east-1' });
+const logsClient = new CloudWatchLogsClient({ region: 'us-east-1' });
+const secretsClient = new SecretsManagerClient({ region: 'us-east-1' });
 
 // Helper functions for AWS SDK v3 operations
 async function getStackInfo() {
