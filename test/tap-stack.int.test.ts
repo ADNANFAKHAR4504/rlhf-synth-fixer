@@ -228,6 +228,13 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
     CLOUDFRONT_DIST_ID = getOutput('CloudFrontDistributionId');
     DB_SECRET_ARN = getOutput('DatabaseSecretArn');
 
+    // Added logging for debugging bucket names
+    console.log('Buckets:', {
+      secure: SECURE_BUCKET,
+      config: CONFIG_BUCKET,
+      cloudtrail: CLOUDTRAIL_BUCKET,
+    });
+
     if (
       !VPC_ID ||
       !PUBLIC_SUBNET_1 ||
