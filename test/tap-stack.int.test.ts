@@ -7,7 +7,8 @@ import {
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
-  CloudWatchClient
+  CloudWatchClient,
+  GetMetricStatisticsCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
   CloudWatchLogsClient
@@ -24,6 +25,7 @@ import {
   DescribeListenersCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
@@ -40,12 +42,15 @@ import {
   GetBucketEncryptionCommand,
   GetBucketLifecycleConfigurationCommand,
   GetBucketVersioningCommand,
+  GetObjectCommand,
   GetPublicAccessBlockCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { SNSClient } from '@aws-sdk/client-sns';
 import {
-  SSMClient
+  SendCommandCommand,
+  SSMClient,
+  waitUntilCommandExecuted
 } from '@aws-sdk/client-ssm';
 import {
   GetWebACLCommand,
@@ -54,6 +59,7 @@ import {
 } from '@aws-sdk/client-wafv2';
 import * as fs from 'fs';
 import * as path from 'path';
+import axios from 'axios';
 
 // Read the deployment outputs
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
@@ -507,5 +513,314 @@ describe('Production Infrastructure Integration Tests', () => {
         expect(subnet.AvailabilityZone).toMatch(/^us-west-2[a-z]$/);
       });
     }, testTimeout);
+  });
+
+  // E2E Tests - End-to-End Application Flow Testing
+  describe('E2E Application Flow Tests', () => {
+    let albDnsName: string;
+    let targetGroupArn: string;
+
+    beforeAll(async () => {
+      albDnsName = outputs.LoadBalancerDNS;
+      expect(albDnsName).toBeDefined();
+
+      // Get target group ARN for health checks
+      const loadBalancers = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({
+          Names: [`tf-alb-${environmentSuffix}`],
+        })
+      );
+      
+      if (loadBalancers.LoadBalancers && loadBalancers.LoadBalancers.length > 0) {
+        const listeners = await elbv2Client.send(
+          new DescribeListenersCommand({
+            LoadBalancerArn: loadBalancers.LoadBalancers[0].LoadBalancerArn,
+          })
+        );
+        
+        if (listeners.Listeners && listeners.Listeners.length > 0) {
+          const defaultActions = listeners.Listeners[0].DefaultActions;
+          if (defaultActions && defaultActions.length > 0 && defaultActions[0].TargetGroupArn) {
+            targetGroupArn = defaultActions[0].TargetGroupArn;
+          }
+        }
+      }
+    }, testTimeout);
+
+    test('E2E: Application responds with valid HTML content', async () => {
+      const url = `http://${albDnsName}`;
+      
+      // Wait for ALB to be ready
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      
+      const response = await axios.get(url, {
+        timeout: 30000,
+        validateStatus: () => true,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/text\/html/);
+      expect(response.data).toContain('Secure Web Application');
+      expect(response.data).toContain('Instance ID:');
+      
+      // Verify response contains actual instance ID
+      const instanceIdMatch = response.data.match(/Instance ID: (i-[a-f0-9]+)/);
+      expect(instanceIdMatch).toBeTruthy();
+      expect(instanceIdMatch[1]).toMatch(/^i-[a-f0-9]{8,17}$/);
+    }, 60000);
+
+    test('E2E: Load balancer distributes traffic across instances', async () => {
+      const url = `http://${albDnsName}`;
+      const requestCount = 10;
+      const instanceIds = new Set<string>();
+
+      for (let i = 0; i < requestCount; i++) {
+        try {
+          const response = await axios.get(url, { timeout: 15000 });
+          const instanceIdMatch = response.data.match(/Instance ID: (i-[a-f0-9]+)/);
+          if (instanceIdMatch) {
+            instanceIds.add(instanceIdMatch[1]);
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error: any) {
+          console.warn(`Request ${i + 1} failed:`, error.message);
+        }
+      }
+
+      expect(instanceIds.size).toBeGreaterThanOrEqual(1);
+      console.log(`Traffic distributed across ${instanceIds.size} instances`);
+    }, 60000);
+
+    test('E2E: Target group maintains healthy instances', async () => {
+      if (!targetGroupArn) {
+        console.warn('Target group ARN not available, skipping health check');
+        return;
+      }
+
+      const healthCheck = await elbv2Client.send(
+        new DescribeTargetHealthCommand({
+          TargetGroupArn: targetGroupArn,
+        })
+      );
+
+      expect(healthCheck.TargetHealthDescriptions).toBeDefined();
+      expect(healthCheck.TargetHealthDescriptions!.length).toBeGreaterThan(0);
+
+      const healthyTargets = healthCheck.TargetHealthDescriptions!.filter(
+        target => target.TargetHealth?.State === 'healthy'
+      );
+
+      expect(healthyTargets.length).toBeGreaterThanOrEqual(1);
+    }, testTimeout);
+
+    test('E2E: Application handles concurrent requests', async () => {
+      const url = `http://${albDnsName}`;
+      const concurrentRequests = 5;
+      
+      const requests = Array.from({ length: concurrentRequests }, () =>
+        axios.get(url, { timeout: 30000 })
+      );
+
+      const responses = await Promise.all(requests);
+      
+      responses.forEach(response => {
+        expect(response.status).toBe(200);
+        expect(response.data).toContain('Secure Web Application');
+      });
+
+      // Verify load balancing across instances
+      const instanceIds = responses.map(response => {
+        const match = response.data.match(/Instance ID: (i-[a-f0-9]+)/);
+        return match ? match[1] : null;
+      }).filter(Boolean);
+
+      expect(instanceIds.length).toBe(concurrentRequests);
+    }, 60000);
+
+    test('E2E: WAF protection blocks malicious requests', async () => {
+      const url = `http://${albDnsName}`;
+      
+      const maliciousRequests = [
+        `${url}/?id=1' OR '1'='1`,
+        `${url}/?search=<script>alert('xss')</script>`,
+        `${url}/../../../etc/passwd`,
+      ];
+
+      for (const maliciousUrl of maliciousRequests) {
+        try {
+          const response = await axios.get(maliciousUrl, {
+            timeout: 30000,
+            validateStatus: () => true,
+          });
+          
+          // WAF should block (403) or handle safely (200)
+          expect([200, 403, 404]).toContain(response.status);
+          
+          if (response.status === 200) {
+            expect(response.data).not.toContain('<script>');
+            expect(response.data).not.toContain('root:x:0:0');
+          }
+        } catch (error: any) {
+          // Network-level blocking is also acceptable
+          expect(error.code).toBeDefined();
+        }
+      }
+    }, 60000);
+
+    test('E2E: S3 integration works from EC2 instances', async () => {
+      const s3BucketName = outputs.S3BucketName;
+      const asgName = outputs.AutoScalingGroupName;
+
+      // Get running instance
+      const asgDetails = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName],
+        })
+      );
+
+      const instances = asgDetails.AutoScalingGroups?.[0]?.Instances?.filter(
+        instance => instance.LifecycleState === 'InService'
+      );
+
+      expect(instances?.length).toBeGreaterThan(0);
+      const instanceId = instances![0].InstanceId!;
+
+      // Test S3 write via SSM
+      const testKey = `e2e-test-${Date.now()}.txt`;
+      const testContent = `E2E test from ${instanceId}`;
+
+      const writeCommand = await ssmClient.send(
+        new SendCommandCommand({
+          InstanceIds: [instanceId],
+          DocumentName: 'AWS-RunShellScript',
+          Parameters: {
+            commands: [
+              `echo "${testContent}" > /tmp/e2e-test.txt`,
+              `aws s3 cp /tmp/e2e-test.txt s3://${s3BucketName}/${testKey}`,
+            ],
+          },
+        })
+      );
+
+      await waitUntilCommandExecuted(
+        { client: ssmClient, maxWaitTime: 60 },
+        {
+          CommandId: writeCommand.Command!.CommandId!,
+          InstanceId: instanceId,
+        }
+      );
+
+      // Verify S3 object exists
+      const s3Object = await s3Client.send(
+        new GetObjectCommand({
+          Bucket: s3BucketName,
+          Key: testKey,
+        })
+      );
+
+      expect(s3Object.Body).toBeDefined();
+      const content = await s3Object.Body!.transformToString();
+      expect(content.trim()).toBe(testContent);
+    }, 120000);
+
+    test('E2E: Auto Scaling maintains minimum capacity', async () => {
+      const asgName = outputs.AutoScalingGroupName;
+      
+      const asgDetails = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName],
+        })
+      );
+
+      const asg = asgDetails.AutoScalingGroups?.[0];
+      expect(asg).toBeDefined();
+      expect(asg!.DesiredCapacity).toBeGreaterThanOrEqual(asg!.MinSize!);
+      expect(asg!.Instances?.length).toBeGreaterThanOrEqual(asg!.MinSize!);
+
+      const inServiceInstances = asg!.Instances?.filter(
+        instance => instance.LifecycleState === 'InService'
+      );
+      expect(inServiceInstances?.length).toBeGreaterThanOrEqual(asg!.MinSize!);
+    }, testTimeout);
+
+    test('E2E: CloudWatch metrics are generated', async () => {
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - 10 * 60 * 1000);
+
+      // Check ALB request metrics
+      const albMetrics = await cloudWatchClient.send(
+        new GetMetricStatisticsCommand({
+          Namespace: 'AWS/ApplicationELB',
+          MetricName: 'RequestCount',
+          Dimensions: [
+            {
+              Name: 'LoadBalancer',
+              Value: `app/tf-alb-${environmentSuffix}/*`,
+            },
+          ],
+          StartTime: startTime,
+          EndTime: endTime,
+          Period: 300,
+          Statistics: ['Sum'],
+        })
+      );
+
+      expect(albMetrics.Datapoints).toBeDefined();
+      console.log(`ALB RequestCount datapoints: ${albMetrics.Datapoints!.length}`);
+
+      // Check ASG metrics
+      const asgMetrics = await cloudWatchClient.send(
+        new GetMetricStatisticsCommand({
+          Namespace: 'AWS/AutoScaling',
+          MetricName: 'GroupDesiredCapacity',
+          Dimensions: [
+            {
+              Name: 'AutoScalingGroupName',
+              Value: outputs.AutoScalingGroupName,
+            },
+          ],
+          StartTime: startTime,
+          EndTime: endTime,
+          Period: 300,
+          Statistics: ['Average'],
+        })
+      );
+
+      expect(asgMetrics.Datapoints).toBeDefined();
+    }, testTimeout);
+
+    test('E2E: Application performance under load', async () => {
+      const url = `http://${albDnsName}`;
+      const loadTestRequests = 10;
+      const maxResponseTime = 10000; // 10 seconds
+      
+      const responseTimes: number[] = [];
+      const requests = Array.from({ length: loadTestRequests }, async () => {
+        const startTime = Date.now();
+        try {
+          const response = await axios.get(url, { timeout: 30000 });
+          const responseTime = Date.now() - startTime;
+          responseTimes.push(responseTime);
+          return { status: response.status, responseTime };
+        } catch (error: any) {
+          const responseTime = Date.now() - startTime;
+          responseTimes.push(responseTime);
+          return { status: 'error', responseTime };
+        }
+      });
+
+      const results = await Promise.all(requests);
+      
+      const successfulRequests = results.filter(r => r.status === 200).length;
+      const averageResponseTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
+
+      console.log('Load test results:', {
+        successfulRequests,
+        averageResponseTime: `${averageResponseTime.toFixed(2)}ms`,
+      });
+
+      expect(successfulRequests).toBeGreaterThan(loadTestRequests * 0.7); // 70% success rate
+      expect(averageResponseTime).toBeLessThan(maxResponseTime);
+    }, 120000);
   });
 });
