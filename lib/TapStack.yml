@@ -1099,7 +1099,7 @@ Resources:
       DBSubnetGroupDescription: !Sub '${Environment} DB subnet group (private/isolated)'
       SubnetIds:
         - !Ref PrivateSubnet1
-        - !Ref IsolatedSubnet1
+        - !Ref PrivateSubnet2
       Tags:
         - Key: Environment
           Value: !Ref Environment
