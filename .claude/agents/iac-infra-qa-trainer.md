@@ -43,6 +43,8 @@ that can be deployed with the current configuration of the ci-cd pipelines.
   - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-east-1
   - If deployment fails, fix the code until it deploys succesfully.
   - If you are not able to deploy, report this error and finish your execution with an error message.
+  - If there are AWS Quota Limit issues while deploying. Report this to the user, and await for user
+  input to continue.
 - Important: Verify that the deployed resources are consistent with the `lib/PROMPT.md` requirements. If
 they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
 - Important: Every deployment should be self-sufficient. There should not be references to resources
@@ -63,7 +65,8 @@ In CDK this is achievable by instantiating the child stack using `this`. e.g:
     });
 ```
 
-- After the deployment succeeds, Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check `Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on
+- After the deployment succeeds, Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check
+`Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on
 how to accomplish this per platform and region.
 The result should be similar to this (an object based on plain key, value).
 
@@ -103,9 +106,8 @@ in structure to the `lib/MODEL_RESPONSE.md`.
 - Verify solution meets requirements
 - Important!: Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
   - Dont forget to Fix them if they are failing.
-- Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the IDEAL_RESPONSE from the
-MODEL_RESPONSE. Do not mention the QA process. only focus in the infrastructure changes needed
-to fix the MODEL_RESPONSE.
+- Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the `lib/IDEAL_RESPONSE.md` from the
+initial `lib/MODEL_RESPONSE`. Do not mention the QA process. only focus in the infrastructure changes needed to fix the MODEL_RESPONSE.
 
 ### 6. Cleanup
 
@@ -125,3 +127,4 @@ to fix the MODEL_RESPONSE.
 Use your best judgement to decide.
 - Never create or updated code outside of the lib, bin, test folders. That should be your working space to do the QA task.
 - Do not create specific github actions or workflows. Those are already created.
+- Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside the lib/ folder
