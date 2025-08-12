@@ -1,0 +1,105 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props and match snapshot 1`] = `
+"{
+  "output": {
+    "ApplicationLoadBalancerDNS": {
+      "description": "Public DNS name of the Application Load Balancer",
+      "value": "mock-alb.dns.name.com"
+    },
+    "ApplicationURL": {
+      "description": "URL to access the web application",
+      "value": "https://mock-alb.dns.name.com"
+    },
+    "KmsKeyArn": {
+      "description": "ARN of the KMS key for EBS encryption",
+      "value": "mock-kms-key-arn"
+    },
+    "VpcId": {
+      "description": "ID of the provisioned VPC",
+      "value": "mock-vpc-id"
+    }
+  },
+  "provider": {
+    "aws": [
+      {
+        "default_tags": [
+          {
+            "tags": {
+              "Owner": "DevOps",
+              "Project": "TAP"
+            }
+          }
+        ],
+        "region": "us-west-2"
+      }
+    ]
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "my-custom-state-bucket",
+        "encrypt": true,
+        "key": "staging/TestCustomStack.tfstate",
+        "region": "us-east-1",
+        "use_lockfile": true
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.4.0"
+      }
+    }
+  }
+}"
+`;
+
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with default props and match snapshot 1`] = `
+"{
+  "output": {
+    "ApplicationLoadBalancerDNS": {
+      "description": "Public DNS name of the Application Load Balancer",
+      "value": "mock-alb.dns.name.com"
+    },
+    "ApplicationURL": {
+      "description": "URL to access the web application",
+      "value": "https://mock-alb.dns.name.com"
+    },
+    "KmsKeyArn": {
+      "description": "ARN of the KMS key for EBS encryption",
+      "value": "mock-kms-key-arn"
+    },
+    "VpcId": {
+      "description": "ID of the provisioned VPC",
+      "value": "mock-vpc-id"
+    }
+  },
+  "provider": {
+    "aws": [
+      {
+        "default_tags": [
+        ],
+        "region": "us-west-2"
+      }
+    ]
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "your-tf-states-bucket-name",
+        "encrypt": true,
+        "key": "prod/TestDefaultStack.tfstate",
+        "region": "us-east-1",
+        "use_lockfile": true
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.4.0"
+      }
+    }
+  }
+}"
+`;
