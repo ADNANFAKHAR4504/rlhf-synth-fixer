@@ -119,11 +119,7 @@ for i in range(min(2, len(availability_zones.names))):
         vpc_id=vpc.id,
         availability_zone=az,
         cidr_block=ipv4_cidr,
-        ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-            lambda cidr: f"{cidr[:-2]}{i + 1}::/64"
-        ),
         map_public_ip_on_launch=True,
-        assign_ipv6_address_on_creation=True,
         tags={
             "Name": get_resource_name(f"public-subnet-{i + 1}"),
             "Environment": ENVIRONMENT,
