@@ -526,7 +526,6 @@ cloudwatch_dashboard = aws.cloudwatch.Dashboard(
 unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
     get_resource_name("unhealthy-targets-alarm"),
     name=get_resource_name("unhealthy-targets-alarm"),
-    description="Alarm when there are unhealthy targets in the target group",
     metric_name="UnHealthyHostCount",
     namespace="AWS/ApplicationELB",
     statistic="Average",
@@ -549,7 +548,6 @@ unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
 high_response_time_alarm = aws.cloudwatch.MetricAlarm(
     get_resource_name("high-response-time-alarm"),
     name=get_resource_name("high-response-time-alarm"),
-    description="Alarm when target response time is too high",
     metric_name="TargetResponseTime",
     namespace="AWS/ApplicationELB",
     statistic="Average",
