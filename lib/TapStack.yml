@@ -16,7 +16,7 @@ Parameters:
     Description: Whether to deploy Lambda functions inside a VPC
 
   VpcId:
-    Type: AWS::EC2::VPC::Id
+    Type: String
     Default: vpc-00000000
     Description: VPC ID where Lambda functions will be deployed (required when EnableVPC is true)
     
