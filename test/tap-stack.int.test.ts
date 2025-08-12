@@ -378,7 +378,7 @@ testSuite('TapStack CloudFormation Integration Tests', () => {
         
         const logGroup = response.logGroups?.find(group => group.logGroupName === logGroupName);
         expect(logGroup).toBeDefined();
-        expect(logGroup?.retentionInDays).toBe(7);
+        expect(logGroup?.retentionInDays).toBe(30);
       } catch (error: any) {
         // Skip test if log group doesn't exist (infrastructure not deployed)
         if (error.name === 'ResourceNotFoundException' || error.name === 'NotFound') {
