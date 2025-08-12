@@ -557,9 +557,6 @@ describe('Production Infrastructure Integration Tests', () => {
         validateStatus: () => true,
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response data (first 500 chars):', response.data.substring(0, 500));
-
       expect(response.status).toBe(200);
       
       // More flexible content checks - the application might not have the exact expected content
@@ -573,7 +570,6 @@ describe('Production Infrastructure Integration Tests', () => {
                            response.data.includes('Welcome');
       
       if (!hasAppContent) {
-        console.log('Application may be serving default content, checking for basic web server response');
         // Just verify we get a valid HTTP response
         expect(response.status).toBe(200);
         return;
@@ -595,8 +591,6 @@ describe('Production Infrastructure Integration Tests', () => {
       if (instanceIdMatch) {
         const instanceId = instanceIdMatch[1] || instanceIdMatch[0];
         expect(instanceId).toMatch(/^i-[a-f0-9]{8,17}$/);
-      } else {
-        console.log('No instance ID found in response, but application is responding correctly');
       }
     }, 60000);
 
@@ -625,22 +619,14 @@ describe('Production Infrastructure Integration Tests', () => {
           if (instanceIdMatch) {
             const instanceId = instanceIdMatch[1] || instanceIdMatch[0];
             instanceIds.add(instanceId);
-            console.log(`Request ${i + 1}: Found instance ${instanceId}`);
-          } else {
-            console.log(`Request ${i + 1}: No instance ID found, but got response status ${response.status}`);
           }
           
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (error: any) {
-          console.warn(`Request ${i + 1} failed:`, error.message);
         }
       }
 
-      console.log(`Traffic distributed across ${instanceIds.size} instances:`, Array.from(instanceIds));
-      
-      // If no instance IDs found, just verify the load balancer is working
       if (instanceIds.size === 0) {
-        console.log('No instance IDs found, verifying load balancer responds correctly');
         const testResponse = await axios.get(url, { timeout: 15000 });
         expect(testResponse.status).toBe(200);
       } else {
@@ -683,7 +669,6 @@ describe('Production Infrastructure Integration Tests', () => {
       // Verify all requests succeeded
       responses.forEach((response, index) => {
         expect(response.status).toBe(200);
-        console.log(`Response ${index + 1} status: ${response.status}`);
       });
 
       // Try to extract instance IDs but don't fail if not found
@@ -701,11 +686,8 @@ describe('Production Infrastructure Integration Tests', () => {
         }
         
         const instanceId = instanceIdMatch ? (instanceIdMatch[1] || instanceIdMatch[0]) : null;
-        console.log(`Response ${index + 1} instance ID:`, instanceId || 'not found');
         return instanceId;
       }).filter(Boolean);
-
-      console.log(`Found ${instanceIds.length} instance IDs out of ${concurrentRequests} requests`);
       
       // Main requirement: all requests should succeed
       expect(responses.length).toBe(concurrentRequests);
@@ -761,8 +743,6 @@ describe('Production Infrastructure Integration Tests', () => {
 
       expect(instances?.length).toBeGreaterThan(0);
       const instanceId = instances![0].InstanceId!;
-      
-      console.log(`Testing S3 integration with instance: ${instanceId}`);
 
       try {
         // Test S3 write via SSM with simpler commands
@@ -784,8 +764,6 @@ describe('Production Infrastructure Integration Tests', () => {
           })
         );
 
-        console.log(`SSM Command sent: ${writeCommand.Command!.CommandId}`);
-
         // Wait for command execution with better error handling
         try {
           await waitUntilCommandExecuted(
@@ -803,12 +781,6 @@ describe('Production Infrastructure Integration Tests', () => {
               InstanceId: instanceId,
             })
           );
-          
-          console.log('Command status:', commandResult.Status);
-          console.log('Command output:', commandResult.StandardOutputContent);
-          if (commandResult.StandardErrorContent) {
-            console.log('Command error:', commandResult.StandardErrorContent);
-          }
 
           if (commandResult.Status === 'Success') {
             // Try to verify S3 object exists
@@ -823,20 +795,15 @@ describe('Production Infrastructure Integration Tests', () => {
               expect(s3Object.Body).toBeDefined();
               const content = await s3Object.Body!.transformToString();
               expect(content.trim()).toBe(testContent);
-              console.log('S3 integration test passed successfully');
             } catch (s3Error: any) {
-              console.log('S3 verification failed:', s3Error.message);
               // Don't fail the test if S3 verification fails, SSM connectivity is the main test
               expect(commandResult.Status).toBe('Success');
             }
           } else {
-            console.log('SSM command did not complete successfully, but connection was established');
             expect(writeCommand.Command).toBeDefined();
           }
           
         } catch (waitError: any) {
-          console.log('SSM command execution failed:', waitError.message);
-          
           // Get command details for debugging
           try {
             const commandResult = await ssmClient.send(
@@ -846,34 +813,23 @@ describe('Production Infrastructure Integration Tests', () => {
               })
             );
             
-            console.log('Command status:', commandResult.Status);
-            console.log('Command output:', commandResult.StandardOutputContent);
-            console.log('Command error:', commandResult.StandardErrorContent);
-            
             // If the command was sent but failed, that's still a valid test of SSM connectivity
             if (commandResult.Status === 'Failed' && commandResult.StandardErrorContent?.includes('Undeliverable')) {
-              console.log('SSM agent not responding - instance may not have SSM agent installed or configured');
               // Skip this test gracefully
               expect(writeCommand.Command).toBeDefined();
               return;
             }
           } catch (getError) {
-            console.log('Could not get command details:', getError);
+            // Could not get command details
           }
           
           // If we can send the command, SSM is working at the API level
           expect(writeCommand.Command).toBeDefined();
         }
       } catch (error: any) {
-        console.log('S3 integration test failed:', error.message);
-        
         // Check if it's a permissions issue or connectivity issue
         if (error.message.includes('AccessDenied') || error.message.includes('InvalidInstanceId')) {
           throw error; // These are real failures
-        } else {
-          // For other issues, log and pass if we can at least send the command
-          console.log('Marking test as passed due to infrastructure connectivity issues');
-          expect(true).toBe(true);
         }
       }
     }, 180000);
@@ -921,7 +877,6 @@ describe('Production Infrastructure Integration Tests', () => {
       );
 
       expect(albMetrics.Datapoints).toBeDefined();
-      console.log(`ALB RequestCount datapoints: ${albMetrics.Datapoints!.length}`);
 
       // Check ASG metrics
       const asgMetrics = await cloudWatchClient.send(
@@ -968,11 +923,6 @@ describe('Production Infrastructure Integration Tests', () => {
       
       const successfulRequests = results.filter(r => r.status === 200).length;
       const averageResponseTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
-
-      console.log('Load test results:', {
-        successfulRequests,
-        averageResponseTime: `${averageResponseTime.toFixed(2)}ms`,
-      });
 
       expect(successfulRequests).toBeGreaterThan(loadTestRequests * 0.7); // 70% success rate
       expect(averageResponseTime).toBeLessThan(maxResponseTime);
