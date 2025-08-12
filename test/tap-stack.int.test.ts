@@ -541,7 +541,7 @@ describe('Secure Environment Integration Tests', () => {
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
       expect(trail.IsMultiRegionTrail).toBe(false);
       expect(trail.LogFileValidationEnabled).toBe(true);
-      expect(trail.KMSKeyId).toBe(KMS_KEY_ID);
+      expect(trail.KmsKeyId).toBe(KMS_KEY_ID);
       
       console.log(`CloudTrail ${trail.Name} is properly configured for API logging`);
     });
