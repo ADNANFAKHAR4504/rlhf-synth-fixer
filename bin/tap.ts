@@ -3,18 +3,22 @@ import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
-// Detect if running in CDKTF context (when cdktf.json expects this file)
-const isCdktfMode =
-  process.argv.includes('--cdktf') || process.env.CDKTF_MODE === 'true';
+// Try CDKTF mode first, fall back to CDK if CDKTF not available
+let isCdktfMode = false;
+try {
+  require('cdktf');
+  isCdktfMode = true;
+} catch {
+  isCdktfMode = false;
+}
 
 if (isCdktfMode) {
   // CDKTF mode - create minimal Terraform stack
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { App, TerraformStack } = require('cdktf');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { Construct } = require('constructs');
 
   class PlaceholderTerraformStack extends TerraformStack {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     constructor(scope: any, id: string) {
       super(scope, id);
       // Empty placeholder for CDKTF synthesis
