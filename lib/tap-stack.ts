@@ -26,7 +26,7 @@ export class TapStack extends cdk.Stack {
       'Allow HTTPS traffic from internet'
     );
 
-    // IAM Role with minimal S3 permissions
+    // IAM Role with minimal S3 permissions 
     const ec2Role = new iam.Role(this, 'Ec2Role', {
       roleName: 'myapp-ec2role-production',
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
