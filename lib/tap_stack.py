@@ -74,7 +74,7 @@ class TapStack(cdk.Stack):
             self,
             "VPC",
             vpc_name=resource_name("vpc"),
-            cidr="10.0.0.0/16",  # Use older cidr property for CLI 2.1020.2 compatibility
+            ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),  # Use newer ip_addresses property
             enable_dns_hostnames=True,
             enable_dns_support=True,
             max_azs=2,  # Use 2 availability zones for high availability
