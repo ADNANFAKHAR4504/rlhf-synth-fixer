@@ -10,40 +10,36 @@ try {
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
 } catch (error) {
-  if (error.code === 'ENOENT') {
-    console.warn(
-      'cfn-outputs/flat-outputs.json not found. Using hardcoded outputs for testing.'
-    );
-    outputs = {
-      HealthEndpoint:
-        'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod/health',
-      SecureEndpoint:
-        'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod/secure',
-      S3VPCEndpointId: 'vpce-0fb5875dfdf689a0e',
-      VPCId: 'vpc-0f6656239792e7205',
-      SecurityGroupId: 'sg-01eaa9dbde3e78a7e',
-      APIGatewayURL:
-        'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod',
-      APIGatewayVPCEndpointId: 'vpce-0a237cf285dc49d10',
-      APIGatewayRoleArn:
-        'arn:aws:iam::149536495831:role/test-APIGatewayCloudWatchRole-ihKflMpoe7no',
-      PrivateSubnetIds: 'subnet-02863e34f51440cf5,subnet-01dbd41a0a20e4ece',
-      WAFLogGroupName: 'aws-waf-logs-secure-api-project-dev',
-      LambdaExecutionRoleArn:
-        'arn:aws:iam::149536495831:role/test-LambdaExecutionRole-4foQIhdePEQT',
-      ApplicationDataBucketName: 'secure-api-project-dev-app-data-149536495831',
-      APILogsBucketName: 'secure-api-project-dev-api-logs-149536495831',
-      PublicSubnetId: 'subnet-0c02a25e8c0f8335c',
-      APIGatewayLogGroupName: '/aws/apigateway/secure-api-project-dev',
-      WebACLId:
-        'secure-api-project-dev-web-acl|fcf3a972-ef8c-452f-b396-a10eb5136d5a|REGIONAL',
-      APIGatewayId: 'of9ae211vg',
-      WebACLArn:
-        'arn:aws:wafv2:us-east-1:149536495831:regional/webacl/secure-api-project-dev-web-acl/fcf3a972-ef8c-452f-b396-a10eb5136d5a',
-    };
-  } else {
-    throw error;
-  }
+  console.warn(
+    'cfn-outputs/flat-outputs.json not found. Using hardcoded outputs for testing.'
+  );
+  outputs = {
+    HealthEndpoint:
+      'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod/health',
+    SecureEndpoint:
+      'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod/secure',
+    S3VPCEndpointId: 'vpce-0fb5875dfdf689a0e',
+    VPCId: 'vpc-0f6656239792e7205',
+    SecurityGroupId: 'sg-01eaa9dbde3e78a7e',
+    APIGatewayURL:
+      'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod',
+    APIGatewayVPCEndpointId: 'vpce-0a237cf285dc49d10',
+    APIGatewayRoleArn:
+      'arn:aws:iam::149536495831:role/test-APIGatewayCloudWatchRole-ihKflMpoe7no',
+    PrivateSubnetIds: 'subnet-02863e34f51440cf5,subnet-01dbd41a0a20e4ece',
+    WAFLogGroupName: 'aws-waf-logs-secure-api-project-dev',
+    LambdaExecutionRoleArn:
+      'arn:aws:iam::149536495831:role/test-LambdaExecutionRole-4foQIhdePEQT',
+    ApplicationDataBucketName: 'secure-api-project-dev-app-data-149536495831',
+    APILogsBucketName: 'secure-api-project-dev-api-logs-149536495831',
+    PublicSubnetId: 'subnet-0c02a25e8c0f8335c',
+    APIGatewayLogGroupName: '/aws/apigateway/secure-api-project-dev',
+    WebACLId:
+      'secure-api-project-dev-web-acl|fcf3a972-ef8c-452f-b396-a10eb5136d5a|REGIONAL',
+    APIGatewayId: 'of9ae211vg',
+    WebACLArn:
+      'arn:aws:wafv2:us-east-1:149536495831:regional/webacl/secure-api-project-dev-web-acl/fcf3a972-ef8c-452f-b396-a10eb5136d5a',
+  };
 }
 
 // Helper function to make HTTPS requests
