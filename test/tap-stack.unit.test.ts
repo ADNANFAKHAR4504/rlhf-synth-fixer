@@ -8,7 +8,7 @@ import {
 import fs from 'fs';
 
 // Load the CloudFormation template
-const templatePath = './tap-stack.template.json';
+const templatePath = '../lib/TapStack.json';
 let template: any;
 
 describe('SecureApp CloudFormation Template Unit Tests', () => {
