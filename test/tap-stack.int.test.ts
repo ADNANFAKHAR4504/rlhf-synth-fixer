@@ -382,7 +382,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const expectedLogGroups = [
         `/aws/ec2/TapStack${environmentSuffix}`,
         `/aws/s3/TapStack${environmentSuffix}`,
-        `CloudTrail/TapStack${environmentSuffix}`,
+        `/aws/cloudtrail/TapStack${environmentSuffix}`,
       ];
 
       const response = await cloudWatchLogs.send(new DescribeLogGroupsCommand({}));

@@ -285,7 +285,7 @@ Resources:
   ApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "tapstack${EnvironmentSuffix}-app-bucket-${AWS::AccountId}"
+      BucketName: !Sub "tapstack${EnvironmentSuffix}-app-bucket-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -319,7 +319,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "tapstack${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}"
+      BucketName: !Sub "tapstack${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -430,7 +430,7 @@ Resources:
     Condition: CreateConfig
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "tapstack${EnvironmentSuffix}-config-${AWS::AccountId}"
+      BucketName: !Sub "tapstack${EnvironmentSuffix}-config-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

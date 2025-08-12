@@ -209,41 +209,53 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('S3 bucket names should include environment suffix', () => {
-      const buckets = ['ApplicationS3Bucket', 'CloudTrailS3Bucket', 'ConfigS3Bucket'];
-      buckets.forEach((name) => {
-        const res = template.Resources[name];
-        expect(res.Properties.BucketName).toEqual({
-          'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
-        });
-      });
-    });
-
-    test('resource names should include environment suffix in tags', () => {
-      const withTags = ['VPC', 'InternetGateway', 'PublicSubnet1', 'NATGateway'];
-      withTags.forEach((name) => {
-        const res = template.Resources[name];
-        const nameTag = res.Properties.Tags.find((t: any) => t.Key === 'Name');
-        expect(nameTag.Value).toEqual({
-          'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
-        });
-      });
-    });
-
-    test('service names should include environment suffix', () => {
-      const resources: Record<string, string> = {
-        DynamoDBTable: 'TableName',
-        LaunchTemplate: 'LaunchTemplateName',
-        AutoScalingGroup: 'AutoScalingGroupName',
+    describe('Resource Naming Convention', () => {
+      const getSubString = (val: any): string => {
+        // BucketName is expressed as { "Fn::Sub": "..." }
+        if (val && typeof val === 'object' && 'Fn::Sub' in val) return val['Fn::Sub'] as string;
+        // Fallback: if ever a plain string slips in
+        if (typeof val === 'string') return val;
+        throw new Error('Expected BucketName to be an Fn::Sub string');
       };
-      Object.entries(resources).forEach(([resName, prop]) => {
-        const res = template.Resources[resName];
-        expect(res.Properties[prop]).toEqual({
-          'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
+
+      test('S3 bucket names should include environment suffix AND region', () => {
+        const buckets = ['ApplicationS3Bucket', 'CloudTrailS3Bucket', 'ConfigS3Bucket'];
+        buckets.forEach((name) => {
+          const res = template.Resources[name];
+          expect(res).toBeDefined();
+          const sub = getSubString(res.Properties.BucketName);
+
+          expect(sub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
+          expect(sub).toEqual(expect.stringContaining('${AWS::Region}'));
+
+          // Optional but recommended (you have it in names): also include AccountId
+          expect(sub).toEqual(expect.stringContaining('${AWS::AccountId}'));
         });
       });
-    });
+
+      test('resource names should include environment suffix in tags', () => {
+        const withTags = ['VPC', 'InternetGateway', 'PublicSubnet1', 'NATGateway'];
+        withTags.forEach((name) => {
+          const res = template.Resources[name];
+          expect(res).toBeDefined();
+          const nameTag = res.Properties.Tags.find((t: any) => t.Key === 'Name');
+          const tagSub = getSubString(nameTag.Value);
+          expect(tagSub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
+        });
+      });
+
+      test('service names should include environment suffix', () => {
+        const resources: Record<string, string> = {
+          DynamoDBTable: 'TableName',
+          LaunchTemplate: 'LaunchTemplateName',
+          AutoScalingGroup: 'AutoScalingGroupName',
+        };
+        Object.entries(resources).forEach(([resName, prop]) => {
+          const res = template.Resources[resName];
+          const sub = getSubString(res.Properties[prop]);
+          expect(sub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
+        });
+      });
   });
 
   describe('Outputs', () => {
