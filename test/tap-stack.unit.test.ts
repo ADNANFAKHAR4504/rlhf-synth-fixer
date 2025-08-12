@@ -7,7 +7,7 @@ describe('CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust as needed
+    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust path as needed
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -50,7 +50,6 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(encryption).toBeDefined();
 
       const rules = encryption?.ServerSideEncryptionConfiguration;
-
       expect(Array.isArray(rules)).toBe(true);
 
       if (!Array.isArray(rules)) {
@@ -59,10 +58,11 @@ describe('CloudFormation Template Unit Tests', () => {
 
       expect(rules.length).toBeGreaterThan(0);
 
+      // **Note the exact key names from your CFN template: KMSMasterKeyID**
       const kmsRule = rules.find(
         (rule: any) =>
           rule.ServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms' &&
-          typeof rule.ServerSideEncryptionByDefault.KMSMasterKeyId === 'string'
+          typeof rule.ServerSideEncryptionByDefault?.KMSMasterKeyID === 'string'
       );
 
       expect(kmsRule).toBeDefined();
@@ -81,7 +81,7 @@ describe('CloudFormation Template Unit Tests', () => {
 
       expect(secretResource.Properties).toBeDefined();
 
-      // Your template explicitly names the secret "MyAppPassword"
+      // Your CFN template sets this exact name:
       expect(secretResource.Properties.Name).toBe('MyAppPassword');
       expect(secretResource.Properties.Description).toBeDefined();
     });
