@@ -27,9 +27,7 @@ class WebApplicationStack(Stack):
       self, "ExistingVPC", vpc_id="vpc-05c4c270ead946104"
     )
 
-    public_subnets = vpc.select_subnets(
-      subnet_type=ec2.SubnetType.PUBLIC
-    )
+    subnets = vpc.select_subnets()
 
     alb = elbv2.ApplicationLoadBalancer(
       self, "ALB",
@@ -50,7 +48,7 @@ class WebApplicationStack(Stack):
     db_subnet_group = rds.SubnetGroup(
       self, "DBSubnetGroup",
       vpc=vpc,
-      vpc_subnets=ec2.SubnetSelection(subnets=public_subnets.subnets),
+      vpc_subnets=ec2.SubnetSelection(subnets=subnets.subnets),
       description="Subnet group for the RDS database"
     )
 
@@ -93,7 +91,7 @@ class WebApplicationStack(Stack):
     asg = autoscaling.AutoScalingGroup(
       self, "ASG",
       vpc=vpc,
-      vpc_subnets=ec2.SubnetSelection(subnets=public_subnets.subnets),
+      vpc_subnets=ec2.SubnetSelection(subnets=subnets.subnets),
       instance_type=ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE2,
         ec2.InstanceSize.MICRO
