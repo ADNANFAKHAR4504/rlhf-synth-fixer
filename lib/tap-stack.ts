@@ -12,18 +12,21 @@ import { Construct } from 'constructs';
 // ? Import your stacks here
 // import { MyStack } from './my-stack';
 
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
+export interface TapStackProps extends cdk.StackProps {
+  environmentSuffix: string;
 }
 
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
+
+    const environmentSuffix = props.environmentSuffix;
 
     // ===========================================
     // VPC Configuration
     // ===========================================
     const vpc = new ec2.Vpc(this, 'CicdVpc', {
+      vpcName: `nodejs-cicd-vpc-${environmentSuffix}`,
       maxAzs: 2,
       natGateways: 1,
       subnetConfiguration: [
@@ -36,15 +39,15 @@ export class TapStack extends cdk.Stack {
           cidrMask: 24,
           name: 'private-subnet',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        }
-      ]
+        },
+      ],
     });
 
     // ===========================================
     // S3 Bucket for Source Code Repository
     // ===========================================
     const sourceCodeBucket = new s3.Bucket(this, 'SourceCodeBucket', {
-      bucketName: `nodejs-app-source-${this.account}-${this.region}`,
+      bucketName: `nodejs-app-source-${environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
@@ -53,7 +56,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 Bucket for CodePipeline Artifacts
     const artifactsBucket = new s3.Bucket(this, 'ArtifactsBucket', {
-      bucketName: `codepipeline-artifacts-${this.account}-${this.region}`,
+      bucketName: `codepipeline-artifacts-${environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
@@ -62,54 +65,64 @@ export class TapStack extends cdk.Stack {
     // ===========================================
     // IAM Roles and Policies
     // ===========================================
-    
+
     // EC2 Instance Role for CodeDeploy Agent
     const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
+      roleName: `nodejs-ec2-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
     // Allow EC2 to download artifacts from S3
-    ec2Role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:ListBucket',
-      ],
-      resources: [
-        artifactsBucket.bucketArn,
-        `${artifactsBucket.bucketArn}/*`,
-      ],
-    }));
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:ListBucket'],
+        resources: [
+          artifactsBucket.bucketArn,
+          `${artifactsBucket.bucketArn}/*`,
+        ],
+      })
+    );
 
     // CodeDeploy Service Role
     const codeDeployRole = new iam.Role(this, 'CodeDeployServiceRole', {
+      roleName: `nodejs-codedeploy-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSCodeDeployRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSCodeDeployRole'
+        ),
       ],
     });
 
     // CodeBuild Service Role
     const codeBuildRole = new iam.Role(this, 'CodeBuildServiceRole', {
+      roleName: `nodejs-codebuild-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
     });
 
     // CodePipeline Service Role
     const codePipelineRole = new iam.Role(this, 'CodePipelineServiceRole', {
+      roleName: `nodejs-codepipeline-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
     });
 
     // ===========================================
     // EC2 Instance Configuration
     // ===========================================
-    
+
     // Security Group for EC2 instances
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc,
+      securityGroupName: `nodejs-ec2-sg-${environmentSuffix}`,
       description: 'Security group for Node.js application EC2 instances',
       allowAllOutbound: true,
     });
@@ -140,29 +153,33 @@ export class TapStack extends cdk.Stack {
     userData.addCommands(
       // Update system
       'yum update -y',
-      
+
       // Install Node.js 18.x
       'curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -',
       'yum install -y nodejs',
-      
+
       // Install CodeDeploy agent
       'yum install -y ruby wget',
       'cd /home/ec2-user',
-      'wget https://aws-codedeploy-' + this.region + '.s3.' + this.region + '.amazonaws.com/latest/install',
+      'wget https://aws-codedeploy-' +
+        this.region +
+        '.s3.' +
+        this.region +
+        '.amazonaws.com/latest/install',
       'chmod +x ./install',
       './install auto',
-      
+
       // Start CodeDeploy agent
       'service codedeploy-agent start',
       'chkconfig codedeploy-agent on',
-      
+
       // Create application directory
       'mkdir -p /var/www/nodejs-app',
       'chown ec2-user:ec2-user /var/www/nodejs-app',
-      
+
       // Install PM2 for process management
       'npm install -g pm2',
-      
+
       // Create a simple systemd service for the application
       'cat > /etc/systemd/system/nodejs-app.service << EOF',
       '[Unit]',
@@ -182,45 +199,54 @@ export class TapStack extends cdk.Stack {
       '[Install]',
       'WantedBy=multi-user.target',
       'EOF',
-      
+
       'systemctl daemon-reload'
     );
 
-    // EC2 Instance Profile
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      role: ec2Role,
-    });
+    // EC2 Instance Profile is created automatically when using role in LaunchTemplate
 
     // Launch Template for EC2 instances
-    const launchTemplate = new ec2.LaunchTemplate(this, 'NodejsAppLaunchTemplate', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      securityGroup: ec2SecurityGroup,
-      userData: userData,
-      role: ec2Role,
-    });
+    const launchTemplate = new ec2.LaunchTemplate(
+      this,
+      'NodejsAppLaunchTemplate',
+      {
+        launchTemplateName: `nodejs-app-lt-${environmentSuffix}`,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        securityGroup: ec2SecurityGroup,
+        userData: userData,
+        role: ec2Role,
+      }
+    );
 
     // Auto Scaling Group for rolling deployments
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'NodejsAppASG', {
-      vpc,
-      launchTemplate, // from your code
-      minCapacity: 1,
-      maxCapacity: 3,
-      desiredCapacity: 2,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-    });
-    
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'NodejsAppASG',
+      {
+        autoScalingGroupName: `nodejs-app-asg-${environmentSuffix}`,
+        vpc,
+        launchTemplate, // from your code
+        minCapacity: 1,
+        maxCapacity: 3,
+        desiredCapacity: 2,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      }
+    );
 
     // Tag instances for CodeDeploy
-    cdk.Tags.of(autoScalingGroup).add('Name', 'NodejsApp');
-    cdk.Tags.of(autoScalingGroup).add('Environment', 'Production');
+    cdk.Tags.of(autoScalingGroup).add('Name', `NodejsApp-${environmentSuffix}`);
+    cdk.Tags.of(autoScalingGroup).add('Environment', environmentSuffix);
 
     // ===========================================
     // CodeBuild Project Configuration
     // ===========================================
-    
+
     const buildProject = new codebuild.Project(this, 'NodejsBuildProject', {
-      projectName: 'nodejs-app-build',
+      projectName: `nodejs-app-build-${environmentSuffix}`,
       description: 'Build project for Node.js application',
       role: codeBuildRole,
       environment: {
@@ -254,9 +280,7 @@ export class TapStack extends cdk.Stack {
           },
         },
         artifacts: {
-          files: [
-            '**/*',
-          ],
+          files: ['**/*'],
           'exclude-paths': [
             'node_modules/**/*',
             '.git/**/*',
@@ -274,38 +298,46 @@ export class TapStack extends cdk.Stack {
     // ===========================================
     // CodeDeploy Configuration
     // ===========================================
-    
+
     // CodeDeploy Application
-    const codeDeployApplication = new codedeploy.ServerApplication(this, 'NodejsCodeDeployApp', {
-      applicationName: 'nodejs-app',
-    });
+    const codeDeployApplication = new codedeploy.ServerApplication(
+      this,
+      'NodejsCodeDeployApp',
+      {
+        applicationName: `nodejs-app-${environmentSuffix}`,
+      }
+    );
 
     // CodeDeploy Deployment Group
-    const deploymentGroup = new codedeploy.ServerDeploymentGroup(this, 'NodejsDeploymentGroup', {
-      application: codeDeployApplication,
-      deploymentGroupName: 'nodejs-app-deployment-group',
-      role: codeDeployRole,
-      autoScalingGroups: [autoScalingGroup],
-      deploymentConfig: codedeploy.ServerDeploymentConfig.HALF_AT_A_TIME, // Rolling deployment
-      installAgent: true,
-      ignorePollAlarmsFailure: false,
-      autoRollback: {
-        failedDeployment: true,
-        stoppedDeployment: true,
-      },
-    });
+    const deploymentGroup = new codedeploy.ServerDeploymentGroup(
+      this,
+      'NodejsDeploymentGroup',
+      {
+        application: codeDeployApplication,
+        deploymentGroupName: `nodejs-app-deployment-group-${environmentSuffix}`,
+        role: codeDeployRole,
+        autoScalingGroups: [autoScalingGroup],
+        deploymentConfig: codedeploy.ServerDeploymentConfig.HALF_AT_A_TIME, // Rolling deployment
+        installAgent: true,
+        ignorePollAlarmsFailure: false,
+        autoRollback: {
+          failedDeployment: true,
+          stoppedDeployment: true,
+        },
+      }
+    );
 
     // ===========================================
     // CodePipeline Configuration
     // ===========================================
-    
+
     // Pipeline artifacts
     const sourceOutput = new codepipeline.Artifact('SourceOutput');
     const buildOutput = new codepipeline.Artifact('BuildOutput');
 
     // Create the pipeline
     const pipeline = new codepipeline.Pipeline(this, 'NodejsCicdPipeline', {
-      pipelineName: 'nodejs-app-pipeline',
+      pipelineName: `nodejs-app-pipeline-${environmentSuffix}`,
       role: codePipelineRole,
       artifactBucket: artifactsBucket,
       stages: [
@@ -348,62 +380,88 @@ export class TapStack extends cdk.Stack {
     // Grant necessary permissions to CodePipeline
     sourceCodeBucket.grantRead(codePipelineRole);
     artifactsBucket.grantReadWrite(codePipelineRole);
-    
-    codePipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'codebuild:BatchGetBuilds',
-        'codebuild:StartBuild',
-      ],
-      resources: [buildProject.projectArn],
-    }));
 
-    codePipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'codedeploy:CreateDeployment',
-        'codedeploy:GetApplication',
-        'codedeploy:GetApplicationRevision',
-        'codedeploy:GetDeployment',
-        'codedeploy:GetDeploymentConfig',
-        'codedeploy:RegisterApplicationRevision',
-      ],
-      resources: ['*'],
-    }));
+    codePipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['codebuild:BatchGetBuilds', 'codebuild:StartBuild'],
+        resources: [buildProject.projectArn],
+      })
+    );
+
+    codePipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'codedeploy:CreateDeployment',
+          'codedeploy:GetApplication',
+          'codedeploy:GetApplicationRevision',
+          'codedeploy:GetDeployment',
+          'codedeploy:GetDeploymentConfig',
+          'codedeploy:RegisterApplicationRevision',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // ===========================================
     // CloudWatch Event Rule for S3 Trigger
     // ===========================================
-    
+
     // The S3SourceAction with S3Trigger.EVENTS automatically creates the necessary
     // EventBridge rule to trigger the pipeline when objects are uploaded to S3
 
     // ===========================================
     // Outputs
     // ===========================================
-    
+
     new cdk.CfnOutput(this, 'SourceCodeBucketName', {
       value: sourceCodeBucket.bucketName,
       description: 'S3 bucket name for source code',
-      exportName: 'SourceCodeBucketName',
+      exportName: `SourceCodeBucketName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'PipelineName', {
       value: pipeline.pipelineName,
       description: 'CodePipeline name',
-      exportName: 'PipelineName',
+      exportName: `PipelineName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'CodeDeployApplicationName', {
       value: codeDeployApplication.applicationName,
       description: 'CodeDeploy application name',
-      exportName: 'CodeDeployApplicationName',
+      exportName: `CodeDeployApplicationName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AutoScalingGroupName', {
       value: autoScalingGroup.autoScalingGroupName,
       description: 'Auto Scaling Group name',
-      exportName: 'AutoScalingGroupName',
+      exportName: `AutoScalingGroupName-${environmentSuffix}`,
+    });
+
+    // Additional outputs for better integration testing
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: vpc.vpcId,
+      description: 'VPC ID',
+      exportName: `VpcId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ArtifactsBucketName', {
+      value: artifactsBucket.bucketName,
+      description: 'S3 bucket name for pipeline artifacts',
+      exportName: `ArtifactsBucketName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'BuildProjectName', {
+      value: buildProject.projectName,
+      description: 'CodeBuild project name',
+      exportName: `BuildProjectName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DeploymentGroupName', {
+      value: deploymentGroup.deploymentGroupName,
+      description: 'CodeDeploy deployment group name',
+      exportName: `DeploymentGroupName-${environmentSuffix}`,
     });
   }
 }
