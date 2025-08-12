@@ -13,6 +13,7 @@ import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 
 // --- Naming Convention Helper ---
 const createResourceName = (
@@ -108,9 +109,24 @@ export class EnterpriseStack extends TerraformStack {
     ];
 
     // --- Compute Module ---
+    const latestAmi = new DataAwsAmi(this, 'LatestAmazonLinux', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+        },
+        {
+          name: 'virtualization-type',
+          values: ['hvm'],
+        },
+      ],
+    });
+
     const launchTemplate = new LaunchTemplate(this, 'AppLaunchTemplate', {
       name: `${createResourceName(env, 'lt', 'app')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
-      imageId: 'ami-0c55b159cbfafe1f0', // Example AMI
+      imageId: latestAmi.id,
       instanceType: 't3.micro',
       tags: { Name: createResourceName(env, 'lt', 'app') },
       lifecycle: {
