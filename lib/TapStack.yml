@@ -16,14 +16,14 @@ Parameters:
     Description: Whether to deploy Lambda functions inside a VPC
 
   VpcId:
-    Type: String
-    Default: ''
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-00000000
     Description: VPC ID where Lambda functions will be deployed (required when EnableVPC is true)
     
   PrivateSubnetIds:
     Type: CommaDelimitedList
     Description: List of private subnet IDs for Lambda deployment (required when EnableVPC is true)
-    Default: ''
+    Default: 'subnet-00000000,subnet-00000001'
     
   ApplicationName:
     Type: String
