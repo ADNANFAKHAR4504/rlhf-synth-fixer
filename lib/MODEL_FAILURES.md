@@ -18,6 +18,7 @@ The output made superficial references to features Lambda and it's semantic use 
 There were hallucinated function calls or AWS resources that don’t exist in Pulumi's actual SDK.
 
 No Modularization Despite Being Explicitly Requested:
+Model created new VPC even after specifying no vpc creation
 
 There was no separation of concerns, making the output infeasible for a real-world security-focused deployment.
 
