@@ -33,6 +33,7 @@ class StorageComponent(pulumi.ComponentResource):
     )
 
     self.bucket_policy_doc = aws.iam.get_policy_document_output(statements=[
+         f"-bucket-policy-document-{region_suffix}",
         # Allow CloudTrail to check bucket ACL
         aws.iam.GetPolicyDocumentStatementArgs(
             effect="Allow",

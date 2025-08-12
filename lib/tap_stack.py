@@ -137,6 +137,7 @@ class TapStack(pulumi.ComponentResource):
             self.monitoring = CloudTrailComponent(
                 f"monitoring-{region_suffix}-{self.environment_suffix}",
                 bucket_id=self.storage.bucket.bucket,
+                region_suffix=region_suffix,
                 opts=provider_opts([self.storage])
             )
             
