@@ -96,8 +96,8 @@ Resources:
                   - s3:GetBucketLogging
                   - s3:GetBucketTagging
                 Resource:
-                  - !Sub "${PrimaryDataBucket}"
-                  - !Sub "${SecondaryDataBucket}"
+                  - !Sub "arn:aws:s3:::${PrimaryDataBucket}"
+                  - !Sub "arn:aws:s3:::${SecondaryDataBucket}"
                 Condition:
                   StringEquals:
                     "aws:RequestedRegion": "us-west-2"
@@ -115,8 +115,8 @@ Resources:
                   - s3:GetObjectTagging
                   - s3:PutObjectTagging
                 Resource:
-                  - !Sub "${PrimaryDataBucket}/*"
-                  - !Sub "${SecondaryDataBucket}/*"
+                  - !Sub "arn:aws:s3:::${PrimaryDataBucket}/*"
+                  - !Sub "arn:aws:s3:::${SecondaryDataBucket}/*"
                 Condition:
                   StringEquals:
                     "aws:RequestedRegion": "us-west-2"

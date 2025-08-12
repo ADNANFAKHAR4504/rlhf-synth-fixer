@@ -87,9 +87,6 @@
     "S3AccessRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "SecureDataS3AccessRole-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -144,10 +141,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "${PrimaryDataBucket}"
+                      "Fn::Sub": "arn:aws:s3:::${PrimaryDataBucket}"
                     },
                     {
-                      "Fn::Sub": "${SecondaryDataBucket}"
+                      "Fn::Sub": "arn:aws:s3:::${SecondaryDataBucket}"
                     }
                   ],
                   "Condition": {
@@ -171,10 +168,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "${PrimaryDataBucket}/*"
+                      "Fn::Sub": "arn:aws:s3:::${PrimaryDataBucket}/*"
                     },
                     {
-                      "Fn::Sub": "${SecondaryDataBucket}/*"
+                      "Fn::Sub": "arn:aws:s3:::${SecondaryDataBucket}/*"
                     }
                   ],
                   "Condition": {
@@ -250,9 +247,6 @@
     "S3AccessInstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "SecureDataS3AccessProfile-${EnvironmentSuffix}"
-        },
         "Path": "/",
         "Roles": [
           {

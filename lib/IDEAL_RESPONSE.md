@@ -91,8 +91,8 @@ Resources:
                   - s3:GetBucketLogging
                   - s3:GetBucketTagging
                 Resource:
-                  - !GetAtt PrimaryDataBucket.Arn
-                  - !GetAtt SecondaryDataBucket.Arn
+                  - !Sub "arn:aws:s3:::${PrimaryDataBucket}"
+                  - !Sub "arn:aws:s3:::${SecondaryDataBucket}"
 
               # Explicit Allow - S3 Object Operations (only for our bucket objects)
               - Sid: AllowS3ObjectAccess
@@ -107,8 +107,8 @@ Resources:
                   - s3:GetObjectTagging
                   - s3:PutObjectTagging
                 Resource:
-                  - !Sub "${PrimaryDataBucket}/*"
-                  - !Sub "${SecondaryDataBucket}/*"
+                  - !Sub "arn:aws:s3:::${PrimaryDataBucket}/*"
+                  - !Sub "arn:aws:s3:::${SecondaryDataBucket}/*"
 
               # Explicit Allow - KMS Operations for S3 encryption
               - Sid: AllowKMSForS3
