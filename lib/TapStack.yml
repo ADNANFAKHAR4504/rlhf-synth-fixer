@@ -49,24 +49,24 @@ Parameters:
 
   PublicSubnetMask:
     Type: Number
-    Description: Subnet mask bits for public subnets (e.g., 24)
-    Default: 24
-    MinValue: 16
-    MaxValue: 28
+    Description: Additional subnet bits for Fn::Cidr (public). Example: 8 -> /24 when VPC is /16
+    Default: 8
+    MinValue: 0
+    MaxValue: 16
 
   PrivateSubnetMask:
     Type: Number
-    Description: Subnet mask bits for private subnets (e.g., 24)
-    Default: 24
-    MinValue: 16
-    MaxValue: 28
+    Description: Additional subnet bits for Fn::Cidr (private). Example: 8 -> /24 when VPC is /16
+    Default: 8
+    MinValue: 0
+    MaxValue: 16
 
   IsolatedSubnetMask:
     Type: Number
-    Description: Subnet mask bits for isolated subnets (e.g., 24)
-    Default: 24
-    MinValue: 16
-    MaxValue: 28
+    Description: Additional subnet bits for Fn::Cidr (isolated). Example: 8 -> /24 when VPC is /16
+    Default: 8
+    MinValue: 0
+    MaxValue: 16
 
   CreateNatGateways:
     Type: String
