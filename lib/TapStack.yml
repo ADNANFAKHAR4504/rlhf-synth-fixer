@@ -29,6 +29,11 @@ Parameters:
     Description: 'Owner/team tag to apply to resources'
     Default: security-team
 
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Suffix to append to resource names to avoid conflicts between deployments'
+    Default: 'dev'
+
   BucketNamePrefix:
     Type: String
     Description: 'Optional prefix to guarantee bucket-name uniqueness (leave empty to let CFN generate names)'
@@ -217,13 +222,11 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
   PrimaryKmsAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub alias/${Environment}-primary-kms
+      AliasName: !Sub alias/${Environment}-${EnvironmentSuffix}-primary-kms
       TargetKeyId: !Ref PrimaryKmsKey
 
   # ---------------------------
@@ -238,7 +241,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-vpc'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-vpc'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -256,7 +259,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-1'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-public-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -272,7 +275,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-2'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-public-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -287,7 +290,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-1'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-private-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -302,7 +305,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-2'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-private-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -317,7 +320,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-isolated-1'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-isolated-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -332,7 +335,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-isolated-2'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-isolated-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -343,7 +346,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-igw'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-igw'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -361,7 +364,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-rt'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-public-rt'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -408,7 +411,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-nat-1'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-nat-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -420,7 +423,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-rt-1'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-private-rt-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -454,7 +457,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-isolated-rt'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-isolated-rt'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -482,7 +485,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-nacl'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-public-nacl'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -544,7 +547,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-nacl'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-private-nacl'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -602,7 +605,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-web-sg'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-web-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -631,7 +634,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-app-sg'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-app-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -653,7 +656,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-db-sg'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-db-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -773,8 +776,6 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
   # ---------------------------
   # S3 Buckets (no fixed names to avoid collisions; CFN will generate names unless prefix provided)
@@ -786,7 +787,7 @@ Resources:
       # optional stable name using prefix + account + region, but if prefix empty, CFN generates unique name
       BucketName: !If
         - HasBucketNamePrefix
-        - !Sub '${BucketNamePrefix}-${Environment}-${AWS::AccountId}-${AWS::Region}'
+        - !Sub '${BucketNamePrefix}-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
         - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -808,8 +809,6 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
   # Bucket policy to enforce HTTPS and SSE-KMS usage when uploading
   SecureDataBucketPolicy:
@@ -852,7 +851,7 @@ Resources:
     Properties:
       BucketName: !If
         - HasBucketNamePrefix
-        - !Sub '${BucketNamePrefix}-access-logs-${Environment}-${AWS::AccountId}'
+        - !Sub '${BucketNamePrefix}-access-logs-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}'
         - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -869,8 +868,6 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
   CloudTrailBucket:
     Condition: CreateNewCloudTrail
@@ -878,7 +875,7 @@ Resources:
     Properties:
       BucketName: !If
         - HasBucketNamePrefix
-        - !Sub '${BucketNamePrefix}-cloudtrail-${Environment}-${AWS::AccountId}'
+        - !Sub '${BucketNamePrefix}-cloudtrail-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}'
         - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -895,8 +892,6 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
   CloudTrailBucketPolicy:
     Condition: CreateNewCloudTrail
@@ -927,7 +922,7 @@ Resources:
     Properties:
       BucketName: !If
         - HasBucketNamePrefix
-        - !Sub '${BucketNamePrefix}-config-${Environment}-${AWS::AccountId}'
+        - !Sub '${BucketNamePrefix}-config-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}'
         - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -944,8 +939,6 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
   ConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -990,8 +983,6 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
@@ -1007,8 +998,6 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
   # ---------------------------
   # CloudTrail (multi-region) with KMS encryption and CloudWatch integration
@@ -1018,7 +1007,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${Environment}-financial-cloudtrail'
+      TrailName: !Sub '${Environment}-${EnvironmentSuffix}-financial-cloudtrail'
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
@@ -1040,7 +1029,7 @@ Resources:
     Condition: CreateNewConfigRecorder
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub '${Environment}-config-recorder'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-config-recorder'
       RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
@@ -1049,14 +1038,14 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub '${Environment}-config-delivery-channel'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-config-delivery-channel'
       S3BucketName: !Ref ConfigBucket
 
   # AWS Config managed rules (CIS Foundations equivalent)
   S3BucketEncryptionConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: !Sub '${Environment}-s3-bucket-server-side-encryption-enabled'
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-s3-bucket-server-side-encryption-enabled'
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
@@ -1064,7 +1053,7 @@ Resources:
   S3BucketPublicReadProhibitedConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: !Sub '${Environment}-s3-bucket-public-read-prohibited'
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-s3-bucket-public-read-prohibited'
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
@@ -1072,7 +1061,7 @@ Resources:
   IAMUserMFAConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: !Sub '${Environment}-iam-user-mfa-enabled'
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-iam-user-mfa-enabled'
       Source:
         Owner: AWS
         SourceIdentifier: IAM_USER_MFA_ENABLED
@@ -1080,7 +1069,7 @@ Resources:
   RootAccountMFAConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: !Sub '${Environment}-root-account-mfa-enabled'
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-root-account-mfa-enabled'
       Source:
         Owner: AWS
         SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
@@ -1088,7 +1077,7 @@ Resources:
   VPCDefaultSecurityGroupClosedConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: !Sub '${Environment}-vpc-default-security-group-closed'
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-vpc-default-security-group-closed'
       Source:
         Owner: AWS
         SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
@@ -1099,7 +1088,7 @@ Resources:
   PatchBaseline:
     Type: AWS::SSM::PatchBaseline
     Properties:
-      Name: !Sub '${Environment}-patch-baseline'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-patch-baseline'
       Description: 'Patch baseline for EC2 instances (security critical)'
       OperatingSystem: AMAZON_LINUX_2
       ApprovalRules:
@@ -1123,7 +1112,7 @@ Resources:
   PatchMaintenanceWindow:
     Type: AWS::SSM::MaintenanceWindow
     Properties:
-      Name: !Sub '${Environment}-patch-window'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-patch-window'
       Schedule: !Ref PatchWindowCron
       Duration: 4
       Cutoff: 1
@@ -1139,11 +1128,11 @@ Resources:
     Type: AWS::SSM::Association
     Properties:
       Name: AWS-RunPatchBaseline
-      AssociationName: !Sub '${Environment}-run-patch-baseline'
+      AssociationName: !Sub '${Environment}-${EnvironmentSuffix}-run-patch-baseline'
       Targets:
         - Key: tag:PatchGroup
           Values:
-            - !Sub '${Environment}-patch-group'
+            - !Sub '${Environment}-${EnvironmentSuffix}-patch-group'
       ScheduleExpression: !Ref PatchWindowCron
       Parameters:
         Operation:
@@ -1172,10 +1161,8 @@ Resources:
   RDSAuroraCluster:
     Condition: IsAuroraEngine
     Type: AWS::RDS::DBCluster
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
     Properties:
-      DBClusterIdentifier: !Sub '${Environment}-financial-cluster'
+      DBClusterIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-financial-cluster'
       Engine: !Ref DBEngine
       MasterUsername:
         !Join [
@@ -1203,10 +1190,8 @@ Resources:
   RDSAuroraInstance:
     Condition: IsAuroraEngine
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-financial-aurora-instance'
+      DBInstanceIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-financial-aurora-instance'
       DBClusterIdentifier: !Ref RDSAuroraCluster
       DBInstanceClass: !Ref DBInstanceClass
       Engine: !Ref DBEngine
@@ -1220,10 +1205,8 @@ Resources:
   RDSInstance:
     Condition: IsNotAuroraEngine
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-financial-db'
+      DBInstanceIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-financial-db'
       AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: !Ref DBInstanceClass
       Engine: !Ref DBEngine
@@ -1259,14 +1242,14 @@ Resources:
     Condition: UseCloudFront
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${Environment}-financial-waf'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-financial-waf'
       Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${Environment}-FinancialWAF'
+        MetricName: !Sub '${Environment}-${EnvironmentSuffix}-FinancialWAF'
       Rules:
         - Name: AWSManagedCommonRuleSet
           Priority: 1
@@ -1364,7 +1347,7 @@ Resources:
     Condition: CreateNewCloudTrail
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-unauthorized-api-calls'
+      AlarmName: !Sub '${Environment}-${EnvironmentSuffix}-unauthorized-api-calls'
       AlarmDescription: 'Alarm fired when CloudTrail logs show unauthorized API calls'
       Namespace: CloudTrailMetrics
       MetricName: UnauthorizedApiCalls
@@ -1388,25 +1371,25 @@ Outputs:
     Description: VPC Id
     Value: !Ref VPC
     Export:
-      Name: !Sub '${Environment}-VPC-ID'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-VPC-ID'
 
   PublicSubnet1Id:
     Description: Public Subnet 1 ID
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub '${Environment}-PublicSubnet1-ID'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-PublicSubnet1-ID'
 
   PrivateSubnet1Id:
     Description: Private Subnet 1 ID
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${Environment}-PrivateSubnet1-ID'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-PrivateSubnet1-ID'
 
   IsolatedSubnet1Id:
     Description: Isolated Subnet 1 ID
     Value: !Ref IsolatedSubnet1
     Export:
-      Name: !Sub '${Environment}-IsolatedSubnet1-ID'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-IsolatedSubnet1-ID'
 
   SecureDataBucketName:
     Description: Secure data S3 bucket name
@@ -1430,7 +1413,7 @@ Outputs:
     Description: Primary KMS Key id
     Value: !Ref PrimaryKmsKey
     Export:
-      Name: !Sub '${Environment}-PrimaryKmsKeyId'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-PrimaryKmsKeyId'
 
   CloudFrontDistributionId:
     Condition: UseCloudFront
@@ -1441,14 +1424,14 @@ Outputs:
     Description: ARN of the database credentials secret
     Value: !Ref DatabaseCredentialsSecret
     Export:
-      Name: !Sub '${Environment}-DatabaseSecretArn'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-DatabaseSecretArn'
 
   RDSClusterIdentifier:
     Condition: IsAuroraEngine
     Description: Aurora DB Cluster Identifier
     Value: !Ref RDSAuroraCluster
     Export:
-      Name: !Sub '${Environment}-RDSClusterIdentifier'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-RDSClusterIdentifier'
 
   RDSInstanceIdentifier:
     Description: RDS Instance Identifier
@@ -1457,4 +1440,4 @@ Outputs:
       - !Ref RDSAuroraInstance
       - !Ref RDSInstance
     Export:
-      Name: !Sub '${Environment}-RDSInstanceIdentifier'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-RDSInstanceIdentifier'

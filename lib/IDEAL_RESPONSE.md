@@ -1,27 +1,44 @@
 # Production-grade AWS CloudFormation template for secure, compliant infrastructure in `us-east-1` region
 **Designed to meet PCI-DSS standards with full automation and best practices for security and compliance**
 
+This ideal response incorporates critical improvements for QA automation and multi-environment deployment safety:
+- **EnvironmentSuffix parameter** for conflict-free parallel deployments
+- **No retention policies** to ensure complete resource cleanup
+- **Environment-scoped resource naming** for deployment isolation
+
 ```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Production-grade AWS security configuration for financial services environment in us-east-1,
-  enforcing PCI-DSS compliance and CIS benchmarks with encryption, monitoring, patching,
-  and least-privilege access controls.
+  secure-config-us-east-1.yml
+  Production-grade, fully-parameterized security configuration for a financial
+  services environment (PCI-DSS oriented). Deploys in us-east-1 by default.
+  - KMS CMK(s) with rotation
+  - S3 buckets encrypted with KMS + enforce HTTPS + SSE enforcement
+  - CloudTrail (multi-region) -> encrypted S3 + CloudWatch Logs
+  - AWS Config (CIS conformance pack + recorder & delivery)
+  - VPC with public/private/isolated subnets (dynamic)
+  - RDS in private/isolated subnets (encrypted, secrets in SecretsManager)
+  - Least-privilege IAM roles, SSM patch automation, CloudWatch alarms, WAF + CloudFront
 
 Parameters:
   Environment:
     Type: String
+    Description: 'Deployment environment (affects names/tags)'
     Default: production
     AllowedValues:
       - production
       - staging
       - development
-    Description: Environment tag to identify resource lifecycle
 
   Owner:
     Type: String
-    Default: financial-ops-team
-    Description: Owner tag for resource accountability
+    Description: 'Owner/team tag to apply to resources'
+    Default: security-team
+
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Suffix to append to resource names to avoid conflicts between deployments'
+    Default: 'dev'
 
   VpcCidr:
     Type: String

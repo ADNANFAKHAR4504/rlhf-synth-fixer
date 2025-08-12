@@ -17,6 +17,11 @@
             "Description": "Owner/team tag to apply to resources",
             "Default": "security-team"
         },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Suffix to append to resource names to avoid conflicts between deployments",
+            "Default": "dev"
+        },
         "BucketNamePrefix": {
             "Type": "String",
             "Description": "Optional prefix to guarantee bucket-name uniqueness (leave empty to let CFN generate names)",
@@ -342,15 +347,13 @@
                         }
                     }
                 ]
-            },
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain"
+            }
         },
         "PrimaryKmsAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/${Environment}-primary-kms"
+                    "Fn::Sub": "alias/${Environment}-${EnvironmentSuffix}-primary-kms"
                 },
                 "TargetKeyId": {
                     "Ref": "PrimaryKmsKey"
@@ -369,7 +372,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-vpc"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-vpc"
                         }
                     },
                     {
@@ -422,7 +425,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-public-1"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-public-1"
                         }
                     },
                     {
@@ -476,7 +479,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-public-2"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-public-2"
                         }
                     },
                     {
@@ -528,7 +531,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-1"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-private-1"
                         }
                     },
                     {
@@ -581,7 +584,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-2"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-private-2"
                         }
                     },
                     {
@@ -633,7 +636,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-isolated-1"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-isolated-1"
                         }
                     },
                     {
@@ -686,7 +689,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-isolated-2"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-isolated-2"
                         }
                     },
                     {
@@ -711,7 +714,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-igw"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-igw"
                         }
                     },
                     {
@@ -750,7 +753,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-public-rt"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-public-rt"
                         }
                     },
                     {
@@ -842,7 +845,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-nat-1"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-nat-1"
                         }
                     },
                     {
@@ -870,7 +873,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-rt-1"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-private-rt-1"
                         }
                     },
                     {
@@ -934,7 +937,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-isolated-rt"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-isolated-rt"
                         }
                     },
                     {
@@ -985,7 +988,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-public-nacl"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-public-nacl"
                         }
                     },
                     {
@@ -1083,7 +1086,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-nacl"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-private-nacl"
                         }
                     },
                     {
@@ -1178,7 +1181,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-web-sg"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-web-sg"
                         }
                     },
                     {
@@ -1235,7 +1238,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-app-sg"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-app-sg"
                         }
                     },
                     {
@@ -1281,7 +1284,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-db-sg"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-db-sg"
                         }
                     },
                     {
@@ -1501,9 +1504,7 @@
                         }
                     }
                 ]
-            },
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain"
+            }
         },
         "SecureDataBucket": {
             "Type": "AWS::S3::Bucket",
@@ -1512,7 +1513,7 @@
                     "Fn::If": [
                         "HasBucketNamePrefix",
                         {
-                            "Fn::Sub": "${BucketNamePrefix}-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                            "Fn::Sub": "${BucketNamePrefix}-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
                         },
                         {
                             "Ref": "AWS::NoValue"
@@ -1560,9 +1561,7 @@
                         }
                     }
                 ]
-            },
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain"
+            }
         },
         "SecureDataBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
@@ -1641,7 +1640,7 @@
                     "Fn::If": [
                         "HasBucketNamePrefix",
                         {
-                            "Fn::Sub": "${BucketNamePrefix}-access-logs-${Environment}-${AWS::AccountId}"
+                            "Fn::Sub": "${BucketNamePrefix}-access-logs-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}"
                         },
                         {
                             "Ref": "AWS::NoValue"
@@ -1680,9 +1679,7 @@
                         }
                     }
                 ]
-            },
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain"
+            }
         },
         "CloudTrailBucket": {
             "Condition": "CreateNewCloudTrail",
@@ -1692,7 +1689,7 @@
                     "Fn::If": [
                         "HasBucketNamePrefix",
                         {
-                            "Fn::Sub": "${BucketNamePrefix}-cloudtrail-${Environment}-${AWS::AccountId}"
+                            "Fn::Sub": "${BucketNamePrefix}-cloudtrail-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}"
                         },
                         {
                             "Ref": "AWS::NoValue"
@@ -1731,9 +1728,7 @@
                         }
                     }
                 ]
-            },
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain"
+            }
         },
         "CloudTrailBucketPolicy": {
             "Condition": "CreateNewCloudTrail",
@@ -1786,7 +1781,7 @@
                     "Fn::If": [
                         "HasBucketNamePrefix",
                         {
-                            "Fn::Sub": "${BucketNamePrefix}-config-${Environment}-${AWS::AccountId}"
+                            "Fn::Sub": "${BucketNamePrefix}-config-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}"
                         },
                         {
                             "Ref": "AWS::NoValue"
@@ -1825,9 +1820,7 @@
                         }
                     }
                 ]
-            },
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain"
+            }
         },
         "ConfigBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
@@ -1908,9 +1901,7 @@
                         }
                     }
                 ]
-            },
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain"
+            }
         },
         "S3AccessLogGroup": {
             "Type": "AWS::Logs::LogGroup",
@@ -1947,9 +1938,7 @@
                         }
                     }
                 ]
-            },
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain"
+            }
         },
         "CloudTrail": {
             "Condition": "CreateNewCloudTrail",
@@ -1957,7 +1946,7 @@
             "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "${Environment}-financial-cloudtrail"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-financial-cloudtrail"
                 },
                 "S3BucketName": {
                     "Ref": "CloudTrailBucket"
@@ -2002,7 +1991,7 @@
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-config-recorder"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-config-recorder"
                 },
                 "RoleARN": {
                     "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
@@ -2017,7 +2006,7 @@
             "Type": "AWS::Config::DeliveryChannel",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-config-delivery-channel"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-config-delivery-channel"
                 },
                 "S3BucketName": {
                     "Ref": "ConfigBucket"
@@ -2028,7 +2017,7 @@
             "Type": "AWS::Config::ConfigRule",
             "Properties": {
                 "ConfigRuleName": {
-                    "Fn::Sub": "${Environment}-s3-bucket-server-side-encryption-enabled"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-s3-bucket-server-side-encryption-enabled"
                 },
                 "Source": {
                     "Owner": "AWS",
@@ -2040,7 +2029,7 @@
             "Type": "AWS::Config::ConfigRule",
             "Properties": {
                 "ConfigRuleName": {
-                    "Fn::Sub": "${Environment}-s3-bucket-public-read-prohibited"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-s3-bucket-public-read-prohibited"
                 },
                 "Source": {
                     "Owner": "AWS",
@@ -2052,7 +2041,7 @@
             "Type": "AWS::Config::ConfigRule",
             "Properties": {
                 "ConfigRuleName": {
-                    "Fn::Sub": "${Environment}-iam-user-mfa-enabled"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-iam-user-mfa-enabled"
                 },
                 "Source": {
                     "Owner": "AWS",
@@ -2064,7 +2053,7 @@
             "Type": "AWS::Config::ConfigRule",
             "Properties": {
                 "ConfigRuleName": {
-                    "Fn::Sub": "${Environment}-root-account-mfa-enabled"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-root-account-mfa-enabled"
                 },
                 "Source": {
                     "Owner": "AWS",
@@ -2076,7 +2065,7 @@
             "Type": "AWS::Config::ConfigRule",
             "Properties": {
                 "ConfigRuleName": {
-                    "Fn::Sub": "${Environment}-vpc-default-security-group-closed"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-vpc-default-security-group-closed"
                 },
                 "Source": {
                     "Owner": "AWS",
@@ -2088,7 +2077,7 @@
             "Type": "AWS::SSM::PatchBaseline",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-patch-baseline"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-patch-baseline"
                 },
                 "Description": "Patch baseline for EC2 instances (security critical)",
                 "OperatingSystem": "AMAZON_LINUX_2",
@@ -2136,7 +2125,7 @@
             "Type": "AWS::SSM::MaintenanceWindow",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-patch-window"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-patch-window"
                 },
                 "Schedule": {
                     "Ref": "PatchWindowCron"
@@ -2168,14 +2157,14 @@
             "Properties": {
                 "Name": "AWS-RunPatchBaseline",
                 "AssociationName": {
-                    "Fn::Sub": "${Environment}-run-patch-baseline"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-run-patch-baseline"
                 },
                 "Targets": [
                     {
                         "Key": "tag:PatchGroup",
                         "Values": [
                             {
-                                "Fn::Sub": "${Environment}-patch-group"
+                                "Fn::Sub": "${Environment}-${EnvironmentSuffix}-patch-group"
                             }
                         ]
                     }
@@ -2234,11 +2223,9 @@
         "RDSAuroraCluster": {
             "Condition": "IsAuroraEngine",
             "Type": "AWS::RDS::DBCluster",
-            "DeletionPolicy": "Snapshot",
-            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBClusterIdentifier": {
-                    "Fn::Sub": "${Environment}-financial-cluster"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-financial-cluster"
                 },
                 "Engine": {
                     "Ref": "DBEngine"
@@ -2291,11 +2278,9 @@
         "RDSAuroraInstance": {
             "Condition": "IsAuroraEngine",
             "Type": "AWS::RDS::DBInstance",
-            "DeletionPolicy": "Snapshot",
-            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "${Environment}-financial-aurora-instance"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-financial-aurora-instance"
                 },
                 "DBClusterIdentifier": {
                     "Ref": "RDSAuroraCluster"
@@ -2326,11 +2311,9 @@
         "RDSInstance": {
             "Condition": "IsNotAuroraEngine",
             "Type": "AWS::RDS::DBInstance",
-            "DeletionPolicy": "Snapshot",
-            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "${Environment}-financial-db"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-financial-db"
                 },
                 "AllocatedStorage": {
                     "Ref": "DBAllocatedStorage"
@@ -2393,7 +2376,7 @@
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-financial-waf"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-financial-waf"
                 },
                 "Scope": "CLOUDFRONT",
                 "DefaultAction": {
@@ -2403,7 +2386,7 @@
                     "SampledRequestsEnabled": true,
                     "CloudWatchMetricsEnabled": true,
                     "MetricName": {
-                        "Fn::Sub": "${Environment}-FinancialWAF"
+                        "Fn::Sub": "${Environment}-${EnvironmentSuffix}-FinancialWAF"
                     }
                 },
                 "Rules": [
@@ -2575,7 +2558,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${Environment}-unauthorized-api-calls"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-unauthorized-api-calls"
                 },
                 "AlarmDescription": "Alarm fired when CloudTrail logs show unauthorized API calls",
                 "Namespace": "CloudTrailMetrics",
@@ -2611,7 +2594,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-VPC-ID"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-VPC-ID"
                 }
             }
         },
@@ -2622,7 +2605,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-PublicSubnet1-ID"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-PublicSubnet1-ID"
                 }
             }
         },
@@ -2633,7 +2616,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-PrivateSubnet1-ID"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-PrivateSubnet1-ID"
                 }
             }
         },
@@ -2644,7 +2627,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-IsolatedSubnet1-ID"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-IsolatedSubnet1-ID"
                 }
             }
         },
@@ -2681,7 +2664,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-PrimaryKmsKeyId"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-PrimaryKmsKeyId"
                 }
             }
         },
@@ -2699,7 +2682,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-DatabaseSecretArn"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-DatabaseSecretArn"
                 }
             }
         },
@@ -2711,7 +2694,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-RDSClusterIdentifier"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-RDSClusterIdentifier"
                 }
             }
         },
@@ -2730,7 +2713,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-RDSInstanceIdentifier"
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-RDSInstanceIdentifier"
                 }
             }
         }
