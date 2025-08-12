@@ -133,7 +133,6 @@ resource "aws_route_table_association" "public_associations" {
 }
 
 resource "aws_eip" "nat_eip" {
-  vpc = true
   depends_on = [aws_internet_gateway.project_igw]
 }
 
