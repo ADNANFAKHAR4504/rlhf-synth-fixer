@@ -90,7 +90,7 @@
                                         "s3:GetObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${SecureAppS3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::secureapp-storage-${AWS::AccountId}/*"
                                     }
                                 },
                                 {
@@ -652,73 +652,10 @@
                 "DeletionProtection": false
             }
         },
-        "SecureAppTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "secureapp-tg-${AWS::AccountId}"
-                },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "VpcId": "vpc-0afe25fe865b0be8f",
-                "HealthCheckPath": "/health",
-                "HealthCheckProtocol": "HTTP",
-                "HealthCheckIntervalSeconds": 30,
-                "HealthCheckTimeoutSeconds": 5,
-                "HealthyThresholdCount": 2,
-                "UnhealthyThresholdCount": 5,
-                "Targets": [
-                    {
-                        "Id": {
-                            "Ref": "WebServerInstance1"
-                        },
-                        "Port": 80
-                    },
-                    {
-                        "Id": {
-                            "Ref": "WebServerInstance2"
-                        },
-                        "Port": 80
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-target-group"
-                    }
-                ]
-            }
-        },
-        "SecureAppListenerRule": {
-            "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
-            "Properties": {
-                "ListenerArn": "arn:aws:elasticloadbalancing:us-east-1:718240086340:listener/app/WebApp-LoadBalancer/b0a9e71ba272edee/50dc6c495c0c9188",
-                "Priority": 100,
-                "Conditions": [
-                    {
-                        "Field": "path-pattern",
-                        "PathPatternConfig": {
-                            "Values": [
-                                "/secureapp*",
-                                "/health"
-                            ]
-                        }
-                    }
-                ],
-                "Actions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "SecureAppTargetGroup"
-                        }
-                    }
-                ]
-            }
-        },
         "WebServerInstance1": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": "ami-0c02fb55956c7d316",
+                "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                 "InstanceType": "t3.micro",
                 "SubnetId": {
                     "Ref": "PrivateSubnet1"
@@ -745,7 +682,7 @@
         "WebServerInstance2": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": "ami-0c02fb55956c7d316",
+                "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                 "InstanceType": "t3.micro",
                 "SubnetId": {
                     "Ref": "PrivateSubnet2"
@@ -868,22 +805,33 @@
             }
         },
         "ExistingLoadBalancerURL": {
-            "Description": "Existing Load Balancer URL with SecureApp path",
-            "Value": "http://WebApp-LoadBalancer-1200637121.us-east-1.elb.amazonaws.com/secureapp/",
+            "Description": "Existing Load Balancer URL (manually create target group and listener rule)",
+            "Value": "http://WebApp-LoadBalancer-1200637121.us-east-1.elb.amazonaws.com/",
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-ALB-URL"
                 }
             }
         },
-        "TargetGroupArn": {
-            "Description": "Target Group ARN for SecureApp",
+        "WebServerInstance1Id": {
+            "Description": "Web Server Instance 1 ID (for manual ALB registration)",
             "Value": {
-                "Ref": "SecureAppTargetGroup"
+                "Ref": "WebServerInstance1"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TargetGroup-ARN"
+                    "Fn::Sub": "${AWS::StackName}-Instance1-ID"
+                }
+            }
+        },
+        "WebServerInstance2Id": {
+            "Description": "Web Server Instance 2 ID (for manual ALB registration)",
+            "Value": {
+                "Ref": "WebServerInstance2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Instance2-ID"
                 }
             }
         },
