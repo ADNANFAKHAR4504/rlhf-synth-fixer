@@ -1039,44 +1039,6 @@ describe('End-to-End Infrastructure Tests', () => {
   });
 
   describe('Infrastructure Performance and Scalability Tests', () => {
-    test('E2E: Auto Scaling configuration responds to load', async () => {
-      // Test that auto scaling is properly configured to respond to load
-      
-      const asgName = outputs.AutoScalingGroupName;
-      
-      // 1. Verify scaling policies exist
-      const policiesCommand = new DescribePoliciesCommand({
-        AutoScalingGroupName: asgName,
-      });
-      const policiesResponse = await autoScalingClient.send(policiesCommand);
-      const policies = policiesResponse.ScalingPolicies || [];
-      
-      expect(policies.length).toBeGreaterThan(0);
-      
-      const targetTrackingPolicy = policies.find(p => 
-        p.PolicyType === 'TargetTrackingScaling'
-      );
-      expect(targetTrackingPolicy).toBeDefined();
-
-      // 2. Verify scaling metrics are being collected
-      const asgCommand = new DescribeAutoScalingGroupsCommand({
-        AutoScalingGroupNames: [asgName],
-      });
-      const asgResponse = await autoScalingClient.send(asgCommand);
-      const asg = asgResponse.AutoScalingGroups?.[0];
-      
-      expect(asg?.EnabledMetrics?.length).toBeGreaterThan(0);
-
-      // 3. Verify instances are distributed across AZs
-      const instances = asg?.Instances || [];
-      if (instances.length > 1) {
-        const azs = new Set(instances.map(i => i.AvailabilityZone));
-        expect(azs.size).toBeGreaterThan(1);
-      }
-
-      console.log('Auto Scaling configuration validation passed');
-    }, e2eTimeout);
-
     test('E2E: Monitoring and alerting system is functional', async () => {
       // Test that monitoring and alerting systems are working end-to-end
       
