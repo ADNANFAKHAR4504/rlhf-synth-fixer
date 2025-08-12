@@ -31,7 +31,27 @@ Resources:
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlaintext
+              - kms:ReEncryptFrom
+              - kms:ReEncryptTo
+              - kms:PutKeyPolicy
+              - kms:GetKeyPolicy
+              - kms:ListGrants
+              - kms:ListKeys
+              - kms:ListAliases
+              - kms:DisableKey
+              - kms:EnableKey
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:CreateAlias            # Required for alias creation
+              - kms:DeleteAlias            # Required for alias management
+              - kms:UpdateAlias 
             Resource: '*'
           - Sid: Allow S3 Service
             Effect: Allow

@@ -379,7 +379,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: '/secureapp/application'
-      RetentionInDays: 7
+      RetentionInDays: 90
       Tags:
         - Key: Name
           Value: 'secureapp-application-logs'
