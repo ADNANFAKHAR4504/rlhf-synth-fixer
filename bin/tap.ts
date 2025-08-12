@@ -25,4 +25,3 @@ new TapStack(app, stackName, {
     region: process.env.CDK_DEFAULT_REGION,
   },
 });
-

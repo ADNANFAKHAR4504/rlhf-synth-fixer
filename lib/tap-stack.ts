@@ -655,4 +655,3 @@ export class TapStack extends cdk.Stack {
     addUsersToMfaGroup.cfnOptions.condition = hasMfaUsers;
   }
 }
-
