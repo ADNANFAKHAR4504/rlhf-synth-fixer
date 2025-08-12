@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack - High Availability Infrastructure', () => {
@@ -245,20 +245,20 @@ describe('TapStack - High Availability Infrastructure', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         MultiAZ: true,
         Engine: 'mysql',
-        DBInstanceClass: 'db.t3.micro',
+        DBInstanceClass: 'db.t3.small',
         AllocatedStorage: '20',
         MaxAllocatedStorage: 100,
         StorageEncrypted: true,
         BackupRetentionPeriod: 7,
         DeletionProtection: false,
-        EnablePerformanceInsights: true,
+        EnablePerformanceInsights: false,
       });
     });
 
     test('Creates RDS Read Replica', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         SourceDBInstanceIdentifier: Match.anyValue(),
-        DBInstanceClass: 'db.t3.micro',
+        DBInstanceClass: 'db.t3.small',
       });
     });
 

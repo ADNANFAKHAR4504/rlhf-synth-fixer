@@ -359,7 +359,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm`),
         }),
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
-        enablePerformanceInsights: true,
+        enablePerformanceInsights: false, // Not required per PROMPT.md specifications
       }
     );
 
