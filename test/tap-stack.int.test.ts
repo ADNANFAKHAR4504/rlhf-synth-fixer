@@ -180,28 +180,22 @@ describe("TapStack Integration Tests", () => {
   }, 15000);
 
   test("RDS instance exists", async () => {
-    if (rdsEndpoint) {
-      const { DBInstances } = await rdsClient.send(
-        new DescribeDBInstancesCommand({
-          // Use DBInstanceIdentifier from stack outputs instead of scanning all
-          DBInstanceIdentifier: stackOutputs["rds-instance-identifier"],
-        })
-      );
+    if (!rdsEndpoint) throw new Error("RDS endpoint not found in stack outputs");
 
-      expect(DBInstances?.length).toBe(1);
-      const instance = DBInstances?.[0];
-      expect(instance).toBeDefined();
+    const endpointWithoutPort = rdsEndpoint.split(":")[0];
 
-      // Compare endpoint ignoring case to avoid subtle mismatches
-      expect(instance?.Endpoint?.Address?.toLowerCase()).toBe(rdsEndpoint.toLowerCase());
-      expect(instance?.Endpoint?.Port).toBe(rdsPort);
+    const { DBInstances } = await rdsClient.send(
+      new DescribeDBInstancesCommand({})
+    );
 
-      // Only check DBName if it's defined in AWS
-      if (instance?.DBName) {
-        expect(instance.DBName).toBe(rdsDbName);
-      }
-    }
-  }, 30000);
+    const myInstance = DBInstances?.find(
+      (db) => db.Endpoint?.Address === endpointWithoutPort
+    );
+
+    expect(myInstance).toBeDefined();
+    expect(myInstance?.DBInstanceStatus).toBe("available");
+    expect(myInstance?.DBName).toBe(rdsDbName);
+  });
 
   test("RDS Security Group exists", async () => {
     const { SecurityGroups } = await ec2Client.send(
