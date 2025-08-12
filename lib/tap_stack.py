@@ -1,6 +1,8 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import S3Backend, TerraformStack
+import os
+
+from cdktf import App, S3Backend, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from constructs import Construct
@@ -30,7 +32,7 @@ class TapStack(TerraformStack):
       self,
       "aws",
       region=aws_region,
-      default_tags=[default_tags],
+      default_tags=default_tags,
     )
 
     # Configure S3 Backend with native state locking
@@ -63,3 +65,34 @@ class TapStack(TerraformStack):
     # ? Add your stack instantiations here
     # ! Do NOT create resources directly in this stack.
     # ! Instead, create separate stacks for each resource type.
+
+
+if __name__ == "__main__":
+  environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+  state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
+  state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
+  aws_region = os.getenv("AWS_REGION", "us-east-1")
+  repository_name = os.getenv("REPOSITORY", "unknown")
+  commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
+
+  stack_name = f"TapStack{environment_suffix}"
+
+  default_tags = {
+    "tags": {
+      "Environment": environment_suffix,
+      "Repository": repository_name,
+      "Author": commit_author,
+    }
+  }
+
+  app = App()
+  TapStack(
+    app,
+    stack_name,
+    environment_suffix=environment_suffix,
+    state_bucket=state_bucket,
+    state_bucket_region=state_bucket_region,
+    aws_region=aws_region,
+    default_tags=default_tags,
+  )
+  app.synth()
