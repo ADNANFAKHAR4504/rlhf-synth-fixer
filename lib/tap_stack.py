@@ -30,16 +30,27 @@ config = pulumi.Config()
 ENVIRONMENT = config.get("environment") or "dev"
 AWS_REGION = "us-east-1"  # Fixed region to avoid configuration issues
 INSTANCE_TYPE = "t3.micro"
-PROJECT_NAME = "dualstack-web-app-v4"  # Changed to v4 for completely clean deployment
+PROJECT_NAME = "dswa-v4"  # Shortened for AWS naming limits
 
 # Add timestamp-based suffix for unique naming
 import time
-DEPLOYMENT_ID = str(int(time.time()))[-6:]  # Use last 6 digits of timestamp
+DEPLOYMENT_ID = str(int(time.time()))[-4:]  # Use last 4 digits of timestamp for shorter names
 
 # Resource naming convention with unique deployment ID
 def get_resource_name(resource_type: str) -> str:
     """Generate consistent resource names following naming convention."""
     return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}-{DEPLOYMENT_ID}"
+
+# Short naming for AWS resources with character limits (like ALB, Target Groups)
+def get_short_name(resource_type: str, max_length: int = 32) -> str:
+    """Generate short names for AWS resources with character limits."""
+    short_name = f"{PROJECT_NAME}-{resource_type}-{DEPLOYMENT_ID}"
+    if len(short_name) > max_length:
+        # Truncate to fit within limit
+        available_chars = max_length - len(f"-{DEPLOYMENT_ID}")
+        truncated = f"{PROJECT_NAME}-{resource_type}"[:available_chars]
+        short_name = f"{truncated}-{DEPLOYMENT_ID}"
+    return short_name
 
 # =============================================================================
 # AWS Provider Configuration
@@ -442,7 +453,7 @@ for i, subnet in enumerate(public_subnets):
 # Create target group for EC2 instances (IPv4 for compatibility)
 target_group = aws.lb.TargetGroup(
     get_resource_name("web-tg"),
-    name=get_resource_name("web-tg"),
+    name=get_short_name("web-tg", 32),  # Use short name for 32-char limit
     port=80,
     protocol="HTTP",
     vpc_id=vpc.id,
@@ -478,7 +489,7 @@ for i, instance in enumerate(ec2_instances):
 # Create Application Load Balancer (supports dual-stack through subnets)
 alb = aws.lb.LoadBalancer(
     get_resource_name("web-alb"),
-    name=get_resource_name("web-alb"),
+    name=get_short_name("web-alb", 32),  # Use short name for 32-char limit
     load_balancer_type="application",
     internal=False,  # internet-facing (False = internet-facing, True = internal)
     security_groups=[alb_security_group.id],
