@@ -89,12 +89,7 @@ vpc = aws.ec2.Vpc(
         "Name": get_resource_name("vpc"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    },
-    opts=pulumi.ResourceOptions(
-        # If the VPC must be replaced, keep the old one to avoid transient AWS dependency violations
-        retain_on_delete=True,
-        custom_timeouts=pulumi.CustomTimeouts(delete="20m")
-    )
+    }
 )
 
 # Internet Gateway for public internet access
@@ -105,11 +100,7 @@ internet_gateway = aws.ec2.InternetGateway(
         "Name": get_resource_name("igw"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    },
-    opts=pulumi.ResourceOptions(
-        retain_on_delete=True,
-        custom_timeouts=pulumi.CustomTimeouts(delete="20m")
-    )
+    }
 )
 
 # Create public subnets across multiple AZs for high availability
@@ -185,7 +176,6 @@ for i, subnet in enumerate(public_subnets):
 # Security group for Application Load Balancer
 alb_security_group = aws.ec2.SecurityGroup(
     get_resource_name("alb-sg"),
-    name=get_resource_name("alb-sg"),
     description="Security group for Application Load Balancer - allows HTTP traffic from internet",
     vpc_id=vpc.id,
     revoke_rules_on_delete=True,
@@ -230,17 +220,12 @@ alb_security_group = aws.ec2.SecurityGroup(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "ALB Security Group"
-    },
-    opts=pulumi.ResourceOptions(
-        retain_on_delete=True,
-        custom_timeouts=pulumi.CustomTimeouts(delete="20m")
-    )
+    }
 )
 
 # Security group for EC2 instances
 ec2_security_group = aws.ec2.SecurityGroup(
     get_resource_name("ec2-sg"),
-    name=get_resource_name("ec2-sg"),
     description="Security group for EC2 instances - allows HTTP traffic only from ALB",
     vpc_id=vpc.id,
     revoke_rules_on_delete=True,
@@ -252,14 +237,6 @@ ec2_security_group = aws.ec2.SecurityGroup(
             to_port=80,
             security_groups=[alb_security_group.id],
             description="Allow HTTP traffic from ALB only"
-        ),
-        # Allow SSH for management (optional - can be removed for production)
-        aws.ec2.SecurityGroupIngressArgs(
-            protocol="tcp",
-            from_port=22,
-            to_port=22,
-            cidr_blocks=["0.0.0.0/0"],  # Restrict this in production
-            description="Allow SSH access for management"
         )
     ],
     egress=[
@@ -285,11 +262,7 @@ ec2_security_group = aws.ec2.SecurityGroup(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "EC2 Security Group"
-    },
-    opts=pulumi.ResourceOptions(
-        retain_on_delete=True,
-        custom_timeouts=pulumi.CustomTimeouts(delete="20m")
-    )
+    }
 )
 
 # =============================================================================
@@ -369,16 +342,13 @@ ec2_instance_profile = aws.iam.InstanceProfile(
 # =============================================================================
 
 user_data_script = f"""#!/bin/bash
-# Update system packages
-yum update -y
-
-# Install and configure Nginx
-yum install -y nginx
-systemctl start nginx
+# Install and configure Nginx (Amazon Linux 2)
+amazon-linux-extras install -y nginx1
 systemctl enable nginx
+systemctl start nginx
 
 # Create a custom index page with system information
-cat > /var/www/html/index.html << 'EOF'
+cat > /usr/share/nginx/html/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -479,10 +449,8 @@ server {{
     listen [::]:80;
     server_name _;
     
-    location / {{
-        root /var/www/html;
-        index index.html;
-    }}
+    root /usr/share/nginx/html;
+    index index.html;
     
     location /health {{
         access_log off;
@@ -494,47 +462,6 @@ EOF
 
 # Restart Nginx to apply configuration
 systemctl restart nginx
-
-# Install CloudWatch agent for detailed monitoring
-yum install -y amazon-cloudwatch-agent
-
-# Configure CloudWatch agent
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-{{
-    "metrics": {{
-        "namespace": "CWAgent",
-        "metrics_collected": {{
-            "cpu": {{
-                "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
-                "metrics_collection_interval": 60
-            }},
-            "disk": {{
-                "measurement": ["used_percent"],
-                "metrics_collection_interval": 60,
-                "resources": ["*"]
-            }},
-            "diskio": {{
-                "measurement": ["io_time"],
-                "metrics_collection_interval": 60,
-                "resources": ["*"]
-            }},
-            "mem": {{
-                "measurement": ["mem_used_percent"],
-                "metrics_collection_interval": 60
-            }},
-            "netstat": {{
-                "measurement": ["tcp_established", "tcp_time_wait"],
-                "metrics_collection_interval": 60
-            }}
-        }}
-    }}
-}}
-EOF
-
-# Start CloudWatch agent
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
-    -a fetch-config -m ec2 -s \\
-    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
 # Log deployment completion
 echo "$(date): Dual-stack web server deployment completed successfully" >> /var/log/deployment.log
@@ -576,7 +503,6 @@ for i, subnet in enumerate(public_subnets):
 # Create target group for EC2 instances
 target_group = aws.lb.TargetGroup(
     get_resource_name("web-tg"),
-    name=get_resource_name("web-tg"),
     port=80,
     protocol="HTTP",
     vpc_id=vpc.id,
@@ -610,7 +536,6 @@ for i, instance in enumerate(ec2_instances):
 # Create Application Load Balancer with dual-stack support
 alb = aws.lb.LoadBalancer(
     get_resource_name("web-alb"),
-    name=get_resource_name("web-alb"),
     load_balancer_type="application",
     ip_address_type="dualstack",  # Enable dual-stack (IPv4 and IPv6)
     internal=False,  # Internet-facing ALB
@@ -739,7 +664,6 @@ cloudwatch_dashboard = aws.cloudwatch.Dashboard(
 # Alarm for unhealthy targets
 unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
     get_resource_name("unhealthy-targets-alarm"),
-    name=get_resource_name("unhealthy-targets-alarm"),
     metric_name="UnHealthyHostCount",
     namespace="AWS/ApplicationELB",
     statistic="Average",
@@ -760,7 +684,6 @@ unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
 # Alarm for high response time
 high_response_time_alarm = aws.cloudwatch.MetricAlarm(
     get_resource_name("high-response-time-alarm"),
-    name=get_resource_name("high-response-time-alarm"),
     metric_name="TargetResponseTime",
     namespace="AWS/ApplicationELB",
     statistic="Average",
