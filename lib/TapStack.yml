@@ -1149,7 +1149,7 @@ Resources:
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseCredentialsSecret}:SecretString:password}}'
       StorageEncrypted: true
       KmsKeyId: !Ref PrimaryKmsKey
-      VPCSecurityGroups:
+      VpcSecurityGroupIds:
         - !Ref DbSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
