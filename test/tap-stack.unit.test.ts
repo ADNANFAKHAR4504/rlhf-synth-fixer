@@ -62,49 +62,27 @@ describe('TapStack', () => {
         );
       }
 
-      // Test without certificateArn (HTTP only)
+      // Test without certificateArn (should throw)
       {
         const app = new cdk.App();
-        const stackNoCert = new TapStack(app, 'TestStackNoCert', {
-          env: defaultEnv,
-          stage: 'test',
-          appName: 'webapp',
-        });
-        const templateNoCert = Template.fromStack(stackNoCert);
-        templateNoCert.resourceCountIs(
-          'AWS::ElasticLoadBalancingV2::Listener',
-          1
-        );
-        const listeners = templateNoCert.findResources(
-          'AWS::ElasticLoadBalancingV2::Listener'
-        );
-        const ports = Object.values(listeners).map(
-          (l: any) => l.Properties.Port
-        );
-        expect(ports).toEqual([80]);
-        // Ensure no HTTPS listener or redirect action exists
-        Object.values(listeners).forEach((l: any) => {
-          expect(l.Properties.DefaultActions).not.toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({
-                Type: 'redirect',
-                RedirectConfig: expect.objectContaining({
-                  Protocol: 'HTTPS',
-                  Port: '443',
-                }),
-              }),
-            ])
-          );
-        });
+        expect(() => {
+          new TapStack(app, 'TestStackNoCert', {
+            env: defaultEnv,
+            stage: 'test',
+            appName: 'webapp',
+            // certificateArn omitted
+          });
+        }).toThrow(/certificateArn is required/);
       }
     });
 
     it('defaults stage to dev if not provided', () => {
       const app = new cdk.App();
-      // Omit stage to test defaulting logic, cast as any to bypass type check
+      // Omit stage to test defaulting logic, but provide required certificateArn
       const stack = new TapStack(app, 'TestStackNoStage', {
         env: defaultEnv,
         appName: 'webapp',
+        certificateArn: defaultCertArn,
         // stage intentionally omitted
       } as any);
       const template = Template.fromStack(stack);
@@ -119,10 +97,11 @@ describe('TapStack', () => {
 
     it('defaults appName to webapp if not provided', () => {
       const app = new cdk.App();
-      // Omit appName to test defaulting logic, cast as any to bypass type check
+      // Omit appName to test defaulting logic, but provide required certificateArn
       const stack = new TapStack(app, 'TestStackNoAppName', {
         env: defaultEnv,
         stage: 'test',
+        certificateArn: defaultCertArn,
         // appName intentionally omitted
       } as any);
       const template = Template.fromStack(stack);

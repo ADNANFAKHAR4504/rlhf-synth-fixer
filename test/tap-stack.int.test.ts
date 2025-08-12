@@ -10,14 +10,15 @@ describe('TapStack Integration', () => {
   const defaultCertArn =
     'arn:aws:acm:us-east-1:123456789012:certificate/abc123';
 
-  it('synthesizes all major resources and propagates tags (HTTP only and HTTP+HTTPS)', () => {
-    // HTTP only (no certificateArn)
+  it('synthesizes all major resources and propagates tags (HTTP+HTTPS only, certificateArn required)', () => {
+    // HTTP+HTTPS (certificateArn provided)
     {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TapStackInt', {
+      const stack = new TapStack(app, 'TapStackIntWithCert', {
         env: defaultEnv,
         stage: 'integration',
         appName: 'webapp',
+        certificateArn: defaultCertArn,
       });
       const template = Template.fromStack(stack);
       // Major resources
@@ -26,7 +27,7 @@ describe('TapStack Integration', () => {
       template.resourceCountIs('AWS::EC2::LaunchTemplate', 1);
       template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
-      template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 1);
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 2);
       // Tag propagation (check on VPC)
       const vpcResources = template.findResources('AWS::EC2::VPC');
       const vpc = Object.values(vpcResources)[0];
@@ -40,6 +41,12 @@ describe('TapStack Integration', () => {
           }),
         ])
       );
+      // Listener ports check
+      const listeners = template.findResources(
+        'AWS::ElasticLoadBalancingV2::Listener'
+      );
+      const ports = Object.values(listeners).map((l: any) => l.Properties.Port);
+      expect(ports).toEqual(expect.arrayContaining([80, 443]));
     }
     // HTTP+HTTPS (certificateArn provided)
     {
