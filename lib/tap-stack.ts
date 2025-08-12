@@ -374,7 +374,7 @@ export class TapStack extends cdk.Stack {
      */
     const database = new rds.DatabaseInstance(this, 'SecureDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_32,
+        version: rds.MysqlEngineVersion.VER_8_0_37,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,

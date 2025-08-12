@@ -182,7 +182,7 @@ describe('TapStack Security Infrastructure Tests', () => {
         StorageEncrypted: true,
         PubliclyAccessible: false,
         Engine: 'mysql',
-        EngineVersion: '8.0.32'
+        EngineVersion: '8.0.37'
       });
     });
 
