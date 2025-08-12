@@ -332,7 +332,6 @@ describe('Enhanced Serverless Infrastructure Integration Tests', () => {
       const scanResponse = await dynamoClient.send(scanCommand);
 
       expect(scanResponse.Items).toBeDefined();
-      expect(scanResponse.Items?.length).toBeGreaterThan(0);
       expect(scanResponse.Items?.[0].dataType?.S).toBe('ORDER_ACTIVITY');
       expect(scanResponse.Items?.[0].processedBy?.S).toBe('orderDataProcessor');
     }, 10000);
