@@ -4,6 +4,7 @@ Storage Component - Creates S3 buckets with encryption and security best practic
 
 import json
 import pulumi
+from pulumi import ResourceOptions
 import pulumi_aws as aws
 
 
@@ -12,6 +13,7 @@ class StorageComponent(pulumi.ComponentResource):
     super().__init__("custom:aws:Storage", name, None, opts)
 
     account_id = aws.get_caller_identity_output().account_id
+    child_opts = ResourceOptions.merge(opts, ResourceOptions(parent=self))
 
     self.environment = environment
     # S3 Bucket for application data
@@ -19,7 +21,8 @@ class StorageComponent(pulumi.ComponentResource):
         f"{name}-app-bucket-{region_suffix}",
         bucket=f"apprlhfturing{region_suffix}",
         tags={**tags, "Name": f"rlhfbucketturing{region_suffix}"},
-        opts=pulumi.ResourceOptions(parent=self),
+        # opts=pulumi.ResourceOptions(parent=self),
+        opts=child_opts
     )
 
     # S3 Bucket Versioning
@@ -29,11 +32,11 @@ class StorageComponent(pulumi.ComponentResource):
         versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
             status="Enabled"
         ),
-        opts=pulumi.ResourceOptions(parent=self),
+        opts=child_opts
+        # opts=pulumi.ResourceOptions(parent=self),
     )
 
     self.bucket_policy_doc = aws.iam.get_policy_document_output(statements=[
-         f"-bucket-policy-document-{region_suffix}",
         # Allow CloudTrail to check bucket ACL
         aws.iam.GetPolicyDocumentStatementArgs(
             effect="Allow",
@@ -65,6 +68,7 @@ class StorageComponent(pulumi.ComponentResource):
         f"trail-bucket-policy-{region_suffix}",
         bucket=self.bucket.id,
         policy=self.bucket_policy_doc.json,
+        opts=child_opts
     )
 
 
@@ -80,7 +84,8 @@ class StorageComponent(pulumi.ComponentResource):
                 bucket_key_enabled=True,
             )
         ],
-        opts=pulumi.ResourceOptions(parent=self),
+        # opts=pulumi.ResourceOptions(parent=self),
+        opts=child_opts
     )
 
     # S3 Bucket Public Access Block
@@ -91,7 +96,8 @@ class StorageComponent(pulumi.ComponentResource):
         block_public_policy=True,
         ignore_public_acls=True,
         restrict_public_buckets=True,
-        opts=pulumi.ResourceOptions(parent=self),
+        # opts=pulumi.ResourceOptions(parent=self),
+        opts=child_opts
     )
 
     # S3 Bucket Lifecycle Configuration
@@ -119,5 +125,6 @@ class StorageComponent(pulumi.ComponentResource):
                 ),
             ),
         ],
-        opts=pulumi.ResourceOptions(parent=self),
+        # opts=pulumi.ResourceOptions(parent=self),
+        opts=child_opts
     )
