@@ -388,13 +388,20 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}:log-stream:${AWS::AccountId}_CloudTrail_*"
+                Resource: !Sub "${CloudTrailLogGroup.Arn}:log-stream:*"
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: "*"
+
+              # Not strictly required because you pre-create the group, but harmless and future-proof:
+              - Effect: Allow
+                Action: logs:CreateLogGroup
+                Resource: !GetAtt CloudTrailLogGroup.Arn
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn:
-      - CloudTrailLogGroup # ensure group exists
-      - CloudTrailLogsRole # ensure role exists
     Properties:
       TrailName: !Sub "TapStack${EnvironmentSuffix}-CloudTrail"
       S3BucketName: !Ref CloudTrailS3Bucket
@@ -402,7 +409,7 @@ Resources:
       IsMultiRegionTrail: true
       IsLogging: true
       EnableLogFileValidation: true
-      CloudWatchLogsLogGroupArn: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}"
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
       EventSelectors:
         - ReadWriteType: All
