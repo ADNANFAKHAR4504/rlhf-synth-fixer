@@ -310,7 +310,7 @@ export class ComputeModule extends Construct {
             ebs: {
               volumeSize: 8,
               volumeType: 'gp3',
-              // encrypted: 'true', // CORRECTED: This must be a boolean
+              encrypted: 'true',
               kmsKeyId: props.kmsKey.arn,
             },
           },
