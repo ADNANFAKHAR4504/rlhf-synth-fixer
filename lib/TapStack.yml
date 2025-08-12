@@ -7,7 +7,9 @@ Mappings:
       AMI: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'  # Latest Amazon Linux 2023
 
 Resources:
- 
+  ###########################################################################
+  # KMS
+  ###########################################################################
   SecureAppKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -64,7 +66,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: secureapp-prod-ec2-role
+      RoleName: !Sub 'secureapp-prod-ec2-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -102,14 +104,16 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: secureapp-prod-ec2-profile
+      InstanceProfileName: !Sub 'secureapp-prod-ec2-profile-${AWS::AccountId}'
       Roles:
         - !Ref EC2InstanceRole
+
+
 
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: secureapp-prod-db-password
+      Name: !Sub 'secureapp-prod-db-password-${AWS::AccountId}'
       Description: 'RDS credentials for SecureApp'
       GenerateSecretString:
         SecretStringTemplate: '{"username":"dbadmin"}'
@@ -581,7 +585,7 @@ Resources:
   CertificateCreationRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: secureapp-prod-cert-lambda-role
+      RoleName: !Sub 'secureapp-prod-cert-lambda-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -606,7 +610,7 @@ Resources:
   CertificateCreationFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: secureapp-prod-cert-creator
+      FunctionName: !Sub 'secureapp-prod-cert-creator-${AWS::AccountId}'
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt CertificateCreationRole.Arn
@@ -828,7 +832,7 @@ Resources:
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: secureapp-prod-db-subnet-group
+      DBSubnetGroupName: !Sub 'secureapp-prod-db-subnet-group-${AWS::AccountId}'
       DBSubnetGroupDescription: Subnet group for SecureApp RDS database
       SubnetIds:
         - !Ref DatabaseSubnet1
@@ -848,7 +852,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: secureapp-prod-database
+      DBInstanceIdentifier: !Sub 'secureapp-prod-database-${AWS::AccountId}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.35'
@@ -899,7 +903,7 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: secureapp-prod-cloudtrail-role
+      RoleName: !Sub 'secureapp-prod-cloudtrail-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -923,7 +927,7 @@ Resources:
   SecureAppCloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: secureapp-prod-cloudtrail
+      TrailName: !Sub 'secureapp-prod-trail-${AWS::AccountId}'
       S3BucketName: !Ref SecureAppLogBucket
       S3KeyPrefix: cloudtrail-logs/
       IncludeGlobalServiceEvents: true
@@ -946,7 +950,7 @@ Resources:
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: secureapp-prod-flowlogs-role
+      RoleName: !Sub 'secureapp-prod-flowlogs-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1003,14 +1007,14 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: secureapp-prod-config-delivery-channel
+      Name: !Sub 'secureapp-prod-config-delivery-${AWS::AccountId}'
       S3BucketName: !Ref SecureAppLogBucket
       S3KeyPrefix: config/
 
   ConfigConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: secureapp-prod-config-recorder
+      Name: !Sub 'secureapp-prod-config-recorder-${AWS::AccountId}'
       RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
@@ -1020,7 +1024,7 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
     Properties:
-      ConfigRuleName: secureapp-s3-bucket-server-side-encryption-enabled
+      ConfigRuleName: !Sub 'secureapp-s3-encryption-${AWS::AccountId}'
       Description: Checks that S3 buckets have server-side encryption enabled
       Source:
         Owner: AWS
@@ -1030,7 +1034,7 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
     Properties:
-      ConfigRuleName: secureapp-rds-storage-encrypted
+      ConfigRuleName: !Sub 'secureapp-rds-encryption-${AWS::AccountId}'
       Description: Checks that RDS instances have storage encryption enabled
       Source:
         Owner: AWS
