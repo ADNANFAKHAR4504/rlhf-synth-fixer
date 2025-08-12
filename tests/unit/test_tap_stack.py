@@ -166,6 +166,7 @@ class MockPulumiResource:
     self.dns_name = f"{name}.amazonaws.com"
     self.endpoint = f"{name}-endpoint.amazonaws.com"
     self.arn_suffix = f"suffix-{name}"
+    self.package = "aws"  # Add package attribute for provider
 
     # Set any additional attributes from kwargs
     for key, value in kwargs.items():
@@ -187,6 +188,8 @@ class TestTapStackInitialization(unittest.TestCase):
 
     # Patch Pulumi AWS resources
     self.patches = [
+      patch('pulumi_aws.Provider',
+            return_value=MockPulumiResource("provider")),
       patch('pulumi_aws.ec2.Vpc', return_value=self.vpc_mock),
       patch('pulumi_aws.ec2.Subnet', return_value=self.subnet_mock),
       patch('pulumi_aws.ec2.SecurityGroup', return_value=self.sg_mock),
@@ -195,6 +198,8 @@ class TestTapStackInitialization(unittest.TestCase):
       patch('pulumi_aws.autoscaling.Group', return_value=self.asg_mock),
       patch('pulumi_aws.iam.Role',
             return_value=MockPulumiResource("role")),
+      patch('pulumi_aws.iam.RolePolicyAttachment',
+            return_value=MockPulumiResource("role-policy-attachment")),
       patch('pulumi_aws.iam.InstanceProfile',
             return_value=MockPulumiResource("instance-profile")),
       patch('pulumi_aws.ec2.InternetGateway',
@@ -205,6 +210,24 @@ class TestTapStackInitialization(unittest.TestCase):
             return_value=MockPulumiResource("route-table")),
       patch('pulumi_aws.ec2.Route',
             return_value=MockPulumiResource("route")),
+      patch('pulumi_aws.ec2.Eip',
+            return_value=MockPulumiResource("eip")),
+      patch('pulumi_aws.ec2.LaunchTemplate',
+            return_value=MockPulumiResource("launch-template")),
+      patch('pulumi_aws.lb.TargetGroup',
+            return_value=MockPulumiResource("target-group")),
+      patch('pulumi_aws.lb.Listener',
+            return_value=MockPulumiResource("listener")),
+      patch('pulumi_aws.autoscaling.Policy',
+            return_value=MockPulumiResource("scaling-policy")),
+      patch('pulumi_aws.cloudwatch.MetricAlarm',
+            return_value=MockPulumiResource("alarm")),
+      patch('pulumi_aws.cloudwatch.LogGroup',
+            return_value=MockPulumiResource("log-group")),
+      patch('pulumi_aws.sns.Topic',
+            return_value=MockPulumiResource("sns-topic")),
+      patch('pulumi_aws.ec2.RouteTableAssociation',
+            return_value=MockPulumiResource("route-table-assoc")),
       patch('pulumi_aws.get_availability_zones',
             return_value=Mock(names=["us-east-1a", "us-east-1b",
                                     "us-east-1c"])),

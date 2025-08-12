@@ -24,8 +24,8 @@ class TapStackArgs:
     self.environment_suffix = environment_suffix
     self.team_name = "tap"
     self.project_name = "iac-aws-nova-model-breaking"
-    # Use only us-east-1 to avoid VPC limits in other regions
-    self.regions = ["us-east-1"]
+    # Multi-region deployment for high availability
+    self.regions = ["us-east-1", "us-west-2", "eu-west-1"]
     self.availability_zones_per_region = 3
     
   def get_resource_name(self, service_name: str) -> str:
@@ -59,6 +59,13 @@ class TapStack(pulumi.ComponentResource):
   
   def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
     super().__init__("custom:infrastructure:TapStack", name, {}, opts)
+    
+    # Initialize necessary attributes for ComponentResource
+    self._transformations = []
+    self._childResources = set()
+    self._providers = {}
+    self._aliases = []
+    self._protect = False
     
     self.args = args
     self.default_tags = args.get_default_tags()
