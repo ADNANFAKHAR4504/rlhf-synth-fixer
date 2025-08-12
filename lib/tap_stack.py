@@ -3,8 +3,11 @@ AWS Dual-Stack Infrastructure with Pulumi
 =========================================
 
 This module provisions a highly available, dual-stack (IPv4 and IPv6) 
-web application infrastructure on AWS using Pulumi and Python.
-
+web application infrastructure on AWS using Pulumi and Pytho# Security group for EC2 instances
+ec2_security_group = aws.ec2.SecurityGroup(
+    "ec2-sg",
+    description="Security group for EC2 instances - allows HTTP traffic from ALB only",
+    vpc_id=vpc.id,
 Features:
 - Dual-stack VPC with IPv4 and IPv6 CIDR blocks
 - Multi-AZ public subnets with internet connectivity
@@ -46,10 +49,8 @@ AWS_REGION = (
 INSTANCE_TYPE = config.get("instance-type") or "t3.micro"
 PROJECT_NAME = config.get("project-name") or "dualstack-web-app"
 
-# Resource naming convention
-def get_resource_name(resource_type: str) -> str:
-    """Generate consistent resource names following naming convention."""
-    return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}"
+# Environment suffix from ENVIRONMENT_SUFFIX env var or default
+environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
 
 # =============================================================================
 # Data Sources
@@ -80,13 +81,13 @@ amazon_linux_ami = aws.ec2.get_ami(
 
 # Create VPC with dual-stack support
 vpc = aws.ec2.Vpc(
-    get_resource_name("vpc"),
+    "vpc",
     cidr_block="10.0.0.0/16",
     assign_generated_ipv6_cidr_block=True,
     enable_dns_hostnames=True,
     enable_dns_support=True,
     tags={
-        "Name": get_resource_name("vpc"),
+        "Name": f"VPC-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
     }
@@ -94,10 +95,10 @@ vpc = aws.ec2.Vpc(
 
 # Internet Gateway for public internet access
 internet_gateway = aws.ec2.InternetGateway(
-    get_resource_name("igw"),
+    "igw",
     vpc_id=vpc.id,
     tags={
-        "Name": get_resource_name("igw"),
+        "Name": f"IGW-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
     }
@@ -113,7 +114,7 @@ for i in range(min(2, len(availability_zones.names))):
     ipv4_cidr = f"10.0.{i + 1}.0/24"
     
     subnet = aws.ec2.Subnet(
-        get_resource_name(f"public-subnet-{i + 1}"),
+        f"subnet-{i + 1}",
         vpc_id=vpc.id,
         availability_zone=az,
         cidr_block=ipv4_cidr,
@@ -123,7 +124,7 @@ for i in range(min(2, len(availability_zones.names))):
         map_public_ip_on_launch=True,
         assign_ipv6_address_on_creation=True,
         tags={
-            "Name": get_resource_name(f"public-subnet-{i + 1}"),
+            "Name": f"Subnet-{i + 1}-{environment_suffix}",
             "Environment": ENVIRONMENT,
             "Project": PROJECT_NAME,
             "Type": "Public",
@@ -135,10 +136,10 @@ for i in range(min(2, len(availability_zones.names))):
 
 # Route table for public subnets
 public_route_table = aws.ec2.RouteTable(
-    get_resource_name("public-rt"),
+    "rt",
     vpc_id=vpc.id,
     tags={
-        "Name": get_resource_name("public-rt"),
+        "Name": f"RT-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Type": "Public"
@@ -147,7 +148,7 @@ public_route_table = aws.ec2.RouteTable(
 
 # IPv4 route to Internet Gateway
 ipv4_route = aws.ec2.Route(
-    get_resource_name("ipv4-route"),
+    "ipv4-route",
     route_table_id=public_route_table.id,
     destination_cidr_block="0.0.0.0/0",
     gateway_id=internet_gateway.id
@@ -155,7 +156,7 @@ ipv4_route = aws.ec2.Route(
 
 # IPv6 route to Internet Gateway
 ipv6_route = aws.ec2.Route(
-    get_resource_name("ipv6-route"),
+    "ipv6-route",
     route_table_id=public_route_table.id,
     destination_ipv6_cidr_block="::/0",
     gateway_id=internet_gateway.id
@@ -164,7 +165,7 @@ ipv6_route = aws.ec2.Route(
 # Associate route table with public subnets
 for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
-        get_resource_name(f"public-rta-{i + 1}"),
+        f"rta-{i + 1}",
         subnet_id=subnet.id,
         route_table_id=public_route_table.id
     )
@@ -175,7 +176,7 @@ for i, subnet in enumerate(public_subnets):
 
 # Security group for Application Load Balancer
 alb_security_group = aws.ec2.SecurityGroup(
-    get_resource_name("alb-sg"),
+    "alb-sg",
     description="Security group for Application Load Balancer - allows HTTP traffic from internet",
     vpc_id=vpc.id,
     revoke_rules_on_delete=True,
@@ -216,7 +217,7 @@ alb_security_group = aws.ec2.SecurityGroup(
         )
     ],
     tags={
-        "Name": get_resource_name("alb-sg"),
+        "Name": f"ALB-SG-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "ALB Security Group"
@@ -225,7 +226,7 @@ alb_security_group = aws.ec2.SecurityGroup(
 
 # Security group for EC2 instances
 ec2_security_group = aws.ec2.SecurityGroup(
-    get_resource_name("ec2-sg"),
+    "ec2-sg",
     description="Security group for EC2 instances - allows HTTP traffic only from ALB",
     vpc_id=vpc.id,
     revoke_rules_on_delete=True,
@@ -258,7 +259,7 @@ ec2_security_group = aws.ec2.SecurityGroup(
         )
     ],
     tags={
-        "Name": get_resource_name("ec2-sg"),
+        "Name": f"EC2-SG-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "EC2 Security Group"
@@ -284,12 +285,12 @@ ec2_assume_role_policy = {
 }
 
 ec2_role = aws.iam.Role(
-    get_resource_name("ec2-role"),
-    name=get_resource_name("ec2-role"),
+    "ec2-role",
+    name=f"EC2-Role-{environment_suffix}",
     assume_role_policy=json.dumps(ec2_assume_role_policy),
     description="IAM role for EC2 instances with minimal required permissions",
     tags={
-        "Name": get_resource_name("ec2-role"),
+        "Name": f"EC2-Role-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
     }
@@ -317,23 +318,23 @@ ec2_policy_document = {
 }
 
 ec2_policy = aws.iam.Policy(
-    get_resource_name("ec2-policy"),
-    name=get_resource_name("ec2-policy"),
+    "ec2-policy",
+    name=f"EC2-Policy-{environment_suffix}",
     description="Custom policy for EC2 instances - CloudWatch and logging permissions",
     policy=json.dumps(ec2_policy_document)
 )
 
 # Attach custom policy to role
 ec2_policy_attachment = aws.iam.RolePolicyAttachment(
-    get_resource_name("ec2-policy-attachment"),
+    "ec2-policy-attachment",
     role=ec2_role.name,
     policy_arn=ec2_policy.arn
 )
 
 # Create instance profile
 ec2_instance_profile = aws.iam.InstanceProfile(
-    get_resource_name("ec2-instance-profile"),
-    name=get_resource_name("ec2-instance-profile"),
+    "ec2-instance-profile",
+    name=f"EC2-InstanceProfile-{environment_suffix}",
     role=ec2_role.name
 )
 
@@ -476,7 +477,7 @@ ec2_instances: List[aws.ec2.Instance] = []
 
 for i, subnet in enumerate(public_subnets):
     instance = aws.ec2.Instance(
-        get_resource_name(f"web-server-{i + 1}"),
+        f"web-server-{i + 1}",
         ami=amazon_linux_ami.id,
         instance_type=INSTANCE_TYPE,
         subnet_id=subnet.id,
@@ -486,7 +487,7 @@ for i, subnet in enumerate(public_subnets):
         monitoring=True,  # Enable detailed monitoring
         ipv6_address_count=1,  # Assign one IPv6 address
         tags={
-            "Name": get_resource_name(f"web-server-{i + 1}"),
+            "Name": f"WebServer-{i + 1}-{environment_suffix}",
             "Environment": ENVIRONMENT,
             "Project": PROJECT_NAME,
             "Role": "WebServer",
@@ -502,7 +503,7 @@ for i, subnet in enumerate(public_subnets):
 
 # Create target group for EC2 instances
 target_group = aws.lb.TargetGroup(
-    get_resource_name("web-tg"),
+    "web-tg",
     name_prefix="tg-",
     port=80,
     protocol="HTTP",
@@ -519,7 +520,7 @@ target_group = aws.lb.TargetGroup(
         port="traffic-port"
     ),
     tags={
-        "Name": get_resource_name("web-tg"),
+        "Name": f"WebTG-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
     }
@@ -528,15 +529,15 @@ target_group = aws.lb.TargetGroup(
 # Attach EC2 instances to target group
 for i, instance in enumerate(ec2_instances):
     aws.lb.TargetGroupAttachment(
-        get_resource_name(f"web-tg-attachment-{i + 1}"),
+        f"web-tg-attachment-{i + 1}",
         target_group_arn=target_group.arn,
         target_id=instance.id,
-    port=80
+        port=80
     )
 
 # Create Application Load Balancer with dual-stack support
 alb = aws.lb.LoadBalancer(
-    get_resource_name("web-alb"),
+    "web-alb",
     name_prefix="alb-",
     load_balancer_type="application",
     ip_address_type="dualstack",  # Enable dual-stack (IPv4 and IPv6)
@@ -545,7 +546,7 @@ alb = aws.lb.LoadBalancer(
     subnets=[subnet.id for subnet in public_subnets],
     enable_deletion_protection=False,  # Set to True for production
     tags={
-        "Name": get_resource_name("web-alb"),
+        "Name": f"WebALB-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Type": "Application Load Balancer"
@@ -554,7 +555,7 @@ alb = aws.lb.LoadBalancer(
 
 # Create HTTP listener
 http_listener = aws.lb.Listener(
-    get_resource_name("web-listener"),
+    "web-listener",
     load_balancer_arn=alb.arn,
     port="80",
     protocol="HTTP",
@@ -657,15 +658,15 @@ dashboard_body = pulumi.Output.all(
 }))
 
 cloudwatch_dashboard = aws.cloudwatch.Dashboard(
-    get_resource_name("monitoring-dashboard"),
-    dashboard_name=get_resource_name("monitoring-dashboard"),
+    "monitoring-dashboard",
+    dashboard_name=f"MonitoringDashboard-{environment_suffix}",
     dashboard_body=dashboard_body
 )
 
 # Create CloudWatch Alarms for critical metrics
 # Alarm for unhealthy targets
 unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
-    get_resource_name("unhealthy-targets-alarm"),
+    "unhealthy-targets-alarm",
     metric_name="UnHealthyHostCount",
     namespace="AWS/ApplicationELB",
     statistic="Average",
@@ -677,7 +678,7 @@ unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
         "TargetGroup": target_group.arn_suffix
     },
     tags={
-        "Name": get_resource_name("unhealthy-targets-alarm"),
+        "Name": f"UnhealthyTargetsAlarm-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
     }
@@ -685,7 +686,7 @@ unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
 
 # Alarm for high response time
 high_response_time_alarm = aws.cloudwatch.MetricAlarm(
-    get_resource_name("high-response-time-alarm"),
+    "high-response-time-alarm",
     metric_name="TargetResponseTime",
     namespace="AWS/ApplicationELB",
     statistic="Average",
@@ -697,7 +698,7 @@ high_response_time_alarm = aws.cloudwatch.MetricAlarm(
         "LoadBalancer": alb.arn_suffix
     },
     tags={
-        "Name": get_resource_name("high-response-time-alarm"),
+        "Name": f"HighResponseTimeAlarm-{environment_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
     }
