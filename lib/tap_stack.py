@@ -374,10 +374,13 @@ class TapStack(ComponentResource):
     def _create_s3_buckets(self):
       """Create S3 buckets with encryption and cross-region replication."""
       
+      # Generate a valid S3 bucket name (lowercase, alphanumeric, and hyphens only)
+      stack_name_lower = pulumi.get_stack().lower().replace("_", "-")
+      
       # Primary application bucket
       self.app_bucket = aws.s3.Bucket(
           f"tap-app-{self.environment}",
-          bucket=f"tap-app-{self.environment}-{pulumi.get_stack()}",
+          bucket=f"tap-app-{self.environment}-{stack_name_lower}",
           server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
               rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                   apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
@@ -406,7 +409,7 @@ class TapStack(ComponentResource):
 
           self.backup_bucket = aws.s3.Bucket(
               f"tap-app-backup-{self.environment}",
-              bucket=f"tap-app-backup-{self.environment}-{pulumi.get_stack()}",
+              bucket=f"tap-app-backup-{self.environment}-{stack_name_lower}",
               server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                   rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                       apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
@@ -428,7 +431,7 @@ class TapStack(ComponentResource):
       # Logs bucket with lifecycle policy using separate resource
       self.logs_bucket = aws.s3.Bucket(
           f"tap-logs-{self.environment}",
-          bucket=f"tap-logs-{self.environment}-{pulumi.get_stack()}",
+          bucket=f"tap-logs-{self.environment}-{stack_name_lower}",
           server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
               rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                   apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
@@ -467,6 +470,7 @@ class TapStack(ComponentResource):
       
       if self.args.enable_cross_region_replication:
           self.s3_bucket_names["backup"] = self.backup_bucket.bucket
+
 
 
     def _create_iam_roles(self):
