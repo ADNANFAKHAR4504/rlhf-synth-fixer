@@ -82,7 +82,10 @@ export class TapStack extends cdk.Stack {
     }
 
     // Check if it's a PR number (starts with 'pr' followed by digits)
-    if (suffix.toLowerCase().startsWith('pr') && /^pr\d+$/.test(suffix.toLowerCase())) {
+    if (
+      suffix.toLowerCase().startsWith('pr') &&
+      /^pr\d+$/.test(suffix.toLowerCase())
+    ) {
       return suffix.toLowerCase();
     }
 

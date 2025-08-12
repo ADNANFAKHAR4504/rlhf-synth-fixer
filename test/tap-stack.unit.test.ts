@@ -278,7 +278,9 @@ describe('TapStack', () => {
         new TapStack(customApp, 'InvalidStack', {
           environmentSuffix: 'invalid',
         });
-      }).toThrow('Invalid environment suffix: invalid. Must be one of: dev, staging, prod, test or a PR number (prXXXX)');
+      }).toThrow(
+        'Invalid environment suffix: invalid. Must be one of: dev, staging, prod, test or a PR number (prXXXX)'
+      );
     });
 
     test('should handle PR number environment suffix', () => {
