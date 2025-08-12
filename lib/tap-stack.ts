@@ -3,20 +3,42 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    // Import existing VPC
-    const vpc = ec2.Vpc.fromLookup(this, 'ExistingVpc', {
-      vpcId: 'vpc-0bb1c79de3EXAMPLE',
+    // Get environment suffix from props, context, or use 'dev' as default
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    // Create destroyable VPC instead of importing existing one
+    const vpc = new ec2.Vpc(this, 'TapVpc', {
+      vpcName: `tap-vpc-${environmentSuffix}`,
+      maxAzs: 2,
+      cidr: '10.0.0.0/16',
+      natGateways: 0, // No NAT gateways for cost efficiency
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: `tap-public-${environmentSuffix}`,
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
     });
 
     // Security Group - HTTPS only from internet
     const securityGroup = new ec2.SecurityGroup(this, 'SecurityGroup', {
       vpc,
-      securityGroupName: 'myapp-webserver-production',
-      description: 'Security group for MyApp web server - HTTPS only',
+      securityGroupName: `myapp-webserver-${environmentSuffix}`,
+      description: `Security group for MyApp web server - HTTPS only (${environmentSuffix})`,
       allowAllOutbound: true, // Unrestricted egress as required
     });
 
@@ -26,11 +48,11 @@ export class TapStack extends cdk.Stack {
       'Allow HTTPS traffic from internet'
     );
 
-    // IAM Role with minimal S3 permissions 
+    // IAM Role with minimal S3 permissions
     const ec2Role = new iam.Role(this, 'Ec2Role', {
-      roleName: 'myapp-ec2role-production',
+      roleName: `myapp-ec2role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'IAM role for MyApp EC2 instances with S3 read-only access',
+      description: `IAM role for MyApp EC2 instances with S3 read-only access (${environmentSuffix})`,
       inlinePolicies: {
         S3ReadOnlyPolicy: new iam.PolicyDocument({
           statements: [
@@ -46,7 +68,7 @@ export class TapStack extends cdk.Stack {
 
     // Instance Profile for EC2
     const instanceProfile = new iam.InstanceProfile(this, 'InstanceProfile', {
-      instanceProfileName: 'myapp-instanceprofile-production',
+      instanceProfileName: `myapp-instanceprofile-${environmentSuffix}`,
       role: ec2Role,
     });
 
@@ -57,7 +79,7 @@ export class TapStack extends cdk.Stack {
 
     // EC2 Instance in public subnet
     const instance = new ec2.Instance(this, 'WebServerInstance', {
-      instanceName: 'myapp-webserver-production',
+      instanceName: `myapp-webserver-${environmentSuffix}`,
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC, // Public subnet as required

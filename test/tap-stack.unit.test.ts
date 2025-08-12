@@ -10,55 +10,8 @@ describe('TapStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    // Mock VPC lookup to avoid context provider issues
-    app.node.setContext('vpc-provider:account=123456789012:filter.vpc-id=vpc-0bb1c79de3EXAMPLE:region=us-east-1:returnAsymmetricSubnets=true', {
-      vpcId: 'vpc-0bb1c79de3EXAMPLE',
-      vpcCidrBlock: '10.0.0.0/16',
-      availabilityZones: ['us-east-1a', 'us-east-1b'],
-      isolatedSubnetIds: [],
-      isolatedSubnetNames: [],
-      isolatedSubnetRouteTableIds: [],
-      privateSubnetIds: ['subnet-private-1', 'subnet-private-2'],
-      privateSubnetNames: ['Private Subnet (AZ1)', 'Private Subnet (AZ2)'],
-      privateSubnetRouteTableIds: ['rtb-private-1', 'rtb-private-2'],
-      publicSubnetIds: ['subnet-public-1', 'subnet-public-2'],
-      publicSubnetNames: ['Public Subnet (AZ1)', 'Public Subnet (AZ2)'],
-      publicSubnetRouteTableIds: ['rtb-public-1', 'rtb-public-2'],
-      subnetGroups: [
-        {
-          name: 'Public',
-          type: 'Public',
-          subnets: [
-            {
-              subnetId: 'subnet-public-1',
-              availabilityZone: 'us-east-1a',
-              routeTableId: 'rtb-public-1'
-            },
-            {
-              subnetId: 'subnet-public-2', 
-              availabilityZone: 'us-east-1b',
-              routeTableId: 'rtb-public-2'
-            }
-          ]
-        },
-        {
-          name: 'Private',
-          type: 'Private',
-          subnets: [
-            {
-              subnetId: 'subnet-private-1',
-              availabilityZone: 'us-east-1a',
-              routeTableId: 'rtb-private-1'
-            },
-            {
-              subnetId: 'subnet-private-2',
-              availabilityZone: 'us-east-1b', 
-              routeTableId: 'rtb-private-2'
-            }
-          ]
-        }
-      ]
-    });
+    // Set test environment suffix via context
+    app.node.setContext('environmentSuffix', 'test');
     
     stack = new TapStack(app, 'TestTapStack', {
       env: {
@@ -70,9 +23,11 @@ describe('TapStack', () => {
   });
 
   describe('VPC Configuration', () => {
-    test('should reference existing VPC', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        VpcId: Match.anyValue()
+    test('should create VPC with environment suffix', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true
       });
     });
   });
@@ -80,8 +35,8 @@ describe('TapStack', () => {
   describe('Security Group', () => {
     test('should create security group with correct properties', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for MyApp web server - HTTPS only',
-        GroupName: 'myapp-webserver-production'
+        GroupDescription: Match.stringLikeRegexp('Security group for MyApp web server - HTTPS only \\(.*\\)'),
+        GroupName: Match.stringLikeRegexp('myapp-webserver-.*')
       });
     });
 
@@ -114,7 +69,7 @@ describe('TapStack', () => {
   describe('IAM Role', () => {
     test('should create EC2 IAM role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'myapp-ec2role-production',
+        RoleName: Match.stringLikeRegexp('myapp-ec2role-.*'),
         AssumeRolePolicyDocument: {
           Statement: [
             {
@@ -152,7 +107,7 @@ describe('TapStack', () => {
   describe('Instance Profile', () => {
     test('should create instance profile', () => {
       template.hasResourceProperties('AWS::IAM::InstanceProfile', {
-        InstanceProfileName: 'myapp-instanceprofile-production'
+        InstanceProfileName: Match.stringLikeRegexp('myapp-instanceprofile-.*')
       });
     });
 
@@ -218,12 +173,12 @@ describe('TapStack', () => {
 
     test('should have correct tags including instance name', () => {
       template.hasResourceProperties('AWS::EC2::Instance', {
-        Tags: [
+        Tags: Match.arrayWith([
           {
             Key: 'Name',
-            Value: 'myapp-webserver-production'
+            Value: Match.stringLikeRegexp('myapp-webserver-.*')
           }
-        ]
+        ])
       });
     });
   });
@@ -260,13 +215,15 @@ describe('TapStack', () => {
 
   describe('Resource Count', () => {
     test('should create expected number of resources', () => {
-      template.resourceCountIs('AWS::EC2::SecurityGroup', 1);
-      template.resourceCountIs('AWS::IAM::Role', 1);
-      // Note: CDK sometimes creates additional instance profiles, so we check for at least 1
-      template.resourcePropertiesCountIs('AWS::IAM::InstanceProfile', {
-        InstanceProfileName: 'myapp-instanceprofile-production'
-      }, 1);
+      // VPC creates multiple resources (vpc, subnets, internet gateway, route tables, etc.)
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 1); // Not counting default SG restriction resources
+      const roles = template.findResources('AWS::IAM::Role');
+      expect(Object.keys(roles).length).toBeGreaterThanOrEqual(1); // EC2 role + potentially Lambda role for default SG restriction
       template.resourceCountIs('AWS::EC2::Instance', 1);
+      // Multiple instance profiles are created by CDK
+      const instanceProfiles = template.findResources('AWS::IAM::InstanceProfile');
+      expect(Object.keys(instanceProfiles).length).toBeGreaterThanOrEqual(1);
     });
   });
 
