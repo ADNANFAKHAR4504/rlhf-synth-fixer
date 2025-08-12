@@ -81,6 +81,7 @@ class TapStack(pulumi.ComponentResource):
         f"serverless-logs-{self.environment_suffix}",
         bucket=pulumi.Output.concat(project, "-logs-", self.environment_suffix),
         tags={**self.tags, "Purpose": "Lambda Logs"},
+        force_destroy=True,
         opts=parent_opts,
     )
 
@@ -211,42 +212,40 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # ------------------- Lambda Function -------------------
+    # --- Lambda Function ---
     lambda_function = aws.lambda_.Function(
         f"handler-{self.environment_suffix}",
-        name=pulumi.Output.concat(
-            project, "-handler-", self.environment_suffix),
+        name=pulumi.Output.concat(project, "-handler-", self.environment_suffix),
         runtime="python3.9",
         role=lambda_role.arn,
         handler="handler.lambda_handler",
-        code=pulumi.AssetArchive({".": pulumi.FileArchive("./lambda")}),
+        code=pulumi.AssetArchive({".": pulumi.FileArchive("./lib/lambda")}),
         timeout=30,
         memory_size=256,
+        publish=True,  # <-- publish a version each update
         environment=aws.lambda_.FunctionEnvironmentArgs(
             variables={
                 "LOG_BUCKET_NAME": log_bucket.bucket,
                 "ENVIRONMENT": self.environment_suffix,
             }
         ),
-        # Use -1 (no reserved concurrency) to allow autoscaling
         reserved_concurrent_executions=-1,
         tags={**self.tags, "Purpose": "HTTP Request Handler"},
         opts=parent_opts.merge(ResourceOptions(depends_on=[lambda_log_group])),
     )
 
-    # Publish a version for provisioned concurrency (can't use $LATEST)
-    lambda_version = aws.lambda_.Version(
-        f"handler-version-{self.environment_suffix}",
-        function_name=lambda_function.name,
-        opts=parent_opts,
-    )
+    # Remove aws.lambda_.Version(...) — not needed.
 
-    aws.lambda_.ProvisionedConcurrencyConfig(
-        f"handler-pc-{self.environment_suffix}",
-        function_name=lambda_function.name,
-        qualifier=lambda_version.version,
-        provisioned_concurrent_executions=2,
-        opts=parent_opts,
-    )
+    # aws.lambda_.ProvisionedConcurrencyConfig(
+    #     f"handler-pc-{self.environment_suffix}",
+    #     function_name=lambda_function.name,
+    #     qualifier=lambda_function.version,  # <-- use the published version output
+    #     provisioned_concurrent_executions=10,
+    #     opts=parent_opts,
+    # )
+
+    # Update outputs (rename if you like)
+    self.lambda_version = lambda_function.version
 
     # ------------------- API Gateway (REST) -------------------
     rest_api = aws.apigateway.RestApi(
@@ -306,14 +305,24 @@ class TapStack(pulumi.ComponentResource):
         opts=parent_opts,
     )
 
+    # --- API Gateway Deployment (no stage_name on v6+) ---
     deployment = aws.apigateway.Deployment(
         f"api-deploy-{self.environment_suffix}",
         rest_api=rest_api.id,
-        stage_name=self.environment_suffix,
         description=pulumi.Output.concat("Deployment for ", self.environment_suffix),
-        opts=parent_opts.merge(ResourceOptions(depends_on=[proxy_integration, root_integration])),
+        # Force a new deployment when routes/integrations change
+        triggers={
+            "redeploy-hash": pulumi.Output.all(
+                proxy_method.id, root_method.id, proxy_integration.id, root_integration.id
+            ).apply(lambda parts: "-".join(parts)),
+        },
+        opts=parent_opts.merge(
+            pulumi.ResourceOptions(depends_on=[proxy_integration, root_integration])
+        ),
     )
 
+    # --- Stage owns the stage name + logs/metrics ---
+    # Keep your Stage as-is, but WITHOUT method_settings
     stage = aws.apigateway.Stage(
         f"api-stage-{self.environment_suffix}",
         rest_api=rest_api.id,
@@ -321,32 +330,36 @@ class TapStack(pulumi.ComponentResource):
         stage_name=self.environment_suffix,
         access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
             destination_arn=api_log_group.arn,
-            format=json.dumps(
-                {
-                    "requestId": "$context.requestId",
-                    "ip": "$context.identity.sourceIp",
-                    "caller": "$context.identity.caller",
-                    "user": "$context.identity.user",
-                    "requestTime": "$context.requestTime",
-                    "httpMethod": "$context.httpMethod",
-                    "resourcePath": "$context.resourcePath",
-                    "status": "$context.status",
-                    "protocol": "$context.protocol",
-                    "responseLength": "$context.responseLength",
-                }
-            ),
+            format=json.dumps({
+                "requestId": "$context.requestId",
+                "ip": "$context.identity.sourceIp",
+                "caller": "$context.identity.caller",
+                "user": "$context.identity.user",
+                "requestTime": "$context.requestTime",
+                "httpMethod": "$context.httpMethod",
+                "resourcePath": "$context.resourcePath",
+                "status": "$context.status",
+                "protocol": "$context.protocol",
+                "responseLength": "$context.responseLength",
+            }),
         ),
-        method_settings=[
-            aws.apigateway.StageMethodSettingArgs(
-                method_path="*/*",
-                metrics_enabled=True,
-                logging_level="INFO",
-                data_trace_enabled=True,
-                throttling_burst_limit=5000,
-                throttling_rate_limit=2000,
-            )
-        ],
         tags={**self.tags, "Purpose": "API Stage"},
+        opts=parent_opts,
+    )
+
+    # Add method-level logging/metrics/throttling via MethodSettings
+    aws.apigateway.MethodSettings(
+        f"api-stage-methodsettings-{self.environment_suffix}",
+        rest_api=rest_api.id,
+        stage_name=stage.stage_name,
+        method_path="*/*",  # apply to all methods
+        settings={
+            "metrics_enabled": True,
+            "logging_level": "INFO",  # OFF | ERROR | INFO
+            "data_trace_enabled": True,  # full request/response data (careful in prod)
+            "throttling_burst_limit": 5000,
+            "throttling_rate_limit": 2000,
+        },
         opts=parent_opts,
     )
 
@@ -427,7 +440,6 @@ class TapStack(pulumi.ComponentResource):
     self.lambda_name = lambda_function.name
     self.lambda_arn = lambda_function.arn
     self.lambda_log_group_name = lambda_log_group.name
-    self.lambda_version = lambda_version.version
 
     self.log_bucket_name = log_bucket.bucket
     self.log_bucket_arn = log_bucket.arn
