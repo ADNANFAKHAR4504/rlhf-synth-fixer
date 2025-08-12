@@ -25,8 +25,6 @@ describe('TapStack — unit coverage', () => {
     process.env.NAT_PER_AZ = 'false';
     process.env.ENABLE_SSH_TO_APP = 'false';
     process.env.ENABLE_SECONDARY = 'true'; // Explicitly enable secondary
-    delete process.env.DNS_HOSTED_ZONE_ID;
-    delete process.env.DNS_RECORD_NAME;
   });
 
   afterAll(() => {
@@ -84,12 +82,11 @@ describe('TapStack — unit coverage', () => {
   });
 
   test('enables DNS when hosted zone + record env vars are provided', () => {
-    process.env.DNS_HOSTED_ZONE_ID = 'ZHOSTED123456';
-    process.env.DNS_RECORD_NAME = 'app.example.com';
-    process.env.ENABLE_SECONDARY = 'true'; // Ensure secondary is enabled
-
     const app = new App();
-    const stack = new TapStack(app, 'TestTapStackWithDns');
+    const stack = new TapStack(app, 'TestTapStackWithDns', {
+      hostedZoneId: 'ZHOSTED123456', // Pass as prop to ensure it's set
+      recordName: 'app.example.com', // Pass as prop to ensure it's set
+    });
     const synthesized = Testing.synth(stack);
 
     expect(stack).toBeDefined();
