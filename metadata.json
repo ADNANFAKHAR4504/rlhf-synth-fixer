@@ -1,0 +1,9 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291244",
+  "team": "2",
+  "startedAt": "2025-08-12T12:31:40.193Z"
+}
