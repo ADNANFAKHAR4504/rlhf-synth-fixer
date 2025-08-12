@@ -46,18 +46,18 @@ class TapStack(TerraformStack):
     self.add_override("terraform.backend.s3.use_lockfile", True)
 
     # Create S3 bucket for demonstration
-    S3Bucket(
+    self.bucket_versioning = {"enabled": True}
+    self.bucket_encryption = {
+      "rule": {
+        "apply_server_side_encryption_by_default": {"sse_algorithm": "AES256"}
+      }
+    }
+    self.bucket = S3Bucket(
       self,
       "tap_bucket",
       bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
-      versioning={"enabled": True},
-      server_side_encryption_configuration={
-        "rule": {
-          "apply_server_side_encryption_by_default": {
-            "sse_algorithm": "AES256"
-          }
-        }
-      }
+      versioning=self.bucket_versioning,
+      server_side_encryption_configuration=self.bucket_encryption,
     )
 
     # ? Add your stack instantiations here
