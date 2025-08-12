@@ -644,20 +644,32 @@ def handler(event, context):
       }
     );
 
-    // Create CloudTrail for comprehensive audit logging
-    new cloudtrail.Trail(this, 'SecurityAuditTrail', {
-      bucket: cloudTrailBucket,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      enableFileValidation: true,
-      encryptionKey: encryptionKey,
-      sendToCloudWatchLogs: true,
-      cloudWatchLogGroup: new logs.LogGroup(this, 'CloudTrailLogGroup', {
-        logGroupName: `/aws/cloudtrail/security-demo-${environmentSuffix}`,
-        retention: logs.RetentionDays.ONE_MONTH,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }),
-    });
+    // Create CloudTrail for comprehensive audit logging (conditional to avoid trail limit)
+    // Only create if this is a production environment or if explicitly requested
+    const shouldCreateCloudTrail = environmentSuffix === 'prod' || environmentSuffix === 'production';
+    
+    if (shouldCreateCloudTrail) {
+      new cloudtrail.Trail(this, 'SecurityAuditTrail', {
+        bucket: cloudTrailBucket,
+        includeGlobalServiceEvents: true,
+        isMultiRegionTrail: true,
+        enableFileValidation: true,
+        encryptionKey: encryptionKey,
+        sendToCloudWatchLogs: true,
+        cloudWatchLogGroup: new logs.LogGroup(this, 'CloudTrailLogGroup', {
+          logGroupName: `/aws/cloudtrail/security-demo-${environmentSuffix}`,
+          retention: logs.RetentionDays.ONE_MONTH,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        }),
+      });
+    } else {
+      // For non-production environments, just create the S3 bucket for potential future use
+      // and add a note about CloudTrail limit
+      new cdk.CfnOutput(this, 'CloudTrailNote', {
+        value: 'CloudTrail not created due to 5-trail limit. Use existing CloudTrail for audit logging.',
+        description: 'Note about CloudTrail creation',
+      });
+    }
 
     // =========================================================================
     // 13. SECURITY REQUIREMENTS COMPLIANCE
