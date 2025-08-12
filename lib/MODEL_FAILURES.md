@@ -75,14 +75,14 @@ deleteAutomatedBackups: true,  // ✅ Cleans up backups
 
 ```typescript
 trailName: 'SecureAppTrail',  // ❌ No environment suffix
-'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail`,  // ❌ No suffix in ARN
+'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail`,  // ❌ No suffix in ARN
 ```
 
 **Fixed Code**:
 
 ```typescript
 trailName: `SecureAppTrail-${props.environmentSuffix}`,  // ✅ Includes suffix
-'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,  // ✅ Suffix in ARN
+'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,  // ✅ Suffix in ARN
 ```
 
 ### 5. Unused Variable Declarations

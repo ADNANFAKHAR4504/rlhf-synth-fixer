@@ -130,7 +130,7 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-1',
+    region: 'ap-northeast-1',
   },
 });
 ```
@@ -279,7 +279,7 @@ export class TapStack extends cdk.Stack {
         resources: [cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail`,
           },
         },
       })
@@ -295,7 +295,7 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail`,
           },
         },
       })

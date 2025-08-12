@@ -48,12 +48,14 @@ if (isCI && fs.existsSync('cfn-outputs/flat-outputs.json')) {
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK clients
-const s3Client = new S3Client({ region: 'us-west-1' });
-const ec2Client = new EC2Client({ region: 'us-west-1' });
-const rdsClient = new RDSClient({ region: 'us-west-1' });
-const cloudTrailClient = new CloudTrailClient({ region: 'us-west-1' });
-const kmsClient = new KMSClient({ region: 'us-west-1' });
-const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-west-1' });
+const s3Client = new S3Client({ region: 'ap-northeast-1' });
+const ec2Client = new EC2Client({ region: 'ap-northeast-1' });
+const rdsClient = new RDSClient({ region: 'ap-northeast-1' });
+const cloudTrailClient = new CloudTrailClient({ region: 'ap-northeast-1' });
+const kmsClient = new KMSClient({ region: 'ap-northeast-1' });
+const elbClient = new ElasticLoadBalancingV2Client({
+  region: 'ap-northeast-1',
+});
 
 describeOrSkip(
   'Secure Web Application Infrastructure Integration Tests',

@@ -4,7 +4,7 @@ I need to set up a secure infrastructure for a new web application using AWS CDK
 
 ## Requirements
 
-**Region**: All resources must be deployed to us-west-1 region.
+**Region**: All resources must be deployed to ap-northeast-1 region.
 
 **Security Requirements**:
 

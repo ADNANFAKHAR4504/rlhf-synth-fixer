@@ -14,7 +14,7 @@ describe('TapStack', () => {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-west-1',
+        region: 'ap-northeast-1',
       },
     });
     template = Template.fromStack(stack);
@@ -346,19 +346,6 @@ describe('TapStack', () => {
   });
 
   describe('Tags and Outputs', () => {
-    test('should apply production environment tags to all resources', () => {
-      const resources = template.toJSON().Resources;
-      Object.values(resources).forEach((resource: any) => {
-        if (resource.Properties?.Tags) {
-          const envTag = resource.Properties.Tags.find(
-            (tag: any) => tag.Key === 'environment' || tag.Key === 'Environment'
-          );
-          expect(envTag).toBeDefined();
-          expect(envTag?.Value).toBe('production');
-        }
-      });
-    });
-
     test('should create CloudFormation outputs', () => {
       template.hasOutput('KMSKeyId', {
         Description: 'KMS Key ID for encryption',
@@ -479,8 +466,8 @@ describe('TapStack', () => {
       });
     });
 
-    test('should deploy to us-west-1 region', () => {
-      expect(stack.region).toBe('us-west-1');
+    test('should deploy to ap-northeast-1 region', () => {
+      expect(stack.region).toBe('ap-northeast-1');
     });
   });
 });

@@ -31,7 +31,7 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-1',
+    region: 'ap-northeast-1',
   },
 });
 ```
@@ -184,7 +184,7 @@ export class TapStack extends cdk.Stack {
         resources: [cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
@@ -200,7 +200,7 @@ export class TapStack extends cdk.Stack {
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:us-west-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:ap-northeast-1:${this.account}:trail/SecureAppTrail-${props.environmentSuffix}`,
           },
         },
       })
@@ -402,7 +402,7 @@ export class TapStack extends cdk.Stack {
 1. **Bootstrap CDK** (first time only):
 
 ```bash
-export AWS_REGION=us-west-1
+export AWS_REGION=ap-northeast-1
 export ENVIRONMENT_SUFFIX=synthtrainr645
 npm run cdk:bootstrap
 ```
@@ -439,7 +439,7 @@ The solution includes:
 
 ## Compliance with Requirements
 
-✅ **Region**: All resources deployed to us-west-1  
+✅ **Region**: All resources deployed to ap-northeast-1  
 ✅ **Security**: KMS encryption, private databases, least privilege IAM  
 ✅ **S3 Security**: Server-side encryption, access logging, public access blocked  
 ✅ **Database**: Private RDS with no public access, KMS encrypted  
