@@ -1,20 +1,24 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import * as AWS from 'aws-sdk';
+import { S3Client, GetBucketLocationCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, GetBucketLifecycleConfigurationCommand, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { LambdaClient, GetFunctionConfigurationCommand, InvokeCommand, ListTagsCommand } from '@aws-sdk/client-lambda';
+import { APIGatewayClient, GetRestApiCommand, GetResourcesCommand, GetStagesCommand } from '@aws-sdk/client-api-gateway';
+import { CloudFormationClient, ListStacksCommand } from '@aws-sdk/client-cloudformation';
 
 // Load deployment outputs
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
+
 // Configure AWS SDK
-AWS.config.update({ region: outputs.DeploymentRegion || 'us-east-1' });
+const region = outputs.DeploymentRegion || 'us-east-1';
 
 // Create AWS service clients
-const s3 = new AWS.S3();
-const lambda = new AWS.Lambda();
-const apigateway = new AWS.APIGateway();
-const cloudformation = new AWS.CloudFormation();
+const s3 = new S3Client({ region });
+const lambda = new LambdaClient({ region });
+const apigateway = new APIGatewayClient({ region });
+const cloudformation = new CloudFormationClient({ region });
 
 describe('Multi-Environment Consistency CDK Integration Tests', () => {
   describe('S3 Bucket Tests', () => {
@@ -26,27 +30,27 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
 
       try {
         // Check bucket exists
-        const bucketLocation = await s3.getBucketLocation({ Bucket: bucketName }).promise();
+        const bucketLocation = await s3.send(new GetBucketLocationCommand({ Bucket: bucketName }));
         expect(bucketLocation).toBeDefined();
 
         // Check bucket encryption
-        const encryption = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
+        const encryption = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
         expect(encryption.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
         expect(encryption.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
 
         // Check bucket versioning
-        const versioning = await s3.getBucketVersioning({ Bucket: bucketName }).promise();
+        const versioning = await s3.send(new GetBucketVersioningCommand({ Bucket: bucketName }));
         expect(['Enabled', 'Suspended']).toContain(versioning.Status || 'Suspended');
 
         // Check bucket public access block
-        const publicAccess = await s3.getPublicAccessBlock({ Bucket: bucketName }).promise();
+        const publicAccess = await s3.send(new GetPublicAccessBlockCommand({ Bucket: bucketName }));
         expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
         expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
         expect(publicAccess.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
         expect(publicAccess.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
 
         // Check lifecycle configuration
-        const lifecycle = await s3.getBucketLifecycleConfiguration({ Bucket: bucketName }).promise();
+        const lifecycle = await s3.send(new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName }));
         expect(lifecycle.Rules).toBeDefined();
         expect(lifecycle.Rules?.length).toBeGreaterThan(0);
       } catch (error: any) {
@@ -66,17 +70,17 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
 
       try {
         // Check bucket exists
-        const bucketLocation = await s3.getBucketLocation({ Bucket: bucketName }).promise();
+        const bucketLocation = await s3.send(new GetBucketLocationCommand({ Bucket: bucketName }));
         expect(bucketLocation).toBeDefined();
 
         // Check bucket encryption
-        const encryption = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
+        const encryption = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
         expect(encryption.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
 
         // Check lifecycle configuration for archival
-        const lifecycle = await s3.getBucketLifecycleConfiguration({ Bucket: bucketName }).promise();
+        const lifecycle = await s3.send(new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName }));
         expect(lifecycle.Rules).toBeDefined();
-        const archiveRule = lifecycle.Rules?.find(r => r.ID === 'ArchiveLogFiles');
+        const archiveRule = lifecycle.Rules?.find((r: any) => r.ID === 'ArchiveLogFiles');
         expect(archiveRule).toBeDefined();
         expect(archiveRule?.Transitions).toBeDefined();
         expect(archiveRule?.Transitions?.length).toBeGreaterThan(0);
@@ -96,27 +100,27 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
 
       try {
         // Write test object
-        await s3.putObject({
+        await s3.send(new PutObjectCommand({
           Bucket: bucketName,
           Key: testKey,
           Body: JSON.stringify(testData),
           ContentType: 'application/json',
-        }).promise();
+        }));
 
         // Read test object
-        const getResult = await s3.getObject({
+        const getResult = await s3.send(new GetObjectCommand({
           Bucket: bucketName,
           Key: testKey,
-        }).promise();
+        }));
 
         const retrievedData = JSON.parse(getResult.Body?.toString() || '{}');
         expect(retrievedData).toEqual(testData);
 
         // Clean up
-        await s3.deleteObject({
+        await s3.send(new DeleteObjectCommand({
           Bucket: bucketName,
           Key: testKey,
-        }).promise();
+        }));
       } catch (error: any) {
         if (error.code === 'NoSuchBucket') {
           console.warn(`Bucket ${bucketName} does not exist - may have been cleaned up`);
@@ -135,9 +139,9 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       expect(functionName).toContain('-api-function');
 
       try {
-        const functionConfig = await lambda.getFunctionConfiguration({
+        const functionConfig = await lambda.send(new GetFunctionConfigurationCommand({
           FunctionName: functionName,
-        }).promise();
+        }));
 
         expect(functionConfig.FunctionName).toBe(functionName);
         expect(functionConfig.Runtime).toBe('nodejs20.x');
@@ -162,9 +166,9 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       expect(functionName).toContain('-processing-function');
 
       try {
-        const functionConfig = await lambda.getFunctionConfiguration({
+        const functionConfig = await lambda.send(new GetFunctionConfigurationCommand({
           FunctionName: functionName,
-        }).promise();
+        }));
 
         expect(functionConfig.FunctionName).toBe(functionName);
         expect(functionConfig.Runtime).toBe('nodejs20.x');
@@ -186,9 +190,9 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       expect(functionName).toContain('-validation-function');
 
       try {
-        const functionConfig = await lambda.getFunctionConfiguration({
+        const functionConfig = await lambda.send(new GetFunctionConfigurationCommand({
           FunctionName: functionName,
-        }).promise();
+        }));
 
         expect(functionConfig.FunctionName).toBe(functionName);
         expect(functionConfig.Runtime).toBe('nodejs20.x');
@@ -207,17 +211,17 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       const functionName = outputs.ApiFunctionName;
 
       try {
-        const invokeResult = await lambda.invoke({
+        const invokeResult = await lambda.send(new InvokeCommand({
           FunctionName: functionName,
           InvocationType: 'RequestResponse',
           Payload: JSON.stringify({ test: true }),
-        }).promise();
+        }));
 
         expect(invokeResult.StatusCode).toBe(200);
         
         // Note: Response streaming functions may return different payload format
         if (invokeResult.Payload) {
-          const payload = JSON.parse(invokeResult.Payload.toString());
+          const payload = JSON.parse(Buffer.from(invokeResult.Payload).toString());
           // Check if it's a response streaming function or regular function
           if (payload.message || payload.body) {
             expect(payload).toBeDefined();
@@ -236,16 +240,16 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       const functionName = outputs.ProcessingFunctionName;
 
       try {
-        const invokeResult = await lambda.invoke({
+        const invokeResult = await lambda.send(new InvokeCommand({
           FunctionName: functionName,
           InvocationType: 'RequestResponse',
           Payload: JSON.stringify({ action: 'process', data: 'test' }),
-        }).promise();
+        }));
 
         expect(invokeResult.StatusCode).toBe(200);
         
         if (invokeResult.Payload) {
-          const payload = JSON.parse(invokeResult.Payload.toString());
+          const payload = JSON.parse(Buffer.from(invokeResult.Payload).toString());
           expect(payload.statusCode).toBe(200);
           
           const body = JSON.parse(payload.body);
@@ -267,7 +271,7 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       expect(apiId).toBeDefined();
 
       try {
-        const api = await apigateway.getRestApi({ restApiId: apiId }).promise();
+        const api = await apigateway.send(new GetRestApiCommand({ restApiId: apiId }));
         
         expect(api.name).toContain('tap-');
         expect(api.name).toContain('-api');
@@ -285,17 +289,17 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       const apiId = outputs.ApiId;
 
       try {
-        const resources = await apigateway.getResources({ restApiId: apiId }).promise();
+        const resources = await apigateway.send(new GetResourcesCommand({ restApiId: apiId }));
         
         expect(resources.items).toBeDefined();
         
         // Check for expected paths
-        const paths = resources.items?.map(r => r.path) || [];
+        const paths = resources.items?.map((r: any) => r.path) || [];
         expect(paths).toContain('/');
-        expect(paths.some(p => p?.includes('/api'))).toBe(true);
-        expect(paths.some(p => p?.includes('/v1'))).toBe(true);
-        expect(paths.some(p => p?.includes('/health'))).toBe(true);
-        expect(paths.some(p => p?.includes('/process'))).toBe(true);
+        expect(paths.some((p: any) => p?.includes('/api'))).toBe(true);
+        expect(paths.some((p: any) => p?.includes('/v1'))).toBe(true);
+        expect(paths.some((p: any) => p?.includes('/health'))).toBe(true);
+        expect(paths.some((p: any) => p?.includes('/process'))).toBe(true);
       } catch (error: any) {
         if (error.code === 'NotFoundException') {
           console.warn(`API ${apiId} does not exist - may have been cleaned up`);
@@ -309,13 +313,13 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       const apiId = outputs.ApiId;
 
       try {
-        const stages = await apigateway.getStages({ restApiId: apiId }).promise();
+        const stages = await apigateway.send(new GetStagesCommand({ restApiId: apiId }));
         
         expect(stages.item).toBeDefined();
         expect(stages.item?.length).toBeGreaterThan(0);
         
         // Check for environment-specific stage
-        const hasEnvironmentStage = stages.item?.some(s => 
+        const hasEnvironmentStage = stages.item?.some((s: any) => 
           s.stageName === 'dev' || s.stageName === 'staging' || s.stageName === 'prod'
         );
         expect(hasEnvironmentStage).toBe(true);
@@ -357,9 +361,9 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
 
       try {
         // Get Lambda function's role
-        const functionConfig = await lambda.getFunctionConfiguration({
+        const functionConfig = await lambda.send(new GetFunctionConfigurationCommand({
           FunctionName: functionName,
-        }).promise();
+        }));
 
         expect(functionConfig.Role).toBeDefined();
         
@@ -380,17 +384,17 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       const stackPrefix = 'TapStack' + outputs.EnvironmentSuffix;
 
       try {
-        const stacks = await cloudformation.listStacks({
+        const stacks = await cloudformation.send(new ListStacksCommand({
           StackStatusFilter: ['CREATE_COMPLETE', 'UPDATE_COMPLETE'],
-        }).promise();
+        }));
 
-        const projectStacks = stacks.StackSummaries?.filter(s => 
+        const projectStacks = stacks.StackSummaries?.filter((s: any) => 
           s.StackName?.includes(stackPrefix)
         ) || [];
 
         // If stacks exist, they should be in good state
         if (projectStacks.length > 0) {
-          projectStacks.forEach(stack => {
+          projectStacks.forEach((stack: any) => {
             expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stack.StackStatus);
           });
         }
@@ -403,9 +407,9 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
       const functionName = outputs.ApiFunctionName;
 
       try {
-        const tags = await lambda.listTags({
+        const tags = await lambda.send(new ListTagsCommand({
           Resource: `arn:aws:lambda:${outputs.DeploymentRegion}:*:function:${functionName}`,
-        }).promise();
+        }));
 
         // Check for expected tags
         expect(tags.Tags).toBeDefined();
@@ -447,16 +451,16 @@ describe('Multi-Environment Consistency CDK Integration Tests', () => {
 
       try {
         // Invoke validation function
-        const invokeResult = await lambda.invoke({
+        const invokeResult = await lambda.send(new InvokeCommand({
           FunctionName: validationFunctionName,
           InvocationType: 'RequestResponse',
           Payload: JSON.stringify({ source: 'integration-test' }),
-        }).promise();
+        }));
 
         expect(invokeResult.StatusCode).toBe(200);
         
         if (invokeResult.Payload) {
-          const payload = JSON.parse(invokeResult.Payload.toString());
+          const payload = JSON.parse(Buffer.from(invokeResult.Payload).toString());
           expect(payload).toBeDefined();
           
           // Validation function should return validation results
