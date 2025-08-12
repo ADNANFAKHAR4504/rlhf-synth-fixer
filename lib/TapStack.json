@@ -12,7 +12,11 @@
     "Environment": {
       "Type": "String",
       "Default": "Development",
-      "AllowedValues": ["Development", "Test", "Production"],
+      "AllowedValues": [
+        "Development",
+        "Test",
+        "Production"
+      ],
       "Description": "Environment type for resource deployment"
     },
     "Owner": {
@@ -36,14 +40,6 @@
       "MinLength": 4,
       "MaxLength": 16,
       "Description": "RDS master username"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Default": "ChangeMe123!",
-      "MinLength": 8,
-      "MaxLength": 41,
-      "Description": "RDS master password"
     }
   },
   "Mappings": {
@@ -77,7 +73,14 @@
     }
   },
   "Conditions": {
-    "IsProduction": {"Fn::Equals": [{"Ref": "Environment"}, "Production"]}
+    "IsProduction": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "Production"
+      ]
+    }
   },
   "Resources": {
     "KMSKey": {
@@ -85,7 +88,9 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "Description": {"Fn::Sub": "KMS Key for encryption - ${EnvironmentSuffix}"},
+        "Description": {
+          "Fn::Sub": "KMS Key for encryption - ${EnvironmentSuffix}"
+        },
         "KeyPolicy": {
           "Version": "2012-10-17",
           "Statement": [
@@ -93,7 +98,9 @@
               "Sid": "Enable IAM User Permissions",
               "Effect": "Allow",
               "Principal": {
-                "AWS": {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"}
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
               },
               "Action": "kms:*",
               "Resource": "*"
@@ -115,25 +122,51 @@
               "Resource": "*",
               "Condition": {
                 "ArnLike": {
-                  "kms:EncryptionContext:aws:logs:arn": {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"}
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  }
                 }
               }
             }
           ]
         },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "kms-key-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "kms-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "KMSKeyAlias": {
       "Type": "AWS::KMS::Alias",
       "Properties": {
-        "AliasName": {"Fn::Sub": "alias/${Environment}-encryption-key-${EnvironmentSuffix}"},
-        "TargetKeyId": {"Ref": "KMSKey"}
+        "AliasName": {
+          "Fn::Sub": "alias/${Environment}-encryption-key-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
       }
     },
     "VPC": {
@@ -143,10 +176,30 @@
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-VPC-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-VPC-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -158,7 +211,9 @@
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": {"Service": "vpc-flow-logs.amazonaws.com"},
+              "Principal": {
+                "Service": "vpc-flow-logs.amazonaws.com"
+              },
               "Action": "sts:AssumeRole"
             }
           ]
@@ -185,9 +240,24 @@
           }
         ],
         "Tags": [
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -196,25 +266,61 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/vpc/flowlogs-${EnvironmentSuffix}"},
+        "LogGroupName": {
+          "Fn::Sub": "/aws/vpc/flowlogs-${EnvironmentSuffix}"
+        },
         "RetentionInDays": 7,
-        "KmsKeyId": {"Fn::GetAtt": ["KMSKey", "Arn"]}
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        }
       }
     },
     "VPCFlowLog": {
       "Type": "AWS::EC2::FlowLog",
       "Properties": {
         "ResourceType": "VPC",
-        "ResourceId": {"Ref": "VPC"},
+        "ResourceId": {
+          "Ref": "VPC"
+        },
         "TrafficType": "ALL",
         "LogDestinationType": "cloud-watch-logs",
-        "LogGroupName": {"Ref": "VPCFlowLogGroup"},
-        "DeliverLogsPermissionArn": {"Fn::GetAtt": ["FlowLogRole", "Arn"]},
+        "LogGroupName": {
+          "Ref": "VPCFlowLogGroup"
+        },
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": [
+            "FlowLogRole",
+            "Arn"
+          ]
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "VPC-FlowLog-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "VPC-FlowLog-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -222,75 +328,215 @@
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-IGW-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-IGW-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "AttachGateway": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "InternetGatewayId": {"Ref": "InternetGateway"}
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-Public-Subnet-1-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-Public-Subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-Public-Subnet-2-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-Public-Subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-Private-Subnet-1-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-Private-Subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.4.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-Private-Subnet-2-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-Private-Subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -300,10 +546,30 @@
       "Properties": {
         "Domain": "vpc",
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-NAT-Gateway-1-EIP-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-NAT-Gateway-1-EIP-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -313,48 +579,144 @@
       "Properties": {
         "Domain": "vpc",
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-NAT-Gateway-2-EIP-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-NAT-Gateway-2-EIP-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "NATGateway1": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NATGateway1EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet1"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-NAT-Gateway-1-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-NAT-Gateway-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "NATGateway2": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NATGateway2EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet2"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-NAT-Gateway-2-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-NAT-Gateway-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-Public-Route-Table-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-Public-Route-Table-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -362,117 +724,223 @@
       "Type": "AWS::EC2::Route",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {"Ref": "InternetGateway"}
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
     "PublicSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "SubnetId": {"Ref": "PublicSubnet1"}
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        }
       }
     },
     "PublicSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "SubnetId": {"Ref": "PublicSubnet2"}
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        }
       }
     },
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-Private-Route-Table-1-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-Private-Route-Table-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "DefaultPrivateRoute1": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NATGateway1"}
+        "NatGatewayId": {
+          "Ref": "NATGateway1"
+        }
       }
     },
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
-        "SubnetId": {"Ref": "PrivateSubnet1"}
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        }
       }
     },
     "PrivateRouteTable2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-Private-Route-Table-2-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-Private-Route-Table-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "DefaultPrivateRoute2": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NATGateway2"}
+        "NatGatewayId": {
+          "Ref": "NATGateway2"
+        }
       }
     },
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
-        "SubnetId": {"Ref": "PrivateSubnet2"}
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        }
       }
     },
     "NetworkAcl": {
       "Type": "AWS::EC2::NetworkAcl",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-NACL-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-NACL-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "NetworkAclEntryInboundHTTP": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 100,
         "Protocol": 6,
         "RuleAction": "allow",
         "CidrBlock": "0.0.0.0/0",
-        "PortRange": {"From": 80, "To": 80}
+        "PortRange": {
+          "From": 80,
+          "To": 80
+        }
       }
     },
     "NetworkAclEntryInboundHTTPS": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 110,
         "Protocol": 6,
         "RuleAction": "allow",
         "CidrBlock": "0.0.0.0/0",
-        "PortRange": {"From": 443, "To": 443}
+        "PortRange": {
+          "From": 443,
+          "To": 443
+        }
       }
     },
     "NetworkAclEntryOutbound": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 100,
         "Protocol": -1,
         "Egress": true,
@@ -484,19 +952,25 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for web servers - restricted access",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 80,
             "ToPort": 80,
-            "SourceSecurityGroupId": {"Ref": "ALBSecurityGroup"}
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            }
           },
           {
             "IpProtocol": "tcp",
             "FromPort": 443,
             "ToPort": 443,
-            "SourceSecurityGroupId": {"Ref": "ALBSecurityGroup"}
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            }
           }
         ],
         "SecurityGroupEgress": [
@@ -516,10 +990,30 @@
           }
         ],
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-WebServer-SG-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-WebServer-SG-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -527,7 +1021,9 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for Application Load Balancer",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -545,10 +1041,30 @@
           }
         ],
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-ALB-SG-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-ALB-SG-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -556,7 +1072,9 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for RDS database - restricted access",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -567,43 +1085,152 @@
           }
         ],
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-Database-SG-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-Database-SG-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {"Fn::Sub": "${Environment}-db-subnet-group-${EnvironmentSuffix}"},
+        "DBSubnetGroupName": {
+          "Fn::Sub": "${Environment}-db-subnet-group-${EnvironmentSuffix}"
+        },
         "DBSubnetGroupDescription": "Subnet group for RDS database",
         "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"}
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
         ],
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-DBSubnetGroup-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-DBSubnetGroup-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "DBParameterGroup": {
       "Type": "AWS::RDS::DBParameterGroup",
       "Properties": {
-        "DBParameterGroupName": {"Fn::Sub": "${Environment}-db-params-${EnvironmentSuffix}"},
+        "DBParameterGroupName": {
+          "Fn::Sub": "${Environment}-db-params-${EnvironmentSuffix}"
+        },
         "Description": "Custom parameter group for MySQL with SSL enforcement",
         "Family": "mysql8.0",
         "Parameters": {
           "require_secure_transport": "ON"
         },
         "Tags": [
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "RDSSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-rds-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "RDS database credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "KmsKeyId": {
+          "Ref": "KMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-RDS-Secret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -612,31 +1239,83 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "${Environment}-database-${EnvironmentSuffix}"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "${Environment}-database-${EnvironmentSuffix}"
+        },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
         "EngineVersion": "8.0.39",
-        "MasterUsername": {"Ref": "DBMasterUsername"},
-        "MasterUserPassword": {"Ref": "DBMasterPassword"},
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}"
+        },
         "AllocatedStorage": "20",
         "StorageType": "gp3",
         "StorageEncrypted": true,
-        "KmsKeyId": {"Ref": "KMSKey"},
-        "VPCSecurityGroups": [{"Ref": "DatabaseSecurityGroup"}],
-        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
-        "DBParameterGroupName": {"Ref": "DBParameterGroup"},
-        "BackupRetentionPeriod": {"Fn::If": ["IsProduction", 7, 1]},
+        "KmsKeyId": {
+          "Ref": "KMSKey"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "DBParameterGroupName": {
+          "Ref": "DBParameterGroup"
+        },
+        "BackupRetentionPeriod": {
+          "Fn::If": [
+            "IsProduction",
+            7,
+            1
+          ]
+        },
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-        "MultiAZ": {"Fn::If": ["IsProduction", true, false]},
+        "MultiAZ": {
+          "Fn::If": [
+            "IsProduction",
+            true,
+            false
+          ]
+        },
         "PubliclyAccessible": false,
-        "EnableCloudwatchLogsExports": ["error", "general", "slowquery"],
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
         "DeletionProtection": false,
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-RDS-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-RDS-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -645,13 +1324,17 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "BucketName": {"Fn::Sub": "logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"},
+        "BucketName": {
+          "Fn::Sub": "logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {"Ref": "KMSKey"}
+                "KMSMasterKeyID": {
+                  "Ref": "KMSKey"
+                }
               }
             }
           ]
@@ -675,17 +1358,39 @@
           ]
         },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "S3-Logs-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "S3-Logs-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "S3LogsBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": {"Ref": "S3LogsBucket"},
+        "Bucket": {
+          "Ref": "S3LogsBucket"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -695,8 +1400,15 @@
               "Principal": "*",
               "Action": "s3:*",
               "Resource": [
-                {"Fn::GetAtt": ["S3LogsBucket", "Arn"]},
-                {"Fn::Sub": "${S3LogsBucket.Arn}/*"}
+                {
+                  "Fn::GetAtt": [
+                    "S3LogsBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${S3LogsBucket.Arn}/*"
+                }
               ],
               "Condition": {
                 "Bool": {
@@ -711,7 +1423,9 @@
                 "Service": "elasticloadbalancing.amazonaws.com"
               },
               "Action": "s3:PutObject",
-              "Resource": {"Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"}
+              "Resource": {
+                "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"
+              }
             }
           ]
         }
@@ -722,13 +1436,17 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "BucketName": {"Fn::Sub": "cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"},
+        "BucketName": {
+          "Fn::Sub": "cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {"Ref": "KMSKey"}
+                "KMSMasterKeyID": {
+                  "Ref": "KMSKey"
+                }
               }
             }
           ]
@@ -752,17 +1470,39 @@
           ]
         },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "CloudTrail-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "CloudTrail-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "CloudTrailBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": {"Ref": "CloudTrailBucket"},
+        "Bucket": {
+          "Ref": "CloudTrailBucket"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -773,7 +1513,12 @@
                 "Service": "cloudtrail.amazonaws.com"
               },
               "Action": "s3:GetBucketAcl",
-              "Resource": {"Fn::GetAtt": ["CloudTrailBucket", "Arn"]}
+              "Resource": {
+                "Fn::GetAtt": [
+                  "CloudTrailBucket",
+                  "Arn"
+                ]
+              }
             },
             {
               "Sid": "AWSCloudTrailWrite",
@@ -782,7 +1527,9 @@
                 "Service": "cloudtrail.amazonaws.com"
               },
               "Action": "s3:PutObject",
-              "Resource": {"Fn::Sub": "${CloudTrailBucket.Arn}/*"},
+              "Resource": {
+                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
+              },
               "Condition": {
                 "StringEquals": {
                   "s3:x-amz-acl": "bucket-owner-full-control"
@@ -798,9 +1545,16 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/cloudtrail/${EnvironmentSuffix}"},
+        "LogGroupName": {
+          "Fn::Sub": "/aws/cloudtrail/${EnvironmentSuffix}"
+        },
         "RetentionInDays": 90,
-        "KmsKeyId": {"Fn::GetAtt": ["KMSKey", "Arn"]}
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        }
       }
     },
     "CloudTrailRole": {
@@ -830,27 +1584,63 @@
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
                   ],
-                  "Resource": {"Fn::GetAtt": ["CloudTrailLogGroup", "Arn"]}
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CloudTrailLogGroup",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
           }
         ],
         "Tags": [
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "CloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": ["CloudTrailBucketPolicy"],
+      "DependsOn": [
+        "CloudTrailBucketPolicy"
+      ],
       "Properties": {
-        "TrailName": {"Fn::Sub": "${Environment}-trail-${EnvironmentSuffix}"},
-        "S3BucketName": {"Ref": "CloudTrailBucket"},
-        "CloudWatchLogsLogGroupArn": {"Fn::GetAtt": ["CloudTrailLogGroup", "Arn"]},
-        "CloudWatchLogsRoleArn": {"Fn::GetAtt": ["CloudTrailRole", "Arn"]},
+        "TrailName": {
+          "Fn::Sub": "${Environment}-trail-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "CloudTrailBucket"
+        },
+        "CloudWatchLogsLogGroupArn": {
+          "Fn::GetAtt": [
+            "CloudTrailLogGroup",
+            "Arn"
+          ]
+        },
+        "CloudWatchLogsRoleArn": {
+          "Fn::GetAtt": [
+            "CloudTrailRole",
+            "Arn"
+          ]
+        },
         "IncludeGlobalServiceEvents": true,
         "IsMultiRegionTrail": true,
         "IsLogging": true,
@@ -862,16 +1652,38 @@
             "DataResources": [
               {
                 "Type": "AWS::S3::Object",
-                "Values": ["arn:aws:s3:::*/"]
+                "Values": [
+                  "arn:aws:s3:::*/"
+                ]
               }
             ]
           }
         ],
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "CloudTrail-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "CloudTrail-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -880,13 +1692,17 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "BucketName": {"Fn::Sub": "config-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"},
+        "BucketName": {
+          "Fn::Sub": "config-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {"Ref": "KMSKey"}
+                "KMSMasterKeyID": {
+                  "Ref": "KMSKey"
+                }
               }
             }
           ]
@@ -901,17 +1717,39 @@
           "Status": "Enabled"
         },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "Config-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "Config-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "ConfigBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": {"Ref": "ConfigBucket"},
+        "Bucket": {
+          "Ref": "ConfigBucket"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -922,7 +1760,12 @@
                 "Service": "config.amazonaws.com"
               },
               "Action": "s3:GetBucketAcl",
-              "Resource": {"Fn::GetAtt": ["ConfigBucket", "Arn"]}
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ConfigBucket",
+                  "Arn"
+                ]
+              }
             },
             {
               "Sid": "AWSConfigBucketExistenceCheck",
@@ -931,7 +1774,12 @@
                 "Service": "config.amazonaws.com"
               },
               "Action": "s3:ListBucket",
-              "Resource": {"Fn::GetAtt": ["ConfigBucket", "Arn"]}
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ConfigBucket",
+                  "Arn"
+                ]
+              }
             },
             {
               "Sid": "AWSConfigBucketWrite",
@@ -940,7 +1788,9 @@
                 "Service": "config.amazonaws.com"
               },
               "Action": "s3:PutObject",
-              "Resource": {"Fn::Sub": "${ConfigBucket.Arn}/*"},
+              "Resource": {
+                "Fn::Sub": "${ConfigBucket.Arn}/*"
+              },
               "Condition": {
                 "StringEquals": {
                   "s3:x-amz-acl": "bucket-owner-full-control"
@@ -967,7 +1817,7 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/ConfigRole"
+          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
         ],
         "Policies": [
           {
@@ -981,12 +1831,19 @@
                     "s3:GetBucketAcl",
                     "s3:ListBucket"
                   ],
-                  "Resource": {"Fn::GetAtt": ["ConfigBucket", "Arn"]}
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ConfigBucket",
+                      "Arn"
+                    ]
+                  }
                 },
                 {
                   "Effect": "Allow",
                   "Action": "s3:PutObject",
-                  "Resource": {"Fn::Sub": "${ConfigBucket.Arn}/*"},
+                  "Resource": {
+                    "Fn::Sub": "${ConfigBucket.Arn}/*"
+                  },
                   "Condition": {
                     "StringEquals": {
                       "s3:x-amz-acl": "bucket-owner-full-control"
@@ -998,18 +1855,42 @@
           }
         ],
         "Tags": [
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "ConfigRecorder": {
       "Type": "AWS::Config::ConfigurationRecorder",
-      "DependsOn": ["ConfigBucketPolicy"],
+      "DependsOn": [
+        "ConfigBucketPolicy"
+      ],
       "Properties": {
-        "Name": {"Fn::Sub": "${Environment}-config-recorder-${EnvironmentSuffix}"},
-        "RoleARN": {"Fn::GetAtt": ["ConfigRecorderRole", "Arn"]},
+        "Name": {
+          "Fn::Sub": "${Environment}-config-recorder-${EnvironmentSuffix}"
+        },
+        "RoleARN": {
+          "Fn::GetAtt": [
+            "ConfigRecorderRole",
+            "Arn"
+          ]
+        },
         "RecordingGroup": {
           "AllSupported": true,
           "IncludeGlobalResourceTypes": true
@@ -1019,8 +1900,12 @@
     "ConfigDeliveryChannel": {
       "Type": "AWS::Config::DeliveryChannel",
       "Properties": {
-        "Name": {"Fn::Sub": "${Environment}-config-delivery-${EnvironmentSuffix}"},
-        "S3BucketName": {"Ref": "ConfigBucket"},
+        "Name": {
+          "Fn::Sub": "${Environment}-config-delivery-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "ConfigBucket"
+        },
         "ConfigSnapshotDeliveryProperties": {
           "DeliveryFrequency": "TwentyFour_Hours"
         }
@@ -1028,10 +1913,19 @@
     },
     "ConfigRecorderStatus": {
       "Type": "AWS::Config::ConfigurationRecorder",
-      "DependsOn": ["ConfigDeliveryChannel"],
+      "DependsOn": [
+        "ConfigDeliveryChannel"
+      ],
       "Properties": {
-        "Name": {"Fn::Sub": "${Environment}-config-recorder-status-${EnvironmentSuffix}"},
-        "RoleARN": {"Fn::GetAtt": ["ConfigRecorderRole", "Arn"]},
+        "Name": {
+          "Fn::Sub": "${Environment}-config-recorder-status-${EnvironmentSuffix}"
+        },
+        "RoleARN": {
+          "Fn::GetAtt": [
+            "ConfigRecorderRole",
+            "Arn"
+          ]
+        },
         "RecordingGroup": {
           "AllSupported": true
         }
@@ -1041,7 +1935,9 @@
       "Type": "AWS::Config::ConfigRule",
       "DependsOn": "ConfigRecorderStatus",
       "Properties": {
-        "ConfigRuleName": {"Fn::Sub": "s3-bucket-public-read-prohibited-${EnvironmentSuffix}"},
+        "ConfigRuleName": {
+          "Fn::Sub": "s3-bucket-public-read-prohibited-${EnvironmentSuffix}"
+        },
         "Description": "Checks that S3 buckets do not allow public read access",
         "Source": {
           "Owner": "AWS",
@@ -1053,7 +1949,9 @@
       "Type": "AWS::Config::ConfigRule",
       "DependsOn": "ConfigRecorderStatus",
       "Properties": {
-        "ConfigRuleName": {"Fn::Sub": "s3-bucket-public-write-prohibited-${EnvironmentSuffix}"},
+        "ConfigRuleName": {
+          "Fn::Sub": "s3-bucket-public-write-prohibited-${EnvironmentSuffix}"
+        },
         "Description": "Checks that S3 buckets do not allow public write access",
         "Source": {
           "Owner": "AWS",
@@ -1065,7 +1963,9 @@
       "Type": "AWS::Config::ConfigRule",
       "DependsOn": "ConfigRecorderStatus",
       "Properties": {
-        "ConfigRuleName": {"Fn::Sub": "rds-storage-encrypted-${EnvironmentSuffix}"},
+        "ConfigRuleName": {
+          "Fn::Sub": "rds-storage-encrypted-${EnvironmentSuffix}"
+        },
         "Description": "Checks whether storage encryption is enabled for RDS instances",
         "Source": {
           "Owner": "AWS",
@@ -1077,7 +1977,9 @@
       "Type": "AWS::Config::ConfigRule",
       "DependsOn": "ConfigRecorderStatus",
       "Properties": {
-        "ConfigRuleName": {"Fn::Sub": "restricted-ssh-${EnvironmentSuffix}"},
+        "ConfigRuleName": {
+          "Fn::Sub": "restricted-ssh-${EnvironmentSuffix}"
+        },
         "Description": "Checks whether security groups allow unrestricted SSH access",
         "Source": {
           "Owner": "AWS",
@@ -1088,7 +1990,9 @@
     "IAMRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "${Environment}-ec2-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "${Environment}-ec2-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -1117,49 +2021,107 @@
                     "s3:GetObject",
                     "s3:PutObject"
                   ],
-                  "Resource": {"Fn::Sub": "${S3LogsBucket.Arn}/*"}
+                  "Resource": {
+                    "Fn::Sub": "${S3LogsBucket.Arn}/*"
+                  }
                 }
               ]
             }
           }
         ],
         "Tags": [
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "Roles": [{"Ref": "IAMRole"}]
+        "Roles": [
+          {
+            "Ref": "IAMRole"
+          }
+        ]
       }
     },
     "SSMKeyParameter": {
       "Type": "AWS::SSM::Parameter",
       "Properties": {
-        "Name": {"Fn::Sub": "/${Environment}/ec2/keypair/${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "/${Environment}/ec2/keypair/${EnvironmentSuffix}"
+        },
         "Type": "String",
-        "Value": {"Ref": "KeyPairName"},
+        "Value": {
+          "Ref": "KeyPairName"
+        },
         "Description": "EC2 KeyPair name for instances",
         "Tags": {
-          "Environment": {"Ref": "Environment"},
-          "Owner": {"Ref": "Owner"},
-          "CostCenter": {"Ref": "CostCenter"}
+          "Environment": {
+            "Ref": "Environment"
+          },
+          "Owner": {
+            "Ref": "Owner"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
         }
       }
     },
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": {"Fn::Sub": "${Environment}-LaunchTemplate-${EnvironmentSuffix}"},
+        "LaunchTemplateName": {
+          "Fn::Sub": "${Environment}-LaunchTemplate-${EnvironmentSuffix}"
+        },
         "LaunchTemplateData": {
-          "ImageId": {"Fn::FindInMap": ["RegionMap", {"Ref": "AWS::Region"}, "AMI"]},
-          "InstanceType": {"Fn::FindInMap": ["EnvironmentMap", {"Ref": "Environment"}, "InstanceType"]},
-          "SecurityGroupIds": [{"Ref": "WebServerSecurityGroup"}],
+          "ImageId": {
+            "Fn::FindInMap": [
+              "RegionMap",
+              {
+                "Ref": "AWS::Region"
+              },
+              "AMI"
+            ]
+          },
+          "InstanceType": {
+            "Fn::FindInMap": [
+              "EnvironmentMap",
+              {
+                "Ref": "Environment"
+              },
+              "InstanceType"
+            ]
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "WebServerSecurityGroup"
+            }
+          ],
           "IamInstanceProfile": {
-            "Arn": {"Fn::GetAtt": ["EC2InstanceProfile", "Arn"]}
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceProfile",
+                "Arn"
+              ]
+            }
           },
           "UserData": {
             "Fn::Base64": {
@@ -1173,7 +2135,9 @@
                 "VolumeSize": 20,
                 "VolumeType": "gp3",
                 "Encrypted": true,
-                "KmsKeyId": {"Ref": "KMSKey"},
+                "KmsKeyId": {
+                  "Ref": "KMSKey"
+                },
                 "DeleteOnTermination": true
               }
             }
@@ -1182,10 +2146,30 @@
             {
               "ResourceType": "instance",
               "Tags": [
-                {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-WebServer-${EnvironmentSuffix}"}},
-                {"Key": "Environment", "Value": {"Ref": "Environment"}},
-                {"Key": "Owner", "Value": {"Ref": "Owner"}},
-                {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+                {
+                  "Key": "Name",
+                  "Value": {
+                    "Fn::Sub": "${Environment}-WebServer-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Key": "Environment",
+                  "Value": {
+                    "Ref": "Environment"
+                  }
+                },
+                {
+                  "Key": "Owner",
+                  "Value": {
+                    "Ref": "Owner"
+                  }
+                },
+                {
+                  "Key": "CostCenter",
+                  "Value": {
+                    "Ref": "CostCenter"
+                  }
+                }
               ]
             }
           ],
@@ -1199,10 +2183,14 @@
     "TargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "${Environment}-TG-${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "${Environment}-TG-${EnvironmentSuffix}"
+        },
         "Port": 80,
         "Protocol": "HTTP",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "HealthCheckPath": "/",
         "HealthCheckProtocol": "HTTP",
         "HealthCheckIntervalSeconds": 30,
@@ -1211,24 +2199,54 @@
         "UnhealthyThresholdCount": 3,
         "TargetType": "instance",
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-TargetGroup-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-TargetGroup-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": {"Fn::Sub": "${Environment}-ALB-${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "${Environment}-ALB-${EnvironmentSuffix}"
+        },
         "Scheme": "internet-facing",
         "Type": "application",
         "Subnets": [
-          {"Ref": "PublicSubnet1"},
-          {"Ref": "PublicSubnet2"}
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          }
         ],
-        "SecurityGroups": [{"Ref": "ALBSecurityGroup"}],
+        "SecurityGroups": [
+          {
+            "Ref": "ALBSecurityGroup"
+          }
+        ],
         "LoadBalancerAttributes": [
           {
             "Key": "access_logs.s3.enabled",
@@ -1236,7 +2254,9 @@
           },
           {
             "Key": "access_logs.s3.bucket",
-            "Value": {"Ref": "S3LogsBucket"}
+            "Value": {
+              "Ref": "S3LogsBucket"
+            }
           },
           {
             "Key": "access_logs.s3.prefix",
@@ -1244,10 +2264,30 @@
           }
         ],
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-ALB-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Owner", "Value": {"Ref": "Owner"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-ALB-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -1257,10 +2297,14 @@
         "DefaultActions": [
           {
             "Type": "forward",
-            "TargetGroupArn": {"Ref": "TargetGroup"}
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
           }
         ],
-        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
         "Port": 80,
         "Protocol": "HTTP"
       }
@@ -1268,40 +2312,89 @@
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
-        "AutoScalingGroupName": {"Fn::Sub": "${Environment}-ASG-${EnvironmentSuffix}"},
+        "AutoScalingGroupName": {
+          "Fn::Sub": "${Environment}-ASG-${EnvironmentSuffix}"
+        },
         "VPCZoneIdentifier": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"}
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
         ],
         "LaunchTemplate": {
-          "LaunchTemplateId": {"Ref": "LaunchTemplate"},
-          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": {
+            "Fn::GetAtt": [
+              "LaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
         },
-        "MinSize": {"Fn::FindInMap": ["EnvironmentMap", {"Ref": "Environment"}, "MinSize"]},
-        "MaxSize": {"Fn::FindInMap": ["EnvironmentMap", {"Ref": "Environment"}, "MaxSize"]},
-        "DesiredCapacity": {"Fn::FindInMap": ["EnvironmentMap", {"Ref": "Environment"}, "DesiredCapacity"]},
-        "TargetGroupARNs": [{"Ref": "TargetGroup"}],
+        "MinSize": {
+          "Fn::FindInMap": [
+            "EnvironmentMap",
+            {
+              "Ref": "Environment"
+            },
+            "MinSize"
+          ]
+        },
+        "MaxSize": {
+          "Fn::FindInMap": [
+            "EnvironmentMap",
+            {
+              "Ref": "Environment"
+            },
+            "MaxSize"
+          ]
+        },
+        "DesiredCapacity": {
+          "Fn::FindInMap": [
+            "EnvironmentMap",
+            {
+              "Ref": "Environment"
+            },
+            "DesiredCapacity"
+          ]
+        },
+        "TargetGroupARNs": [
+          {
+            "Ref": "TargetGroup"
+          }
+        ],
         "HealthCheckType": "ELB",
         "HealthCheckGracePeriod": 300,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${Environment}-ASG-Instance-${EnvironmentSuffix}"},
+            "Value": {
+              "Fn::Sub": "${Environment}-ASG-Instance-${EnvironmentSuffix}"
+            },
             "PropagateAtLaunch": true
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"},
+            "Value": {
+              "Ref": "Environment"
+            },
             "PropagateAtLaunch": true
           },
           {
             "Key": "Owner",
-            "Value": {"Ref": "Owner"},
+            "Value": {
+              "Ref": "Owner"
+            },
             "PropagateAtLaunch": true
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"},
+            "Value": {
+              "Ref": "CostCenter"
+            },
             "PropagateAtLaunch": true
           }
         ]
@@ -1310,7 +2403,9 @@
     "ScalingPolicy": {
       "Type": "AWS::AutoScaling::ScalingPolicy",
       "Properties": {
-        "AutoScalingGroupName": {"Ref": "AutoScalingGroup"},
+        "AutoScalingGroupName": {
+          "Ref": "AutoScalingGroup"
+        },
         "PolicyType": "TargetTrackingScaling",
         "TargetTrackingConfiguration": {
           "PredefinedMetricSpecification": {
@@ -1323,7 +2418,9 @@
     "UnauthorizedAPICallsAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${Environment}-UnauthorizedAPICalls-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "${Environment}-UnauthorizedAPICalls-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert on unauthorized API calls",
         "MetricName": "UnauthorizedAPICalls",
         "Namespace": "CloudTrailMetrics",
@@ -1338,7 +2435,9 @@
     "SecurityGroupChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${Environment}-SecurityGroupChanges-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "${Environment}-SecurityGroupChanges-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert on security group configuration changes",
         "MetricName": "SecurityGroupEventCount",
         "Namespace": "CloudTrailMetrics",
@@ -1353,7 +2452,9 @@
     "IAMPolicyChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${Environment}-IAMPolicyChanges-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "${Environment}-IAMPolicyChanges-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert on IAM policy changes",
         "MetricName": "IAMPolicyEventCount",
         "Namespace": "CloudTrailMetrics",
@@ -1369,51 +2470,85 @@
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "VPC"},
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
       }
     },
     "ALBDNSName": {
       "Description": "Application Load Balancer DNS Name",
-      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ALBDNSName"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALBDNSName"
+        }
       }
     },
     "S3LogsBucket": {
       "Description": "S3 Logs Bucket Name",
-      "Value": {"Ref": "S3LogsBucket"},
+      "Value": {
+        "Ref": "S3LogsBucket"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-S3LogsBucket"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3LogsBucket"
+        }
       }
     },
     "RDSEndpoint": {
       "Description": "RDS Database Endpoint",
-      "Value": {"Fn::GetAtt": ["RDSDatabase", "Endpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSDatabase",
+          "Endpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-RDSEndpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
+        }
       }
     },
     "KMSKeyId": {
       "Description": "KMS Key ID for encryption",
-      "Value": {"Ref": "KMSKey"},
+      "Value": {
+        "Ref": "KMSKey"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-KMSKeyId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
       }
     },
     "CloudTrailName": {
       "Description": "CloudTrail Trail Name",
-      "Value": {"Ref": "CloudTrail"},
+      "Value": {
+        "Ref": "CloudTrail"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-CloudTrailName"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudTrailName"
+        }
       }
     },
     "ConfigRecorderName": {
       "Description": "AWS Config Recorder Name",
-      "Value": {"Ref": "ConfigRecorder"},
+      "Value": {
+        "Ref": "ConfigRecorder"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ConfigRecorderName"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ConfigRecorderName"
+        }
       }
     }
   }
