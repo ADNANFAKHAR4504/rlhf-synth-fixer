@@ -25,13 +25,12 @@ import json
 # =============================================================================
 
 config = pulumi.Config()
-aws_config = pulumi.Config("aws")
 
-# Environment-specific configuration
+# Simple and reliable configuration
 ENVIRONMENT = config.get("environment") or "dev"
-AWS_REGION = aws_config.require("region")
-INSTANCE_TYPE = config.get("instance-type") or "t3.micro"
-PROJECT_NAME = config.get("project-name") or "dualstack-web-app"
+AWS_REGION = "us-east-1"  # Fixed region to avoid configuration issues
+INSTANCE_TYPE = "t3.micro"
+PROJECT_NAME = "dualstack-web-app"
 
 # Resource naming convention
 def get_resource_name(resource_type: str) -> str:
@@ -39,11 +38,24 @@ def get_resource_name(resource_type: str) -> str:
     return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}"
 
 # =============================================================================
+# AWS Provider Configuration
+# =============================================================================
+
+# Simple AWS provider configuration
+aws_provider = aws.Provider(
+    "aws-provider",
+    region=AWS_REGION
+)
+
+# =============================================================================
 # Data Sources
 # =============================================================================
 
 # Get available AZs in the region
-availability_zones = aws.get_availability_zones(state="available")
+availability_zones = aws.get_availability_zones(
+    state="available",
+    opts=pulumi.InvokeOptions(provider=aws_provider)
+)
 
 # Get the latest Amazon Linux 2 AMI
 amazon_linux_ami = aws.ec2.get_ami(
@@ -58,7 +70,8 @@ amazon_linux_ami = aws.ec2.get_ami(
             name="virtualization-type",
             values=["hvm"]
         )
-    ]
+    ],
+    opts=pulumi.InvokeOptions(provider=aws_provider)
 )
 
 # =============================================================================
@@ -76,7 +89,8 @@ vpc = aws.ec2.Vpc(
         "Name": get_resource_name("vpc"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Internet Gateway for public internet access
@@ -87,7 +101,8 @@ internet_gateway = aws.ec2.InternetGateway(
         "Name": get_resource_name("igw"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Create public subnets across multiple AZs for high availability
@@ -115,7 +130,8 @@ for i in range(min(2, len(availability_zones.names))):
             "Project": PROJECT_NAME,
             "Type": "Public",
             "AZ": az
-        }
+        },
+        opts=pulumi.ResourceOptions(provider=aws_provider)
     )
     
     public_subnets.append(subnet)
@@ -129,7 +145,8 @@ public_route_table = aws.ec2.RouteTable(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Type": "Public"
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # IPv4 route to Internet Gateway
@@ -137,7 +154,8 @@ ipv4_route = aws.ec2.Route(
     get_resource_name("ipv4-route"),
     route_table_id=public_route_table.id,
     destination_cidr_block="0.0.0.0/0",
-    gateway_id=internet_gateway.id
+    gateway_id=internet_gateway.id,
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # IPv6 route to Internet Gateway
@@ -145,7 +163,8 @@ ipv6_route = aws.ec2.Route(
     get_resource_name("ipv6-route"),
     route_table_id=public_route_table.id,
     destination_ipv6_cidr_block="::/0",
-    gateway_id=internet_gateway.id
+    gateway_id=internet_gateway.id,
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Associate route table with public subnets
@@ -153,7 +172,8 @@ for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
         get_resource_name(f"public-rta-{i + 1}"),
         subnet_id=subnet.id,
-        route_table_id=public_route_table.id
+        route_table_id=public_route_table.id,
+        opts=pulumi.ResourceOptions(provider=aws_provider)
     )
 
 # =============================================================================
@@ -207,7 +227,8 @@ alb_security_group = aws.ec2.SecurityGroup(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "ALB Security Group"
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Security group for EC2 instances
@@ -224,14 +245,6 @@ ec2_security_group = aws.ec2.SecurityGroup(
             to_port=80,
             security_groups=[alb_security_group.id],
             description="Allow HTTP traffic from ALB only"
-        ),
-        # Allow SSH for management (optional - can be removed for production)
-        aws.ec2.SecurityGroupIngressArgs(
-            protocol="tcp",
-            from_port=22,
-            to_port=22,
-            cidr_blocks=["0.0.0.0/0"],  # Restrict this in production
-            description="Allow SSH access for management"
         )
     ],
     egress=[
@@ -257,7 +270,8 @@ ec2_security_group = aws.ec2.SecurityGroup(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Purpose": "EC2 Security Group"
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # =============================================================================
@@ -287,7 +301,8 @@ ec2_role = aws.iam.Role(
         "Name": get_resource_name("ec2-role"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Custom policy for EC2 instances (CloudWatch metrics and logs)
@@ -315,197 +330,58 @@ ec2_policy = aws.iam.Policy(
     get_resource_name("ec2-policy"),
     name=get_resource_name("ec2-policy"),
     description="Custom policy for EC2 instances - CloudWatch and logging permissions",
-    policy=json.dumps(ec2_policy_document)
+    policy=json.dumps(ec2_policy_document),
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Attach custom policy to role
 ec2_policy_attachment = aws.iam.RolePolicyAttachment(
     get_resource_name("ec2-policy-attachment"),
     role=ec2_role.name,
-    policy_arn=ec2_policy.arn
+    policy_arn=ec2_policy.arn,
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Create instance profile
 ec2_instance_profile = aws.iam.InstanceProfile(
     get_resource_name("ec2-instance-profile"),
     name=get_resource_name("ec2-instance-profile"),
-    role=ec2_role.name
+    role=ec2_role.name,
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # =============================================================================
 # User Data Script for EC2 Instances
 # =============================================================================
 
-user_data_script = f"""#!/bin/bash
-# Update system packages
+# Simple user data script for web server
+user_data_script = """#!/bin/bash
 yum update -y
-
-# Install and configure Nginx
 yum install -y nginx
 systemctl start nginx
 systemctl enable nginx
 
-# Create a custom index page with system information
+# Create simple index page
 cat > /var/www/html/index.html << 'EOF'
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dual-Stack Web Application</title>
-    <style>
-        body {{
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }}
-        .container {{
-            background-color: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }}
-        .header {{
-            color: #2c3e50;
-            border-bottom: 3px solid #3498db;
-            padding-bottom: 10px;
-        }}
-        .info-section {{
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #ecf0f1;
-            border-radius: 5px;
-        }}
-        .success {{
-            color: #27ae60;
-            font-weight: bold;
-        }}
-        .highlight {{
-            background-color: #f39c12;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
-        }}
-    </style>
+    <title>Dual-Stack Web App</title>
 </head>
 <body>
-    <div class="container">
-        <h1 class="header">🌐 Dual-Stack Web Application</h1>
-        
-        <div class="info-section">
-            <h2>✅ Deployment Status</h2>
-            <p class="success">Successfully deployed on AWS with dual-stack (IPv4/IPv6) support!</p>
-            <p><strong>Environment:</strong> <span class="highlight">{ENVIRONMENT}</span></p>
-            <p><strong>Region:</strong> <span class="highlight">{AWS_REGION}</span></p>
-            <p><strong>Instance Type:</strong> <span class="highlight">{INSTANCE_TYPE}</span></p>
-        </div>
-        
-        <div class="info-section">
-            <h2>🏗️ Infrastructure Components</h2>
-            <ul>
-                <li><strong>VPC:</strong> Dual-stack with IPv4 and IPv6 CIDR blocks</li>
-                <li><strong>Subnets:</strong> Multi-AZ public subnets with internet connectivity</li>
-                <li><strong>Load Balancer:</strong> Application Load Balancer with dual-stack support</li>
-                <li><strong>Security:</strong> Least privilege security groups and IAM roles</li>
-                <li><strong>Monitoring:</strong> CloudWatch dashboard and detailed monitoring</li>
-            </ul>
-        </div>
-        
-        <div class="info-section">
-            <h2>📊 System Information</h2>
-            <p><strong>Server:</strong> Amazon Linux 2 with Nginx</p>
-            <p><strong>Timestamp:</strong> <span id="timestamp"></span></p>
-            <p><strong>User Agent:</strong> <span id="user-agent"></span></p>
-        </div>
-        
-        <div class="info-section">
-            <h2>🔧 Infrastructure as Code</h2>
-            <p>This infrastructure is managed using <strong>Pulumi</strong> with Python, ensuring:</p>
-            <ul>
-                <li>Reproducible deployments</li>
-                <li>Version-controlled infrastructure</li>
-                <li>Automated provisioning and updates</li>
-                <li>Best practices for security and scalability</li>
-            </ul>
-        </div>
-    </div>
-    
-    <script>
-        document.getElementById('timestamp').textContent = new Date().toLocaleString();
-        document.getElementById('user-agent').textContent = navigator.userAgent;
-    </script>
+    <h1>✅ Dual-Stack Web Application</h1>
+    <p>Successfully deployed on AWS!</p>
+    <p>Supports both IPv4 and IPv6</p>
 </body>
 </html>
 EOF
 
-# Configure Nginx for both IPv4 and IPv6
-cat > /etc/nginx/conf.d/dualstack.conf << 'EOF'
-server {{
-    listen 80;
-    listen [::]:80;
-    server_name _;
-    
-    location / {{
-        root /var/www/html;
-        index index.html;
-    }}
-    
-    location /health {{
-        access_log off;
-        return 200 "healthy\\n";
-        add_header Content-Type text/plain;
-    }}
-}}
+# Create health check endpoint
+cat > /var/www/html/health << 'EOF'
+healthy
 EOF
 
-# Restart Nginx to apply configuration
 systemctl restart nginx
-
-# Install CloudWatch agent for detailed monitoring
-yum install -y amazon-cloudwatch-agent
-
-# Configure CloudWatch agent
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-{{
-    "metrics": {{
-        "namespace": "CWAgent",
-        "metrics_collected": {{
-            "cpu": {{
-                "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
-                "metrics_collection_interval": 60
-            }},
-            "disk": {{
-                "measurement": ["used_percent"],
-                "metrics_collection_interval": 60,
-                "resources": ["*"]
-            }},
-            "diskio": {{
-                "measurement": ["io_time"],
-                "metrics_collection_interval": 60,
-                "resources": ["*"]
-            }},
-            "mem": {{
-                "measurement": ["mem_used_percent"],
-                "metrics_collection_interval": 60
-            }},
-            "netstat": {{
-                "measurement": ["tcp_established", "tcp_time_wait"],
-                "metrics_collection_interval": 60
-            }}
-        }}
-    }}
-}}
-EOF
-
-# Start CloudWatch agent
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
-    -a fetch-config -m ec2 -s \\
-    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-
-# Log deployment completion
-echo "$(date): Dual-stack web server deployment completed successfully" >> /var/log/deployment.log
 """
 
 # =============================================================================
@@ -532,7 +408,8 @@ for i, subnet in enumerate(public_subnets):
             "Project": PROJECT_NAME,
             "Role": "WebServer",
             "AZ": subnet.availability_zone
-        }
+        },
+        opts=pulumi.ResourceOptions(provider=aws_provider)
     )
     
     ec2_instances.append(instance)
@@ -564,7 +441,8 @@ target_group = aws.lb.TargetGroup(
         "Name": get_resource_name("web-tg"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Attach EC2 instances to target group
@@ -573,7 +451,8 @@ for i, instance in enumerate(ec2_instances):
         get_resource_name(f"web-tg-attachment-{i + 1}"),
         target_group_arn=target_group.arn,
         target_id=instance.id,
-        port=80
+        port=80,
+        opts=pulumi.ResourceOptions(provider=aws_provider)
     )
 
 # Create Application Load Balancer with dual-stack support
@@ -591,7 +470,8 @@ alb = aws.lb.LoadBalancer(
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "Type": "Application Load Balancer"
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Create HTTP listener
@@ -605,18 +485,16 @@ http_listener = aws.lb.Listener(
             type="forward",
             target_group_arn=target_group.arn
         )
-    ]
+    ],
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # =============================================================================
 # CloudWatch Monitoring and Dashboard
 # =============================================================================
 
-# Create CloudWatch Dashboard for monitoring
-dashboard_body = pulumi.Output.all(
-    alb_full_name=alb.arn_suffix,
-    target_group_full_name=target_group.arn_suffix
-).apply(lambda args: json.dumps({
+# Simple CloudWatch Dashboard
+dashboard_body = alb.arn_suffix.apply(lambda arn_suffix: json.dumps({
     "widgets": [
         {
             "type": "metric",
@@ -626,73 +504,12 @@ dashboard_body = pulumi.Output.all(
             "height": 6,
             "properties": {
                 "metrics": [
-                    ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", args["alb_full_name"]],
-                    [".", "ActiveConnectionCount", ".", "."],
-                    [".", "NewConnectionCount", ".", "."]
+                    ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", arn_suffix]
                 ],
                 "view": "timeSeries",
-                "stacked": False,
                 "region": AWS_REGION,
-                "title": "ALB Request and Connection Metrics",
-                "period": 300,
-                "stat": "Sum"
-            }
-        },
-        {
-            "type": "metric",
-            "x": 12,
-            "y": 0,
-            "width": 12,
-            "height": 6,
-            "properties": {
-                "metrics": [
-                    ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", args["target_group_full_name"]],
-                    [".", "UnHealthyHostCount", ".", "."]
-                ],
-                "view": "timeSeries",
-                "stacked": False,
-                "region": AWS_REGION,
-                "title": "Target Group Health Status",
-                "period": 300,
-                "stat": "Average"
-            }
-        },
-        {
-            "type": "metric",
-            "x": 0,
-            "y": 6,
-            "width": 12,
-            "height": 6,
-            "properties": {
-                "metrics": [
-                    ["AWS/ApplicationELB", "HTTPCode_Target_2XX_Count", "LoadBalancer", args["alb_full_name"]],
-                    [".", "HTTPCode_Target_4XX_Count", ".", "."],
-                    [".", "HTTPCode_Target_5XX_Count", ".", "."]
-                ],
-                "view": "timeSeries",
-                "stacked": False,
-                "region": AWS_REGION,
-                "title": "HTTP Response Codes",
-                "period": 300,
-                "stat": "Sum"
-            }
-        },
-        {
-            "type": "metric",
-            "x": 12,
-            "y": 6,
-            "width": 12,
-            "height": 6,
-            "properties": {
-                "metrics": [
-                    ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", args["alb_full_name"]]
-                ],
-                "view": "timeSeries",
-                "stacked": False,
-                "region": AWS_REGION,
-                "title": "Target Response Time",
-                "period": 300,
-                "stat": "Average"
+                "title": "ALB Request Count",
+                "period": 300
             }
         }
     ]
@@ -701,7 +518,8 @@ dashboard_body = pulumi.Output.all(
 cloudwatch_dashboard = aws.cloudwatch.Dashboard(
     get_resource_name("monitoring-dashboard"),
     dashboard_name=get_resource_name("monitoring-dashboard"),
-    dashboard_body=dashboard_body
+    dashboard_body=dashboard_body,
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Create CloudWatch Alarms for critical metrics
@@ -724,7 +542,8 @@ unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
         "Name": get_resource_name("unhealthy-targets-alarm"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Alarm for high response time
@@ -746,7 +565,8 @@ high_response_time_alarm = aws.cloudwatch.MetricAlarm(
         "Name": get_resource_name("high-response-time-alarm"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
-    }
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # =============================================================================
