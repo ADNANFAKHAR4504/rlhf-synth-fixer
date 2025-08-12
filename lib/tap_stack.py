@@ -62,6 +62,7 @@ class TapStack(pulumi.ComponentResource):
         self.default_tags = args.get_default_tags()
         
         # Store created resources
+        self.providers: Dict[str, aws.Provider] = {}
         self.vpcs: Dict[str, aws.ec2.Vpc] = {}
         self.subnets: Dict[str, Dict[str, List[aws.ec2.Subnet]]] = {}
         self.security_groups: Dict[str, aws.ec2.SecurityGroup] = {}
@@ -69,6 +70,9 @@ class TapStack(pulumi.ComponentResource):
         self.auto_scaling_groups: Dict[str, aws.autoscaling.Group] = {}
         self.databases: Dict[str, aws.rds.Instance] = {}
         self.load_balancers: Dict[str, aws.lb.LoadBalancer] = {}
+        
+        # Create AWS providers first
+        self._create_providers()
         
         # Create infrastructure
         self._create_iam_resources()
@@ -84,6 +88,18 @@ class TapStack(pulumi.ComponentResource):
             "database_endpoints": {region: db.endpoint for region, db in self.databases.items()},
             "load_balancer_dns": {region: lb.dns_name for region, lb in self.load_balancers.items()},
         })
+    
+    def _create_providers(self):
+        """Create AWS providers for each region with unique names."""
+        for region in self.args.regions:
+            # Create unique provider name to avoid URN conflicts
+            provider_name = f"{self.args.get_resource_name('provider')}-{region}"
+            
+            self.providers[region] = aws.Provider(
+                provider_name,
+                region=region,
+                opts=ResourceOptions(parent=self)
+            )
     
     def _create_iam_resources(self):
         """Create IAM roles and policies for the infrastructure."""
@@ -142,11 +158,7 @@ class TapStack(pulumi.ComponentResource):
         """Create VPC infrastructure across multiple regions."""
         
         for region in self.args.regions:
-            provider = aws.Provider(
-                f"provider-{region}",
-                region=region,
-                opts=ResourceOptions(parent=self)
-            )
+            provider = self.providers[region]
             
             # Create VPC
             vpc = aws.ec2.Vpc(
@@ -273,7 +285,7 @@ class TapStack(pulumi.ComponentResource):
         """Create security groups with restricted access."""
         
         for region in self.args.regions:
-            provider = aws.Provider(f"provider-{region}", region=region)
+            provider = self.providers[region]
             vpc = self.vpcs[region]
             
             # Web server security group
@@ -338,7 +350,7 @@ class TapStack(pulumi.ComponentResource):
         """Create managed database with encryption and automated backups."""
         
         for region in self.args.regions:
-            provider = aws.Provider(f"provider-{region}", region=region)
+            provider = self.providers[region]
             
             # Create DB subnet group
             db_subnet_group = aws.rds.SubnetGroup(
@@ -383,7 +395,7 @@ class TapStack(pulumi.ComponentResource):
         """Create auto-scaling compute resources with load balancers."""
         
         for region in self.args.regions:
-            provider = aws.Provider(f"provider-{region}", region=region)
+            provider = self.providers[region]
             
             # Get latest Amazon Linux 2 AMI
             ami = aws.ec2.get_ami(
@@ -438,12 +450,12 @@ class TapStack(pulumi.ComponentResource):
             )
             
             # Create launch template
-            user_data = """#!/bin/bash
+            user_data = f"""#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>TAP Infrastructure - Region: """ + region + """</h1>" > /var/www/html/index.html
+echo "<h1>TAP Infrastructure - Region: {region}</h1>" > /var/www/html/index.html
 echo "OK" > /var/www/html/health
 """
             
@@ -547,7 +559,7 @@ echo "OK" > /var/www/html/health
         """Create CloudWatch logging and monitoring infrastructure."""
         
         for region in self.args.regions:
-            provider = aws.Provider(f"provider-{region}", region=region)
+            provider = self.providers[region]
             
             # Create CloudWatch Log Group
             log_group = aws.cloudwatch.LogGroup(
@@ -590,6 +602,3 @@ echo "OK" > /var/www/html/health
                 dashboard_body=dashboard_body,
                 opts=ResourceOptions(parent=self, provider=provider)
             )
-
-
-
