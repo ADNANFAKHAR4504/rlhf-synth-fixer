@@ -20,8 +20,19 @@ Resources:
           - Effect: Allow
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: "kms:*"
+            Action: 
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
             Resource: "*"
+      Tags:
+        - Key: Name
+          Value: S3KMSKey
+        - Key: Environment
+          Value: production
+    DeletionPolicy: Retain
 
   S3KMSAlias:
     Type: AWS::KMS::Alias
@@ -40,14 +51,27 @@ Resources:
               KMSMasterKeyID: !Ref S3KMSKey
       VersioningConfiguration:
         Status: Enabled
+      Tags:
+        - Key: Name
+          Value: MyEncryptedBucket
+        - Key: Environment
+          Value: production
 
-  ### 3. Secret in AWS Secrets Manager ###
+  #### 3. Secret in AWS Secrets Manager ###
   MyAppSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: MyAppPassword
       Description: Password for my application
-      SecretString: '{"username":"admin","password":"ReplaceMe123!"}'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        ExcludeCharacters: '"@/\''
+      Tags:
+        - Key: Name
+          Value: MyAppSecret
+        - Key: Environment
+          Value: production
 
 Outputs:
 
