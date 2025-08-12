@@ -8,7 +8,7 @@ describe('TapStack Integration Tests', () => {
     // Path to the flat outputs file generated after deploy
     const outputsFile = path.resolve(
       __dirname,
-      '../cfn-output/flat-outputs.json'
+      '../cfn-outputs/flat-outputs.json'
     );
 
     if (!fs.existsSync(outputsFile)) {
