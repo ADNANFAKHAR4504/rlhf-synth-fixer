@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure production infrastructure for SecureApp - Simplified deployment without parameters",
+    "Description": "Secure production infrastructure for SecureApp using existing ALB - No parameters required",
     "Resources": {
         "SecureAppKMSKey": {
             "Type": "AWS::KMS::Key",
@@ -467,30 +467,6 @@
                 }
             }
         },
-        "ALBSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Security group for Application Load Balancer",
-                "VpcId": {
-                    "Ref": "SecureAppVPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTP from internet"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-alb-sg"
-                    }
-                ]
-            }
-        },
         "WebServerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -503,10 +479,8 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Ref": "ALBSecurityGroup"
-                        },
-                        "Description": "HTTP from ALB"
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP from existing ALB"
                     },
                     {
                         "IpProtocol": "tcp",
@@ -678,30 +652,7 @@
                 "DeletionProtection": false
             }
         },
-        "ApplicationLoadBalancer": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "secureapp-alb-${AWS::AccountId}"
-                },
-                "Scheme": "internet-facing",
-                "Type": "application",
-                "SecurityGroups": [
-                    {
-                        "Ref": "ALBSecurityGroup"
-                    }
-                ],
-                "Subnets": [
-                    {
-                        "Ref": "PublicSubnet1"
-                    },
-                    {
-                        "Ref": "PublicSubnet2"
-                    }
-                ]
-            }
-        },
-        "ALBTargetGroup": {
+        "SecureAppTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
@@ -709,9 +660,7 @@
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
-                "VpcId": {
-                    "Ref": "SecureAppVPC"
-                },
+                "VpcId": "vpc-0afe25fe865b0be8f",
                 "HealthCheckPath": "/health",
                 "HealthCheckProtocol": "HTTP",
                 "HealthCheckIntervalSeconds": 30,
@@ -731,31 +680,45 @@
                         },
                         "Port": 80
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "secureapp-target-group"
+                    }
                 ]
             }
         },
-        "ALBListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+        "SecureAppListenerRule": {
+            "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
             "Properties": {
-                "DefaultActions": [
+                "ListenerArn": "arn:aws:elasticloadbalancing:us-east-1:718240086340:listener/app/WebApp-LoadBalancer/b0a9e71ba272edee/50dc6c495c0c9188",
+                "Priority": 100,
+                "Conditions": [
                     {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "ALBTargetGroup"
+                        "Field": "path-pattern",
+                        "PathPatternConfig": {
+                            "Values": [
+                                "/secureapp*",
+                                "/health"
+                            ]
                         }
                     }
                 ],
-                "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "Port": 80,
-                "Protocol": "HTTP"
+                "Actions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "SecureAppTargetGroup"
+                        }
+                    }
+                ]
             }
         },
         "WebServerInstance1": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": "ami-'{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'",
+                "ImageId": "ami-0c02fb55956c7d316",
                 "InstanceType": "t3.micro",
                 "SubnetId": {
                     "Ref": "PrivateSubnet1"
@@ -769,7 +732,7 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 1</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" > /var/www/html/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 1</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Access via: /secureapp/</p>\" > /var/www/html/index.html\n\n# Create secureapp directory and content\nmkdir -p /var/www/html/secureapp\necho \"<h1>SecureApp Main Page</h1><p>Welcome to SecureApp!</p><p>Server 1 - $(date)</p>\" > /var/www/html/secureapp/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
                 },
                 "Tags": [
                     {
@@ -796,7 +759,7 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 2</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" > /var/www/html/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 2</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Access via: /secureapp/</p>\" > /var/www/html/index.html\n\n# Create secureapp directory and content\nmkdir -p /var/www/html/secureapp\necho \"<h1>SecureApp Main Page</h1><p>Welcome to SecureApp!</p><p>Server 2 - $(date)</p>\" > /var/www/html/secureapp/index.html\n\nsystemctl enable httpd\nsystemctl start httpd\n"
                 },
                 "Tags": [
                     {
@@ -904,14 +867,23 @@
                 }
             }
         },
-        "LoadBalancerURL": {
-            "Description": "Application Load Balancer URL",
-            "Value": {
-                "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
-            },
+        "ExistingLoadBalancerURL": {
+            "Description": "Existing Load Balancer URL with SecureApp path",
+            "Value": "http://WebApp-LoadBalancer-1200637121.us-east-1.elb.amazonaws.com/secureapp/",
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-ALB-URL"
+                }
+            }
+        },
+        "TargetGroupArn": {
+            "Description": "Target Group ARN for SecureApp",
+            "Value": {
+                "Ref": "SecureAppTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TargetGroup-ARN"
                 }
             }
         },
