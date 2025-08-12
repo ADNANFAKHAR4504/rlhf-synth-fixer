@@ -44,11 +44,14 @@ import {
   GetParameterCommand,
   SSMClient,
 } from '@aws-sdk/client-ssm';
-import fs from 'fs';
 
-const outputs = JSON.parse(
-  fs.readFileSync('lib/flat-outputs.json', 'utf8')
-);
+// Read the deployment outputs
+const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+let outputs: any = {};
+
+if (fs.existsSync(outputsPath)) {
+  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+}
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
