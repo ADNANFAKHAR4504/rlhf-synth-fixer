@@ -1,8 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure with comprehensive security controls'
+Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure with comprehensive security controls (Updated to use an existing certificate)'
 
 # Parameters section for customizable values
 Parameters:
+  # Parameter to accept the ARN of an existing ACM certificate
+  ExistingCertificateArn:
+    Type: String
+    Description: 'The ARN of the existing AWS Certificate Manager (ACM) certificate for the ALB.'
+    Default: 'arn:aws:acm:us-east-1:718240086340:certificate/92b736bc-6abe-41ca-a07e-de76eee848b3'
+
   # SSH access CIDR for security group configuration
   SSHAccessCIDR:
     Type: String
@@ -339,7 +345,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${ApplicationDataBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ProjectNameLower}-${AWS::AccountId}-${AWS::Region}-app-data/*'
                 Condition:
                   StringEquals:
                     'ec2:ResourceTag/S3Access': 'Approved'
@@ -504,7 +510,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-mysql-db'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.37'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
@@ -575,19 +581,7 @@ Resources:
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref SSLCertificate
-
-  # Self-signed SSL certificate for demo purposes
-  SSLCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Sub '${ProjectName}.example.com'
-      ValidationMethod: DNS
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-SSL-Certificate'
-        - Key: Project
-          Value: !Ref ProjectName
+        - CertificateArn: !Ref ExistingCertificateArn
 
   # WAFv2 WebACL with OWASP Top 10 protection
   WebACL:
@@ -743,7 +737,7 @@ Resources:
       StageName: !Sub 'prod-${EnvironmentSuffix}'
       AccessLogSetting:
         DestinationArn: !GetAtt APIGatewayLogGroup.Arn
-        Format: '$requestId $requestTime $httpMethod $resourcePath $status $responseLength $responseTime'
+        Format: '$context.requestId $context.requestTime $context.httpMethod $context.resourcePath $context.status $context.responseLength $context.responseTime'
       MethodSettings:
         - ResourcePath: '/*'
           HttpMethod: '*'
@@ -807,7 +801,7 @@ Resources:
           
           def lambda_handler(event, context):
               ssm_client = boto3.client('ssm')
-              ec2_client = boto3.client('ec2')
+              ec2_client = botoe3.client('ec2')
               
               try:
                   # Get instances with PatchGroup=WebApp tag
@@ -877,3 +871,64 @@ Resources:
       Targets:
         - Arn: !GetAtt PatchingLambdaFunction.Arn
           Id: !Sub '${ProjectName}-PatchingLambdaTarget'
+          
+Outputs:
+  VpcId:
+    Description: The ID of the VPC
+    Value: !Ref MainVPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcId"
+      
+  PrivateSubnetIds:
+    Description: Comma-separated list of Private Subnet IDs
+    Value: !Join [',', [!Ref PrivateAppSubnet1, !Ref PrivateAppSubnet2, !Ref PrivateDataSubnet1, !Ref PrivateDataSubnet2]]
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetIds"
+
+  DBInstanceIdentifier:
+    Description: The identifier for the RDS DB instance
+    Value: !Ref DatabaseInstance
+    Export:
+      Name: !Sub "${AWS::StackName}-DBInstanceIdentifier"
+
+  EC2InstanceRoleName:
+    Description: The name of the IAM Role for EC2 instances
+    Value: !Ref EC2InstanceRole
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2InstanceRoleName"
+
+  EC2InstanceRoleArn:
+    Description: The ARN of the IAM Role for EC2 instances
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2InstanceRoleArn"
+
+  ALBArn:
+    Description: The ARN of the Application Load Balancer
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub "${AWS::StackName}-ALBArn"
+
+  ALBListenerArn:
+    Description: The ARN of the ALB Listener
+    Value: !Ref ALBListener
+    Export:
+      Name: !Sub "${AWS::StackName}-ALBListenerArn"
+      
+  CertificateArnUsed:
+    Description: The ARN of the certificate used by the listener
+    Value: !Ref ExistingCertificateArn
+    Export:
+      Name: !Sub "${AWS::StackName}-CertificateArnUsed"
+
+  WebACLName:
+    Description: The name of the WAFv2 WebACL
+    Value: !GetAtt WebACL.Name
+    Export:
+      Name: !Sub "${AWS::StackName}-WebACLName"
+
+  PatchingLambdaFunctionName:
+    Description: The name of the automated patching Lambda function
+    Value: !Ref PatchingLambdaFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-PatchingLambdaFunctionName"
