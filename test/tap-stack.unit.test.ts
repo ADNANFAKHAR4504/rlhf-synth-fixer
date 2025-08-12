@@ -243,9 +243,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.SecureAppApplicationLogGroup).toBeDefined();
     });
 
-    test('SecureAppApplicationLogGroup should have 30-day retention', () => {
+    test('SecureAppApplicationLogGroup should have 90-day retention', () => {
       const logGroup = template.Resources.SecureAppApplicationLogGroup;
-      expect(logGroup.Properties.RetentionInDays).toBe(30);
+      expect(logGroup.Properties.RetentionInDays).toBe(90);
     });
   });
 

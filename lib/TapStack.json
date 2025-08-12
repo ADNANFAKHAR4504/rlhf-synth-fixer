@@ -29,7 +29,28 @@
                                     "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                                 }
                             },
-                            "Action": "kms:*",
+                            "Action": [
+                                "kms:CreateGrant",
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey",
+                                "kms:GenerateDataKeyWithoutPlaintext",
+                                "kms:ReEncryptFrom",
+                                "kms:ReEncryptTo",
+                                "kms:PutKeyPolicy",
+                                "kms:GetKeyPolicy",
+                                "kms:ListGrants",
+                                "kms:ListKeys",
+                                "kms:ListAliases",
+                                "kms:DisableKey",
+                                "kms:EnableKey",
+                                "kms:ScheduleKeyDeletion",
+                                "kms:CancelKeyDeletion",
+                                "kms:CreateAlias",
+                                "kms:DeleteAlias",
+                                "kms:UpdateAlias"
+                            ],
                             "Resource": "*"
                         },
                         {
@@ -595,7 +616,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": "/secureapp/application",
-                "RetentionInDays": 7,
+                "RetentionInDays": 90,
                 "Tags": [
                     {
                         "Key": "Name",
