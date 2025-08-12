@@ -27,7 +27,7 @@ def create_infrastructure():
     enable_dns_support=True,
     enable_dns_hostnames=True,
     tags={"Name": "web-vpc"},
-    opts=pulumi.ResourceOptions(provider=aws_provider)
+  opts=pulumi.ResourceOptions(provider=aws_provider, retain_on_delete=True)
   )
 
   igw = aws.ec2.InternetGateway(
@@ -192,7 +192,7 @@ echo '<h1>Hello from Nginx on AWS!</h1>' > /usr/share/nginx/html/index.html
     ami=ami_id,
     subnet_id=subnet1.id,
     associate_public_ip_address=True,
-    security_groups=[ec2_sg.id],
+  vpc_security_group_ids=[ec2_sg.id],
     iam_instance_profile=instance_profile.name,
     user_data=b64encode(user_data.encode()).decode(),
     monitoring=True,
