@@ -954,7 +954,7 @@ Resources:
             Action:
               - s3:GetBucketAcl
               - s3:ListBucket
-            Resource: !Ref ConfigBucket
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
           - Sid: AllowConfigPuts
             Effect: Allow
             Principal:
