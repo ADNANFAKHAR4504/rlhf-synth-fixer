@@ -16,7 +16,7 @@ export class TapStack extends cdk.Stack {
     const commonTags = {
       project: 'IaC-AWS-Nova-Model-Breaking',
       owner: 'nova-team',
-      environment: 'development'
+      environment: 'development',
     };
     cdk.Tags.of(this).add('project', commonTags.project);
     cdk.Tags.of(this).add('owner', commonTags.owner);
@@ -24,7 +24,7 @@ export class TapStack extends cdk.Stack {
 
     // Log Group for Lambda
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/lambda-nova-team-development`,
+      logGroupName: '/aws/lambda/lambda-nova-team-development',
       retention: logs.RetentionDays.THREE_MONTHS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -34,7 +34,9 @@ export class TapStack extends cdk.Stack {
       roleName: 'lambda-execution-role-nova-team-development',
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
       inlinePolicies: {
         CloudWatchLogsPolicy: new iam.PolicyDocument({
@@ -44,13 +46,13 @@ export class TapStack extends cdk.Stack {
               actions: [
                 'logs:CreateLogGroup',
                 'logs:CreateLogStream',
-                'logs:PutLogEvents'
+                'logs:PutLogEvents',
               ],
-              resources: [lambdaLogGroup.logGroupArn + ':*']
-            })
-          ]
-        })
-      }
+              resources: [lambdaLogGroup.logGroupArn + ':*'],
+            }),
+          ],
+        }),
+      },
     });
 
     // Lambda Function
@@ -64,70 +66,93 @@ export class TapStack extends cdk.Stack {
       memorySize: 1024,
       environment: {
         NODE_ENV: 'development',
-        LOG_LEVEL: 'info'
+        LOG_LEVEL: 'info',
       },
       reservedConcurrentExecutions: 1000,
-      description: 'High-performance Lambda function for processing web requests in nova-team development environment'
+      description:
+        'High-performance Lambda function for processing web requests in nova-team development environment',
     });
 
     // Lambda Alias for Provisioned Concurrency
     const lambdaAlias = new lambda.Alias(this, 'LambdaAlias', {
       aliasName: 'live',
       version: lambdaFunction.currentVersion,
-      description: 'Live alias for production traffic with provisioned concurrency'
+      description:
+        'Live alias for production traffic with provisioned concurrency',
     });
 
     // Provisioned Concurrency (use provisionedConcurrentExecutions on version or alias if needed)
     // If you want provisioned concurrency, set it on the alias or version directly:
     lambdaAlias.addAutoScaling({
       minCapacity: 1,
-      maxCapacity: 100
+      maxCapacity: 100,
     });
 
     // Application Auto Scaling Role (created if not already present)
     const autoScalingRole = new iam.Role(this, 'AutoScalingRole', {
-      assumedBy: new iam.ServicePrincipal('application-autoscaling.amazonaws.com'),
+      assumedBy: new iam.ServicePrincipal(
+        'application-autoscaling.amazonaws.com'
+      ),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSApplicationAutoscalingLambdaConcurrencyPolicy')
-      ]
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSApplicationAutoscalingLambdaConcurrencyPolicy'
+        ),
+      ],
     });
 
     // Application Auto Scaling Target
-    const scalableTarget = new applicationautoscaling.ScalableTarget(this, 'LambdaScalableTarget', {
-      serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
-      resourceId: `function:${lambdaFunction.functionName}:${lambdaAlias.aliasName}`,
-      scalableDimension: 'lambda:function:ProvisionedConcurrency',
-      minCapacity: 50,
-      maxCapacity: 1000,
-      role: autoScalingRole
-    });
+    const scalableTarget = new applicationautoscaling.ScalableTarget(
+      this,
+      'LambdaScalableTarget',
+      {
+        serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
+        resourceId: `function:${lambdaFunction.functionName}:${lambdaAlias.aliasName}`,
+        scalableDimension: 'lambda:function:ProvisionedConcurrency',
+        minCapacity: 50,
+        maxCapacity: 1000,
+        role: autoScalingRole,
+      }
+    );
     scalableTarget.node.addDependency(lambdaAlias);
 
     // Auto Scaling Policy
-    new applicationautoscaling.TargetTrackingScalingPolicy(this, 'LambdaScalingPolicy', {
-      scalingTarget: scalableTarget,
-      targetValue: 70.0,
-      predefinedMetric: applicationautoscaling.PredefinedMetric.LAMBDA_PROVISIONED_CONCURRENCY_UTILIZATION,
-      scaleOutCooldown: cdk.Duration.seconds(300),
-      scaleInCooldown: cdk.Duration.seconds(300),
-      disableScaleIn: false,
-      policyName: 'lambda-scaling-policy-nova-team-development'
-    });
+    new applicationautoscaling.TargetTrackingScalingPolicy(
+      this,
+      'LambdaScalingPolicy',
+      {
+        scalingTarget: scalableTarget,
+        targetValue: 70.0,
+        predefinedMetric:
+          applicationautoscaling.PredefinedMetric
+            .LAMBDA_PROVISIONED_CONCURRENCY_UTILIZATION,
+        scaleOutCooldown: cdk.Duration.seconds(300),
+        scaleInCooldown: cdk.Duration.seconds(300),
+        disableScaleIn: false,
+        policyName: 'lambda-scaling-policy-nova-team-development',
+      }
+    );
 
     // API Gateway HTTP API
     const httpApi = new apigateway.HttpApi(this, 'NovaHttpApi', {
       apiName: 'api-gateway-nova-team-development',
-      description: 'HTTP API Gateway for nova-team development environment - high-throughput serverless architecture',
+      description:
+        'HTTP API Gateway for nova-team development environment - high-throughput serverless architecture',
       corsPreflight: {
         allowOrigins: ['*'],
         allowMethods: [
           apigateway.CorsHttpMethod.GET,
           apigateway.CorsHttpMethod.POST,
           apigateway.CorsHttpMethod.PUT,
-          apigateway.CorsHttpMethod.DELETE
+          apigateway.CorsHttpMethod.DELETE,
         ],
-        allowHeaders: ['Content-Type', 'Authorization', 'X-Amz-Date', 'X-Api-Key', 'X-Amz-Security-Token']
-      }
+        allowHeaders: [
+          'Content-Type',
+          'Authorization',
+          'X-Amz-Date',
+          'X-Api-Key',
+          'X-Amz-Security-Token',
+        ],
+      },
       // Removed defaultThrottle: not supported in HttpApiProps
     });
 
@@ -137,7 +162,7 @@ export class TapStack extends cdk.Stack {
       lambdaAlias,
       {
         payloadFormatVersion: apigateway.PayloadFormatVersion.VERSION_2_0,
-        timeout: cdk.Duration.seconds(29)
+        timeout: cdk.Duration.seconds(29),
       }
     );
 
@@ -150,36 +175,36 @@ export class TapStack extends cdk.Stack {
         apigateway.HttpMethod.PUT,
         apigateway.HttpMethod.DELETE,
         apigateway.HttpMethod.PATCH,
-        apigateway.HttpMethod.OPTIONS
+        apigateway.HttpMethod.OPTIONS,
       ],
-      integration: lambdaIntegration
+      integration: lambdaIntegration,
     });
     httpApi.addRoutes({
       path: '/',
       methods: [apigateway.HttpMethod.GET, apigateway.HttpMethod.POST],
-      integration: lambdaIntegration
+      integration: lambdaIntegration,
     });
 
     // Outputs
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: httpApi.apiEndpoint,
       description: 'HTTP API Gateway endpoint URL',
-      exportName: 'nova-team-development-api-url'
+      exportName: 'nova-team-development-api-url',
     });
     new cdk.CfnOutput(this, 'LambdaFunctionName', {
       value: lambdaFunction.functionName,
       description: 'Lambda function name',
-      exportName: 'nova-team-development-lambda-name'
+      exportName: 'nova-team-development-lambda-name',
     });
     new cdk.CfnOutput(this, 'LambdaAliasName', {
       value: lambdaAlias.aliasName,
       description: 'Lambda alias name for provisioned concurrency',
-      exportName: 'nova-team-development-lambda-alias'
+      exportName: 'nova-team-development-lambda-alias',
     });
     new cdk.CfnOutput(this, 'LogGroupName', {
       value: lambdaLogGroup.logGroupName,
       description: 'CloudWatch Log Group name for Lambda function',
-      exportName: 'nova-team-development-log-group'
+      exportName: 'nova-team-development-log-group',
     });
   }
 }

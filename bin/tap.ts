@@ -7,7 +7,8 @@ const app = new cdk.App();
 new TapStack(app, 'TapStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2'
+    region: 'us-west-2',
   },
-  description: 'Scalable serverless architecture for nova-team development environment'
+  description:
+    'Scalable serverless architecture for nova-team development environment',
 });
