@@ -70,8 +70,8 @@ class WebApplicationStack(Stack):
         version=rds.MysqlEngineVersion.VER_8_0_42
       ),
       instance_type=ec2.InstanceType.of(
-        ec2.InstanceClass.BURSTABLE3,
-        ec2.InstanceSize.SMALL
+        ec2.InstanceClass.MEMORY5,
+        ec2.InstanceSize.LARGE
       ),
       vpc=vpc,
       multi_az=True,
