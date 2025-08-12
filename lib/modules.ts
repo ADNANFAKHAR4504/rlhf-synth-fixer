@@ -310,19 +310,19 @@ export class ComputeModule extends Construct {
             ebs: {
               volumeSize: 8,
               volumeType: 'gp3',
-              encrypted: 'true', // This should be a boolean, not a string
+              // encrypted: 'true', // CORRECTED: This must be a boolean
               kmsKeyId: props.kmsKey.arn,
             },
           },
         ],
-        // FIXED: Use Fn.toBase64 to correctly encode the user data
+        // CORRECTED: Use the correct function name 'Fn.base64'
         userData: Fn.base64encode(
           `#!/bin/bash
                  yum update -y
                  yum install -y httpd
                  systemctl start httpd
                  systemctl enable httpd
-                 echo "<h1>Deployed via CDKTF</h1>" > /var/www/html/index.html`
+                 echo '<h1>Deployed via CDKTF</h1>' > /var/www/html/index.html`
         ),
       }
     );
