@@ -6,7 +6,7 @@ This document analyzes the key infrastructure changes and fixes made to transfor
 
 The original MODEL_RESPONSE contained a functional but basic serverless infrastructure implementation. Through comprehensive QA pipeline execution, several critical areas required fixes and improvements to achieve the ideal solution.
 
-## 1. Resource Organization and Pulumi ComponentResource Architecture
+## 1. Resource Organization & Pulumi ComponentResource Architecture
 
 ### Initial Issues
 
@@ -32,11 +32,12 @@ class TapStack(pulumi.ComponentResource):
         # Resources properly organized within component
 ```
 
-## 2. File Path Resolution and Lambda Code Deployment
+## 2. File Path Resolution & Lambda Code Deployment
 
 ### Initial Issues
 
 - Lambda function code referenced files using relative paths that could fail during deployment
+- `code=pulumi.AssetArchive({"lambda_function.py": pulumi.FileAsset("lambda_function.py")})`
 
 ### Fixes Applied
 
@@ -49,7 +50,7 @@ code=pulumi.AssetArchive({
     "lambda_function.py": pulumi.FileAsset("lambda_function.py")
 })
 
-# AFTER: Robust path resolution
+# AFTER: Robust path resolution  
 code=pulumi.AssetArchive({
     "lambda_function.py": pulumi.FileAsset(
         os.path.join(os.path.dirname(__file__), "lambda_function.py")
@@ -57,7 +58,7 @@ code=pulumi.AssetArchive({
 })
 ```
 
-## 3. Resource Dependencies and Deployment Reliability
+## 3. Resource Dependencies & Deployment Reliability
 
 ### Initial Issues
 
@@ -85,13 +86,13 @@ api_deployment = aws.apigateway.Deployment(
 )
 ```
 
-## 4. Lambda Function Error Handling and Robustness
+## 4. Lambda Function Error Handling & Robustness
 
 ### Initial Issues
 
 - Basic exception handling that could miss specific error scenarios
 - Deprecated datetime usage (`datetime.utcnow()`)
-- Broad exception catching without proper categorization
+- F-string formatting in logging statements (pylint violations)
 
 ### Fixes Applied
 
@@ -107,17 +108,14 @@ api_deployment = aws.apigateway.Deployment(
 # AFTER: Modern UTC datetime
 "timestamp": datetime.now(UTC).isoformat()
 
-# BEFORE: Basic exception handling
-except Exception as e:
+# BEFORE: F-string logging (pylint violation)
+logger.info(f"Received event: {json.dumps(event, default=str)}")
 
-# AFTER: Specific and broad exception handling
-except (KeyError, TypeError, AttributeError) as exc:
-    # Handle specific exceptions
-except Exception as exc:  # pylint: disable=broad-exception-caught
-    # Keep broad catch as fallback with proper comment
+# AFTER: % formatting for logging
+logger.info("Received event: %s", json.dumps(event, default=str))
 ```
 
-## 5. Code Quality and Standards Compliance
+## 5. Code Quality & Standards Compliance
 
 ### Initial Issues
 
@@ -133,7 +131,7 @@ except Exception as exc:  # pylint: disable=broad-exception-caught
 - **Import Organization**: Proper import ordering and removal of unused imports
 - **String Formatting**: Migrated from f-strings to % formatting for logging statements to meet pylint standards
 
-## 6. Resource Naming and Output Management
+## 6. Resource Naming & Output Management
 
 ### Initial Issues
 
@@ -162,7 +160,7 @@ except Exception as exc:  # pylint: disable=broad-exception-caught
 - **Network Connectivity Handling**: Enhanced error handling for network connectivity issues and missing AWS resources
 - **Graceful Test Skipping**: Tests skip appropriately when AWS infrastructure is not deployed
 
-## 8. Test Coverage and Quality Assurance
+## 8. Test Coverage & Quality Assurance
 
 ### Initial Issues
 
