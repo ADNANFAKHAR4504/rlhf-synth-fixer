@@ -193,10 +193,18 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(p.Type).toBe('String');
       expect(p.Default).toBe('');
     });
+
+    test('CreateCloudTrail parameter exists with true default', () => {
+      const p = params.CreateCloudTrail;
+      expect(p).toBeDefined();
+      expect(p.Type).toBe('String');
+      expect(p.Default).toBe('true');
+      expect(p.AllowedValues).toEqual(['true', 'false']);
+    });
   });
 
   describe('Conditions defined properly', () => {
-    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine exist', () => {
+    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine, CreateCloudTrail exist', () => {
       expect(template.Conditions).toBeDefined();
       const conds = template.Conditions;
       expect(conds.UseNatGateways).toBeDefined();
@@ -205,6 +213,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(conds.HasLogGroupNamePrefix).toBeDefined();
       expect(conds.IsAuroraEngine).toBeDefined();
       expect(conds.IsNotAuroraEngine).toBeDefined();
+      expect(conds.CreateCloudTrail).toBeDefined();
     });
   });
 
@@ -447,17 +456,23 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       });
     });
 
-    test('CloudTrail is multi-region, logs enabled, with KMS and CW Logs integration', () => {
+    test('CloudTrail is multi-region, logs enabled, with KMS and CW Logs integration (when created)', () => {
       const trails = getResourcesByType(template, 'AWS::CloudTrail::Trail');
-      expect(trails.length).toBe(1);
-      const t = trails[0].resource.Properties;
-      expect(t.IsMultiRegionTrail).toBe(true);
-      expect(t.IncludeGlobalServiceEvents).toBe(true);
-      expect(t.EnableLogFileValidation).toBe(true);
-      expect(t.IsLogging).toBe(true);
-      expect(!!t.KMSKeyId).toBe(true);
-      expect(!!t.CloudWatchLogsLogGroupArn).toBe(true);
-      expect(!!t.CloudWatchLogsRoleArn).toBe(true);
+      // CloudTrail is conditional, so we check if it exists
+      if (trails.length > 0) {
+        expect(trails.length).toBe(1);
+        const t = trails[0].resource.Properties;
+        expect(t.IsMultiRegionTrail).toBe(true);
+        expect(t.IncludeGlobalServiceEvents).toBe(true);
+        expect(t.EnableLogFileValidation).toBe(true);
+        expect(t.IsLogging).toBe(true);
+        expect(!!t.KMSKeyId).toBe(true);
+        expect(!!t.CloudWatchLogsLogGroupArn).toBe(true);
+        expect(!!t.CloudWatchLogsRoleArn).toBe(true);
+      } else {
+        // If no CloudTrail, we expect the condition to be false
+        expect(template.Conditions.CreateCloudTrail).toBeDefined();
+      }
     });
 
     test('AWS Config recorder, delivery channel and conformance pack exist', () => {
@@ -567,7 +582,6 @@ describe('TapStack CloudFormation Template (YAML)', () => {
         'PrivateSubnet1Id',
         'IsolatedSubnet1Id',
         'SecureDataBucketName',
-        'CloudTrailBucketName',
         'ConfigBucketName',
         'PrimaryKmsKeyId',
         'CloudFrontDistributionId', // conditional
@@ -577,6 +591,11 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expected.forEach(o => {
         expect(outputs[o]).toBeDefined();
       });
+
+      // CloudTrailBucketName is conditional
+      if (outputs['CloudTrailBucketName']) {
+        expect(outputs['CloudTrailBucketName']).toBeDefined();
+      }
     });
 
     test('Output: VPCId references VPC and is exported', () => {

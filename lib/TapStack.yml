@@ -132,6 +132,12 @@ Parameters:
     Description: 'Optional prefix for CloudWatch Log Group names to ensure uniqueness across deployments'
     Default: ''
 
+  CreateCloudTrail:
+    Type: String
+    Description: 'Create CloudTrail (true|false). Set to false if you already have 5 trails in the region.'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
 # ---------------------------
 # CONDITIONS
 # ---------------------------
@@ -142,6 +148,7 @@ Conditions:
   HasSecondAZ: !Not [!Equals [!Ref AZCount, 1]]
   HasBucketNamePrefix: !Not [!Equals [!Ref BucketNamePrefix, '']]
   HasLogGroupNamePrefix: !Not [!Equals [!Ref LogGroupNamePrefix, '']]
+  CreateCloudTrail: !Equals [!Ref CreateCloudTrail, 'true']
   IsAuroraEngine:
     !Or [
       !Equals [!Ref DBEngine, 'aurora'],
@@ -650,6 +657,7 @@ Resources:
   # ---------------------------
 
   CloudTrailRole:
+    Condition: CreateCloudTrail
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -858,6 +866,7 @@ Resources:
     UpdateReplacePolicy: Retain
 
   CloudTrailBucket:
+    Condition: CreateCloudTrail
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !If
@@ -883,6 +892,7 @@ Resources:
     UpdateReplacePolicy: Retain
 
   CloudTrailBucketPolicy:
+    Condition: CreateCloudTrail
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref CloudTrailBucket
@@ -959,6 +969,7 @@ Resources:
   # CloudWatch LogGroups (encrypted)
   # ---------------------------
   CloudTrailLogGroup:
+    Condition: CreateCloudTrail
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !If
@@ -996,6 +1007,7 @@ Resources:
   # CloudTrail (multi-region) with KMS encryption and CloudWatch integration
   # ---------------------------
   CloudTrail:
+    Condition: CreateCloudTrail
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
@@ -1310,6 +1322,7 @@ Resources:
   # CloudWatch Metric Filter + Alarm for Unauthorized API calls
   # ---------------------------
   CloudTrailMetricFilter:
+    Condition: CreateCloudTrail
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
@@ -1320,6 +1333,7 @@ Resources:
           MetricName: UnauthorizedApiCalls
 
   UnauthorizedApiCallsAlarm:
+    Condition: CreateCloudTrail
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${Environment}-unauthorized-api-calls'
@@ -1371,6 +1385,7 @@ Outputs:
     Value: !Ref SecureDataBucket
 
   CloudTrailBucketName:
+    Condition: CreateCloudTrail
     Description: CloudTrail S3 bucket name
     Value: !Ref CloudTrailBucket
 

@@ -127,6 +127,15 @@
             "Type": "String",
             "Description": "Optional prefix for CloudWatch Log Group names to ensure uniqueness across deployments",
             "Default": ""
+        },
+        "CreateCloudTrail": {
+            "Type": "String",
+            "Description": "Create CloudTrail (true|false). Set to false if you already have 5 trails in the region.",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
         }
     },
     "Conditions": {
@@ -192,6 +201,14 @@
                         ""
                     ]
                 }
+            ]
+        },
+        "CreateCloudTrail": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateCloudTrail"
+                },
+                "true"
             ]
         },
         "IsAuroraEngine": {
@@ -1258,6 +1275,7 @@
             }
         },
         "CloudTrailRole": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "AssumeRolePolicyDocument": {
@@ -1642,6 +1660,7 @@
             "UpdateReplacePolicy": "Retain"
         },
         "CloudTrailBucket": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
@@ -1692,6 +1711,7 @@
             "UpdateReplacePolicy": "Retain"
         },
         "CloudTrailBucketPolicy": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::S3::BucketPolicy",
             "Properties": {
                 "Bucket": {
@@ -1828,6 +1848,7 @@
             }
         },
         "CloudTrailLogGroup": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -1906,6 +1927,7 @@
             "UpdateReplacePolicy": "Retain"
         },
         "CloudTrail": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::CloudTrail::Trail",
             "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
@@ -2181,7 +2203,7 @@
                 "KmsKeyId": {
                     "Ref": "PrimaryKmsKey"
                 },
-                "VPCSecurityGroups": [
+                "VpcSecurityGroupIds": [
                     {
                         "Ref": "DbSecurityGroup"
                     }
@@ -2473,6 +2495,7 @@
             }
         },
         "CloudTrailMetricFilter": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::Logs::MetricFilter",
             "Properties": {
                 "LogGroupName": {
@@ -2489,6 +2512,7 @@
             }
         },
         "UnauthorizedApiCallsAlarm": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
@@ -2572,6 +2596,7 @@
             }
         },
         "CloudTrailBucketName": {
+            "Condition": "CreateCloudTrail",
             "Description": "CloudTrail S3 bucket name",
             "Value": {
                 "Ref": "CloudTrailBucket"
