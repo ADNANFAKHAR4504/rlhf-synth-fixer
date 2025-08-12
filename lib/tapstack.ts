@@ -77,13 +77,12 @@ export class TapStack extends cdk.Stack {
       description: 'Live alias for production traffic with provisioned concurrency'
     });
 
-    // Provisioned Concurrency
-    const provisionedConcurrency = new lambda.CfnProvisionedConcurrencyConfig(this, 'ProvisionedConcurrency', {
-      functionName: lambdaFunction.functionName,
-      qualifier: lambdaAlias.aliasName,
-      provisionedConcurrencyCount: 100
+    // Provisioned Concurrency (use provisionedConcurrentExecutions on version or alias if needed)
+    // If you want provisioned concurrency, set it on the alias or version directly:
+    lambdaAlias.addAutoScaling({
+      minCapacity: 1,
+      maxCapacity: 100
     });
-    provisionedConcurrency.addDependency(lambdaAlias.node.defaultChild as lambda.CfnAlias);
 
     // Application Auto Scaling Role (created if not already present)
     const autoScalingRole = new iam.Role(this, 'AutoScalingRole', {
@@ -102,7 +101,7 @@ export class TapStack extends cdk.Stack {
       maxCapacity: 1000,
       role: autoScalingRole
     });
-    scalableTarget.node.addDependency(provisionedConcurrency);
+    scalableTarget.node.addDependency(lambdaAlias);
 
     // Auto Scaling Policy
     new applicationautoscaling.TargetTrackingScalingPolicy(this, 'LambdaScalingPolicy', {
@@ -128,11 +127,8 @@ export class TapStack extends cdk.Stack {
           apigateway.CorsHttpMethod.DELETE
         ],
         allowHeaders: ['Content-Type', 'Authorization', 'X-Amz-Date', 'X-Api-Key', 'X-Amz-Security-Token']
-      },
-      defaultThrottle: {
-        rateLimit: 10000,
-        burstLimit: 20000
       }
+      // Removed defaultThrottle: not supported in HttpApiProps
     });
 
     // Lambda Integration with API Gateway
