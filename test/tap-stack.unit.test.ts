@@ -7,7 +7,7 @@ describe('CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust if needed
+    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust as needed
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -45,10 +45,23 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(bucketEntry).toBeDefined();
 
       const [_, bucketResource] = bucketEntry as [string, any];
-      const encryption = bucketResource?.Properties?.BucketEncryption;
-      const rules = encryption?.ServerSideEncryptionConfiguration?.Rules;
 
+      const encryption = bucketResource?.Properties?.BucketEncryption;
+      expect(encryption).toBeDefined();
+
+      const sseConfig = encryption?.ServerSideEncryptionConfiguration;
+      expect(sseConfig).toBeDefined();
+
+      const rules = sseConfig?.Rules;
+
+      // Ensure rules is an array
       expect(Array.isArray(rules)).toBe(true);
+
+      if (!Array.isArray(rules)) {
+        console.error('Encryption rules are not an array:', rules);
+        throw new Error('Invalid encryption rules format');
+      }
+
       expect(rules.length).toBeGreaterThan(0);
 
       const kmsRule = rules.find(
@@ -56,6 +69,7 @@ describe('CloudFormation Template Unit Tests', () => {
           rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms' &&
           typeof rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID === 'string'
       );
+
       expect(kmsRule).toBeDefined();
     });
 
@@ -72,7 +86,7 @@ describe('CloudFormation Template Unit Tests', () => {
 
       expect(secretResource.Properties).toBeDefined();
 
-      // Instead of checking if name contains ENV, just check it's named as in the output
+      // Match exact name from CloudFormation output, not environment suffix
       expect(secretResource.Properties.Name).toBe('MyAppPassword');
       expect(secretResource.Properties.Description).toBeDefined();
     });
