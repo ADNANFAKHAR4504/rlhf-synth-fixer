@@ -199,6 +199,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("total_regions", len(self.regions))
     pulumi.export("environment", self.environment_suffix)
     pulumi.export("tags", self.tags)
-    pulumi.export("us_east_lambda_arn", self.serverless["us-east-1"].arn)
+    pulumi.export("us_east_lambda_arn",
+                  self.serverless["us-east-1"].lambda_function.arn)
     pulumi.export("us_west_rds_endpoint",
                   self.database["us-west-2"].rds_endpoint)
