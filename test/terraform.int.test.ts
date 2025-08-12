@@ -1,4 +1,8 @@
 // tests/int-tests.ts
+// LIVE integration tests (EC2/VPC/NAT/Routes/SG + PEM sanity) using Terraform structured outputs.
+// NO Terraform CLI usage. Requires AWS creds with READ permissions.
+// Run: AWS_REGION=us-west-2 npx jest --runInBand --detectOpenHandles
+
 import * as fs from "fs";
 import * as path from "path";
 import {
@@ -11,6 +15,8 @@ import {
   DescribeSecurityGroupsCommand,
   IpPermission,
 } from "@aws-sdk/client-ec2";
+
+/* ----------------------------- Utilities ----------------------------- */
 
 type TfOutputValue<T> = { sensitive: boolean; type: any; value: T };
 type StructuredOutputs = {
@@ -44,7 +50,7 @@ function readStructuredOutputs() {
   return { vpcId, bastionIp, privateInstanceIds, publicSubnetIds, privateSubnetIds, bastionPrivateKeyPem };
 }
 
-async function retry<T>(fn: () => Promise<T>, attempts = 10, baseMs = 800): Promise<T> {
+async function retry<T>(fn: () => Promise<T>, attempts = 8, baseMs = 800): Promise<T> {
   let lastErr: any;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -72,8 +78,8 @@ function pickFirstInstance(res: any) {
 function hasDefaultRouteToGateway(rt: any, gwType: "igw" | "nat") {
   for (const r of rt.Routes || []) {
     if (r.DestinationCidrBlock === "0.0.0.0/0") {
-      if (gwType === "igw" && r.GatewayId?.startsWith("igw-")) return true;
-      if (gwType === "nat" && r.NatGatewayId?.startsWith("nat-")) return true;
+      if (gwType === "igw" && r.GatewayId && r.GatewayId.startsWith("igw-")) return true;
+      if (gwType === "nat" && r.NatGatewayId && r.NatGatewayId.startsWith("nat-")) return true;
     }
   }
   return false;
@@ -106,30 +112,26 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     const tags: Record<string, string> = {};
     for (const t of inst!.Tags || []) if (t.Key && typeof t.Value === "string") tags[t.Key] = t.Value;
     expect(tags["Name"]).toBe("project-bastion");
-  }, 45000); // increased timeout for this test
+  });
 
   /* Private EC2 */
-  test(
-    "Private instances exist, no public IPs, t3.micro, in private subnets, with name tags",
-    async () => {
-      const res = await retry(() =>
-        ec2.send(new DescribeInstancesCommand({ InstanceIds: o.privateInstanceIds }))
-      );
-      const instances = (res.Reservations || []).flatMap((r) => r.Instances || []);
-      expect(instances.length).toBe(o.privateInstanceIds.length);
+  test("Private instances exist, no public IPs, t3.micro, in private subnets, with name tags", async () => {
+    const res = await retry(() =>
+      ec2.send(new DescribeInstancesCommand({ InstanceIds: o.privateInstanceIds }))
+    );
+    const instances = (res.Reservations || []).flatMap((r) => r.Instances || []);
+    expect(instances.length).toBe(o.privateInstanceIds.length);
 
-      for (const i of instances) {
-        expect(i.PublicIpAddress || "").toBeFalsy(); // no public IP
-        expect(i.InstanceType).toBe("t3.micro");
-        expect(o.privateSubnetIds).toContain(i.SubnetId);
+    for (const i of instances) {
+      expect(i.PublicIpAddress || "").toBe(""); // no public IP
+      expect(i.InstanceType).toBe("t3.micro");
+      expect(o.privateSubnetIds).toContain(i.SubnetId);
 
-        const tags: Record<string, string> = {};
-        for (const t of i.Tags || []) if (t.Key && typeof t.Value === "string") tags[t.Key] = t.Value;
-        expect((tags["Name"] || "").startsWith("project-private-")).toBe(true);
-      }
-    },
-    60000 // longer timeout for slow test
-  );
+      const tags: Record<string, string> = {};
+      for (const t of i.Tags || []) if (t.Key && typeof t.Value === "string") tags[t.Key] = t.Value;
+      expect((tags["Name"] || "").startsWith("project-private-")).toBe(true);
+    }
+  });
 
   /* VPC, IGW, NAT, Routes, Subnets */
   test("VPC has IGW attached; NAT exists in first public subnet; routes are correct", async () => {
@@ -149,7 +151,7 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     const natRes = await retry(() =>
       ec2.send(
         new DescribeNatGatewaysCommand({
-          Filters: [{ Name: "subnet-id", Values: [o.publicSubnetIds[0]] }], // fixed: Filters (plural)
+          Filter: [{ Name: "subnet-id", Values: [o.publicSubnetIds[0]] }], // <-- singular Filter here
         })
       )
     );
@@ -197,7 +199,7 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
     for (const s of subRes.Subnets || []) {
       expect(s.VpcId).toBe(o.vpcId);
     }
-  }, 30000);
+  });
 
   /* Security Groups */
   test("Security groups: bastion (22 open to world), private (22 from bastion SG only), both full egress", async () => {
@@ -254,7 +256,7 @@ describe("LIVE: Terraform-provisioned network & compute (from structured outputs
 
     const privEgress = privateSg.IpPermissionsEgress || [];
     expect(privEgress.some((p) => p.IpProtocol === "-1")).toBe(true);
-  }, 30000);
+  });
 
   /* PEM sanity */
   test("Bastion private key PEM has RSA header/footer and plausible length", () => {
