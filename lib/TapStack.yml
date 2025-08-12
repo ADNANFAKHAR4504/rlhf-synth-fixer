@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure production infrastructure for SecureApp with comprehensive security controls and compliance monitoring - No parameters required'
+Description: 'Secure production infrastructure for SecureApp with comprehensive security controls and compliance monitoring - Simplified version'
 
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'  # Latest Amazon Linux 2023
+      AMI: 'ami-0c02fb55956c7d316'  # Amazon Linux 2023
 
 Resources:
   ###########################################################################
@@ -51,8 +51,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   SecureAppKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -61,7 +59,7 @@ Resources:
       TargetKeyId: !Ref SecureAppKMSKey
 
   ###########################################################################
-  # IAM (least privilege) + Password Policy + Secrets
+  # IAM + Secrets
   ###########################################################################
   EC2InstanceRole:
     Type: AWS::IAM::Role
@@ -98,8 +96,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -126,8 +122,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   ###########################################################################
   # Networking: VPC, subnets, IGW, NAT, routes
@@ -145,8 +139,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -158,8 +150,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -181,8 +171,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -198,8 +186,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -214,8 +200,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -230,8 +214,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   DatabaseSubnet1:
     Type: AWS::EC2::Subnet
@@ -246,8 +228,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   DatabaseSubnet2:
     Type: AWS::EC2::Subnet
@@ -262,8 +242,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   NATGatewayEIP:
     Type: AWS::EC2::EIP
@@ -277,8 +255,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   NATGateway:
     Type: AWS::EC2::NatGateway
@@ -292,8 +268,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -306,8 +280,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -320,8 +292,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   DatabaseRouteTable:
     Type: AWS::EC2::RouteTable
@@ -334,8 +304,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -389,105 +357,7 @@ Resources:
       RouteTableId: !Ref DatabaseRouteTable
 
   ###########################################################################
-  # NACLs - Restrictive security by default
-  ###########################################################################
-  PublicNetworkACL:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref SecureAppVPC
-      Tags:
-        - Key: Name
-          Value: secureapp-prod-public-nacl
-        - Key: Project
-          Value: SecureApp
-        - Key: Environment
-          Value: production
-        - Key: CostCenter
-          Value: placeholder
-
-  PrivateNetworkACL:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref SecureAppVPC
-      Tags:
-        - Key: Name
-          Value: secureapp-prod-private-nacl
-        - Key: Project
-          Value: SecureApp
-        - Key: Environment
-          Value: production
-        - Key: CostCenter
-          Value: placeholder
-
-  # Allow HTTPS from corporate network (adjust CIDR as needed)
-  PublicNetworkACLInbound443:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 100
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.0.0/8
-      PortRange:
-        From: 443
-        To: 443
-
-  # Allow return traffic
-  PublicNetworkACLOutboundAll:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 100
-      Protocol: -1
-      Egress: true
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-
-  PrivateNetworkACLInboundVPC:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkACL
-      RuleNumber: 100
-      Protocol: -1
-      RuleAction: allow
-      CidrBlock: 10.0.0.0/16
-
-  PrivateNetworkACLOutboundAll:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkACL
-      RuleNumber: 100
-      Protocol: -1
-      Egress: true
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-
-  PublicSubnetNetworkACLAssociation1:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      NetworkAclId: !Ref PublicNetworkACL
-
-  PublicSubnetNetworkACLAssociation2:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      NetworkAclId: !Ref PublicNetworkACL
-
-  PrivateSubnetNetworkACLAssociation1:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      NetworkAclId: !Ref PrivateNetworkACL
-
-  PrivateSubnetNetworkACLAssociation2:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      NetworkAclId: !Ref PrivateNetworkACL
-
-  ###########################################################################
-  # Security Groups - Fixed circular dependency
+  # Security Groups
   ###########################################################################
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -497,10 +367,15 @@ Resources:
       VpcId: !Ref SecureAppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from internet
+        - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 10.0.0.0/8
-          Description: HTTPS from corporate network
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from internet
       Tags:
         - Key: Name
           Value: secureapp-prod-alb-sg
@@ -508,8 +383,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -519,21 +392,26 @@ Resources:
       VpcId: !Ref SecureAppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+          FromPort: 80
+          ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: HTTPS from ALB
+          Description: HTTP from ALB
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 203.0.113.0/24
-          Description: SSH from admin network
+          CidrIp: 10.0.0.0/16
+          Description: SSH from VPC
       SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Outbound HTTP
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: Outbound HTTPS for updates
+          Description: Outbound HTTPS
       Tags:
         - Key: Name
           Value: secureapp-prod-web-sg
@@ -541,19 +419,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
-
-  # Separate rule to avoid circular dependency
-  ALBSecurityGroupEgressRule:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref ALBSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      DestinationSecurityGroupId: !Ref WebServerSecurityGroup
-      Description: HTTPS to web servers
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -574,136 +439,9 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   ###########################################################################
-  # Lambda Function to Create Self-Signed Certificate for ALB
-  ###########################################################################
-  CertificateCreationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub 'secureapp-prod-cert-lambda-role-${AWS::AccountId}'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: ACMCertificatePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - acm:ImportCertificate
-                  - acm:DeleteCertificate
-                  - acm:DescribeCertificate
-                Resource: '*'
-
-  CertificateCreationFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub 'secureapp-prod-cert-creator-${AWS::AccountId}'
-      Runtime: python3.9
-      Handler: index.handler
-      Role: !GetAtt CertificateCreationRole.Arn
-      Timeout: 60
-      Code:
-        ZipFile: |
-          import boto3
-          import cfnresponse
-          import json
-          from cryptography import x509
-          from cryptography.x509.oid import NameOID
-          from cryptography.hazmat.primitives import hashes, serialization
-          from cryptography.hazmat.primitives.asymmetric import rsa
-          import datetime
-          
-          def handler(event, context):
-              try:
-                  if event['RequestType'] == 'Delete':
-                      # Clean up certificate on stack deletion
-                      acm = boto3.client('acm')
-                      cert_arn = event.get('PhysicalResourceId')
-                      if cert_arn and cert_arn.startswith('arn:aws:acm:'):
-                          try:
-                              acm.delete_certificate(CertificateArn=cert_arn)
-                          except:
-                              pass
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                      return
-                  
-                  # Generate private key
-                  private_key = rsa.generate_private_key(
-                      public_exponent=65537,
-                      key_size=2048,
-                  )
-                  
-                  # Create certificate
-                  subject = issuer = x509.Name([
-                      x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-                      x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "NA"),
-                      x509.NameAttribute(NameOID.LOCALITY_NAME, "NA"),
-                      x509.NameAttribute(NameOID.ORGANIZATION_NAME, "SecureApp"),
-                      x509.NameAttribute(NameOID.COMMON_NAME, "secureapp.local"),
-                  ])
-                  
-                  cert = x509.CertificateBuilder().subject_name(
-                      subject
-                  ).issuer_name(
-                      issuer
-                  ).public_key(
-                      private_key.public_key()
-                  ).serial_number(
-                      x509.random_serial_number()
-                  ).not_valid_before(
-                      datetime.datetime.utcnow()
-                  ).not_valid_after(
-                      datetime.datetime.utcnow() + datetime.timedelta(days=365)
-                  ).add_extension(
-                      x509.SubjectAlternativeName([
-                          x509.DNSName("secureapp.local"),
-                          x509.DNSName("*.secureapp.local"),
-                      ]),
-                      critical=False,
-                  ).sign(private_key, hashes.SHA256())
-                  
-                  # Convert to PEM
-                  cert_pem = cert.public_bytes(serialization.Encoding.PEM)
-                  key_pem = private_key.private_bytes(
-                      encoding=serialization.Encoding.PEM,
-                      format=serialization.PrivateFormat.PKCS8,
-                      encryption_algorithm=serialization.NoEncryption()
-                  )
-                  
-                  # Import to ACM
-                  acm = boto3.client('acm')
-                  response = acm.import_certificate(
-                      Certificate=cert_pem,
-                      PrivateKey=key_pem
-                  )
-                  
-                  cert_arn = response['CertificateArn']
-                  
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, 
-                                  {'CertificateArn': cert_arn}, cert_arn)
-                  
-              except Exception as e:
-                  print(f"Error: {str(e)}")
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
-
-  SelfSignedCertificate:
-    Type: AWS::CloudFormation::CustomResource
-    Properties:
-      ServiceToken: !GetAtt CertificateCreationFunction.Arn
-
-  ###########################################################################
-  # S3: Data bucket + Logs bucket (CloudTrail/Config)
+  # S3 Buckets
   ###########################################################################
   SecureAppS3Bucket:
     Type: AWS::S3::Bucket
@@ -729,8 +467,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -773,59 +509,9 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
-
-  SecureAppLogBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref SecureAppLogBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: DenyInsecureTransport
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::${SecureAppLogBucket}'
-              - !Sub 'arn:aws:s3:::${SecureAppLogBucket}/*'
-            Condition:
-              Bool:
-                aws:SecureTransport: 'false'
-          - Sid: AllowCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::${SecureAppLogBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          - Sid: AllowCloudTrailGetBucketAcl
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Sub 'arn:aws:s3:::${SecureAppLogBucket}'
-          - Sid: AllowConfigWrite
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::${SecureAppLogBucket}/config/*'
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          - Sid: AllowConfigGetBucketAcl
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Sub 'arn:aws:s3:::${SecureAppLogBucket}'
 
   ###########################################################################
-  # RDS (encrypted)
+  # RDS Database
   ###########################################################################
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -842,8 +528,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
@@ -866,11 +550,7 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      DeletionProtection: true
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-        - slow-query
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: secureapp-prod-database
@@ -878,11 +558,9 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   ###########################################################################
-  # CloudWatch Logs (KMS), CloudTrail, VPC Flow Logs
+  # CloudWatch Logs
   ###########################################################################
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
@@ -898,6 +576,9 @@ Resources:
       RetentionInDays: 30
       KmsKeyId: !GetAtt SecureAppKMSKey.Arn
 
+  ###########################################################################
+  # CloudTrail
+  ###########################################################################
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
@@ -942,9 +623,10 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
+  ###########################################################################
+  # VPC Flow Logs
+  ###########################################################################
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
@@ -991,50 +673,9 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   ###########################################################################
-  # AWS Config + Rules (Fixed service-linked role issue)
-  ###########################################################################
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub 'secureapp-prod-config-delivery-${AWS::AccountId}'
-      S3BucketName: !Ref SecureAppLogBucket
-      S3KeyPrefix: config/
-
-  ConfigConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub 'secureapp-prod-config-recorder-${AWS::AccountId}'
-      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  S3BucketEncryptionRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigConfigurationRecorder
-    Properties:
-      ConfigRuleName: !Sub 'secureapp-s3-encryption-${AWS::AccountId}'
-      Description: Checks that S3 buckets have server-side encryption enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
-
-  RDSEncryptionRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigConfigurationRecorder
-    Properties:
-      ConfigRuleName: !Sub 'secureapp-rds-encryption-${AWS::AccountId}'
-      Description: Checks that RDS instances have storage encryption enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: RDS_STORAGE_ENCRYPTED
-
-  ###########################################################################
-  # ALB (HTTPS with auto-generated certificate) + Shield Advanced
+  # Load Balancer (HTTP only for simplicity)
   ###########################################################################
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -1054,32 +695,25 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
-
-  # Shield Advanced Protection (requires subscription)
-  ShieldProtectionALB:
-    Type: AWS::Shield::Protection
-    Properties:
-      Name: secureapp-prod-alb-shield
-      ResourceArn: !Ref ApplicationLoadBalancer
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: secureapp-prod-tg
-      Port: 443
-      Protocol: HTTPS
+      Port: 80
+      Protocol: HTTP
       VpcId: !Ref SecureAppVPC
       HealthCheckPath: /health
-      HealthCheckProtocol: HTTPS
+      HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 5
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: '30'
+      Targets:
+        - Id: !Ref WebServerInstance1
+          Port: 80
+        - Id: !Ref WebServerInstance2
+          Port: 80
       Tags:
         - Key: Name
           Value: secureapp-prod-tg
@@ -1087,24 +721,19 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
-  ALBListenerHTTPS:
+  ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !GetAtt SelfSignedCertificate.CertificateArn
-      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
+      Port: 80
+      Protocol: HTTP
 
   ###########################################################################
-  # EC2 (no public IPs) + TLS on instances; register to TG
+  # EC2 Instances
   ###########################################################################
   WebServerInstance1:
     Type: AWS::EC2::Instance
@@ -1119,30 +748,11 @@ Resources:
         Fn::Base64: |
           #!/bin/bash
           yum update -y
-          yum install -y httpd mod_ssl openssl
-          
-          # Generate self-signed certificate for instance
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout /etc/pki/tls/private/secureapp.key \
-            -out /etc/pki/tls/certs/secureapp.crt \
-            -subj "/C=US/ST=NA/L=NA/O=SecureApp/CN=secureapp.local"
-          
-          # Configure Apache SSL
-          cat > /etc/httpd/conf.d/ssl-secureapp.conf << 'EOFSSL'
-          <VirtualHost *:443>
-            ServerName secureapp.local
-            DocumentRoot /var/www/html
-            SSLEngine on
-            SSLCertificateFile /etc/pki/tls/certs/secureapp.crt
-            SSLCertificateKeyFile /etc/pki/tls/private/secureapp.key
-            SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1
-            SSLCipherSuite ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
-          </VirtualHost>
-          EOFSSL
+          yum install -y httpd
           
           # Create content
           echo "OK" > /var/www/html/health
-          echo "<h1>SecureApp Web Server 1 (HTTPS) - Instance in Private Subnet</h1>" > /var/www/html/index.html
+          echo "<h1>SecureApp Web Server 1 - Instance in Private Subnet</h1>" > /var/www/html/index.html
           
           # Start Apache
           systemctl enable --now httpd
@@ -1153,8 +763,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
   WebServerInstance2:
     Type: AWS::EC2::Instance
@@ -1169,30 +777,11 @@ Resources:
         Fn::Base64: |
           #!/bin/bash
           yum update -y
-          yum install -y httpd mod_ssl openssl
-          
-          # Generate self-signed certificate for instance
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout /etc/pki/tls/private/secureapp.key \
-            -out /etc/pki/tls/certs/secureapp.crt \
-            -subj "/C=US/ST=NA/L=NA/O=SecureApp/CN=secureapp.local"
-          
-          # Configure Apache SSL
-          cat > /etc/httpd/conf.d/ssl-secureapp.conf << 'EOFSSL'
-          <VirtualHost *:443>
-            ServerName secureapp.local
-            DocumentRoot /var/www/html
-            SSLEngine on
-            SSLCertificateFile /etc/pki/tls/certs/secureapp.crt
-            SSLCertificateKeyFile /etc/pki/tls/private/secureapp.key
-            SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1
-            SSLCipherSuite ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
-          </VirtualHost>
-          EOFSSL
+          yum install -y httpd
           
           # Create content
           echo "OK" > /var/www/html/health
-          echo "<h1>SecureApp Web Server 2 (HTTPS) - Instance in Private Subnet</h1>" > /var/www/html/index.html
+          echo "<h1>SecureApp Web Server 2 - Instance in Private Subnet</h1>" > /var/www/html/index.html
           
           # Start Apache
           systemctl enable --now httpd
@@ -1203,8 +792,6 @@ Resources:
           Value: SecureApp
         - Key: Environment
           Value: production
-        - Key: CostCenter
-          Value: placeholder
 
 Outputs:
   VPCId:
@@ -1214,8 +801,8 @@ Outputs:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
   LoadBalancerDNS:
-    Description: 'Application Load Balancer DNS name (HTTPS only)'
-    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+    Description: 'Application Load Balancer DNS name'
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
 
@@ -1232,7 +819,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-S3-Bucket'
 
   LogsBucketName:
-    Description: 'S3 Bucket for CloudTrail/Config logs'
+    Description: 'S3 Bucket for CloudTrail logs'
     Value: !Ref SecureAppLogBucket
     Export:
       Name: !Sub '${AWS::StackName}-Logs-Bucket'
@@ -1242,9 +829,3 @@ Outputs:
     Value: !Ref SecureAppKMSKey
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Key'
-
-  SSLCertificateArn:
-    Description: 'Auto-generated SSL Certificate ARN'
-    Value: !GetAtt SelfSignedCertificate.CertificateArn
-    Export:
-      Name: !Sub '${AWS::StackName}-SSL-Certificate'

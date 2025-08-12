@@ -1,10 +1,10 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure production infrastructure for SecureApp with comprehensive security controls and compliance monitoring - No parameters required",
+    "Description": "Secure production infrastructure for SecureApp with comprehensive security controls and compliance monitoring - Simplified version",
     "Mappings": {
         "RegionMap": {
             "us-east-1": {
-                "AMI": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+                "AMI": "ami-0c02fb55956c7d316"
             }
         }
     },
@@ -72,10 +72,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -152,10 +148,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -201,10 +193,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -227,10 +215,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -250,10 +234,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -297,10 +277,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -333,10 +309,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -368,10 +340,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -403,10 +371,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -438,10 +402,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -473,10 +433,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -498,10 +454,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -530,10 +482,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -556,10 +504,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -582,10 +526,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -608,10 +548,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -707,156 +643,6 @@
                 }
             }
         },
-        "PublicNetworkACL": {
-            "Type": "AWS::EC2::NetworkAcl",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "SecureAppVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-public-nacl"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
-                    }
-                ]
-            }
-        },
-        "PrivateNetworkACL": {
-            "Type": "AWS::EC2::NetworkAcl",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "SecureAppVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "secureapp-prod-private-nacl"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "SecureApp"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
-                    }
-                ]
-            }
-        },
-        "PublicNetworkACLInbound443": {
-            "Type": "AWS::EC2::NetworkAclEntry",
-            "Properties": {
-                "NetworkAclId": {
-                    "Ref": "PublicNetworkACL"
-                },
-                "RuleNumber": 100,
-                "Protocol": 6,
-                "RuleAction": "allow",
-                "CidrBlock": "10.0.0.0/8",
-                "PortRange": {
-                    "From": 443,
-                    "To": 443
-                }
-            }
-        },
-        "PublicNetworkACLOutboundAll": {
-            "Type": "AWS::EC2::NetworkAclEntry",
-            "Properties": {
-                "NetworkAclId": {
-                    "Ref": "PublicNetworkACL"
-                },
-                "RuleNumber": 100,
-                "Protocol": -1,
-                "Egress": true,
-                "RuleAction": "allow",
-                "CidrBlock": "0.0.0.0/0"
-            }
-        },
-        "PrivateNetworkACLInboundVPC": {
-            "Type": "AWS::EC2::NetworkAclEntry",
-            "Properties": {
-                "NetworkAclId": {
-                    "Ref": "PrivateNetworkACL"
-                },
-                "RuleNumber": 100,
-                "Protocol": -1,
-                "RuleAction": "allow",
-                "CidrBlock": "10.0.0.0/16"
-            }
-        },
-        "PrivateNetworkACLOutboundAll": {
-            "Type": "AWS::EC2::NetworkAclEntry",
-            "Properties": {
-                "NetworkAclId": {
-                    "Ref": "PrivateNetworkACL"
-                },
-                "RuleNumber": 100,
-                "Protocol": -1,
-                "Egress": true,
-                "RuleAction": "allow",
-                "CidrBlock": "0.0.0.0/0"
-            }
-        },
-        "PublicSubnetNetworkACLAssociation1": {
-            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                },
-                "NetworkAclId": {
-                    "Ref": "PublicNetworkACL"
-                }
-            }
-        },
-        "PublicSubnetNetworkACLAssociation2": {
-            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "NetworkAclId": {
-                    "Ref": "PublicNetworkACL"
-                }
-            }
-        },
-        "PrivateSubnetNetworkACLAssociation1": {
-            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1"
-                },
-                "NetworkAclId": {
-                    "Ref": "PrivateNetworkACL"
-                }
-            }
-        },
-        "PrivateSubnetNetworkACLAssociation2": {
-            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet2"
-                },
-                "NetworkAclId": {
-                    "Ref": "PrivateNetworkACL"
-                }
-            }
-        },
         "ALBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -868,10 +654,17 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP from internet"
+                    },
+                    {
+                        "IpProtocol": "tcp",
                         "FromPort": 443,
                         "ToPort": 443,
-                        "CidrIp": "10.0.0.0/8",
-                        "Description": "HTTPS from corporate network"
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS from internet"
                     }
                 ],
                 "Tags": [
@@ -886,10 +679,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -905,28 +694,35 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
+                        "FromPort": 80,
+                        "ToPort": 80,
                         "SourceSecurityGroupId": {
                             "Ref": "ALBSecurityGroup"
                         },
-                        "Description": "HTTPS from ALB"
+                        "Description": "HTTP from ALB"
                     },
                     {
                         "IpProtocol": "tcp",
                         "FromPort": 22,
                         "ToPort": 22,
-                        "CidrIp": "203.0.113.0/24",
-                        "Description": "SSH from admin network"
+                        "CidrIp": "10.0.0.0/16",
+                        "Description": "SSH from VPC"
                     }
                 ],
                 "SecurityGroupEgress": [
                     {
                         "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Outbound HTTP"
+                    },
+                    {
+                        "IpProtocol": "tcp",
                         "FromPort": 443,
                         "ToPort": 443,
                         "CidrIp": "0.0.0.0/0",
-                        "Description": "Outbound HTTPS for updates"
+                        "Description": "Outbound HTTPS"
                     }
                 ],
                 "Tags": [
@@ -941,27 +737,8 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
-            }
-        },
-        "ALBSecurityGroupEgressRule": {
-            "Type": "AWS::EC2::SecurityGroupEgress",
-            "Properties": {
-                "GroupId": {
-                    "Ref": "ALBSecurityGroup"
-                },
-                "IpProtocol": "tcp",
-                "FromPort": 443,
-                "ToPort": 443,
-                "DestinationSecurityGroupId": {
-                    "Ref": "WebServerSecurityGroup"
-                },
-                "Description": "HTTPS to web servers"
             }
         },
         "DatabaseSecurityGroup": {
@@ -995,85 +772,8 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
-            }
-        },
-        "CertificateCreationRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "secureapp-prod-cert-lambda-role-${AWS::AccountId}"
-                },
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "lambda.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "ACMCertificatePolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "acm:ImportCertificate",
-                                        "acm:DeleteCertificate",
-                                        "acm:DescribeCertificate"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "CertificateCreationFunction": {
-            "Type": "AWS::Lambda::Function",
-            "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "secureapp-prod-cert-creator-${AWS::AccountId}"
-                },
-                "Runtime": "python3.9",
-                "Handler": "index.handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "CertificateCreationRole",
-                        "Arn"
-                    ]
-                },
-                "Timeout": 60,
-                "Code": {
-                    "ZipFile": "import boto3\nimport cfnresponse\nimport json\nfrom cryptography import x509\nfrom cryptography.x509.oid import NameOID\nfrom cryptography.hazmat.primitives import hashes, serialization\nfrom cryptography.hazmat.primitives.asymmetric import rsa\nimport datetime\n\ndef handler(event, context):\n    try:\n        if event['RequestType'] == 'Delete':\n            # Clean up certificate on stack deletion\n            acm = boto3.client('acm')\n            cert_arn = event.get('PhysicalResourceId')\n            if cert_arn and cert_arn.startswith('arn:aws:acm:'):\n                try:\n                    acm.delete_certificate(CertificateArn=cert_arn)\n                except:\n                    pass\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n            return\n        \n        # Generate private key\n        private_key = rsa.generate_private_key(\n            public_exponent=65537,\n            key_size=2048,\n        )\n        \n        # Create certificate\n        subject = issuer = x509.Name([\n            x509.NameAttribute(NameOID.COUNTRY_NAME, \"US\"),\n            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, \"NA\"),\n            x509.NameAttribute(NameOID.LOCALITY_NAME, \"NA\"),\n            x509.NameAttribute(NameOID.ORGANIZATION_NAME, \"SecureApp\"),\n            x509.NameAttribute(NameOID.COMMON_NAME, \"secureapp.local\"),\n        ])\n        \n        cert = x509.CertificateBuilder().subject_name(\n            subject\n        ).issuer_name(\n            issuer\n        ).public_key(\n            private_key.public_key()\n        ).serial_number(\n            x509.random_serial_number()\n        ).not_valid_before(\n            datetime.datetime.utcnow()\n        ).not_valid_after(\n            datetime.datetime.utcnow() + datetime.timedelta(days=365)\n        ).add_extension(\n            x509.SubjectAlternativeName([\n                x509.DNSName(\"secureapp.local\"),\n                x509.DNSName(\"*.secureapp.local\"),\n            ]),\n            critical=False,\n        ).sign(private_key, hashes.SHA256())\n        \n        # Convert to PEM\n        cert_pem = cert.public_bytes(serialization.Encoding.PEM)\n        key_pem = private_key.private_bytes(\n            encoding=serialization.Encoding.PEM,\n            format=serialization.PrivateFormat.PKCS8,\n            encryption_algorithm=serialization.NoEncryption()\n        )\n        \n        # Import to ACM\n        acm = boto3.client('acm')\n        response = acm.import_certificate(\n            Certificate=cert_pem,\n            PrivateKey=key_pem\n        )\n        \n        cert_arn = response['CertificateArn']\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, \n                        {'CertificateArn': cert_arn}, cert_arn)\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
-                }
-            }
-        },
-        "SelfSignedCertificate": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Properties": {
-                "ServiceToken": {
-                    "Fn::GetAtt": [
-                        "CertificateCreationFunction",
-                        "Arn"
-                    ]
-                }
             }
         },
         "SecureAppS3Bucket": {
@@ -1116,10 +816,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -1195,98 +891,8 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
-            }
-        },
-        "SecureAppLogBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "SecureAppLogBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "DenyInsecureTransport",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "arn:aws:s3:::${SecureAppLogBucket}"
-                                },
-                                {
-                                    "Fn::Sub": "arn:aws:s3:::${SecureAppLogBucket}/*"
-                                }
-                            ],
-                            "Condition": {
-                                "Bool": {
-                                    "aws:SecureTransport": "false"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AllowCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${SecureAppLogBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AllowCloudTrailGetBucketAcl",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${SecureAppLogBucket}"
-                            }
-                        },
-                        {
-                            "Sid": "AllowConfigWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${SecureAppLogBucket}/config/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AllowConfigGetBucketAcl",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${SecureAppLogBucket}"
-                            }
-                        }
-                    ]
-                }
             }
         },
         "DatabaseSubnetGroup": {
@@ -1316,10 +922,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -1356,12 +958,7 @@
                 "BackupRetentionPeriod": 7,
                 "MultiAZ": false,
                 "PubliclyAccessible": false,
-                "DeletionProtection": true,
-                "EnableCloudwatchLogsExports": [
-                    "error",
-                    "general",
-                    "slow-query"
-                ],
+                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1374,10 +971,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -1497,10 +1090,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -1594,67 +1183,8 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
-            }
-        },
-        "ConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "secureapp-prod-config-delivery-${AWS::AccountId}"
-                },
-                "S3BucketName": {
-                    "Ref": "SecureAppLogBucket"
-                },
-                "S3KeyPrefix": "config/"
-            }
-        },
-        "ConfigConfigurationRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "secureapp-prod-config-recorder-${AWS::AccountId}"
-                },
-                "RoleARN": {
-                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
-                },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                }
-            }
-        },
-        "S3BucketEncryptionRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigConfigurationRecorder",
-            "Properties": {
-                "ConfigRuleName": {
-                    "Fn::Sub": "secureapp-s3-encryption-${AWS::AccountId}"
-                },
-                "Description": "Checks that S3 buckets have server-side encryption enabled",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-                }
-            }
-        },
-        "RDSEncryptionRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigConfigurationRecorder",
-            "Properties": {
-                "ConfigRuleName": {
-                    "Fn::Sub": "secureapp-rds-encryption-${AWS::AccountId}"
-                },
-                "Description": "Checks that RDS instances have storage encryption enabled",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
-                }
             }
         },
         "ApplicationLoadBalancer": {
@@ -1688,42 +1218,37 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
-            }
-        },
-        "ShieldProtectionALB": {
-            "Type": "AWS::Shield::Protection",
-            "Properties": {
-                "Name": "secureapp-prod-alb-shield",
-                "ResourceArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                }
             }
         },
         "ALBTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": "secureapp-prod-tg",
-                "Port": 443,
-                "Protocol": "HTTPS",
+                "Port": 80,
+                "Protocol": "HTTP",
                 "VpcId": {
                     "Ref": "SecureAppVPC"
                 },
                 "HealthCheckPath": "/health",
-                "HealthCheckProtocol": "HTTPS",
+                "HealthCheckProtocol": "HTTP",
                 "HealthCheckIntervalSeconds": 30,
                 "HealthCheckTimeoutSeconds": 5,
                 "HealthyThresholdCount": 2,
                 "UnhealthyThresholdCount": 5,
-                "TargetGroupAttributes": [
+                "Targets": [
                     {
-                        "Key": "deregistration_delay.timeout_seconds",
-                        "Value": "30"
+                        "Id": {
+                            "Ref": "WebServerInstance1"
+                        },
+                        "Port": 80
+                    },
+                    {
+                        "Id": {
+                            "Ref": "WebServerInstance2"
+                        },
+                        "Port": 80
                     }
                 ],
                 "Tags": [
@@ -1738,15 +1263,11 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
         },
-        "ALBListenerHTTPS": {
+        "ALBListenerHTTP": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
             "Properties": {
                 "DefaultActions": [
@@ -1760,19 +1281,8 @@
                 "LoadBalancerArn": {
                     "Ref": "ApplicationLoadBalancer"
                 },
-                "Port": 443,
-                "Protocol": "HTTPS",
-                "Certificates": [
-                    {
-                        "CertificateArn": {
-                            "Fn::GetAtt": [
-                                "SelfSignedCertificate",
-                                "CertificateArn"
-                            ]
-                        }
-                    }
-                ],
-                "SslPolicy": "ELBSecurityPolicy-TLS-1-2-2017-01"
+                "Port": 80,
+                "Protocol": "HTTP"
             }
         },
         "WebServerInstance1": {
@@ -1800,7 +1310,7 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd mod_ssl openssl\n\n# Generate self-signed certificate for instance\nopenssl req -x509 -nodes -days 365 -newkey rsa:2048 \\\n  -keyout /etc/pki/tls/private/secureapp.key \\\n  -out /etc/pki/tls/certs/secureapp.crt \\\n  -subj \"/C=US/ST=NA/L=NA/O=SecureApp/CN=secureapp.local\"\n\n# Configure Apache SSL\ncat > /etc/httpd/conf.d/ssl-secureapp.conf << 'EOFSSL'\n<VirtualHost *:443>\n  ServerName secureapp.local\n  DocumentRoot /var/www/html\n  SSLEngine on\n  SSLCertificateFile /etc/pki/tls/certs/secureapp.crt\n  SSLCertificateKeyFile /etc/pki/tls/private/secureapp.key\n  SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1\n  SSLCipherSuite ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384\n</VirtualHost>\nEOFSSL\n\n# Create content\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 1 (HTTPS) - Instance in Private Subnet</h1>\" > /var/www/html/index.html\n\n# Start Apache\nsystemctl enable --now httpd\n"
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\n# Create content\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 1 - Instance in Private Subnet</h1>\" > /var/www/html/index.html\n\n# Start Apache\nsystemctl enable --now httpd\n"
                 },
                 "Tags": [
                     {
@@ -1814,10 +1324,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -1847,7 +1353,7 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd mod_ssl openssl\n\n# Generate self-signed certificate for instance\nopenssl req -x509 -nodes -days 365 -newkey rsa:2048 \\\n  -keyout /etc/pki/tls/private/secureapp.key \\\n  -out /etc/pki/tls/certs/secureapp.crt \\\n  -subj \"/C=US/ST=NA/L=NA/O=SecureApp/CN=secureapp.local\"\n\n# Configure Apache SSL\ncat > /etc/httpd/conf.d/ssl-secureapp.conf << 'EOFSSL'\n<VirtualHost *:443>\n  ServerName secureapp.local\n  DocumentRoot /var/www/html\n  SSLEngine on\n  SSLCertificateFile /etc/pki/tls/certs/secureapp.crt\n  SSLCertificateKeyFile /etc/pki/tls/private/secureapp.key\n  SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1\n  SSLCipherSuite ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384\n</VirtualHost>\nEOFSSL\n\n# Create content\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 2 (HTTPS) - Instance in Private Subnet</h1>\" > /var/www/html/index.html\n\n# Start Apache\nsystemctl enable --now httpd\n"
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\n# Create content\necho \"OK\" > /var/www/html/health\necho \"<h1>SecureApp Web Server 2 - Instance in Private Subnet</h1>\" > /var/www/html/index.html\n\n# Start Apache\nsystemctl enable --now httpd\n"
                 },
                 "Tags": [
                     {
@@ -1861,10 +1367,6 @@
                     {
                         "Key": "Environment",
                         "Value": "production"
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": "placeholder"
                     }
                 ]
             }
@@ -1883,9 +1385,9 @@
             }
         },
         "LoadBalancerDNS": {
-            "Description": "Application Load Balancer DNS name (HTTPS only)",
+            "Description": "Application Load Balancer DNS name",
             "Value": {
-                "Fn::Sub": "https://${ApplicationLoadBalancer.DNSName}"
+                "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
             },
             "Export": {
                 "Name": {
@@ -1919,7 +1421,7 @@
             }
         },
         "LogsBucketName": {
-            "Description": "S3 Bucket for CloudTrail/Config logs",
+            "Description": "S3 Bucket for CloudTrail logs",
             "Value": {
                 "Ref": "SecureAppLogBucket"
             },
@@ -1937,20 +1439,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-KMS-Key"
-                }
-            }
-        },
-        "SSLCertificateArn": {
-            "Description": "Auto-generated SSL Certificate ARN",
-            "Value": {
-                "Fn::GetAtt": [
-                    "SelfSignedCertificate",
-                    "CertificateArn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-SSL-Certificate"
                 }
             }
         }
