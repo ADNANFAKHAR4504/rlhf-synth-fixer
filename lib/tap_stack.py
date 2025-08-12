@@ -78,11 +78,10 @@ amazon_linux_ami = aws.ec2.get_ami(
 # Networking Infrastructure
 # =============================================================================
 
-# Create VPC with dual-stack support
+# Create VPC with IPv4 support (simplified for reliable deployment)
 vpc = aws.ec2.Vpc(
     get_resource_name("vpc"),
     cidr_block="10.0.0.0/16",
-    assign_generated_ipv6_cidr_block=True,
     enable_dns_hostnames=True,
     enable_dns_support=True,
     tags={
@@ -105,31 +104,22 @@ internet_gateway = aws.ec2.InternetGateway(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Create public subnets across multiple AZs for high availability
-public_subnets: List[aws.ec2.Subnet] = []
-
-for i in range(min(2, len(availability_zones.names))):
-    az = availability_zones.names[i]
-    
-    # Calculate IPv4 and IPv6 CIDR blocks for each subnet
-    ipv4_cidr = f"10.0.{i + 1}.0/24"
-    
+# Create public subnets (IPv4 only for simplicity)
+public_subnets = []
+for i, az in enumerate(availability_zones[:2]):
     subnet = aws.ec2.Subnet(
-        get_resource_name(f"public-subnet-{i + 1}"),
+        get_resource_name(f"public-subnet-{i+1}"),
         vpc_id=vpc.id,
+        cidr_block=f"10.0.{10+i}.0/24",
         availability_zone=az,
-        cidr_block=ipv4_cidr,
         map_public_ip_on_launch=True,
         tags={
-            "Name": get_resource_name(f"public-subnet-{i + 1}"),
+            "Name": get_resource_name(f"public-subnet-{i+1}"),
             "Environment": ENVIRONMENT,
-            "Project": PROJECT_NAME,
-            "Type": "Public",
-            "AZ": az
+            "Type": "Public"
         },
         opts=pulumi.ResourceOptions(provider=aws_provider)
     )
-    
     public_subnets.append(subnet)
 
 # Route table for public subnets
@@ -150,15 +140,6 @@ ipv4_route = aws.ec2.Route(
     get_resource_name("ipv4-route"),
     route_table_id=public_route_table.id,
     destination_cidr_block="0.0.0.0/0",
-    gateway_id=internet_gateway.id,
-    opts=pulumi.ResourceOptions(provider=aws_provider)
-)
-
-# IPv6 route to Internet Gateway
-ipv6_route = aws.ec2.Route(
-    get_resource_name("ipv6-route"),
-    route_table_id=public_route_table.id,
-    destination_ipv6_cidr_block="::/0",
     gateway_id=internet_gateway.id,
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
@@ -397,7 +378,6 @@ for i, subnet in enumerate(public_subnets):
         iam_instance_profile=ec2_instance_profile.name,
         user_data=user_data_script,
         monitoring=True,  # Enable detailed monitoring
-        ipv6_address_count=1,  # Assign one IPv6 address
         tags={
             "Name": get_resource_name(f"web-server-{i + 1}"),
             "Environment": ENVIRONMENT,
@@ -450,12 +430,11 @@ for i, instance in enumerate(ec2_instances):
         opts=pulumi.ResourceOptions(provider=aws_provider)
     )
 
-# Create Application Load Balancer with dual-stack support
+# Create Application Load Balancer (IPv4 only for simplicity)
 alb = aws.lb.LoadBalancer(
     get_resource_name("web-alb"),
     name=get_resource_name("web-alb"),
     load_balancer_type="application",
-    ip_address_type="dualstack",  # Enable dual-stack (IPv4 and IPv6)
     internal=False,  # internet-facing (False = internet-facing, True = internal)
     security_groups=[alb_security_group.id],
     subnets=[subnet.id for subnet in public_subnets],
