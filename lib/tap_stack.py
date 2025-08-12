@@ -413,14 +413,13 @@ for i, subnet in enumerate(public_subnets):
 # Application Load Balancer
 # =============================================================================
 
-# Create target group for EC2 instances with dual-stack support
+# Create target group for EC2 instances (IPv4 for compatibility)
 target_group = aws.lb.TargetGroup(
     get_resource_name("web-tg"),
     name=get_resource_name("web-tg"),
     port=80,
     protocol="HTTP",
     vpc_id=vpc.id,
-    ip_address_type="dualstack",  # Enable dual-stack support following working pattern
     health_check=aws.lb.TargetGroupHealthCheckArgs(
         enabled=True,
         healthy_threshold=2,
@@ -450,13 +449,12 @@ for i, instance in enumerate(ec2_instances):
         opts=pulumi.ResourceOptions(provider=aws_provider)
     )
 
-# Create Application Load Balancer with dual-stack support
+# Create Application Load Balancer (supports dual-stack through subnets)
 alb = aws.lb.LoadBalancer(
     get_resource_name("web-alb"),
     name=get_resource_name("web-alb"),
     load_balancer_type="application",
     internal=False,  # internet-facing (False = internet-facing, True = internal)
-    ip_address_type="dualstack",  # Enable dual-stack support following working pattern
     security_groups=[alb_security_group.id],
     subnets=[subnet.id for subnet in public_subnets],
     enable_deletion_protection=False,  # Set to True for production
