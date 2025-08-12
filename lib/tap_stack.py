@@ -491,7 +491,9 @@ def create_api_gateway(kms_key: aws.kms.Key, tags: Dict[str, str]) -> Dict[str, 
     )
 
     deployment = aws.apigateway.Deployment(
-        "nova-api-deployment", rest_api=api.id
+        "nova-api-deployment",
+        rest_api=api.id,
+        opts=ResourceOptions(depends_on=[integration])  # ensures deployment runs after integration
     )
 
     stage = aws.apigateway.Stage(
@@ -604,21 +606,30 @@ def create_monitoring(
     )
 
     lambda_policy = aws.iam.RolePolicy(
-        "nova-lambda-custom-policy",
-        role=lambda_role.id,
-        policy=json.dumps(
-            {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": ["ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "cloudwatch:PutMetricData"],
-                        "Resource": "*",
-                    }
-                ],
-            }
-        ),
-    )
+                                    "nova-lambda-custom-policy",
+                                    role=lambda_role.id,
+                                    policy=json.dumps({
+                                        "Version": "2012-10-17",
+                                        "Statement": [{
+                                            "Effect": "Allow",
+                                            "Action": [
+                                                # Your existing actions
+                                                "ec2:DescribeInstances",
+                                                "ec2:DescribeInstanceStatus",
+                                                "cloudwatch:PutMetricData",
+                                                # Required VPC actions
+                                                "ec2:CreateNetworkInterface",
+                                                "ec2:DescribeNetworkInterfaces",
+                                                "ec2:DeleteNetworkInterface",
+                                                "ec2:DescribeSubnets",
+                                                "ec2:AssignPrivateIpAddresses",
+                                                "ec2:UnassignPrivateIpAddresses"
+                                            ],
+                                            "Resource": "*"
+                                        }]
+                                    })
+                                )
+
 
     lambda_code = """
 import json
