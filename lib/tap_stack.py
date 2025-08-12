@@ -26,7 +26,7 @@ class WebApplicationStack(Stack):
     # Retrieve an existing VPC
     vpc = ec2.Vpc.from_lookup(
       self, "ExistingVPC",
-      vpc_id="vpc-09041aed7078c8f5e"
+      vpc_id="vpc-05c4c270ead946104"
     )
 
     private_subnets = vpc.select_subnets(
