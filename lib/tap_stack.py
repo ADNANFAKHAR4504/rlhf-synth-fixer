@@ -714,3 +714,4 @@ echo "OK" > /var/www/html/health
         dashboard_body=dashboard_body,
         opts=ResourceOptions(parent=self, provider=provider)
       )
+
