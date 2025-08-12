@@ -655,11 +655,7 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*
 
-  ConfigServiceLinkedRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: config.amazonaws.com
-
+  
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1004,7 +1000,7 @@ Resources:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
       Name: !Sub '${Environment}-config-recorder'
-      RoleARN: !GetAtt ConfigServiceLinkedRole.Arn
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
