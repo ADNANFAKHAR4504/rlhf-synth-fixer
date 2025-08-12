@@ -73,26 +73,31 @@ export class SecureWebAppStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
       description: 'Application Load Balancer DNS Name',
+      exportName: `${prefix}-${environment}-alb-dns`,
     });
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: s3Bucket.bucketName,
       description: 'S3 Bucket Name for EC2 data',
+      exportName: `${prefix}-${environment}-s3-bucket-name`,
     });
 
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID',
+      exportName: `${prefix}-${environment}-vpc-id`,
     });
 
     new cdk.CfnOutput(this, 'KMSKeyId', {
       value: kmsKey.keyId,
       description: 'KMS Key ID for encryption',
+      exportName: `${prefix}-${environment}-kms-key-id`,
     });
 
     new cdk.CfnOutput(this, 'AutoScalingGroupName', {
       value: asg.autoScalingGroupName,
       description: 'Auto Scaling Group Name',
+      exportName: `${prefix}-${environment}-asg-name`,
     });
   }
 

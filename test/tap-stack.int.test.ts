@@ -2,18 +2,15 @@
 // These tests run against actual deployed infrastructure in AWS
 // Run these tests after deploying the stack to a live environment
 
-import * as fs from 'fs';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
+  CloudWatchClient
 } from '@aws-sdk/client-cloudwatch';
 import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
+  CloudWatchLogsClient
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
   DescribeFlowLogsCommand,
@@ -30,8 +27,8 @@ import {
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  IAMClient,
   GetRoleCommand,
+  IAMClient,
   ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
 import {
@@ -46,21 +43,26 @@ import {
   GetPublicAccessBlockCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { ListTopicsCommand, SNSClient } from '@aws-sdk/client-sns';
+import { SNSClient } from '@aws-sdk/client-sns';
 import {
-  DescribeInstanceInformationCommand,
-  SSMClient,
+  SSMClient
 } from '@aws-sdk/client-ssm';
 import {
   GetWebACLCommand,
   ListWebACLsCommand,
   WAFV2Client,
 } from '@aws-sdk/client-wafv2';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// Read outputs from CDK deployment
-const outputs = JSON.parse(
-  fs.readFileSync('lib/flat-outputs.json', 'utf8')
-);
+// Read the deployment outputs
+const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+let outputs: any = {};
+
+if (fs.existsSync(outputsPath)) {
+  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+}
+
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -444,13 +446,13 @@ describe('Production Infrastructure Integration Tests', () => {
 
       // Should have AmazonSSMManagedInstanceCore policy
       const ssmPolicy = attachedPolicies.find(policy => 
-        policy.PolicyName === 'AmazonSSMManagedInstanceCore'
+        policy.PolicyArn?.includes('AmazonSSMManagedInstanceCore')
       );
       expect(ssmPolicy).toBeDefined();
 
       // Should have CloudWatchAgentServerPolicy
       const cloudWatchPolicy = attachedPolicies.find(policy => 
-        policy.PolicyName === 'CloudWatchAgentServerPolicy'
+        policy.PolicyArn?.includes('CloudWatchAgentServerPolicy')
       );
       expect(cloudWatchPolicy).toBeDefined();
     }, testTimeout);
@@ -485,8 +487,8 @@ describe('Production Infrastructure Integration Tests', () => {
   describe('Production Readiness Tests', () => {
     test('All resources are prefixed with tf- and suffixed with environment', async () => {
       // Test resource naming conventions
-      expect(outputs.S3BucketName).toMatch(/^tf-.*-${environmentSuffix}$/);
-      expect(outputs.AutoScalingGroupName).toMatch(/^tf-.*-${environmentSuffix}$/);
+      expect(outputs.S3BucketName).toMatch(new RegExp(`^tf-.*-${environmentSuffix}$`));
+      expect(outputs.AutoScalingGroupName).toMatch(new RegExp(`^tf-.*-${environmentSuffix}$`));
       expect(outputs.LoadBalancerDNS).toMatch(/^tf-alb-.*\.elb\.amazonaws\.com$/);
     }, testTimeout);
 

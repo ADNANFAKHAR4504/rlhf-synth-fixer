@@ -1,8 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
 import { SecureWebAppStack } from './secure-web-app-stack';
 
 interface TapStackProps extends cdk.StackProps {
@@ -11,18 +8,22 @@ interface TapStackProps extends cdk.StackProps {
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: 'us-west-2',
+      },
+    });
 
-    // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    const prefix = 'tf';
+
+    // Instantiate the secure stack (not relying on outputs directly anymore)
     new SecureWebAppStack(this, 'TfSecureWebAppStack', {
       environment: environmentSuffix,
       env: {
@@ -31,6 +32,29 @@ export class TapStack extends cdk.Stack {
       },
       description:
         'Secure web application infrastructure with production-ready security configurations',
+    });
+
+    // Explicitly import and re-export outputs so they show up in this top-level stack
+    this.exportOutput(
+      'LoadBalancerDNS',
+      `${prefix}-${environmentSuffix}-alb-dns`
+    );
+    this.exportOutput(
+      'S3BucketName',
+      `${prefix}-${environmentSuffix}-s3-bucket-name`
+    );
+    this.exportOutput('VPCId', `${prefix}-${environmentSuffix}-vpc-id`);
+    this.exportOutput('KMSKeyId', `${prefix}-${environmentSuffix}-kms-key-id`);
+    this.exportOutput(
+      'AutoScalingGroupName',
+      `${prefix}-${environmentSuffix}-asg-name`
+    );
+  }
+
+  private exportOutput(key: string, importName: string) {
+    new cdk.CfnOutput(this, `Tap${key}`, {
+      value: cdk.Fn.importValue(importName),
+      description: `Imported and re-exported value for ${key}`,
     });
   }
 }
