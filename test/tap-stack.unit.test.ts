@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Unit Tests', () => {
@@ -234,7 +234,7 @@ describe('TapStack Unit Tests', () => {
     test('should create public and private subnets', () => {
       // Check for public subnets
       template.resourceCountIs('AWS::EC2::Subnet', 4);
-      
+
       // Check for public subnet configuration
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
@@ -452,7 +452,8 @@ describe('TapStack Unit Tests', () => {
                 'method.response.header.Access-Control-Allow-Headers':
                   "'Content-Type,Authorization'",
                 'method.response.header.Access-Control-Allow-Origin': "'*'",
-                'method.response.header.Access-Control-Allow-Methods': "'GET,POST'",
+                'method.response.header.Access-Control-Allow-Methods':
+                  "'GET,POST'",
               },
             }),
           ]),

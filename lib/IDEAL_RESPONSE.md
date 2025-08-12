@@ -8,9 +8,7 @@ Here's the production-ready CDK TypeScript solution for secure AWS infrastructur
 {
   "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
   "watch": {
-    "include": [
-      "**"
-    ],
+    "include": ["**"],
     "exclude": [
       "README.md",
       "cdk*.json",
@@ -79,15 +77,14 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as logs from 'aws-cdk-lib/aws-logs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export class TapStack extends cdk.Stack {
@@ -95,7 +92,8 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     const accountId = cdk.Stack.of(this).account;
-    const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
+    const environmentSuffix =
+      this.node.tryGetContext('environmentSuffix') || 'dev';
 
     // 1. S3 Bucket with SSE-S3 encryption
     const corpBucket = new s3.Bucket(this, 'corp-secure-bucket', {
@@ -221,7 +219,7 @@ export class TapStack extends cdk.Stack {
       {
         instanceIdentifier: `corp-secure-db-${environmentSuffix}`,
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_4,
+          version: rds.PostgresEngineVersion.VER_15,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
@@ -245,43 +243,113 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // 5. GuardDuty with Extended Threat Detection
-    const guardDutyDetector = new guardduty.CfnDetector(
-      this,
-      'corp-guardduty-detector',
-      {
-        enable: true,
-        findingPublishingFrequency: 'FIFTEEN_MINUTES',
-        dataSources: {
-          s3Logs: {
-            enable: true,
-          },
-          malwareProtection: {
-            scanEc2InstanceWithFindings: {
-              ebsVolumes: true,
-            },
-          },
-        },
-        features: [
-          {
-            name: 'EKS_AUDIT_LOGS',
-            status: 'ENABLED',
-          },
-          {
-            name: 'EBS_MALWARE_PROTECTION',
-            status: 'ENABLED',
-          },
-          {
-            name: 'RDS_LOGIN_EVENTS',
-            status: 'ENABLED',
-          },
-          {
-            name: 'LAMBDA_NETWORK_LOGS',
-            status: 'ENABLED',
-          },
+    // 5. GuardDuty - Reuse existing detector if available
+    // Since GuardDuty only allows one detector per account per region,
+    // we'll use a custom resource to either create or reference existing detector
+    const guardDutyHandler = new cdk.CustomResource(this, 'guardduty-handler', {
+      serviceToken: new lambda.Function(this, 'guardduty-lambda', {
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
+import boto3
+import cfnresponse
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def handler(event, context):
+    try:
+        guardduty = boto3.client('guardduty')
+        
+        if event['RequestType'] == 'Create':
+            # Check if detector already exists
+            response = guardduty.list_detectors()
+            
+            if response['DetectorIds']:
+                # Use existing detector
+                detector_id = response['DetectorIds'][0]
+                logger.info(f"Using existing GuardDuty detector: {detector_id}")
+                
+                # Update existing detector with our desired configuration
+                try:
+                    guardduty.update_detector(
+                        DetectorId=detector_id,
+                        Enable=True,
+                        FindingPublishingFrequency='FIFTEEN_MINUTES'
+                    )
+                    
+                    # Enable desired features on existing detector
+                    features = ['S3_DATA_EVENTS', 'EKS_AUDIT_LOGS', 'EBS_MALWARE_PROTECTION', 'RDS_LOGIN_EVENTS', 'LAMBDA_NETWORK_LOGS']
+                    for feature in features:
+                        try:
+                            guardduty.update_detector_feature_configuration(
+                                DetectorId=detector_id,
+                                Feature=feature,
+                                Status='ENABLED'
+                            )
+                            logger.info(f"Enabled feature: {feature}")
+                        except Exception as e:
+                            logger.warning(f"Could not enable feature {feature}: {e}")
+                            
+                except Exception as e:
+                    logger.warning(f"Could not update detector: {e}")
+                    
+            else:
+                # Create new detector
+                response = guardduty.create_detector(
+                    Enable=True,
+                    FindingPublishingFrequency='FIFTEEN_MINUTES',
+                    Features=[
+                        {'Name': 'S3_DATA_EVENTS', 'Status': 'ENABLED'},
+                        {'Name': 'EKS_AUDIT_LOGS', 'Status': 'ENABLED'},
+                        {'Name': 'EBS_MALWARE_PROTECTION', 'Status': 'ENABLED'},
+                        {'Name': 'RDS_LOGIN_EVENTS', 'Status': 'ENABLED'},
+                        {'Name': 'LAMBDA_NETWORK_LOGS', 'Status': 'ENABLED'}
+                    ]
+                )
+                detector_id = response['DetectorId']
+                logger.info(f"Created new GuardDuty detector: {detector_id}")
+                
+        elif event['RequestType'] == 'Update':
+            # Handle updates by reusing existing detector
+            response = guardduty.list_detectors()
+            detector_id = response['DetectorIds'][0] if response['DetectorIds'] else 'none'
+            logger.info(f"Updated GuardDuty detector: {detector_id}")
+            
+        elif event['RequestType'] == 'Delete':
+            # Don't delete the detector on stack deletion
+            logger.info("Skipping GuardDuty detector deletion")
+            detector_id = 'none'
+        
+        cfnresponse.send(event, context, cfnresponse.SUCCESS, {'DetectorId': detector_id})
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+        `),
+        timeout: cdk.Duration.minutes(5),
+        initialPolicy: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+              'guardduty:CreateDetector',
+              'guardduty:ListDetectors',
+              'guardduty:UpdateDetector',
+              'guardduty:UpdateDetectorFeatureConfiguration',
+              'guardduty:GetDetector',
+            ],
+            resources: ['*'],
+          }),
         ],
-      }
-    );
+      }).functionArn,
+      properties: {
+        timestamp: Date.now().toString(),
+      },
+    });
+
+    // Get the detector ID from the custom resource
+    const detectorId = guardDutyHandler.getAtt('DetectorId');
 
     // 6. API Gateway with comprehensive logging
     const apiLogGroup = new logs.LogGroup(this, 'corp-api-logs', {
@@ -420,8 +488,8 @@ def handler(event, context):
     });
 
     new cdk.CfnOutput(this, 'GuardDutyDetectorId', {
-      value: guardDutyDetector.ref,
-      description: 'Corp GuardDuty detector ID',
+      value: detectorId.toString(),
+      description: 'Corp GuardDuty detector ID (managed by custom resource)',
       exportName: `${this.stackName}-GuardDutyDetectorId`,
     });
 
@@ -475,8 +543,9 @@ def handler(event, context):
 This production-ready solution includes:
 
 ### 1. **Security Best Practices**
+
 - S3 bucket with SSE-S3 encryption and SSL enforcement
-- IAM roles with account-bounded permissions  
+- IAM roles with account-bounded permissions
 - MFA enforcement for all IAM users
 - RDS database not publicly accessible
 - GuardDuty enabled with extended threat detection
@@ -484,18 +553,21 @@ This production-ready solution includes:
 - Least privilege principle enforced across all IAM policies
 
 ### 2. **High Availability and Resilience**
+
 - Multi-AZ VPC configuration
 - RDS with 7-day backup retention
 - S3 versioning enabled
 - Intelligent tiering for cost optimization
 
 ### 3. **Monitoring and Compliance**
+
 - GuardDuty for threat detection with 15-minute reporting
 - CloudWatch logging for API Gateway
 - Lambda function logging
 - All resources tagged for tracking
 
 ### 4. **Infrastructure as Code Best Practices**
+
 - Environment suffix for multi-environment deployments
 - Destroyable resources for clean teardown
 - Comprehensive outputs for integration
@@ -503,6 +575,7 @@ This production-ready solution includes:
 - CDK best practices with feature flags
 
 ### 5. **Network Security**
+
 - Private subnets for RDS
 - Security groups with least privilege
 - VPC with DNS support
