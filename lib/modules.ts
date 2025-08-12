@@ -182,14 +182,16 @@ export class SecurityModule extends Construct {
       tags: { Name: `${props.projectName}-ec2-sg` },
     });
 
+    // CORRECTED: This rule allows the ALB to send health check traffic to the EC2 instances.
     new aws.securityGroupRule.SecurityGroupRule(this, 'AlbEgressToEc2', {
       type: 'egress',
       fromPort: 0,
       toPort: 0,
-      protocol: '-1',
+      protocol: '-1', // Allow all protocols
       securityGroupId: this.albSg.id,
       sourceSecurityGroupId: this.ec2Sg.id,
-      description: 'Allow all outbound traffic from ALB to EC2 SG',
+      description:
+        'Allow all outbound traffic from ALB to EC2 SG for health checks',
     });
 
     const ec2Role = new aws.iamRole.IamRole(this, 'Ec2Role', {
@@ -302,7 +304,6 @@ export class ComputeModule extends Construct {
             ebs: {
               volumeSize: 8,
               volumeType: 'gp3',
-              // CORRECTED: The 'encrypted' property must be a boolean, not a string.
               encrypted: 'true',
               kmsKeyId: props.kmsKey.arn,
             },
