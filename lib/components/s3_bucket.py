@@ -88,17 +88,12 @@ class S3BucketComponent(ComponentResource):
     self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
       f"{name}-encryption",
       bucket=self.bucket.id,
-      server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs(
-        rules=[
-          aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-              sse_algorithm="aws:kms",
-              kms_master_key_id=self.kms_key.arn
-            ),
-            bucket_key_enabled=True
-          )
-        ]
-      ),
+      rules=[aws.s3.BucketServerSideEncryptionConfigurationV2Rule(
+        aws.s3.BucketServerSideEncryptionConfigurationV2Rule(
+          sse_algorithm="aws:kms",
+          kms_key_id=self.kms_key.key_id
+        )
+      )],
       opts=ResourceOptions(parent=self)
     )
 
