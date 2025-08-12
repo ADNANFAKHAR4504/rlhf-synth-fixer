@@ -21,6 +21,11 @@ export class TapStack extends cdk.Stack {
       process.env.ENVIRONMENT_SUFFIX ||
       'dev';
 
+    // Get region suffix for resource naming
+    const regionSuffix = cdk.Stack.of(this)
+      .region.toLowerCase()
+      .replace(/-/g, '');
+
     // Create KMS key for encryption
     const encryptionKey = new kms.Key(this, 'FinancialDataKey', {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -96,7 +101,7 @@ export class TapStack extends cdk.Stack {
 
     // Create VPC with security-focused configuration
     const vpc = new ec2.Vpc(this, 'SecureVPC', {
-      vpcName: `tap-${environmentSuffix}-vpc`,
+      vpcName: `tap-${environmentSuffix}-vpc-${regionSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 3,
       enableDnsSupport: true,
@@ -164,7 +169,7 @@ export class TapStack extends cdk.Stack {
 
     // Create S3 buckets with security features
     const dataLogsBucket = new s3.Bucket(this, 'DataLogsBucket', {
-      bucketName: `tap-${environmentSuffix}-data-logs-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}`,
+      bucketName: `tap-${environmentSuffix}-data-logs-${cdk.Stack.of(this).account}-${regionSuffix}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       versioned: true,
@@ -206,7 +211,7 @@ export class TapStack extends cdk.Stack {
     );
 
     const applicationDataBucket = new s3.Bucket(this, 'ApplicationDataBucket', {
-      bucketName: `tap-${environmentSuffix}-app-data-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}`,
+      bucketName: `tap-${environmentSuffix}-app-data-${cdk.Stack.of(this).account}-${regionSuffix}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       versioned: true,

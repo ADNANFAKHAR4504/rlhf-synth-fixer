@@ -21,7 +21,7 @@ describe('TapStack - Environment Suffix Branch Coverage', () => {
     
     // Verify environment suffix is used in resource names
     template.hasResourceProperties('AWS::S3::Bucket', {
-      BucketName: `tap-fromcontext-data-logs-123456789012-us-east-1`
+      BucketName: `tap-fromcontext-data-logs-123456789012-useast1`
     });
   });
 
@@ -43,7 +43,7 @@ describe('TapStack - Environment Suffix Branch Coverage', () => {
     
     // Verify environment suffix is used in resource names
     template.hasResourceProperties('AWS::S3::Bucket', {
-      BucketName: `tap-fromenv-data-logs-123456789012-us-east-1`
+      BucketName: `tap-fromenv-data-logs-123456789012-useast1`
     });
     
     // Restore original environment variable
@@ -72,7 +72,7 @@ describe('TapStack - Environment Suffix Branch Coverage', () => {
     
     // Verify default environment suffix is used in resource names
     template.hasResourceProperties('AWS::S3::Bucket', {
-      BucketName: `tap-dev-data-logs-123456789012-us-east-1`
+      BucketName: `tap-dev-data-logs-123456789012-useast1`
     });
     
     // Restore original environment variable
@@ -99,7 +99,7 @@ describe('TapStack - Environment Suffix Branch Coverage', () => {
     
     // Verify region is used in resource names
     template.hasResourceProperties('AWS::S3::Bucket', {
-      BucketName: `tap-regional-data-logs-123456789012-eu-west-1`
+      BucketName: `tap-regional-data-logs-123456789012-euwest1`
     });
   });
 });
