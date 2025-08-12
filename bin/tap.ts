@@ -89,8 +89,8 @@ const defaultTags = {
   Author: commitAuthor,
 };
 
-// All regions as specified in PROMPT.md requirements
-const allRegions = ['us-east-1', 'eu-west-1', 'ap-southeast-2'];
+// All possible regions for local/multi-region use
+const allRegions = ['us-east-1', 'us-west-2'];
 
 // Determine target regions
 // In CI/CD, AWS_REGION is usually set → deploy only that region
@@ -125,11 +125,6 @@ targetRegions.forEach(region => {
   new TerraformOutput(stack, `${region}RdsEndpoint`, {
     value: stack.rdsEndpoint,
     description: `RDS endpoint in ${region}`,
-  });
-
-  new TerraformOutput(stack, `${region}S3BucketName`, {
-    value: stack.s3BucketName,
-    description: `S3 bucket name in ${region}`,
   });
 });
 

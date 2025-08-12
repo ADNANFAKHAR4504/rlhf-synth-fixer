@@ -42,25 +42,17 @@ import { Lb } from '@cdktf/provider-aws/lib/lb';
 import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { LbTargetGroupAttachment } from '@cdktf/provider-aws/lib/lb-target-group-attachment';
 import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 
 export interface TapStackConfig {
   region: string;
   environmentSuffix: string;
   tags?: { [key: string]: string };
-  crossAccountId?: string; // For cross-account access demonstration
 }
 
 export class TapStack extends TerraformStack {
   public readonly vpcId: string;
   public readonly albDnsName: string;
   public readonly rdsEndpoint: string;
-  public readonly s3BucketName: string;
 
   constructor(scope: Construct, id: string, config: TapStackConfig) {
     super(scope, id);
@@ -624,181 +616,9 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       provider: provider,
     });
 
-    // S3 Bucket with lifecycle policies for storage management
-    const s3Bucket = new S3Bucket(this, `${prefix}storage-bucket-${region}`, {
-      bucket: `${prefix}storage-${region}-${environmentSuffix}-${new Date().getTime()}`,
-      tags: {
-        ...tags,
-        Name: `${prefix}storage-bucket-${region}`,
-        Purpose: 'Multi-region storage with lifecycle management',
-      },
-      provider: provider,
-    });
-
-    // S3 Bucket Versioning
-    new S3BucketVersioningA(this, `${prefix}bucket-versioning-${region}`, {
-      bucket: s3Bucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-      provider: provider,
-    });
-
-    // S3 Bucket Server-side Encryption
-    new S3BucketServerSideEncryptionConfigurationA(
-      this,
-      `${prefix}bucket-encryption-${region}`,
-      {
-        bucket: s3Bucket.id,
-        rule: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-          },
-        ],
-        provider: provider,
-      }
-    );
-
-    // S3 Bucket Lifecycle Configuration
-    new S3BucketLifecycleConfiguration(
-      this,
-      `${prefix}bucket-lifecycle-${region}`,
-      {
-        bucket: s3Bucket.id,
-        rule: [
-          {
-            id: 'transition-to-ia',
-            status: 'Enabled',
-            transition: [
-              {
-                days: 30,
-                storageClass: 'STANDARD_IA',
-              },
-              {
-                days: 90,
-                storageClass: 'GLACIER',
-              },
-              {
-                days: 365,
-                storageClass: 'DEEP_ARCHIVE',
-              },
-            ],
-          },
-        ],
-        provider: provider,
-      }
-    );
-
-    // S3 Bucket Public Access Block (security best practice)
-    new S3BucketPublicAccessBlock(this, `${prefix}bucket-pab-${region}`, {
-      bucket: s3Bucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-      provider: provider,
-    });
-
-    // Cross-account IAM Role (for demonstration of cross-account access)
-    const crossAccountRole = new IamRole(
-      this,
-      `${prefix}cross-account-role-${region}`,
-      {
-        name: `${prefix}cross-account-role-${region}`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ec2.amazonaws.com',
-              },
-              Action: 'sts:AssumeRole',
-            },
-            ...(config.crossAccountId
-              ? [
-                  {
-                    Effect: 'Allow',
-                    Principal: {
-                      AWS: `arn:aws:iam::${config.crossAccountId}:root`,
-                    },
-                    Action: 'sts:AssumeRole',
-                    Condition: {
-                      StringEquals: {
-                        'sts:ExternalId': `${prefix}external-id-${region}`,
-                      },
-                    },
-                  },
-                ]
-              : []),
-          ],
-        }),
-        tags: {
-          ...tags,
-          Name: `${prefix}cross-account-role-${region}`,
-          Purpose: 'Cross-account access demonstration',
-        },
-        provider: provider,
-      }
-    );
-
-    // Cross-account IAM Policy for S3 access
-    const crossAccountPolicy = new IamPolicy(
-      this,
-      `${prefix}cross-account-policy-${region}`,
-      {
-        name: `${prefix}cross-account-s3-policy-${region}`,
-        description: 'Policy for cross-account S3 bucket access',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                's3:GetObject',
-                's3:PutObject',
-                's3:DeleteObject',
-                's3:ListBucket',
-              ],
-              Resource: [s3Bucket.arn, `${s3Bucket.arn}/*`],
-            },
-            {
-              Effect: 'Allow',
-              Action: [
-                'cloudwatch:PutMetricData',
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
-              Resource: '*',
-            },
-          ],
-        }),
-        tags: {
-          ...tags,
-          Name: `${prefix}cross-account-s3-policy-${region}`,
-        },
-        provider: provider,
-      }
-    );
-
-    // Attach cross-account policy to role
-    new IamRolePolicyAttachment(
-      this,
-      `${prefix}cross-account-policy-attachment-${region}`,
-      {
-        role: crossAccountRole.name,
-        policyArn: crossAccountPolicy.arn,
-        provider: provider,
-      }
-    );
-
     // Set up outputs
     this.vpcId = vpc.id;
     this.albDnsName = alb.dnsName;
     this.rdsEndpoint = rdsInstance.endpoint;
-    this.s3BucketName = s3Bucket.bucket;
   }
 }
