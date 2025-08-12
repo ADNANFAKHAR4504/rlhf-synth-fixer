@@ -5,7 +5,7 @@ TapStack Component for the A2 deployment requirement:
 - Scaling to handle ~1000 requests/min
 - CloudWatch alarms for errors, throttles, latency
 - Resource tagging
-- Environment-aware naming
+- Environment-aware naming.
 """
 
 from typing import Optional
