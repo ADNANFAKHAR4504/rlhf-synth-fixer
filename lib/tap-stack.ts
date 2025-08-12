@@ -14,7 +14,7 @@ export interface TapStackProps extends cdk.StackProps {
    * Allowed IP addresses for SSH and HTTP access
    */
   allowedIpAddresses: string[];
-
+  
   /**
    * Database configuration
    */
@@ -298,12 +298,12 @@ export class TapStack extends cdk.Stack {
         this,
         'BucketNotificationsHandlerRole',
         {
-          assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-          managedPolicies: [
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
             iam.ManagedPolicy.fromAwsManagedPolicyName(
               'service-role/AWSLambdaBasicExecutionRole'
             ),
-          ],
+        ],
         }
       ),
     });
@@ -355,7 +355,7 @@ export class TapStack extends cdk.Stack {
 
     const database = new rds.DatabaseInstance(this, 'TapDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_14_9,
+        version: rds.PostgresEngineVersion.VER_15_13,
       }),
       instanceType:
         config?.instanceType ||
@@ -381,7 +381,7 @@ export class TapStack extends cdk.Stack {
       }),
       parameterGroup: new rds.ParameterGroup(this, 'TapDbParameterGroup', {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_14_9,
+          version: rds.PostgresEngineVersion.VER_15_13,
         }),
         parameters: {
           log_statement: 'all',
@@ -618,7 +618,7 @@ def handler(event, context):
   private enableDdosProtection(): void {
     // Note: AWS Shield Advanced requires manual activation and has costs
     // This creates the WAF WebACL for additional protection
-
+    
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const webAcl = new wafv2.CfnWebACL(this, 'TapWebAcl', {
       scope: 'CLOUDFRONT',
@@ -836,7 +836,7 @@ def handler(event, context):
         `),
           role: new iam.Role(this, 'AwsConfigSetupLambdaRole', {
             assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-            managedPolicies: [
+      managedPolicies: [
               iam.ManagedPolicy.fromAwsManagedPolicyName(
                 'service-role/AWSLambdaBasicExecutionRole'
               ),
@@ -878,15 +878,15 @@ def handler(event, context):
 
     // Note: GuardDuty requires manual activation in the AWS Console
     // This section focuses on other security configurations that can be automated
-
+    
     // Create SNS topic for security alerts
     const securityAlertsTopic = new cdk.aws_sns.Topic(
       this,
       'SecurityAlertsTopic',
       {
         topicName: `tap-security-alerts-${this.stackName.toLowerCase()}`,
-        displayName: 'TAP Security Alerts',
-        masterKey: this.kmsKey,
+      displayName: 'TAP Security Alerts',
+      masterKey: this.kmsKey,
       }
     );
 
@@ -896,14 +896,14 @@ def handler(event, context):
       'UnauthorizedApiCallsAlarm',
       {
         alarmName: `tap-unauthorized-api-calls-${this.stackName.toLowerCase()}`,
-        alarmDescription: 'Alarm for unauthorized API calls',
-        metric: new cdk.aws_cloudwatch.Metric({
-          namespace: 'CloudWatchLogs',
-          metricName: 'UnauthorizedAPICalls',
-          statistic: 'Sum',
-        }),
-        threshold: 1,
-        evaluationPeriods: 1,
+      alarmDescription: 'Alarm for unauthorized API calls',
+      metric: new cdk.aws_cloudwatch.Metric({
+        namespace: 'CloudWatchLogs',
+        metricName: 'UnauthorizedAPICalls',
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
       }
     );
 

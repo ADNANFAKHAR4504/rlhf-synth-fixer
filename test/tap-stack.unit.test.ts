@@ -191,12 +191,12 @@ describe('TapStack', () => {
     test('creates RDS instance with proper security configuration', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
-        EngineVersion: '14.9',
+        EngineVersion: '15.13',
         MultiAZ: true,
         StorageEncrypted: true,
         PubliclyAccessible: false,
-        DeletionProtection: true,
-        DeleteAutomatedBackups: false,
+        DeletionProtection: false,
+        DeleteAutomatedBackups: true,
         MonitoringInterval: 60,
         EnablePerformanceInsights: true,
       });
@@ -216,7 +216,7 @@ describe('TapStack', () => {
 
     test('creates parameter group with security logging', () => {
       template.hasResourceProperties('AWS::RDS::DBParameterGroup', {
-        Family: 'postgres14',
+        Family: 'postgres15',
         Parameters: {
           log_statement: 'all',
           log_min_duration_statement: '1000',
