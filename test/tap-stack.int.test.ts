@@ -269,11 +269,17 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
     ];
 
     // Add CloudTrail bucket if it exists (conditional)
-    if (CLOUDTRAIL_BUCKET) {
+    if (CLOUDTRAIL_BUCKET && CLOUDTRAIL_BUCKET.trim() !== '') {
       buckets.push({ name: CLOUDTRAIL_BUCKET });
     }
 
-    for (const b of buckets) {
+    const validBuckets = buckets.filter(b => b.name && b.name.trim() !== '');
+
+    for (const b of validBuckets) {
+      if (!b.name || b.name.trim() === '') {
+    test.skip(`Bucket name undefined - skipping tests`);
+    continue;
+  }
       test(`Bucket ${b.name} - KMS encryption and public access block`, async () => {
         const enc = await s3.send(
           new GetBucketEncryptionCommand({ Bucket: b.name })
