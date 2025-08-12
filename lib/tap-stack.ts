@@ -135,8 +135,8 @@ export class TapStack extends TerraformStack {
       this,
       'rds',
       {
-        instanceIdentifier: nameFromTags(commonTags, 'db'),
-        dbName: nameFromTags(commonTags, 'rdsdb'),
+        instanceIdentifier: 'rlhf-db',
+        dbName: 'rlhf-db',
         instanceClass: 'db.t3.micro', // Use appropriate size for production
         allocatedStorage: 20,
         engine: 'mysql',
