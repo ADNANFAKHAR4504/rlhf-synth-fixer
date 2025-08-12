@@ -122,7 +122,12 @@ export class EnterpriseStack extends TerraformStack {
     ];
 
     // --- NAT Gateways and Routing for Private Subnets ---
-    const natGatewayEip = new Eip(this, 'NatGatewayEip', { domain: 'vpc' });
+    const natGatewayEip = new Eip(this, 'NatGatewayEip', {
+      domain: 'vpc',
+      // FIX: Added a unique tag to the EIP for easier identification in the AWS Console.
+      tags: { Name: createResourceName(env, 'eip', `nat-${uniqueSuffix}`) },
+    });
+
     const natGateway = new NatGateway(this, 'NatGateway', {
       allocationId: natGatewayEip.id,
       subnetId: appSubnets[0].id, // Place NAT Gateway in a public subnet
@@ -228,13 +233,18 @@ export class EnterpriseStack extends TerraformStack {
       tags: { Name: createResourceName(env, 'dbsubnetgroup', 'main') },
     });
 
+    // FIX: Define a unique identifier for the RDS instance and its components.
+    const rdsIdentifier = `${createResourceName(env, 'rds', 'main')}-${uniqueSuffix}`;
+
     new CloudwatchLogGroup(this, 'RdsLogGroup', {
-      name: `/aws/rds/instance/${createResourceName(env, 'rds', 'main')}/postgresql`,
+      // FIX: Use the unique RDS identifier in the log group name to prevent collisions.
+      name: `/aws/rds/instance/${rdsIdentifier}/postgresql`,
       retentionInDays: 7,
     });
 
     new DbInstance(this, 'RdsInstance', {
-      identifier: `${createResourceName(env, 'rds', 'main')}-${uniqueSuffix}`,
+      // FIX: Use the predefined unique identifier.
+      identifier: rdsIdentifier,
       engine: 'postgres',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
