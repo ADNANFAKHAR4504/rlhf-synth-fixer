@@ -132,9 +132,25 @@ internet_gateway = aws.ec2.InternetGateway(
 public_subnets = []
 for i, az in enumerate(availability_zones):
     # Calculate IPv6 CIDR properly - VPC gives us something like 2600:1f18:25c:300::/56
-    # We need to create /64 subnets like 2600:1f18:25c:300::/64, 2600:1f18:25c:301::/64
+    # AWS VPC IPv6 blocks have different ending patterns, let's handle this more robustly
+    def calculate_ipv6_cidr(vpc_cidr, subnet_index):
+        # VPC CIDR might be like 2600:1f18:2585:f700::/56
+        # We need to create 2600:1f18:2585:f700::/64 for first subnet
+        # and increment the prefix for additional subnets
+        base_prefix = vpc_cidr.replace("::/56", "")
+        if subnet_index == 0:
+            return f"{base_prefix}::/64"
+        else:
+            # For additional subnets, we need to increment properly
+            # Convert last segment to int, add subnet_index, convert back
+            parts = base_prefix.split(":")
+            last_part = parts[-1] if parts[-1] else "0"
+            last_int = int(last_part, 16) + subnet_index
+            parts[-1] = f"{last_int:x}"
+            return f"{':'.join(parts)}::/64"
+    
     ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-        lambda cidr, subnet_idx=i: cidr.replace("::/56", f":{subnet_idx:x}::/64")
+        lambda cidr, subnet_idx=i: calculate_ipv6_cidr(cidr, subnet_idx)
     )
     
     subnet = aws.ec2.Subnet(
