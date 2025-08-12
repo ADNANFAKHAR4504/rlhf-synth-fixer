@@ -45,21 +45,16 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(bucketEntry).toBeDefined();
 
       const [_, bucketResource] = bucketEntry as [string, any];
-
       const encryption = bucketResource?.Properties?.BucketEncryption;
+
       expect(encryption).toBeDefined();
+      expect(encryption?.ServerSideEncryptionConfiguration).toBeDefined();
 
-      const sseConfig = encryption?.ServerSideEncryptionConfiguration;
-      expect(sseConfig).toBeDefined();
-
-      const rules = sseConfig?.Rules;
-
-      // Ensure rules is an array
-      expect(Array.isArray(rules)).toBe(true);
+      const rules = encryption.ServerSideEncryptionConfiguration?.Rules;
 
       if (!Array.isArray(rules)) {
-        console.error('Encryption rules are not an array:', rules);
-        throw new Error('Invalid encryption rules format');
+        console.error('⚠️ ServerSideEncryptionConfiguration.Rules is not an array:', rules);
+        throw new Error('Invalid or missing encryption rules for S3 bucket.');
       }
 
       expect(rules.length).toBeGreaterThan(0);
@@ -85,8 +80,6 @@ describe('CloudFormation Template Unit Tests', () => {
       const [__, secretResource] = secretEntry as [string, any];
 
       expect(secretResource.Properties).toBeDefined();
-
-      // Match exact name from CloudFormation output, not environment suffix
       expect(secretResource.Properties.Name).toBe('MyAppPassword');
       expect(secretResource.Properties.Description).toBeDefined();
     });
