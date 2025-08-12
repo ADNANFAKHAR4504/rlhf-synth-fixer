@@ -128,14 +128,10 @@
             "Description": "Optional prefix for CloudWatch Log Group names to ensure uniqueness across deployments",
             "Default": ""
         },
-        "CreateCloudTrail": {
+        "ExistingCloudTrailArn": {
             "Type": "String",
-            "Description": "Create CloudTrail (true|false). Set to false if you already have 5 trails in the region.",
-            "Default": "true",
-            "AllowedValues": [
-                "true",
-                "false"
-            ]
+            "Description": "ARN of existing CloudTrail trail to use (leave empty to create new trail)",
+            "Default": ""
         }
     },
     "Conditions": {
@@ -203,12 +199,16 @@
                 }
             ]
         },
-        "CreateCloudTrail": {
-            "Fn::Equals": [
+        "UseExistingCloudTrail": {
+            "Fn::Not": [
                 {
-                    "Ref": "CreateCloudTrail"
-                },
-                "true"
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingCloudTrailArn"
+                        },
+                        ""
+                    ]
+                }
             ]
         },
         "IsAuroraEngine": {
@@ -1275,7 +1275,18 @@
             }
         },
         "CloudTrailRole": {
-            "Condition": "CreateCloudTrail",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "ExistingCloudTrailArn"
+                            },
+                            ""
+                        ]
+                    }
+                ]
+            },
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "AssumeRolePolicyDocument": {
@@ -1660,7 +1671,18 @@
             "UpdateReplacePolicy": "Retain"
         },
         "CloudTrailBucket": {
-            "Condition": "CreateCloudTrail",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "ExistingCloudTrailArn"
+                            },
+                            ""
+                        ]
+                    }
+                ]
+            },
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
@@ -1711,7 +1733,18 @@
             "UpdateReplacePolicy": "Retain"
         },
         "CloudTrailBucketPolicy": {
-            "Condition": "CreateCloudTrail",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "ExistingCloudTrailArn"
+                            },
+                            ""
+                        ]
+                    }
+                ]
+            },
             "Type": "AWS::S3::BucketPolicy",
             "Properties": {
                 "Bucket": {
@@ -1824,7 +1857,7 @@
                                 "s3:ListBucket"
                             ],
                             "Resource": {
-                                "Ref": "ConfigBucket"
+                                "Fn::Sub": "arn:aws:s3:::${ConfigBucket}"
                             }
                         },
                         {
@@ -1848,7 +1881,18 @@
             }
         },
         "CloudTrailLogGroup": {
-            "Condition": "CreateCloudTrail",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "ExistingCloudTrailArn"
+                            },
+                            ""
+                        ]
+                    }
+                ]
+            },
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -1927,7 +1971,18 @@
             "UpdateReplacePolicy": "Retain"
         },
         "CloudTrail": {
-            "Condition": "CreateCloudTrail",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "ExistingCloudTrailArn"
+                            },
+                            ""
+                        ]
+                    }
+                ]
+            },
             "Type": "AWS::CloudTrail::Trail",
             "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
@@ -2495,7 +2550,18 @@
             }
         },
         "CloudTrailMetricFilter": {
-            "Condition": "CreateCloudTrail",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "ExistingCloudTrailArn"
+                            },
+                            ""
+                        ]
+                    }
+                ]
+            },
             "Type": "AWS::Logs::MetricFilter",
             "Properties": {
                 "LogGroupName": {
@@ -2512,7 +2578,18 @@
             }
         },
         "UnauthorizedApiCallsAlarm": {
-            "Condition": "CreateCloudTrail",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "ExistingCloudTrailArn"
+                            },
+                            ""
+                        ]
+                    }
+                ]
+            },
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
@@ -2596,10 +2673,35 @@
             }
         },
         "CloudTrailBucketName": {
-            "Condition": "CreateCloudTrail",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "ExistingCloudTrailArn"
+                            },
+                            ""
+                        ]
+                    }
+                ]
+            },
             "Description": "CloudTrail S3 bucket name",
             "Value": {
                 "Ref": "CloudTrailBucket"
+            }
+        },
+        "ExistingCloudTrailArnOutput": {
+            "Condition": {
+                "Fn::Equals": [
+                    {
+                        "Ref": "ExistingCloudTrailArn"
+                    },
+                    ""
+                ]
+            },
+            "Description": "ARN of the existing CloudTrail trail being used",
+            "Value": {
+                "Ref": "ExistingCloudTrailArn"
             }
         },
         "ConfigBucketName": {

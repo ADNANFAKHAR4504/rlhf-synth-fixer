@@ -194,17 +194,16 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(p.Default).toBe('');
     });
 
-    test('CreateCloudTrail parameter exists with true default', () => {
-      const p = params.CreateCloudTrail;
+    test('ExistingCloudTrailArn parameter exists with empty default', () => {
+      const p = params.ExistingCloudTrailArn;
       expect(p).toBeDefined();
       expect(p.Type).toBe('String');
-      expect(p.Default).toBe('true');
-      expect(p.AllowedValues).toEqual(['true', 'false']);
+      expect(p.Default).toBe('');
     });
   });
 
   describe('Conditions defined properly', () => {
-    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine, CreateCloudTrail exist', () => {
+    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine, UseExistingCloudTrail exist', () => {
       expect(template.Conditions).toBeDefined();
       const conds = template.Conditions;
       expect(conds.UseNatGateways).toBeDefined();
@@ -213,7 +212,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(conds.HasLogGroupNamePrefix).toBeDefined();
       expect(conds.IsAuroraEngine).toBeDefined();
       expect(conds.IsNotAuroraEngine).toBeDefined();
-      expect(conds.CreateCloudTrail).toBeDefined();
+      expect(conds.UseExistingCloudTrail).toBeDefined();
     });
   });
 
@@ -458,7 +457,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
 
     test('CloudTrail is multi-region, logs enabled, with KMS and CW Logs integration (when created)', () => {
       const trails = getResourcesByType(template, 'AWS::CloudTrail::Trail');
-      // CloudTrail is conditional, so we check if it exists
+      // CloudTrail is conditional based on whether existing trail ARN is provided
       if (trails.length > 0) {
         expect(trails.length).toBe(1);
         const t = trails[0].resource.Properties;
@@ -470,8 +469,8 @@ describe('TapStack CloudFormation Template (YAML)', () => {
         expect(!!t.CloudWatchLogsLogGroupArn).toBe(true);
         expect(!!t.CloudWatchLogsRoleArn).toBe(true);
       } else {
-        // If no CloudTrail, we expect the condition to be false
-        expect(template.Conditions.CreateCloudTrail).toBeDefined();
+        // If no CloudTrail, we expect the condition to be defined
+        expect(template.Conditions.UseExistingCloudTrail).toBeDefined();
       }
     });
 
