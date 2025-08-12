@@ -492,7 +492,7 @@ export class TapStack extends TerraformStack {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       storageEncrypted: true,
-      monitoringInterval: 60,
+      monitoringInterval: 0,
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       skipFinalSnapshot: true, // For development - set to false in production
       deletionProtection: false, // For development - set to true in production
