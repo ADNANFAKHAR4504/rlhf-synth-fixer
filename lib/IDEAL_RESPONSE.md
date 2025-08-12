@@ -147,7 +147,7 @@ Resources:
             Principal: "*"
             Action: "s3:*"
             Resource:
-              - !Sub "${AppS3Bucket}"
+              - !GetAtt AppS3Bucket.Arn
               - !Sub "${AppS3Bucket}/*"
             Condition:
               Bool:
@@ -192,7 +192,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Sub "${CloudTrailLogsBucket}"
+            Resource: !GetAtt CloudTrailLogsBucket.Arn
           - Sid: "AWSCloudTrailWrite"
             Effect: Allow
             Principal:
@@ -207,7 +207,7 @@ Resources:
             Principal: "*"
             Action: "s3:*"
             Resource:
-              - !Sub "${CloudTrailLogsBucket}"
+              - !GetAtt CloudTrailLogsBucket.Arn
               - !Sub "${CloudTrailLogsBucket}/*"
             Condition:
               Bool:

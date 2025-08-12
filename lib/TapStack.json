@@ -205,7 +205,10 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${AppS3Bucket}"
+                                    "Fn::GetAtt": [
+                                        "AppS3Bucket",
+                                        "Arn"
+                                    ]
                                 },
                                 {
                                     "Fn::Sub": "${AppS3Bucket}/*"
@@ -286,7 +289,10 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailLogsBucket}"
+                                "Fn::GetAtt": [
+                                    "CloudTrailLogsBucket",
+                                    "Arn"
+                                ]
                             }
                         },
                         {
@@ -312,7 +318,10 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${CloudTrailLogsBucket}"
+                                    "Fn::GetAtt": [
+                                        "CloudTrailLogsBucket",
+                                        "Arn"
+                                    ]
                                 },
                                 {
                                     "Fn::Sub": "${CloudTrailLogsBucket}/*"
