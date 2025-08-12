@@ -6,6 +6,7 @@ describe('TapStack Security Infrastructure Tests', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
+  const environmentSuffix = 'test';
 
   beforeEach(() => {
     app = new cdk.App();
@@ -193,7 +194,7 @@ describe('TapStack Security Infrastructure Tests', () => {
 
     test('should use Secrets Manager for database credentials', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: 'rds-credentials',
+        Name: `rds-credentials-${environmentSuffix}`,
         GenerateSecretString: Match.objectLike({
           SecretStringTemplate: '{"username":"admin"}',
           PasswordLength: 30
@@ -341,7 +342,7 @@ describe('TapStack Security Infrastructure Tests', () => {
 
     test('should configure CloudTrail to send logs to CloudWatch', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/cloudtrail/security-demo',
+        LogGroupName: `/aws/cloudtrail/security-demo-${environmentSuffix}`,
         RetentionInDays: 30
       });
     });

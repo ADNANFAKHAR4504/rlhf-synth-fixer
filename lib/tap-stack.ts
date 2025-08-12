@@ -265,7 +265,7 @@ export class TapStack extends cdk.Stack {
       this,
       `SecureDataBucket-${environmentSuffix}`,
       {
-        bucketName: `secure-data-${environmentSuffix}-${this.stackName}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        bucketName: `secure-data-${environmentSuffix}-${this.stackName.toLowerCase()}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: encryptionKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // Block all public access
@@ -392,7 +392,7 @@ export class TapStack extends cdk.Stack {
       // Database configuration
       databaseName: 'securedb',
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: 'rds-credentials',
+        secretName: `rds-credentials-${environmentSuffix}`,
         encryptionKey: encryptionKey,
       }),
 
@@ -634,7 +634,7 @@ def handler(event, context):
       this,
       `CloudTrailBucket-${environmentSuffix}`,
       {
-        bucketName: `cloudtrail-logs-${environmentSuffix}-${this.stackName}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        bucketName: `cloudtrail-logs-${environmentSuffix}-${this.stackName.toLowerCase()}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: encryptionKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -653,7 +653,7 @@ def handler(event, context):
       encryptionKey: encryptionKey,
       sendToCloudWatchLogs: true,
       cloudWatchLogGroup: new logs.LogGroup(this, 'CloudTrailLogGroup', {
-        logGroupName: '/aws/cloudtrail/security-demo',
+        logGroupName: `/aws/cloudtrail/security-demo-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_MONTH,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }),

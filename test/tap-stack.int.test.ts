@@ -6,11 +6,12 @@ describe('TapStack Integration Tests', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
+  const environmentSuffix = 'int-test';
 
   beforeEach(() => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStackIntegration', { 
-      environmentSuffix: 'int-test',
+      environmentSuffix: environmentSuffix,
       env: {
         account: '123456789012',
         region: 'us-east-1'
