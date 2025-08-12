@@ -97,7 +97,6 @@ export class TapStack extends cdk.Stack {
     const flowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
       logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      encryptionKey: encryptionKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -656,7 +655,6 @@ def handler(event, context):
       cloudWatchLogGroup: new logs.LogGroup(this, 'CloudTrailLogGroup', {
         logGroupName: '/aws/cloudtrail/security-demo',
         retention: logs.RetentionDays.ONE_MONTH,
-        encryptionKey: encryptionKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }),
     });
