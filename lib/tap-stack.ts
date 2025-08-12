@@ -57,6 +57,12 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
       }),
     });
 
+    // KMS Key Alias for better operational management
+    new kms.Alias(this, 'EnterpriseKMSKeyAlias', {
+      aliasName: `alias/enterprise-key-${this.stackName.toLowerCase()}`,
+      targetKey: kmsKey,
+    });
+
     // VPC with public and private subnets across 3 AZs
     const vpc = new ec2.Vpc(this, 'SecureVPC', {
       maxAzs: 3,
@@ -83,6 +89,7 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
     // VPC Flow Logs for monitoring
     const vpcFlowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
       retention: logs.RetentionDays.ONE_YEAR,
+      encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow log group deletion for cleanup
     });
 
@@ -144,6 +151,7 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
     // CloudTrail for API logging - Log group for CloudTrail logs
     new logs.LogGroup(this, 'CloudTrailLogGroup', {
       retention: logs.RetentionDays.ONE_YEAR,
+      encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow log group deletion for cleanup
     });
 
@@ -347,6 +355,7 @@ export class SecureEnterpriseInfrastructureStack extends cdk.Stack {
 import json
 import boto3
 import logging
+from datetime import datetime
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -366,7 +375,8 @@ def handler(event, context):
             
             for key in keys['AccessKeyMetadata']:
                 key_id = key['AccessKeyId']
-                key_age = (context.aws_request_id - key['CreateDate']).days
+                key_created = key['CreateDate'].replace(tzinfo=None)
+                key_age = (datetime.now() - key_created).days
                 
                 # Rotate keys older than 90 days
                 if key_age > 90:
@@ -404,13 +414,35 @@ def handler(event, context):
           'iam:ListAccessKeys',
           'iam:CreateAccessKey',
           'iam:DeleteAccessKey',
+        ],
+        resources: [
+          `arn:aws:iam::${this.account}:user/*`,
+        ],
+      })
+    );
+
+    keyRotationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
           'secretsmanager:CreateSecret',
           'secretsmanager:UpdateSecret',
+        ],
+        resources: [
+          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+        ],
+      })
+    );
+
+    keyRotationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
           'kms:Encrypt',
           'kms:Decrypt',
           'kms:GenerateDataKey',
         ],
-        resources: ['*'],
+        resources: [kmsKey.keyArn],
       })
     );
 
@@ -453,6 +485,7 @@ def handler(event, context):
     const applicationLogGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
       logGroupName: '/aws/application/secure-app',
       retention: logs.RetentionDays.ONE_YEAR,
+      encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow log group deletion for cleanup
     });
 
@@ -603,10 +636,5 @@ def handler(event, context):
 const app = new cdk.App();
 new SecureEnterpriseInfrastructureStack(
   app,
-  'SecureEnterpriseInfrastructureStack',
-  {
-    env: {
-      region: 'us-west-2',
-    },
-  }
+  'SecureEnterpriseInfrastructureStack'
 );
