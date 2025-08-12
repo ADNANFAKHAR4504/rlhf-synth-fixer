@@ -96,19 +96,19 @@ test('placeholder test', async () => {
 ```typescript
 // HIGH RISK - KMS Key with DESTROY policy
 kms.Key(this, 'TapKmsKey', {
-  removalPolicy: cdk.RemovalPolicy.DESTROY, // ❌ Should be RETAIN
+  removalPolicy: cdk.RemovalPolicy.DESTROY, // Should be RETAIN
 });
 
 // CRITICAL RISK - RDS with deletion protection disabled
 rds.DatabaseInstance(this, 'TapDatabase', {
-  deletionProtection: false, // ❌ Should be true
-  deleteAutomatedBackups: true, // ❌ Should be false
-  removalPolicy: cdk.RemovalPolicy.DESTROY, // ❌ Should be RETAIN
+  deletionProtection: false, // Should be true
+  deleteAutomatedBackups: true, // Should be false
+  removalPolicy: cdk.RemovalPolicy.DESTROY, // Should be RETAIN
 });
 
 // HIGH RISK - CloudWatch Log Groups with DESTROY
 logs.LogGroup(this, 'FlowLogsGroup', {
-  removalPolicy: cdk.RemovalPolicy.DESTROY, // ❌ Should be RETAIN
+  removalPolicy: cdk.RemovalPolicy.DESTROY, // Should be RETAIN
 });
 ```
 
@@ -164,13 +164,13 @@ logs.LogGroup(this, 'FlowLogsGroup', {
 **Examples (BEFORE)**:
 ```typescript
 // Unused variable in forEach loop
-subnetIds.forEach((_index, subnetId) => { // ❌ _index unused
+subnetIds.forEach((_index, subnetId) => { // _index unused
   // ...
 });
 
 // Unused variable with ESLint disabled
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const passwordPolicyCustomResource = new cdk.CustomResource( // ❌ Unused
+const passwordPolicyCustomResource = new cdk.CustomResource( // Unused
   // ...
 );
 ```
