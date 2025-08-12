@@ -180,6 +180,7 @@ Resources:
               - kms:Encrypt
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
+              - kms:CreateGrant
             Resource: '*'
       Tags:
         - Key: Environment
