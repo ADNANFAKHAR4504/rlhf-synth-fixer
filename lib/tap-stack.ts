@@ -14,7 +14,7 @@ export interface TapStackProps extends cdk.StackProps {
    * Allowed IP addresses for SSH and HTTP access
    */
   allowedIpAddresses: string[];
-  
+
   /**
    * Database configuration
    */
@@ -298,12 +298,12 @@ export class TapStack extends cdk.Stack {
         this,
         'BucketNotificationsHandlerRole',
         {
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
+          assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+          managedPolicies: [
             iam.ManagedPolicy.fromAwsManagedPolicyName(
               'service-role/AWSLambdaBasicExecutionRole'
             ),
-        ],
+          ],
         }
       ),
     });
@@ -618,7 +618,7 @@ def handler(event, context):
   private enableDdosProtection(): void {
     // Note: AWS Shield Advanced requires manual activation and has costs
     // This creates the WAF WebACL for additional protection
-    
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const webAcl = new wafv2.CfnWebACL(this, 'TapWebAcl', {
       scope: 'CLOUDFRONT',
@@ -683,210 +683,19 @@ def handler(event, context):
     });
   }
 
-  private enableAwsConfig(): void {
-    // Create service-linked role for AWS Config
-    const configServiceLinkedRole = new cdk.CustomResource(
-      this,
-      'ConfigServiceLinkedRole',
-      {
-        serviceToken: new cdk.aws_lambda.Function(
-          this,
-          'ConfigServiceLinkedRoleFunction',
-          {
-            runtime: cdk.aws_lambda.Runtime.PYTHON_3_9,
-            handler: 'index.handler',
-            code: cdk.aws_lambda.Code.fromInline(`
-import boto3
-import json
-import cfnresponse
-
-def handler(event, context):
-    try:
-        iam = boto3.client('iam')
-        
-        if event['RequestType'] == 'Create':
-            try:
-                iam.create_service_linked_role(AWSServiceName='config.amazonaws.com')
-                print("Service-linked role created successfully")
-            except iam.exceptions.InvalidInputException as e:
-                if 'already exists' in str(e):
-                    print("Service-linked role already exists")
-                else:
-                    raise e
-        
-        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        cfnresponse.send(event, context, cfnresponse.FAILED, {})
-        `),
-            role: new iam.Role(this, 'ConfigServiceLinkedRoleLambdaRole', {
-              assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-              managedPolicies: [
-                iam.ManagedPolicy.fromAwsManagedPolicyName(
-                  'service-role/AWSLambdaBasicExecutionRole'
-                ),
-              ],
-              inlinePolicies: {
-                CreateServiceLinkedRole: new iam.PolicyDocument({
-                  statements: [
-                    new iam.PolicyStatement({
-                      effect: iam.Effect.ALLOW,
-                      actions: ['iam:CreateServiceLinkedRole'],
-                      resources: [
-                        'arn:aws:iam::*:role/aws-service-role/config.amazonaws.com/*',
-                      ],
-                    }),
-                  ],
-                }),
-              },
-            }),
-          }
-        ).functionArn,
-      }
-    );
-
-    // Create AWS Config setup custom resource
-    const configSetup = new cdk.CustomResource(this, 'AwsConfigSetup', {
-      serviceToken: new cdk.aws_lambda.Function(
-        this,
-        'AwsConfigSetupFunction',
-        {
-          runtime: cdk.aws_lambda.Runtime.PYTHON_3_9,
-          handler: 'index.handler',
-          timeout: cdk.Duration.minutes(5),
-          code: cdk.aws_lambda.Code.fromInline(`
-import boto3
-import json
-import cfnresponse
-import time
-
-def handler(event, context):
-    try:
-        config_client = boto3.client('config')
-        
-        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
-            # Configuration recorder settings
-            recorder_name = 'default'
-            service_role_arn = f"arn:aws:iam::{context.invoked_function_arn.split(':')[4]}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
-            
-            # Delivery channel settings
-            s3_bucket_name = event['ResourceProperties']['S3BucketName']
-            s3_key_prefix = event['ResourceProperties'].get('S3KeyPrefix', 'config/')
-            
-            try:
-                # Create/update configuration recorder
-                config_client.put_configuration_recorder(
-                    ConfigurationRecorder={
-                        'name': recorder_name,
-                        'roleARN': service_role_arn,
-                        'recordingGroup': {
-                            'allSupported': True,
-                            'includeGlobalResourceTypes': True,
-                            'resourceTypes': []
-                        }
-                    }
-                )
-                print("Configuration recorder created/updated")
-                
-                # Create/update delivery channel
-                config_client.put_delivery_channel(
-                    DeliveryChannel={
-                        'name': 'default',
-                        's3BucketName': s3_bucket_name,
-                        's3KeyPrefix': s3_key_prefix,
-                        'configSnapshotDeliveryProperties': {
-                            'deliveryFrequency': 'TwentyFour_Hours'
-                        }
-                    }
-                )
-                print("Delivery channel created/updated")
-                
-                # Start configuration recorder
-                try:
-                    config_client.start_configuration_recorder(
-                        ConfigurationRecorderName=recorder_name
-                    )
-                    print("Configuration recorder started")
-                except config_client.exceptions.NoSuchConfigurationRecorderException:
-                    print("Configuration recorder not found, but continuing...")
-                except Exception as e:
-                    if 'is already started' in str(e):
-                        print("Configuration recorder already started")
-                    else:
-                        raise e
-                        
-            except Exception as e:
-                print(f"Config setup error: {str(e)}")
-                raise e
-        
-        elif event['RequestType'] == 'Delete':
-            try:
-                # Stop configuration recorder
-                config_client.stop_configuration_recorder(
-                    ConfigurationRecorderName='default'
-                )
-                print("Configuration recorder stopped")
-            except:
-                print("Configuration recorder already stopped or doesn't exist")
-        
-        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        cfnresponse.send(event, context, cfnresponse.FAILED, {})
-        `),
-          role: new iam.Role(this, 'AwsConfigSetupLambdaRole', {
-            assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-              iam.ManagedPolicy.fromAwsManagedPolicyName(
-                'service-role/AWSLambdaBasicExecutionRole'
-              ),
-            ],
-            inlinePolicies: {
-              ConfigSetup: new iam.PolicyDocument({
-                statements: [
-                  new iam.PolicyStatement({
-                    effect: iam.Effect.ALLOW,
-                    actions: [
-                      'config:PutConfigurationRecorder',
-                      'config:PutDeliveryChannel',
-                      'config:StartConfigurationRecorder',
-                      'config:StopConfigurationRecorder',
-                      'config:DescribeConfigurationRecorders',
-                      'config:DescribeDeliveryChannels',
-                    ],
-                    resources: ['*'],
-                  }),
-                ],
-              }),
-            },
-          }),
-        }
-      ).functionArn,
-      properties: {
-        S3BucketName: this.s3Bucket.bucketName,
-        S3KeyPrefix: 'config/',
-      },
-    });
-
-    // Make sure the service-linked role is created before Config setup
-    configSetup.node.addDependency(configServiceLinkedRole);
-  }
-
   private addSecurityConfigurations(): void {
-    // Enable AWS Config for compliance monitoring via custom resource
-    this.enableAwsConfig();
-
+    // Note: AWS Config can be manually enabled in the AWS Console for compliance monitoring
     // Note: GuardDuty requires manual activation in the AWS Console
     // This section focuses on other security configurations that can be automated
-    
+
     // Create SNS topic for security alerts
     const securityAlertsTopic = new cdk.aws_sns.Topic(
       this,
       'SecurityAlertsTopic',
       {
         topicName: `tap-security-alerts-${this.stackName.toLowerCase()}`,
-      displayName: 'TAP Security Alerts',
-      masterKey: this.kmsKey,
+        displayName: 'TAP Security Alerts',
+        masterKey: this.kmsKey,
       }
     );
 
@@ -896,14 +705,14 @@ def handler(event, context):
       'UnauthorizedApiCallsAlarm',
       {
         alarmName: `tap-unauthorized-api-calls-${this.stackName.toLowerCase()}`,
-      alarmDescription: 'Alarm for unauthorized API calls',
-      metric: new cdk.aws_cloudwatch.Metric({
-        namespace: 'CloudWatchLogs',
-        metricName: 'UnauthorizedAPICalls',
-        statistic: 'Sum',
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
+        alarmDescription: 'Alarm for unauthorized API calls',
+        metric: new cdk.aws_cloudwatch.Metric({
+          namespace: 'CloudWatchLogs',
+          metricName: 'UnauthorizedAPICalls',
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
       }
     );
 
