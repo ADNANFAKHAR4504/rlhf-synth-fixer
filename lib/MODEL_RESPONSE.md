@@ -21,7 +21,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // Common tags applied to all resources
     const commonTags = {
       Owner: 'YourName', // Replace with your actual name
-      Project: 'SecurityDemo'
+      Project: 'SecurityDemo',
     };
 
     // Apply tags to the entire stack
@@ -31,7 +31,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // =========================================================================
     // 1. KMS KEY FOR ENCRYPTION
     // =========================================================================
-    
+
     /**
      * Create a customer-managed KMS key for encrypting sensitive resources
      * This key will be used for RDS, EBS volumes, and other encrypted resources
@@ -45,7 +45,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // =========================================================================
     // 2. NETWORK CONFIGURATION - VPC WITH PRIVATE SUBNETS
     // =========================================================================
-    
+
     /**
      * Create a VPC with private subnets only for maximum security
      * NAT Gateways provide outbound internet access for private resources
@@ -72,7 +72,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
           cidrMask: 24,
           name: 'DatabaseSubnet',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        }
+        },
       ],
       natGateways: 2, // One NAT Gateway per AZ for redundancy
     });
@@ -80,7 +80,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // =========================================================================
     // 3. VPC FLOW LOGS FOR NETWORK MONITORING
     // =========================================================================
-    
+
     /**
      * Enable VPC Flow Logs to capture all network traffic for security monitoring
      * Logs are stored in CloudWatch Logs with encryption
@@ -104,32 +104,36 @@ export class SecureInfrastructureStack extends cdk.Stack {
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
                 'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams'
+                'logs:DescribeLogStreams',
               ],
-              resources: [flowLogGroup.logGroupArn]
-            })
-          ]
-        })
-      }
+              resources: [flowLogGroup.logGroupArn],
+            }),
+          ],
+        }),
+      },
     });
 
     new ec2.FlowLog(this, 'VPCFlowLog', {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup, flowLogRole),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        flowLogGroup,
+        flowLogRole
+      ),
       trafficType: ec2.FlowLogTrafficType.ALL,
     });
 
     // =========================================================================
     // 4. SECURITY GROUPS WITH RESTRICTIVE RULES
     // =========================================================================
-    
+
     /**
      * Database Security Group - Only allows access from Lambda and EC2
      * No public access allowed (0.0.0.0/0 is explicitly avoided)
      */
     const databaseSG = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
       vpc: vpc,
-      description: 'Security group for RDS database - restrictive inbound rules',
+      description:
+        'Security group for RDS database - restrictive inbound rules',
       allowAllOutbound: false, // Explicitly deny all outbound traffic
     });
 
@@ -161,7 +165,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     });
 
     // Configure security group rules for secure communication
-    
+
     // Allow Lambda to connect to database on port 3306 (MySQL)
     databaseSG.addIngressRule(
       lambdaSG,
@@ -236,7 +240,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // =========================================================================
     // 5. S3 BUCKET WITH ENCRYPTION AT REST
     // =========================================================================
-    
+
     /**
      * Create S3 bucket with server-side encryption enabled
      * All objects are encrypted at rest using the customer-managed KMS key
@@ -254,7 +258,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // =========================================================================
     // 6. IAM ROLES WITH LEAST PRIVILEGE PRINCIPLE
     // =========================================================================
-    
+
     /**
      * Lambda Execution Role - Minimal permissions for Lambda functions
      * Only grants access to specific resources needed for operation
@@ -263,34 +267,30 @@ export class SecureInfrastructureStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'IAM role for Lambda functions with least privilege',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole')
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
       ],
       inlinePolicies: {
         S3Access: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject'
-              ],
-              resources: [secureBucket.arnForObjects('*')]
-            })
-          ]
+              actions: ['s3:GetObject', 's3:PutObject'],
+              resources: [secureBucket.arnForObjects('*')],
+            }),
+          ],
         }),
         KMSAccess: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'kms:Decrypt',
-                'kms:GenerateDataKey'
-              ],
-              resources: [encryptionKey.keyArn]
-            })
-          ]
-        })
-      }
+              actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+              resources: [encryptionKey.keyArn],
+            }),
+          ],
+        }),
+      },
     });
 
     /**
@@ -301,42 +301,44 @@ export class SecureInfrastructureStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances with least privilege',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
       inlinePolicies: {
         S3ReadAccess: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject'
-              ],
-              resources: [secureBucket.arnForObjects('*')]
-            })
-          ]
+              actions: ['s3:GetObject'],
+              resources: [secureBucket.arnForObjects('*')],
+            }),
+          ],
         }),
         KMSDecryptAccess: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'kms:Decrypt'
-              ],
-              resources: [encryptionKey.keyArn]
-            })
-          ]
-        })
-      }
+              actions: ['kms:Decrypt'],
+              resources: [encryptionKey.keyArn],
+            }),
+          ],
+        }),
+      },
     });
 
-    const ec2InstanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      role: ec2Role
-    });
+    const ec2InstanceProfile = new iam.InstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        role: ec2Role,
+      }
+    );
 
     // =========================================================================
     // 7. RDS DATABASE WITH ENCRYPTION AND PRIVATE ACCESS
     // =========================================================================
-    
+
     /**
      * Create RDS subnet group in isolated subnets for maximum security
      * Database has no internet access and can only be reached from VPC
@@ -345,8 +347,8 @@ export class SecureInfrastructureStack extends cdk.Stack {
       vpc: vpc,
       description: 'Subnet group for RDS database in isolated subnets',
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED
-      }
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
     });
 
     /**
@@ -355,36 +357,39 @@ export class SecureInfrastructureStack extends cdk.Stack {
      */
     const database = new rds.DatabaseInstance(this, 'SecureDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35
+        version: rds.MysqlEngineVersion.VER_8_0_35,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc: vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [databaseSG],
-      
+
       // Security configurations
       storageEncrypted: true, // Encrypt data at rest
       storageEncryptionKey: encryptionKey,
       publiclyAccessible: false, // NEVER make database publicly accessible
-      
+
       // Database configuration
       databaseName: 'securedb',
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
         secretName: 'rds-credentials',
-        encryptionKey: encryptionKey
+        encryptionKey: encryptionKey,
       }),
-      
+
       // Backup and maintenance
       backupRetention: cdk.Duration.days(7),
       deletionProtection: false, // Set to true in production
-      
+
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes only
     });
 
     // =========================================================================
     // 8. LAMBDA FUNCTION IN PRIVATE SUBNET
     // =========================================================================
-    
+
     /**
      * Lambda function deployed in private subnet for secure database access
      * Uses the restrictive security group and IAM role
@@ -412,7 +417,7 @@ def handler(event, context):
       `),
       vpc: vpc,
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
       securityGroups: [lambdaSG],
       role: lambdaRole,
@@ -420,42 +425,47 @@ def handler(event, context):
       environment: {
         DB_HOST: database.instanceEndpoint.hostname,
         DB_NAME: 'securedb',
-        S3_BUCKET: secureBucket.bucketName
-      }
+        S3_BUCKET: secureBucket.bucketName,
+      },
     });
 
     // =========================================================================
     // 9. EC2 INSTANCE WITH ENCRYPTED EBS VOLUMES
     // =========================================================================
-    
+
     /**
      * EC2 instance in private subnet with encrypted EBS volumes
      * Uses restrictive security group and IAM role
      */
     const webServerInstance = new ec2.Instance(this, 'WebServerInstance', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       vpc: vpc,
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
       securityGroup: ec2SG,
       role: ec2Role,
-      
+
       // Encrypt EBS volumes
-      blockDevices: [{
-        deviceName: '/dev/xvda',
-        volume: ec2.BlockDeviceVolume.ebs(8, {
-          encrypted: true,
-          kmsKey: encryptionKey,
-          volumeType: ec2.EbsDeviceVolumeType.GP3
-        })
-      }],
-      
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: ec2.BlockDeviceVolume.ebs(8, {
+            encrypted: true,
+            kmsKey: encryptionKey,
+            volumeType: ec2.EbsDeviceVolumeType.GP3,
+          }),
+        },
+      ],
+
       // User data for basic web server setup
       userData: ec2.UserData.forLinux({
-        shebang: '#!/bin/bash'
-      })
+        shebang: '#!/bin/bash',
+      }),
     });
 
     // Add user data commands
@@ -470,7 +480,7 @@ def handler(event, context):
     // =========================================================================
     // 10. APPLICATION LOAD BALANCER WITH WAF
     // =========================================================================
-    
+
     /**
      * Application Load Balancer in public subnets
      * Protected by Web Application Firewall (WAF)
@@ -479,23 +489,27 @@ def handler(event, context):
       vpc: vpc,
       internetFacing: true,
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC
+        subnetType: ec2.SubnetType.PUBLIC,
       },
-      securityGroup: albSG
+      securityGroup: albSG,
     });
 
     // Create target group for EC2 instances
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebServerTargetGroup', {
-      vpc: vpc,
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targets: [new elbv2.InstanceTarget(webServerInstance)],
-      healthCheck: {
-        enabled: true,
-        path: '/',
-        protocol: elbv2.Protocol.HTTP
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'WebServerTargetGroup',
+      {
+        vpc: vpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targets: [new elbv2.InstanceTarget(webServerInstance)],
+        healthCheck: {
+          enabled: true,
+          path: '/',
+          protocol: elbv2.Protocol.HTTP,
+        },
       }
-    });
+    );
 
     // Add HTTPS listener (you would need to provide a certificate in production)
     alb.addListener('HTTPSListener', {
@@ -505,7 +519,7 @@ def handler(event, context):
         // In production, add your SSL certificate here
         // elbv2.ListenerCertificate.fromArn('arn:aws:acm:region:account:certificate/certificate-id')
       ],
-      defaultTargetGroups: [targetGroup]
+      defaultTargetGroups: [targetGroup],
     });
 
     // Redirect HTTP to HTTPS
@@ -515,14 +529,14 @@ def handler(event, context):
       defaultAction: elbv2.ListenerAction.redirect({
         protocol: 'HTTPS',
         port: '443',
-        permanent: true
-      })
+        permanent: true,
+      }),
     });
 
     // =========================================================================
     // 11. WEB APPLICATION FIREWALL (WAF)
     // =========================================================================
-    
+
     /**
      * WAF Web ACL with common security rules
      * Protects against common web attacks like SQL injection and XSS
@@ -539,14 +553,14 @@ def handler(event, context):
           statement: {
             managedRuleGroupStatement: {
               vendorName: 'AWS',
-              name: 'AWSManagedRulesCommonRuleSet'
-            }
+              name: 'AWSManagedRulesCommonRuleSet',
+            },
           },
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudWatchMetricsEnabled: true,
-            metricName: 'CommonRuleSetMetric'
-          }
+            metricName: 'CommonRuleSetMetric',
+          },
         },
         {
           name: 'AWSManagedRulesKnownBadInputsRuleSet',
@@ -555,14 +569,14 @@ def handler(event, context):
           statement: {
             managedRuleGroupStatement: {
               vendorName: 'AWS',
-              name: 'AWSManagedRulesKnownBadInputsRuleSet'
-            }
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
           },
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudWatchMetricsEnabled: true,
-            metricName: 'KnownBadInputsMetric'
-          }
+            metricName: 'KnownBadInputsMetric',
+          },
         },
         {
           name: 'AWSManagedRulesSQLiRuleSet',
@@ -571,33 +585,33 @@ def handler(event, context):
           statement: {
             managedRuleGroupStatement: {
               vendorName: 'AWS',
-              name: 'AWSManagedRulesSQLiRuleSet'
-            }
+              name: 'AWSManagedRulesSQLiRuleSet',
+            },
           },
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudWatchMetricsEnabled: true,
-            metricName: 'SQLiRuleSetMetric'
-          }
-        }
+            metricName: 'SQLiRuleSetMetric',
+          },
+        },
       ],
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudWatchMetricsEnabled: true,
-        metricName: 'WebACLMetric'
-      }
+        metricName: 'WebACLMetric',
+      },
     });
 
     // Associate WAF with ALB
     new wafv2.CfnWebACLAssociation(this, 'WebACLAssociation', {
       resourceArn: alb.loadBalancerArn,
-      webAclArn: webAcl.attrArn
+      webAclArn: webAcl.attrArn,
     });
 
     // =========================================================================
     // 12. CLOUDTRAIL FOR AUDIT LOGGING
     // =========================================================================
-    
+
     /**
      * CloudTrail for comprehensive audit logging
      * Captures all management events across all regions
@@ -624,36 +638,36 @@ def handler(event, context):
         retention: logs.RetentionDays.ONE_MONTH,
         encryptionKey: encryptionKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
-      })
+      }),
     });
 
     // =========================================================================
     // 13. OUTPUTS FOR REFERENCE
     // =========================================================================
-    
+
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
-      description: 'VPC ID for the secure infrastructure'
+      description: 'VPC ID for the secure infrastructure',
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
-      description: 'RDS database endpoint (private access only)'
+      description: 'RDS database endpoint (private access only)',
     });
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
-      description: 'Application Load Balancer DNS name'
+      description: 'Application Load Balancer DNS name',
     });
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: secureBucket.bucketName,
-      description: 'Secure S3 bucket name'
+      description: 'Secure S3 bucket name',
     });
 
     new cdk.CfnOutput(this, 'LambdaFunctionName', {
       value: databaseLambda.functionName,
-      description: 'Lambda function name'
+      description: 'Lambda function name',
     });
   }
 }
@@ -665,26 +679,31 @@ export default SecureInfrastructureStack;
 ## Key Security Features Implemented
 
 ### 🔒 **Network Security**
+
 - **Private Subnet Architecture**: All sensitive resources (RDS, Lambda, EC2) deployed in private subnets
 - **Isolated Database Subnets**: Database in completely isolated subnets with no internet access
 - **VPC Flow Logs**: Complete network traffic monitoring and logging
 
 ### 🛡️ **Access Control**
+
 - **Restrictive Security Groups**: No `0.0.0.0/0` rules, explicit allow-only approach
 - **Least Privilege IAM**: Custom roles with minimal required permissions
 - **No Static Keys**: All access via IAM roles and temporary credentials
 
 ### 🔐 **Encryption**
+
 - **Customer-Managed KMS Key**: Single key for all encryption with automatic rotation
 - **Encryption at Rest**: S3, RDS, EBS volumes, and CloudWatch Logs all encrypted
 - **Encryption in Transit**: HTTPS/TLS for all communications
 
 ### 📊 **Monitoring & Auditing**
+
 - **CloudTrail**: Multi-region management event logging
 - **VPC Flow Logs**: Network traffic monitoring
 - **WAF Logging**: Web application attack monitoring
 
 ### 🌐 **Web Security**
+
 - **WAF Integration**: Protection against OWASP Top 10 attacks
 - **HTTPS Enforcement**: HTTP to HTTPS redirects
 - **Restricted Access**: ALB only accepts traffic from specified CIDR blocks
@@ -692,11 +711,13 @@ export default SecureInfrastructureStack;
 ## Deployment Instructions
 
 1. **Install Dependencies**:
+
    ```bash
    npm install aws-cdk-lib constructs
    ```
 
 2. **Deploy the Stack**:
+
    ```bash
    cdk deploy SecureInfrastructureStack
    ```

@@ -646,8 +646,9 @@ def handler(event, context):
 
     // Create CloudTrail for comprehensive audit logging (conditional to avoid trail limit)
     // Only create if this is a production environment or if explicitly requested
-    const shouldCreateCloudTrail = environmentSuffix === 'prod' || environmentSuffix === 'production';
-    
+    const shouldCreateCloudTrail =
+      environmentSuffix === 'prod' || environmentSuffix === 'production';
+
     if (shouldCreateCloudTrail) {
       new cloudtrail.Trail(this, 'SecurityAuditTrail', {
         bucket: cloudTrailBucket,
@@ -666,7 +667,8 @@ def handler(event, context):
       // For non-production environments, just create the S3 bucket for potential future use
       // and add a note about CloudTrail limit
       new cdk.CfnOutput(this, 'CloudTrailNote', {
-        value: 'CloudTrail not created due to 5-trail limit. Use existing CloudTrail for audit logging.',
+        value:
+          'CloudTrail not created due to 5-trail limit. Use existing CloudTrail for audit logging.',
         description: 'Note about CloudTrail creation',
       });
     }

@@ -3,6 +3,7 @@
 ## Core Requirements
 
 ### 1. **Correct Class Structure**
+
 ```typescript
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -18,6 +19,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 ### 2. **Proper Import Statements**
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -35,19 +37,25 @@ import { Construct } from 'constructs';
 ```
 
 ### 3. **Environment-Aware Resource Naming**
+
 ```typescript
 const encryptionKey = new kms.Key(this, `EncryptionKey-${environmentSuffix}`, {
   description: `KMS key for encrypting sensitive resources in SecurityDemo-${environmentSuffix}`,
   // ...
 });
 
-const secureBucket = new s3.Bucket(this, `SecureDataBucket-${environmentSuffix}`, {
-  bucketName: `secure-data-${environmentSuffix}-${this.stackName}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-  // ...
-});
+const secureBucket = new s3.Bucket(
+  this,
+  `SecureDataBucket-${environmentSuffix}`,
+  {
+    bucketName: `secure-data-${environmentSuffix}-${this.stackName}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+    // ...
+  }
+);
 ```
 
 ### 4. **Proper Security Group Configuration**
+
 ```typescript
 // For testing (replace with specific IP ranges in production)
 albSG.addIngressRule(
@@ -58,13 +66,14 @@ albSG.addIngressRule(
 
 // For production
 const allowedCidrBlocks = [
-  '10.0.0.0/8',   // Your VPC CIDR
+  '10.0.0.0/8', // Your VPC CIDR
   '172.16.0.0/12', // Your VPN CIDR
   '192.168.0.0/16', // Your office CIDR
 ];
 ```
 
 ### 5. **Working Load Balancer Configuration**
+
 ```typescript
 // Use HTTP listener for testing (no certificate required)
 alb.addListener('HTTPListener', {
@@ -83,6 +92,7 @@ alb.addListener('HTTPListener', {
 ```
 
 ### 6. **Lambda Function Without Runtime Dependencies**
+
 ```typescript
 const databaseLambda = new lambda.Function(this, 'DatabaseLambda', {
   runtime: lambda.Runtime.PYTHON_3_11,
@@ -108,23 +118,29 @@ def handler(event, context):
 ```
 
 ### 7. **Proper Target Group Configuration**
+
 ```typescript
-const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebServerTargetGroup', {
-  vpc: vpc,
-  port: 80,
-  protocol: elbv2.ApplicationProtocol.HTTP,
-  targets: [new targets.InstanceTarget(webServerInstance)],
-  healthCheck: {
-    enabled: true,
-    path: '/',
-    protocol: elbv2.Protocol.HTTP,
-  },
-});
+const targetGroup = new elbv2.ApplicationTargetGroup(
+  this,
+  'WebServerTargetGroup',
+  {
+    vpc: vpc,
+    port: 80,
+    protocol: elbv2.ApplicationProtocol.HTTP,
+    targets: [new targets.InstanceTarget(webServerInstance)],
+    healthCheck: {
+      enabled: true,
+      path: '/',
+      protocol: elbv2.Protocol.HTTP,
+    },
+  }
+);
 ```
 
 ## Security Requirements Compliance
 
 ### 8. **Comprehensive Security Checklist**
+
 ```typescript
 /**
  * SECURITY COMPLIANCE CHECKLIST:
@@ -138,7 +154,7 @@ const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebServerTargetGroup
  * ✅ Lambda in VPC: Deployed in private subnets
  * ✅ Security groups: Restricted to specific CIDR blocks
  * ✅ EBS encryption: All volumes encrypted
- * 
+ *
  * ⚠️  MANUAL REQUIREMENT: Enable MFA on AWS Root account
  *    This must be done manually in AWS Console as it's not
  *    configurable via infrastructure code.
@@ -148,12 +164,14 @@ const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebServerTargetGroup
 ## Testing Requirements
 
 ### 9. **Comprehensive Unit Tests**
+
 - Test all security requirements
 - Validate resource configurations
 - Test environment-specific behavior
 - 100% code coverage
 
 ### 10. **Integration Tests**
+
 - Test resource dependencies
 - Validate end-to-end scenarios
 - Test cross-environment consistency
@@ -162,6 +180,7 @@ const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebServerTargetGroup
 ## Documentation Requirements
 
 ### 11. **Clear Deployment Instructions**
+
 ```bash
 # Install dependencies
 npm install
@@ -175,6 +194,7 @@ cdk deploy TapStackdev
 ```
 
 ### 12. **Security Best Practices Documentation**
+
 - Explain each security measure
 - Provide production deployment guidance
 - Document manual security requirements
@@ -183,12 +203,14 @@ cdk deploy TapStackdev
 ## Quality Assurance
 
 ### 13. **Error Handling**
+
 - Validate optional parameters
 - Handle missing environment variables
 - Provide meaningful error messages
 - Graceful degradation
 
 ### 14. **Monitoring and Observability**
+
 - Comprehensive stack outputs
 - CloudWatch logging configuration
 - Resource tagging for cost tracking
@@ -197,12 +219,14 @@ cdk deploy TapStackdev
 ## Production Readiness
 
 ### 15. **Environment Management**
+
 - Support for multiple environments (dev, staging, prod)
 - Environment-specific configurations
 - Consistent security across environments
 - Proper resource naming conventions
 
 ### 16. **Operational Excellence**
+
 - Automated testing in CI/CD
 - Security compliance validation
 - Cost optimization considerations
