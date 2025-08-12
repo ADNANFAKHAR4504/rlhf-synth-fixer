@@ -68,13 +68,15 @@ describe('TAP Stack Integration Tests', () => {
   });
 
   describe('CloudFormation Outputs', () => {
-    test('should have S3BucketName output', () => {
+    test('should have S3 bucket name output', () => {
       if (!outputsExist) {
         console.log('Skipping test - no outputs available');
         return;
       }
-      expect(outputs.S3BucketName).toBeDefined();
-      expect(typeof outputs.S3BucketName).toBe('string');
+      // Check for either S3BucketName (TapStack) or DataBucketName (secureapp)
+      const bucketName = outputs.S3BucketName || outputs.DataBucketName;
+      expect(bucketName).toBeDefined();
+      expect(typeof bucketName).toBe('string');
     });
 
     test('should have StackName output', () => {
@@ -86,25 +88,26 @@ describe('TAP Stack Integration Tests', () => {
       expect(typeof outputs.StackName).toBe('string');
     });
 
-    test('should have EnvironmentSuffix output', () => {
+    test('should have Environment output', () => {
       if (!outputsExist) {
         console.log('Skipping test - no outputs available');
         return;
       }
-      expect(outputs.EnvironmentSuffix).toBeDefined();
-      expect(typeof outputs.EnvironmentSuffix).toBe('string');
+      expect(outputs.Environment).toBeDefined();
+      expect(typeof outputs.Environment).toBe('string');
     });
   });
 
   describe('S3 Bucket Live Integration', () => {
     test('S3 bucket should exist and be accessible', async () => {
-      if (!outputsExist || !outputs.S3BucketName) {
+      const bucketName = outputs.S3BucketName || outputs.DataBucketName;
+      if (!outputsExist || !bucketName) {
         console.log('Skipping test - no S3 bucket name available');
         return;
       }
       
       try {
-        const command = new HeadBucketCommand({ Bucket: outputs.S3BucketName });
+        const command = new HeadBucketCommand({ Bucket: bucketName });
         await s3Client.send(command);
         expect(true).toBe(true); // If we reach here, bucket exists and is accessible
       } catch (error: any) {
@@ -115,13 +118,14 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('S3 bucket should have encryption enabled', async () => {
-      if (!outputsExist || !outputs.S3BucketName) {
+      const bucketName = outputs.S3BucketName || outputs.DataBucketName;
+      if (!outputsExist || !bucketName) {
         console.log('Skipping test - no S3 bucket name available');
         return;
       }
       
       try {
-        const command = new GetBucketEncryptionCommand({ Bucket: outputs.S3BucketName });
+        const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
         const response = await s3Client.send(command);
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
         expect(response.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
@@ -134,13 +138,14 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('S3 bucket should have versioning enabled', async () => {
-      if (!outputsExist || !outputs.S3BucketName) {
+      const bucketName = outputs.S3BucketName || outputs.DataBucketName;
+      if (!outputsExist || !bucketName) {
         console.log('Skipping test - no S3 bucket name available');
         return;
       }
       
       try {
-        const command = new GetBucketVersioningCommand({ Bucket: outputs.S3BucketName });
+        const command = new GetBucketVersioningCommand({ Bucket: bucketName });
         const response = await s3Client.send(command);
         expect(response.Status).toBe('Enabled');
       } catch (error: any) {
@@ -151,13 +156,14 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('S3 bucket should have bucket policy', async () => {
-      if (!outputsExist || !outputs.S3BucketName) {
+      const bucketName = outputs.S3BucketName || outputs.DataBucketName;
+      if (!outputsExist || !bucketName) {
         console.log('Skipping test - no S3 bucket name available');
         return;
       }
       
       try {
-        const command = new GetBucketPolicyCommand({ Bucket: outputs.S3BucketName });
+        const command = new GetBucketPolicyCommand({ Bucket: bucketName });
         const response = await s3Client.send(command);
         expect(response.Policy).toBeDefined();
         const policy = JSON.parse(response.Policy!);
@@ -314,28 +320,30 @@ describe('TAP Stack Integration Tests', () => {
         return;
       }
       const stackName = outputs.StackName;
-      expect(stackName).toContain('TapStack');
+      // Check for either TapStack or secureapp (different stacks)
+      expect(stackName).toMatch(/(TapStack|secureapp)/);
     });
 
-    test('environment suffix should match expected pattern', () => {
-      if (!outputsExist || !outputs.EnvironmentSuffix) {
-        console.log('Skipping test - no environment suffix available');
+    test('environment should match expected pattern', () => {
+      if (!outputsExist || !outputs.Environment) {
+        console.log('Skipping test - no environment available');
         return;
       }
-      const envSuffix = outputs.EnvironmentSuffix;
-      expect(envSuffix).toMatch(/^[a-zA-Z0-9]+$/);
+      const environment = outputs.Environment;
+      expect(environment).toMatch(/^(dev|staging|prod)$/);
     });
   });
 
   describe('Security Validation', () => {
     test('S3 bucket should have encryption enabled', async () => {
-      if (!outputsExist || !outputs.S3BucketName) {
+      const bucketName = outputs.S3BucketName || outputs.DataBucketName;
+      if (!outputsExist || !bucketName) {
         console.log('Skipping test - no S3 bucket name available');
         return;
       }
       
       try {
-        const command = new GetBucketEncryptionCommand({ Bucket: outputs.S3BucketName });
+        const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
         const response = await s3Client.send(command);
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
         expect(response.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
@@ -354,12 +362,12 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('Lambda function should have proper IAM role', async () => {
-      if (!outputsExist || !outputs.S3BucketName) {
+      const bucketName = outputs.S3BucketName || outputs.DataBucketName;
+      if (!outputsExist || !bucketName) {
         console.log('Skipping test - no S3 bucket name available');
         return;
       }
       
-      const bucketName = outputs.S3BucketName;
       const functionName = bucketName.replace('-app-data-', '-main-function-').replace(/-\d{12}$/, '');
       
       try {
