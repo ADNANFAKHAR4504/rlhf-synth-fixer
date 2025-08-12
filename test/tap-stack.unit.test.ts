@@ -62,7 +62,7 @@ describe('Web Application Stack Unit Tests', () => {
 
       // Verify the ECRImageUriParameter has the correct default
       expect(params.ECRImageUriParameter.Default).toBe(
-        'public.ecr.aws/lambda/nodejs:20'
+        'public.ecr.aws/lambda/nodejs:latest-x86_64'
       );
     });
   });

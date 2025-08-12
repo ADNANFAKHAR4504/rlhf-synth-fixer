@@ -3,6 +3,7 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
+  Filter,
 } from '@aws-sdk/client-ec2';
 import {
   ElasticLoadBalancingV2Client,
@@ -31,7 +32,6 @@ import {
   DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
 import * as fs from 'fs';
-import * as path from 'path';
 
 // --- Test Configuration ---
 const STACK_NAME = process.env.STACK_NAME; // Your deployed stack name
@@ -49,6 +49,12 @@ const cfnClient = new CloudFormationClient({ region: REGION });
 
 // --- Helper function to get stack outputs ---
 async function getStackOutputs(): Promise<{ [key: string]: string }> {
+  if (!STACK_NAME) {
+    console.warn(
+      'STACK_NAME environment variable not set. Skipping API calls.'
+    );
+    return {};
+  }
   try {
     const { Stacks } = await cfnClient.send(
       new DescribeStacksCommand({ StackName: STACK_NAME })
@@ -84,6 +90,7 @@ async function getStackOutputs(): Promise<{ [key: string]: string }> {
 // --- Helper function to get stack resources ---
 async function getStackResources(): Promise<Map<string, any>> {
   const resourceMap = new Map();
+  if (!STACK_NAME) return resourceMap;
   try {
     const { StackResources } = await cfnClient.send(
       new DescribeStackResourcesCommand({ StackName: STACK_NAME })
@@ -108,7 +115,8 @@ beforeAll(async () => {
 }, 30000);
 
 // Conditionally run tests only if stack outputs were loaded successfully
-const testSuite = Object.keys(outputs).length > 0 ? describe : describe.skip;
+const testSuite =
+  STACK_NAME && Object.keys(outputs).length > 0 ? describe : describe.skip;
 
 testSuite('Web Application Stack Integration Tests', () => {
   // Resource identifiers fetched from outputs
@@ -126,29 +134,33 @@ testSuite('Web Application Stack Integration Tests', () => {
 
   beforeAll(async () => {
     // Discover the ALB ARN from its DNS name
-    const albResponse = await elbv2Client.send(
-      new DescribeLoadBalancersCommand({})
-    );
-    const alb = albResponse.LoadBalancers?.find(
-      lb => lb.DNSName === albDnsName
-    );
-    if (!alb || !alb.LoadBalancerArn) {
-      console.warn('Could not find deployed Application Load Balancer');
-    } else {
-      albArn = alb.LoadBalancerArn;
+    if (albDnsName) {
+      const albResponse = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({})
+      );
+      const alb = albResponse.LoadBalancers?.find(
+        lb => lb.DNSName === albDnsName
+      );
+      if (!alb || !alb.LoadBalancerArn) {
+        console.warn('Could not find deployed Application Load Balancer');
+      } else {
+        albArn = alb.LoadBalancerArn;
+      }
     }
 
     // Discover the RDS Instance Identifier from its endpoint address
-    const rdsResponse = await rdsClient.send(
-      new DescribeDBInstancesCommand({})
-    );
-    const rdsInstance = rdsResponse.DBInstances?.find(
-      db => db.Endpoint?.Address === rdsEndpoint
-    );
-    if (!rdsInstance || !rdsInstance.DBInstanceIdentifier) {
-      console.warn('Could not find deployed RDS Instance');
-    } else {
-      rdsInstanceIdentifier = rdsInstance.DBInstanceIdentifier;
+    if (rdsEndpoint) {
+      const rdsResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({})
+      );
+      const rdsInstance = rdsResponse.DBInstances?.find(
+        db => db.Endpoint?.Address === rdsEndpoint
+      );
+      if (!rdsInstance || !rdsInstance.DBInstanceIdentifier) {
+        console.warn('Could not find deployed RDS Instance');
+      } else {
+        rdsInstanceIdentifier = rdsInstance.DBInstanceIdentifier;
+      }
     }
 
     // Discover Lambda function name from stack resources
@@ -160,43 +172,55 @@ testSuite('Web Application Stack Integration Tests', () => {
       const { Functions } = await lambdaClient.send(
         new ListFunctionsCommand({})
       );
-      const lambdaFunc = Functions?.find(
-        f =>
-          f.FunctionName?.includes('WebApp-Placeholder') ||
-          f.FunctionName?.includes(STACK_NAME)
-      );
-      if (lambdaFunc) {
-        lambdaFunctionName = lambdaFunc.FunctionName!;
+      const lambdaFunc = Functions?.find(f => {
+        if (!f.FunctionName) return false;
+        const nameIncludesPlaceholder =
+          f.FunctionName.includes('WebApp-Placeholder');
+        const nameIncludesStackName = STACK_NAME
+          ? f.FunctionName.includes(STACK_NAME)
+          : false;
+        return nameIncludesPlaceholder || nameIncludesStackName;
+      });
+      if (lambdaFunc && lambdaFunc.FunctionName) {
+        lambdaFunctionName = lambdaFunc.FunctionName;
       }
     }
 
     // Discover Security Group IDs from stack resources or by tags
-    const sgResponse = await ec2Client.send(
-      new DescribeSecurityGroupsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [vpcId] },
-          { Name: 'tag:aws:cloudformation:stack-name', Values: [STACK_NAME] },
-        ],
-      })
-    );
+    const filters: Filter[] = [];
+    if (vpcId) {
+      filters.push({ Name: 'vpc-id', Values: [vpcId] });
+    }
+    if (STACK_NAME) {
+      filters.push({
+        Name: 'tag:aws:cloudformation:stack-name',
+        Values: [STACK_NAME],
+      });
+    }
 
-    // Try to identify security groups by their CloudFormation logical IDs
-    for (const sg of sgResponse.SecurityGroups || []) {
-      const logicalIdTag = sg.Tags?.find(
-        tag => tag.Key === 'aws:cloudformation:logical-id'
+    if (filters.length > 0) {
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ Filters: filters })
       );
 
-      if (logicalIdTag) {
-        switch (logicalIdTag.Value) {
-          case 'ALBSecurityGroup':
-            securityGroupIds.alb = sg.GroupId!;
-            break;
-          case 'WebServerSecurityGroup':
-            securityGroupIds.web = sg.GroupId!;
-            break;
-          case 'DatabaseSecurityGroup':
-            securityGroupIds.db = sg.GroupId!;
-            break;
+      // Try to identify security groups by their CloudFormation logical IDs
+      for (const sg of sgResponse.SecurityGroups || []) {
+        const logicalIdTag = sg.Tags?.find(
+          tag => tag.Key === 'aws:cloudformation:logical-id'
+        );
+
+        if (logicalIdTag && sg.GroupId) {
+          switch (logicalIdTag.Value) {
+            case 'ALBSecurityGroup':
+              securityGroupIds.alb = sg.GroupId;
+              break;
+            case 'WebServerSecurityGroup':
+              securityGroupIds.web = sg.GroupId;
+              break;
+            case 'DatabaseSecurityGroup':
+              securityGroupIds.db = sg.GroupId;
+              break;
+          }
         }
       }
     }
@@ -341,6 +365,7 @@ testSuite('Web Application Stack Integration Tests', () => {
 
         // 2. Extract the role name from the ARN
         const roleName = roleArn!.split('/').pop();
+        if (!roleName) throw new Error('Could not parse role name from ARN');
 
         // 3. Get the role from IAM using the extracted name
         const { Role } = await iamClient.send(
@@ -356,7 +381,8 @@ testSuite('Web Application Stack Integration Tests', () => {
 
         expect(principalService).toBe('lambda.amazonaws.com');
       } catch (error) {
-        console.warn(`Failed to verify Lambda IAM role: ${error}`);
+        // Fail the test explicitly on error
+        fail(`Failed to verify Lambda IAM role: ${error}`);
       }
     });
   });
@@ -452,7 +478,7 @@ testSuite('Web Application Stack Integration Tests', () => {
           );
         }
       } catch (error) {
-        console.warn(`Failed to verify Lambda configuration: ${error}`);
+        fail(`Failed to verify Lambda configuration: ${error}`);
       }
     });
 
@@ -480,6 +506,10 @@ testSuite('Web Application Stack Integration Tests', () => {
 
   describe('🏷️ Resource Tagging', () => {
     test('All resources should have proper tags', async () => {
+      if (!STACK_NAME) {
+        console.warn('STACK_NAME not set, skipping tagging test.');
+        return;
+      }
       const resources = Array.from(stackResources.values());
 
       // Check if stack has proper tags

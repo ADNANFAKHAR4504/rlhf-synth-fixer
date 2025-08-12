@@ -13,7 +13,7 @@ Parameters:
   ECRImageUriParameter:
     Type: String
     Description: The URI of the container image for the Lambda function.
-    Default: 'public.ecr.aws/lambda/nodejs:20' # AWS-provided public Lambda runtime image
+    Default: 'public.ecr.aws/lambda/nodejs:latest-x86_64' # AWS-provided public Lambda runtime image
 
 Resources:
   # ------------------------------------------------------------#
