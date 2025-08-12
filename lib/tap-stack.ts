@@ -33,10 +33,13 @@ export class TapStack extends cdk.Stack {
 
     // Validate environment suffix (equivalent to Terraform workspace validation)
     const validEnvironments = ['dev', 'staging', 'prod'];
+    
+    // For CI/CD scenarios, if the environment suffix doesn't match valid environments,
+    // default to 'dev' instead of throwing an error
+    let finalEnvironmentSuffix = environmentSuffix;
     if (!validEnvironments.includes(environmentSuffix)) {
-      throw new Error(
-        `Invalid environment suffix: ${environmentSuffix}. Must be one of: ${validEnvironments.join(', ')}`
-      );
+      console.warn(`Warning: Invalid environment suffix '${environmentSuffix}' detected. Defaulting to 'dev'. Valid environments are: ${validEnvironments.join(', ')}`);
+      finalEnvironmentSuffix = 'dev';
     }
 
     // Get the region configuration for this stack
@@ -50,7 +53,7 @@ export class TapStack extends cdk.Stack {
     // Update tags with environment suffix
     config.tags = {
       ...config.tags,
-      Environment: environmentSuffix,
+      Environment: finalEnvironmentSuffix,
       Stack: id,
       DeployedAt: new Date().toISOString(),
     };

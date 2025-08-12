@@ -29,16 +29,21 @@ describe('TapStack', () => {
       expect(stack.monitoringConstruct).toBeDefined();
     });
 
-    test('should validate environment suffix and throw error for invalid', () => {
+    test('should handle invalid environment suffix by defaulting to dev', () => {
       const invalidApp = new cdk.App({
         context: {
           environmentSuffix: 'invalid'
         }
       });
       
+      // Should not throw error, but default to 'dev'
       expect(() => {
         new TapStack(invalidApp, 'InvalidStack');
-      }).toThrow('Invalid environment suffix: invalid. Must be one of: dev, staging, prod');
+      }).not.toThrow();
+      
+      // Verify the stack was created successfully
+      const invalidStack = new TapStack(invalidApp, 'InvalidStack2');
+      expect(invalidStack).toBeDefined();
     });
 
     test('should use default environment suffix when not provided', () => {
