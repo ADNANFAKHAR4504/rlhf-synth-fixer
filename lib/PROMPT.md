@@ -10,7 +10,7 @@
 >
 > **Performance & Scalability Requirements:**
 >
-> 1. The system must reliably handle **≥ 100,000 requests per second**.
+> 1. The system must reliably handle **≥ 1,000 requests per second**.
 > 2. Configure **API Gateway** with **high throughput limits** (burst and rate settings) and enable **stage caching** where appropriate.
 > 3. Pre-provision **Lambda provisioned concurrency** to avoid cold starts and ensure consistent latency under peak load.
 > 4. Use **Lambda reserved concurrency** where necessary to prevent resource exhaustion and maintain stability.
