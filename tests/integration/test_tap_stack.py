@@ -50,10 +50,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         'sns_topic_arn': f'arn:aws:sns:us-west-2:123456789012:prod-cloudwatch-alerts-{cls.environment_suffix}'  # pylint: disable=line-too-long
       }
 
-  @mock_aws
   def test_lambda_function_exists_and_configured(self):
     """Test Lambda function exists with proper configuration."""
     function_name = self.stack_outputs.get('lambda_function_name')
+    
+    if not function_name or function_name == 'prod-lambda-function-dev':
+      self.skipTest(f"Lambda function {function_name} not deployed - deployment required for live testing")
     
     try:
       response = self.lambda_client.get_function(FunctionName=function_name)
@@ -73,10 +75,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     except self.lambda_client.exceptions.ResourceNotFoundException:
       self.skipTest(f"Lambda function {function_name} not found - deployment required")
 
-  @mock_aws
   def test_api_gateway_endpoints_accessible(self):
     """Test API Gateway endpoints are accessible and return expected responses."""
     api_url = self.stack_outputs.get('api_gateway_url')
+    
+    if not api_url or 'mock-api-dev' in api_url or 'test-api-dev' in api_url:
+      self.skipTest(f"API Gateway {api_url} not deployed - deployment required for live testing")
     
     # Test health endpoint
     try:
@@ -103,10 +107,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     except requests.RequestException:
       self.skipTest("API Gateway root endpoint not accessible")
 
-  @mock_aws
   def test_s3_bucket_configuration(self):
     """Test S3 bucket exists and has proper security configuration."""
     bucket_name = self.stack_outputs.get('s3_bucket_name')
+    
+    if not bucket_name or bucket_name == 'prod-nova-data-dev':
+      self.skipTest(f"S3 bucket {bucket_name} not deployed - deployment required for live testing")
     
     try:
       # Check bucket exists

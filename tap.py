@@ -10,6 +10,7 @@ The stack created by this module uses environment suffixes to distinguish betwee
 different deployment environments (development, staging, production, etc.).
 """
 import os
+import pulumi
 from pulumi import Config
 from lib.tap_stack import TapStack, TapStackArgs
 
@@ -34,3 +35,11 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+# Export stack outputs for integration tests and CI/CD pipeline
+pulumi.export("lambda_function_name", stack.lambda_function.name)
+pulumi.export("lambda_function_arn", stack.lambda_function.arn)
+pulumi.export("api_gateway_url", stack.api_gateway.api_endpoint)
+pulumi.export("s3_bucket_name", stack.s3_bucket.bucket)
+pulumi.export("lambda_role_arn", stack.lambda_role.arn)
+pulumi.export("sns_topic_arn", stack.sns_topic.arn)
