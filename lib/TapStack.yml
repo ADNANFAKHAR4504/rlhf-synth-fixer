@@ -2,15 +2,25 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: "Automated failover between primary and standby EC2 instances using Route 53 health checks"
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for resource naming
+    Default: dev
+
   HostedZoneId:
     Type: String
-    Description: Route 53 Hosted Zone ID
-    Default: Z0457876OLTG958Q3IXN
+    Description: Route 53 Hosted Zone ID (leave empty to create a new zone)
+    Default: ""
 
   RecordName:
     Type: String
     Description: DNS record name for failover (FQDN, trailing dot ok)
-    Default: tap-us-east-1.turing229221.com.
+    Default: ""
+
+  DomainName:
+    Type: String
+    Description: Domain name for creating new hosted zone (used if HostedZoneId is empty)
+    Default: ""
 
   InstanceType:
     Type: String
@@ -21,7 +31,7 @@ Parameters:
   KeyName:
     Type: String
     Description: EC2 Key Pair name (optional)
-    Default: cf-task-keypair-TapStackpr104
+    Default: ""
 
   AllowedSSHCidr:
     Type: String
@@ -47,8 +57,27 @@ Parameters:
 
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+  CreateHostedZone: !Equals [!Ref HostedZoneId, ""]
+  HasDomainName: !Not [!Equals [!Ref DomainName, ""]]
+  UseProvidedRecordName: !Not [!Equals [!Ref RecordName, ""]]
 
 Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Condition: CreateHostedZone
+    Properties:
+      Name: !If
+        - HasDomainName
+        - !Ref DomainName
+        - !Sub "failover-${EnvironmentSuffix}.example.com"
+      HostedZoneConfig:
+        Comment: !Sub "Hosted zone for failover testing - ${EnvironmentSuffix}"
+      HostedZoneTags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-HostedZone-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -57,7 +86,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-VPC"
+          Value: !Sub "${AWS::StackName}-VPC-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
@@ -66,7 +95,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-IGW"
+          Value: !Sub "${AWS::StackName}-IGW-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
@@ -85,7 +114,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PublicSubnet1"
+          Value: !Sub "${AWS::StackName}-PublicSubnet1-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
@@ -98,7 +127,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PublicSubnet2"
+          Value: !Sub "${AWS::StackName}-PublicSubnet2-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
@@ -108,7 +137,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PublicRouteTable"
+          Value: !Sub "${AWS::StackName}-PublicRouteTable-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
@@ -136,6 +165,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for primary and standby instances
+      GroupName: !Sub "${AWS::StackName}-SecurityGroup-${EnvironmentSuffix}"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -150,7 +180,7 @@ Resources:
           Description: SSH access from allowed CIDR
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-SecurityGroup"
+          Value: !Sub "${AWS::StackName}-SecurityGroup-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
@@ -163,7 +193,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds: [!Ref SecurityGroup]
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           set -euxo pipefail
           dnf update -y
@@ -179,7 +209,7 @@ Resources:
           systemctl restart httpd
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PrimaryInstance"
+          Value: !Sub "${AWS::StackName}-PrimaryInstance-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
         - Key: Role
@@ -194,7 +224,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       SecurityGroupIds: [!Ref SecurityGroup]
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           set -euxo pipefail
           dnf update -y
@@ -210,7 +240,7 @@ Resources:
           systemctl restart httpd
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-StandbyInstance"
+          Value: !Sub "${AWS::StackName}-StandbyInstance-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
         - Key: Role
@@ -222,7 +252,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PrimaryEIP"
+          Value: !Sub "${AWS::StackName}-PrimaryEIP-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
@@ -232,7 +262,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-StandbyEIP"
+          Value: !Sub "${AWS::StackName}-StandbyEIP-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
@@ -260,15 +290,21 @@ Resources:
         FailureThreshold: 3
       HealthCheckTags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PrimaryHealthCheck"
+          Value: !Sub "${AWS::StackName}-PrimaryHealthCheck-${EnvironmentSuffix}"
         - Key: Project
           Value: "IaC - AWS Nova Model Breaking"
 
   PrimaryRecord:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Ref RecordName
+      HostedZoneId: !If [CreateHostedZone, !Ref HostedZone, !Ref HostedZoneId]
+      Name: !If 
+        - UseProvidedRecordName
+        - !Ref RecordName
+        - !If
+          - CreateHostedZone
+          - !Sub "failover.${HostedZone}"
+          - !Sub "failover-${EnvironmentSuffix}.example.com"
       Type: A
       SetIdentifier: Primary
       Failover: PRIMARY
@@ -280,8 +316,14 @@ Resources:
   StandbyRecord:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Ref RecordName
+      HostedZoneId: !If [CreateHostedZone, !Ref HostedZone, !Ref HostedZoneId]
+      Name: !If 
+        - UseProvidedRecordName
+        - !Ref RecordName
+        - !If
+          - CreateHostedZone
+          - !Sub "failover.${HostedZone}"
+          - !Sub "failover-${EnvironmentSuffix}.example.com"
       Type: A
       SetIdentifier: Standby
       Failover: SECONDARY
@@ -316,7 +358,13 @@ Outputs:
 
   DNSName:
     Description: Full DNS name for failover
-    Value: !Ref RecordName
+    Value: !If 
+      - UseProvidedRecordName
+      - !Ref RecordName
+      - !If
+        - CreateHostedZone
+        - !Sub "failover.${HostedZone}"
+        - !Sub "failover-${EnvironmentSuffix}.example.com"
     Export:
       Name: !Sub "${AWS::StackName}-DNSName"
 
@@ -325,3 +373,15 @@ Outputs:
     Value: !Ref PrimaryHealthCheck
     Export:
       Name: !Sub "${AWS::StackName}-HealthCheckId"
+
+  HostedZoneIdOutput:
+    Description: Hosted Zone ID (created or provided)
+    Value: !If [CreateHostedZone, !Ref HostedZone, !Ref HostedZoneId]
+    Export:
+      Name: !Sub "${AWS::StackName}-HostedZoneId"
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCId"

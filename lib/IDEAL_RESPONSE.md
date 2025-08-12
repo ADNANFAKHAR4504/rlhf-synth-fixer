@@ -1,1 +1,389 @@
-Insert here the ideal response
+```yaml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Automated failover between primary and standby EC2 instances using Route 53 health checks"
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for resource naming
+    Default: dev
+
+  HostedZoneId:
+    Type: String
+    Description: Route 53 Hosted Zone ID (leave empty to create a new zone)
+    Default: ""
+
+  RecordName:
+    Type: String
+    Description: DNS record name for failover (FQDN, trailing dot ok)
+    Default: ""
+
+  DomainName:
+    Type: String
+    Description: Domain name for creating new hosted zone (used if HostedZoneId is empty)
+    Default: ""
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type
+    AllowedValues: [t3.micro, t3.small, t3.medium, t3.large]
+
+  KeyName:
+    Type: String
+    Description: EC2 Key Pair name (optional)
+    Default: ""
+
+  AllowedSSHCidr:
+    Type: String
+    Description: CIDR block allowed for SSH access
+    Default: 0.0.0.0/0
+
+  HealthCheckPort:
+    Type: Number
+    Description: Port for health check
+    Default: 80
+    MinValue: 1
+    MaxValue: 65535
+
+  HealthCheckPath:
+    Type: String
+    Description: Path for health check
+    Default: /
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: Latest Amazon Linux AMI ID
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+  CreateHostedZone: !Equals [!Ref HostedZoneId, ""]
+  HasDomainName: !Not [!Equals [!Ref DomainName, ""]]
+  UseProvidedRecordName: !Not [!Equals [!Ref RecordName, ""]]
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Condition: CreateHostedZone
+    Properties:
+      Name: !If
+        - HasDomainName
+        - !Ref DomainName
+        - !Sub "failover-${EnvironmentSuffix}.example.com"
+      HostedZoneConfig:
+        Comment: !Sub "Hosted zone for failover testing - ${EnvironmentSuffix}"
+      HostedZoneTags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-HostedZone-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-VPC-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-IGW-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PublicSubnet1-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PublicSubnet2-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PublicRouteTable-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for primary and standby instances
+      GroupName: !Sub "${AWS::StackName}-SecurityGroup-${EnvironmentSuffix}"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP access from anywhere
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHCidr
+          Description: SSH access from allowed CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-SecurityGroup-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  PrimaryInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds: [!Ref SecurityGroup]
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euxo pipefail
+          dnf update -y
+          dnf install -y httpd
+          systemctl enable --now httpd
+          cat >/var/www/html/index.html <<'HTML'
+          <html><body>
+          <h1>Primary Instance</h1>
+          <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+          <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+          </body></html>
+          HTML
+          systemctl restart httpd
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PrimaryInstance-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+        - Key: Role
+          Value: Primary
+
+  StandbyInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
+      SubnetId: !Ref PublicSubnet2
+      SecurityGroupIds: [!Ref SecurityGroup]
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euxo pipefail
+          dnf update -y
+          dnf install -y httpd
+          systemctl enable --now httpd
+          cat >/var/www/html/index.html <<'HTML'
+          <html><body>
+          <h1>Standby Instance</h1>
+          <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+          <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+          </body></html>
+          HTML
+          systemctl restart httpd
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-StandbyInstance-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+        - Key: Role
+          Value: Standby
+
+  PrimaryEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PrimaryEIP-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  StandbyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-StandbyEIP-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  PrimaryEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt PrimaryEIP.AllocationId
+      InstanceId: !Ref PrimaryInstance
+
+  StandbyEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt StandbyEIP.AllocationId
+      InstanceId: !Ref StandbyInstance
+
+  PrimaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTP
+        IPAddress: !Ref PrimaryEIP
+        Port: !Ref HealthCheckPort
+        ResourcePath: !Ref HealthCheckPath
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PrimaryHealthCheck-${EnvironmentSuffix}"
+        - Key: Project
+          Value: "IaC - AWS Nova Model Breaking"
+
+  PrimaryRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !If [CreateHostedZone, !Ref HostedZone, !Ref HostedZoneId]
+      Name: !If 
+        - UseProvidedRecordName
+        - !Ref RecordName
+        - !If
+          - CreateHostedZone
+          - !Sub "failover.${HostedZone}"
+          - !Sub "failover-${EnvironmentSuffix}.example.com"
+      Type: A
+      SetIdentifier: Primary
+      Failover: PRIMARY
+      TTL: 60
+      ResourceRecords:
+        - !Ref PrimaryEIP
+      HealthCheckId: !Ref PrimaryHealthCheck
+
+  StandbyRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !If [CreateHostedZone, !Ref HostedZone, !Ref HostedZoneId]
+      Name: !If 
+        - UseProvidedRecordName
+        - !Ref RecordName
+        - !If
+          - CreateHostedZone
+          - !Sub "failover.${HostedZone}"
+          - !Sub "failover-${EnvironmentSuffix}.example.com"
+      Type: A
+      SetIdentifier: Standby
+      Failover: SECONDARY
+      TTL: 60
+      ResourceRecords:
+        - !Ref StandbyEIP
+
+Outputs:
+  PrimaryInstanceId:
+    Description: Primary instance ID
+    Value: !Ref PrimaryInstance
+    Export:
+      Name: !Sub "${AWS::StackName}-PrimaryInstanceId"
+
+  StandbyInstanceId:
+    Description: Standby instance ID
+    Value: !Ref StandbyInstance
+    Export:
+      Name: !Sub "${AWS::StackName}-StandbyInstanceId"
+
+  PrimaryEIPOut:
+    Description: Primary instance Elastic IP
+    Value: !Ref PrimaryEIP
+    Export:
+      Name: !Sub "${AWS::StackName}-PrimaryEIP"
+
+  StandbyEIPOut:
+    Description: Standby instance Elastic IP
+    Value: !Ref StandbyEIP
+    Export:
+      Name: !Sub "${AWS::StackName}-StandbyEIP"
+
+  DNSName:
+    Description: Full DNS name for failover
+    Value: !If 
+      - UseProvidedRecordName
+      - !Ref RecordName
+      - !If
+        - CreateHostedZone
+        - !Sub "failover.${HostedZone}"
+        - !Sub "failover-${EnvironmentSuffix}.example.com"
+    Export:
+      Name: !Sub "${AWS::StackName}-DNSName"
+
+  HealthCheckId:
+    Description: Primary health check ID
+    Value: !Ref PrimaryHealthCheck
+    Export:
+      Name: !Sub "${AWS::StackName}-HealthCheckId"
+
+  HostedZoneIdOutput:
+    Description: Hosted Zone ID (created or provided)
+    Value: !If [CreateHostedZone, !Ref HostedZone, !Ref HostedZoneId]
+    Export:
+      Name: !Sub "${AWS::StackName}-HostedZoneId"
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCId"
+```
