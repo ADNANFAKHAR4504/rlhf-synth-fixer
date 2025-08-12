@@ -1,38 +1,41 @@
 Prompt:
 
-You are to create a complete AWS infrastructure-as-code project using CDK for Terraform (cdktf) in TypeScript.
-The folder structure must be:
+Design and implement a multi-region AWS infrastructure using CDK for Terraform (CDKTF) with TypeScript. Your solution should follow this folder structure:
 
-bin/tap.ts in the project root (entry point)
+main.ts (in the project root) – Entry point that synthesizes the app and defines stacks.
 
-lib/ folder under root containing tapstack.ts (the main stack definition)
+lib/tapstack.ts – Contains the primary CDKTF stack (TapStack) that encapsulates all AWS resource logic.
 
-test/ folder under root for tests
+test/ – Contains unit/integration tests validating the infrastructure.
 
-Requirements:
+Infrastructure Requirements:
 
-Use AWS as the cloud provider and deploy to two regions: us-east-1 and us-west-2.
+Use CDKTF in TypeScript to provision AWS infrastructure across three regions: us-east-1, eu-west-1, and ap-southeast-2.
 
-Define a VPC in each region with CIDR block 10.0.0.0/16.
+In each region, set up consistent networking components, including :
 
-Create two public subnets and two private subnets per region, each associated with the correct route table.
+VPCs
 
-Attach an Internet Gateway to each VPC and configure NAT Gateways in private subnets using Elastic IPs.
+Public and private subnets
 
-Launch EC2 application servers in public subnets with security groups allowing only HTTP (80) and SSH (22).
+Internet gateways
 
-Deploy an RDS database in private subnets with a restricted security group that only allows access from the application server security group.
+Create one S3 bucket per region with the identical lifecycle policies for storage management.
 
-Create an Elastic Load Balancer to distribute traffic to application servers.
+Configure IAM roles with cross-account access between two distinct AWS accounts.
 
-Use IAM roles with least privilege for EC2, RDS, and other resources.
+Apply a consistent tagging strategy across all resources for cost tracking and organizational compliance.
 
-Store database credentials securely in AWS Secrets Manager and retrieve them for the RDS instance.
+Optimize for cost-efficiency, leveraging regional pricing advantages and avoiding over-provisioning.
 
-Enable the CloudWatch monitoring for EC2 and RDS.
+Implement security is best practices using proper security groups and NACLs.
 
-Prefix all resource names with "prod-" to indicate a production environment.
+Ensure high availability and fault tolerance for critical infrastructure components.
 
-Follow best practices for redundancy,security, and scaling.
+Automate deployment using CDKTF CLI and scripts to manage environments via environment-specific config.
 
-The output must be a TypeScript CDKTF project with the above requirements fully implemented, compiling and deploying without manual intervention. Use modern CDKTF patterns and resource constructs.
+Use Terraform state management to tarack and protect infrastructure state.
+
+Validate all infrastructure changes against company compliance and security standards.
+
+Write and organize all the test cases under the test directory to verify correct infrastructure deployment.
