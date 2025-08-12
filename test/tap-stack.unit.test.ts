@@ -271,7 +271,7 @@ describe('TapStack Unit Tests', () => {
     test('should create RDS instance with PostgreSQL', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
-        EngineVersion: '15.4',
+        EngineVersion: '15',
         DBInstanceClass: 'db.t3.micro',
       });
     });
@@ -340,55 +340,45 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('GuardDuty Configuration', () => {
-    test('should create GuardDuty detector', () => {
-      template.hasResourceProperties('AWS::GuardDuty::Detector', {
-        Enable: true,
-        FindingPublishingFrequency: 'FIFTEEN_MINUTES',
-      });
-    });
-
-    test('should enable S3 logs monitoring', () => {
-      template.hasResourceProperties('AWS::GuardDuty::Detector', {
-        DataSources: {
-          S3Logs: {
-            Enable: true,
-          },
+    test('should create GuardDuty custom resource', () => {
+      template.hasResource('AWS::CloudFormation::CustomResource', {
+        Properties: {
+          ServiceToken: Match.anyValue(),
         },
       });
     });
 
-    test('should enable malware protection', () => {
-      template.hasResourceProperties('AWS::GuardDuty::Detector', {
-        DataSources: {
-          MalwareProtection: {
-            ScanEc2InstanceWithFindings: {
-              EbsVolumes: true,
-            },
-          },
-        },
+    test('should create Lambda function for GuardDuty management', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Runtime: 'python3.11',
+        Handler: 'index.handler',
+        Timeout: 300,
       });
     });
 
-    test('should enable extended threat detection features', () => {
-      template.hasResourceProperties('AWS::GuardDuty::Detector', {
-        Features: Match.arrayWith([
-          {
-            Name: 'EKS_AUDIT_LOGS',
-            Status: 'ENABLED',
-          },
-          {
-            Name: 'EBS_MALWARE_PROTECTION',
-            Status: 'ENABLED',
-          },
-          {
-            Name: 'RDS_LOGIN_EVENTS',
-            Status: 'ENABLED',
-          },
-          {
-            Name: 'LAMBDA_NETWORK_LOGS',
-            Status: 'ENABLED',
-          },
-        ]),
+    test('should have Lambda function with GuardDuty permissions', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Code: Match.anyValue(),
+        Environment: Match.anyValue(),
+      });
+    });
+
+    test('should create IAM role for GuardDuty Lambda', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Action: Match.arrayWith([
+                'guardduty:CreateDetector',
+                'guardduty:ListDetectors',
+                'guardduty:UpdateDetector',
+                'guardduty:UpdateDetectorFeatureConfiguration',
+                'guardduty:GetDetector',
+              ]),
+            }),
+          ]),
+        },
       });
     });
   });

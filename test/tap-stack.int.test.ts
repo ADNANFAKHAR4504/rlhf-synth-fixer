@@ -2,7 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Load deployment outputs
-const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const outputsPath = path.join(
+  __dirname,
+  '..',
+  'cfn-outputs',
+  'flat-outputs.json'
+);
 let outputs: any = {};
 
 if (fs.existsSync(outputsPath)) {
@@ -58,7 +63,9 @@ describe('TapStack Integration Tests', () => {
 
   describe('API Gateway Validation', () => {
     test('should have valid API Gateway URL', () => {
-      expect(outputs.ApiGatewayUrl).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\./);
+      expect(outputs.ApiGatewayUrl).toMatch(
+        /^https:\/\/[a-z0-9]+\.execute-api\./
+      );
     });
 
     test('should have prod stage in URL', () => {
@@ -174,7 +181,7 @@ describe('TapStack Integration Tests', () => {
         outputs.IAMRoleName,
       ];
 
-      resources.forEach((resource) => {
+      resources.forEach(resource => {
         if (resource) {
           // Should have pattern: corp-<name>-<suffix>
           expect(resource).toMatch(/^corp-[a-z-]+-\w+/);
