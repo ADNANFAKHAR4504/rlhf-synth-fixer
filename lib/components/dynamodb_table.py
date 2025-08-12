@@ -60,7 +60,7 @@ class DynamoDBTableComponent(ComponentResource):
 
     self.table = aws.dynamodb.Table(
       f"{name}-table",
-      point_in_time_recovery=aws.dynamodb.PointInTimeRecoveryArgs(
+      point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
         enabled=True
       ),
       **table_args,
