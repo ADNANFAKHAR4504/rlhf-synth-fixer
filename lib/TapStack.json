@@ -21,26 +21,15 @@
             "Description": "Database administrator username",
             "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
         },
-        "WebServerInstanceType": {
+        "InstanceType": {
             "Type": "String",
             "Default": "t3.medium",
-            "AllowedValues": [
-                "t3.small",
-                "t3.medium",
-                "t3.large",
-                "m5.large",
-                "m5.xlarge"
-            ],
             "Description": "EC2 instance type for web servers"
-        }
-    },
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "AMI": "ami-0c02fb55956c7d316",
-                "AZ1": "us-east-1a",
-                "AZ2": "us-east-1b"
-            }
+        },
+        "AmiId": {
+            "Description": "AMI ID for EC2 instances",
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
         }
     },
     "Conditions": {
@@ -187,12 +176,11 @@
                     "Ref": "VPC"
                 },
                 "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::Select": [
+                        0,
                         {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ1"
+                            "Fn::GetAZs": ""
+                        }
                     ]
                 },
                 "CidrBlock": "10.0.1.0/24",
@@ -224,12 +212,11 @@
                     "Ref": "VPC"
                 },
                 "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::Select": [
+                        1,
                         {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ2"
+                            "Fn::GetAZs": ""
+                        }
                     ]
                 },
                 "CidrBlock": "10.0.2.0/24",
@@ -261,12 +248,11 @@
                     "Ref": "VPC"
                 },
                 "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::Select": [
+                        0,
                         {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ1"
+                            "Fn::GetAZs": ""
+                        }
                     ]
                 },
                 "CidrBlock": "10.0.11.0/24",
@@ -297,12 +283,11 @@
                     "Ref": "VPC"
                 },
                 "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::Select": [
+                        1,
                         {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ2"
+                            "Fn::GetAZs": ""
+                        }
                     ]
                 },
                 "CidrBlock": "10.0.12.0/24",
@@ -749,7 +734,7 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
                                     }
                                 },
                                 {
@@ -758,7 +743,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "SecureS3Bucket"
+                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
                                     }
                                 }
                             ]
@@ -999,7 +984,7 @@
             "Properties": {
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.39",
                 "AllocatedStorage": 20,
                 "StorageType": "gp3",
                 "StorageEncrypted": true,
@@ -1424,16 +1409,10 @@
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
-                        "Fn::FindInMap": [
-                            "RegionMap",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "AMI"
-                        ]
+                        "Ref": "AmiId"
                     },
                     "InstanceType": {
-                        "Ref": "WebServerInstanceType"
+                        "Ref": "InstanceType"
                     },
                     "KeyName": {
                         "Fn::If": [

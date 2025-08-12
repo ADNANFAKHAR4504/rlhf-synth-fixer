@@ -24,26 +24,15 @@ Parameters:
     Description: 'Database administrator username'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
 
-  WebServerInstanceType:
+  InstanceType:
     Type: String
     Default: 't3.medium'
-    AllowedValues:
-      - 't3.small'
-      - 't3.medium'
-      - 't3.large'
-      - 'm5.large'
-      - 'm5.xlarge'
     Description: 'EC2 instance type for web servers'
 
-# =============================================================================
-# MAPPINGS
-# =============================================================================
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: 'ami-0c02fb55956c7d316'
-      AZ1: 'us-east-1a'
-      AZ2: 'us-east-1b'
+  AmiId:
+    Description: 'AMI ID for EC2 instances'
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 
 # =============================================================================
 # CONDITIONS
@@ -131,7 +120,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
@@ -146,7 +135,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.2.0/24'
       MapPublicIpOnLaunch: true
       Tags:
@@ -162,7 +151,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '10.0.11.0/24'
       Tags:
         - Key: Name
@@ -176,7 +165,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.12.0/24'
       Tags:
         - Key: Name
@@ -418,11 +407,11 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
-                Resource: !Sub '${SecureS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
-                Resource: !Ref SecureS3Bucket
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
         - PolicyName: LoggingPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -556,7 +545,7 @@ Resources:
     Properties:
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.39'
       AllocatedStorage: 20
       StorageType: 'gp3'
       StorageEncrypted: true
@@ -781,8 +770,8 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-        InstanceType: !Ref WebServerInstanceType
+        ImageId: !Ref AmiId
+        InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Arn: !GetAtt WebServerInstanceProfile.Arn
