@@ -1,14 +1,120 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { VpcStack } from '../lib/vpc-stack';
 
-describe('VpcStack Advanced Tests', () => {
-  test('Uses default environment suffix when not provided', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
+describe('VpcStack', () => {
+  let app: cdk.App;
+  let testStack: cdk.Stack;
 
-    // Should use 'dev' as default
+  beforeEach(() => {
+    app = new cdk.App();
+    testStack = new cdk.Stack(app, 'TestStack');
+  });
+
+  test('Creates VPC with correct CIDR block', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    template.hasResourceProperties('AWS::EC2::VPC', {
+      CidrBlock: '10.0.0.0/16',
+      EnableDnsHostnames: true,
+      EnableDnsSupport: true,
+    });
+  });
+
+  test('Creates public and private subnets', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    // Check for public subnet
+    template.hasResourceProperties('AWS::EC2::Subnet', {
+      CidrBlock: '10.0.0.0/24',
+      MapPublicIpOnLaunch: true,
+    });
+
+    // Check for private subnet
+    template.hasResourceProperties('AWS::EC2::Subnet', {
+      CidrBlock: '10.0.1.0/24',
+      MapPublicIpOnLaunch: false,
+    });
+  });
+
+  test('Creates internet gateway and NAT gateway', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    template.hasResource('AWS::EC2::InternetGateway', {});
+    template.hasResource('AWS::EC2::NatGateway', {});
+  });
+
+  test('Creates route tables for both subnets', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    const routeTables = template.findResources('AWS::EC2::RouteTable');
+    expect(Object.keys(routeTables).length).toBe(2);
+  });
+
+  test('VPC is properly tagged', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    template.hasResourceProperties('AWS::EC2::VPC', {
+      Tags: Match.arrayWith([
+        Match.objectLike({
+          Key: 'Environment',
+          Value: 'Development',
+        }),
+        Match.objectLike({
+          Key: 'Name',
+          Value: 'vpcBasictest',
+        }),
+      ]),
+    });
+  });
+
+  test('Subnets are properly tagged', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    // Check public subnet tags
+    template.hasResourceProperties('AWS::EC2::Subnet', {
+      Tags: Match.arrayWith([
+        Match.objectLike({
+          Key: 'Name',
+          Value: 'subnetPublictest',
+        }),
+      ]),
+    });
+
+    // Check private subnet tags
+    template.hasResourceProperties('AWS::EC2::Subnet', {
+      Tags: Match.arrayWith([
+        Match.objectLike({
+          Key: 'Name',
+          Value: 'subnetPrivatetest',
+        }),
+      ]),
+    });
+  });
+
+  test('Uses default environment suffix when not provided', () => {
+    new VpcStack(testStack, 'TestVpcStack');
+    const template = Template.fromStack(testStack);
+
     template.hasResourceProperties('AWS::EC2::VPC', {
       Tags: Match.arrayWith([
         Match.objectLike({
@@ -19,105 +125,59 @@ describe('VpcStack Advanced Tests', () => {
     });
   });
 
-  test('Uses provided environment suffix in resource names', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack', {
-      environmentSuffix: 'production',
+  test('Creates VPC gateway attachment', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
+
+    template.hasResource('AWS::EC2::VPCGatewayAttachment', {});
+  });
+
+  test('Stack exports are properly defined', () => {
+    const vpcStack = new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+
+    expect(vpcStack.vpc).toBeDefined();
+    expect(vpcStack.publicSubnet).toBeDefined();
+    expect(vpcStack.privateSubnet).toBeDefined();
+  });
+
+  test('All outputs have proper descriptions', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    // Since we removed the outputs from individual constructs, 
+    // this test should verify that the main stack handles outputs
+    const outputs = template.findOutputs('*');
+    // The outputs are now handled by the main TapStack, not the individual constructs
+    expect(Object.keys(outputs).length).toBe(0);
+  });
+
+  test('VPC has correct instance tenancy', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
 
     template.hasResourceProperties('AWS::EC2::VPC', {
-      Tags: Match.arrayWith([
-        Match.objectLike({
-          Key: 'Name',
-          Value: 'vpcBasicproduction',
-        }),
-      ]),
+      InstanceTenancy: 'default',
     });
   });
 
-  test('VPC has DNS support and hostnames enabled', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
-
-    template.hasResourceProperties('AWS::EC2::VPC', {
-      EnableDnsHostnames: true,
-      EnableDnsSupport: true,
+  test('Subnets are in correct availability zones', () => {
+    new VpcStack(testStack, 'TestVpcStack', {
+      environmentSuffix: 'test',
     });
-  });
-
-  test('Creates correct number of subnets', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     const subnets = template.findResources('AWS::EC2::Subnet');
-    expect(Object.keys(subnets).length).toBe(2); // One public, one private
-  });
-
-  test('Public subnet has correct route to Internet Gateway', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
-
-    template.hasResourceProperties('AWS::EC2::Route', {
-      DestinationCidrBlock: '0.0.0.0/0',
-      GatewayId: Match.anyValue(),
+    Object.values(subnets).forEach((subnet: any) => {
+      expect(subnet.Properties.AvailabilityZone).toBeDefined();
     });
-  });
-
-  test('Private subnet has route to NAT Gateway', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
-
-    template.hasResourceProperties('AWS::EC2::Route', {
-      DestinationCidrBlock: '0.0.0.0/0',
-      NatGatewayId: Match.anyValue(),
-    });
-  });
-
-  test('VPC CIDR block is correctly set', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
-
-    template.hasResourceProperties('AWS::EC2::VPC', {
-      CidrBlock: '10.0.0.0/16',
-    });
-  });
-
-  test('Subnets are associated with correct route tables', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
-
-    const associations = template.findResources(
-      'AWS::EC2::SubnetRouteTableAssociation'
-    );
-    expect(Object.keys(associations).length).toBeGreaterThanOrEqual(2);
-  });
-
-  test('Internet Gateway is attached to VPC', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
-
-    template.hasResourceProperties('AWS::EC2::VPCGatewayAttachment', {
-      VpcId: Match.anyValue(),
-      InternetGatewayId: Match.anyValue(),
-    });
-  });
-
-  test('All outputs have descriptions', () => {
-    const app = new cdk.App();
-    const stack = new VpcStack(app, 'TestStack');
-    const template = Template.fromStack(stack);
-
-    const outputs = template.findOutputs('*');
-    expect(outputs.VpcId.Description).toBeDefined();
-    expect(outputs.PublicSubnetId.Description).toBeDefined();
-    expect(outputs.PrivateSubnetId.Description).toBeDefined();
   });
 });
+

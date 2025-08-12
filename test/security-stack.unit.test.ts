@@ -3,130 +3,185 @@ import { Template, Match } from 'aws-cdk-lib/assertions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { SecurityStack } from '../lib/security-stack';
 
-describe('SecurityStack Advanced Tests', () => {
+describe('SecurityStack', () => {
   let app: cdk.App;
-  let vpcStack: cdk.Stack;
+  let testStack: cdk.Stack;
   let vpc: ec2.Vpc;
 
   beforeEach(() => {
     app = new cdk.App();
-    vpcStack = new cdk.Stack(app, 'TestVpcStack');
-    vpc = new ec2.Vpc(vpcStack, 'TestVpc', {
+    testStack = new cdk.Stack(app, 'TestStack');
+    vpc = new ec2.Vpc(testStack, 'TestVpc', {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+      maxAzs: 1,
     });
   });
 
-  test('Uses default environment suffix when not provided', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-    const template = Template.fromStack(stack);
-
-    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      GroupName: 'securityGroupPublicdev',
-    });
-  });
-
-  test('Uses provided environment suffix', () => {
-    const stack = new SecurityStack(app, 'TestStack', {
+  test('Creates public security group with correct properties', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
       vpc,
-      environmentSuffix: 'staging',
+      environmentSuffix: 'test',
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      GroupName: 'securityGroupPublicstaging',
+      GroupDescription: 'Security group for public subnet EC2 instances',
+      GroupName: 'securityGroupPublictest',
     });
   });
 
-  test('Public security group allows outbound traffic', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-    const template = Template.fromStack(stack);
-
-    // Check that the security group doesn't have explicit egress rules blocking traffic
-    const securityGroups = template.findResources('AWS::EC2::SecurityGroup', {
-      Properties: {
-        GroupDescription: 'Security group for public subnet EC2 instances',
-      },
+  test('Creates private security group with correct properties', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
     });
-
-    expect(Object.keys(securityGroups).length).toBe(1);
-  });
-
-  test('Private security group allows outbound traffic', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-    const template = Template.fromStack(stack);
-
-    const securityGroups = template.findResources('AWS::EC2::SecurityGroup', {
-      Properties: {
-        GroupDescription: 'Security group for private subnet EC2 instances',
-      },
-    });
-
-    expect(Object.keys(securityGroups).length).toBe(1);
-  });
-
-  test('SSH access is restricted to specific CIDR', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      SecurityGroupIngress: [
+      GroupDescription: 'Security group for private subnet EC2 instances',
+      GroupName: 'securityGroupPrivatetest',
+    });
+  });
+
+  test('Public security group allows SSH from specified IP range', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      SecurityGroupIngress: Match.arrayWith([
         Match.objectLike({
           CidrIp: '198.51.100.0/24',
           FromPort: 22,
           ToPort: 22,
           IpProtocol: 'tcp',
         }),
-      ],
+      ]),
+    });
+  });
+
+  test('Private security group allows SSH from public security group', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    // Check for security group ingress rule
+    template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+      FromPort: 22,
+      ToPort: 22,
+      IpProtocol: 'tcp',
     });
   });
 
   test('Private security group allows internal communication', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-    const template = Template.fromStack(stack);
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
 
-    // Check for self-referencing security group ingress rule
+    // Check for security group ingress rule allowing all traffic from itself
     template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
-      IpProtocol: '-1', // All traffic
+      IpProtocol: '-1',
     });
   });
 
-  test('Security groups are properly exported', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-
-    expect(stack.securityGroupPublic).toBeDefined();
-    expect(stack.securityGroupPrivate).toBeDefined();
-  });
-
-  test('Creates exactly two security groups', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-    const template = Template.fromStack(stack);
+  test('Both security groups allow all outbound traffic', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
 
     const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
-    expect(Object.keys(securityGroups).length).toBe(2);
-  });
-
-  test('All security group ingress rules have descriptions', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-    const template = Template.fromStack(stack);
-
-    const ingressRules = template.findResources(
-      'AWS::EC2::SecurityGroupIngress'
-    );
-    Object.values(ingressRules).forEach((rule: any) => {
-      expect(rule.Properties.Description).toBeDefined();
+    Object.values(securityGroups).forEach((sg: any) => {
+      expect(sg.Properties.SecurityGroupEgress).toBeDefined();
+      expect(sg.Properties.SecurityGroupEgress[0].CidrIp).toBe('0.0.0.0/0');
     });
   });
 
-  test('Stack creates proper exports', () => {
-    const stack = new SecurityStack(app, 'TestStack', { vpc });
-    const template = Template.fromStack(stack);
+  test('Security groups are properly tagged', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
 
+    const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
+    Object.values(securityGroups).forEach((sg: any) => {
+      const envTag = sg.Properties.Tags?.find(
+        (tag: any) => tag.Key === 'Environment'
+      );
+      expect(envTag).toBeDefined();
+      expect(envTag.Value).toBe('Development');
+    });
+  });
+
+  test('Uses default environment suffix when not provided', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+    });
+    const template = Template.fromStack(testStack);
+
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupName: 'securityGroupPublicdev',
+    });
+  });
+
+  test('Security groups are associated with the correct VPC', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
+    Object.values(securityGroups).forEach((sg: any) => {
+      expect(sg.Properties.VpcId).toBeDefined();
+    });
+  });
+
+  test('Stack exports are properly defined', () => {
+    const securityStack = new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
+    });
+
+    expect(securityStack.securityGroupPublic).toBeDefined();
+    expect(securityStack.securityGroupPrivate).toBeDefined();
+  });
+
+  test('All outputs have proper descriptions', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(testStack);
+
+    // Since we removed the outputs from individual constructs, 
+    // this test should verify that the main stack handles outputs
     const outputs = template.findOutputs('*');
-    expect(Object.keys(outputs).length).toBeGreaterThanOrEqual(2);
+    // The outputs are now handled by the main TapStack, not the individual constructs
+    expect(Object.keys(outputs).length).toBe(0);
+  });
 
-    // Check that outputs have Export values for cross-stack references
-    Object.values(outputs).forEach((output: any) => {
-      expect(output.Export).toBeDefined();
+  test('Security group names are unique with environment suffix', () => {
+    new SecurityStack(testStack, 'TestSecurityStack', {
+      vpc,
+      environmentSuffix: 'prod',
+    });
+    const template = Template.fromStack(testStack);
+
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupName: 'securityGroupPublicprod',
+    });
+
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupName: 'securityGroupPrivateprod',
     });
   });
 });

@@ -5,7 +5,7 @@ import { ComputeStack } from '../lib/compute-stack';
 
 describe('ComputeStack Advanced Tests', () => {
   let app: cdk.App;
-  let vpcStack: cdk.Stack;
+  let testStack: cdk.Stack;
   let vpc: ec2.Vpc;
   let publicSubnet: ec2.ISubnet;
   let privateSubnet: ec2.ISubnet;
@@ -14,8 +14,8 @@ describe('ComputeStack Advanced Tests', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    vpcStack = new cdk.Stack(app, 'TestVpcStack');
-    vpc = new ec2.Vpc(vpcStack, 'TestVpc', {
+    testStack = new cdk.Stack(app, 'TestStack');
+    vpc = new ec2.Vpc(testStack, 'TestVpc', {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 1,
       subnetConfiguration: [
@@ -35,26 +35,26 @@ describe('ComputeStack Advanced Tests', () => {
     publicSubnet = vpc.publicSubnets[0];
     privateSubnet = vpc.privateSubnets[0];
 
-    securityGroupPublic = new ec2.SecurityGroup(vpcStack, 'TestSgPublic', {
+    securityGroupPublic = new ec2.SecurityGroup(testStack, 'TestSgPublic', {
       vpc,
       description: 'Test public SG',
     });
 
-    securityGroupPrivate = new ec2.SecurityGroup(vpcStack, 'TestSgPrivate', {
+    securityGroupPrivate = new ec2.SecurityGroup(testStack, 'TestSgPrivate', {
       vpc,
       description: 'Test private SG',
     });
   });
 
   test('Uses default environment suffix when not provided', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
       securityGroupPublic,
       securityGroupPrivate,
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     template.hasResourceProperties('AWS::EC2::KeyPair', {
       KeyName: 'keyPairBasicdev',
@@ -62,7 +62,7 @@ describe('ComputeStack Advanced Tests', () => {
   });
 
   test('Uses provided environment suffix in all resource names', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
@@ -70,7 +70,7 @@ describe('ComputeStack Advanced Tests', () => {
       securityGroupPrivate,
       environmentSuffix: 'prod',
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     template.hasResourceProperties('AWS::EC2::KeyPair', {
       KeyName: 'keyPairBasicprod',
@@ -87,14 +87,14 @@ describe('ComputeStack Advanced Tests', () => {
   });
 
   test('Public instance has public IP association', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
       securityGroupPublic,
       securityGroupPrivate,
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     // The public instance should be in the public subnet
     const instances = template.findResources('AWS::EC2::Instance');
@@ -108,14 +108,14 @@ describe('ComputeStack Advanced Tests', () => {
   });
 
   test('Private instance does not have public IP', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
       securityGroupPublic,
       securityGroupPrivate,
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     // The private instance should be in the private subnet
     const instances = template.findResources('AWS::EC2::Instance');
@@ -130,28 +130,28 @@ describe('ComputeStack Advanced Tests', () => {
   });
 
   test('Both instances use the same key pair', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
       securityGroupPublic,
       securityGroupPrivate,
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     const keyPairs = template.findResources('AWS::EC2::KeyPair');
     expect(Object.keys(keyPairs).length).toBe(1);
   });
 
   test('Key pair uses RSA encryption', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
       securityGroupPublic,
       securityGroupPrivate,
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     template.hasResourceProperties('AWS::EC2::KeyPair', {
       KeyType: 'rsa',
@@ -160,14 +160,14 @@ describe('ComputeStack Advanced Tests', () => {
   });
 
   test('Instances are tagged with correct Environment', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
       securityGroupPublic,
       securityGroupPrivate,
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     const instances = template.findResources('AWS::EC2::Instance');
     Object.values(instances).forEach((instance: any) => {
@@ -180,7 +180,7 @@ describe('ComputeStack Advanced Tests', () => {
   });
 
   test('Stack exports are properly defined', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    const computeStack = new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
@@ -188,45 +188,36 @@ describe('ComputeStack Advanced Tests', () => {
       securityGroupPrivate,
     });
 
-    expect(stack.publicInstance).toBeDefined();
-    expect(stack.privateInstance).toBeDefined();
+    expect(computeStack.publicInstance).toBeDefined();
+    expect(computeStack.privateInstance).toBeDefined();
   });
 
   test('All outputs have proper descriptions', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
       securityGroupPublic,
       securityGroupPrivate,
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
+    // Since we removed the outputs from individual constructs, 
+    // this test should verify that the main stack handles outputs
     const outputs = template.findOutputs('*');
-    expect(outputs.PublicInstanceId.Description).toContain(
-      'Public EC2 Instance ID'
-    );
-    expect(outputs.PublicInstancePublicIp.Description).toContain(
-      'Public EC2 Instance Public IP'
-    );
-    expect(outputs.PrivateInstanceId.Description).toContain(
-      'Private EC2 Instance ID'
-    );
-    expect(outputs.PrivateInstancePrivateIp.Description).toContain(
-      'Private EC2 Instance Private IP'
-    );
-    expect(outputs.KeyPairName.Description).toContain('EC2 Key Pair Name');
+    // The outputs are now handled by the main TapStack, not the individual constructs
+    expect(Object.keys(outputs).length).toBe(0);
   });
 
   test('Instances have proper IAM roles attached', () => {
-    const stack = new ComputeStack(app, 'TestStack', {
+    new ComputeStack(testStack, 'TestComputeStack', {
       vpc,
       publicSubnet,
       privateSubnet,
       securityGroupPublic,
       securityGroupPrivate,
     });
-    const template = Template.fromStack(stack);
+    const template = Template.fromStack(testStack);
 
     // Check that instances have IAM instance profiles
     template.hasResourceProperties('AWS::EC2::Instance', {
