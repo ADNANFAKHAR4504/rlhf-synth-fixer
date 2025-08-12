@@ -1,14 +1,13 @@
-I need to create AWS infrastructure code using CDK TypeScript for a simple cloud environment with the following requirements:
+# AWS Serverless Infrastructure with Lambda, S3, and DynamoDB
 
-1. A VPC with CIDR block 10.0.0.0/16
-2. Two public subnets and two private subnets across different AZs
-3. A NAT Gateway in one public subnet for private subnet internet access
-4. An Internet Gateway attached to the VPC
-5. A Security Group allowing HTTP (80) and HTTPS (443) inbound traffic
-6. CloudWatch monitoring for EC2 instances
-7. VPC Flow Logs for traffic monitoring
-8. VPC Lattice service network for modern service connectivity
-9. All resources tagged as Environment: production
-10. Infrastructure should support easy stack deletion
+I need to create AWS infrastructure using CDK TypeScript that includes:
 
-Please provide the infrastructure code in separate files. The target region is us-east-1.
+1. An AWS Lambda function using Python 3.8 runtime
+2. An S3 bucket that triggers the Lambda function when objects are created
+3. A DynamoDB table to log Lambda invocations with unique request ID and timestamp
+4. Deploy everything in the us-west-2 region
+5. Proper IAM roles and permissions following security best practices
+
+The Lambda function should process S3 object creation events and store invocation logs in DynamoDB. Use DynamoDB's latest cost-optimized on-demand billing mode and consider DynamoDB local version 3.0.0 compatibility for development. 
+
+Please provide the complete infrastructure code with one code block per file. Include proper error handling and follow AWS security best practices for IAM permissions.

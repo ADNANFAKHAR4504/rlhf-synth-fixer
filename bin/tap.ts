@@ -1,39 +1,27 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
-// Use AWS CDK App (prior version incorrectly used CDKTF App while stacks extend aws-cdk-lib.Stack)
 const app = new cdk.App();
 
-// Get environment variables from the environment or use defaults
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-const stateBucketRegion =
-  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Calculate the stack name
-const stackName = `TapStack${environmentSuffix}`;
+// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+Tags.of(app).add('Environment', environmentSuffix);
+Tags.of(app).add('Repository', repositoryName);
+Tags.of(app).add('Author', commitAuthor);
 
-// defautlTags is structured in adherence to the AwsProviderDefaultTags interface
-const defaultTags = {
-  tags: {
-    Environment: environmentSuffix,
-    Repository: repositoryName,
-    CommitAuthor: commitAuthor,
-  },
-};
-
-// Create the TapStack with the calculated properties
 new TapStack(app, stackName, {
-  environmentSuffix: environmentSuffix,
-  stateBucket: stateBucket,
-  stateBucketRegion: stateBucketRegion,
-  awsRegion: awsRegion,
-  defaultTags: defaultTags,
+  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION || 'us-west-2',
+  },
 });
-
-// Synthesize CloudFormation templates
-app.synth();

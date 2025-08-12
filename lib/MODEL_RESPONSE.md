@@ -1,225 +1,236 @@
-# AWS VPC Infrastructure with CDK TypeScript
+# AWS CDK TypeScript Infrastructure Response
 
-I'll create a comprehensive VPC infrastructure setup using AWS CDK TypeScript that meets all your requirements. The solution will be modular and production-ready.
+I'll create a serverless infrastructure with AWS Lambda, S3, and DynamoDB using CDK TypeScript. Here's the complete solution:
 
-## Implementation Overview
-
-The infrastructure includes:
-- VPC with 10.0.0.0/16 CIDR block
-- Multi-AZ setup with public and private subnets
-- NAT Gateway for private subnet internet access
-- Internet Gateway for public subnet access
-- Security groups for HTTP/HTTPS traffic
-- CloudWatch monitoring configuration
-- VPC Flow Logs for network monitoring
-- VPC Lattice service network for modern service connectivity
-- Production tagging strategy
-
-## Code Structure
-
-### File: `lib/vpc-stack.ts`
+## CDK Stack Implementation
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as logs from 'aws-cdk-lib/aws-logs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
 import { Construct } from 'constructs';
 
-interface VpcStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-}
-
-export class VpcStack extends cdk.Stack {
-  public readonly vpc: ec2.Vpc;
-  public readonly securityGroup: ec2.SecurityGroup;
-  public readonly latticeServiceNetwork: vpclattice.CfnServiceNetwork;
-
-  constructor(scope: Construct, id: string, props?: VpcStackProps) {
-    super(scope, id, props);
-
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-
-    // Create VPC with specified CIDR
-    this.vpc = new ec2.Vpc(this, 'VPC', {
-      vpcName: `vpc-${environmentSuffix}`,
-      cidr: '10.0.0.0/16',
-      maxAzs: 2,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      subnetConfiguration: [
-        {
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
-      natGateways: 1, // Single NAT Gateway for cost optimization
-    });
-
-    // Create Security Group for HTTP/HTTPS traffic
-    this.securityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
-      vpc: this.vpc,
-      securityGroupName: `web-sg-${environmentSuffix}`,
-      description: 'Security Group for web traffic',
-      allowAllOutbound: true,
-    });
-
-    // Add HTTP and HTTPS inbound rules
-    this.securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic'
-    );
-
-    this.securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic'
-    );
-
-    // Create IAM role for VPC Flow Logs
-    const flowLogRole = new iam.Role(this, 'FlowLogRole', {
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/VPCFlowLogsDeliveryRolePolicy'),
-      ],
-    });
-
-    // Create CloudWatch Log Group for VPC Flow Logs
-    const logGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      logGroupName: `/aws/vpc/flowlogs/${environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Create VPC Flow Logs
-    new ec2.FlowLog(this, 'VpcFlowLog', {
-      resourceType: ec2.FlowLogResourceType.fromVpc(this.vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(logGroup, flowLogRole),
-      trafficType: ec2.FlowLogTrafficType.ALL,
-    });
-
-    // Create VPC Lattice Service Network
-    this.latticeServiceNetwork = new vpclattice.CfnServiceNetwork(this, 'LatticeServiceNetwork', {
-      name: `service-network-${environmentSuffix}`,
-      authType: 'NONE',
-    });
-
-    // Associate VPC with Lattice Service Network
-    new vpclattice.CfnServiceNetworkVpcAssociation(this, 'LatticeVpcAssociation', {
-      serviceNetworkIdentifier: this.latticeServiceNetwork.attrId,
-      vpcIdentifier: this.vpc.vpcId,
-    });
-
-    // CloudWatch Dashboard for monitoring
-    const dashboard = new cdk.aws_cloudwatch.Dashboard(this, 'VpcDashboard', {
-      dashboardName: `vpc-monitoring-${environmentSuffix}`,
-    });
-
-    // Add VPC metrics to dashboard
-    dashboard.addWidgets(
-      new cdk.aws_cloudwatch.GraphWidget({
-        title: 'VPC Flow Logs',
-        width: 12,
-        height: 6,
-        left: [
-          new cdk.aws_cloudwatch.Metric({
-            namespace: 'AWS/Logs',
-            metricName: 'IncomingLogEvents',
-            dimensionsMap: {
-              LogGroupName: logGroup.logGroupName,
-            },
-            statistic: 'Sum',
-          }),
-        ],
-      })
-    );
-
-    // Add tags to all resources
-    cdk.Tags.of(this).add('Environment', 'production');
-    cdk.Tags.of(this).add('Project', 'VPC-Infrastructure');
-    cdk.Tags.of(this).add('ManagedBy', 'CDK');
-
-    // Outputs
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID',
-      exportName: `VpcId-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(this, 'SecurityGroupId', {
-      value: this.securityGroup.securityGroupId,
-      description: 'Web Security Group ID',
-      exportName: `WebSecurityGroupId-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(this, 'LatticeServiceNetworkId', {
-      value: this.latticeServiceNetwork.attrId,
-      description: 'VPC Lattice Service Network ID',
-      exportName: `LatticeServiceNetworkId-${environmentSuffix}`,
-    });
-  }
-}
-```
-
-### File: `lib/tap-stack.ts` (Updated)
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import { VpcStack } from './vpc-stack';
-
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
+export interface TapStackProps extends cdk.StackProps {
+  environmentSuffix: string;
 }
 
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    // Get environment suffix from props, context, or use 'dev' as default
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
-
-    // Create VPC Stack
-    const vpcStack = new VpcStack(scope, `VpcStack${environmentSuffix}`, {
-      environmentSuffix: environmentSuffix,
-      env: props?.env,
+    // DynamoDB table for logging Lambda invocations
+    const logsTable = new dynamodb.Table(this, 'LambdaInvocationLogs', {
+      tableName: `lambda-invocation-logs-${props.environmentSuffix}`,
+      partitionKey: {
+        name: 'requestId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'timestamp',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.ON_DEMAND,
+      pointInTimeRecovery: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Add dependencies if needed
-    this.addDependency(vpcStack);
+    // S3 bucket for triggering Lambda
+    const triggerBucket = new s3.Bucket(this, 'LambdaTriggerBucket', {
+      bucketName: `lambda-trigger-bucket-${props.environmentSuffix}-${this.account}`,
+      versioned: false,
+      publicReadAccess: false,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    // IAM role for Lambda function
+    const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
+    });
+
+    // Grant DynamoDB write permissions to Lambda
+    logsTable.grantWriteData(lambdaRole);
+
+    // Grant S3 read permissions to Lambda
+    triggerBucket.grantRead(lambdaRole);
+
+    // Lambda function
+    const processFunction = new lambda.Function(this, 'S3ProcessorFunction', {
+      functionName: `s3-processor-${props.environmentSuffix}`,
+      runtime: lambda.Runtime.PYTHON_3_8,
+      handler: 'index.lambda_handler',
+      code: lambda.Code.fromInline(`
+import json
+import boto3
+import uuid
+from datetime import datetime
+import logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('${logsTable.tableName}')
+def lambda_handler(event, context):
+    try:
+        request_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        
+        logger.info(f"Processing S3 event with request ID: {request_id}")
+        
+        # Process S3 event
+        for record in event.get('Records', []):
+            if 's3' in record:
+                bucket = record['s3']['bucket']['name']
+                key = record['s3']['object']['key']
+                event_name = record['eventName']
+                
+                logger.info(f"Processing {event_name} for {key} in bucket {bucket}")
+                
+                # Log invocation to DynamoDB
+                table.put_item(
+                    Item={
+                        'requestId': request_id,
+                        'timestamp': timestamp,
+                        'bucketName': bucket,
+                        'objectKey': key,
+                        'eventName': event_name,
+                        'functionName': context.function_name,
+                        'awsRequestId': context.aws_request_id
+                    }
+                )
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'Successfully processed S3 event',
+                'requestId': request_id
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing event: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'message': 'Error processing S3 event',
+                'error': str(e)
+            })
+        }
+`),
+      role: lambdaRole,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 128,
+      environment: {
+        DYNAMODB_TABLE_NAME: logsTable.tableName,
+        LOG_LEVEL: 'INFO',
+      },
+    });
+
+    // S3 bucket notification to trigger Lambda
+    triggerBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(processFunction)
+    );
+
+    // Outputs
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: triggerBucket.bucketName,
+      description: 'Name of the S3 bucket that triggers Lambda',
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDBTableName', {
+      value: logsTable.tableName,
+      description: 'Name of the DynamoDB table for logging',
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: processFunction.functionName,
+      description: 'Name of the Lambda function',
+    });
   }
 }
 ```
 
-## Key Features Implemented
+## Lambda Function Code (Alternative Separate File)
 
-1. **VPC Configuration**: Created with 10.0.0.0/16 CIDR block across 2 AZs
-2. **Subnet Design**: 2 public and 2 private subnets with proper routing
-3. **NAT Gateway**: Single NAT Gateway for cost optimization while providing private subnet internet access
-4. **Internet Gateway**: Automatically created by CDK for public subnets
-5. **Security Groups**: Web security group allowing HTTP (80) and HTTPS (443) inbound traffic
-6. **VPC Flow Logs**: Comprehensive traffic monitoring with CloudWatch Logs
-7. **CloudWatch Monitoring**: Dashboard for VPC metrics and monitoring
-8. **VPC Lattice**: Modern service networking for cross-VPC communication
-9. **Production Tags**: All resources tagged with Environment: production
-10. **Clean Deletion**: Configured with proper removal policies
+```python
+import json
+import boto3
+import uuid
+from datetime import datetime
+import logging
+import os
 
-## Deployment Notes
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
-- The infrastructure is designed for production use with proper security and monitoring
-- NAT Gateway is configured for cost optimization (single gateway)
-- Flow logs retention is set to 1 week for cost control
-- All resources support clean deletion without leaving orphaned resources
-- VPC Lattice provides modern service-to-service connectivity
-- CloudWatch dashboard provides visibility into network traffic and performance
+dynamodb = boto3.resource('dynamodb')
+table_name = os.environ.get('DYNAMODB_TABLE_NAME')
+table = dynamodb.Table(table_name)
+
+def lambda_handler(event, context):
+    try:
+        request_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+
+        logger.info(f"Processing S3 event with request ID: {request_id}")
+
+        # Process S3 event
+        for record in event.get('Records', []):
+            if 's3' in record:
+                bucket = record['s3']['bucket']['name']
+                key = record['s3']['object']['key']
+                event_name = record['eventName']
+
+                logger.info(f"Processing {event_name} for {key} in bucket {bucket}")
+
+                # Log invocation to DynamoDB
+                table.put_item(
+                    Item={
+                        'requestId': request_id,
+                        'timestamp': timestamp,
+                        'bucketName': bucket,
+                        'objectKey': key,
+                        'eventName': event_name,
+                        'functionName': context.function_name,
+                        'awsRequestId': context.aws_request_id
+                    }
+                )
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'Successfully processed S3 event',
+                'requestId': request_id
+            })
+        }
+
+    except Exception as e:
+        logger.error(f"Error processing event: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'message': 'Error processing S3 event',
+                'error': str(e)
+            })
+        }
+```
+
+This solution provides:
+
+1. **Lambda Function**: Python 3.8 runtime with proper error handling and logging
+2. **S3 Bucket**: Secure bucket with encryption and public access blocked
+3. **DynamoDB Table**: On-demand billing with partition key (requestId) and sort key (timestamp)
+4. **IAM Permissions**: Least privilege access with specific grants for DynamoDB write and S3 read
+5. **S3 Trigger**: Configured to trigger Lambda on object creation events
+6. **Region**: Deployed in us-west-2 region via CDK environment configuration
+7. **Security**: SSL enforcement, encryption, and proper IAM roles
+8. **Monitoring**: CloudWatch logs integration and comprehensive error handling

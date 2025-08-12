@@ -1,272 +1,259 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
+// Integration tests for Task 278 serverless infrastructure
 import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeFlowLogsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand
-} from '@aws-sdk/client-ec2';
-import {
-  VPCLatticeClient,
-  GetServiceNetworkCommand
-} from '@aws-sdk/client-vpc-lattice';
-import {
-  CloudWatchClient,
-  ListDashboardsCommand
-} from '@aws-sdk/client-cloudwatch';
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand
-} from '@aws-sdk/client-cloudwatch-logs';
+import path from 'path';
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { DynamoDBClient, ScanCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
-// Initialize AWS clients
-const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-const latticeClient = new VPCLatticeClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const logsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-east-1' });
+// Configuration - These are coming from cfn-outputs after cdk deploy
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synthtrainr65';
+// AWS clients
+const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const dynamodbClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
-// Load outputs if they exist
-let outputs: any = {};
-const outputsFile = 'cfn-outputs/flat-outputs.json';
-if (fs.existsSync(outputsFile)) {
-  outputs = JSON.parse(fs.readFileSync(outputsFile, 'utf8'));
-}
+describe('Serverless Infrastructure Integration Tests', () => {
+  const bucketName = outputs.BucketName;
+  const tableName = outputs.DynamoDBTableName;
+  const functionName = outputs.LambdaFunctionName;
 
-describe('VPC Infrastructure Integration Tests', () => {
-  describe('VPC Configuration', () => {
-    test('should have VPC with correct CIDR block deployed', async () => {
-      if (!outputs.VpcId) {
-        console.warn('VpcId not found in outputs, skipping test');
-        return;
+  beforeAll(() => {
+    expect(bucketName).toBeDefined();
+    expect(tableName).toBeDefined();
+    expect(functionName).toBeDefined();
+  });
+
+  afterEach(async () => {
+    // Clean up any test objects from S3 bucket
+    try {
+      const listResponse = await s3Client.send(
+        new ListObjectsV2Command({ Bucket: bucketName })
+      );
+
+      if (listResponse.Contents && listResponse.Contents.length > 0) {
+        // Note: In a real cleanup, you'd delete objects here
+        // For this test, we'll leave them to verify the flow worked
       }
+    } catch (error) {
+      console.warn('Failed to clean up S3 objects:', error);
+    }
+  });
 
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VpcId]
+  describe('AWS Resource Verification', () => {
+    test('should verify S3 bucket exists and is accessible', async () => {
+      const command = new ListObjectsV2Command({
+        Bucket: bucketName,
+        MaxKeys: 1,
       });
-      const response = await ec2Client.send(command);
 
-      expect(response.Vpcs).toHaveLength(1);
-      const vpc = response.Vpcs![0];
-      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      // DNS settings are part of VpcAttributesSupport (different API call)
-      // We're checking the presence of the VPC with the correct CIDR
+      const response = await s3Client.send(command);
+      expect(response.$metadata.httpStatusCode).toBe(200);
     });
 
-    test('should have correct number of subnets', async () => {
-      if (!outputs.VpcId) {
-        console.warn('VpcId not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeSubnetsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId]
-          }
-        ]
+    test('should verify DynamoDB table exists and is accessible', async () => {
+      const command = new ScanCommand({
+        TableName: tableName,
+        Limit: 1,
       });
-      const response = await ec2Client.send(command);
 
-      // Should have at least 4 subnets (2 public, 2 private)
-      expect(response.Subnets!.length).toBeGreaterThanOrEqual(4);
-
-      // Check for public subnets
-      const publicSubnets = response.Subnets!.filter(s => s.MapPublicIpOnLaunch === true);
-      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
-
-      // Check for private subnets
-      const privateSubnets = response.Subnets!.filter(s => s.MapPublicIpOnLaunch === false);
-      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+      const response = await dynamodbClient.send(command);
+      expect(response.$metadata.httpStatusCode).toBe(200);
+      expect(response.Items).toBeDefined();
     });
 
-    test('should have NAT Gateway configured', async () => {
-      if (!outputs.VpcId) {
-        console.warn('VpcId not found in outputs, skipping test');
-        return;
+    test('should verify Lambda function exists and is accessible', async () => {
+      const command = new InvokeCommand({
+        FunctionName: functionName,
+        InvocationType: 'RequestResponse',
+        Payload: JSON.stringify({
+          Records: [{
+            eventVersion: '2.1',
+            eventSource: 'aws:s3',
+            eventName: 'ObjectCreated:Put',
+            s3: {
+              bucket: { name: bucketName },
+              object: { key: 'test-integration.txt' }
+            }
+          }]
+        }),
+      });
+
+      const response = await lambdaClient.send(command);
+      expect(response.$metadata.httpStatusCode).toBe(200);
+      expect(response.StatusCode).toBe(200);
+
+      if (response.Payload) {
+        const payload = JSON.parse(Buffer.from(response.Payload).toString());
+        expect(payload.statusCode).toBe(200);
+        expect(payload.body).toContain('Successfully processed S3 event');
+      }
+    });
+  });
+
+  describe('End-to-End S3 → Lambda → DynamoDB Flow', () => {
+    test('should trigger Lambda function when object is uploaded to S3 and log to DynamoDB', async () => {
+      const testFileName = `integration-test-${Date.now()}.txt`;
+      const testContent = 'Integration test content for Task 278';
+
+      // Step 1: Upload a file to S3 bucket
+      const putCommand = new PutObjectCommand({
+        Bucket: bucketName,
+        Key: testFileName,
+        Body: testContent,
+        ContentType: 'text/plain',
+      });
+
+      const uploadResponse = await s3Client.send(putCommand);
+      expect(uploadResponse.$metadata.httpStatusCode).toBe(200);
+
+      // Step 2: Wait for Lambda to process the event (eventual consistency)
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Step 3: Query DynamoDB for the log entries
+      // Since we don't know the exact requestId, we'll scan for recent entries
+      const scanCommand = new ScanCommand({
+        TableName: tableName,
+        FilterExpression: 'objectKey = :objectKey',
+        ExpressionAttributeValues: {
+          ':objectKey': { S: testFileName },
+        },
+        Limit: 10,
+      });
+
+      const scanResponse = await dynamodbClient.send(scanCommand);
+      expect(scanResponse.$metadata.httpStatusCode).toBe(200);
+      expect(scanResponse.Items).toBeDefined();
+      expect(scanResponse.Items!.length).toBeGreaterThan(0);
+
+      // Verify the log entry contains expected data
+      const logEntry = scanResponse.Items![0];
+      expect(logEntry.bucketName.S).toBe(bucketName);
+      expect(logEntry.objectKey.S).toBe(testFileName);
+      expect(logEntry.eventName.S).toMatch(/ObjectCreated/);
+      expect(logEntry.functionName.S).toBe(functionName);
+      expect(logEntry.requestId.S).toBeDefined();
+      expect(logEntry.timestamp.S).toBeDefined();
+      expect(logEntry.awsRequestId.S).toBeDefined();
+    }, 30000);
+
+    test('should handle multiple S3 events and create separate DynamoDB entries', async () => {
+      const testFiles = [
+        `multi-test-1-${Date.now()}.txt`,
+        `multi-test-2-${Date.now()}.txt`,
+        `multi-test-3-${Date.now()}.txt`,
+      ];
+
+      // Upload multiple files
+      for (const fileName of testFiles) {
+        const putCommand = new PutObjectCommand({
+          Bucket: bucketName,
+          Key: fileName,
+          Body: `Content for ${fileName}`,
+          ContentType: 'text/plain',
+        });
+
+        const response = await s3Client.send(putCommand);
+        expect(response.$metadata.httpStatusCode).toBe(200);
       }
 
-      const command = new DescribeNatGatewaysCommand({
-        Filter: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId]
+      // Wait for Lambda processing
+      await new Promise(resolve => setTimeout(resolve, 8000));
+
+      // Check that we have entries for all files
+      for (const fileName of testFiles) {
+        const scanCommand = new ScanCommand({
+          TableName: tableName,
+          FilterExpression: 'objectKey = :objectKey',
+          ExpressionAttributeValues: {
+            ':objectKey': { S: fileName },
           },
-          {
-            Name: 'state',
-            Values: ['available']
-          }
-        ]
-      });
-      const response = await ec2Client.send(command);
+        });
 
-      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
-      expect(response.NatGateways![0].State).toBe('available');
+        const scanResponse = await dynamodbClient.send(scanCommand);
+        expect(scanResponse.Items!.length).toBeGreaterThan(0);
+        expect(scanResponse.Items![0].objectKey.S).toBe(fileName);
+      }
+    }, 45000);
+  });
+
+  describe('Error Handling and Resilience', () => {
+    test('should handle Lambda function execution with malformed S3 event', async () => {
+      const command = new InvokeCommand({
+        FunctionName: functionName,
+        InvocationType: 'RequestResponse',
+        Payload: JSON.stringify({
+          Records: [{
+            // Missing required S3 event structure
+            eventVersion: '2.1',
+            eventSource: 'aws:s3',
+            malformed: true
+          }]
+        }),
+      });
+
+      const response = await lambdaClient.send(command);
+      expect(response.$metadata.httpStatusCode).toBe(200);
+      expect(response.StatusCode).toBe(200);
+
+      if (response.Payload) {
+        const payload = JSON.parse(Buffer.from(response.Payload).toString());
+        // Function should handle the error gracefully
+        expect([200, 500]).toContain(payload.statusCode);
+      }
     });
 
-    test('should have Internet Gateway attached', async () => {
-      if (!outputs.VpcId) {
-        console.warn('VpcId not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeInternetGatewaysCommand({
-        Filters: [
-          {
-            Name: 'attachment.vpc-id',
-            Values: [outputs.VpcId]
-          }
-        ]
+    test('should verify S3 bucket permissions are correctly configured', async () => {
+      // Test that we can read from the bucket
+      const listCommand = new ListObjectsV2Command({
+        Bucket: bucketName,
+        MaxKeys: 5,
       });
-      const response = await ec2Client.send(command);
 
-      expect(response.InternetGateways!.length).toBeGreaterThanOrEqual(1);
-      const igw = response.InternetGateways![0];
-      expect(igw.Attachments).toBeDefined();
-      expect(igw.Attachments!.length).toBeGreaterThanOrEqual(1);
-      expect(igw.Attachments![0].State).toBe('available');
+      const response = await s3Client.send(listCommand);
+      expect(response.$metadata.httpStatusCode).toBe(200);
     });
   });
 
-  describe('Security Configuration', () => {
-    test('should have Security Group with correct rules', async () => {
-      if (!outputs.SecurityGroupId) {
-        console.warn('SecurityGroupId not found in outputs, skipping test');
-        return;
+  describe('Data Consistency and Format Validation', () => {
+    test('should verify DynamoDB entries have correct schema and data types', async () => {
+      // Get a sample of recent entries
+      const scanCommand = new ScanCommand({
+        TableName: tableName,
+        Limit: 5,
+      });
+
+      const response = await dynamodbClient.send(scanCommand);
+      expect(response.Items).toBeDefined();
+
+      if (response.Items && response.Items.length > 0) {
+        const item = response.Items[0];
+
+        // Verify required attributes exist and have correct types
+        expect(item.requestId).toBeDefined();
+        expect(item.requestId.S).toBeDefined();
+        expect(typeof item.requestId.S).toBe('string');
+
+        expect(item.timestamp).toBeDefined();
+        expect(item.timestamp.S).toBeDefined();
+        expect(typeof item.timestamp.S).toBe('string');
+
+        expect(item.bucketName).toBeDefined();
+        expect(item.bucketName.S).toBe(bucketName);
+
+        expect(item.functionName).toBeDefined();
+        expect(item.functionName.S).toBe(functionName);
+
+        // Validate timestamp format (ISO 8601 with optional microseconds)
+        const timestampRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3,6})?Z?$/;
+        expect(item.timestamp.S).toMatch(timestampRegex);
+
+        // Validate UUID format for requestId
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        expect(item.requestId.S).toMatch(uuidRegex);
       }
-
-      const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [outputs.SecurityGroupId]
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.SecurityGroups).toHaveLength(1);
-      const sg = response.SecurityGroups![0];
-
-      // Check for HTTP rule
-      const httpRule = sg.IpPermissions!.find(rule => 
-        rule.FromPort === 80 && rule.ToPort === 80
-      );
-      expect(httpRule).toBeDefined();
-      expect(httpRule!.IpRanges).toContainEqual(
-        expect.objectContaining({ CidrIp: '0.0.0.0/0' })
-      );
-
-      // Check for HTTPS rule
-      const httpsRule = sg.IpPermissions!.find(rule => 
-        rule.FromPort === 443 && rule.ToPort === 443
-      );
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule!.IpRanges).toContainEqual(
-        expect.objectContaining({ CidrIp: '0.0.0.0/0' })
-      );
-    });
-  });
-
-  describe('Monitoring and Logging', () => {
-    test('should have VPC Flow Logs enabled', async () => {
-      if (!outputs.VpcId) {
-        console.warn('VpcId not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeFlowLogsCommand({
-        Filter: [
-          {
-            Name: 'resource-id',
-            Values: [outputs.VpcId]
-          }
-        ]
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.FlowLogs!.length).toBeGreaterThanOrEqual(1);
-      const flowLog = response.FlowLogs![0];
-      expect(flowLog.FlowLogStatus).toBe('ACTIVE');
-      expect(flowLog.TrafficType).toBe('ALL');
-      expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
-    });
-
-    test('should have CloudWatch Log Group for Flow Logs', async () => {
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/vpc/flowlogs/`
-      });
-      const response = await logsClient.send(command);
-
-      expect(response.logGroups!.length).toBeGreaterThanOrEqual(1);
-      // Find the log group for our deployment
-      const logGroup = response.logGroups!.find(lg => 
-        lg.logGroupName?.includes(environmentSuffix)
-      );
-      expect(logGroup).toBeDefined();
-      if (logGroup && logGroup.retentionInDays !== undefined) {
-        expect(logGroup.retentionInDays).toBe(7);
-      }
-    });
-
-    test('should have CloudWatch Dashboard for monitoring', async () => {
-      const command = new ListDashboardsCommand({
-        DashboardNamePrefix: `vpc-monitoring-`
-      });
-      const response = await cloudWatchClient.send(command);
-
-      // Find the dashboard for our deployment
-      const dashboard = response.DashboardEntries?.find(d => 
-        d.DashboardName?.includes(environmentSuffix)
-      );
-      expect(dashboard).toBeDefined();
-    });
-  });
-
-  describe('VPC Lattice Configuration', () => {
-    test('should have VPC Lattice Service Network configured', async () => {
-      if (!outputs.LatticeServiceNetworkId) {
-        console.warn('LatticeServiceNetworkId not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new GetServiceNetworkCommand({
-        serviceNetworkIdentifier: outputs.LatticeServiceNetworkId
-      });
-      const response = await latticeClient.send(command);
-
-      expect(response.authType).toBe('NONE');
-      expect(response.name).toBeDefined();
-      // Check that the name includes 'service-network'
-      expect(response.name).toContain('service-network');
-    });
-  });
-
-  describe('Resource Tagging', () => {
-    test('should have correct tags on VPC', async () => {
-      if (!outputs.VpcId) {
-        console.warn('VpcId not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VpcId]
-      });
-      const response = await ec2Client.send(command);
-
-      const vpc = response.Vpcs![0];
-      const tags = vpc.Tags || [];
-
-      expect(tags).toContainEqual(
-        expect.objectContaining({ Key: 'Environment', Value: 'production' })
-      );
-      expect(tags).toContainEqual(
-        expect.objectContaining({ Key: 'Project', Value: 'VPC-Infrastructure' })
-      );
-      expect(tags).toContainEqual(
-        expect.objectContaining({ Key: 'ManagedBy', Value: 'CDK' })
-      );
     });
   });
 });
