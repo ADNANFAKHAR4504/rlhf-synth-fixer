@@ -96,11 +96,11 @@ class TapStack(pulumi.ComponentResource):
       # Creates security groups, WAF, and IAM roles with least privilege
       self.security[region] = SecurityComponent(
           f"security-{region_suffix}-{self.environment_suffix}",
-          vpc_id=self.networking.vpc.id,
-          subnets=self.networking.public_subnet_ids,
+          vpc_id=self.networking[region].vpc.id,
+          subnets=self.networking[region].public_subnet_ids,
           region=region,
           tags=self.tags,
-          opts=provider_opts([self.networking])
+          opts=provider_opts([self.networking[region]])
       )
 
       print(f"  Creating storage components for {region}...")
@@ -119,13 +119,13 @@ class TapStack(pulumi.ComponentResource):
       # Creates RDS Multi-AZ and DynamoDB with encryption and auto-scaling
       self.database[region] = DatabaseComponent(
           f"database-{region_suffix}-{self.environment_suffix}",
-          vpc_id=self.networking.vpc.id,
-          private_subnet_ids=self.networking.private_subnet_ids,
-          database_security_group_id=self.security.database_security_group.id,
+          vpc_id=self.networking[region].vpc.id,
+          private_subnet_ids=self.networking[region].private_subnet_ids,
+          database_security_group_id=self.security[region].database_security_group.id,
           region=region,
           is_primary=is_primary,
           tags=self.tags,
-          opts=provider_opts([self.networking, self.security])
+          opts=provider_opts([self.networking[region], self.security[region]])
       )
 
       print(f"  Creating serverless components for {region}...")
@@ -134,13 +134,13 @@ class TapStack(pulumi.ComponentResource):
       self.serverless[region] = ServerlessComponent(
           f"serverless-{region_suffix}-{self.environment_suffix}",
           environment=self.environment_suffix,
-          lambda_role_arn=self.security.lambda_execution_role.arn,
-          private_subnet_ids=self.networking.private_subnet_ids,
-          lambda_security_group_id=self.security.lambda_security_group.id,
-          rds_endpoint=self.database.rds_endpoint,
+          lambda_role_arn=self.security[region].lambda_execution_role.arn,
+          private_subnet_ids=self.networking[region].private_subnet_ids,
+          lambda_security_group_id=self.security[region].lambda_security_group.id,
+          rds_endpoint=self.database[region].rds_endpoint,
           tags=self.tags,
           opts=provider_opts(
-              [self.networking, self.security, self.database, self.storage])
+              [self.networking[region], self.security[region], self.database[region], self.storage[region]])
       )
 
       print(f"  Creating monitoring and auditing for {region}...")
@@ -148,18 +148,18 @@ class TapStack(pulumi.ComponentResource):
       # Creates CloudTrail
       self.monitoring[region] = CloudTrailComponent(
           f"monitoring-{region_suffix}-{self.environment_suffix}",
-          bucket_id=self.storage.bucket.bucket,
+          bucket_id=self.storage[region].bucket.bucket,
           region_suffix=region_suffix,
-          opts=provider_opts([self.storage])
+          opts=provider_opts([self.storage[region]])
       )
 
       self.regional_deployments[region] = {
-          "networking": self.networking,
-          "security": self.security,
-          "storage": self.storage,
-          "database": self.database,
-          "serverless": self.serverless,
-          "monitoring": self.monitoring
+          "networking": self.networking[region],
+          "security": self.security[region],
+          "storage": self.storage[region],
+          "database": self.database[region],
+          "serverless": self.serverless[region],
+          "monitoring": self.monitoring[region]
       }
 
     print(" Exporting Outputs for Multi-Region Deployment...")

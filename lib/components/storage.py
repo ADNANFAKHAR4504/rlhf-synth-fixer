@@ -8,7 +8,13 @@ import pulumi_aws as aws
 
 
 class StorageComponent(pulumi.ComponentResource):
-  def __init__(self, name: str, environment: str, region_suffix: str, tags: dict, opts: pulumi.ResourceOptions = None):
+  def __init__(
+          self,
+          name: str,
+          environment: str,
+          region_suffix: str,
+          tags: dict,
+          opts: pulumi.ResourceOptions = None):
     super().__init__("custom:aws:Storage", name, None, opts)
 
     account_id = aws.get_caller_identity_output().account_id

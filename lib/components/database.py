@@ -4,15 +4,21 @@ Database component that creates RDS Multi-AZ and DynamoDB with encryption
 Implements high availability and cross-region replication strategies
 """
 
+from typing import List
 import pulumi
 import pulumi_aws as aws
-from typing import List
 
 
 class DatabaseComponent(pulumi.ComponentResource):
-  def __init__(self, name: str, vpc_id: pulumi.Output[str], private_subnet_ids: List[pulumi.Output[str]],
-               database_security_group_id: pulumi.Output[str], region: str, is_primary: bool,
-               tags: dict, opts: pulumi.ResourceOptions = None):
+  def __init__(
+          self,
+          name: str,
+          vpc_id: pulumi.Output[str],
+          private_subnet_ids: List[pulumi.Output[str]],
+          database_security_group_id: pulumi.Output[str],
+          region: str,
+          is_primary: bool,
+          tags: dict, opts: pulumi.ResourceOptions = None):
     super().__init__("custom:database:DatabaseComponent", name, None, opts)
 
     self.region = region
