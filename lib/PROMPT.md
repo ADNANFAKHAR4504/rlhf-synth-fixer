@@ -16,7 +16,8 @@ Requirements:
    • Environment — parameterized (e.g., dev, staging, prod).
    • Owner — parameterized (e.g., team or individual name).
    • Project — parameterized (e.g., project name).
-   • Ensure tags are consistently applied across all supported resources. 4. AWS Lambda Security:
+   • Ensure tags are consistently applied across all supported resources.
+4. AWS Lambda Security:
    • All Lambda functions must run inside a Virtual Private Cloud (VPC).
    • Create the necessary VPC, subnets, and security groups in the template (or allow them to be provided as parameters).
    • Ensure outbound access is controlled, and inbound traffic is restricted to only necessary sources.
