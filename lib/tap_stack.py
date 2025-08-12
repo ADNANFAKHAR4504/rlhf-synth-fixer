@@ -1,684 +1,42 @@
 """
 AWS Dual-Stack Infrastructure with Pulumi
+=========================================
 
-This script provisions a highly available, dual-stack (IPv4 and IPv6) web application 
-infrastructure on AWS following modern best practices and security principles.
+This module provisions a highly available, dual-stack (IPv4 and IPv6) 
+web application infrastructure on AWS using Pulumi and Python.
 
-Architecture:
-- VPC with dual-stack support (IPv4 + IPv6)
-- Multi-AZ public subnets for high availability
+Features:
+- Dual-stack VPC with IPv4 and IPv6 CIDR blocks
+- Multi-AZ public subnets with internet connectivity
+- EC2 instances with Nginx web server
 - Application Load Balancer with dual-stack support
-- EC2 instances running Nginx web server
 - Security groups with least privilege access
-- IAM roles with minimal permissions
 - CloudWatch monitoring and dashboards
+- IAM roles with minimal permissions
 """
-
-import json
-import os
-from ipaddress import IPv6Network
-from typing import List
 
 import pulumi
 import pulumi_aws as aws
+from typing import List, Dict, Any
+import json
 
 # =============================================================================
-# Configuration
+# Configuration Management
 # =============================================================================
 
-# Pulumi configuration
 config = pulumi.Config()
+aws_config = pulumi.Config("aws")
 
-# Core settings
-ENVIRONMENT = os.getenv("ENVIRONMENT_SUFFIX", "dev")
-PROJECT_NAME = "dualstack-web-app"
-INSTANCE_TYPE = "t3.micro"
-
-# Get AWS region from config or environment
-aws_region = config.get("region") or os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-west-2"
-
-# =============================================================================
-# Data Sources
-# =============================================================================
-
-# Get available AZs in the region
-availability_zones = aws.get_availability_zones(state="available")
-
-# Get the latest Amazon Linux 2 AMI
-amazon_linux_ami = aws.ec2.get_ami(
-    most_recent=True,
-    owners=["amazon"],
-    filters=[
-        aws.ec2.GetAmiFilterArgs(
-            name="name",
-            values=["amzn2-ami-hvm-*-x86_64-gp2"]
-        ),
-        aws.ec2.GetAmiFilterArgs(
-            name="virtualization-type",
-            values=["hvm"]
-        )
-    ]
-)
-
-# =============================================================================
-# Networking Infrastructure
-# =============================================================================
-
-# Create VPC with dual-stack support
-vpc = aws.ec2.Vpc(
-    "main-vpc",
-    cidr_block="10.0.0.0/16",
-    assign_generated_ipv6_cidr_block=True,
-    enable_dns_hostnames=True,
-    enable_dns_support=True,
-    tags={
-        "Name": f"VPC-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME
-    }
-)
-
-# Internet Gateway for public internet access
-internet_gateway = aws.ec2.InternetGateway(
-    "main-igw",
-    vpc_id=vpc.id,
-    tags={
-        "Name": f"IGW-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME
-    }
-)
-
-# Create public subnets across multiple AZs for high availability
-public_subnets: List[aws.ec2.Subnet] = []
-
-for i in range(min(2, len(availability_zones.names))):
-    az = availability_zones.names[i]
-    
-    # Calculate IPv4 CIDR block for each subnet
-    ipv4_cidr = f"10.0.{i + 1}.0/24"
-    
-    subnet = aws.ec2.Subnet(
-        f"public-subnet-{i + 1}",
-        vpc_id=vpc.id,
-        availability_zone=az,
-        cidr_block=ipv4_cidr,
-        ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-            lambda cidr, idx=i: str(list(IPv6Network(cidr).subnets(new_prefix=64))[idx])
-        ),
-        map_public_ip_on_launch=True,
-        assign_ipv6_address_on_creation=True,
-        tags={
-            "Name": f"PublicSubnet-{i + 1}-{ENVIRONMENT}",
-            "Environment": ENVIRONMENT,
-            "Project": PROJECT_NAME,
-            "Type": "Public",
-            "AZ": az
-        }
-    )
-    
-    public_subnets.append(subnet)
-
-# Route table for public subnets
-public_route_table = aws.ec2.RouteTable(
-    "public-rt",
-    vpc_id=vpc.id,
-    tags={
-        "Name": f"PublicRT-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME,
-        "Type": "Public"
-    }
-)
-
-# IPv4 route to Internet Gateway
-ipv4_route = aws.ec2.Route(
-    "ipv4-route",
-    route_table_id=public_route_table.id,
-    destination_cidr_block="0.0.0.0/0",
-    gateway_id=internet_gateway.id
-)
-
-# IPv6 route to Internet Gateway
-ipv6_route = aws.ec2.Route(
-    "ipv6-route",
-    route_table_id=public_route_table.id,
-    destination_ipv6_cidr_block="::/0",
-    gateway_id=internet_gateway.id
-)
-
-# Associate route table with public subnets
-for i, subnet in enumerate(public_subnets):
-    aws.ec2.RouteTableAssociation(
-        f"public-rta-{i + 1}",
-        subnet_id=subnet.id,
-        route_table_id=public_route_table.id
-    )
-
-# =============================================================================
-# Security Groups
-# =============================================================================
-
-# Security group for Application Load Balancer
-alb_security_group = aws.ec2.SecurityGroup(
-    "alb-sg",
-    name_prefix="alb-sg-",
-    description="Security group for Application Load Balancer - allows HTTP traffic from internet",
-    vpc_id=vpc.id,
-    ingress=[
-        # Allow HTTP traffic from anywhere (IPv4)
-        aws.ec2.SecurityGroupIngressArgs(
-            protocol="tcp",
-            from_port=80,
-            to_port=80,
-            cidr_blocks=["0.0.0.0/0"],
-            description="Allow HTTP traffic from internet (IPv4)"
-        ),
-        # Allow HTTP traffic from anywhere (IPv6)
-        aws.ec2.SecurityGroupIngressArgs(
-            protocol="tcp",
-            from_port=80,
-            to_port=80,
-            ipv6_cidr_blocks=["::/0"],
-            description="Allow HTTP traffic from internet (IPv6)"
-        )
-    ],
-    egress=[
-        # Allow all outbound traffic (IPv4)
-        aws.ec2.SecurityGroupEgressArgs(
-            protocol="-1",
-            from_port=0,
-            to_port=0,
-            cidr_blocks=["0.0.0.0/0"],
-            description="Allow all outbound traffic (IPv4)"
-        ),
-        # Allow all outbound traffic (IPv6)
-        aws.ec2.SecurityGroupEgressArgs(
-            protocol="-1",
-            from_port=0,
-            to_port=0,
-            ipv6_cidr_blocks=["::/0"],
-            description="Allow all outbound traffic (IPv6)"
-        )
-    ],
-    tags={
-        "Name": f"ALB-SG-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME,
-        "Purpose": "ALB Security Group"
-    }
-)
-
-# Security group for EC2 instances
-ec2_security_group = aws.ec2.SecurityGroup(
-    "ec2-sg",
-    name_prefix="ec2-sg-",
-    description="Security group for EC2 instances - allows HTTP traffic only from ALB",
-    vpc_id=vpc.id,
-    ingress=[
-        # Allow HTTP traffic only from ALB security group
-        aws.ec2.SecurityGroupIngressArgs(
-            protocol="tcp",
-            from_port=80,
-            to_port=80,
-            source_security_group_id=alb_security_group.id,
-            description="Allow HTTP traffic from ALB only"
-        )
-    ],
-    egress=[
-        # Allow all outbound traffic (IPv4)
-        aws.ec2.SecurityGroupEgressArgs(
-            protocol="-1",
-            from_port=0,
-            to_port=0,
-            cidr_blocks=["0.0.0.0/0"],
-            description="Allow all outbound traffic (IPv4)"
-        ),
-        # Allow all outbound traffic (IPv6)
-        aws.ec2.SecurityGroupEgressArgs(
-            protocol="-1",
-            from_port=0,
-            to_port=0,
-            ipv6_cidr_blocks=["::/0"],
-            description="Allow all outbound traffic (IPv6)"
-        )
-    ],
-    tags={
-        "Name": f"EC2-SG-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME,
-        "Purpose": "EC2 Security Group"
-    }
-)
-
-# =============================================================================
-# IAM Roles and Policies
-# =============================================================================
-
-# IAM role for EC2 instances with minimal permissions
-ec2_assume_role_policy = {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "ec2.amazonaws.com"
-            }
-        }
-    ]
-}
-
-ec2_role = aws.iam.Role(
-    "ec2-role",
-    assume_role_policy=json.dumps(ec2_assume_role_policy),
-    description="IAM role for EC2 instances with minimal required permissions",
-    tags={
-        "Name": f"EC2-Role-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME
-    }
-)
-
-# Custom policy for EC2 instances - CloudWatch monitoring permissions
-ec2_policy_document = {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "cloudwatch:PutMetricData",
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents",
-                "logs:DescribeLogStreams"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-
-ec2_policy = aws.iam.Policy(
-    "ec2-policy",
-    description="Custom policy for EC2 instances - CloudWatch and logging permissions",
-    policy=json.dumps(ec2_policy_document)
-)
-
-# Attach custom policy to role
-ec2_policy_attachment = aws.iam.RolePolicyAttachment(
-    "ec2-policy-attachment",
-    role=ec2_role.name,
-    policy_arn=ec2_policy.arn
-)
-
-# Create instance profile
-ec2_instance_profile = aws.iam.InstanceProfile(
-    "ec2-instance-profile",
-    role=ec2_role.name
-)
-
-# =============================================================================
-# User Data Script
-# =============================================================================
-
-user_data_script = """#!/bin/bash
-yum update -y
-yum install -y nginx
-
-# Create a simple index page
-cat <<EOF > /var/www/html/index.html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>AWS Dual-Stack Web Application</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f0f0f0; }
-        .container { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .success { color: #27ae60; }
-        .info { color: #3498db; }
-        h1 { color: #2c3e50; }
-        .status-box { background-color: #ecf0f1; padding: 15px; border-radius: 5px; margin: 10px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 AWS Dual-Stack Infrastructure</h1>
-        <div class="status-box">
-            <h2 class="success">✅ Deployment Successful!</h2>
-            <p><strong>Environment:</strong> <span class="info">$ENVIRONMENT</span></p>
-            <p><strong>Instance ID:</strong> <span class="info">$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</span></p>
-            <p><strong>Availability Zone:</strong> <span class="info">$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</span></p>
-            <p><strong>Public IPv4:</strong> <span class="info">$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)</span></p>
-            <p><strong>IPv6:</strong> <span class="info">$(curl -s http://169.254.169.254/latest/meta-data/ipv6)</span></p>
-        </div>
-        <div class="status-box">
-            <h3>Infrastructure Features:</h3>
-            <ul>
-                <li>✅ Dual-stack VPC (IPv4 + IPv6)</li>
-                <li>✅ Multi-AZ deployment</li>
-                <li>✅ Application Load Balancer</li>
-                <li>✅ Security groups with least privilege</li>
-                <li>✅ CloudWatch monitoring</li>
-                <li>✅ IAM roles with minimal permissions</li>
-            </ul>
-        </div>
-    </div>
-</body>
-</html>
-EOF
-
-# Create health check endpoint
-cat <<EOF > /var/www/html/health
-OK
-EOF
-
-# Start and enable nginx
-systemctl start nginx
-systemctl enable nginx
-
-# Configure nginx to start on boot
-chkconfig nginx on
-"""
-
-# =============================================================================
-# EC2 Instances
-# =============================================================================
-
-# List to store EC2 instances
-ec2_instances: List[aws.ec2.Instance] = []
-
-# Create EC2 instances in each public subnet
-for i, subnet in enumerate(public_subnets):
-    instance = aws.ec2.Instance(
-        f"web-server-{i + 1}",
-        ami=amazon_linux_ami.id,
-        instance_type=INSTANCE_TYPE,
-        subnet_id=subnet.id,
-        vpc_security_group_ids=[ec2_security_group.id],
-        iam_instance_profile=ec2_instance_profile.name,
-        user_data=user_data_script,
-        monitoring=True,  # Enable detailed monitoring
-        ipv6_address_count=1,  # Assign one IPv6 address
-        tags={
-            "Name": f"WebServer-{i + 1}-{ENVIRONMENT}",
-            "Environment": ENVIRONMENT,
-            "Project": PROJECT_NAME,
-            "Role": "WebServer",
-            "AZ": subnet.availability_zone
-        }
-    )
-    
-    ec2_instances.append(instance)
-
-# =============================================================================
-# Load Balancer Infrastructure
-# =============================================================================
-
-# Create target group for EC2 instances
-target_group = aws.lb.TargetGroup(
-    "web-tg",
-    name_prefix="web-",
-    port=80,
-    protocol="HTTP",
-    vpc_id=vpc.id,
-    health_check=aws.lb.TargetGroupHealthCheckArgs(
-        enabled=True,
-        healthy_threshold=2,
-        unhealthy_threshold=2,
-        timeout=5,
-        interval=30,
-        path="/health",
-        matcher="200",
-        protocol="HTTP",
-        port="traffic-port"
-    ),
-    tags={
-        "Name": f"WebTG-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME
-    }
-)
-
-# Attach EC2 instances to target group
-for i, instance in enumerate(ec2_instances):
-    aws.lb.TargetGroupAttachment(
-        f"web-tg-attachment-{i + 1}",
-        target_group_arn=target_group.arn,
-        target_id=instance.id,
-        port=80
-    )
-
-# Create Application Load Balancer with dual-stack support
-alb = aws.lb.LoadBalancer(
-    "web-alb",
-    name_prefix="web-",
-    load_balancer_type="application",
-    ip_address_type="dualstack",  # Enable dual-stack (IPv4 and IPv6)
-    internal=False,  # Internet-facing ALB
-    security_groups=[alb_security_group.id],
-    subnets=[subnet.id for subnet in public_subnets],
-    enable_deletion_protection=False,  # Set to True for production
-    tags={
-        "Name": f"WebALB-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME,
-        "Type": "Application Load Balancer"
-    }
-)
-
-# Create HTTP listener
-http_listener = aws.lb.Listener(
-    "web-listener",
-    load_balancer_arn=alb.arn,
-    port="80",
-    protocol="HTTP",
-    default_actions=[
-        aws.lb.ListenerDefaultActionArgs(
-            type="forward",
-            target_group_arn=target_group.arn
-        )
-    ]
-)
-
-# =============================================================================
-# CloudWatch Monitoring
-# =============================================================================
-
-# CloudWatch Dashboard for monitoring ALB metrics
-dashboard_body = pulumi.Output.all(alb.arn_suffix, target_group.arn_suffix).apply(lambda args: json.dumps({
-    "widgets": [
-        {
-            "type": "metric",
-            "x": 0,
-            "y": 0,
-            "width": 12,
-            "height": 6,
-            "properties": {
-                "metrics": [
-                    ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", args[0]],
-                    [".", "TargetResponseTime", ".", "."],
-                    [".", "HTTPCode_Target_2XX_Count", ".", "."],
-                    [".", "HTTPCode_Target_4XX_Count", ".", "."],
-                    [".", "HTTPCode_Target_5XX_Count", ".", "."]
-                ],
-                "view": "timeSeries",
-                "stacked": False,
-                "region": aws_region,
-                "title": "ALB Performance Metrics",
-                "period": 300
-            }
-        },
-        {
-            "type": "metric",
-            "x": 0,
-            "y": 6,
-            "width": 12,
-            "height": 6,
-            "properties": {
-                "metrics": [
-                    ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", args[1]],
-                    [".", "UnHealthyHostCount", ".", "."]
-                ],
-                "view": "timeSeries",
-                "stacked": False,
-                "region": aws_region,
-                "title": "Target Health Status",
-                "period": 300
-            }
-        }
-    ]
-}))
-
-cloudwatch_dashboard = aws.cloudwatch.Dashboard(
-    "monitoring-dashboard",
-    dashboard_name=f"WebApp-Dashboard-{ENVIRONMENT}",
-    dashboard_body=dashboard_body
-)
-
-# Create CloudWatch Alarms for critical metrics
-# Alarm for unhealthy targets
-unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
-    "unhealthy-targets-alarm",
-    metric_name="UnHealthyHostCount",
-    namespace="AWS/ApplicationELB",
-    statistic="Average",
-    period=300,
-    evaluation_periods=2,
-    threshold=1,
-    comparison_operator="GreaterThanOrEqualToThreshold",
-    dimensions={
-        "TargetGroup": target_group.arn_suffix
-    },
-    tags={
-        "Name": f"UnhealthyTargetsAlarm-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME
-    }
-)
-
-# Alarm for high response time
-high_response_time_alarm = aws.cloudwatch.MetricAlarm(
-    "high-response-time-alarm",
-    metric_name="TargetResponseTime",
-    namespace="AWS/ApplicationELB",
-    statistic="Average",
-    period=300,
-    evaluation_periods=2,
-    threshold=1.0,  # 1 second
-    comparison_operator="GreaterThanThreshold",
-    dimensions={
-        "LoadBalancer": alb.arn_suffix
-    },
-    tags={
-        "Name": f"HighResponseTimeAlarm-{ENVIRONMENT}",
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME
-    }
-)
-
-# =============================================================================
-# Outputs
-# =============================================================================
-
-# Export key infrastructure outputs
-pulumi.export("vpc_id", vpc.id)
-pulumi.export("vpc_ipv4_cidr", vpc.cidr_block)
-pulumi.export("vpc_ipv6_cidr", vpc.ipv6_cidr_block)
-pulumi.export("public_subnet_ids", [subnet.id for subnet in public_subnets])
-pulumi.export("availability_zones", [subnet.availability_zone for subnet in public_subnets])
-
-# ALB outputs
-pulumi.export("alb_arn", alb.arn)
-pulumi.export("alb_dns_name", alb.dns_name)
-pulumi.export("alb_zone_id", alb.zone_id)
-pulumi.export("alb_security_group_id", alb_security_group.id)
-pulumi.export("application_url", alb.dns_name.apply(lambda dns: f"http://{dns}"))
-
-# EC2 outputs
-pulumi.export("ec2_instance_ids", [instance.id for instance in ec2_instances])
-pulumi.export("ec2_public_ips", [instance.public_ip for instance in ec2_instances])
-pulumi.export("ec2_ipv6_addresses", [instance.ipv6_addresses for instance in ec2_instances])
-
-# Target Group outputs
-pulumi.export("target_group_arn", target_group.arn)
-
-# CloudWatch Dashboard URL
-pulumi.export("cloudwatch_dashboard_url", cloudwatch_dashboard.dashboard_name.apply(
-    lambda name: f"https://{aws_region}.console.aws.amazon.com/cloudwatch/home?region={aws_region}#dashboards:name={name}"
-))
-
-# Environment and configuration
-pulumi.export("EnvironmentSuffix", ENVIRONMENT)
-pulumi.export("aws_region", aws_region)
-pulumi.export("project_name", PROJECT_NAME)
-
-# Deployment summary
-pulumi.export("deployment_summary", {
-    "project_name": PROJECT_NAME,
-    "environment": ENVIRONMENT,
-    "region": aws_region,
-    "instance_type": INSTANCE_TYPE,
-    "high_availability": True,
-    "dual_stack_enabled": True,
-    "security_hardened": True,
-    "monitoring_enabled": True
-})
-
-# Deployment instructions
-pulumi.export("deployment_instructions", {
-    "step_1": "Run 'pulumi up' to deploy the infrastructure",
-    "step_2": "Wait for deployment to complete (typically 5-10 minutes)",
-    "step_3": "Access the application using the 'application_url' output",
-    "step_4": "Monitor the infrastructure using the CloudWatch dashboard",
-    "verification": {
-        "web_access": "Open the application_url in a web browser",
-        "ipv6_test": "Use 'curl -6' with the ALB DNS name to test IPv6 connectivity",
-        "health_check": "Check target group health in AWS Console",
-        "monitoring": "View metrics in the CloudWatch dashboard"
-    }
-})
-
-# Print deployment information
-pulumi.log.info("🚀 AWS Dual-Stack Infrastructure Deployment")
-pulumi.log.info("=" * 50)
-pulumi.log.info(f"Environment: {ENVIRONMENT}")
-pulumi.log.info(f"Region: {aws_region}")
-pulumi.log.info(f"Instance Type: {INSTANCE_TYPE}")
-pulumi.log.info(f"Project: {PROJECT_NAME}")
-pulumi.log.info("=" * 50)
-pulumi.log.info("✅ Infrastructure components:")
-pulumi.log.info("   • Dual-stack VPC with IPv4 and IPv6 support")
-pulumi.log.info("   • Multi-AZ public subnets for high availability")
-pulumi.log.info("   • Application Load Balancer with dual-stack support")
-pulumi.log.info("   • EC2 instances with Nginx web server")
-pulumi.log.info("   • Security groups with least privilege access")
-pulumi.log.info("   • IAM roles with minimal permissions")
-pulumi.log.info("   • CloudWatch monitoring and dashboards")
-pulumi.log.info("   • Automated health checks and alarms")
-pulumi.log.info("=" * 50)
-
-
-# =============================================================================
-# Testing Helper
-# =============================================================================
-def create_infrastructure():
-    """Return key resources for unit tests without altering deployment behavior."""
-    return {
-        "vpc": vpc,
-        "alb": alb,
-        "ec2_instance": ec2_instances[0] if ec2_instances else None,
-        "ec2_sg": ec2_security_group,
-        "alb_sg": alb_security_group,
-        "dashboard": cloudwatch_dashboard,
-    }
+# Environment-specific configuration
+ENVIRONMENT = config.get("environment") or "dev"
+AWS_REGION = aws_config.require("region")
+INSTANCE_TYPE = config.get("instance-type") or "t3.micro"
+PROJECT_NAME = config.get("project-name") or "dualstack-web-app"
 
 # Resource naming convention
 def get_resource_name(resource_type: str) -> str:
     """Generate consistent resource names following naming convention."""
     return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}"
-
-# Environment suffix from ENVIRONMENT_SUFFIX env var or default
-environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
 
 # =============================================================================
 # Data Sources
@@ -747,7 +105,7 @@ for i in range(min(2, len(availability_zones.names))):
         availability_zone=az,
         cidr_block=ipv4_cidr,
         ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-            lambda cidr, idx=i: str(list(IPv6Network(cidr).subnets(new_prefix=64))[idx])
+            lambda cidr: f"{cidr[:-2]}{i + 1}::/64"
         ),
         map_public_ip_on_launch=True,
         assign_ipv6_address_on_creation=True,
@@ -805,9 +163,9 @@ for i, subnet in enumerate(public_subnets):
 # Security group for Application Load Balancer
 alb_security_group = aws.ec2.SecurityGroup(
     get_resource_name("alb-sg"),
+    name=get_resource_name("alb-sg"),
     description="Security group for Application Load Balancer - allows HTTP traffic from internet",
     vpc_id=vpc.id,
-    revoke_rules_on_delete=True,
     ingress=[
         # Allow HTTP traffic from anywhere (IPv4)
         aws.ec2.SecurityGroupIngressArgs(
@@ -855,9 +213,9 @@ alb_security_group = aws.ec2.SecurityGroup(
 # Security group for EC2 instances
 ec2_security_group = aws.ec2.SecurityGroup(
     get_resource_name("ec2-sg"),
+    name=get_resource_name("ec2-sg"),
     description="Security group for EC2 instances - allows HTTP traffic only from ALB",
     vpc_id=vpc.id,
-    revoke_rules_on_delete=True,
     ingress=[
         # Allow HTTP traffic only from ALB security group
         aws.ec2.SecurityGroupIngressArgs(
@@ -866,6 +224,14 @@ ec2_security_group = aws.ec2.SecurityGroup(
             to_port=80,
             security_groups=[alb_security_group.id],
             description="Allow HTTP traffic from ALB only"
+        ),
+        # Allow SSH for management (optional - can be removed for production)
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=22,
+            to_port=22,
+            cidr_blocks=["0.0.0.0/0"],  # Restrict this in production
+            description="Allow SSH access for management"
         )
     ],
     egress=[
@@ -971,13 +337,16 @@ ec2_instance_profile = aws.iam.InstanceProfile(
 # =============================================================================
 
 user_data_script = f"""#!/bin/bash
-# Install and configure Nginx (Amazon Linux 2)
-amazon-linux-extras install -y nginx1
-systemctl enable nginx
+# Update system packages
+yum update -y
+
+# Install and configure Nginx
+yum install -y nginx
 systemctl start nginx
+systemctl enable nginx
 
 # Create a custom index page with system information
-cat > /usr/share/nginx/html/index.html << 'EOF'
+cat > /var/www/html/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1078,8 +447,10 @@ server {{
     listen [::]:80;
     server_name _;
     
-    root /usr/share/nginx/html;
-    index index.html;
+    location / {{
+        root /var/www/html;
+        index index.html;
+    }}
     
     location /health {{
         access_log off;
@@ -1091,6 +462,47 @@ EOF
 
 # Restart Nginx to apply configuration
 systemctl restart nginx
+
+# Install CloudWatch agent for detailed monitoring
+yum install -y amazon-cloudwatch-agent
+
+# Configure CloudWatch agent
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
+{{
+    "metrics": {{
+        "namespace": "CWAgent",
+        "metrics_collected": {{
+            "cpu": {{
+                "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+                "metrics_collection_interval": 60
+            }},
+            "disk": {{
+                "measurement": ["used_percent"],
+                "metrics_collection_interval": 60,
+                "resources": ["*"]
+            }},
+            "diskio": {{
+                "measurement": ["io_time"],
+                "metrics_collection_interval": 60,
+                "resources": ["*"]
+            }},
+            "mem": {{
+                "measurement": ["mem_used_percent"],
+                "metrics_collection_interval": 60
+            }},
+            "netstat": {{
+                "measurement": ["tcp_established", "tcp_time_wait"],
+                "metrics_collection_interval": 60
+            }}
+        }}
+    }}
+}}
+EOF
+
+# Start CloudWatch agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
+    -a fetch-config -m ec2 -s \\
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
 # Log deployment completion
 echo "$(date): Dual-stack web server deployment completed successfully" >> /var/log/deployment.log
@@ -1131,11 +543,12 @@ for i, subnet in enumerate(public_subnets):
 
 # Create target group for EC2 instances
 target_group = aws.lb.TargetGroup(
-    "web-tg",
-    name_prefix="tg-",
+    get_resource_name("web-tg"),
+    name=get_resource_name("web-tg"),
     port=80,
     protocol="HTTP",
     vpc_id=vpc.id,
+    ip_address_type="dualstack",  # Support both IPv4 and IPv6
     health_check=aws.lb.TargetGroupHealthCheckArgs(
         enabled=True,
         healthy_threshold=2,
@@ -1148,7 +561,7 @@ target_group = aws.lb.TargetGroup(
         port="traffic-port"
     ),
     tags={
-        "Name": f"WebTG-{environment_suffix}",
+        "Name": get_resource_name("web-tg"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME
     }
@@ -1166,10 +579,10 @@ for i, instance in enumerate(ec2_instances):
 # Create Application Load Balancer with dual-stack support
 alb = aws.lb.LoadBalancer(
     get_resource_name("web-alb"),
-    name_prefix="alb-",
+    name=get_resource_name("web-alb"),
     load_balancer_type="application",
     ip_address_type="dualstack",  # Enable dual-stack (IPv4 and IPv6)
-    internal=False,  # Internet-facing ALB
+    scheme="internet-facing",
     security_groups=[alb_security_group.id],
     subnets=[subnet.id for subnet in public_subnets],
     enable_deletion_protection=False,  # Set to True for production
@@ -1295,6 +708,8 @@ cloudwatch_dashboard = aws.cloudwatch.Dashboard(
 # Alarm for unhealthy targets
 unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
     get_resource_name("unhealthy-targets-alarm"),
+    name=get_resource_name("unhealthy-targets-alarm"),
+    description="Alarm when there are unhealthy targets in the target group",
     metric_name="UnHealthyHostCount",
     namespace="AWS/ApplicationELB",
     statistic="Average",
@@ -1315,6 +730,8 @@ unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
 # Alarm for high response time
 high_response_time_alarm = aws.cloudwatch.MetricAlarm(
     get_resource_name("high-response-time-alarm"),
+    name=get_resource_name("high-response-time-alarm"),
+    description="Alarm when target response time is too high",
     metric_name="TargetResponseTime",
     namespace="AWS/ApplicationELB",
     statistic="Average",
@@ -1382,9 +799,6 @@ pulumi.export("deployment_summary", {
     "security_hardened": True
 })
 
-# Also export the environment suffix explicitly for downstream jobs/tests
-pulumi.export("EnvironmentSuffix", ENVIRONMENT)
-
 # =============================================================================
 # Deployment Instructions and Verification
 # =============================================================================
@@ -1419,18 +833,3 @@ print("   • IAM roles with minimal permissions")
 print("   • CloudWatch monitoring and dashboards")
 print("   • Automated health checks and alarms")
 print("=" * 50)
-
-
-# =============================================================================
-# Testing Helper
-# =============================================================================
-def create_infrastructure() -> Dict[str, Any]:
-    """Return key resources for unit tests without altering deployment behavior."""
-    return {
-        "vpc": vpc,
-        "alb": alb,
-        "ec2_instance": ec2_instances[0] if ec2_instances else None,
-        "ec2_sg": ec2_security_group,
-        "alb_sg": alb_security_group,
-        "dashboard": cloudwatch_dashboard,
-    }

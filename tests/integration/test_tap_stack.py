@@ -1,4 +1,4 @@
-﻿import json
+import json
 import subprocess
 import time
 import os
@@ -27,26 +27,25 @@ def run_command(command):
   return process.stdout
 
 def test_integration():
-  try:
-    # Optional: login if backend URL is provided (e.g., S3 backend)
-    backend = os.environ.get("PULUMI_BACKEND_URL")
-    if backend:
-      print(f"--- Logging into Pulumi backend: {backend} ---")
-      run_command(f"pulumi login {backend}")
+  # Optional: login if backend URL is provided (e.g., S3 backend)
+  backend = os.environ.get("PULUMI_BACKEND_URL")
+  if backend:
+    print(f"--- Logging into Pulumi backend: {backend} ---")
+    run_command(f"pulumi login {backend}")
 
-    print(f"--- Selecting Pulumi Stack: {FULL_STACK} ---")
-    run_command(f"pulumi stack select {FULL_STACK} --create")
+  print(f"--- Selecting Pulumi Stack: {FULL_STACK} ---")
+  run_command(f"pulumi stack select {FULL_STACK} --create")
 
-    print("--- Cancelling any pending operations to remove locks ---")
+  print("--- Cancelling any pending operations to remove locks ---")
   run_command("pulumi cancel --yes")
 
-    print("--- Deploying Infrastructure ---")
+  print("--- Deploying Infrastructure ---")
   run_command("pulumi up --yes --skip-preview")
 
-    print("--- Fetching Stack Outputs ---")
-    alb_dns_json = run_command("pulumi stack output alb_dns_name --json")
-    alb_dns = json.loads(alb_dns_json)
-    url = f"http://{alb_dns}"
+  print("--- Fetching Stack Outputs ---")
+  alb_dns_json = run_command("pulumi stack output alb_dns_name --json")
+  alb_dns = json.loads(alb_dns_json)
+  url = f"http://{alb_dns}"
 
   # Optionally, wait briefly to allow targets to register if backend AWS is available.
   # Since local AWS access may not be present, we avoid hard AWS CLI checks here.
@@ -62,7 +61,7 @@ def test_integration():
     except Exception as e:
       print(f"Skipping HTTP validation due to: {e}")
 
-  print("✅ Integration Test completed")
+  print("? Integration Test completed")
 
   finally:
     print("--- Destroying Infrastructure ---")
