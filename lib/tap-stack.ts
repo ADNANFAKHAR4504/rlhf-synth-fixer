@@ -334,7 +334,7 @@ export class TapStack extends TerraformStack {
     sessionHandler: LambdaFunction;
     healthCheck: LambdaFunction;
   } {
-    // Lambda Functions with inline code (no ZIP files needed)
+    // Lambda Functions using existing placeholder ZIP file
     const userHandler = new LambdaFunction(
       this,
       `${this.resourcePrefix}-user-handler`,
@@ -342,9 +342,9 @@ export class TapStack extends TerraformStack {
         functionName: `${this.resourcePrefix}-user-handler-${this.uniqueSuffix}`,
         role: lambdaRole.arn,
         runtime: 'nodejs18.x',
-        handler: 'index.handler',
-        filename: 'user-handler.zip',
-        sourceCodeHash: 'placeholder-hash-1',
+        handler: 'lambda-handler.handler',
+        filename: 'lib/lambda-placeholder.zip',
+        sourceCodeHash: 'placeholder-hash-user',
         timeout: 30,
         memorySize: 128,
         environment: {
@@ -363,9 +363,9 @@ export class TapStack extends TerraformStack {
         functionName: `${this.resourcePrefix}-session-handler-${this.uniqueSuffix}`,
         role: lambdaRole.arn,
         runtime: 'nodejs18.x',
-        handler: 'index.handler',
-        filename: 'session-handler.zip',
-        sourceCodeHash: 'placeholder-hash-2',
+        handler: 'lambda-handler.handler',
+        filename: 'lib/lambda-placeholder.zip',
+        sourceCodeHash: 'placeholder-hash-session',
         timeout: 30,
         memorySize: 128,
         environment: {
@@ -384,9 +384,9 @@ export class TapStack extends TerraformStack {
         functionName: `${this.resourcePrefix}-health-check-${this.uniqueSuffix}`,
         role: lambdaRole.arn,
         runtime: 'nodejs18.x',
-        handler: 'index.handler',
-        filename: 'health-check.zip',
-        sourceCodeHash: 'placeholder-hash-3',
+        handler: 'lambda-handler.handler',
+        filename: 'lib/lambda-placeholder.zip',
+        sourceCodeHash: 'placeholder-hash-health',
         timeout: 10,
         memorySize: 128,
       }
