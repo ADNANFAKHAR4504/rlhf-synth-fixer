@@ -306,109 +306,112 @@ Resources:
               Bool:
                 "aws:SecureTransport": "false"
 
-  CloudTrailS3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "tapstack${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}"
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+  # ------------------------------------------------------------------------------------
+  # CLOUDTRAIL RESOURCES DISABLED
+  # The following resources are intentionally commented out to SKIP creating CloudTrail
+  # and its dependencies (log group, role, S3 bucket/policy). Re-enable by uncommenting.
+  # ------------------------------------------------------------------------------------
 
-  CloudTrailS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CloudTrailS3Bucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailS3Bucket.Arn
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: s3:PutObject
-            Resource: !Sub "${CloudTrailS3Bucket.Arn}/*"
-            Condition:
-              StringEquals:
-                "s3:x-amz-acl": "bucket-owner-full-control"
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: "*"
-            Action: "s3:*"
-            Resource:
-              - !GetAtt CloudTrailS3Bucket.Arn
-              - !Sub "${CloudTrailS3Bucket.Arn}/*"
-            Condition:
-              Bool: { "aws:SecureTransport": "false" }
+  # CloudTrailS3Bucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub "tapstack${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}"
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
 
-  # ===============================
-  # CLOUDTRAIL → CLOUDWATCH LOGS
-  # ===============================
-  CloudTrailLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/cloudtrail/TapStack${EnvironmentSuffix}"
-      RetentionInDays: 30
+  # CloudTrailS3BucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref CloudTrailS3Bucket
+  #     PolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Sid: AWSCloudTrailAclCheck
+  #           Effect: Allow
+  #           Principal: { Service: cloudtrail.amazonaws.com }
+  #           Action: s3:GetBucketAcl
+  #           Resource: !GetAtt CloudTrailS3Bucket.Arn
+  #         - Sid: AWSCloudTrailWrite
+  #           Effect: Allow
+  #           Principal: { Service: cloudtrail.amazonaws.com }
+  #           Action: s3:PutObject
+  #           Resource: !Sub "${CloudTrailS3Bucket.Arn}/*"
+  #           Condition:
+  #             StringEquals:
+  #               "s3:x-amz-acl": "bucket-owner-full-control"
+  #         - Sid: DenyInsecureConnections
+  #           Effect: Deny
+  #           Principal: "*"
+  #           Action: "s3:*"
+  #           Resource:
+  #             - !GetAtt CloudTrailS3Bucket.Arn
+  #             - !Sub "${CloudTrailS3Bucket.Arn}/*"
+  #           Condition:
+  #             Bool: { "aws:SecureTransport": "false" }
 
-  CloudTrailLogsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudTrailToCWLogs
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub "${CloudTrailLogGroup.Arn}:log-stream:*"
-              - Effect: Allow
-                Action:
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
-                Resource: "*"
-              - Effect: Allow
-                Action: logs:CreateLogGroup
-                Resource: !GetAtt CloudTrailLogGroup.Arn
+  # CloudTrailLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub "/aws/cloudtrail/TapStack${EnvironmentSuffix}"
+  #     RetentionInDays: 30
 
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      TrailName: !Sub "TapStack${EnvironmentSuffix}-CloudTrail"
-      S3BucketName: !Ref CloudTrailS3Bucket
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      IsLogging: true
-      EnableLogFileValidation: true
-      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: AWS::S3::Object
-              Values:
-                - !Sub "arn:${AWS::Partition}:s3:::${ApplicationS3Bucket}/"
-      Tags:
-        - Key: Name
-          Value: !Sub "TapStack${EnvironmentSuffix}-CloudTrail"
+  # CloudTrailLogsRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     Policies:
+  #       - PolicyName: CloudTrailToCWLogs
+  #         PolicyDocument:
+  #           Version: "2012-10-17"
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - logs:CreateLogStream
+  #                 - logs:PutLogEvents
+  #               Resource: !Sub "${CloudTrailLogGroup.Arn}:log-stream:*"
+  #             - Effect: Allow
+  #               Action:
+  #                 - logs:DescribeLogGroups
+  #                 - logs:DescribeLogStreams
+  #               Resource: "*"
+  #             - Effect: Allow
+  #               Action: logs:CreateLogGroup
+  #               Resource: !GetAtt CloudTrailLogGroup.Arn
+
+  # CloudTrail:
+  #   Type: AWS::CloudTrail::Trail
+  #   Properties:
+  #     TrailName: !Sub "TapStack${EnvironmentSuffix}-CloudTrail"
+  #     S3BucketName: !Ref CloudTrailS3Bucket
+  #     IncludeGlobalServiceEvents: true
+  #     IsMultiRegionTrail: true
+  #     IsLogging: true
+  #     EnableLogFileValidation: true
+  #     CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+  #     CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
+  #     EventSelectors:
+  #       - ReadWriteType: All
+  #         IncludeManagementEvents: true
+  #         DataResources:
+  #           - Type: AWS::S3::Object
+  #             Values:
+  #               - !Sub "arn:${AWS::Partition}:s3:::${ApplicationS3Bucket}/"
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "TapStack${EnvironmentSuffix}-CloudTrail"
 
   # ===============================
   # LAUNCH TEMPLATE + ASG
@@ -594,34 +597,37 @@ Resources:
       TopicArn: !Ref SecurityAlertsTopic
       Endpoint: !GetAtt SecurityAlertFunction.Arn
 
-  # ===============================
-  # METRIC FILTER + ALARM
-  # ===============================
-  UnauthorizedAccessMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
-      MetricTransformations:
-        - MetricNamespace: CloudTrailMetrics
-          MetricName: ErrorCount
-          MetricValue: "1"
-          DefaultValue: 0
+  # ------------------------------------------------------------------------------------
+  # METRIC FILTER + ALARM DISABLED
+  # These relied on CloudTrail log delivery. With CloudTrail disabled above,
+  # leave them commented out to avoid broken references and no-op alarms.
+  # ------------------------------------------------------------------------------------
 
-  UnauthorizedAccessAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "TapStack${EnvironmentSuffix}-UnauthorizedAccess"
-      AlarmDescription: "Alarm for unauthorized access attempts detected in CloudTrail"
-      MetricName: ErrorCount
-      Namespace: CloudTrailMetrics
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      AlarmActions: [!Ref SecurityAlertsTopic]
-      TreatMissingData: notBreaching
+  # UnauthorizedAccessMetricFilter:
+  #   Type: AWS::Logs::MetricFilter
+  #   Properties:
+  #     LogGroupName: !Ref CloudTrailLogGroup
+  #     FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
+  #     MetricTransformations:
+  #       - MetricNamespace: CloudTrailMetrics
+  #         MetricName: ErrorCount
+  #         MetricValue: "1"
+  #         DefaultValue: 0
+  #
+  # UnauthorizedAccessAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: !Sub "TapStack${EnvironmentSuffix}-UnauthorizedAccess"
+  #     AlarmDescription: "Alarm for unauthorized access attempts detected in CloudTrail"
+  #     MetricName: ErrorCount
+  #     Namespace: CloudTrailMetrics
+  #     Statistic: Sum
+  #     Period: 300
+  #     EvaluationPeriods: 1
+  #     Threshold: 1
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold
+  #     AlarmActions: [!Ref SecurityAlertsTopic]
+  #     TreatMissingData: notBreaching
 
 Outputs:
   VPCId:
@@ -652,9 +658,9 @@ Outputs:
     Description: Application S3 Bucket Name
     Value: !Ref ApplicationS3Bucket
 
-  CloudTrailS3BucketName:
-    Description: CloudTrail S3 Bucket Name
-    Value: !Ref CloudTrailS3Bucket
+  # CloudTrailS3BucketName:
+  #   Description: CloudTrail S3 Bucket Name (disabled with CloudTrail)
+  #   Value: !Ref CloudTrailS3Bucket
 
   DynamoDBTableName:
     Description: DynamoDB Table Name

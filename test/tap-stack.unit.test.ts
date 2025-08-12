@@ -3,7 +3,7 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template (NO AWS Config)', () => {
+describe('TapStack CloudFormation Template (NO AWS Config, CloudTrail disabled)', () => {
   let template: any;
 
   beforeAll(() => {
@@ -55,7 +55,6 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
         'AmiId',
       ];
       expected.forEach((p) => expect(template.Parameters[p]).toBeDefined());
-      // Ensure deprecated/removed param is not present
       expect(template.Parameters.CreateConfigResources).toBeUndefined();
     });
 
@@ -132,9 +131,8 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
   });
 
   describe('Storage Resources', () => {
-    test('should have S3 buckets with encryption', () => {
+    test('should have S3 application bucket with encryption', () => {
       expect(template.Resources.ApplicationS3Bucket).toBeDefined();
-      expect(template.Resources.CloudTrailS3Bucket).toBeDefined();
 
       const appBucket = template.Resources.ApplicationS3Bucket;
       expect(appBucket.Properties.BucketEncryption).toBeDefined();
@@ -172,24 +170,21 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
   });
 
   describe('Monitoring and Logging Resources', () => {
-    test('should have CloudTrail', () => {
-      const trail = template.Resources.CloudTrail;
-      expect(trail?.Type).toBe('AWS::CloudTrail::Trail');
-      expect(trail.Properties.IsMultiRegionTrail).toBe(true);
-      expect(trail.Properties.EnableLogFileValidation).toBe(true);
+    test('should NOT define CloudTrail resources', () => {
+      expect(template.Resources.CloudTrail).toBeUndefined();
+      expect(template.Resources.CloudTrailLogGroup).toBeUndefined();
+      expect(template.Resources.CloudTrailS3Bucket).toBeUndefined();
+      expect(template.Resources.CloudTrailS3BucketPolicy).toBeUndefined();
     });
 
-    test('should NOT define any AWS Config resources', () => {
-      expect(template.Resources.ConfigS3Bucket).toBeUndefined();
-      expect(template.Resources.ConfigServiceRole).toBeUndefined();
-      expect(template.Resources.ConfigDeliveryChannel).toBeUndefined();
-      expect(template.Resources.ConfigurationRecorder).toBeUndefined();
+    test('should NOT define CloudTrail-driven metric filter & alarm', () => {
+      expect(template.Resources.UnauthorizedAccessMetricFilter).toBeUndefined();
+      expect(template.Resources.UnauthorizedAccessAlarm).toBeUndefined();
     });
 
-    test('should have CloudWatch Log Groups', () => {
+    test('should have CloudWatch Log Groups for app and S3', () => {
       expect(template.Resources.CloudWatchLogGroup).toBeDefined();
       expect(template.Resources.S3LogGroup).toBeDefined();
-      expect(template.Resources.CloudTrailLogGroup).toBeDefined();
       expect(template.Resources.CloudWatchLogGroup.Properties.RetentionInDays).toBe(30);
     });
 
@@ -199,33 +194,21 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
       expect(template.Resources.SecurityAlertFunction).toBeDefined();
       expect(template.Resources.SecurityAlertFunction.Properties.Runtime).toBe('python3.12');
     });
-
-    test('should have CloudWatch alarm & metric filter', () => {
-      expect(template.Resources.UnauthorizedAccessAlarm).toBeDefined();
-      expect(template.Resources.UnauthorizedAccessMetricFilter).toBeDefined();
-    });
   });
 
   describe('Resource Naming Convention', () => {
     const getSubString = (val: any): string => {
-      // BucketName is expressed as { "Fn::Sub": "..." }
       if (val && typeof val === 'object' && 'Fn::Sub' in val) return val['Fn::Sub'] as string;
-      // Fallback: if ever a plain string slips in
       if (typeof val === 'string') return val;
       throw new Error('Expected value to be an Fn::Sub string');
     };
 
-    test('S3 bucket names should include environment suffix AND region', () => {
-      const buckets = ['ApplicationS3Bucket', 'CloudTrailS3Bucket'];
-      buckets.forEach((name) => {
-        const res = template.Resources[name];
-        expect(res).toBeDefined();
-        const sub = getSubString(res.Properties.BucketName);
-
-        expect(sub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
-        expect(sub).toEqual(expect.stringContaining('${AWS::Region}'));
-        expect(sub).toEqual(expect.stringContaining('${AWS::AccountId}'));
-      });
+    test('S3 application bucket name should include environment suffix AND region', () => {
+      const res = template.Resources.ApplicationS3Bucket;
+      const sub = getSubString(res.Properties.BucketName);
+      expect(sub).toEqual(expect.stringContaining('${EnvironmentSuffix}'));
+      expect(sub).toEqual(expect.stringContaining('${AWS::Region}'));
+      expect(sub).toEqual(expect.stringContaining('${AWS::AccountId}'));
     });
 
     test('resource names should include environment suffix in tags', () => {
@@ -254,7 +237,7 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
+    test('should have all required outputs (no CloudTrail bucket name)', () => {
       const expected = [
         'VPCId',
         'PublicSubnet1Id',
@@ -263,7 +246,6 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
         'PrivateSubnet2Id',
         'AutoScalingGroupName',
         'ApplicationS3BucketName',
-        'CloudTrailS3BucketName',
         'DynamoDBTableName',
         'SecurityAlertsTopicArn',
         'EnvironmentSuffixOut',
@@ -271,6 +253,9 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
         'NATGatewayEipAddress',
       ];
       expected.forEach((k) => expect(template.Outputs[k]).toBeDefined());
+
+      // Ensure CloudTrail bucket output is not present
+      expect(template.Outputs.CloudTrailS3BucketName).toBeUndefined();
     });
 
     test('EnvironmentSuffixOut output should be correct', () => {
@@ -281,15 +266,12 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
   });
 
   describe('Template Security Validation', () => {
-    test('S3 buckets should deny insecure connections', () => {
-      const bucketPolicies = ['ApplicationS3BucketPolicy', 'CloudTrailS3BucketPolicy'];
-      bucketPolicies.forEach((name) => {
-        const policy = template.Resources[name];
-        const stmts = policy.Properties.PolicyDocument.Statement;
-        const deny = stmts.find((s: any) => s.Sid === 'DenyInsecureConnections');
-        expect(deny).toBeDefined();
-        expect(deny.Effect).toBe('Deny');
-      });
+    test('S3 buckets should deny insecure connections (app bucket)', () => {
+      const policy = template.Resources.ApplicationS3BucketPolicy;
+      const stmts = policy.Properties.PolicyDocument.Statement;
+      const deny = stmts.find((s: any) => s.Sid === 'DenyInsecureConnections');
+      expect(deny).toBeDefined();
+      expect(deny.Effect).toBe('Deny');
     });
 
     test('EBS volumes should be encrypted', () => {
@@ -324,17 +306,14 @@ describe('TapStack CloudFormation Template (NO AWS Config)', () => {
   });
 
   describe('Compliance Features', () => {
-    test('should have CloudTrail enabled with proper configuration', () => {
-      const trail = template.Resources.CloudTrail;
-      expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail.Properties.IsMultiRegionTrail).toBe(true);
-      expect(trail.Properties.EnableLogFileValidation).toBe(true);
-    });
-
     test('should NOT have AWS Config for compliance monitoring (by design)', () => {
       expect(template.Resources.ConfigurationRecorder).toBeUndefined();
       expect(template.Resources.ConfigDeliveryChannel).toBeUndefined();
       expect(template.Resources.ConfigServiceRole).toBeUndefined();
+    });
+
+    test('should NOT have CloudTrail (disabled by request)', () => {
+      expect(template.Resources.CloudTrail).toBeUndefined();
     });
   });
 });

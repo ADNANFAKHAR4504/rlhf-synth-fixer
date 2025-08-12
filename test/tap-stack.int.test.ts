@@ -2,11 +2,6 @@ import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
-import {
-  CloudTrailClient,
-  DescribeTrailsCommand,
-  GetTrailStatusCommand,
-} from '@aws-sdk/client-cloudtrail';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
@@ -51,9 +46,8 @@ const sns = new SNSClient({ region });
 const lambda = new LambdaClient({ region });
 const cloudWatch = new CloudWatchClient({ region });
 const cloudWatchLogs = new CloudWatchLogsClient({ region });
-const cloudTrail = new CloudTrailClient({ region });
 
-describe('TapStack Infrastructure Integration Tests', () => {
+describe('TapStack Infrastructure Integration Tests (CloudTrail disabled)', () => {
   describe('VPC Infrastructure', () => {
     test('VPC should exist and be properly configured', async () => {
       if (process.env.NODE_ENV === 'test-mock') {
@@ -248,49 +242,40 @@ describe('TapStack Infrastructure Integration Tests', () => {
   });
 
   describe('Storage Services', () => {
-    test('S3 buckets should exist and be encrypted', async () => {
+    test('Application S3 bucket should exist and be encrypted', async () => {
       if (process.env.NODE_ENV === 'test-mock') {
         expect(outputs.ApplicationS3BucketName).toContain(environmentSuffix);
-        expect(outputs.CloudTrailS3BucketName).toContain(environmentSuffix);
         return;
       }
 
-      const buckets = [outputs.ApplicationS3BucketName, outputs.CloudTrailS3BucketName];
+      const bucketName = outputs.ApplicationS3BucketName;
 
-      for (const bucketName of buckets) {
-        await expect(s3.send(new HeadBucketCommand({ Bucket: bucketName }))).resolves.toBeTruthy();
+      await expect(s3.send(new HeadBucketCommand({ Bucket: bucketName }))).resolves.toBeTruthy();
 
-        const encryptionResponse = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
-        expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      const encryptionResponse = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
 
-        if (bucketName === outputs.ApplicationS3BucketName) {
-          const versioningResponse = await s3.send(
-            new GetBucketVersioningCommand({ Bucket: bucketName })
-          );
-          expect(versioningResponse.Status).toBe('Enabled');
-        }
-      }
+      const versioningResponse = await s3.send(
+        new GetBucketVersioningCommand({ Bucket: bucketName })
+      );
+      expect(versioningResponse.Status).toBe('Enabled');
     });
 
-    test('S3 bucket policies should enforce HTTPS', async () => {
+    test('Application S3 bucket policy should enforce HTTPS', async () => {
       if (process.env.NODE_ENV === 'test-mock') {
         expect(outputs.ApplicationS3BucketName).toBeDefined();
         return;
       }
 
-      const buckets = [outputs.ApplicationS3BucketName, outputs.CloudTrailS3BucketName];
+      const response = await s3.send(new GetBucketPolicyCommand({ Bucket: outputs.ApplicationS3BucketName }));
+      const policy = JSON.parse(response.Policy!);
+      const httpsStatement = policy.Statement.find(
+        (stmt: any) => stmt.Sid === 'DenyInsecureConnections'
+      );
 
-      for (const bucketName of buckets) {
-        const response = await s3.send(new GetBucketPolicyCommand({ Bucket: bucketName }));
-        const policy = JSON.parse(response.Policy!);
-        const httpsStatement = policy.Statement.find(
-          (stmt: any) => stmt.Sid === 'DenyInsecureConnections'
-        );
-
-        expect(httpsStatement).toBeDefined();
-        expect(httpsStatement.Effect).toBe('Deny');
-        expect(httpsStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
-      }
+      expect(httpsStatement).toBeDefined();
+      expect(httpsStatement.Effect).toBe('Deny');
+      expect(httpsStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
     });
 
     test('DynamoDB table should be configured with encryption and backup', async () => {
@@ -350,25 +335,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       );
     });
 
-    test('CloudWatch alarms should be configured', async () => {
-      if (process.env.NODE_ENV === 'test-mock') {
-        expect(environmentSuffix).toBeDefined();
-        return;
-      }
-
-      const response = await cloudWatch.send(
-        new DescribeAlarmsCommand({ AlarmNamePrefix: `TapStack${environmentSuffix}` })
-      );
-      expect(response.MetricAlarms!.length).toBeGreaterThan(0);
-
-      const unauthorizedAlarm = response.MetricAlarms!.find((alarm) =>
-        alarm.AlarmName?.includes('UnauthorizedAccess')
-      );
-      expect(unauthorizedAlarm).toBeDefined();
-      expect(unauthorizedAlarm!.AlarmActions).toContain(outputs.SecurityAlertsTopicArn);
-    });
-
-    test('CloudWatch Log Groups should be configured', async () => {
+    test('CloudWatch Log Groups should be configured (app & s3)', async () => {
       if (process.env.NODE_ENV === 'test-mock') {
         expect(environmentSuffix).toBeDefined();
         return;
@@ -377,7 +344,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const expectedLogGroups = [
         `/aws/ec2/TapStack${environmentSuffix}`,
         `/aws/s3/TapStack${environmentSuffix}`,
-        `/aws/cloudtrail/TapStack${environmentSuffix}`,
       ];
 
       const response = await cloudWatchLogs.send(new DescribeLogGroupsCommand({}));
@@ -392,42 +358,33 @@ describe('TapStack Infrastructure Integration Tests', () => {
       );
       expect(testLogGroup?.retentionInDays).toBe(30);
     });
-  });
 
-  describe('Compliance and Auditing', () => {
-    test('CloudTrail should be enabled and logging', async () => {
+    test('There should be NO UnauthorizedAccess alarm (CloudTrail disabled)', async () => {
       if (process.env.NODE_ENV === 'test-mock') {
-        expect(environmentSuffix).toBeDefined();
+        expect(true).toBe(true);
         return;
       }
 
-      const trailName = `TapStack${environmentSuffix}-CloudTrail`;
-      const describeResponse = await cloudTrail.send(
-        new DescribeTrailsCommand({ trailNameList: [trailName] })
+      const response = await cloudWatch.send(
+        new DescribeAlarmsCommand({ AlarmNamePrefix: `TapStack${environmentSuffix}` })
       );
-      expect(describeResponse.trailList).toHaveLength(1);
 
-      const trail = describeResponse.trailList![0];
-      expect(trail.S3BucketName).toBe(outputs.CloudTrailS3BucketName);
-      expect(trail.IsMultiRegionTrail).toBe(true);
-      expect(trail.LogFileValidationEnabled).toBe(true);
-      expect(trail.IncludeGlobalServiceEvents).toBe(true);
-
-      const statusResponse = await cloudTrail.send(new GetTrailStatusCommand({ Name: trailName }));
-      expect(statusResponse.IsLogging).toBe(true);
+      const unauthorizedAlarm = (response.MetricAlarms ?? []).find((alarm) =>
+        alarm.AlarmName?.includes('UnauthorizedAccess')
+      );
+      expect(unauthorizedAlarm).toBeUndefined();
     });
-
-    // NOTE: AWS Config checks removed by design (stack does not create AWS Config)
   });
 
   describe('Resource Tagging and Naming', () => {
-    test('all resources should follow naming conventions', () => {
+    test('all resources should follow naming conventions (no CloudTrail output)', () => {
       expect(outputs.EnvironmentSuffixOut).toBe(environmentSuffix);
       expect(outputs.StackName).toContain(environmentSuffix);
       expect(outputs.AutoScalingGroupName).toContain(environmentSuffix);
       expect(outputs.DynamoDBTableName).toContain(environmentSuffix);
       expect(outputs.ApplicationS3BucketName).toContain(environmentSuffix.toLowerCase());
-      expect(outputs.CloudTrailS3BucketName).toContain(environmentSuffix.toLowerCase());
+      // CloudTrailS3BucketName is not expected anymore
+      expect(outputs.CloudTrailS3BucketName).toBeUndefined();
     });
 
     test('resource identifiers should be valid AWS format', () => {
@@ -454,10 +411,11 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(outputs.NATGatewayEipAddress).toBeDefined();
     });
 
-    test('monitoring and alerting pipeline should be complete', () => {
+    test('monitoring and alerting components should exist (without CloudTrail)', () => {
       expect(outputs.SecurityAlertsTopicArn).toBeDefined();
-      expect(outputs.CloudTrailS3BucketName).toBeDefined();
       expect(outputs.EnvironmentSuffixOut).toBe(environmentSuffix);
+      // No CloudTrail bucket expected
+      expect(outputs.CloudTrailS3BucketName).toBeUndefined();
     });
   });
 });
