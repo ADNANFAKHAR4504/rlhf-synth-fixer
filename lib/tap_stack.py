@@ -14,8 +14,8 @@ import base64
 from typing import Optional
 
 import pulumi
-from pulumi import ResourceOptions
 import pulumi_aws as aws
+from pulumi import ResourceOptions
 
 # Import your nested stacks here
 # from .dynamodb_stack import DynamoDBStack
@@ -442,7 +442,8 @@ class TapStack(pulumi.ComponentResource):
                     name="name",
                     values=["al2023-ami-*-x86_64"]
             )
-            ]
+            ],
+        opts=pulumi.InvokeOptions(provider=aws_provider)
     )
 
     # User data script for web server setup
