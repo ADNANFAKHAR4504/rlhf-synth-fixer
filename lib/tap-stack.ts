@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { TerraformStack } from 'cdktf';
+import { TerraformStack, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
@@ -32,14 +32,14 @@ export class EnterpriseStack extends TerraformStack {
 
     // --- Remote State Management Resources ---
     new S3Bucket(this, 'TerraformStateBucket', {
-      bucket: `enterprise-tfstate-bucket-${env}`,
+      bucket: `enterprise-tfstate-bucket-${env}-${Fn.substr(Fn.uuid(), 0, 4)}`,
       versioning: {
         enabled: true,
       },
     });
 
     new DynamodbTable(this, 'TerraformLockTable', {
-      name: `enterprise-terraform-locks-${env}`,
+      name: `enterprise-terraform-locks-${env}-${Fn.substr(Fn.uuid(), 0, 4)}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'LockID',
       attribute: [{ name: 'LockID', type: 'S' }],
@@ -109,7 +109,7 @@ export class EnterpriseStack extends TerraformStack {
 
     // --- Compute Module ---
     const launchTemplate = new LaunchTemplate(this, 'AppLaunchTemplate', {
-      name: createResourceName(env, 'lt', 'app'),
+      name: `${createResourceName(env, 'lt', 'app')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
       imageId: 'ami-0c55b159cbfafe1f0', // Example AMI
       instanceType: 't3.micro',
       tags: { Name: createResourceName(env, 'lt', 'app') },
@@ -119,7 +119,7 @@ export class EnterpriseStack extends TerraformStack {
     });
 
     new AutoscalingGroup(this, 'AppAsg', {
-      name: createResourceName(env, 'asg', 'app'),
+      name: `${createResourceName(env, 'asg', 'app')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
       minSize: 2,
       maxSize: 5,
       desiredCapacity: 2,
@@ -139,13 +139,13 @@ export class EnterpriseStack extends TerraformStack {
 
     // --- Database Module ---
     const dbSubnetGroup = new DbSubnetGroup(this, 'DbSubnetGroup', {
-      name: createResourceName(env, 'dbsubnetgroup', 'main'),
+      name: `${createResourceName(env, 'dbsubnetgroup', 'main')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
       subnetIds: dbSubnets.map(s => s.id),
       tags: { Name: createResourceName(env, 'dbsubnetgroup', 'main') },
     });
 
     new DbInstance(this, 'RdsInstance', {
-      identifier: createResourceName(env, 'rds', 'main'),
+      identifier: `${createResourceName(env, 'rds', 'main')}-${Fn.substr(Fn.uuid(), 0, 4)}`,
       engine: 'postgres',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
