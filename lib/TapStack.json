@@ -2,17 +2,10 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production-ready serverless infrastructure with Lambda, API Gateway, S3, and CloudWatch - Optimized for 100k+ RPS",
     "Parameters": {
-        "EnvironmentSuffix": {
-            "Type": "String",
-            "Default": "dev",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
-            "AllowedPattern": "^[a-zA-Z0-9]+$",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
-        },
         "Environment": {
             "Type": "String",
             "Default": "prod",
-            "Description": "Environment name for resource naming",
+            "Description": "Environment name for resource naming (e.g., dev, staging, prod)",
             "AllowedValues": [
                 "dev",
                 "staging",
@@ -228,6 +221,7 @@
                 },
                 "Timeout": 30,
                 "MemorySize": 1024,
+                "ReservedConcurrentExecutions": 500,
                 "Environment": {
                     "Variables": {
                         "BUCKET_NAME": {
@@ -658,14 +652,14 @@
                 }
             }
         },
-        "EnvironmentSuffix": {
-            "Description": "Environment suffix used for this deployment",
+        "Environment": {
+            "Description": "Environment name used for this deployment",
             "Value": {
-                "Ref": "EnvironmentSuffix"
+                "Ref": "Environment"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                    "Fn::Sub": "${AWS::StackName}-Environment"
                 }
             }
         }

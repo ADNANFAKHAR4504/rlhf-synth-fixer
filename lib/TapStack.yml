@@ -2,17 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready serverless infrastructure with Lambda, API Gateway, S3, and CloudWatch - Optimized for 100k+ RPS'
 
 Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-  
   Environment:
     Type: String
     Default: 'prod'
-    Description: 'Environment name for resource naming'
+    Description: 'Environment name for resource naming (e.g., dev, staging, prod)'
     AllowedValues: ['dev', 'staging', 'prod']
   
   ApplicationName:
@@ -162,7 +155,7 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       MemorySize: 1024  # Optimized for performance
-
+      ReservedConcurrentExecutions: 500
       Environment:
         Variables:
           BUCKET_NAME: !Sub '${ApplicationName}-${Environment}-data-${AWS::AccountId}'
@@ -491,8 +484,8 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-StackName'
   
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
+  Environment:
+    Description: 'Environment name used for this deployment'
+    Value: !Ref Environment
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub '${AWS::StackName}-Environment'

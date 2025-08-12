@@ -27,17 +27,7 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const param = template.Parameters.EnvironmentSuffix;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.Description).toBeDefined();
-      expect(param.AllowedPattern).toBeDefined();
-    });
 
     test('should have ApplicationName parameter', () => {
       expect(template.Parameters.ApplicationName).toBeDefined();
@@ -91,6 +81,8 @@ describe('TapStack CloudFormation Template', () => {
     });
 
 
+
+
   });
 
   describe('Conditions', () => {
@@ -125,7 +117,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(resource.Properties.Code).toBeDefined();
       expect(resource.Properties.Timeout).toBe(30);
       expect(resource.Properties.MemorySize).toBe(1024);
-
+      expect(resource.Properties.ReservedConcurrentExecutions).toBe(500);
     });
 
     test('should have LambdaAlias resource', () => {
@@ -267,6 +259,8 @@ describe('TapStack CloudFormation Template', () => {
 
 
 
+
+
     test('should have ApiGatewayAccount resource', () => {
       expect(template.Resources.ApiGatewayAccount).toBeDefined();
     });
@@ -287,7 +281,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(outputs.CloudWatchLogGroups).toBeDefined();
       expect(outputs.SecurityFeatures).toBeDefined();
       expect(outputs.StackName).toBeDefined();
-      expect(outputs.EnvironmentSuffix).toBeDefined();
+      expect(outputs.Environment).toBeDefined();
     });
 
     test('ApiGatewayUrl output should be correct', () => {
@@ -340,8 +334,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Export).toBeDefined();
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
+    test('Environment output should be correct', () => {
+      const output = template.Outputs.Environment;
       expect(output.Description).toBeDefined();
       expect(output.Value).toBeDefined();
       expect(output.Value.Ref).toBeDefined();
@@ -369,7 +363,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have the correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5); // EnvironmentSuffix, ApplicationName, Environment, EnableProvisionedConcurrency, LambdaProvisionedConcurrency
+      expect(parameterCount).toBe(4); // ApplicationName, Environment, EnableProvisionedConcurrency, LambdaProvisionedConcurrency
     });
 
     test('should have the correct number of outputs', () => {
@@ -512,13 +506,13 @@ describe('TapStack CloudFormation Template', () => {
 
     test('export names should follow naming convention', () => {
       const stackNameOutput = template.Outputs.StackName;
-      const envSuffixOutput = template.Outputs.EnvironmentSuffix;
+      const environmentOutput = template.Outputs.Environment;
       
       expect(stackNameOutput.Export.Name['Fn::Sub']).toBeDefined();
       expect(stackNameOutput.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
       
-      expect(envSuffixOutput.Export.Name['Fn::Sub']).toBeDefined();
-      expect(envSuffixOutput.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
+      expect(environmentOutput.Export.Name['Fn::Sub']).toBeDefined();
+      expect(environmentOutput.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
     });
   });
 });
