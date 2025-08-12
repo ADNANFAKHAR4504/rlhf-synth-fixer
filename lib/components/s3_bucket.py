@@ -69,7 +69,7 @@ class S3BucketComponent(ComponentResource):
     # Create main S3 bucket
     self.bucket = aws.s3.Bucket(
       f"{name}-bucket",
-      bucket=f"{environment}-{name}",
+      bucket=f"{environment}-{name}-{pulumi.get_stack()}".lower(),
       tags=default_tags,
       opts=ResourceOptions(parent=self)
     )
