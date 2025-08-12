@@ -1,3 +1,5 @@
+// test/tap-stack.int.test.ts
+
 import {
   EC2Client,
   DescribeVpcsCommand,
@@ -5,6 +7,7 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
+  DescribeVpcAttributeCommand, // <-- 1. IMPORT THE NEW COMMAND
   Vpc,
   Subnet,
   RouteTable,
@@ -13,7 +16,6 @@ import {
 import {
   ElasticBeanstalkClient,
   DescribeEnvironmentsCommand,
-  DescribeConfigurationSettingsCommand,
   EnvironmentDescription,
 } from '@aws-sdk/client-elastic-beanstalk';
 import {
@@ -21,20 +23,12 @@ import {
   DescribeDBInstancesCommand,
   DBInstance,
 } from '@aws-sdk/client-rds';
-import {
-  Route53Client,
-  ListResourceRecordSetsCommand,
-  ListHostedZonesByNameCommand,
-  ResourceRecordSet,
-} from '@aws-sdk/client-route-53';
+import { Route53Client } from '@aws-sdk/client-route-53';
 import {
   SecretsManagerClient,
   DescribeSecretCommand,
 } from '@aws-sdk/client-secrets-manager';
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
+import { CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -58,9 +52,6 @@ interface StackOutputs {
 const ec2Client = new EC2Client({ region: REGION });
 const ebClient = new ElasticBeanstalkClient({ region: REGION });
 const rdsClient = new RDSClient({ region: REGION });
-const route53Client = new Route53Client({ region: REGION });
-const secretsManagerClient = new SecretsManagerClient({ region: REGION });
-const cwLogsClient = new CloudWatchLogsClient({ region: REGION });
 
 // --- Read Deployed Stack Outputs ---
 let outputs: StackOutputs | null = null;
@@ -96,12 +87,10 @@ testSuite('Node.js Production Stack Integration Tests', () => {
   let dbInstanceIdentifier: string;
 
   beforeAll(async () => {
-    // Use VPC ID from outputs if available
     if (outputs && outputs.VPCId) {
       vpcId = outputs.VPCId;
     }
 
-    // Find the deployed Elastic Beanstalk environment
     const ebResponse = await ebClient.send(
       new DescribeEnvironmentsCommand({
         EnvironmentNames: [`${STACK_NAME}-Env`],
@@ -116,7 +105,6 @@ testSuite('Node.js Production Stack Integration Tests', () => {
     expect(environment.EnvironmentName).toBeDefined();
     ebEnvironmentName = environment.EnvironmentName!;
 
-    // Find the RDS instance
     dbInstanceIdentifier = `${STACK_NAME.toLowerCase()}db`;
     const rdsResponse = await rdsClient.send(
       new DescribeDBInstancesCommand({
@@ -130,7 +118,6 @@ testSuite('Node.js Production Stack Integration Tests', () => {
     }
     const dbInstance: DBInstance = rdsResponse.DBInstances[0];
 
-    // If VPC ID wasn't in outputs, get it from RDS
     if (!vpcId && dbInstance.DBSubnetGroup) {
       vpcId = dbInstance.DBSubnetGroup.VpcId!;
     }
@@ -138,6 +125,7 @@ testSuite('Node.js Production Stack Integration Tests', () => {
 
   describe('🌐 Networking Infrastructure', () => {
     test('VPC should exist and be in an available state', async () => {
+      // --- 2. MODIFY THIS TEST BLOCK ---
       const { Vpcs } = await ec2Client.send(
         new DescribeVpcsCommand({ VpcIds: [vpcId] })
       );
@@ -146,8 +134,24 @@ testSuite('Node.js Production Stack Integration Tests', () => {
       const vpc: Vpc = Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
+
+      // Check for DNS Support attribute
+      const dnsSupportResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsSupport',
+        })
+      );
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+
+      // Check for DNS Hostnames attribute
+      const dnsHostnamesResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsHostnames',
+        })
+      );
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
     });
 
     test('Should have 2 public and 2 private subnets across different AZs', async () => {
@@ -185,9 +189,9 @@ testSuite('Node.js Production Stack Integration Tests', () => {
       expect(NatGateways).toBeDefined();
       expect(NatGateways!).toHaveLength(2);
 
-      // Verify NAT Gateways are in different AZs
-      const natAzs = new Set(NatGateways!.map(ng => ng.SubnetId));
-      expect(natAzs.size).toBe(2);
+      // Verify NAT Gateways are in different AZs by checking their subnet IDs
+      const natSubnetIds = new Set(NatGateways!.map(ng => ng.SubnetId));
+      expect(natSubnetIds.size).toBe(2);
     });
 
     test('Private subnets should route internet traffic through NAT Gateways', async () => {
