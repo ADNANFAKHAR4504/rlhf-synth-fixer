@@ -373,9 +373,6 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
     test('WebServerGroup has management policies', () => {
       const group = template.Resources.WebServerGroup;
       expect(group.Type).toBe('AWS::IAM::Group');
-      expect(group.Properties.GroupName).toEqual({
-        'Fn::Sub': '${AWS::StackName}-webserver-group'
-      });
     });
   });
 

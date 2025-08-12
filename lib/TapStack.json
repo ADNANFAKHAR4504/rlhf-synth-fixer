@@ -831,9 +831,6 @@
         "WebServerGroup": {
             "Type": "AWS::IAM::Group",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${AWS::StackName}-webserver-group"
-                },
                 "Policies": [
                     {
                         "PolicyName": "WebServerManagementPolicy",
