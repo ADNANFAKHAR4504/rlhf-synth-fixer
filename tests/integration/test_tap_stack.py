@@ -69,8 +69,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         dns_support = self.ec2_client.describe_vpc_attribute(
           VpcId=vpc_id, Attribute='enableDnsSupport'
         )
-        self.assertTrue(dns_hostnames['EnableDnsHostnames'])
-        self.assertTrue(dns_support['EnableDnsSupport'])
+        self.assertTrue(dns_hostnames['EnableDnsHostnames']['Value'])
+        self.assertTrue(dns_support['EnableDnsSupport']['Value'])
       except ClientError:
         # If we can't check DNS settings, just verify the VPC exists
         pass
