@@ -38,11 +38,11 @@ export class MonitoringConstruct extends Construct {
     this.enableApplicationSignalsServiceMap(props.lambdaFunctions);
 
     // Add Application Signals widgets to dashboard
-    const dashboard = new cloudwatch.Dashboard(this, 'ServerlessDashboard', {
+    new cloudwatch.Dashboard(this, 'ServerlessDashboard', {
       dashboardName: `serverless-monitoring-${props.environmentSuffix}`,
       widgets: [
         this.createDashboardWidgets(props.lambdaFunctions),
-        this.createApplicationSignalsWidgets(props.lambdaFunctions)
+        this.createApplicationSignalsWidgets(props.lambdaFunctions),
       ],
     });
   }
