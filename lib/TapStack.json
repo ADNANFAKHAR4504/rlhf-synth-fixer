@@ -47,6 +47,15 @@
                 "true",
                 "false"
             ]
+        },
+        "CreateCloudTrail": {
+            "Type": "String",
+            "Description": "Whether to create CloudTrail (set to false if you've reached the 5 trail limit)",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
         }
     },
     "Resources": {
@@ -323,6 +332,7 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "Condition": "CreateCloudTrailCondition",
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "my-app-cloudtrail-${EnvironmentSuffix}"
@@ -627,6 +637,14 @@
                 "true"
             ]
         },
+        "CreateCloudTrailCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateCloudTrail"
+                },
+                "true"
+            ]
+        },
         "HasKeyPair": {
             "Fn::Not": [
                 {
@@ -677,7 +695,15 @@
         "CloudTrailName": {
             "Description": "Name of the CloudTrail",
             "Value": {
-                "Ref": "CloudTrail"
+                "Fn::If": [
+                    "CreateCloudTrailCondition",
+                    {
+                        "Ref": "CloudTrail"
+                    },
+                    {
+                        "Fn::Sub": "CloudTrail not created (limit reached) - ${EnvironmentSuffix}"
+                    }
+                ]
             },
             "Export": {
                 "Name": {

@@ -39,6 +39,7 @@ describe('TapStack Unit Tests', () => {
       expect(parameters).toHaveProperty('PublicKeyName');
       expect(parameters).toHaveProperty('AssumeRoleService');
       expect(parameters).toHaveProperty('CreateS3Bucket');
+      expect(parameters).toHaveProperty('CreateCloudTrail');
     });
 
     test('should have all required resources', () => {
@@ -180,6 +181,7 @@ describe('TapStack Unit Tests', () => {
     test('should have CloudTrail with multi-region configuration', () => {
       const cloudTrail = templateJson.Resources.CloudTrail;
       expect(cloudTrail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(cloudTrail.Condition).toBe('CreateCloudTrailCondition');
       expect(cloudTrail.Properties.TrailName['Fn::Sub']).toContain('my-app-cloudtrail-${EnvironmentSuffix}');
       expect(cloudTrail.Properties.IsMultiRegionTrail).toBe(true);
       expect(cloudTrail.Properties.IncludeGlobalServiceEvents).toBe(true);
@@ -320,6 +322,14 @@ describe('TapStack Unit Tests', () => {
       expect(conditions.CreateS3BucketCondition['Fn::Equals']).toHaveLength(2);
       expect(conditions.CreateS3BucketCondition['Fn::Equals'][0].Ref).toBe('CreateS3Bucket');
       expect(conditions.CreateS3BucketCondition['Fn::Equals'][1]).toBe('true');
+    });
+
+    test('should have condition for CloudTrail creation', () => {
+      const conditions = templateJson.Conditions;
+      expect(conditions).toHaveProperty('CreateCloudTrailCondition');
+      expect(conditions.CreateCloudTrailCondition['Fn::Equals']).toHaveLength(2);
+      expect(conditions.CreateCloudTrailCondition['Fn::Equals'][0].Ref).toBe('CreateCloudTrail');
+      expect(conditions.CreateCloudTrailCondition['Fn::Equals'][1]).toBe('true');
     });
   });
 

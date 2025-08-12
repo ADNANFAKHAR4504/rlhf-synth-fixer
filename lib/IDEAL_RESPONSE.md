@@ -47,6 +47,12 @@ Parameters:
     Default: "true"
     AllowedValues: ["true", "false"]
 
+  CreateCloudTrail:
+    Type: String
+    Description: "Whether to create CloudTrail (set to false if you've reached the 5 trail limit)"
+    Default: "true"
+    AllowedValues: ["true", "false"]
+
 Resources:
   # KMS Customer Master Key for S3 encryption
   S3KMSKey:
@@ -209,6 +215,7 @@ Resources:
   # CloudTrail for multi-region logging
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: CreateCloudTrailCondition
     Properties:
       TrailName: !Sub "my-app-cloudtrail-${EnvironmentSuffix}"
       S3BucketName: !Ref CloudTrailLogsBucket
@@ -355,6 +362,7 @@ Resources:
 
 Conditions:
   CreateS3BucketCondition: !Equals [!Ref CreateS3Bucket, "true"]
+  CreateCloudTrailCondition: !Equals [!Ref CreateCloudTrail, "true"]
   HasKeyPair: !Not [!Equals [!Ref PublicKeyName, ""]]
 
 Outputs:
@@ -377,7 +385,12 @@ Outputs:
 
   CloudTrailName:
     Description: "Name of the CloudTrail"
-    Value: !Ref CloudTrail
+    Value:
+      !If [
+        CreateCloudTrailCondition,
+        !Ref CloudTrail,
+        !Sub "CloudTrail not created (limit reached) - ${EnvironmentSuffix}",
+      ]
     Export:
       Name: !Sub "${AWS::StackName}-CloudTrailName"
 
