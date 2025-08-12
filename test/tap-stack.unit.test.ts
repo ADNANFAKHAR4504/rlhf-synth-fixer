@@ -57,7 +57,9 @@ describe('Web Application Stack Unit Tests', () => {
       expect(Object.keys(params).length).toBe(4);
       expect(params.DBMasterUsername).toBeDefined();
       expect(params.DynamoDBTableArnParameter).toBeDefined();
-      expect(params.ECRImageUriParameter).toBeDefined();
+      // Check for the new ECRRepositoryName and ImageTag parameters
+      expect(params.ECRRepositoryName).toBeDefined();
+      expect(params.ImageTag).toBeDefined();
     });
   });
 
@@ -215,8 +217,10 @@ describe('Web Application Stack Unit Tests', () => {
     test('Lambda function should be configured to use a container image', () => {
       const lambda = template.Resources.PlaceholderLambda;
       expect(lambda.Properties.PackageType).toBe('Image');
+      // Check for the dynamic ImageUri that is now being built
       expect(lambda.Properties.Code.ImageUri).toEqual({
-        Ref: 'ECRImageUriParameter',
+        'Fn::Sub':
+          '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryName}:${ImageTag}',
       });
     });
   });

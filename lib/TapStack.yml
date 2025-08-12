@@ -14,10 +14,10 @@ Parameters:
     Type: String
     Description: The name of the ECR repository to be created for the Lambda function.
     Default: 'my-web-app'
-  ECRImageUriParameter:
+  ImageTag:
     Type: String
-    Description: The full URI of the container image in ECR for the Lambda function (e.g., ACCOUNT.dkr.ecr.REGION.amazonaws.com/my-web-app:latest).
-    Default: '123456789012.dkr.ecr.us-east-1.amazonaws.com/my-web-app:latest'
+    Description: The tag of the container image to deploy (e.g., latest, v1.2.3).
+    Default: 'latest'
 
 Resources:
   # ------------------------------------------------------------#
@@ -468,7 +468,7 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       PackageType: Image
       Code:
-        ImageUri: !Ref ECRImageUriParameter
+        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryName}:${ImageTag}'
       VpcConfig:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
