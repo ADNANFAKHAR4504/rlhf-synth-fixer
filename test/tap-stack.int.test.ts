@@ -3,6 +3,10 @@ import {
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import type {
+  DescribeLogGroupsCommandOutput,
+  LogGroup,
+} from '@aws-sdk/client-cloudwatch-logs';
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
   DescribeContinuousBackupsCommand,
@@ -48,13 +52,15 @@ const cloudWatch = new CloudWatchClient({ region });
 const cloudWatchLogs = new CloudWatchLogsClient({ region });
 
 // ---------- NEW: helper to fetch a specific log group with pagination ----------
-async function getLogGroupByName(name: string) {
+async function getLogGroupByName(name: string): Promise<LogGroup | undefined> {
   let nextToken: string | undefined = undefined;
   do {
-    const resp = await cloudWatchLogs.send(
+    const resp: DescribeLogGroupsCommandOutput = await cloudWatchLogs.send(
       new DescribeLogGroupsCommand({ logGroupNamePrefix: name, nextToken })
     );
-    const match = (resp.logGroups ?? []).find((lg) => lg.logGroupName === name);
+    const match = (resp.logGroups ?? []).find(
+      (lg: LogGroup) => lg.logGroupName === name
+    );
     if (match) return match;
     nextToken = resp.nextToken;
   } while (nextToken);
