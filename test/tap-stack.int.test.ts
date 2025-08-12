@@ -27,18 +27,18 @@ try {
     APIGatewayRoleArn:
       'arn:aws:iam::149536495831:role/test-APIGatewayCloudWatchRole-ihKflMpoe7no',
     PrivateSubnetIds: 'subnet-02863e34f51440cf5,subnet-01dbd41a0a20e4ece',
-    WAFLogGroupName: 'aws-waf-logs-secure-api-project-dev',
+    WAFLogGroupName: 'aws-waf-logs-secure-api-projects-dev',
     LambdaExecutionRoleArn:
       'arn:aws:iam::149536495831:role/test-LambdaExecutionRole-4foQIhdePEQT',
-    ApplicationDataBucketName: 'secure-api-project-dev-app-data-149536495831',
-    APILogsBucketName: 'secure-api-project-dev-api-logs-149536495831',
+    ApplicationDataBucketName: 'secure-api-projects-dev-app-data-149536495831',
+    APILogsBucketName: 'secure-api-projects-dev-api-logs-149536495831',
     PublicSubnetId: 'subnet-0c02a25e8c0f8335c',
-    APIGatewayLogGroupName: '/aws/apigateway/secure-api-project-dev',
+    APIGatewayLogGroupName: '/aws/apigateway/secure-api-projects-dev',
     WebACLId:
-      'secure-api-project-dev-web-acl|fcf3a972-ef8c-452f-b396-a10eb5136d5a|REGIONAL',
+      'secure-api-projects-dev-web-acl|fcf3a972-ef8c-452f-b396-a10eb5136d5a|REGIONAL',
     APIGatewayId: 'of9ae211vg',
     WebACLArn:
-      'arn:aws:wafv2:us-east-1:149536495831:regional/webacl/secure-api-project-dev-web-acl/fcf3a972-ef8c-452f-b396-a10eb5136d5a',
+      'arn:aws:wafv2:us-east-1:149536495831:regional/webacl/secure-api-projects-dev-web-acl/fcf3a972-ef8c-452f-b396-a10eb5136d5a',
   };
 }
 
@@ -219,7 +219,7 @@ describe('CloudFormation Stack Integration Tests', () => {
     test('all resources should include environment suffix', () => {
       // Extract environment suffix from one of the bucket names
       const bucketName = outputs.ApplicationDataBucketName;
-      const match = bucketName.match(/secure-api-project-([^-]+)-app-data/);
+      const match = bucketName.match(/secure-api-projects-([^-]+)-app-data/);
 
       if (match) {
         const envSuffix = match[1];
