@@ -30,7 +30,7 @@ config = pulumi.Config()
 ENVIRONMENT = config.get("environment") or "dev"
 AWS_REGION = "us-east-1"  # Fixed region to avoid configuration issues
 INSTANCE_TYPE = "t3.micro"
-PROJECT_NAME = "dualstack-web-app"
+PROJECT_NAME = "dualstack-web-app-v3"  # Changed to v3 for fresh deployment
 
 # Resource naming convention
 def get_resource_name(resource_type: str) -> str:
@@ -109,7 +109,7 @@ internet_gateway = aws.ec2.InternetGateway(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Create public subnets with dual-stack support (forcing recreation with new CIDR blocks)
+# Create public subnets with dual-stack support (fresh v3 deployment)
 public_subnets = []
 for i, az in enumerate(availability_zones):
     # Calculate IPv6 CIDR properly to avoid conflicts - use different subnet ranges
@@ -123,15 +123,15 @@ for i, az in enumerate(availability_zones):
         )
     
     subnet = aws.ec2.Subnet(
-        get_resource_name(f"public-subnet-v2-{i+1}"),  # New name to force recreation
+        get_resource_name(f"public-subnet-v3-{i+1}"),  # Fresh v3 naming
         vpc_id=vpc.id,
-        cidr_block=f"10.0.{20+i}.0/24",  # Changed from 10+i to 20+i to avoid conflicts
+        cidr_block=f"10.0.{30+i}.0/24",  # Changed to 30+i for completely new CIDR range
         availability_zone=az,
         assign_ipv6_address_on_creation=True,
         ipv6_cidr_block=ipv6_cidr_calc,
         map_public_ip_on_launch=True,
         tags={
-            "Name": get_resource_name(f"public-subnet-v2-{i+1}"),
+            "Name": get_resource_name(f"public-subnet-v3-{i+1}"),
             "Environment": ENVIRONMENT,
             "Type": "Public"
         },
@@ -170,10 +170,10 @@ ipv6_route = aws.ec2.Route(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Associate route table with public subnets (new names to force recreation)
+# Associate route table with public subnets (v3 fresh deployment)
 for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
-        get_resource_name(f"public-rta-v2-{i + 1}"),  # New name to force recreation
+        get_resource_name(f"public-rta-v3-{i + 1}"),  # Fresh v3 naming
         subnet_id=subnet.id,
         route_table_id=public_route_table.id,
         opts=pulumi.ResourceOptions(provider=aws_provider)
