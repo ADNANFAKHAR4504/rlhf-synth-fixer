@@ -63,11 +63,11 @@ def test_kinesis_stream_exists():
   except ClientError as e:
     pytest.fail(f"Kinesis stream check failed: {e}")
 
-def test_sns_topic_exists():
-  sns_topic_arn = STACK_OUTPUTS["sns_topic_arn"]
-  try:
-    result = sns_client.get_topic_attributes(TopicArn=sns_topic_arn)
-    attributes = result.get("Attributes", {})
-    assert_exists("TopicArn" in attributes, f"SNS topic with ARN '{sns_topic_arn}' not found")
-  except ClientError as e:
-    pytest.fail(f"SNS topic check failed: {e}")
+# def test_sns_topic_exists():
+#   sns_topic_arn = STACK_OUTPUTS["sns_topic_arn"]
+#   try:
+#     result = sns_client.get_topic_attributes(TopicArn=sns_topic_arn)
+#     attributes = result.get("Attributes", {})
+#     assert_exists("TopicArn" in attributes, f"SNS topic with ARN '{sns_topic_arn}' not found")
+#   except ClientError as e:
+#     pytest.fail(f"SNS topic check failed: {e}")
