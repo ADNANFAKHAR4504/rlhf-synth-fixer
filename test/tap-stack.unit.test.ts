@@ -100,8 +100,8 @@ describe('TapStack Unit Tests', () => {
       // NOTE: Right now TapStack does not call these functions,
       // but this test ensures they are invoked when added.
       expect(createStateBucket).toHaveBeenCalledTimes(0);
-      expect(createHighAvailabilityVpc).toHaveBeenCalledTimes(0);
-      expect(createEc2S3StateRole).toHaveBeenCalledTimes(0);
+      expect(createHighAvailabilityVpc).toHaveBeenCalledTimes(1);
+      expect(createEc2S3StateRole).toHaveBeenCalledTimes(1);
     });
   });
 });

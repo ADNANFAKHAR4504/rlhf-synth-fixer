@@ -2,6 +2,32 @@
 
 exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props and match snapshot 1`] = `
 "{
+  "output": {
+    "ec2_role_name": {
+      "value": "mock-ec2-s3-role"
+    },
+    "private_subnet_ids": {
+      "value": [
+        "subnet-private-1",
+        "subnet-private-2"
+      ]
+    },
+    "public_subnet_ids": {
+      "value": [
+        "subnet-public-1",
+        "subnet-public-2"
+      ]
+    },
+    "state_bucket_arn": {
+      "value": "arn:aws:s3:::custom-state-bucket"
+    },
+    "state_bucket_name": {
+      "value": "custom-state-bucket"
+    },
+    "vpc_id": {
+      "value": "mock-vpc-id"
+    }
+  },
   "provider": {
     "aws": [
       {
@@ -39,6 +65,32 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
 
 exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with default props and match snapshot 1`] = `
 "{
+  "output": {
+    "ec2_role_name": {
+      "value": "mock-ec2-s3-role"
+    },
+    "private_subnet_ids": {
+      "value": [
+        "subnet-private-1",
+        "subnet-private-2"
+      ]
+    },
+    "public_subnet_ids": {
+      "value": [
+        "subnet-public-1",
+        "subnet-public-2"
+      ]
+    },
+    "state_bucket_arn": {
+      "value": "arn:aws:s3:::iac-rlhf-tf-states"
+    },
+    "state_bucket_name": {
+      "value": "iac-rlhf-tf-states"
+    },
+    "vpc_id": {
+      "value": "mock-vpc-id"
+    }
+  },
   "provider": {
     "aws": [
       {

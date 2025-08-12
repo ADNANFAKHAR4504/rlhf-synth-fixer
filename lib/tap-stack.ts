@@ -4,6 +4,9 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import { TerraformOutput } from 'cdktf';
+import { createHighAvailabilityVpc } from './modules';
+import { createEc2S3StateRole } from './modules';
 
 // ? Import your stacks here
 // import { MyStack } from './my-stack';
@@ -53,5 +56,36 @@ export class TapStack extends TerraformStack {
     // ? Add your stack instantiations here
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
+
+    const vpc = createHighAvailabilityVpc(this, 'tap', {
+      cidr: '10.10.0.0/16',
+      azCount: 2,
+      namePrefix: 'tap',
+    });
+
+    // Define state object for bucketArn and bucketName
+    const state = {
+      bucketArn: `arn:aws:s3:::${stateBucket}`,
+      bucketName: stateBucket,
+    };
+
+    // Create EC2 IAM role with access to the state bucket
+    const ec2Role = createEc2S3StateRole(this, 'tap', {
+      roleNamePrefix: 'tap',
+      bucketArn: state.bucketArn,
+      bucketName: state.bucketName,
+    });
+
+    // Outputs for integration tests
+    new TerraformOutput(this, 'vpc_id', { value: vpc.vpcId });
+    new TerraformOutput(this, 'public_subnet_ids', {
+      value: vpc.publicSubnetIds,
+    });
+    new TerraformOutput(this, 'private_subnet_ids', {
+      value: vpc.privateSubnetIds,
+    });
+    new TerraformOutput(this, 'state_bucket_name', { value: state.bucketName });
+    new TerraformOutput(this, 'state_bucket_arn', { value: state.bucketArn });
+    new TerraformOutput(this, 'ec2_role_name', { value: ec2Role.name });
   }
 }
