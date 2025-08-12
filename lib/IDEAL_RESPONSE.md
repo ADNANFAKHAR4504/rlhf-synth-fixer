@@ -1190,6 +1190,7 @@ describe('TapStack — unit coverage', () => {
     process.env.AZ_COUNT = '2';
     process.env.NAT_PER_AZ = 'false';
     process.env.ENABLE_SSH_TO_APP = 'false';
+    process.env.ENABLE_SECONDARY = 'true'; // Explicitly enable secondary
     delete process.env.DNS_HOSTED_ZONE_ID;
     delete process.env.DNS_RECORD_NAME;
   });
@@ -1251,6 +1252,7 @@ describe('TapStack — unit coverage', () => {
   test('enables DNS when hosted zone + record env vars are provided', () => {
     process.env.DNS_HOSTED_ZONE_ID = 'ZHOSTED123456';
     process.env.DNS_RECORD_NAME = 'app.example.com';
+    process.env.ENABLE_SECONDARY = 'true'; // Ensure secondary is enabled
 
     const app = new App();
     const stack = new TapStack(app, 'TestTapStackWithDns');
@@ -1283,7 +1285,6 @@ describe('TapStack — unit coverage', () => {
     expect(synthesized).toMatch(/"aws_security_group"/);
   });
 
-  // NEW: Test disable secondary region
   test('disables secondary region when ENABLE_SECONDARY is false', () => {
     process.env.ENABLE_SECONDARY = 'false';
 
