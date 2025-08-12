@@ -203,7 +203,6 @@ Resources:
   WebAppEC2Role:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: 'WebApp-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
