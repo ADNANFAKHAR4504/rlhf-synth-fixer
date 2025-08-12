@@ -868,7 +868,7 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.36",
+                "EngineVersion": "8.0.37",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,

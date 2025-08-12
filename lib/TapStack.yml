@@ -298,7 +298,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName property removed to allow CloudFormation to generate a unique name
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -338,7 +337,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      # InstanceProfileName property removed to allow CloudFormation to generate a unique name
       Roles:
         - !Ref EC2InstanceRole
 
@@ -473,7 +471,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-mysql-db'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.36'
+      EngineVersion: '8.0.37'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
@@ -609,7 +607,6 @@ Resources:
   APIGatewayLoggingRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName property removed to allow CloudFormation to generate a unique name
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -705,7 +702,6 @@ Resources:
   LambdaPatchingRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName property removed to allow CloudFormation to generate a unique name
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -866,12 +862,6 @@ Outputs:
     Value: !Ref ExistingCertificateArn
     Export:
       Name: !Sub "${AWS::StackName}-CertificateArnUsed"
-
-  WebACLName:
-    Description: The name of the WAFv2 WebACL
-    Value: !GetAtt WebACL.Name
-    Export:
-      Name: !Sub "${AWS::StackName}-WebACLName"
 
   PatchingLambdaFunctionName:
     Description: The name of the automated patching Lambda function
