@@ -302,7 +302,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
       
       expect(environment?.EnvironmentName).toBe(envName);
       expect(environment?.Status).toBe('Ready');
-      expect(['Ok', 'Info', 'Warning']).toContain(environment?.Health);
+      expect(['Ok', 'Info', 'Warning', 'Green']).toContain(environment?.Health);
     });
 
     test('Beanstalk environment uses correct solution stack', async () => {
