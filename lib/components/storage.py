@@ -2,7 +2,6 @@
 Storage Component - Creates S3 buckets with encryption and security best practices
 """
 
-import json
 import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
@@ -54,7 +53,8 @@ class StorageComponent(pulumi.ComponentResource):
             )],
             actions=["s3:PutObject"],
             resources=[pulumi.Output.all(self.bucket.arn, account_id).apply(
-                lambda x: f"{x[0]}/AWSLogs/{x[1]}/*"  # arn:aws:s3:::<bucket>/AWSLogs/<acct>/*
+                # arn:aws:s3:::<bucket>/AWSLogs/<acct>/*
+                lambda x: f"{x[0]}/AWSLogs/{x[1]}/*"
             )],
             conditions=[aws.iam.GetPolicyDocumentStatementConditionArgs(
                 test="StringEquals",
@@ -70,7 +70,6 @@ class StorageComponent(pulumi.ComponentResource):
         policy=self.bucket_policy_doc.json,
         opts=child_opts
     )
-
 
     # S3 Bucket Server-Side Encryption
     self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
