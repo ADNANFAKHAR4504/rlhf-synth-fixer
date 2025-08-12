@@ -1,4 +1,3 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import axios from 'axios';
 import {
@@ -387,6 +386,53 @@ describe('Disaster Recovery Infrastructure Integration Tests', () => {
           expect(tag?.Value).toBe(value);
         });
       }
+    });
+  });
+
+  describe('Cross-Service Integration Tests', () => {
+    test('Multi-AZ deployment provides geographic redundancy', async () => {
+      // Verify instances are in different availability zones for disaster recovery
+      const primaryCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.PrimaryInstanceId],
+      });
+      const primaryResponse = await ec2Client.send(primaryCommand);
+      const primaryInstance = primaryResponse.Reservations![0].Instances![0];
+      
+      const secondaryCommand = new DescribeInstancesCommand({
+        InstanceIds: [outputs.SecondaryInstanceId],
+      });
+      const secondaryResponse = await ec2Client.send(secondaryCommand);
+      const secondaryInstance = secondaryResponse.Reservations![0].Instances![0];
+      
+      // Verify AZ separation
+      const primaryAZ = primaryInstance.Placement?.AvailabilityZone;
+      const secondaryAZ = secondaryInstance.Placement?.AvailabilityZone;
+      
+      expect(primaryAZ).toBeDefined();
+      expect(secondaryAZ).toBeDefined();
+      expect(primaryAZ).not.toBe(secondaryAZ);
+      
+      // Verify both are in the same region but different AZs
+      expect(primaryAZ!.substring(0, primaryAZ!.length - 1)).toBe(
+        secondaryAZ!.substring(0, secondaryAZ!.length - 1)
+      );
+      
+      // Verify both instances are in public subnets for internet access
+      expect(primaryInstance.PublicIpAddress).toBeDefined();
+      expect(secondaryInstance.PublicIpAddress).toBeDefined();
+      expect(primaryInstance.PublicDnsName).toBeDefined();
+      expect(secondaryInstance.PublicDnsName).toBeDefined();
+      
+      // Verify instances are in the same VPC
+      expect(primaryInstance.VpcId).toBe(outputs.VpcId);
+      expect(secondaryInstance.VpcId).toBe(outputs.VpcId);
+      expect(primaryInstance.VpcId).toBe(secondaryInstance.VpcId);
+      
+      // Verify different subnets (should be in different AZs)
+      expect(primaryInstance.SubnetId).not.toBe(secondaryInstance.SubnetId);
+      
+      // Both should have the same security group for consistent access rules
+      expect(primaryInstance.SecurityGroups).toEqual(secondaryInstance.SecurityGroups);
     });
   });
 });
