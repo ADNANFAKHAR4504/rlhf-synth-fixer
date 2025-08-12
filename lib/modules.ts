@@ -139,7 +139,6 @@ export class SecurityModule extends Construct {
       vpcId: props.vpcId,
       description: 'Allow web traffic to ALB',
       ingress: [
-        // MODIFIED: Removed HTTPS rule, only allow HTTP
         {
           protocol: 'tcp',
           fromPort: 80,
@@ -270,8 +269,6 @@ export class ComputeModule extends Construct {
       tags: { Name: `${props.projectName}-tg` },
     });
 
-    // MODIFIED: Removed the HTTPS listener and the HTTP redirect listener.
-    // This new listener forwards HTTP traffic directly to the target group.
     new aws.lbListener.LbListener(this, 'HttpListener', {
       loadBalancerArn: this.alb.arn,
       port: 80,
@@ -305,7 +302,8 @@ export class ComputeModule extends Construct {
             ebs: {
               volumeSize: 8,
               volumeType: 'gp3',
-              // encrypted: true,
+              // CORRECTED: The 'encrypted' property must be a boolean, not a string.
+              encrypted: 'true',
               kmsKeyId: props.kmsKey.arn,
             },
           },
