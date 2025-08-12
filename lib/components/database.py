@@ -121,10 +121,16 @@ class DatabaseComponent(pulumi.ComponentResource):
             # The replica will be created by the secondary region deployment
             pass
         
+        account_id = aws.get_caller_identity_output().account_id
+        dest_vault_arn = account_id.apply(
+            lambda aid: f"arn:aws:backup:{secondary_region if is_primary else 'us-east-1'}:{aid}:backup-vault:Default"
+        )
+
+
         # Create DynamoDB backup vault for additional protection
         self.dynamodb_backup = aws.backup.Plan(
             f"{name}-dynamodb-backup-plan",
-            rule=[
+            rules=[
                 aws.backup.PlanRuleArgs(
                     rule_name="daily_backup",
                     target_vault_name="default",  # Use default backup vault
@@ -137,7 +143,9 @@ class DatabaseComponent(pulumi.ComponentResource):
                     ),
                     copy_actions=[
                         aws.backup.PlanRuleCopyActionArgs(
-                            destination_vault_arn=f"arn:aws:backup:{secondary_region if is_primary else 'us-east-1'}:*:backup-vault:default",
+                            # destination_vault_arn=f"arn:aws:backup:{secondary_region if is_primary else 'us-east-1'}:{account_id}:backup-vault:default",
+                            destination_vault_arn=dest_vault_arn,
+                            # destination_vault_arn=f"arn:aws:backup:us-east-1:*:backup-vault:default",
                             lifecycle=aws.backup.PlanRuleCopyActionLifecycleArgs(
                                 cold_storage_after=30,
                                 delete_after=365

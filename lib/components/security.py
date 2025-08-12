@@ -222,7 +222,7 @@ class SecurityComponent(pulumi.ComponentResource):
                         "kms:Decrypt",
                         "kms:GenerateDataKey"
                     ],
-                    "Resource": self.kms_key.arn
+                    "Resource": "*"
                 }
             ]
         }
