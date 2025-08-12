@@ -228,7 +228,10 @@ describe('Secure Infrastructure Integration Tests', () => {
   describe('RDS Database', () => {
     test('RDS instance exists and is properly configured', async () => {
       // Extract database identifier from the ARN
-      const dbIdentifier = outputs.DatabaseArn.split(':').pop()?.split('/').pop();
+      const dbIdentifier = outputs.DatabaseArn.split(':')
+        .pop()
+        ?.split('/')
+        .pop();
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -251,7 +254,10 @@ describe('Secure Infrastructure Integration Tests', () => {
 
     test('Database parameter group has secure settings', async () => {
       // Get the parameter group name from the RDS instance
-      const dbIdentifier = outputs.DatabaseArn.split(':').pop()?.split('/').pop();
+      const dbIdentifier = outputs.DatabaseArn.split(':')
+        .pop()
+        ?.split('/')
+        .pop();
       const instanceCommand = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -354,7 +360,10 @@ describe('Secure Infrastructure Integration Tests', () => {
 
     test('RDS encryption key is properly configured', async () => {
       // Get RDS instance to find KMS key
-      const dbIdentifier = outputs.DatabaseArn.split(':').pop()?.split('/').pop();
+      const dbIdentifier = outputs.DatabaseArn.split(':')
+        .pop()
+        ?.split('/')
+        .pop();
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -400,7 +409,10 @@ describe('Secure Infrastructure Integration Tests', () => {
     });
 
     test('RDS logs are properly configured', async () => {
-      const dbIdentifier = outputs.DatabaseArn.split(':').pop()?.split('/').pop();
+      const dbIdentifier = outputs.DatabaseArn.split(':')
+        .pop()
+        ?.split('/')
+        .pop();
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: `/aws/rds/instance/${dbIdentifier}`,
       });
