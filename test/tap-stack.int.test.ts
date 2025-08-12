@@ -47,6 +47,21 @@ const lambda = new LambdaClient({ region });
 const cloudWatch = new CloudWatchClient({ region });
 const cloudWatchLogs = new CloudWatchLogsClient({ region });
 
+// ---------- NEW: helper to fetch a specific log group with pagination ----------
+async function getLogGroupByName(name: string) {
+  let nextToken: string | undefined = undefined;
+  do {
+    const resp = await cloudWatchLogs.send(
+      new DescribeLogGroupsCommand({ logGroupNamePrefix: name, nextToken })
+    );
+    const match = (resp.logGroups ?? []).find((lg) => lg.logGroupName === name);
+    if (match) return match;
+    nextToken = resp.nextToken;
+  } while (nextToken);
+  return undefined;
+}
+// -----------------------------------------------------------------------------
+
 describe('TapStack Infrastructure Integration Tests (CloudTrail disabled)', () => {
   describe('VPC Infrastructure', () => {
     test('VPC should exist and be properly configured', async () => {
@@ -341,22 +356,16 @@ describe('TapStack Infrastructure Integration Tests (CloudTrail disabled)', () =
         return;
       }
 
-      const expectedLogGroups = [
+      const expected = [
         `/aws/ec2/TapStack${environmentSuffix}`,
         `/aws/s3/TapStack${environmentSuffix}`,
       ];
 
-      const response = await cloudWatchLogs.send(new DescribeLogGroupsCommand({}));
-      const actualLogGroups = (response.logGroups ?? []).map((lg) => lg.logGroupName);
-
-      expectedLogGroups.forEach((expectedLg) => {
-        expect(actualLogGroups).toContain(expectedLg);
-      });
-
-      const testLogGroup = (response.logGroups ?? []).find(
-        (lg) => lg.logGroupName === `/aws/ec2/TapStack${environmentSuffix}`
-      );
-      expect(testLogGroup?.retentionInDays).toBe(30);
+      for (const lgName of expected) {
+        const lg = await getLogGroupByName(lgName);
+        expect(lg).toBeDefined();
+        expect(lg!.retentionInDays).toBe(30);
+      }
     });
 
     test('There should be NO UnauthorizedAccess alarm (CloudTrail disabled)', async () => {
