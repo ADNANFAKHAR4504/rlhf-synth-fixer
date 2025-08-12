@@ -11,18 +11,22 @@ import path from 'path';
 
 // AWS SDK v3 clients
 import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketPolicyCommand,
-  GetBucketLoggingCommand,
-} from '@aws-sdk/client-s3';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
+  CloudFormationClient,
+  DescribeStacksCommand,
+} from '@aws-sdk/client-cloudformation';
+import {
+  CloudFrontClient,
+  GetDistributionCommand,
+} from '@aws-sdk/client-cloudfront';
 import {
   CloudTrailClient,
   DescribeTrailsCommand,
   GetTrailStatusCommand,
 } from '@aws-sdk/client-cloudtrail';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
@@ -30,50 +34,48 @@ import {
 import {
   ConfigServiceClient,
   DescribeConfigurationRecordersCommand,
-  DescribeDeliveryChannelsCommand,
   DescribeConformancePacksCommand,
+  DescribeDeliveryChannelsCommand,
 } from '@aws-sdk/client-config-service';
 import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  CloudFrontClient,
-  GetDistributionCommand,
-} from '@aws-sdk/client-cloudfront';
-import {
-  WAFV2Client,
-  GetWebACLCommand,
-} from '@aws-sdk/client-wafv2';
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeRouteTablesCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeNetworkAclsCommand,
+  DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
-  SecretsManagerClient,
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLoggingCommand,
+  GetBucketPolicyCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
   DescribeSecretCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const environment = process.env.ENVIRONMENT || 'production';
 
-const outputsPath = process.env.CFN_OUTPUTS_PATH || path.join(process.cwd(), 'cfn-outputs/flat-outputs.json');
-const ENABLE_LIVE = process.env.FORCE_LIVE === 'true' || fs.existsSync(outputsPath) || !!process.env.STACK_NAME;
+const outputsPath =
+  process.env.CFN_OUTPUTS_PATH ||
+  path.join(process.cwd(), 'cfn-outputs/flat-outputs.json');
+const ENABLE_LIVE =
+  process.env.FORCE_LIVE === 'true' ||
+  fs.existsSync(outputsPath) ||
+  !!process.env.STACK_NAME;
 
 let outputs: any = {};
 
@@ -107,7 +109,9 @@ async function loadOutputs(): Promise<Record<string, string>> {
   const stackName = process.env.STACK_NAME;
   const cfn = new CloudFormationClient({ region });
   if (stackName) {
-    const res = await cfn.send(new DescribeStacksCommand({ StackName: stackName }));
+    const res = await cfn.send(
+      new DescribeStacksCommand({ StackName: stackName })
+    );
     const stack = res.Stacks?.[0];
     const map: Record<string, string> = {};
     (stack?.Outputs || []).forEach(o => {
@@ -153,7 +157,9 @@ async function loadOutputs(): Promise<Record<string, string>> {
     return best.outputs;
   }
 
-  throw new Error('Unable to resolve outputs. Provide CFN_OUTPUTS_PATH, set STACK_NAME, or ensure a stack with expected Outputs exists in the account.');
+  throw new Error(
+    'Unable to resolve outputs. Provide CFN_OUTPUTS_PATH, set STACK_NAME, or ensure a stack with expected Outputs exists in the account.'
+  );
 }
 
 // Create clients
@@ -173,7 +179,11 @@ const sm = new SecretsManagerClient({ region });
 function getOutput(name: string): string | undefined {
   if (!outputs) return undefined;
   if (typeof outputs[name] === 'string') return outputs[name];
-  if (outputs.Outputs && outputs.Outputs[name] && outputs.Outputs[name].OutputValue) {
+  if (
+    outputs.Outputs &&
+    outputs.Outputs[name] &&
+    outputs.Outputs[name].OutputValue
+  ) {
     return outputs.Outputs[name].OutputValue;
   }
   return undefined;
@@ -202,7 +212,8 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
     // Helper to find value in outputs accepting either { key: value } or CDK-like structure
     function getOutput(name: string): string | undefined {
       if (!outputs) return undefined;
-      if (typeof (outputs as any)[name] === 'string') return (outputs as any)[name];
+      if (typeof (outputs as any)[name] === 'string')
+        return (outputs as any)[name];
       return undefined;
     }
 
@@ -217,8 +228,20 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
     CLOUDFRONT_DIST_ID = getOutput('CloudFrontDistributionId');
     DB_SECRET_ARN = getOutput('DatabaseSecretArn');
 
-    if (!VPC_ID || !PUBLIC_SUBNET_1 || !PRIVATE_SUBNET_1 || !ISOLATED_SUBNET_1 || !SECURE_BUCKET || !CLOUDTRAIL_BUCKET || !CONFIG_BUCKET || !PRIMARY_KMS_KEY_ID || !DB_SECRET_ARN) {
-      throw new Error('One or more required outputs are missing. Provide outputs via CFN_OUTPUTS_PATH file or ensure the stack has all expected Outputs.');
+    if (
+      !VPC_ID ||
+      !PUBLIC_SUBNET_1 ||
+      !PRIVATE_SUBNET_1 ||
+      !ISOLATED_SUBNET_1 ||
+      !SECURE_BUCKET ||
+      !CLOUDTRAIL_BUCKET ||
+      !CONFIG_BUCKET ||
+      !PRIMARY_KMS_KEY_ID ||
+      !DB_SECRET_ARN
+    ) {
+      throw new Error(
+        'One or more required outputs are missing. Provide outputs via CFN_OUTPUTS_PATH file or ensure the stack has all expected Outputs.'
+      );
     }
   });
   describe('KMS', () => {
@@ -242,14 +265,18 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
 
     for (const b of buckets) {
       test(`Bucket ${b.name} - KMS encryption and public access block`, async () => {
-        const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: b.name }));
+        const enc = await s3.send(
+          new GetBucketEncryptionCommand({ Bucket: b.name })
+        );
         const rules = enc.ServerSideEncryptionConfiguration?.Rules || [];
         expect(rules.length).toBeGreaterThan(0);
         const sse = rules[0].ApplyServerSideEncryptionByDefault;
         expect(sse?.SSEAlgorithm).toBe('aws:kms');
 
         // Public access block
-        const pab = await s3.send(new GetPublicAccessBlockCommand({ Bucket: b.name }));
+        const pab = await s3.send(
+          new GetPublicAccessBlockCommand({ Bucket: b.name })
+        );
         const cfg = pab.PublicAccessBlockConfiguration;
         expect(cfg?.BlockPublicAcls).toBe(true);
         expect(cfg?.BlockPublicPolicy).toBe(true);
@@ -257,7 +284,9 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
         expect(cfg?.RestrictPublicBuckets).toBe(true);
 
         if (b.requireLogging) {
-          const logging = await s3.send(new GetBucketLoggingCommand({ Bucket: b.name }));
+          const logging = await s3.send(
+            new GetBucketLoggingCommand({ Bucket: b.name })
+          );
           expect(logging.LoggingEnabled).toBeDefined();
           expect(logging.LoggingEnabled?.TargetBucket).toBeDefined();
         }
@@ -265,80 +294,146 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
     }
 
     test('SecureDataBucket policy enforces HTTPS & SSE-KMS', async () => {
-      const pol = await s3.send(new GetBucketPolicyCommand({ Bucket: SECURE_BUCKET! }));
+      const pol = await s3.send(
+        new GetBucketPolicyCommand({ Bucket: SECURE_BUCKET! })
+      );
       const doc = JSON.parse(pol.Policy as string);
       const statements = doc.Statement || [];
       // DenyInsecureTransport and DenyUnEncryptedObjectUploads
       const sidNames = statements.map((s: any) => s.Sid);
-      expect(sidNames).toEqual(expect.arrayContaining(['DenyInsecureTransport', 'DenyUnEncryptedObjectUploads']));
+      expect(sidNames).toEqual(
+        expect.arrayContaining([
+          'DenyInsecureTransport',
+          'DenyUnEncryptedObjectUploads',
+        ])
+      );
     });
   });
 
   describe('VPC & Networking', () => {
     test('VPC and core subnets exist', async () => {
-      const vpcs = await ec2.send(new DescribeVpcsCommand({ VpcIds: [VPC_ID!] }));
+      const vpcs = await ec2.send(
+        new DescribeVpcsCommand({ VpcIds: [VPC_ID!] })
+      );
       expect(vpcs.Vpcs?.[0].VpcId).toBe(VPC_ID);
 
-      const subnets = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: [PUBLIC_SUBNET_1!, PRIVATE_SUBNET_1!, ISOLATED_SUBNET_1!] }));
+      const subnets = await ec2.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: [PUBLIC_SUBNET_1!, PRIVATE_SUBNET_1!, ISOLATED_SUBNET_1!],
+        })
+      );
       expect(subnets.Subnets?.length).toBe(3);
     });
 
     test('Internet Gateway and public route to 0.0.0.0/0 exist', async () => {
-      const igws = await ec2.send(new DescribeInternetGatewaysCommand({ Filters: [{ Name: 'attachment.vpc-id', Values: [VPC_ID!] }] }));
+      const igws = await ec2.send(
+        new DescribeInternetGatewaysCommand({
+          Filters: [{ Name: 'attachment.vpc-id', Values: [VPC_ID!] }],
+        })
+      );
       expect((igws.InternetGateways || []).length).toBeGreaterThan(0);
 
-      const rts = await ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: 'vpc-id', Values: [VPC_ID!] }] }));
-      const hasDefaultRoute = (rts.RouteTables || []).some(rt => (rt.Routes || []).some(r => r.DestinationCidrBlock === '0.0.0.0/0' && (r.GatewayId || r.NatGatewayId)));
+      const rts = await ec2.send(
+        new DescribeRouteTablesCommand({
+          Filters: [{ Name: 'vpc-id', Values: [VPC_ID!] }],
+        })
+      );
+      const hasDefaultRoute = (rts.RouteTables || []).some(rt =>
+        (rt.Routes || []).some(
+          r =>
+            r.DestinationCidrBlock === '0.0.0.0/0' &&
+            (r.GatewayId || r.NatGatewayId)
+        )
+      );
       expect(hasDefaultRoute).toBe(true);
     });
 
     test('Network ACLs present', async () => {
-      const nacls = await ec2.send(new DescribeNetworkAclsCommand({ Filters: [{ Name: 'vpc-id', Values: [VPC_ID!] }] }));
+      const nacls = await ec2.send(
+        new DescribeNetworkAclsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [VPC_ID!] }],
+        })
+      );
       expect((nacls.NetworkAcls || []).length).toBeGreaterThan(0);
     });
 
     test('NAT Gateway presence (if created)', async () => {
-      const natgws = await ec2.send(new DescribeNatGatewaysCommand({ Filter: [{ Name: 'vpc-id', Values: [VPC_ID!] }] }));
+      const natgws = await ec2.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [{ Name: 'vpc-id', Values: [VPC_ID!] }],
+        })
+      );
       // Conditional in template; if not found we still pass but assert consistent state
       expect((natgws.NatGateways || []).length).toBeGreaterThanOrEqual(0);
     });
 
     test('Security Groups enforce least privilege (ports)', async () => {
-      const sgs = await ec2.send(new DescribeSecurityGroupsCommand({ Filters: [{ Name: 'vpc-id', Values: [VPC_ID!] }] }));
-      const byName = (name: string) => (sgs.SecurityGroups || []).find(sg => (sg.GroupName || '').includes(name) || (sg.Tags || []).some(t => t.Key === 'Name' && (t.Value || '').includes(name)));
+      const sgs = await ec2.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [VPC_ID!] }],
+        })
+      );
+      const byName = (name: string) =>
+        (sgs.SecurityGroups || []).find(
+          sg =>
+            (sg.GroupName || '').includes(name) ||
+            (sg.Tags || []).some(
+              t => t.Key === 'Name' && (t.Value || '').includes(name)
+            )
+        );
 
       const web = byName('web-sg');
       const app = byName('app-sg');
       const db = byName('db-sg');
       expect(web && app && db).toBeTruthy();
 
-      const hasHttps = (web?.IpPermissions || []).some(p => p.IpProtocol === 'tcp' && p.FromPort === 443 && p.ToPort === 443);
+      const hasHttps = (web?.IpPermissions || []).some(
+        p => p.IpProtocol === 'tcp' && p.FromPort === 443 && p.ToPort === 443
+      );
       expect(hasHttps).toBe(true);
 
-      const hasApp8080 = (app?.IpPermissions || []).some(p => p.IpProtocol === 'tcp' && p.FromPort === 8080 && p.ToPort === 8080);
+      const hasApp8080 = (app?.IpPermissions || []).some(
+        p => p.IpProtocol === 'tcp' && p.FromPort === 8080 && p.ToPort === 8080
+      );
       expect(hasApp8080).toBe(true);
 
-      const hasDb3306 = (db?.IpPermissions || []).some(p => p.IpProtocol === 'tcp' && p.FromPort === 3306 && p.ToPort === 3306);
+      const hasDb3306 = (db?.IpPermissions || []).some(
+        p => p.IpProtocol === 'tcp' && p.FromPort === 3306 && p.ToPort === 3306
+      );
       expect(hasDb3306).toBe(true);
     });
   });
 
   describe('CloudTrail', () => {
     test('Multi-region trail exists and logging is enabled', async () => {
-      const dt = await cloudtrail.send(new DescribeTrailsCommand({ includeShadowTrails: false }));
-      const trail = (dt.trailList || []).find(t => (t.S3BucketName === CLOUDTRAIL_BUCKET));
+      const dt = await cloudtrail.send(
+        new DescribeTrailsCommand({ includeShadowTrails: false })
+      );
+      const trail = (dt.trailList || []).find(
+        t => t.S3BucketName === CLOUDTRAIL_BUCKET
+      );
       expect(trail).toBeDefined();
       expect(trail?.IsMultiRegionTrail).toBe(true);
 
       if (trail?.Name) {
-        const st = await cloudtrail.send(new GetTrailStatusCommand({ Name: trail.Name }));
+        const st = await cloudtrail.send(
+          new GetTrailStatusCommand({ Name: trail.Name })
+        );
         expect(st.IsLogging).toBe(true);
       }
     });
 
     test('CloudWatch Logs integration log group exists', async () => {
-      const lgs = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/cloudtrail/' }));
-      const lg = (lgs.logGroups || []).find(g => g.logGroupName?.includes('production') || true); // at least one exists
+      const lgs = await logs.send(
+        new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/cloudtrail/' })
+      );
+      // Look for log groups that match the new naming pattern with account ID
+      const lg = (lgs.logGroups || []).find(
+        g =>
+          g.logGroupName?.includes('production') &&
+          (g.logGroupName?.includes('-') ||
+            g.logGroupName?.includes('production'))
+      );
       expect(lg).toBeDefined();
     });
   });
@@ -349,13 +444,17 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
       expect((rec.ConfigurationRecorders || []).length).toBeGreaterThan(0);
 
       const dc = await cfg.send(new DescribeDeliveryChannelsCommand({}));
-      expect((dc.DeliveryChannels || []).some(d => d.s3BucketName === CONFIG_BUCKET)).toBe(true);
+      expect(
+        (dc.DeliveryChannels || []).some(d => d.s3BucketName === CONFIG_BUCKET)
+      ).toBe(true);
     });
 
     test('CIS Conformance pack is present (if permitted)', async () => {
       const cps = await cfg.send(new DescribeConformancePacksCommand({}));
       // We expect at least one conformance pack - named like "*-cis-foundations"
-      const hasCis = (cps.ConformancePackDetails || []).some(c => (c.ConformancePackName || '').includes('cis-foundations'));
+      const hasCis = (cps.ConformancePackDetails || []).some(c =>
+        (c.ConformancePackName || '').includes('cis-foundations')
+      );
       expect(hasCis).toBe(true);
     });
   });
@@ -364,14 +463,22 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
     test('RDS instance exists, is encrypted, MultiAZ, and not public', async () => {
       const dbs = await rds.send(new DescribeDBInstancesCommand({}));
       // Find DB whose master user secret matches provided secret
-      const db = (dbs.DBInstances || []).find(d => (d.MasterUserSecret?.SecretArn === DB_SECRET_ARN) || (d.DBInstanceIdentifier || '').includes('financial-db'));
+      const db = (dbs.DBInstances || []).find(
+        d =>
+          d.MasterUserSecret?.SecretArn === DB_SECRET_ARN ||
+          (d.DBInstanceIdentifier || '').includes('financial-db')
+      );
       expect(db).toBeDefined();
       expect(db?.StorageEncrypted).toBe(true);
       expect(db?.MultiAZ).toBe(true);
       expect(db?.PubliclyAccessible).toBe(false);
 
       if (db?.DBSubnetGroup?.DBSubnetGroupName) {
-        const sg = await rds.send(new DescribeDBSubnetGroupsCommand({ DBSubnetGroupName: db.DBSubnetGroup.DBSubnetGroupName }));
+        const sg = await rds.send(
+          new DescribeDBSubnetGroupsCommand({
+            DBSubnetGroupName: db.DBSubnetGroup.DBSubnetGroupName,
+          })
+        );
         expect((sg.DBSubnetGroups || [])[0]?.SubnetGroupStatus).toBeDefined();
       }
     });
@@ -379,7 +486,9 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
 
   describe('Secrets Manager', () => {
     test('DatabaseSecret exists', async () => {
-      const res = await sm.send(new DescribeSecretCommand({ SecretId: DB_SECRET_ARN! }));
+      const res = await sm.send(
+        new DescribeSecretCommand({ SecretId: DB_SECRET_ARN! })
+      );
       expect(res.ARN).toBe(DB_SECRET_ARN);
       expect(res.Name).toBeDefined();
     });
@@ -390,7 +499,9 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
       if (!CLOUDFRONT_DIST_ID) {
         return; // Conditional in template
       }
-      const dist = await cf.send(new GetDistributionCommand({ Id: CLOUDFRONT_DIST_ID }));
+      const dist = await cf.send(
+        new GetDistributionCommand({ Id: CLOUDFRONT_DIST_ID })
+      );
       const cfg = dist.Distribution?.DistributionConfig;
       expect(cfg?.Enabled).toBe(true);
       // WAF association is retrieved via CloudFront API in WebACLId in template; runtime requires separate lookup via WAFv2 API
@@ -400,9 +511,16 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
     test('WAF WebACL for CloudFront scope exists', async () => {
       // The WebACL name is parameterized; we attempt to fetch by name if provided via env or validate that at least one exists
       // To keep dynamic, we enumerate by name from environment hint or expect presence of at least one web ACL
-      const nameHint = process.env.WAF_ACL_NAME || `${environment}-financial-waf`;
+      const nameHint =
+        process.env.WAF_ACL_NAME || `${environment}-financial-waf`;
       try {
-        const res = await waf.send(new GetWebACLCommand({ Name: nameHint, Scope: 'CLOUDFRONT', Id: process.env.WAF_ACL_ID } ));
+        const res = await waf.send(
+          new GetWebACLCommand({
+            Name: nameHint,
+            Scope: 'CLOUDFRONT',
+            Id: process.env.WAF_ACL_ID,
+          })
+        );
         expect(res.WebACL?.Name).toBeDefined();
         expect(res.WebACL?.DefaultAction).toBeDefined();
       } catch (e) {
@@ -415,8 +533,16 @@ describeLive('TapStack Stack - Live Resource Validation', () => {
 
   describe('CloudWatch Monitoring', () => {
     test('Alarm for Unauthorized API calls exists', async () => {
-      const res = await cw.send(new DescribeAlarmsCommand({ AlarmNamePrefix: `${environment}-unauthorized-api-calls` }));
-      const any = (res.MetricAlarms || []).some(a => a.MetricName === 'UnauthorizedApiCalls' && a.Namespace === 'CloudTrailMetrics');
+      const res = await cw.send(
+        new DescribeAlarmsCommand({
+          AlarmNamePrefix: `${environment}-unauthorized-api-calls`,
+        })
+      );
+      const any = (res.MetricAlarms || []).some(
+        a =>
+          a.MetricName === 'UnauthorizedApiCalls' &&
+          a.Namespace === 'CloudTrailMetrics'
+      );
       expect(any).toBe(true);
     });
   });

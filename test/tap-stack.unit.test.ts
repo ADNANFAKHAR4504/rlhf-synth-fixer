@@ -1,6 +1,6 @@
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 
 // Note: To avoid external YAML parser dependencies, these tests expect a JSON-converted
 // version of the template at lib/TapStack.json. Generate it from the YAML template using
@@ -21,7 +21,8 @@ const getResourcesByType = (template: any, type: string): ResEntry[] => {
     .map(([logicalId, res]) => ({ logicalId, resource: res as any }));
 };
 
-const allResourceLogicalIds = (template: any) => Object.keys(getResources(template));
+const allResourceLogicalIds = (template: any) =>
+  Object.keys(getResources(template));
 
 const getTags = (res: any): Array<{ Key: string; Value: any }> => {
   const props = res?.Properties ?? {};
@@ -41,7 +42,10 @@ const expectS3BucketEncryptedWithKms = (bucketRes: any) => {
   expect(sseByDefault).toBeDefined();
   expect(sseByDefault.SSEAlgorithm).toBe('aws:kms');
   // We expect the key to reference PrimaryKmsKey (parser may reduce !Ref to string)
-  expect(sseByDefault.KMSMasterKeyID === 'PrimaryKmsKey' || !!sseByDefault.KMSMasterKeyID).toBe(true);
+  expect(
+    sseByDefault.KMSMasterKeyID === 'PrimaryKmsKey' ||
+      !!sseByDefault.KMSMasterKeyID
+  ).toBe(true);
 };
 
 const expectS3BlockPublicAccess = (bucketRes: any) => {
@@ -77,12 +81,16 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       if (fs.existsSync(jsonPath)) return;
       // Try python module cfn_flip
       try {
-        execSync(`python -m cfn_flip "${ymlPath}" "${jsonPath}"`, { stdio: 'pipe' });
+        execSync(`python -m cfn_flip "${ymlPath}" "${jsonPath}"`, {
+          stdio: 'pipe',
+        });
       } catch (e1) {
         try {
           // Try installing cfn_flip and rerunning
           execSync(`pip install --user cfn_flip`, { stdio: 'pipe' });
-          execSync(`python -m cfn_flip "${ymlPath}" "${jsonPath}"`, { stdio: 'pipe' });
+          execSync(`python -m cfn_flip "${ymlPath}" "${jsonPath}"`, {
+            stdio: 'pipe',
+          });
         } catch (e2) {
           try {
             // Try cfn-flip CLI if available; capture stdout and write file
@@ -140,7 +148,13 @@ describe('TapStack CloudFormation Template (YAML)', () => {
     });
 
     test('AZ and subnet mask number parameters have min/max constraints', () => {
-      const numberParamNames = ['AZCount', 'PublicSubnetMask', 'PrivateSubnetMask', 'IsolatedSubnetMask', 'DBAllocatedStorage'];
+      const numberParamNames = [
+        'AZCount',
+        'PublicSubnetMask',
+        'PrivateSubnetMask',
+        'IsolatedSubnetMask',
+        'DBAllocatedStorage',
+      ];
       numberParamNames.forEach(n => {
         const p = params[n];
         expect(p).toBeDefined();
@@ -165,17 +179,30 @@ describe('TapStack CloudFormation Template (YAML)', () => {
     test('DBEngine allowed values include common engines', () => {
       const p = params.DBEngine;
       expect(p).toBeDefined();
-      expect(p.AllowedValues).toEqual(['aurora', 'aurora-mysql', 'mysql', 'postgres']);
+      expect(p.AllowedValues).toEqual([
+        'aurora',
+        'aurora-mysql',
+        'mysql',
+        'postgres',
+      ]);
+    });
+
+    test('LogGroupNamePrefix parameter exists with empty default', () => {
+      const p = params.LogGroupNamePrefix;
+      expect(p).toBeDefined();
+      expect(p.Type).toBe('String');
+      expect(p.Default).toBe('');
     });
   });
 
   describe('Conditions defined properly', () => {
-    test('UseNatGateways, UseCloudFront, UseCustomCert exist', () => {
+    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix exist', () => {
       expect(template.Conditions).toBeDefined();
       const conds = template.Conditions;
       expect(conds.UseNatGateways).toBeDefined();
       expect(conds.UseCloudFront).toBeDefined();
       expect(conds.UseCustomCert).toBeDefined();
+      expect(conds.HasLogGroupNamePrefix).toBeDefined();
     });
   });
 
@@ -196,10 +223,13 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       const aliasProps = alias[0].resource.Properties;
       const aliasName = aliasProps.AliasName;
       expect(
-        typeof aliasName === 'string' || (aliasName && (aliasName['Fn::Sub'] || aliasName.Sub))
+        typeof aliasName === 'string' ||
+          (aliasName && (aliasName['Fn::Sub'] || aliasName.Sub))
       ).toBeTruthy();
       // TargetKeyId likely references PrimaryKmsKey and may be a Ref/intrinsic
-      expect(aliasProps.TargetKeyId === 'PrimaryKmsKey' || !!aliasProps.TargetKeyId).toBe(true);
+      expect(
+        aliasProps.TargetKeyId === 'PrimaryKmsKey' || !!aliasProps.TargetKeyId
+      ).toBe(true);
     });
 
     test('VPC and subnets exist with correct basic properties', () => {
@@ -256,19 +286,31 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       // Web allows HTTPS inbound only
       expect(webSg.Properties.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ FromPort: 443, ToPort: 443, IpProtocol: 'tcp' }),
+          expect.objectContaining({
+            FromPort: 443,
+            ToPort: 443,
+            IpProtocol: 'tcp',
+          }),
         ])
       );
       // App inbound only from Web SG on 8080
       expect(appSg.Properties.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ FromPort: 8080, ToPort: 8080, IpProtocol: 'tcp' }),
+          expect.objectContaining({
+            FromPort: 8080,
+            ToPort: 8080,
+            IpProtocol: 'tcp',
+          }),
         ])
       );
       // DB inbound only from App SG on 3306
       expect(dbSg.Properties.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ FromPort: 3306, ToPort: 3306, IpProtocol: 'tcp' }),
+          expect.objectContaining({
+            FromPort: 3306,
+            ToPort: 3306,
+            IpProtocol: 'tcp',
+          }),
         ])
       );
     });
@@ -278,7 +320,9 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(cloudTrailRole).toBeDefined();
       const cloudTrailPolicies = cloudTrailRole.Properties.Policies;
       expect(Array.isArray(cloudTrailPolicies)).toBe(true);
-      const cwPolicy = cloudTrailPolicies.find((p: any) => p.PolicyName === 'CloudTrailToCloudWatch');
+      const cwPolicy = cloudTrailPolicies.find(
+        (p: any) => p.PolicyName === 'CloudTrailToCloudWatch'
+      );
       expect(cwPolicy).toBeDefined();
 
       // AWS Config uses a service-linked role; ensure the recorder references a role ARN
@@ -293,20 +337,31 @@ describe('TapStack CloudFormation Template (YAML)', () => {
         'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       );
       // Verify scoped S3 and KMS permissions reference SecureDataBucket and PrimaryKmsKey
-      const inlinePol = ec2Role.Properties.Policies?.find((p: any) => p.PolicyName === 'EC2S3ScopedAccess');
+      const inlinePol = ec2Role.Properties.Policies?.find(
+        (p: any) => p.PolicyName === 'EC2S3ScopedAccess'
+      );
       expect(inlinePol).toBeDefined();
       const statements = inlinePol.PolicyDocument.Statement;
       expect(Array.isArray(statements)).toBe(true);
       // Ensure at least one statement references SecureDataBucket and PrimaryKmsKey (parser reduces !Ref/!GetAtt)
-      const s3Stmt = statements.find((s: any) => JSON.stringify(s.Resource || s.Resources || s) .includes('SecureDataBucket'));
-      const kmsStmt = statements.find((s: any) => JSON.stringify(s.Resource || s.Resources || s) .includes('PrimaryKmsKey'));
+      const s3Stmt = statements.find((s: any) =>
+        JSON.stringify(s.Resource || s.Resources || s).includes(
+          'SecureDataBucket'
+        )
+      );
+      const kmsStmt = statements.find((s: any) =>
+        JSON.stringify(s.Resource || s.Resources || s).includes('PrimaryKmsKey')
+      );
       expect(!!s3Stmt).toBe(true);
       expect(!!kmsStmt).toBe(true);
 
       const instanceProfile = template.Resources.EC2InstanceProfile;
       expect(instanceProfile).toBeDefined();
       const roles = instanceProfile.Properties.Roles || [];
-      const hasRoleRef = roles.some((r: any) => r === 'EC2InstanceRole' || (r && r.Ref === 'EC2InstanceRole'));
+      const hasRoleRef = roles.some(
+        (r: any) =>
+          r === 'EC2InstanceRole' || (r && r.Ref === 'EC2InstanceRole')
+      );
       expect(hasRoleRef).toBe(true);
 
       const rdsMonRole = template.Resources.RDSMonitoringRole;
@@ -324,7 +379,9 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(gen.GenerateStringKey).toBe('password');
       expect(gen.PasswordLength).toBeGreaterThanOrEqual(32);
       const tmpl = gen.SecretStringTemplate;
-      expect(typeof tmpl === 'string' || (tmpl && (tmpl['Fn::Sub'] || tmpl.Sub))).toBeTruthy();
+      expect(
+        typeof tmpl === 'string' || (tmpl && (tmpl['Fn::Sub'] || tmpl.Sub))
+      ).toBeTruthy();
     });
 
     test('S3 buckets have KMS encryption and public access blocked', () => {
@@ -337,7 +394,9 @@ describe('TapStack CloudFormation Template (YAML)', () => {
 
       // SecureDataBucket has versioning and logging
       const secureBucket = template.Resources.SecureDataBucket;
-      expect(secureBucket.Properties.VersioningConfiguration?.Status).toBe('Enabled');
+      expect(secureBucket.Properties.VersioningConfiguration?.Status).toBe(
+        'Enabled'
+      );
       expect(secureBucket.Properties.LoggingConfiguration).toBeDefined();
     });
 
@@ -345,21 +404,31 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       const securePolicy = template.Resources.SecureDataBucketPolicy;
       expect(securePolicy).toBeDefined();
       const stmts = securePolicy.Properties.PolicyDocument.Statement;
-      const denyTransport = stmts.find((s: any) => s.Sid === 'DenyInsecureTransport');
-      const denyNoSse = stmts.find((s: any) => s.Sid === 'DenyUnEncryptedObjectUploads');
+      const denyTransport = stmts.find(
+        (s: any) => s.Sid === 'DenyInsecureTransport'
+      );
+      const denyNoSse = stmts.find(
+        (s: any) => s.Sid === 'DenyUnEncryptedObjectUploads'
+      );
       expect(denyTransport).toBeDefined();
       expect(denyNoSse).toBeDefined();
 
       const ctPolicy = template.Resources.CloudTrailBucketPolicy;
       expect(ctPolicy).toBeDefined();
       const ctStmts = ctPolicy.Properties.PolicyDocument.Statement;
-      expect(ctStmts.some((s: any) => s.Sid === 'AWSCloudTrailAclCheck')).toBe(true);
-      expect(ctStmts.some((s: any) => s.Sid === 'AWSCloudTrailWrite')).toBe(true);
+      expect(ctStmts.some((s: any) => s.Sid === 'AWSCloudTrailAclCheck')).toBe(
+        true
+      );
+      expect(ctStmts.some((s: any) => s.Sid === 'AWSCloudTrailWrite')).toBe(
+        true
+      );
 
       const cfgPolicy = template.Resources.ConfigBucketPolicy;
       expect(cfgPolicy).toBeDefined();
       const cfgStmts = cfgPolicy.Properties.PolicyDocument.Statement;
-      expect(cfgStmts.some((s: any) => s.Sid === 'AllowConfigService')).toBe(true);
+      expect(cfgStmts.some((s: any) => s.Sid === 'AllowConfigService')).toBe(
+        true
+      );
       expect(cfgStmts.some((s: any) => s.Sid === 'AllowConfigPuts')).toBe(true);
     });
 
@@ -369,7 +438,10 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       logGroups.forEach(({ resource }) => {
         expect(resource.Properties.RetentionInDays).toBeGreaterThan(0);
         // KmsKeyId likely references PrimaryKmsKey
-        expect(resource.Properties.KmsKeyId === 'PrimaryKmsKey' || !!resource.Properties.KmsKeyId).toBe(true);
+        expect(
+          resource.Properties.KmsKeyId === 'PrimaryKmsKey' ||
+            !!resource.Properties.KmsKeyId
+        ).toBe(true);
       });
     });
 
@@ -431,13 +503,19 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(oai).toBeDefined();
 
       const rules = waf.Properties.Rules;
-      expect(rules.some((r: any) => r.Name === 'AWSManagedCommonRuleSet')).toBe(true);
-      expect(rules.some((r: any) => r.Name === 'AWSManagedSQLiRuleSet')).toBe(true);
+      expect(rules.some((r: any) => r.Name === 'AWSManagedCommonRuleSet')).toBe(
+        true
+      );
+      expect(rules.some((r: any) => r.Name === 'AWSManagedSQLiRuleSet')).toBe(
+        true
+      );
 
       const dcfg = dist.Properties.DistributionConfig;
       expect(dcfg.Enabled).toBe(true);
       expect(dcfg.HttpVersion).toBe('http2');
-      expect(dcfg.DefaultCacheBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
+      expect(dcfg.DefaultCacheBehavior.ViewerProtocolPolicy).toBe(
+        'redirect-to-https'
+      );
     });
 
     test('CloudWatch MetricFilter and Alarm for unauthorized API calls exist', () => {
@@ -448,7 +526,9 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(alarm.Properties.MetricName).toBe('UnauthorizedApiCalls');
       expect(alarm.Properties.Namespace).toBe('CloudTrailMetrics');
       expect(alarm.Properties.Threshold).toBe(1);
-      expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
+      expect(alarm.Properties.ComparisonOperator).toBe(
+        'GreaterThanOrEqualToThreshold'
+      );
     });
   });
 
