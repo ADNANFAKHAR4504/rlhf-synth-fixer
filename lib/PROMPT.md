@@ -1,9 +1,5 @@
-Here's a prompt designed to align with Claude's Sonnet best practices, offering a clear, structured, and comprehensive request for your automated cloud environment setup in AWS using Pulumi and Python.
-
 ---
-
 ## 📝 Automated Cloud Environment Setup on AWS
-
 ---
 
 ### Objective
