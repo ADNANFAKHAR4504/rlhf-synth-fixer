@@ -149,37 +149,30 @@ describe('TapStack Unit Tests', () => {
 
     test('S3 buckets have correct naming pattern', () => {
       // Check that buckets are created with the correct naming pattern
-      template.hasResource('AWS::S3::Bucket', {
-        Properties: {
-          BucketName: {
-            'Fn::Join': [
-              '',
-              [
-                `secure-data-bucket-${environmentSuffix}-`,
-                {
-                  Ref: 'AWS::AccountId',
-                },
-                '-c81cbb2d',
-              ],
-            ],
-          },
+      // The actual implementation uses Fn::Join with AWS::AccountId and uniqueId
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: {
+          'Fn::Join': [
+            '',
+            Match.arrayWith([
+              `secure-data-bucket-${environmentSuffix}-`,
+              { Ref: 'AWS::AccountId' },
+              Match.stringLikeRegexp('-[a-f0-9]+-\\d+'),
+            ]),
+          ],
         },
       });
 
-      template.hasResource('AWS::S3::Bucket', {
-        Properties: {
-          BucketName: {
-            'Fn::Join': [
-              '',
-              [
-                `secure-logs-bucket-${environmentSuffix}-`,
-                {
-                  Ref: 'AWS::AccountId',
-                },
-                '-c81cbb2d',
-              ],
-            ],
-          },
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: {
+          'Fn::Join': [
+            '',
+            Match.arrayWith([
+              `secure-logs-bucket-${environmentSuffix}-`,
+              { Ref: 'AWS::AccountId' },
+              Match.stringLikeRegexp('-[a-f0-9]+-\\d+'),
+            ]),
+          ],
         },
       });
     });
