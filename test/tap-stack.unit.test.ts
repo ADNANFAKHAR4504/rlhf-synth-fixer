@@ -258,7 +258,7 @@ describe('TapStack Unit Tests', () => {
       const subnetA = templateJson.Resources.SubnetA;
       expect(subnetA.Type).toBe('AWS::EC2::Subnet');
       expect(subnetA.Properties.VpcId.Ref).toBe('ExistingVPCId');
-      expect(subnetA.Properties.CidrBlock).toBe('10.0.1.0/24');
+      expect(subnetA.Properties.CidrBlock).toBe('10.0.30.0/24');
       expect(subnetA.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
       expect(subnetA.Properties.AvailabilityZone['Fn::Select'][1].Ref).toBe('AvailabilityZones');
     });
@@ -267,7 +267,7 @@ describe('TapStack Unit Tests', () => {
       const subnetB = templateJson.Resources.SubnetB;
       expect(subnetB.Type).toBe('AWS::EC2::Subnet');
       expect(subnetB.Properties.VpcId.Ref).toBe('ExistingVPCId');
-      expect(subnetB.Properties.CidrBlock).toBe('10.0.2.0/24');
+      expect(subnetB.Properties.CidrBlock).toBe('10.0.40.0/24');
       expect(subnetB.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
       expect(subnetB.Properties.AvailabilityZone['Fn::Select'][1].Ref).toBe('AvailabilityZones');
     });

@@ -288,7 +288,7 @@ Resources:
     Properties:
       VpcId: !Ref ExistingVPCId
       AvailabilityZone: !Select [0, !Ref AvailabilityZones]
-      CidrBlock: "10.0.1.0/24"
+      CidrBlock: "10.0.30.0/24"
       Tags:
         - Key: Name
           Value: !Sub "my-app-Subnet-A-${EnvironmentSuffix}"
@@ -303,7 +303,7 @@ Resources:
     Properties:
       VpcId: !Ref ExistingVPCId
       AvailabilityZone: !Select [1, !Ref AvailabilityZones]
-      CidrBlock: "10.0.2.0/24"
+      CidrBlock: "10.0.40.0/24"
       Tags:
         - Key: Name
           Value: !Sub "my-app-Subnet-B-${EnvironmentSuffix}"
@@ -344,6 +344,7 @@ Resources:
       SubnetId: !Ref SubnetA
       IamInstanceProfile: !Ref EC2InstanceProfile
       Monitoring: true # Enable detailed monitoring
+      KeyName: !If [HasKeyPair, !Ref PublicKeyName, !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
           Value: !Sub "my-app-SampleEC2-${EnvironmentSuffix}"

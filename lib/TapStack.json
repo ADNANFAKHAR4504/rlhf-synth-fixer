@@ -474,7 +474,7 @@
                         }
                     ]
                 },
-                "CidrBlock": "10.0.1.0/24",
+                "CidrBlock": "10.0.30.0/24",
                 "Tags": [
                     {
                         "Key": "Name",
@@ -509,7 +509,7 @@
                         }
                     ]
                 },
-                "CidrBlock": "10.0.2.0/24",
+                "CidrBlock": "10.0.40.0/24",
                 "Tags": [
                     {
                         "Key": "Name",
@@ -586,6 +586,17 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "Monitoring": true,
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "PublicKeyName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
