@@ -664,7 +664,7 @@ Resources:
 
   CloudTrailLogBucket:
     Type: AWS::S3::Bucket
-    Properties:s
+    Properties:
       # S3 bucket names must be <= 63 characters
       BucketName: !Sub '${ProjectNameLower}-ctlogs-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
