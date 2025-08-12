@@ -671,8 +671,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 """
 
     lambda_function = aws.lambda_.Function(
-        "nova-health-check",
-        name="nova-health-check",
+        "nova-model-health-check",
+        name="nova-model-health-check",
         runtime="python3.9",
         code=pulumi.AssetArchive({"lambda_function.py": pulumi.StringAsset(lambda_code)}),
         handler="lambda_function.lambda_handler",
