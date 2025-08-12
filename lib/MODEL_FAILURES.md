@@ -87,7 +87,7 @@ The prompt required: **"Ensure IAM policies and roles provide only the minimum p
 # BEFORE (Overly Permissive)
 Action: 'kms:*'  # Allows all KMS actions
 
-# AFTER (Least Privilege)
+# AFTER (Initial Fix - Too Restrictive)
 Action:
   - kms:CreateGrant
   - kms:Decrypt
@@ -97,22 +97,53 @@ Action:
   - kms:GenerateDataKeyWithoutPlaintext
   - kms:ReEncryptFrom
   - kms:ReEncryptTo
-```
+
+# FINAL (Balanced - Includes Management Permissions)
+Action:
+  - kms:CreateGrant
+  - kms:Decrypt
+  - kms:DescribeKey
+  - kms:Encrypt
+  - kms:GenerateDataKey
+  - kms:GenerateDataKeyWithoutPlaintext
+  - kms:ReEncryptFrom
+  - kms:ReEncryptTo
+  - kms:PutKeyPolicy      # Required for key policy updates
+  - kms:GetKeyPolicy      # Required for key policy management
+  - kms:ListGrants        # Required for key management
+  - kms:ListKeys          # Required for key management
+  - kms:ListAliases       # Required for key management
+  - kms:DisableKey        # Required for key lifecycle management
+  - kms:EnableKey         # Required for key lifecycle management
+  - kms:ScheduleKeyDeletion    # Required for key lifecycle management
+  - kms:CancelKeyDeletion      # Required for key lifecycle management
+  - kms:CreateAlias            # Required for alias creation
+  - kms:DeleteAlias            # Required for alias management
+  - kms:UpdateAlias            # Required for alias management
 
 #### **Impact**
 - **Security Risk**: Overly broad permissions could allow unauthorized KMS operations
 - **Compliance Violation**: Failed to follow the explicit least privilege requirement
 - **Best Practice Violation**: Not following AWS security best practices
+- **Management Issue**: Initial fix was too restrictive, preventing key policy updates
+- **Alias Creation Issue**: Missing alias management permissions prevented alias creation
 
 #### **Resolution Applied**
-1. **Restricted KMS Actions**: Limited to only actions necessary for S3 encryption
-2. **Added Documentation**: Included comments explaining the security principle
-3. **Validated Permissions**: Ensured all required S3 encryption operations are covered
+1. **Initial Fix**: Restricted KMS actions to only S3 encryption operations
+2. **Management Issue**: Discovered that key policy updates were blocked
+3. **Balanced Solution**: Added essential key management permissions while maintaining security
+4. **Alias Issue**: Added missing alias management permissions (`kms:CreateAlias`, `kms:DeleteAlias`, `kms:UpdateAlias`)
+5. **Added Documentation**: Included comments explaining the security principle
+6. **Validated Permissions**: Ensured all required operations are covered
 
 #### **Lessons Learned**
 1. **Explicit Security Requirements**: When prompts specify security principles, they must be strictly followed
 2. **Permission Granularity**: Always use specific actions instead of wildcard permissions
 3. **Security Review**: Generated IAM policies should be reviewed for compliance with security requirements
+4. **Management Permissions**: Key management operations require specific permissions that cannot be omitted
+5. **Balanced Security**: Least privilege must be balanced with operational requirements
+6. **Alias Management**: KMS alias operations require separate permissions from key operations
+7. **Iterative Testing**: Security changes should be tested incrementally to catch missing permissions
 
 ## Positive Examples - Good Documentation Practices
 

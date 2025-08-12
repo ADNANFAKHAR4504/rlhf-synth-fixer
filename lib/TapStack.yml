@@ -22,8 +22,8 @@ Resources:
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          # Restricted KMS permissions following least privilege principle
-          # Only allows actions necessary for S3 encryption operations
+          # KMS key management permissions for account root
+          # Allows key policy updates and management operations
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
@@ -37,6 +37,18 @@ Resources:
               - kms:GenerateDataKeyWithoutPlaintext
               - kms:ReEncryptFrom
               - kms:ReEncryptTo
+              - kms:PutKeyPolicy
+              - kms:GetKeyPolicy
+              - kms:ListGrants
+              - kms:ListKeys
+              - kms:ListAliases
+              - kms:DisableKey
+              - kms:EnableKey
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:CreateAlias            # Required for alias creation
+              - kms:DeleteAlias            # Required for alias management
+              - kms:UpdateAlias            # Required for alias management
             Resource: '*'
           - Sid: Allow S3 Service
             Effect: Allow
