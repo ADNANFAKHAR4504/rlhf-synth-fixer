@@ -15,8 +15,8 @@ class StorageComponent(pulumi.ComponentResource):
     # S3 Bucket for application data
     self.bucket = aws.s3.Bucket(
         f"{name}-app-bucket",
-        bucket=f"appdatarlhfturing",
-        tags={**tags, "Name": f"rlhfappbucketturing"},
+        bucket=f"apprlhfturing",
+        tags={**tags, "Name": f"rlhfbucketturing"},
         opts=pulumi.ResourceOptions(parent=self),
     )
 
