@@ -76,6 +76,7 @@
 - **Least privilege IAM** ✅ (No `Action: "*"`, scoped ARNs)
 - **No external dependencies** ✅ (Self-contained template)
 - **No custom resources** ✅ (Standard AWS resources only)
+- **CAPABILITY_IAM compatibility** ✅ (No custom IAM role/group names - uses auto-generated names)
 
 ### ✅ Validation & Deliverables (All Met)
 

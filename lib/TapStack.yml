@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure multi-AZ VPC with Lambda, S3 VPC Endpoint, KMS encryption, and CloudTrail logging'
+# Note: This template uses CAPABILITY_IAM (not CAPABILITY_NAMED_IAM) - IAM resources use auto-generated names
 
 Parameters:
   VpcCidr:
@@ -602,7 +603,6 @@ Resources:
   PublicSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-Public-SG'
       GroupDescription: 'Security group for public resources - HTTPS only'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -626,7 +626,6 @@ Resources:
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-Lambda-SG'
       GroupDescription: 'Security group for Lambda function'
       VpcId: !Ref VPC
       SecurityGroupEgress:
@@ -645,7 +644,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-Lambda-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

@@ -159,6 +159,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(templateContent).toContain('PublicSecurityGroup:');
       expect(templateContent).toContain('LambdaSecurityGroup:');
       expect(templateContent).toContain('Type: AWS::EC2::SecurityGroup');
+      // Note: No GroupName properties - uses CAPABILITY_IAM instead of CAPABILITY_NAMED_IAM
     });
 
     test('should have KMS keys', () => {
@@ -202,6 +203,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have Lambda execution role', () => {
       expect(templateContent).toContain('LambdaExecutionRole:');
       expect(templateContent).toContain('Type: AWS::IAM::Role');
+      // Note: No RoleName property - uses CAPABILITY_IAM instead of CAPABILITY_NAMED_IAM
     });
 
     test('should have Lambda function', () => {
