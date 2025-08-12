@@ -11,8 +11,8 @@ import json
 from typing import Optional
 
 import pulumi
-from pulumi import ResourceOptions
 import pulumi_aws as aws
+from pulumi import ResourceOptions
 
 # Import your nested stacks here
 # from .dynamodb_stack import DynamoDBStack
@@ -297,8 +297,9 @@ class TapStack(pulumi.ComponentResource):
                     "OUTPUT_PREFIX": "processed/"
                 }
             },
-            depends_on=[lambda_role_policy_attachment, lambda_log_group],
-            opts=pulumi.ResourceOptions(provider=aws_provider)
+            opts=pulumi.ResourceOptions(provider=aws_provider,
+                                        depends_on=[lambda_role_policy_attachment, 
+                                                    lambda_log_group])
         )
 
     # Create Lambda permission for S3 to invoke the function
@@ -322,8 +323,8 @@ class TapStack(pulumi.ComponentResource):
                     events=["s3:ObjectCreated:*"],
                 )
             ],
-            depends_on=[lambda_permission],
-            opts=pulumi.ResourceOptions(provider=aws_provider)
+            opts=pulumi.ResourceOptions(provider=aws_provider,
+                                        depends_on=[lambda_permission])
         )
 
     # Export important resource information
