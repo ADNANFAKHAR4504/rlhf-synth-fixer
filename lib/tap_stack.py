@@ -138,20 +138,28 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # RDS Service Role
-        rds_assume_role_policy = json.dumps({
+        # RDS Enhanced Monitoring Role - FIXED
+        rds_monitoring_assume_role_policy = json.dumps({
             "Version": "2012-10-17",
             "Statement": [{
                 "Action": "sts:AssumeRole",
                 "Effect": "Allow",
-                "Principal": {"Service": "rds.amazonaws.com"}
+                "Principal": {"Service": "monitoring.rds.amazonaws.com"}
             }]
         })
         
-        self.iam_roles["rds_role"] = aws.iam.Role(
-            self.args.get_resource_name("rds-role"),
-            assume_role_policy=rds_assume_role_policy,
+        self.iam_roles["rds_monitoring_role"] = aws.iam.Role(
+            self.args.get_resource_name("rds-monitoring-role"),
+            assume_role_policy=rds_monitoring_assume_role_policy,
             tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Attach the AWS managed policy for RDS enhanced monitoring
+        aws.iam.RolePolicyAttachment(
+            self.args.get_resource_name("rds-monitoring-policy"),
+            role=self.iam_roles["rds_monitoring_role"].name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole",
             opts=ResourceOptions(parent=self)
         )
     
@@ -410,50 +418,48 @@ class TapStack(pulumi.ComponentResource):
             self.security_groups[f"db-{region}"] = db_sg
     
     def _create_database_infrastructure(self):
-      """Create managed database with encryption and automated backups."""
-      
-      for region in self.args.regions:
-          provider = self.providers[region]
-          
-          # Create DB subnet group
-          db_subnet_group = aws.rds.SubnetGroup(
-              self.args.get_resource_name(f"db-subnet-group-{region}"),
-              subnet_ids=[subnet.id for subnet in self.subnets[region]["private"]],
-              tags={**self.default_tags, "Name": self.args.get_resource_name(f"db-subnet-group-{region}")},
-              opts=ResourceOptions(parent=self, provider=provider)
-          )
-          
-          # Create RDS instance with updated PostgreSQL version
-          db_instance = aws.rds.Instance(
-              self.args.get_resource_name(f"postgres-{region}"),
-              allocated_storage=20,
-              max_allocated_storage=100,
-              storage_type="gp2",
-              storage_encrypted=True,
-              engine="postgres",
-              engine_version="15.7",  # Updated to PostgreSQL 15.7 (currently supported)
-              instance_class="db.t3.micro",
-              db_name="tapdb",
-              username="tapuser",
-              password="ChangeMe123!",  # In production, use AWS Secrets Manager
-              vpc_security_group_ids=[self.security_groups[f"db-{region}"].id],
-              db_subnet_group_name=db_subnet_group.name,
-              backup_retention_period=7,
-              backup_window="03:00-04:00",
-              maintenance_window="sun:04:00-sun:05:00",
-              auto_minor_version_upgrade=True,
-              deletion_protection=True,
-              skip_final_snapshot=False,
-              final_snapshot_identifier=self.args.get_resource_name(f"postgres-final-snapshot-{region}"),
-              copy_tags_to_snapshot=True,
-              performance_insights_enabled=True,
-              monitoring_interval=60,
-              monitoring_role_arn=self.iam_roles["rds_role"].arn,
-              tags=self.default_tags,
-              opts=ResourceOptions(parent=self, provider=provider)
-          )
-          self.databases[region] = db_instance
-
+        """Create managed database with encryption and automated backups."""
+        
+        for region in self.args.regions:
+            provider = self.providers[region]
+            
+            # Create DB subnet group
+            db_subnet_group = aws.rds.SubnetGroup(
+                self.args.get_resource_name(f"db-subnet-group-{region}"),
+                subnet_ids=[subnet.id for subnet in self.subnets[region]["private"]],
+                tags={**self.default_tags, "Name": self.args.get_resource_name(f"db-subnet-group-{region}")},
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Create RDS instance with corrected monitoring role
+            db_instance = aws.rds.Instance(
+                self.args.get_resource_name(f"postgres-{region}"),
+                allocated_storage=20,
+                max_allocated_storage=100,
+                storage_type="gp3",
+                storage_encrypted=True,
+                engine="postgres",
+                engine_version="15.7",  # Updated to supported version
+                instance_class="db.t3.micro",
+                db_name="tapdb",
+                username="tapuser",
+                password="ChangeMe123!",  # In production, use AWS Secrets Manager
+                vpc_security_group_ids=[self.security_groups[f"db-{region}"].id],
+                db_subnet_group_name=db_subnet_group.name,
+                backup_retention_period=7,
+                backup_window="03:00-04:00",
+                maintenance_window="sun:04:00-sun:05:00",
+                auto_minor_version_upgrade=True,
+                deletion_protection=False,  # Set to False for testing environments
+                skip_final_snapshot=True,   # Set to True for testing environments
+                copy_tags_to_snapshot=True,
+                performance_insights_enabled=True,
+                monitoring_interval=60,
+                monitoring_role_arn=self.iam_roles["rds_monitoring_role"].arn,  # Use the correct monitoring role
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            self.databases[region] = db_instance
     
     def _create_compute_infrastructure(self):
         """Create auto-scaling compute resources with load balancers."""
