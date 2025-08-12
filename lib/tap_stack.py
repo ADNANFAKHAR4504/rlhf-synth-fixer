@@ -14,7 +14,7 @@ from aws_cdk import (
   CfnOutput,
   RemovalPolicy,
   Duration,
-  Environment
+  Environment,
 )
 from constructs import Construct
 
@@ -23,15 +23,14 @@ class WebApplicationStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
 
-    # Retrieve an existing VPC
     vpc = ec2.Vpc.from_lookup(
-      self, "ExistingVPC",
-      vpc_id="vpc-0c83b6e7ec0f14e10"
+      self, "ExistingVPC", vpc_id="vpc-05c4c270ead946104"
     )
 
-    private_subnets = vpc.select_subnets(subnet_type=ec2.SubnetType.PUBLIC)
+    public_subnets = vpc.select_subnets(
+      subnet_type=ec2.SubnetType.PUBLIC
+    )
 
-    # 1. Application Load Balancer
     alb = elbv2.ApplicationLoadBalancer(
       self, "ALB",
       vpc=vpc,
@@ -41,7 +40,6 @@ class WebApplicationStack(Stack):
 
     listener = alb.add_listener("HTTPListener", port=80, open=True)
 
-    # 2. RDS Database
     db_security_group = ec2.SecurityGroup(
       self, "DBSecurityGroup",
       vpc=vpc,
@@ -52,7 +50,7 @@ class WebApplicationStack(Stack):
     db_subnet_group = rds.SubnetGroup(
       self, "DBSubnetGroup",
       vpc=vpc,
-      vpc_subnets=ec2.SubnetSelection(subnets=private_subnets.subnets),
+      vpc_subnets=ec2.SubnetSelection(subnets=public_subnets.subnets),
       description="Subnet group for the RDS database"
     )
 
@@ -66,9 +64,9 @@ class WebApplicationStack(Stack):
         ec2.InstanceSize.SMALL
       ),
       vpc=vpc,
-      multi_az=True,
+      multi_az=False,
       allocated_storage=20,
-      publicly_accessible=False,
+      publicly_accessible=True,
       removal_policy=RemovalPolicy.DESTROY,
       security_groups=[db_security_group],
       subnet_group=db_subnet_group
@@ -80,7 +78,6 @@ class WebApplicationStack(Stack):
       "Allow web servers to access MySQL"
     )
 
-    # 3. IAM Role
     web_server_role = iam.Role(
       self, "WebServerRole",
       assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
@@ -93,11 +90,10 @@ class WebApplicationStack(Stack):
       )
     )
 
-    # 4. Auto Scaling Group
     asg = autoscaling.AutoScalingGroup(
       self, "ASG",
       vpc=vpc,
-      vpc_subnets=ec2.SubnetSelection(subnets=private_subnets.subnets),
+      vpc_subnets=ec2.SubnetSelection(subnets=public_subnets.subnets),
       instance_type=ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE2,
         ec2.InstanceSize.MICRO
@@ -119,7 +115,6 @@ class WebApplicationStack(Stack):
       cooldown=Duration.minutes(5)
     )
 
-    # 5. CloudWatch Alarm
     alarm_topic = sns.Topic(self, "AlarmTopic")
 
     cpu_alarm = cloudwatch.Alarm(
@@ -143,7 +138,6 @@ class WebApplicationStack(Stack):
       cloudwatch_actions.SnsAction(alarm_topic)
     )
 
-    # 6. S3 and CloudFront
     static_assets_bucket = s3.Bucket(
       self, "StaticAssetsBucket",
       removal_policy=RemovalPolicy.DESTROY,
@@ -167,7 +161,6 @@ class WebApplicationStack(Stack):
       }
     )
 
-    # 7. Outputs
     CfnOutput(
       self, "AlbDnsName",
       value=alb.load_balancer_dns_name,
