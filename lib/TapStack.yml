@@ -147,7 +147,8 @@ Conditions:
   HasSecondAZ: !Not [!Equals [!Ref AZCount, 1]]
   HasBucketNamePrefix: !Not [!Equals [!Ref BucketNamePrefix, '']]
   HasLogGroupNamePrefix: !Not [!Equals [!Ref LogGroupNamePrefix, '']]
-  UseExistingCloudTrail: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+  HasExistingCloudTrail: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+  CreateNewCloudTrail: !Equals [!Ref ExistingCloudTrailArn, '']
   IsAuroraEngine:
     !Or [
       !Equals [!Ref DBEngine, 'aurora'],
@@ -656,7 +657,7 @@ Resources:
   # ---------------------------
 
   CloudTrailRole:
-    Condition: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+    Condition: CreateNewCloudTrail
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -865,7 +866,7 @@ Resources:
     UpdateReplacePolicy: Retain
 
   CloudTrailBucket:
-    Condition: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+    Condition: CreateNewCloudTrail
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !If
@@ -891,7 +892,7 @@ Resources:
     UpdateReplacePolicy: Retain
 
   CloudTrailBucketPolicy:
-    Condition: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+    Condition: CreateNewCloudTrail
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref CloudTrailBucket
@@ -968,7 +969,7 @@ Resources:
   # CloudWatch LogGroups (encrypted)
   # ---------------------------
   CloudTrailLogGroup:
-    Condition: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+    Condition: CreateNewCloudTrail
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !If
@@ -1006,7 +1007,7 @@ Resources:
   # CloudTrail (multi-region) with KMS encryption and CloudWatch integration
   # ---------------------------
   CloudTrail:
-    Condition: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+    Condition: CreateNewCloudTrail
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
@@ -1321,7 +1322,7 @@ Resources:
   # CloudWatch Metric Filter + Alarm for Unauthorized API calls
   # ---------------------------
   CloudTrailMetricFilter:
-    Condition: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+    Condition: CreateNewCloudTrail
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
@@ -1332,7 +1333,7 @@ Resources:
           MetricName: UnauthorizedApiCalls
 
   UnauthorizedApiCallsAlarm:
-    Condition: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+    Condition: CreateNewCloudTrail
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${Environment}-unauthorized-api-calls'
@@ -1384,12 +1385,12 @@ Outputs:
     Value: !Ref SecureDataBucket
 
   CloudTrailBucketName:
-    Condition: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+    Condition: CreateNewCloudTrail
     Description: CloudTrail S3 bucket name
     Value: !Ref CloudTrailBucket
 
   ExistingCloudTrailArnOutput:
-    Condition: !Equals [!Ref ExistingCloudTrailArn, '']
+    Condition: HasExistingCloudTrail
     Description: ARN of the existing CloudTrail trail being used
     Value: !Ref ExistingCloudTrailArn
 

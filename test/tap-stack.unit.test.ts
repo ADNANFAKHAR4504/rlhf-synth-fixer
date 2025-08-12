@@ -203,7 +203,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
   });
 
   describe('Conditions defined properly', () => {
-    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine, UseExistingCloudTrail exist', () => {
+    test('UseNatGateways, UseCloudFront, UseCustomCert, HasLogGroupNamePrefix, IsAuroraEngine, HasExistingCloudTrail, CreateNewCloudTrail exist', () => {
       expect(template.Conditions).toBeDefined();
       const conds = template.Conditions;
       expect(conds.UseNatGateways).toBeDefined();
@@ -212,7 +212,8 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(conds.HasLogGroupNamePrefix).toBeDefined();
       expect(conds.IsAuroraEngine).toBeDefined();
       expect(conds.IsNotAuroraEngine).toBeDefined();
-      expect(conds.UseExistingCloudTrail).toBeDefined();
+      expect(conds.HasExistingCloudTrail).toBeDefined();
+      expect(conds.CreateNewCloudTrail).toBeDefined();
     });
   });
 
@@ -469,8 +470,9 @@ describe('TapStack CloudFormation Template (YAML)', () => {
         expect(!!t.CloudWatchLogsLogGroupArn).toBe(true);
         expect(!!t.CloudWatchLogsRoleArn).toBe(true);
       } else {
-        // If no CloudTrail, we expect the condition to be defined
-        expect(template.Conditions.UseExistingCloudTrail).toBeDefined();
+        // If no CloudTrail, we expect the conditions to be defined
+        expect(template.Conditions.HasExistingCloudTrail).toBeDefined();
+        expect(template.Conditions.CreateNewCloudTrail).toBeDefined();
       }
     });
 
