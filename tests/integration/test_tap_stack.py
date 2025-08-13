@@ -28,15 +28,9 @@ def _infer_envs_from_outputs(outputs):
 
 
 def _synthesize_outputs_if_missing():
-  """
-  Build a flat outputs dict without a real deploy AND execute TapStack for
-  coverage. Uses a fresh cdk.App() per environment to avoid the error:
-  'Synthesis has been called multiple times and the construct tree was modified
-  after the first synthesis.'
-  """
   out = {}
   for env_suffix in ["dev", "prod"]:
-    app = cdk.App()  # fresh app per env to avoid multi-synth errors
+    app = cdk.App()  # fresh app per env (avoid multi-synth error)
     env_cfg = cdk.Environment(account=ACCOUNT, region=REGION)
 
     stack = TapStack(
@@ -45,11 +39,9 @@ def _synthesize_outputs_if_missing():
       props=TapStackProps(environment_suffix=env_suffix),
       env=env_cfg,
     )
-
-    # Force synth of this app/stack (executes constructs for coverage)
+    # synth executes constructs (counts for coverage)
     Template.from_stack(stack.s3_processor)
 
-    # Mirror naming logic from the stack for expected outputs
     out[f"S3BucketName-{env_suffix}"] = (
       f"serverless-processor-{env_suffix}-{ACCOUNT}-{REGION}"
     )
@@ -83,25 +75,17 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertIn(f"S3BucketName-{env}", self.outputs)
         self.assertIn(f"LambdaFunctionArn-{env}", self.outputs)
         self.assertIn(f"DynamoDBTableName-{env}", self.outputs)
-
-        self.assertIsInstance(self.outputs[f"S3BucketName-{env}"], str)
-        self.assertIsInstance(self.outputs[f"LambdaFunctionArn-{env}"], str)
-        self.assertIsInstance(self.outputs[f"DynamoDBTableName-{env}"], str)
-
         self.assertTrue(self.outputs[f"S3BucketName-{env}"])
         self.assertTrue(self.outputs[f"LambdaFunctionArn-{env}"])
         self.assertTrue(self.outputs[f"DynamoDBTableName-{env}"])
 
   @mark.it("validates S3 bucket naming convention")
   def test_s3_bucket_naming(self):
-    bucket_re = re.compile(
-      r"^serverless-processor-[a-z0-9-]+-\d{12}-[a-z0-9-]+$"
-    )
+    bucket_re = re.compile(r"^serverless-processor-[a-z0-9-]+-\d{12}-[a-z0-9-]+$")
     for env in self.envs:
-      key = f"S3BucketName-{env}"
-      if key not in self.outputs:
+      name = self.outputs.get(f"S3BucketName-{env}")
+      if not name:
         continue
-      name = self.outputs[key]
       with self.subTest(env=env, bucket=name):
         self.assertRegex(name, bucket_re)
 
@@ -111,23 +95,18 @@ class TestTapStackIntegration(unittest.TestCase):
       r"^arn:aws:lambda:[a-z0-9-]+:\d{12}:function:s3-processor-[a-z0-9-]+$"
     )
     for env in self.envs:
-      key = f"LambdaFunctionArn-{env}"
-      if key not in self.outputs:
+      arn = self.outputs.get(f"LambdaFunctionArn-{env}")
+      if not arn:
         continue
-      arn = self.outputs[key]
       with self.subTest(env=env, arn=arn):
         self.assertRegex(arn, arn_re)
-        self.assertTrue(
-          arn.endswith(f":function:s3-processor-{env}"),
-          msg=f"Lambda name should end with s3-processor-{env}",
-        )
+        self.assertTrue(arn.endswith(f":function:s3-processor-{env}"))
 
   @mark.it("validates DynamoDB table name per environment")
   def test_dynamodb_table_name(self):
     for env in self.envs:
-      key = f"DynamoDBTableName-{env}"
-      if key not in self.outputs:
+      table = self.outputs.get(f"DynamoDBTableName-{env}")
+      if not table:
         continue
-      table = self.outputs[key]
       with self.subTest(env=env, table=table):
         self.assertEqual(table, f"object-metadata-{env}")

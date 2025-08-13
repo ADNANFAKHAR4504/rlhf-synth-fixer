@@ -1,15 +1,16 @@
 # pylint: disable=C0111,C0103,C0303,W0511,R0903,R0913,R0914,R0915
 #!/usr/bin/env python3
 """
-Refactored CDK app using TapStackProps and TapStack.
+TAP Orchestrated Serverless S3 Processor (hardened)
 
-- TapStack orchestrates environment-specific nested stacks.
-- ServerlessS3ProcessorNestedStack holds the actual AWS resources (S3, Lambda, DynamoDB).
-- No resources are created directly in TapStack.
-
-Note for tests:
-- We resolve Lambda code via _resolve_lambda_code() which prefers an asset folder
-  but falls back to inline code if no folder is found, so unit tests can synth.
+Adds:
+- Lambda Python 3.11 + inline handler (for tests)
+- Customer-managed KMS for S3 & DynamoDB
+- S3 bucket policies (deny non-SSL, deny wrong/no SSE-KMS)
+- DLQ (SQS), SNS alerts, CloudWatch alarms
+- Lambda Insights, tracing, reserved concurrency
+- Lifecycle rules
+- Least-privilege IAM
 """
 
 from typing import Optional
@@ -19,30 +20,43 @@ import aws_cdk as cdk
 from aws_cdk import (
   Stack,
   NestedStack,
+  Duration,
+  RemovalPolicy,
+  Tags,
+  CfnOutput,
   aws_s3 as s3,
   aws_lambda as _lambda,
   aws_dynamodb as dynamodb,
   aws_iam as iam,
   aws_s3_notifications as s3n,
-  CfnOutput,
-  Tags,
-  Duration,
-  RemovalPolicy,
+  aws_kms as kms,
+  aws_sqs as sqs,
+  aws_sns as sns,
+  aws_cloudwatch as cw,
+  aws_cloudwatch_actions as cwa,
+  aws_logs as logs,
 )
 from constructs import Construct
 
 
-def _resolve_lambda_code() -> _lambda.Code:
-  """
-  Prefer a real asset if available; otherwise return inline code so unit tests
-  can synth without a ./lambda directory.
+# ---------- helpers ----------
 
-  Priority:
-    1) LAMBDA_CODE_PATH env var (absolute or relative)
-    2) ./lambda relative to CWD
-    3) lib-adjacent lambda folder (next to this file)
-    4) inline stub
-  """
+_INLINE_HANDLER = (
+  "import os,json,boto3\n"
+  "ddb=boto3.client('dynamodb')\n"
+  "TABLE=os.getenv('DYNAMODB_TABLE_NAME','')\n"
+  "def lambda_handler(event, context):\n"
+  "  records=event.get('Records',[])\n"
+  "  for r in records:\n"
+  "    s3=r.get('s3',{})\n"
+  "    b=s3.get('bucket',{}).get('name','')\n"
+  "    k=s3.get('object',{}).get('key','')\n"
+  "    if TABLE and b and k:\n"
+  "      ddb.put_item(TableName=TABLE,Item={'ObjectID':{'S':f'{b}/{k}'}})\n"
+  "  return {'status':'ok','count':len(records)}\n"
+)
+
+def _resolve_lambda_code() -> _lambda.Code:
   candidates = []
   env_path = os.getenv("LAMBDA_CODE_PATH")
   if env_path:
@@ -60,12 +74,10 @@ def _resolve_lambda_code() -> _lambda.Code:
     if os.path.isdir(abspath):
       return _lambda.Code.from_asset(abspath)
 
-  # Fallback for tests: inline stub (no asset staging)
-  return _lambda.Code.from_inline(
-    "def lambda_handler(event, context):\n"
-    "  return 'ok'\n"
-  )
+  return _lambda.Code.from_inline(_INLINE_HANDLER)
 
+
+# ---------- orchestration ----------
 
 class TapStackProps(cdk.StackProps):
   def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
@@ -100,12 +112,9 @@ class TapStack(Stack):
     self.table_name = self.s3_processor.dynamodb_table.table_name
 
 
-class ServerlessS3ProcessorNestedStack(NestedStack):
-  """
-  Note: Do NOT shadow CDK's built-in `environment` property.
-  Use `env_suffix` for our own environment label.
-  """
+# ---------- nested resources ----------
 
+class ServerlessS3ProcessorNestedStack(NestedStack):
   def __init__(
     self,
     scope: Construct,
@@ -119,6 +128,16 @@ class ServerlessS3ProcessorNestedStack(NestedStack):
     is_prod = self.env_suffix in ("prod", "production")
     is_dev = self.env_suffix in ("dev", "development")
 
+    # KMS CMK
+    self.cmk = kms.Key(
+      self,
+      f"DataKey-{self.env_suffix}",
+      enable_key_rotation=True,
+      alias=f"alias/serverless-processor-{self.env_suffix}",
+      removal_policy=RemovalPolicy.RETAIN,
+    )
+
+    # DynamoDB (CMK + PITR for prod)
     self.dynamodb_table = dynamodb.Table(
       self,
       f"ObjectMetadataTable-{self.env_suffix}",
@@ -130,8 +149,11 @@ class ServerlessS3ProcessorNestedStack(NestedStack):
       billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
       removal_policy=RemovalPolicy.DESTROY if is_dev else RemovalPolicy.RETAIN,
       point_in_time_recovery=is_prod,
+      encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
+      encryption_key=self.cmk,
     )
 
+    # S3 (CMK + lifecycle)
     self.s3_bucket = s3.Bucket(
       self,
       f"ProcessorBucket-{self.env_suffix}",
@@ -142,9 +164,55 @@ class ServerlessS3ProcessorNestedStack(NestedStack):
       auto_delete_objects=True if is_dev else False,
       versioned=True if is_prod else False,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-      encryption=s3.BucketEncryption.S3_MANAGED,
+      encryption=s3.BucketEncryption.KMS,
+      encryption_key=self.cmk,
+      lifecycle_rules=[
+        s3.LifecycleRule(
+          id="expire-noncurrent-30d" if is_prod else "expire-all-7d",
+          noncurrent_version_expiration=Duration.days(30) if is_prod else None,
+          expiration=None if is_prod else Duration.days(7),
+        )
+      ],
     )
 
+    # Bucket policy: enforce SSL
+    self.s3_bucket.add_to_resource_policy(
+      iam.PolicyStatement(
+        sid="DenyInsecureTransport",
+        effect=iam.Effect.DENY,
+        principals=[iam.AnyPrincipal()],
+        actions=["s3:*"],
+        resources=[self.s3_bucket.bucket_arn, f"{self.s3_bucket.bucket_arn}/*"],
+        conditions={"Bool": {"aws:SecureTransport": "false"}},
+      )
+    )
+    # Bucket policy: require SSE-KMS with our CMK
+    self.s3_bucket.add_to_resource_policy(
+      iam.PolicyStatement(
+        sid="DenyUnencryptedObjectUploads",
+        effect=iam.Effect.DENY,
+        principals=[iam.AnyPrincipal()],
+        actions=["s3:PutObject"],
+        resources=[f"{self.s3_bucket.bucket_arn}/*"],
+        conditions={"StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"}},
+      )
+    )
+    self.s3_bucket.add_to_resource_policy(
+      iam.PolicyStatement(
+        sid="DenyWrongKmsKey",
+        effect=iam.Effect.DENY,
+        principals=[iam.AnyPrincipal()],
+        actions=["s3:PutObject"],
+        resources=[f"{self.s3_bucket.bucket_arn}/*"],
+        conditions={
+          "StringNotEquals": {
+            "s3:x-amz-server-side-encryption-aws-kms-key-id": self.cmk.key_arn
+          }
+        },
+      )
+    )
+
+    # Lambda role (least-privilege)
     lambda_role = iam.Role(
       self,
       f"LambdaExecutionRole-{self.env_suffix}",
@@ -157,17 +225,25 @@ class ServerlessS3ProcessorNestedStack(NestedStack):
       ],
     )
 
+    # S3 read (bucket scoped)
     lambda_role.add_to_policy(
       iam.PolicyStatement(
         effect=iam.Effect.ALLOW,
-        actions=[
-          "s3:GetObject",
-          "s3:GetObjectAcl",
-        ],
+        actions=["s3:GetObject", "s3:GetObjectAcl"],
         resources=[f"{self.s3_bucket.bucket_arn}/*"],
       )
     )
 
+    # KMS decrypt for our CMK (S3 KMS reads, DDB SSE-KMS)
+    lambda_role.add_to_policy(
+      iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
+        actions=["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"],
+        resources=[self.cmk.key_arn],
+      )
+    )
+
+    # DynamoDB put on our table only
     lambda_role.add_to_policy(
       iam.PolicyStatement(
         effect=iam.Effect.ALLOW,
@@ -176,30 +252,24 @@ class ServerlessS3ProcessorNestedStack(NestedStack):
       )
     )
 
-    lambda_role.add_to_policy(
-      iam.PolicyStatement(
-        effect=iam.Effect.ALLOW,
-        actions=[
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-        ],
-        resources=[
-          (
-            f"arn:aws:logs:{self.region}:{self.account}:"
-            f"log-group:/aws/lambda/s3-processor-{self.env_suffix}*"
-          )
-        ],
-      )
+    # DLQ
+    self.dlq = sqs.Queue(
+      self,
+      f"DLQ-{self.env_suffix}",
+      retention_period=Duration.days(14),
+      visibility_timeout=Duration.seconds(60),
+      removal_policy=RemovalPolicy.DESTROY if is_dev else RemovalPolicy.RETAIN,
     )
 
+    # Lambda (3.11) + Insights + tracing + reserved concurrency
+    reserved = 5 if is_dev else 50
     self.lambda_function = _lambda.Function(
       self,
       f"S3ProcessorFunction-{self.env_suffix}",
       function_name=f"s3-processor-{self.env_suffix}",
-      runtime=_lambda.Runtime.PYTHON_3_9,
+      runtime=_lambda.Runtime.PYTHON_3_11,
       handler="lambda_handler.lambda_handler",
-      code=_resolve_lambda_code(),  # avoids asset error during tests
+      code=_resolve_lambda_code(),
       role=lambda_role,
       timeout=Duration.seconds(30),
       memory_size=256 if is_dev else 512,
@@ -208,45 +278,81 @@ class ServerlessS3ProcessorNestedStack(NestedStack):
         "ENVIRONMENT": self.env_suffix,
       },
       retry_attempts=2,
+      max_event_age=Duration.hours(6),
+      dead_letter_queue=self.dlq,
+      dead_letter_queue_enabled=True,
+      insights_version=_lambda.LambdaInsightsVersion.VERSION_1_0_178_0,
+      tracing=_lambda.Tracing.ACTIVE,
+      reserved_concurrent_executions=reserved,
+      log_retention=logs.RetentionDays.ONE_WEEK if is_dev else logs.RetentionDays.ONE_MONTH,
     )
 
+    # S3 -> Lambda
     self.s3_bucket.add_event_notification(
       s3.EventType.OBJECT_CREATED,
       s3n.LambdaDestination(self.lambda_function),
     )
 
+    # SNS (encrypted) + alarms to SNS
+    self.alerts_topic = sns.Topic(
+      self,
+      f"AlertsTopic-{self.env_suffix}",
+      topic_name=f"s3-processor-alerts-{self.env_suffix}",
+      master_key=self.cmk,
+    )
+
+    cw.Alarm(
+      self,
+      f"LambdaErrors-{self.env_suffix}",
+      metric=self.lambda_function.metric_errors(period=Duration.minutes(1)),
+      threshold=1,
+      evaluation_periods=1,
+      datapoints_to_alarm=1,
+      treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+      alarm_description=f"Lambda errors > 0 for {self.env_suffix}",
+    ).add_alarm_action(cwa.SnsAction(self.alerts_topic))
+
+    cw.Alarm(
+      self,
+      f"LambdaThrottles-{self.env_suffix}",
+      metric=self.lambda_function.metric_throttles(period=Duration.minutes(1)),
+      threshold=1,
+      evaluation_periods=1,
+      datapoints_to_alarm=1,
+      treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+      alarm_description=f"Lambda throttles > 0 for {self.env_suffix}",
+    ).add_alarm_action(cwa.SnsAction(self.alerts_topic))
+
+    # Tags
     Tags.of(self).add("Environment", self.env_suffix)
     Tags.of(self).add("Project", "ServerlessS3Processor")
     Tags.of(self).add("ManagedBy", "CDK")
 
+    # Outputs
     CfnOutput(
       self,
       f"S3BucketName-{self.env_suffix}",
       value=self.s3_bucket.bucket_name,
-      description=(
-        f"S3 Bucket Name for {self.env_suffix} environment"
-      ),
+      description=f"S3 Bucket Name for {self.env_suffix} environment",
       export_name=f"S3BucketName-{self.env_suffix}",
     )
     CfnOutput(
       self,
       f"LambdaFunctionArn-{self.env_suffix}",
       value=self.lambda_function.function_arn,
-      description=(
-        f"Lambda Function ARN for {self.env_suffix} environment"
-      ),
+      description=f"Lambda Function ARN for {self.env_suffix} environment",
       export_name=f"LambdaFunctionArn-{self.env_suffix}",
     )
     CfnOutput(
       self,
       f"DynamoDBTableName-{self.env_suffix}",
       value=self.dynamodb_table.table_name,
-      description=(
-        f"DynamoDB Table Name for {self.env_suffix} environment"
-      ),
+      description=f"DynamoDB Table Name for {self.env_suffix} environment",
       export_name=f"DynamoDBTableName-{self.env_suffix}",
     )
 
+
+# ---------- app ----------
 
 class ServerlessS3ProcessorApp(cdk.App):
   def __init__(self):
@@ -261,9 +367,7 @@ class ServerlessS3ProcessorApp(cdk.App):
           account=os.getenv("CDK_DEFAULT_ACCOUNT"),
           region=os.getenv("CDK_DEFAULT_REGION", "us-east-1"),
         ),
-        description=(
-          f"TAP Orchestrator for Serverless S3 processor ({env_suffix})"
-        ),
+        description=f"TAP Orchestrator for Serverless S3 processor ({env_suffix})",
       )
 
 
