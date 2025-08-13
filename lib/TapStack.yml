@@ -13,7 +13,7 @@ Parameters:
   DomainName:
     Type: String
     Description: The custom domain name for your application (e.g., myapp.example.com).
-    Default: app.meerio.com # Corrected Default
+    Default: app.eu-north-1.meerio.com
 
   HostedZoneName:
     Type: String
@@ -23,7 +23,7 @@ Parameters:
   CertificateArn:
     Type: String
     Description: The ARN of the ACM SSL certificate for your domain.
-    Default: arn:aws:acm:eu-central-1:718240086340:certificate/0591702e-4d22-4864-803b-7deabec4197c
+    Default: arn:aws:acm:eu-north-1:718240086340:certificate/b309bb0d-0e43-4663-9307-e6f60c1df388
 
   DBUsername:
     Type: String
