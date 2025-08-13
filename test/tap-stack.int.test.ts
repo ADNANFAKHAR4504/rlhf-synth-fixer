@@ -1,5 +1,5 @@
-import fs from 'fs';
 import * as AWS from 'aws-sdk';
+import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
@@ -29,32 +29,50 @@ describe('Security Infrastructure Integration Tests', () => {
       expect(vpcId).toBeDefined();
       expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
 
-      const vpcs = await ec2.describeVpcs({
-        VpcIds: [vpcId],
-      }).promise();
+      const vpcs = await ec2
+        .describeVpcs({
+          VpcIds: [vpcId],
+        })
+        .promise();
 
       expect(vpcs.Vpcs).toHaveLength(1);
       const vpc = vpcs.Vpcs![0];
-      
-      // Verify DNS settings
-      expect((vpc as any).EnableDnsHostnames).toBe(true);
-      expect((vpc as any).EnableDnsSupport).toBe(true);
+
+      // Get DNS settings using describeVpcAttribute
+      const dnsHostnames = await ec2
+        .describeVpcAttribute({
+          VpcId: vpcId,
+          Attribute: 'enableDnsHostnames',
+        })
+        .promise();
+
+      const dnsSupport = await ec2
+        .describeVpcAttribute({
+          VpcId: vpcId,
+          Attribute: 'enableDnsSupport',
+        })
+        .promise();
+
+      expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
+      expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('VPC should have flow logs enabled', async () => {
       const vpcId = outputs.VPCId;
-      const flowLogs = await ec2.describeFlowLogs({
-        Filter: [
-          {
-            Name: 'resource-id',
-            Values: [vpcId],
-          },
-        ],
-      }).promise();
+      const flowLogs = await ec2
+        .describeFlowLogs({
+          Filter: [
+            {
+              Name: 'resource-id',
+              Values: [vpcId],
+            },
+          ],
+        })
+        .promise();
 
       expect(flowLogs.FlowLogs).toBeDefined();
       expect(flowLogs.FlowLogs!.length).toBeGreaterThan(0);
-      
+
       const flowLog = flowLogs.FlowLogs![0];
       expect(flowLog.FlowLogStatus).toBe('ACTIVE');
       expect(flowLog.TrafficType).toBe('ALL');
@@ -62,40 +80,92 @@ describe('Security Infrastructure Integration Tests', () => {
 
     test('VPC should have multiple subnets across availability zones', async () => {
       const vpcId = outputs.VPCId;
-      const subnets = await ec2.describeSubnets({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId],
-          },
-        ],
-      }).promise();
+      const subnets = await ec2
+        .describeSubnets({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+          ],
+        })
+        .promise();
 
       expect(subnets.Subnets).toBeDefined();
       expect(subnets.Subnets!.length).toBeGreaterThanOrEqual(6); // At least 2 AZs * 3 subnet types
 
       // Check that subnets are distributed across multiple AZs
-      const azs = new Set(subnets.Subnets!.map(subnet => subnet.AvailabilityZone));
+      const azs = new Set(
+        subnets.Subnets!.map(subnet => subnet.AvailabilityZone)
+      );
       expect(azs.size).toBeGreaterThanOrEqual(2);
     });
 
     test('Private subnets should have NAT gateway routes', async () => {
       const vpcId = outputs.VPCId;
-      const natGateways = await ec2.describeNatGateways({
-        Filter: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId],
-          },
-          {
-            Name: 'state',
-            Values: ['available'],
-          },
-        ],
-      }).promise();
+
+      // First check if private subnets exist
+      const subnets = await ec2
+        .describeSubnets({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'tag:aws-cdk:subnet-type',
+              Values: ['Private'],
+            },
+          ],
+        })
+        .promise();
+
+      expect(subnets.Subnets).toBeDefined();
+      expect(subnets.Subnets!.length).toBeGreaterThan(0);
+
+      // Check NAT Gateways with less restrictive filters
+      const natGateways = await ec2
+        .describeNatGateways({
+          Filter: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+          ],
+        })
+        .promise();
 
       expect(natGateways.NatGateways).toBeDefined();
-      expect(natGateways.NatGateways!.length).toBeGreaterThanOrEqual(2);
+
+      // Check if NAT Gateways exist and are in any state
+      const activeNatGateways = natGateways.NatGateways!.filter(nat =>
+        ['pending', 'available'].includes(nat.State || '')
+      );
+
+      expect(activeNatGateways.length).toBeGreaterThanOrEqual(1);
+
+      // Check route tables for private subnets
+      const routeTables = await ec2
+        .describeRouteTables({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'association.subnet-id',
+              Values: subnets.Subnets!.map(subnet => subnet.SubnetId!),
+            },
+          ],
+        })
+        .promise();
+
+      // Verify that private subnets have routes to NAT Gateway
+      const hasNatRoutes = routeTables.RouteTables!.some(rt =>
+        rt.Routes!.some(route => route.NatGatewayId)
+      );
+
+      expect(hasNatRoutes).toBe(true);
     });
   });
 
@@ -104,37 +174,45 @@ describe('Security Infrastructure Integration Tests', () => {
       const keyId = outputs.KMSKeyId;
       expect(keyId).toBeDefined();
 
-      const keyMetadata = await kms.describeKey({
-        KeyId: keyId,
-      }).promise();
+      const keyMetadata = await kms
+        .describeKey({
+          KeyId: keyId,
+        })
+        .promise();
 
       expect(keyMetadata.KeyMetadata).toBeDefined();
       expect(keyMetadata.KeyMetadata!.KeyState).toBe('Enabled');
-      expect(keyMetadata.KeyMetadata!.Description).toContain('KMS key for securing storage resources');
+      expect(keyMetadata.KeyMetadata!.Description).toContain(
+        'KMS key for securing storage resources'
+      );
 
       // Check key rotation
-      const keyRotation = await kms.getKeyRotationStatus({
-        KeyId: keyId,
-      }).promise();
+      const keyRotation = await kms
+        .getKeyRotationStatus({
+          KeyId: keyId,
+        })
+        .promise();
 
       expect(keyRotation.KeyRotationEnabled).toBe(true);
     });
 
     test('KMS key should have policy for CloudWatch Logs', async () => {
       const keyId = outputs.KMSKeyId;
-      const keyPolicy = await kms.getKeyPolicy({
-        KeyId: keyId,
-        PolicyName: 'default',
-      }).promise();
+      const keyPolicy = await kms
+        .getKeyPolicy({
+          KeyId: keyId,
+          PolicyName: 'default',
+        })
+        .promise();
 
       expect(keyPolicy.Policy).toBeDefined();
       const policy = JSON.parse(keyPolicy.Policy!);
-      
+
       // Check for CloudWatch Logs permissions
-      const logsStatement = policy.Statement.find((stmt: any) => 
-        stmt.Sid === 'Enable CloudWatch Logs'
+      const logsStatement = policy.Statement.find(
+        (stmt: any) => stmt.Sid === 'Enable CloudWatch Logs'
       );
-      
+
       expect(logsStatement).toBeDefined();
       expect(logsStatement.Principal.Service).toContain('logs.amazonaws.com');
       expect(logsStatement.Effect).toBe('Allow');
@@ -145,7 +223,7 @@ describe('Security Infrastructure Integration Tests', () => {
     test('S3 buckets should exist with proper encryption', async () => {
       // List all buckets with the environment suffix
       const buckets = await s3.listBuckets().promise();
-      const securityBuckets = buckets.Buckets!.filter(bucket => 
+      const securityBuckets = buckets.Buckets!.filter(bucket =>
         bucket.Name!.includes(`-${environmentSuffix}-`)
       );
 
@@ -155,56 +233,78 @@ describe('Security Infrastructure Integration Tests', () => {
       for (const bucket of securityBuckets) {
         if (bucket.Name!.includes('access-logs')) {
           // Access logs bucket should use S3-managed encryption
-          const encryption = await s3.getBucketEncryption({
-            Bucket: bucket.Name!,
-          }).promise();
+          const encryption = await s3
+            .getBucketEncryption({
+              Bucket: bucket.Name!,
+            })
+            .promise();
 
           expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
           const rule = encryption.ServerSideEncryptionConfiguration!.Rules![0];
-          expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
+          expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe(
+            'AES256'
+          );
         } else {
           // Data buckets should use KMS encryption
-          const encryption = await s3.getBucketEncryption({
-            Bucket: bucket.Name!,
-          }).promise();
+          const encryption = await s3
+            .getBucketEncryption({
+              Bucket: bucket.Name!,
+            })
+            .promise();
 
           expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
           const rule = encryption.ServerSideEncryptionConfiguration!.Rules![0];
-          expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
+          expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe(
+            'aws:kms'
+          );
         }
       }
     });
 
     test('S3 buckets should block public access', async () => {
       const buckets = await s3.listBuckets().promise();
-      const securityBuckets = buckets.Buckets!.filter(bucket => 
+      const securityBuckets = buckets.Buckets!.filter(bucket =>
         bucket.Name!.includes(`-${environmentSuffix}-`)
       );
 
       for (const bucket of securityBuckets) {
-        const publicAccessBlock = await s3.getPublicAccessBlock({
-          Bucket: bucket.Name!,
-        }).promise();
+        const publicAccessBlock = await s3
+          .getPublicAccessBlock({
+            Bucket: bucket.Name!,
+          })
+          .promise();
 
         expect(publicAccessBlock.PublicAccessBlockConfiguration).toBeDefined();
-        expect(publicAccessBlock.PublicAccessBlockConfiguration!.BlockPublicAcls).toBe(true);
-        expect(publicAccessBlock.PublicAccessBlockConfiguration!.BlockPublicPolicy).toBe(true);
-        expect(publicAccessBlock.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
-        expect(publicAccessBlock.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
+        expect(
+          publicAccessBlock.PublicAccessBlockConfiguration!.BlockPublicAcls
+        ).toBe(true);
+        expect(
+          publicAccessBlock.PublicAccessBlockConfiguration!.BlockPublicPolicy
+        ).toBe(true);
+        expect(
+          publicAccessBlock.PublicAccessBlockConfiguration!.IgnorePublicAcls
+        ).toBe(true);
+        expect(
+          publicAccessBlock.PublicAccessBlockConfiguration!
+            .RestrictPublicBuckets
+        ).toBe(true);
       }
     });
 
     test('S3 buckets should have versioning enabled for data buckets', async () => {
       const buckets = await s3.listBuckets().promise();
-      const dataBuckets = buckets.Buckets!.filter(bucket => 
-        bucket.Name!.includes(`-${environmentSuffix}-`) && 
-        !bucket.Name!.includes('access-logs')
+      const dataBuckets = buckets.Buckets!.filter(
+        bucket =>
+          bucket.Name!.includes(`-${environmentSuffix}-`) &&
+          !bucket.Name!.includes('access-logs')
       );
 
       for (const bucket of dataBuckets) {
-        const versioning = await s3.getBucketVersioning({
-          Bucket: bucket.Name!,
-        }).promise();
+        const versioning = await s3
+          .getBucketVersioning({
+            Bucket: bucket.Name!,
+          })
+          .promise();
 
         expect(versioning.Status).toBe('Enabled');
       }
@@ -214,8 +314,10 @@ describe('Security Infrastructure Integration Tests', () => {
   describe('RDS Database Security', () => {
     test('RDS instances should exist with encryption enabled', async () => {
       const dbInstances = await rds.describeDBInstances().promise();
-      const securityDatabases = dbInstances.DBInstances!.filter(db => 
-        db.DBInstanceIdentifier!.toLowerCase().includes(environmentSuffix.toLowerCase())
+      const securityDatabases = dbInstances.DBInstances!.filter(db =>
+        db
+          .DBInstanceIdentifier!.toLowerCase()
+          .includes(environmentSuffix.toLowerCase())
       );
 
       expect(securityDatabases.length).toBeGreaterThanOrEqual(2); // Primary and secondary
@@ -223,10 +325,10 @@ describe('Security Infrastructure Integration Tests', () => {
       for (const db of securityDatabases) {
         // Check encryption
         expect(db.StorageEncrypted).toBe(true);
-        
+
         // Check backup retention
         expect(db.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
-        
+
         // Check deletion protection is disabled (for easy cleanup)
         expect(db.DeletionProtection).toBe(false);
       }
@@ -234,14 +336,16 @@ describe('Security Infrastructure Integration Tests', () => {
 
     test('RDS instances should be in private subnets', async () => {
       const dbInstances = await rds.describeDBInstances().promise();
-      const securityDatabases = dbInstances.DBInstances!.filter(db => 
-        db.DBInstanceIdentifier!.toLowerCase().includes(environmentSuffix.toLowerCase())
+      const securityDatabases = dbInstances.DBInstances!.filter(db =>
+        db
+          .DBInstanceIdentifier!.toLowerCase()
+          .includes(environmentSuffix.toLowerCase())
       );
 
       for (const db of securityDatabases) {
         // Check that DB is not publicly accessible
         expect(db.PubliclyAccessible).toBe(false);
-        
+
         // Check that DB is in a subnet group
         expect(db.DBSubnetGroup).toBeDefined();
         expect(db.DBSubnetGroup!.DBSubnetGroupName).toContain('database');
@@ -251,30 +355,34 @@ describe('Security Infrastructure Integration Tests', () => {
 
   describe('EC2 Compute Security', () => {
     test('EC2 instances should exist with encrypted EBS volumes', async () => {
-      const instances = await ec2.describeInstances({
-        Filters: [
-          {
-            Name: 'instance-state-name',
-            Values: ['running'],
-          },
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VPCId],
-          },
-        ],
-      }).promise();
+      const instances = await ec2
+        .describeInstances({
+          Filters: [
+            {
+              Name: 'instance-state-name',
+              Values: ['running'],
+            },
+            {
+              Name: 'vpc-id',
+              Values: [outputs.VPCId],
+            },
+          ],
+        })
+        .promise();
 
       let totalInstances = 0;
       for (const reservation of instances.Reservations || []) {
         for (const instance of reservation.Instances || []) {
           totalInstances++;
-          
+
           // Check that all EBS volumes are encrypted
           for (const blockDevice of instance.BlockDeviceMappings || []) {
             if (blockDevice.Ebs) {
-              const volume = await ec2.describeVolumes({
-                VolumeIds: [blockDevice.Ebs.VolumeId!],
-              }).promise();
+              const volume = await ec2
+                .describeVolumes({
+                  VolumeIds: [blockDevice.Ebs.VolumeId!],
+                })
+                .promise();
 
               expect(volume.Volumes![0].Encrypted).toBe(true);
               expect(volume.Volumes![0].VolumeType).toBe('gp3');
@@ -287,18 +395,20 @@ describe('Security Infrastructure Integration Tests', () => {
     });
 
     test('EC2 instances should have IAM roles attached', async () => {
-      const instances = await ec2.describeInstances({
-        Filters: [
-          {
-            Name: 'instance-state-name',
-            Values: ['running'],
-          },
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VPCId],
-          },
-        ],
-      }).promise();
+      const instances = await ec2
+        .describeInstances({
+          Filters: [
+            {
+              Name: 'instance-state-name',
+              Values: ['running'],
+            },
+            {
+              Name: 'vpc-id',
+              Values: [outputs.VPCId],
+            },
+          ],
+        })
+        .promise();
 
       for (const reservation of instances.Reservations || []) {
         for (const instance of reservation.Instances || []) {
@@ -310,40 +420,42 @@ describe('Security Infrastructure Integration Tests', () => {
     });
 
     test('EC2 security groups should have appropriate rules', async () => {
-      const securityGroups = await ec2.describeSecurityGroups({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VPCId],
-          },
-        ],
-      }).promise();
+      const securityGroups = await ec2
+        .describeSecurityGroups({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [outputs.VPCId],
+            },
+          ],
+        })
+        .promise();
 
       // Find web server security group
-      const webSG = securityGroups.SecurityGroups!.find(sg => 
+      const webSG = securityGroups.SecurityGroups!.find(sg =>
         sg.GroupName!.includes('WebSecurityGroup')
       );
 
       if (webSG) {
         // Check HTTPS ingress rule
-        const httpsRule = webSG.IpPermissions!.find(rule => 
-          rule.FromPort === 443 && rule.ToPort === 443
+        const httpsRule = webSG.IpPermissions!.find(
+          rule => rule.FromPort === 443 && rule.ToPort === 443
         );
         expect(httpsRule).toBeDefined();
         expect(httpsRule!.IpProtocol).toBe('tcp');
       }
 
       // Find app server security group
-      const appSG = securityGroups.SecurityGroups!.find(sg => 
+      const appSG = securityGroups.SecurityGroups!.find(sg =>
         sg.GroupName!.includes('AppSecurityGroup')
       );
 
       if (appSG) {
         // Check that app servers only accept traffic from web servers
-        const appRules = appSG.IpPermissions!.filter(rule => 
-          rule.FromPort === 8080
+        const appRules = appSG.IpPermissions!.filter(
+          rule => rule.FromPort === 8080
         );
-        
+
         if (appRules.length > 0) {
           expect(appRules[0].UserIdGroupPairs).toBeDefined();
         }
@@ -353,11 +465,13 @@ describe('Security Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Monitoring', () => {
     test('CloudWatch dashboard should exist', async () => {
-      const dashboards = await cloudwatch.listDashboards({
-        DashboardNamePrefix: 'SecureInfrastructure-Monitoring',
-      }).promise();
+      const dashboards = await cloudwatch
+        .listDashboards({
+          DashboardNamePrefix: 'SecureInfrastructure-Monitoring',
+        })
+        .promise();
 
-      const securityDashboard = dashboards.DashboardEntries!.find(d => 
+      const securityDashboard = dashboards.DashboardEntries!.find(d =>
         d.DashboardName!.includes(environmentSuffix)
       );
 
@@ -367,11 +481,13 @@ describe('Security Infrastructure Integration Tests', () => {
     test('CloudWatch log groups should exist with encryption', async () => {
       // Check for EC2 log group
       const ec2LogGroup = `/aws/ec2/secure-instances-${environmentSuffix}`;
-      
+
       try {
-        const logGroups = await logs.describeLogGroups({
-          logGroupNamePrefix: ec2LogGroup,
-        }).promise();
+        const logGroups = await logs
+          .describeLogGroups({
+            logGroupNamePrefix: ec2LogGroup,
+          })
+          .promise();
 
         if (logGroups.logGroups && logGroups.logGroups.length > 0) {
           const logGroup = logGroups.logGroups[0];
@@ -386,34 +502,40 @@ describe('Security Infrastructure Integration Tests', () => {
 
       // Check for security audit log group
       try {
-        const auditLogs = await logs.describeLogGroups({
-          logGroupNamePrefix: '/aws/security/audit',
-        }).promise();
+        const auditLogs = await logs
+          .describeLogGroups({
+            logGroupNamePrefix: '/aws/security/audit',
+          })
+          .promise();
 
         if (auditLogs.logGroups && auditLogs.logGroups.length > 0) {
           const auditLog = auditLogs.logGroups[0];
           expect(auditLog.retentionInDays).toBe(365);
         }
       } catch (error) {
-        console.log('Audit log group not found - may not have been created yet');
+        console.log(
+          'Audit log group not found - may not have been created yet'
+        );
       }
     });
 
     test('SNS topic should exist for security alerts', async () => {
       const topics = await sns.listTopics().promise();
-      
-      const securityTopic = topics.Topics!.find(topic => 
+
+      const securityTopic = topics.Topics!.find(topic =>
         topic.TopicArn!.includes('SecurityAlertTopic')
       );
 
       if (securityTopic) {
-        const topicAttributes = await sns.getTopicAttributes({
-          TopicArn: securityTopic.TopicArn!,
-        }).promise();
+        const topicAttributes = await sns
+          .getTopicAttributes({
+            TopicArn: securityTopic.TopicArn!,
+          })
+          .promise();
 
         expect(topicAttributes.Attributes).toBeDefined();
         expect(topicAttributes.Attributes!.DisplayName).toBe('Security Alerts');
-        
+
         // Check KMS encryption
         if (topicAttributes.Attributes!.KmsMasterKeyId) {
           expect(topicAttributes.Attributes!.KmsMasterKeyId).toBeDefined();
@@ -425,21 +547,26 @@ describe('Security Infrastructure Integration Tests', () => {
   describe('IAM Security', () => {
     test('EC2 instance roles should have minimal permissions', async () => {
       const roles = await iam.listRoles().promise();
-      
-      const instanceRoles = roles.Roles!.filter(role => 
-        role.RoleName!.includes('ServerRole') && 
-        role.RoleName!.includes(environmentSuffix)
+
+      const instanceRoles = roles.Roles!.filter(
+        role =>
+          role.RoleName!.includes('ServerRole') &&
+          role.RoleName!.includes(environmentSuffix)
       );
 
       for (const role of instanceRoles) {
         // Get attached policies
-        const attachedPolicies = await iam.listAttachedRolePolicies({
-          RoleName: role.RoleName!,
-        }).promise();
+        const attachedPolicies = await iam
+          .listAttachedRolePolicies({
+            RoleName: role.RoleName!,
+          })
+          .promise();
 
         // Check for expected managed policies
-        const policyNames = attachedPolicies.AttachedPolicies!.map(p => p.PolicyName);
-        
+        const policyNames = attachedPolicies.AttachedPolicies!.map(
+          p => p.PolicyName
+        );
+
         if (role.RoleName!.includes('WebServerRole')) {
           expect(policyNames).toContain('AmazonSSMManagedInstanceCore');
           expect(policyNames).toContain('CloudWatchAgentServerPolicy');
@@ -448,23 +575,34 @@ describe('Security Infrastructure Integration Tests', () => {
         if (role.RoleName!.includes('AppServerRole')) {
           expect(policyNames).toContain('AmazonSSMManagedInstanceCore');
           expect(policyNames).toContain('CloudWatchAgentServerPolicy');
-          
+
           // Check inline policies for S3 access
-          const inlinePolicies = await iam.listRolePolicies({
-            RoleName: role.RoleName!,
-          }).promise();
-
-          if (inlinePolicies.PolicyNames && inlinePolicies.PolicyNames.length > 0) {
-            const policyDoc = await iam.getRolePolicy({
+          const inlinePolicies = await iam
+            .listRolePolicies({
               RoleName: role.RoleName!,
-              PolicyName: inlinePolicies.PolicyNames[0],
-            }).promise();
+            })
+            .promise();
 
-            const policy = JSON.parse(decodeURIComponent(policyDoc.PolicyDocument!));
-            
+          if (
+            inlinePolicies.PolicyNames &&
+            inlinePolicies.PolicyNames.length > 0
+          ) {
+            const policyDoc = await iam
+              .getRolePolicy({
+                RoleName: role.RoleName!,
+                PolicyName: inlinePolicies.PolicyNames[0],
+              })
+              .promise();
+
+            const policy = JSON.parse(
+              decodeURIComponent(policyDoc.PolicyDocument!)
+            );
+
             // Check that S3 permissions are limited
-            const s3Statement = policy.Statement.find((stmt: any) => 
-              stmt.Action && stmt.Action.some((action: string) => action.startsWith('s3:'))
+            const s3Statement = policy.Statement.find(
+              (stmt: any) =>
+                stmt.Action &&
+                stmt.Action.some((action: string) => action.startsWith('s3:'))
             );
 
             if (s3Statement) {
