@@ -11,12 +11,7 @@ terraform {
   }
 
   # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {
-    bucket = "myowntfbucketstate"
-    encrypt = true
-    key = "blacreetfstate"
-    region = "us-east-1"
-  }
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
