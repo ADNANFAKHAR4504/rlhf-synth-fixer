@@ -25,6 +25,20 @@
     "eu-west-1b",
     "eu-west-1c"
   ],
+  "availability-zones:account=609426092135:region=us-east-1": [
+    "us-east-1a",
+    "us-east-1b",
+    "us-east-1c",
+    "us-east-1d",
+    "us-east-1e",
+    "us-east-1f"
+  ],
+  "availability-zones:account=609426092135:region=us-west-2": [
+    "us-west-2a",
+    "us-west-2b",
+    "us-west-2c",
+    "us-west-2d"
+  ],
   "vpc-provider:account=718240086340:filter.isDefault=true:region=us-east-1:returnAsymmetricSubnets=true": {
     "vpcId": "vpc-002dd1e7eb944d35a",
     "vpcCidrBlock": "172.31.0.0/16",
@@ -74,5 +88,13 @@
         ]
       }
     ]
-  }
+  },
+  "availability-zones:account=767828760999:region=us-east-1": [
+    "us-east-1a",
+    "us-east-1b",
+    "us-east-1c",
+    "us-east-1d",
+    "us-east-1e",
+    "us-east-1f"
+  ]
 }
