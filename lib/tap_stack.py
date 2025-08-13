@@ -49,10 +49,9 @@ def calculate_ipv6_cidr(vpc_cidr: str, subnet_index: int) -> str:
         return f"2001:db8:{subnet_index:x}::/64"
 
 
-def get_vpc_with_fallback():
-    """Get VPC with intelligent fallback strategy to handle VPC limits."""
+def find_existing_vpc():
+    """Try to find an existing VPC that can be reused."""
     try:
-        # First, try to find existing VPC with our project tag
         existing_vpcs = aws.ec2.get_vpcs(
             filters=[
                 aws.ec2.GetVpcsFilterArgs(name="tag:Project", values=[PROJECT_NAME]),
@@ -62,9 +61,27 @@ def get_vpc_with_fallback():
         )
         
         if existing_vpcs.ids and len(existing_vpcs.ids) > 0:
-            vpc_id = existing_vpcs.ids[0]
-            pulumi.log.info(f"Reusing existing VPC: {vpc_id}")
-            return aws.ec2.Vpc.get(get_resource_name("vpc"), vpc_id, opts=pulumi.ResourceOptions(provider=aws_provider))
+            pulumi.log.info(f"Found {len(existing_vpcs.ids)} existing VPC(s): {existing_vpcs.ids}")
+            return existing_vpcs.ids[0]
+        return None
+    except Exception as e:
+        pulumi.log.warn(f"Could not find existing VPC: {e}")
+        return None
+
+
+def get_vpc_with_fallback():
+    """Get VPC with intelligent fallback strategy to handle VPC limits."""
+    try:
+        # First, try to find existing VPC with our project tag
+        existing_vpc_id = find_existing_vpc()
+        
+        if existing_vpc_id:
+            pulumi.log.info(f"Reusing existing VPC: {existing_vpc_id}")
+            return aws.ec2.Vpc.get(
+                get_resource_name("vpc"), 
+                existing_vpc_id, 
+                opts=pulumi.ResourceOptions(provider=aws_provider)
+            )
         
         # Try to create new VPC
         pulumi.log.info("Creating new VPC...")
@@ -88,72 +105,23 @@ def get_vpc_with_fallback():
         pulumi.log.warn(f"VPC creation failed, trying default VPC: {e}")
         # Fallback to default VPC
         try:
-            default_vpc = aws.ec2.get_vpc(default=True, opts=pulumi.InvokeOptions(provider=aws_provider))
+            default_vpc = aws.ec2.get_vpc(
+                default=True, 
+                opts=pulumi.InvokeOptions(provider=aws_provider)
+            )
             pulumi.log.info(f"Using default VPC: {default_vpc.id}")
-            return aws.ec2.Vpc.get("default-vpc", default_vpc.id, opts=pulumi.ResourceOptions(provider=aws_provider))
+            return aws.ec2.Vpc.get(
+                "default-vpc", 
+                default_vpc.id, 
+                opts=pulumi.ResourceOptions(provider=aws_provider)
+            )
         except Exception as fallback_error:
             raise Exception(f"Both VPC creation and default VPC fallback failed: {e}")
 
-def create_vpc_with_fallback():
-    """Create VPC with fallback to using existing VPC if limit reached."""
-    try:
-        # Try to find existing VPC first
-        existing_vpc_id = find_existing_vpc()
-        
-        if existing_vpc_id:
-            pulumi.log.info(f"Reusing existing VPC: {existing_vpc_id}")
-            return aws.ec2.Vpc.get(
-                get_resource_name("vpc"),
-                existing_vpc_id,
-                opts=pulumi.ResourceOptions(provider=aws_provider)
-            )
-        
-        # Create new VPC
-        pulumi.log.info("Creating new VPC...")
-        return aws.ec2.Vpc(
-            get_resource_name("vpc"),
-            cidr_block="10.0.0.0/16",
-            instance_tenancy="default",
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            assign_generated_ipv6_cidr_block=True,
-            tags={
-                "Name": get_resource_name("vpc"),
-                "Environment": ENVIRONMENT,
-                "Project": PROJECT_NAME,
-                "ManagedBy": "Pulumi",
-                "CreatedAt": str(int(time.time()))
-            },
-            opts=pulumi.ResourceOptions(
-                provider=aws_provider,
-                protect=False,
-                delete_before_replace=True,
-                replace_on_changes=["cidr_block"]
-            )
-        )
-        
-    except Exception as e:
-        pulumi.log.error(f"VPC creation failed: {e}")
-        # Try to use default VPC as last resort
-        try:
-            default_vpc = aws.ec2.get_vpc(
-                default=True,
-                opts=pulumi.InvokeOptions(provider=aws_provider)
-            )
-            pulumi.log.warn(f"Using default VPC as fallback: {default_vpc.id}")
-            return aws.ec2.Vpc.get(
-                get_resource_name("vpc-fallback"),
-                default_vpc.id,
-                opts=pulumi.ResourceOptions(provider=aws_provider)
-            )
-        except Exception as fallback_error:
-            pulumi.log.error(f"Default VPC fallback also failed: {fallback_error}")
-            raise Exception(f"VPC creation and fallback failed: {e}, {fallback_error}")
-
-# Create VPC with error handling
-vpc = create_vpc_with_fallback()
-
 aws_provider = aws.Provider("aws-provider", region=AWS_REGION)
+
+# Get VPC with intelligent fallback
+vpc = get_vpc_with_fallback()
 
 availability_zones_data = aws.get_availability_zones(
     state="available",
@@ -170,85 +138,6 @@ amazon_linux_ami = aws.ec2.get_ami(
         aws.ec2.GetAmiFilterArgs(name="virtualization-type", values=["hvm"])
     ],
     opts=pulumi.InvokeOptions(provider=aws_provider)
-)
-
-def find_existing_vpc():
-    """Try to find an existing VPC that can be reused."""
-    try:
-        existing_vpcs = aws.ec2.get_vpcs(
-            filters=[
-                aws.ec2.GetVpcsFilterArgs(name="tag:Project", values=[PROJECT_NAME]),
-                aws.ec2.GetVpcsFilterArgs(name="state", values=["available"])
-            ],
-            opts=pulumi.InvokeOptions(provider=aws_provider)
-        )
-        
-        if existing_vpcs.ids and len(existing_vpcs.ids) > 0:
-            pulumi.log.info(f"Found {len(existing_vpcs.ids)} existing VPC(s): {existing_vpcs.ids}")
-            return existing_vpcs.ids[0]
-        return None
-    except Exception as e:
-        pulumi.log.warn(f"Could not find existing VPC: {e}")
-        return None
-
-def create_vpc_with_fallback():
-    """Create VPC with fallback to using existing VPC if limit reached."""
-    try:
-        # Try to find existing VPC first
-        existing_vpc_id = find_existing_vpc()
-        
-        if existing_vpc_id:
-            pulumi.log.info(f"Reusing existing VPC: {existing_vpc_id}")
-            return aws.ec2.Vpc.get(
-                get_resource_name("vpc"),
-                existing_vpc_id,
-                opts=pulumi.ResourceOptions(provider=aws_provider)
-            )
-        
-        # Create new VPC
-        pulumi.log.info("Creating new VPC...")
-        return aws.ec2.Vpc(
-            get_resource_name("vpc"),
-            cidr_block="10.0.0.0/16",
-            instance_tenancy="default",
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            assign_generated_ipv6_cidr_block=True,
-            tags={
-                "Name": get_resource_name("vpc"),
-                "Environment": ENVIRONMENT,
-                "Project": PROJECT_NAME,
-                "ManagedBy": "Pulumi",
-                "CreatedAt": str(int(time.time()))
-            },
-            opts=pulumi.ResourceOptions(
-                provider=aws_provider,
-                protect=False,
-                delete_before_replace=True,
-                replace_on_changes=["cidr_block"]
-            )
-        )
-        
-    except Exception as e:
-        pulumi.log.error(f"VPC creation failed: {e}")
-        # Try to use default VPC as last resort
-        try:
-            default_vpc = aws.ec2.get_vpc(
-                default=True,
-                opts=pulumi.InvokeOptions(provider=aws_provider)
-            )
-            pulumi.log.warn(f"Using default VPC as fallback: {default_vpc.id}")
-            return aws.ec2.Vpc.get(
-                get_resource_name("vpc-fallback"),
-                default_vpc.id,
-                opts=pulumi.ResourceOptions(provider=aws_provider)
-            )
-        except Exception as fallback_error:
-            pulumi.log.error(f"Default VPC fallback also failed: {fallback_error}")
-            raise Exception(f"VPC creation and fallback failed: {e}, {fallback_error}")
-
-# Create VPC with error handling
-vpc = create_vpc_with_fallback()
 )
 
 def create_internet_gateway(vpc):
@@ -276,17 +165,38 @@ for i, az in enumerate(availability_zones):
     ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
         lambda cidr, subnet_idx=i: calculate_ipv6_cidr(cidr, subnet_idx)
     )
+                provider=aws_provider,
+                protect=False,
+    )
     
     subnet = aws.ec2.Subnet(
         get_resource_name(f"public-subnet-{i+1}"),
         vpc_id=vpc.id,
-        cidr_block=f"10.0.{40+i}.0/24",
+        cidr_block=f"10.0.{i+1}.0/24",
         availability_zone=az,
+        map_public_ip_on_launch=True,
         assign_ipv6_address_on_creation=True,
         ipv6_cidr_block=ipv6_cidr_calc,
-        map_public_ip_on_launch=True,
         tags={
             "Name": get_resource_name(f"public-subnet-{i+1}"),
+            "Environment": ENVIRONMENT,
+            "Project": PROJECT_NAME,
+            "Type": "Public"
+        },
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+    )
+    public_subnets.append(subnet)
+
+route_table = aws.ec2.RouteTable(
+    get_resource_name("public-route-table"),
+    vpc_id=vpc.id,
+    tags={
+        "Name": get_resource_name("public-route-table"),
+        "Environment": ENVIRONMENT,
+        "Project": PROJECT_NAME
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+)
             "Environment": ENVIRONMENT,
             "Type": "Public",
             "DeploymentID": DEPLOYMENT_ID
