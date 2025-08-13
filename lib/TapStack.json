@@ -1702,7 +1702,7 @@
       "UpdateReplacePolicy": "Delete",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "config-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "configg-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
