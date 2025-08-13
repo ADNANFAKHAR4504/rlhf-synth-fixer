@@ -63,13 +63,13 @@ variable "desired_capacity" {
 }
 
 locals {
-  # Ensure environment suffix is properly formatted
-  env_suffix = var.environment_suffix != "" ? "-${var.environment_suffix}" : ""
+  # Ensure environment suffix is properly formatted - use random suffix if none provided
+  env_suffix = var.environment_suffix != "" ? "-${var.environment_suffix}" : "-${random_id.suffix.hex}"
 
   # Common tags for all resources
   common_tags = {
     Environment = var.environment
     ManagedBy   = "terraform"
-    Suffix      = var.environment_suffix != "" ? var.environment_suffix : "default"
+    Suffix      = var.environment_suffix != "" ? var.environment_suffix : random_id.suffix.hex
   }
 }

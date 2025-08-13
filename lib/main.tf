@@ -22,6 +22,19 @@ data "aws_ami" "amazon_linux" {
 }
 
 ########################
+# Random Suffix Generation
+########################
+
+# Generate a random suffix to ensure unique resource names
+resource "random_id" "suffix" {
+  byte_length = 4
+  keepers = {
+    # Change this to regenerate suffix when needed
+    timestamp = "2024"
+  }
+}
+
+########################
 # VPC Resources
 ########################
 
