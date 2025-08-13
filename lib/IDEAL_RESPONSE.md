@@ -342,4 +342,6 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("lambda_function_arn", file_processor_lambda.arn)
     pulumi.export("log_group_name", lambda_log_group.name)
     self.register_outputs({})
+
+
 ```
