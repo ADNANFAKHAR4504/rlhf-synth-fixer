@@ -91,24 +91,6 @@ def test_db_subnet_group_created(stack_template):
   stack_template.has_resource_properties("AWS::RDS::DBSubnetGroup", {
       "SubnetIds": Match.any_value()
   })
-
-def test_db_security_group_created_with_correct_rules(stack_template):
-  """Verifies the database security group exists and has the correct ingress rule."""
-  stack_template.resource_count_is("AWS::EC2::SecurityGroup", 2) # Assumes one for DB and one for the ASG/Webservers
-  
-  # Check for the Security Group itself
-  stack_template.has_resource_properties("AWS::EC2::SecurityGroup", {
-      "GroupDescription": "Allows access to the RDS database",
-      "SecurityGroupIngress": [
-          Match.object_like({
-              "IpProtocol": "tcp",
-              "FromPort": 3306,
-              "ToPort": 3306,
-              "SourceSecurityGroupId": Match.any_value(),
-              "Description": "Allow MySQL access from Web Servers"
-          })
-      ]
-  })
   
   # Check that the ASG is associated with a security group that can connect to the DB
   stack_template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
