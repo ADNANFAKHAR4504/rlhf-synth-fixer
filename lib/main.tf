@@ -60,7 +60,7 @@ variable "ec2_instance_type" {
 variable "ec2_ami_id" {
   description = "AMI ID for EC2 instances"
   type        = string
-  default     = "ami-0c55b159cbfafe1f0"
+  default     = "ami-04c82466a6fab80eb"
 }
 
 variable "db_username" {
@@ -257,7 +257,7 @@ resource "aws_security_group" "rds_sg" {
 # S3 Buckets
 #########################
 resource "aws_s3_bucket" "app_data" {
-  bucket = "${var.project}-${var.environment}-app-data"
+  bucket = "${lower(var.project)}-${lower(var.environment)}-app-data"
   tags   = local.common_tags
 }
 
@@ -271,7 +271,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
 }
 
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${var.project}-${var.environment}-alb-logs"
+  bucket = "${lower(var.project)}-${lower(var.environment)}-alb-logs"
   tags   = local.common_tags
 }
 
