@@ -1,6 +1,6 @@
-# Serverless Data Processing Application - CloudFormation Template
+# Serverless Data Processing Application - CloudFormation Template (Fixed)
 
-This CloudFormation template provisions a complete serverless application on AWS that satisfies all the specified requirements. The solution includes AWS Lambda, API Gateway, DynamoDB with auto-scaling, and comprehensive monitoring.
+This CloudFormation template provisions a complete serverless application on AWS that satisfies all the specified requirements with critical compliance fixes applied. The solution includes AWS Lambda, API Gateway, DynamoDB with auto-scaling, and comprehensive monitoring, with all resources explicitly constrained to the us-east-1 region.
 
 ## Architecture Overview
 
@@ -377,13 +377,14 @@ Outputs:
 - **Environment Parameter**: String type with allowed values (dev, stage, prod), default: dev
 - **LogLevel Parameter**: String type with allowed values (INFO, WARN, ERROR), default: INFO
 
-### 3. Lambda Function Specifications
+### 3. Lambda Function Specifications (CRITICAL FIXES APPLIED)
 
 - **Environment Variables**:
-  - STAGE: References Environment parameter
-  - AWS_REGION: Explicitly set to us-east-1
+  - STAGE: References Environment parameter  
+  - AWS_REGION: HARDCODED to "us-east-1" (not parameterized for compliance)
   - LOG_LEVEL: References LogLevel parameter
   - TABLE_NAME: References the DynamoDB table
+- **Lambda Code**: Uses os.environ.get('AWS_REGION') instead of os.environ.get('REGION')
 - **IAM Role**: Follows least privilege principle with only necessary permissions:
   - CloudWatch Logs: CreateLogStream, PutLogEvents
   - DynamoDB: PutItem access only

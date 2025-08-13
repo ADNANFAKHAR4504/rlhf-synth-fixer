@@ -1,6 +1,6 @@
-# CloudFormation Template for Serverless Application
+# CloudFormation Template for Serverless Application (Updated with Critical Fixes)
 
-Based on the requirements provided, here is a complete CloudFormation template in YAML format that provisions a serverless application with Lambda, API Gateway, DynamoDB, and monitoring components.
+Based on the requirements provided, here is the corrected and complete CloudFormation template in YAML format that provisions a serverless application with Lambda, API Gateway, DynamoDB, and monitoring components. This version includes critical compliance fixes for us-east-1 region constraints.
 
 ## CloudFormation Template
 
@@ -92,7 +92,7 @@ Resources:
           logger.setLevel(getattr(logging, log_level))
 
           # Initialize DynamoDB client
-          dynamodb = boto3.resource('dynamodb')
+          dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION'))
           table_name = os.environ.get('TABLE_NAME')
           table = dynamodb.Table(table_name)
 
