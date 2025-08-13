@@ -23,7 +23,6 @@ This solution implements a secure, scalable AWS network infrastructure using CDK
 - EC2 Instance Connect Endpoint (2025 feature for secure connectivity)
 - Amazon Linux 2023 AMI for bastion host (future-proofed)
 - VPC Interface Endpoints for enhanced security
-- Proper IAM roles and policies for production use
 
 ## File Structure
 
@@ -76,7 +75,6 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 export class TapStack extends cdk.Stack {
@@ -726,7 +724,6 @@ describe('TapStack Integration Tests', () => {
 - **Encryption**: S3 bucket encryption enabled by default
 
 ### Access Control
-- **IAM Integration**: EC2 Instance Connect uses IAM for authentication
 - **Security Groups**: Least-privilege network access rules
 - **Resource Tagging**: All resources tagged for governance and cost allocation
 
