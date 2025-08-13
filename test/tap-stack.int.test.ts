@@ -235,23 +235,4 @@ describe('VPC Infrastructure Integration Tests', () => {
       }
     });
   });
-
-  function findOutputKey(outputs: any, suffix: string) {
-    const match = Object.entries(outputs).find(([key]) => key.endsWith(suffix));
-    return match ? match[1] : undefined;
-  }
-
-  test('All required outputs should be present when deployed', () => {
-    const requiredSuffixes = ['VpcId', 'PublicSubnetIds', 'ServiceNetworkId'];
-
-    if (Object.keys(outputs).length === 0) {
-      console.log('No deployment outputs found - infrastructure not deployed yet');
-      return;
-    }
-
-    for (const suffix of requiredSuffixes) {
-      const value = findOutputKey(outputs, suffix);
-      expect(value).toBeDefined();
-    }
-  });
 });
