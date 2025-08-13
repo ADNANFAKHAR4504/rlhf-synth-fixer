@@ -12,7 +12,7 @@ describe('TapStack Integration Tests (live)', () => {
   beforeAll(async () => {
     const region = process.env.AWS_REGION || 'us-east-1';
     const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-    const stackName = process.env.STACK_NAME || `TapStack-${envSuffix}`;
+    const stackName = process.env.STACK_NAME || `TapStack${envSuffix}`;
 
     const cf = new CloudFormationClient({ region });
     const resp = await cf.send(
