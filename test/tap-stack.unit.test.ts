@@ -14,7 +14,7 @@ describe('TapStack', () => {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'ap-northeast-1',
+        region: 'sa-east-1',
       },
     });
     template = Template.fromStack(stack);
@@ -105,7 +105,7 @@ describe('TapStack', () => {
     test('creates KMS VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Interface',
-        ServiceName: 'com.amazonaws.ap-northeast-1.kms',
+        ServiceName: 'com.amazonaws.sa-east-1.kms',
         PrivateDnsEnabled: true,
       });
     });
@@ -113,7 +113,7 @@ describe('TapStack', () => {
     test('creates Secrets Manager VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Interface',
-        ServiceName: 'com.amazonaws.ap-northeast-1.secretsmanager',
+        ServiceName: 'com.amazonaws.sa-east-1.secretsmanager',
         PrivateDnsEnabled: true,
       });
     });
@@ -121,7 +121,7 @@ describe('TapStack', () => {
     test('creates EC2 VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Interface',
-        ServiceName: 'com.amazonaws.ap-northeast-1.ec2',
+        ServiceName: 'com.amazonaws.sa-east-1.ec2',
         PrivateDnsEnabled: true,
       });
     });

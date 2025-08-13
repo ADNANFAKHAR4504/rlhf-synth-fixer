@@ -322,14 +322,6 @@ export class TapStack extends cdk.Stack {
           'ec2:DescribeSubnets',
         ],
         resources: ['*'],
-        conditions: {
-          DateGreaterThan: {
-            'aws:CurrentTime': '08:00Z', // Business hours only
-          },
-          DateLessThan: {
-            'aws:CurrentTime': '18:00Z',
-          },
-        },
       })
     );
 
@@ -341,12 +333,6 @@ export class TapStack extends cdk.Stack {
         conditions: {
           Bool: {
             'aws:SecureTransport': 'true',
-          },
-          StringEquals: {
-            's3:x-amz-server-side-encryption': 'aws:kms',
-          },
-          IpAddress: {
-            'aws:SourceIp': ['10.0.0.0/16'], // Only from VPC
           },
         },
       })
@@ -385,9 +371,6 @@ export class TapStack extends cdk.Stack {
         ],
         resources: ['*'],
         conditions: {
-          StringNotEquals: {
-            'aws:PrincipalTag/EmergencyAccess': 'true',
-          },
           Bool: {
             'aws:MultiFactorAuthPresent': 'false', // Require MFA for dangerous actions
           },
