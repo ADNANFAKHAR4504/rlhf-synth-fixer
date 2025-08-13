@@ -11,17 +11,6 @@
 # aws ec2 describe-security-groups --group-ids <security_group_id>
 ###########################################################
 
-terraform {
-  required_version = ">= 1.4.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-}
-
 ########################
 # Variables
 ########################
