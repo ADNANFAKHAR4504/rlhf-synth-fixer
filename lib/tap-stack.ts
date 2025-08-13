@@ -22,13 +22,15 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('owner', commonTags.owner);
     cdk.Tags.of(this).add('environment', commonTags.environment);
 
-    // Use stack name for uniqueness
+    // Use stack name and unique suffix for uniqueness
     const stackName = cdk.Stack.of(this).stackName;
-    const uniqueAliasName = `${stackName}-live`;
+    const uniqueSuffix = this.node.addr.slice(-8);
+    const uniqueFunctionName = `${stackName}-lambda-nova-team-development-${uniqueSuffix}`;
+    const uniqueAliasName = `${stackName}-live-${uniqueSuffix}`;
 
     // Log Group for Lambda
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/${stackName}-lambda-nova-team-development`,
+      logGroupName: `/aws/lambda/${uniqueFunctionName}`,
       retention: logs.RetentionDays.THREE_MONTHS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -65,7 +67,7 @@ export class TapStack extends cdk.Stack {
 
     // Lambda Function
     const lambdaFunction = new lambda.Function(this, 'ProcessingLambda', {
-      functionName: `${stackName}-lambda-nova-team-development`,
+      functionName: uniqueFunctionName,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
@@ -115,7 +117,7 @@ export class TapStack extends cdk.Stack {
       'LambdaScalableTarget',
       {
         serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
-        resourceId: `function:${lambdaFunction.functionName}:${uniqueAliasName}`,
+        resourceId: `function:${uniqueFunctionName}:${uniqueAliasName}`,
         scalableDimension: 'lambda:function:ProvisionedConcurrency',
         minCapacity: 1,
         maxCapacity: 10,
