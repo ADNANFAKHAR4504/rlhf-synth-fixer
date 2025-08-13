@@ -240,8 +240,8 @@ Resources:
             Principal: "*"
             Action: "s3:*"
             Resource:
-              - !Sub "${PrimaryDataBucket}/*"
-              - !Sub "${PrimaryDataBucket}"
+              - !Sub "arn:aws:s3:::${PrimaryDataBucket}/*"
+              - !Sub "arn:aws:s3:::${PrimaryDataBucket}"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"
@@ -249,7 +249,7 @@ Resources:
             Effect: Deny
             Principal: "*"
             Action: "s3:PutObject"
-            Resource: !Sub "${PrimaryDataBucket}/*"
+            Resource: !Sub "arn:aws:s3:::${PrimaryDataBucket}/*"
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": "aws:kms"
@@ -258,8 +258,8 @@ Resources:
             Principal: "*"
             Action: "s3:*"
             Resource:
-              - !Sub "${PrimaryDataBucket}/*"
-              - !Sub "${PrimaryDataBucket}"
+              - !Sub "arn:aws:s3:::${PrimaryDataBucket}/*"
+              - !Sub "arn:aws:s3:::${PrimaryDataBucket}"
             Condition:
               StringNotEquals:
                 "aws:RequestedRegion": "us-west-2"
@@ -276,8 +276,8 @@ Resources:
             Principal: "*"
             Action: "s3:*"
             Resource:
-              - !Sub "${SecondaryDataBucket}/*"
-              - !Sub "${SecondaryDataBucket}"
+              - !Sub "arn:aws:s3:::${SecondaryDataBucket}/*"
+              - !Sub "arn:aws:s3:::${SecondaryDataBucket}"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"
@@ -285,7 +285,7 @@ Resources:
             Effect: Deny
             Principal: "*"
             Action: "s3:PutObject"
-            Resource: !Sub "${SecondaryDataBucket}/*"
+            Resource: !Sub "arn:aws:s3:::${SecondaryDataBucket}/*"
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": "aws:kms"
@@ -294,8 +294,8 @@ Resources:
             Principal: "*"
             Action: "s3:*"
             Resource:
-              - !Sub "${SecondaryDataBucket}/*"
-              - !Sub "${SecondaryDataBucket}"
+              - !Sub "arn:aws:s3:::${SecondaryDataBucket}/*"
+              - !Sub "arn:aws:s3:::${SecondaryDataBucket}"
             Condition:
               StringNotEquals:
                 "aws:RequestedRegion": "us-west-2"

@@ -334,9 +334,10 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('resource names should include environment suffix where appropriate', () => {
-      // Check IAM Role name includes environment suffix
+      // Check IAM Role tags include environment suffix
       const iamRole = template.Resources.S3AccessRole;
-      expect(iamRole.Properties.RoleName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      const nameTag = iamRole.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
 
       // Check KMS key alias includes environment suffix
       const kmsAlias = template.Resources.S3EncryptionKeyAlias;
