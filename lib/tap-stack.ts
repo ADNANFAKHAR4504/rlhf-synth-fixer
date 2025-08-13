@@ -54,6 +54,21 @@ export class TapStack extends cdk.Stack {
               ],
               resources: ['*'],
             }),
+            new iam.PolicyStatement({
+              sid: 'Allow CloudTrail',
+              effect: iam.Effect.ALLOW,
+              principals: [
+                new iam.ServicePrincipal('cloudtrail.amazonaws.com'),
+              ],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: ['*'],
+            }),
           ],
         }),
       }
@@ -188,7 +203,7 @@ export class TapStack extends cdk.Stack {
         sid: 'AWSCloudTrailAclCheck',
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: ['s3:GetBucketAcl'],
+        actions: ['s3:GetBucketAcl', 's3:GetBucketLocation'],
         resources: [cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
