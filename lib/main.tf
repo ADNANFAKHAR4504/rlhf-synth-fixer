@@ -15,7 +15,7 @@ module "secure_environment" {
 variable "trusted_account_id" {
   description = "AWS Account ID that is allowed to assume the cross-account role"
   type        = string
-  default     = "123456789012" # Replace with actual trusted account ID
+  default     = "718240086340" # Replace with actual trusted account ID
 }
 
 variable "allowed_cidr_blocks" {
