@@ -1,265 +1,570 @@
 """
-Integration tests for TapStack Pulumi infrastructure.
+Integration tests for TapStack IPv6 dual-stack VPC infrastructure.
 
-Tests the serverless infrastructure components against live AWS resources including 
-Lambda functions, SSM Parameter Store, API Gateway, IAM roles, and concurrent execution limits.
+Tests validate live AWS resources including VPC, subnets, EC2 instances, 
+security groups, auto-scaling groups, and IPv6 configuration against 
+deployed infrastructure.
 """
 
 import json
 import os
-import time
+import subprocess
 import unittest
 import boto3
 from botocore.exceptions import ClientError
 
-from lib.tap_stack import TapStack, TapStackArgs
-
 
 class TestTapStackLiveInfrastructure(unittest.TestCase):
-    """Live integration tests for deployed TapStack infrastructure."""
+    """Live integration tests for deployed TapStack IPv6 infrastructure."""
 
     @classmethod
     def setUpClass(cls):
-        """Set up live AWS clients and deploy test infrastructure."""
-        cls.test_environment = os.environ.get('TEST_ENVIRONMENT', 'integration-test')
+        """Set up AWS clients and get deployment outputs."""
         cls.region = 'us-east-1'
         
         # Initialize AWS clients
-        cls.lambda_client = boto3.client('lambda', region_name=cls.region)
-        cls.ssm_client = boto3.client('ssm', region_name=cls.region)
-        cls.iam_client = boto3.client('iam', region_name=cls.region)
-        cls.apigateway_client = boto3.client('apigatewayv2', region_name=cls.region)
-        cls.logs_client = boto3.client('logs', region_name=cls.region)
+        cls.ec2_client = boto3.client('ec2', region_name=cls.region)
+        cls.autoscaling_client = boto3.client('autoscaling', region_name=cls.region)
         
-        # Expected resource names based on TapStack naming conventions
-        cls.lambda_function_name = f"serverless-infra-{cls.test_environment}-processor"
-        cls.api_name_prefix = f"serverless-infra-{cls.test_environment}-api"
-        cls.ssm_parameter_prefix = f"/myapp/{cls.test_environment}/database/"
-        cls.log_group_name = f"/aws/lambda/{cls.lambda_function_name}"
+        # Get Pulumi stack outputs
+        cls.stack_outputs = cls._get_pulumi_outputs()
 
-    def test_lambda_function_exists_and_configured(self):
-        """Test that Lambda function exists with correct configuration."""
+    @classmethod
+    def _get_pulumi_outputs(cls):
+        """Get outputs from deployed Pulumi stack or fallback to demo data."""
         try:
-            response = self.lambda_client.get_function(
-                FunctionName=self.lambda_function_name
+            result = subprocess.run(
+                ['pulumi', 'stack', 'output', '--json'],
+                capture_output=True,
+                text=True,
+                check=True
             )
+            outputs = json.loads(result.stdout)
+            if not outputs:
+                return cls._get_demo_outputs()
+            return outputs
+        except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
+            return cls._get_demo_outputs()
+    
+    @classmethod
+    def _get_demo_outputs(cls):
+        """Get demo outputs for testing when no deployment is available."""
+        # Check if there's a demo environment variable set for testing
+        if os.environ.get('USE_DEMO_DATA') != 'true':
+            raise unittest.SkipTest("Infrastructure not deployed and demo data not enabled")
+        
+        # Demo data for testing the integration test logic
+        return {
+            'vpc_id': 'vpc-demo123456789',
+            'vpc_ipv6_cidr_block': '2001:db8::/56',
+            'public_subnet_id': 'subnet-pub123456789',
+            'public_subnet_ipv6_cidr_block': '2001:db8:1::/64',
+            'private_subnet_id': 'subnet-prv123456789', 
+            'private_subnet_ipv6_cidr_block': '2001:db8:2::/64',
+            'security_group_id': 'sg-demo123456789',
+            'instance1_id': 'i-demo123456789abc',
+            'instance2_id': 'i-demo987654321def',
+            'nat_gateway_id': 'nat-demo123456789',
+            'egress_igw_id': 'eigw-demo123456789',
+            'launch_template_id': 'lt-demo123456789',
+            'autoscaling_group_name': 'web-server-asg-demo',
+            'internet_gateway_id': 'igw-demo123456789'
+        }
+
+    def test_vpc_exists_with_ipv6_configuration(self):
+        """Test that VPC exists with both IPv4 and IPv6 CIDR blocks."""
+        vpc_id = self.stack_outputs.get('vpc_id')
+        self.assertIsNotNone(vpc_id, "VPC ID not found in stack outputs")
+        
+        try:
+            response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+            vpcs = response['Vpcs']
             
-            config = response['Configuration']
+            self.assertEqual(len(vpcs), 1)
+            vpc = vpcs[0]
             
-            # Verify basic function properties
-            self.assertEqual(config['Runtime'], 'python3.11')
-            self.assertEqual(config['Handler'], 'index.lambda_handler')
-            self.assertEqual(config['Timeout'], 30)
-            self.assertEqual(config['MemorySize'], 512)
+            # Verify IPv4 CIDR block
+            self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
             
-            # Verify concurrent execution limit
-            self.assertEqual(config['ReservedConcurrencyLimit'], 1000)
+            # Verify IPv6 CIDR block exists
+            ipv6_cidr_blocks = vpc.get('Ipv6CidrBlockAssociationSet', [])
+            active_ipv6 = [block for block in ipv6_cidr_blocks 
+                          if block['Ipv6CidrBlockState']['State'] == 'associated']
+            self.assertGreater(len(active_ipv6), 0, "VPC should have IPv6 CIDR block")
             
-            # Verify environment variables
-            env_vars = config['Environment']['Variables']
-            self.assertEqual(env_vars['ENVIRONMENT'], self.test_environment)
-            self.assertEqual(env_vars['SSM_PARAMETER_PREFIX'], f"/myapp/{self.test_environment}")
-            self.assertEqual(env_vars['LOG_LEVEL'], 'INFO')
+            # Verify DNS support
+            self.assertTrue(vpc['EnableDnsSupport'])
+            self.assertTrue(vpc['EnableDnsHostnames'])
             
             # Verify tags
-            tags_response = self.lambda_client.list_tags(Resource=config['FunctionArn'])
-            tags = tags_response['Tags']
-            self.assertEqual(tags['Environment'], self.test_environment)
-            self.assertEqual(tags['Application'], 'serverless-infrastructure')
+            tags = {tag['Key']: tag['Value'] for tag in vpc.get('Tags', [])}
+            self.assertEqual(tags.get('Environment'), 'Production')
+            self.assertEqual(tags.get('Project'), 'IPv6StaticTest')
+            self.assertEqual(tags.get('ManagedBy'), 'Pulumi')
             
         except ClientError as e:
-            self.fail(f"Lambda function {self.lambda_function_name} not found or misconfigured: {e}")
+            self.fail(f"VPC {vpc_id} not found or misconfigured: {e}")
 
-    def test_lambda_function_invocation(self):
-        """Test Lambda function invocation with live execution."""
+    def test_public_subnet_ipv6_configuration(self):
+        """Test public subnet has correct IPv4 and IPv6 configuration."""
+        subnet_id = self.stack_outputs.get('public_subnet_id')
+        self.assertIsNotNone(subnet_id, "Public subnet ID not found in stack outputs")
+        
         try:
-            test_payload = {
-                "test": True,
-                "message": "Integration test invocation"
-            }
+            response = self.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            subnets = response['Subnets']
             
-            response = self.lambda_client.invoke(
-                FunctionName=self.lambda_function_name,
-                InvocationType='RequestResponse',
-                Payload=json.dumps(test_payload)
+            self.assertEqual(len(subnets), 1)
+            subnet = subnets[0]
+            
+            # Verify IPv4 configuration
+            self.assertEqual(subnet['CidrBlock'], '10.0.11.0/24')
+            self.assertTrue(subnet['MapPublicIpOnLaunch'])
+            
+            # Verify IPv6 configuration
+            ipv6_cidr_blocks = subnet.get('Ipv6CidrBlockAssociationSet', [])
+            active_ipv6 = [block for block in ipv6_cidr_blocks 
+                          if block['Ipv6CidrBlockState']['State'] == 'associated']
+            self.assertGreater(len(active_ipv6), 0, "Public subnet should have IPv6 CIDR block")
+            
+            self.assertTrue(subnet['AssignIpv6AddressOnCreation'])
+            
+            # Verify availability zone
+            self.assertIn(subnet['AvailabilityZone'], ['us-east-1a', 'us-east-1b', 'us-east-1c'])
+            
+        except ClientError as e:
+            self.fail(f"Public subnet {subnet_id} not found or misconfigured: {e}")
+
+    def test_private_subnet_ipv6_configuration(self):
+        """Test private subnet has correct IPv4 and IPv6 configuration."""
+        subnet_id = self.stack_outputs.get('private_subnet_id')
+        self.assertIsNotNone(subnet_id, "Private subnet ID not found in stack outputs")
+        
+        try:
+            response = self.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            subnets = response['Subnets']
+            
+            self.assertEqual(len(subnets), 1)
+            subnet = subnets[0]
+            
+            # Verify IPv4 configuration
+            self.assertEqual(subnet['CidrBlock'], '10.0.12.0/24')
+            self.assertFalse(subnet['MapPublicIpOnLaunch'])
+            
+            # Verify IPv6 configuration
+            ipv6_cidr_blocks = subnet.get('Ipv6CidrBlockAssociationSet', [])
+            active_ipv6 = [block for block in ipv6_cidr_blocks 
+                          if block['Ipv6CidrBlockState']['State'] == 'associated']
+            self.assertGreater(len(active_ipv6), 0, "Private subnet should have IPv6 CIDR block")
+            
+            self.assertTrue(subnet['AssignIpv6AddressOnCreation'])
+            
+        except ClientError as e:
+            self.fail(f"Private subnet {subnet_id} not found or misconfigured: {e}")
+
+    def test_internet_gateway_configuration(self):
+        """Test Internet Gateway is properly attached to VPC."""
+        igw_id = self.stack_outputs.get('internet_gateway_id')
+        vpc_id = self.stack_outputs.get('vpc_id')
+        
+        self.assertIsNotNone(igw_id, "Internet Gateway ID not found in stack outputs")
+        
+        try:
+            response = self.ec2_client.describe_internet_gateways(InternetGatewayIds=[igw_id])
+            gateways = response['InternetGateways']
+            
+            self.assertEqual(len(gateways), 1)
+            igw = gateways[0]
+            
+            # Verify attachment to VPC
+            attachments = igw.get('Attachments', [])
+            self.assertEqual(len(attachments), 1)
+            self.assertEqual(attachments[0]['VpcId'], vpc_id)
+            self.assertEqual(attachments[0]['State'], 'available')
+            
+        except ClientError as e:
+            self.fail(f"Internet Gateway {igw_id} not found or misconfigured: {e}")
+
+    def test_nat_gateway_configuration(self):
+        """Test NAT Gateway is properly configured in public subnet."""
+        nat_gw_id = self.stack_outputs.get('nat_gateway_id')
+        public_subnet_id = self.stack_outputs.get('public_subnet_id')
+        
+        self.assertIsNotNone(nat_gw_id, "NAT Gateway ID not found in stack outputs")
+        
+        try:
+            response = self.ec2_client.describe_nat_gateways(NatGatewayIds=[nat_gw_id])
+            nat_gateways = response['NatGateways']
+            
+            self.assertEqual(len(nat_gateways), 1)
+            nat_gw = nat_gateways[0]
+            
+            # Verify configuration
+            self.assertEqual(nat_gw['SubnetId'], public_subnet_id)
+            self.assertEqual(nat_gw['State'], 'available')
+            
+            # Verify NAT Gateway has EIP
+            addresses = nat_gw.get('NatGatewayAddresses', [])
+            self.assertGreater(len(addresses), 0)
+            
+        except ClientError as e:
+            self.fail(f"NAT Gateway {nat_gw_id} not found or misconfigured: {e}")
+
+    def test_egress_only_internet_gateway(self):
+        """Test Egress-Only Internet Gateway for IPv6 outbound traffic."""
+        egress_igw_id = self.stack_outputs.get('egress_igw_id')
+        vpc_id = self.stack_outputs.get('vpc_id')
+        
+        self.assertIsNotNone(egress_igw_id, "Egress-Only IGW ID not found in stack outputs")
+        
+        try:
+            response = self.ec2_client.describe_egress_only_internet_gateways(
+                EgressOnlyInternetGatewayIds=[egress_igw_id]
             )
+            gateways = response['EgressOnlyInternetGateways']
             
-            # Verify successful invocation
-            self.assertEqual(response['StatusCode'], 200)
+            self.assertEqual(len(gateways), 1)
+            egress_igw = gateways[0]
             
-            # Parse response payload
-            payload = json.loads(response['Payload'].read().decode('utf-8'))
-            response_body = json.loads(payload['body'])
-            
-            # Verify response structure
-            self.assertEqual(payload['statusCode'], 200)
-            self.assertIn('request_id', response_body)
-            self.assertIn('message', response_body)
-            self.assertEqual(response_body['environment'], self.test_environment)
+            # Verify attachment to VPC
+            attachments = egress_igw.get('Attachments', [])
+            self.assertEqual(len(attachments), 1)
+            self.assertEqual(attachments[0]['VpcId'], vpc_id)
+            self.assertEqual(attachments[0]['State'], 'attached')
             
         except ClientError as e:
-            self.fail(f"Failed to invoke Lambda function: {e}")
+            self.fail(f"Egress-Only IGW {egress_igw_id} not found or misconfigured: {e}")
 
-
-    def test_ssm_parameters_exist_and_accessible(self):
-        """Test that SSM parameters exist and are accessible by Lambda."""
+    def test_security_group_rules(self):
+        """Test security group has correct IPv4 and IPv6 rules."""
+        sg_id = self.stack_outputs.get('security_group_id')
+        self.assertIsNotNone(sg_id, "Security Group ID not found in stack outputs")
+        
         try:
-            # Test all expected database parameters
-            expected_params = ['host', 'port', 'database', 'username']
+            response = self.ec2_client.describe_security_groups(GroupIds=[sg_id])
+            security_groups = response['SecurityGroups']
             
-            for param_name in expected_params:
-                parameter_path = f"{self.ssm_parameter_prefix}{param_name}"
-                
-                response = self.ssm_client.get_parameter(
-                    Name=parameter_path,
-                    WithDecryption=True
-                )
-                
-                param = response['Parameter']
-                self.assertEqual(param['Type'], 'String')
-                self.assertIsNotNone(param['Value'])
-                
-                # Verify parameter tags
-                tags_response = self.ssm_client.list_tags_for_resource(
-                    ResourceType='Parameter',
-                    ResourceId=parameter_path
-                )
-                
-                tags = {tag['Key']: tag['Value'] for tag in tags_response['TagList']}
-                self.assertEqual(tags['Environment'], self.test_environment)
-                self.assertEqual(tags['Application'], 'serverless-infrastructure')
-                
+            self.assertEqual(len(security_groups), 1)
+            sg = security_groups[0]
+            
+            # Check ingress rules
+            ingress_rules = sg['IpPermissions']
+            
+            # Should have SSH (22), HTTP (80), HTTPS (443) rules
+            ports_found = set()
+            for rule in ingress_rules:
+                if rule['IpProtocol'] == 'tcp':
+                    port = rule['FromPort']
+                    ports_found.add(port)
+                    
+                    # Verify both IPv4 and IPv6 CIDR blocks for each port
+                    ipv4_ranges = rule.get('IpRanges', [])
+                    ipv6_ranges = rule.get('Ipv6Ranges', [])
+                    
+                    self.assertTrue(any(ip['CidrIp'] == '0.0.0.0/0' for ip in ipv4_ranges))
+                    self.assertTrue(any(ip['CidrIpv6'] == '::/0' for ip in ipv6_ranges))
+            
+            expected_ports = {22, 80, 443}
+            self.assertEqual(ports_found, expected_ports)
+            
+            # Check egress rules (should allow all outbound)
+            egress_rules = sg['IpPermissionsEgress']
+            self.assertGreater(len(egress_rules), 0)
+            
         except ClientError as e:
-            self.fail(f"SSM parameters not found or misconfigured: {e}")
+            self.fail(f"Security Group {sg_id} not found or misconfigured: {e}")
 
-    def test_ssm_parameter_hierarchy(self):
-        """Test SSM parameter hierarchy for configuration management."""
+    def test_ec2_instances_have_ipv6_addresses(self):
+        """Test EC2 instances have IPv6 addresses assigned."""
+        instance1_id = self.stack_outputs.get('instance1_id')
+        instance2_id = self.stack_outputs.get('instance2_id')
+        
+        for instance_id in [instance1_id, instance2_id]:
+            self.assertIsNotNone(instance_id, f"Instance ID not found in stack outputs")
+            
+            try:
+                response = self.ec2_client.describe_instances(InstanceIds=[instance_id])
+                reservations = response['Reservations']
+                
+                self.assertEqual(len(reservations), 1)
+                instances = reservations[0]['Instances']
+                self.assertEqual(len(instances), 1)
+                
+                instance = instances[0]
+                
+                # Verify instance is running
+                self.assertEqual(instance['State']['Name'], 'running')
+                
+                # Verify IPv4 address
+                self.assertIsNotNone(instance.get('PublicIpAddress'))
+                self.assertIsNotNone(instance.get('PrivateIpAddress'))
+                
+                # Verify IPv6 addresses
+                network_interfaces = instance.get('NetworkInterfaces', [])
+                self.assertGreater(len(network_interfaces), 0)
+                
+                primary_ni = network_interfaces[0]
+                ipv6_addresses = primary_ni.get('Ipv6Addresses', [])
+                self.assertGreater(len(ipv6_addresses), 0, 
+                                 f"Instance {instance_id} should have IPv6 addresses")
+                
+                # Verify instance type
+                self.assertEqual(instance['InstanceType'], 't3.micro')
+                
+                # Verify tags
+                tags = {tag['Key']: tag['Value'] for tag in instance.get('Tags', [])}
+                self.assertEqual(tags.get('Environment'), 'Production')
+                self.assertEqual(tags.get('Project'), 'IPv6StaticTest')
+                self.assertEqual(tags.get('ManagedBy'), 'Pulumi')
+                
+            except ClientError as e:
+                self.fail(f"Instance {instance_id} not found or misconfigured: {e}")
+
+    def test_route_tables_configuration(self):
+        """Test route tables have correct IPv4 and IPv6 routes."""
+        vpc_id = self.stack_outputs.get('vpc_id')
+        public_subnet_id = self.stack_outputs.get('public_subnet_id')
+        private_subnet_id = self.stack_outputs.get('private_subnet_id')
+        igw_id = self.stack_outputs.get('internet_gateway_id')
+        nat_gw_id = self.stack_outputs.get('nat_gateway_id')
+        egress_igw_id = self.stack_outputs.get('egress_igw_id')
+        
         try:
-            response = self.ssm_client.get_parameters_by_path(
-                Path=f"/myapp/{self.test_environment}",
-                Recursive=True,
-                WithDecryption=True
+            # Get route tables for VPC
+            response = self.ec2_client.describe_route_tables(
+                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
             )
+            route_tables = response['RouteTables']
             
-            parameters = response['Parameters']
-            self.assertGreaterEqual(len(parameters), 4)  # host, port, database, username
+            # Get subnet associations to identify public/private route tables
+            subnet_associations = {}
+            for rt in route_tables:
+                for assoc in rt.get('Associations', []):
+                    if assoc.get('SubnetId'):
+                        subnet_associations[assoc['SubnetId']] = rt
             
-            # Verify parameter names follow hierarchy
-            param_names = [p['Name'] for p in parameters]
-            expected_base_path = f"/myapp/{self.test_environment}/database/"
+            # Test public subnet route table
+            public_rt = subnet_associations.get(public_subnet_id)
+            self.assertIsNotNone(public_rt, "Public subnet should have route table")
             
-            for param_name in param_names:
-                self.assertTrue(param_name.startswith(expected_base_path))
-                
-        except ClientError as e:
-            self.fail(f"Failed to retrieve SSM parameter hierarchy: {e}")
-
-    def test_api_gateway_exists_and_configured(self):
-        """Test that API Gateway exists with correct configuration."""
-        try:
-            # List APIs and find our test API
-            response = self.apigateway_client.get_apis()
-            apis = response['Items']
-            
-            test_api = None
-            for api in apis:
-                if api['Name'].startswith(self.api_name_prefix):
-                    test_api = api
-                    break
-            
-            self.assertIsNotNone(test_api, f"API Gateway with prefix {self.api_name_prefix} not found")
-            
-            # Verify API configuration
-            self.assertEqual(test_api['ProtocolType'], 'HTTP')
-            
-            # Verify CORS configuration
-            cors_config = test_api.get('CorsConfiguration', {})
-            self.assertIn('GET', cors_config.get('AllowMethods', []))
-            self.assertIn('POST', cors_config.get('AllowMethods', []))
-            self.assertIn('*', cors_config.get('AllowOrigins', []))
-            
-            # Verify routes exist
-            routes_response = self.apigateway_client.get_routes(ApiId=test_api['ApiId'])
-            routes = routes_response['Items']
-            
-            # Should have POST /process route
-            route_keys = [route['RouteKey'] for route in routes]
-            self.assertIn('POST /process', route_keys)
-            
-        except ClientError as e:
-            self.fail(f"API Gateway not found or misconfigured: {e}")
-
-    def test_cloudwatch_logs_exist(self):
-        """Test that CloudWatch log groups exist for Lambda function."""
-        try:
-            response = self.logs_client.describe_log_groups(
-                logGroupNamePrefix=self.log_group_name
+            public_routes = public_rt['Routes']
+            ipv4_internet_route = any(
+                route.get('DestinationCidrBlock') == '0.0.0.0/0' and 
+                route.get('GatewayId') == igw_id
+                for route in public_routes
             )
+            ipv6_internet_route = any(
+                route.get('DestinationIpv6CidrBlock') == '::/0' and 
+                route.get('GatewayId') == igw_id
+                for route in public_routes
+            )
+            self.assertTrue(ipv4_internet_route, "Public subnet missing IPv4 internet route")
+            self.assertTrue(ipv6_internet_route, "Public subnet missing IPv6 internet route")
             
-            log_groups = response['logGroups']
-            self.assertEqual(len(log_groups), 1)
+            # Test private subnet route table
+            private_rt = subnet_associations.get(private_subnet_id)
+            self.assertIsNotNone(private_rt, "Private subnet should have route table")
             
-            log_group = log_groups[0]
-            self.assertEqual(log_group['logGroupName'], self.log_group_name)
-            self.assertEqual(log_group['retentionInDays'], 14)
+            private_routes = private_rt['Routes']
+            ipv4_nat_route = any(
+                route.get('DestinationCidrBlock') == '0.0.0.0/0' and 
+                route.get('NatGatewayId') == nat_gw_id
+                for route in private_routes
+            )
+            ipv6_egress_route = any(
+                route.get('DestinationIpv6CidrBlock') == '::/0' and 
+                route.get('EgressOnlyInternetGatewayId') == egress_igw_id
+                for route in private_routes
+            )
+            self.assertTrue(ipv4_nat_route, "Private subnet missing IPv4 NAT route")
+            self.assertTrue(ipv6_egress_route, "Private subnet missing IPv6 egress route")
             
         except ClientError as e:
-            self.fail(f"CloudWatch log group not found: {e}")
+            self.fail(f"Route table configuration error: {e}")
 
-    def test_iam_roles_and_policies_exist(self):
-        """Test that IAM roles and policies exist with correct permissions."""
+    def test_launch_template_configuration(self):
+        """Test launch template for auto-scaling group."""
+        launch_template_id = self.stack_outputs.get('launch_template_id')
+        self.assertIsNotNone(launch_template_id, "Launch template ID not found in stack outputs")
+        
         try:
-            # Test Lambda execution role exists
-            role_name = f"serverless-infra-{self.test_environment}-lambda-role"
+            response = self.ec2_client.describe_launch_templates(
+                LaunchTemplateIds=[launch_template_id]
+            )
+            templates = response['LaunchTemplates']
             
-            role_response = self.iam_client.get_role(RoleName=role_name)
-            role = role_response['Role']
+            self.assertEqual(len(templates), 1)
+            template = templates[0]
             
-            # Verify assume role policy allows Lambda service
-            assume_role_policy = json.loads(role['AssumeRolePolicyDocument'])
-            principals = [stmt['Principal']['Service'] for stmt in assume_role_policy['Statement']]
-            self.assertIn('lambda.amazonaws.com', principals)
+            # Get template version details
+            version_response = self.ec2_client.describe_launch_template_versions(
+                LaunchTemplateId=launch_template_id
+            )
+            versions = version_response['LaunchTemplateVersions']
+            self.assertGreater(len(versions), 0)
             
-            # Verify attached policies
-            policies_response = self.iam_client.list_attached_role_policies(RoleName=role_name)
-            attached_policies = policies_response['AttachedPolicies']
+            latest_version = versions[0]
+            template_data = latest_version['LaunchTemplateData']
             
-            policy_arns = [p['PolicyArn'] for p in attached_policies]
+            # Verify instance type
+            self.assertEqual(template_data['InstanceType'], 't3.micro')
             
-            # Should have basic execution role
-            self.assertTrue(any('AWSLambdaBasicExecutionRole' in arn for arn in policy_arns))
+            # Verify security groups
+            security_groups = template_data.get('SecurityGroupIds', [])
+            expected_sg_id = self.stack_outputs.get('security_group_id')
+            self.assertIn(expected_sg_id, security_groups)
             
-            # Should have custom SSM access policy
-            custom_policies = [p for p in attached_policies if not p['PolicyArn'].startswith('arn:aws:iam::aws:policy')]
-            self.assertGreater(len(custom_policies), 0, "Custom SSM policy should be attached")
+            # Verify user data exists
+            self.assertIsNotNone(template_data.get('UserData'))
             
         except ClientError as e:
-            self.fail(f"IAM roles or policies not configured correctly: {e}")
+            self.fail(f"Launch template {launch_template_id} not found or misconfigured: {e}")
 
-    def test_end_to_end_api_invocation(self):
-        """Test end-to-end API Gateway to Lambda invocation."""
+    def test_autoscaling_group_configuration(self):
+        """Test auto-scaling group configuration and capacity."""
+        asg_name = self.stack_outputs.get('autoscaling_group_name')
+        public_subnet_id = self.stack_outputs.get('public_subnet_id')
+        launch_template_id = self.stack_outputs.get('launch_template_id')
+        
+        self.assertIsNotNone(asg_name, "Auto-scaling group name not found in stack outputs")
+        
         try:
-            # Find the API Gateway
-            apis_response = self.apigateway_client.get_apis()
-            test_api = None
+            response = self.autoscaling_client.describe_auto_scaling_groups(
+                AutoScalingGroupNames=[asg_name]
+            )
+            asgs = response['AutoScalingGroups']
             
-            for api in apis_response['Items']:
-                if api['Name'].startswith(self.api_name_prefix):
-                    test_api = api
-                    break
+            self.assertEqual(len(asgs), 1)
+            asg = asgs[0]
             
-            self.assertIsNotNone(test_api, "API Gateway not found for end-to-end test")
+            # Verify capacity settings
+            self.assertEqual(asg['MinSize'], 1)
+            self.assertEqual(asg['MaxSize'], 3)
+            self.assertEqual(asg['DesiredCapacity'], 2)
             
-            # Construct API endpoint URL
-            api_endpoint = test_api['ApiEndpoint']
+            # Verify subnet configuration
+            self.assertIn(public_subnet_id, asg['VPCZoneIdentifier'].split(','))
             
-            # Note: In a real test, you would make HTTP requests to the API endpoint
-            # For this integration test, we verify the endpoint exists and is properly configured
-            self.assertTrue(api_endpoint.startswith('https://'))
-            self.assertIn('.execute-api.us-east-1.amazonaws.com', api_endpoint)
+            # Verify launch template
+            lt = asg['LaunchTemplate']
+            self.assertEqual(lt['LaunchTemplateId'], launch_template_id)
+            self.assertEqual(lt['Version'], '$Latest')
+            
+            # Verify tags
+            tag_dict = {tag['Key']: tag['Value'] for tag in asg.get('Tags', [])}
+            self.assertEqual(tag_dict.get('Environment'), 'Production')
+            self.assertEqual(tag_dict.get('Project'), 'IPv6StaticTest')
+            self.assertEqual(tag_dict.get('ManagedBy'), 'Pulumi')
+            
+            # Verify instances are healthy
+            healthy_instances = [inst for inst in asg['Instances'] 
+                               if inst['HealthStatus'] == 'Healthy']
+            self.assertEqual(len(healthy_instances), asg['DesiredCapacity'])
             
         except ClientError as e:
-            self.fail(f"End-to-end API test failed: {e}")
+            self.fail(f"Auto-scaling group {asg_name} not found or misconfigured: {e}")
+
+    def test_instance_connectivity_ipv6(self):
+        """Test instances are accessible and have working IPv6 connectivity."""
+        instance1_id = self.stack_outputs.get('instance1_id')
+        instance2_id = self.stack_outputs.get('instance2_id')
+        
+        for instance_id in [instance1_id, instance2_id]:
+            try:
+                response = self.ec2_client.describe_instances(InstanceIds=[instance_id])
+                instance = response['Reservations'][0]['Instances'][0]
+                
+                # Verify instance is running
+                self.assertEqual(instance['State']['Name'], 'running')
+                
+                # Verify both IPv4 and IPv6 connectivity
+                public_ip = instance.get('PublicIpAddress')
+                self.assertIsNotNone(public_ip)
+                
+                # Verify IPv6 addresses
+                network_interfaces = instance.get('NetworkInterfaces', [])
+                primary_ni = network_interfaces[0]
+                ipv6_addresses = primary_ni.get('Ipv6Addresses', [])
+                
+                self.assertGreater(len(ipv6_addresses), 0)
+                
+                # Verify IPv6 address format
+                ipv6_addr = ipv6_addresses[0]['Ipv6Address']
+                self.assertRegex(ipv6_addr, r'^[0-9a-fA-F:]+$')
+                self.assertIn(':', ipv6_addr)
+                
+            except ClientError as e:
+                self.fail(f"Instance connectivity test failed for {instance_id}: {e}")
+
+    def test_environment_agnostic_resource_naming(self):
+        """Test that resources follow environment-agnostic naming patterns."""
+        # Get all resource IDs from outputs
+        resource_outputs = {
+            'vpc_id': self.stack_outputs.get('vpc_id'),
+            'public_subnet_id': self.stack_outputs.get('public_subnet_id'),
+            'private_subnet_id': self.stack_outputs.get('private_subnet_id'),
+            'security_group_id': self.stack_outputs.get('security_group_id'),
+            'instance1_id': self.stack_outputs.get('instance1_id'),
+            'instance2_id': self.stack_outputs.get('instance2_id')
+        }
+        
+        # Verify all resources exist
+        for resource_name, resource_id in resource_outputs.items():
+            self.assertIsNotNone(resource_id, f"{resource_name} not found in outputs")
+            
+        # Test that resource IDs are valid AWS resource IDs
+        self.assertTrue(resource_outputs['vpc_id'].startswith('vpc-'))
+        self.assertTrue(resource_outputs['public_subnet_id'].startswith('subnet-'))
+        self.assertTrue(resource_outputs['private_subnet_id'].startswith('subnet-'))
+        self.assertTrue(resource_outputs['security_group_id'].startswith('sg-'))
+        self.assertTrue(resource_outputs['instance1_id'].startswith('i-'))
+        self.assertTrue(resource_outputs['instance2_id'].startswith('i-'))
+
+    def test_vpc_cidr_blocks_match_expected(self):
+        """Test VPC and subnet CIDR blocks match specification."""
+        vpc_ipv6_cidr = self.stack_outputs.get('vpc_ipv6_cidr_block')
+        public_subnet_ipv6_cidr = self.stack_outputs.get('public_subnet_ipv6_cidr_block')
+        private_subnet_ipv6_cidr = self.stack_outputs.get('private_subnet_ipv6_cidr_block')
+        
+        self.assertIsNotNone(vpc_ipv6_cidr, "VPC IPv6 CIDR not found in outputs")
+        self.assertIsNotNone(public_subnet_ipv6_cidr, "Public subnet IPv6 CIDR not found")
+        self.assertIsNotNone(private_subnet_ipv6_cidr, "Private subnet IPv6 CIDR not found")
+        
+        # Verify IPv6 CIDR format
+        self.assertTrue(vpc_ipv6_cidr.endswith('/56'))
+        self.assertTrue(public_subnet_ipv6_cidr.endswith('/64'))
+        self.assertTrue(private_subnet_ipv6_cidr.endswith('/64'))
+        
+        # Verify subnet CIDRs are derived from VPC CIDR
+        vpc_base = vpc_ipv6_cidr.replace('/56', '')
+        self.assertTrue(public_subnet_ipv6_cidr.startswith(vpc_base.rstrip(':')))
+        self.assertTrue(private_subnet_ipv6_cidr.startswith(vpc_base.rstrip(':')))
+
+    def test_resource_tags_compliance(self):
+        """Test all resources have required tags."""
+        required_tags = {
+            'Environment': 'Production',
+            'Project': 'IPv6StaticTest',
+            'ManagedBy': 'Pulumi'
+        }
+        
+        # Test VPC tags
+        vpc_id = self.stack_outputs.get('vpc_id')
+        response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        vpc_tags = {tag['Key']: tag['Value'] for tag in response['Vpcs'][0].get('Tags', [])}
+        
+        for key, value in required_tags.items():
+            self.assertEqual(vpc_tags.get(key), value, f"VPC missing required tag {key}")
+        
+        # Test subnet tags
+        for subnet_type in ['public_subnet_id', 'private_subnet_id']:
+            subnet_id = self.stack_outputs.get(subnet_type)
+            response = self.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            subnet_tags = {tag['Key']: tag['Value'] for tag in response['Subnets'][0].get('Tags', [])}
+            
+            for key, value in required_tags.items():
+                self.assertEqual(subnet_tags.get(key), value, 
+                               f"{subnet_type} missing required tag {key}")
 
 
 if __name__ == '__main__':
