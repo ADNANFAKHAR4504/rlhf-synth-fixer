@@ -13,7 +13,7 @@ Description: 'Secure AWS cloud environment with API Gateway, S3, IAM, WAF, and V
 Parameters:
   ProjectName:
     Type: String
-    Default: 'secure-api'
+    Default: 'cf-secure-project'
     Description: 'Name prefix for all resources'
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
