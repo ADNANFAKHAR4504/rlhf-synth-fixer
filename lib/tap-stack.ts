@@ -21,44 +21,38 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'prod';
-    const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
+    const awsRegion = props?.awsRegion || AWS_REGION_OVERRIDE || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'your-tf-states-bucket-name'; // <-- IMPORTANT: Change this
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+    const stateBucket = props?.stateBucket || 'your-tf-states-bucket-name';
+    const defaultTags = props?.defaultTags || { tags: {} };
     const projectName = `webapp-${environmentSuffix}`;
 
-    // --- Configure AWS Provider ---
+    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags: defaultTags,
+      // CORRECTED: The defaultTags property expects an array of tag objects.
+      defaultTags: [defaultTags],
     });
 
-    // --- Configure S3 Backend with native state locking ---
+    // --- S3 Backend ---
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
     });
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // ===================================================================
-    // ## Instantiate Infrastructure Modules
-    // ===================================================================
-
-    // --- 1. Network Module ---
+    // --- Infrastructure Modules ---
     const network = new NetworkModule(this, 'NetworkInfrastructure', {
       vpcCidr: '10.0.0.0/16',
       projectName: projectName,
     });
 
-    // --- 2. Security Module ---
     const security = new SecurityModule(this, 'SecurityInfrastructure', {
       vpcId: network.vpc.id,
       projectName: projectName,
     });
 
-    // --- 3. Compute Module ---
     const compute = new ComputeModule(this, 'ComputeInfrastructure', {
       vpcId: network.vpc.id,
       publicSubnets: network.publicSubnets,
@@ -70,17 +64,15 @@ export class TapStack extends TerraformStack {
       projectName: projectName,
     });
 
-    // ===================================================================
-    // ## Stack Outputs
-    // ===================================================================
+    // --- Outputs ---
     new TerraformOutput(this, 'ApplicationLoadBalancerDNS', {
       description: 'Public DNS name of the Application Load Balancer',
       value: compute.alb.dnsName,
     });
 
     new TerraformOutput(this, 'ApplicationURL', {
-      description: 'URL to access the web application',
-      value: `https://${compute.alb.dnsName}`,
+      description: 'URL to access the web application (HTTP only)',
+      value: `http://${compute.alb.dnsName}`,
     });
 
     new TerraformOutput(this, 'KmsKeyArn', {

@@ -8,8 +8,8 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       "value": "mock-alb.dns.name.com"
     },
     "ApplicationURL": {
-      "description": "URL to access the web application",
-      "value": "https://mock-alb.dns.name.com"
+      "description": "URL to access the web application (HTTP only)",
+      "value": "http://mock-alb.dns.name.com"
     },
     "KmsKeyArn": {
       "description": "ARN of the KMS key for EBS encryption",
@@ -31,7 +31,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
             }
           }
         ],
-        "region": "us-west-2"
+        "region": "us-east-1"
       }
     ]
   },
@@ -41,8 +41,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
         "bucket": "my-custom-state-bucket",
         "encrypt": true,
         "key": "staging/TestCustomStack.tfstate",
-        "region": "us-east-1",
-        "use_lockfile": true
+        "region": "us-east-1"
       }
     },
     "required_providers": {
@@ -63,8 +62,8 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       "value": "mock-alb.dns.name.com"
     },
     "ApplicationURL": {
-      "description": "URL to access the web application",
-      "value": "https://mock-alb.dns.name.com"
+      "description": "URL to access the web application (HTTP only)",
+      "value": "http://mock-alb.dns.name.com"
     },
     "KmsKeyArn": {
       "description": "ARN of the KMS key for EBS encryption",
@@ -79,6 +78,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
     "aws": [
       {
         "default_tags": [
+          {
+            "tags": {
+            }
+          }
         ],
         "region": "us-west-2"
       }
@@ -90,8 +93,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
         "bucket": "your-tf-states-bucket-name",
         "encrypt": true,
         "key": "prod/TestDefaultStack.tfstate",
-        "region": "us-east-1",
-        "use_lockfile": true
+        "region": "us-east-1"
       }
     },
     "required_providers": {
