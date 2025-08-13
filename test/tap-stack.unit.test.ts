@@ -156,7 +156,7 @@ describe('TapStack', () => {
     test('should create RDS database instance with security features', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'mysql',
-        EngineVersion: '8.0.35',
+        EngineVersion: '8.0.37',
         DBInstanceClass: 'db.t3.micro',
         AllocatedStorage: '20',
         MultiAZ: true,

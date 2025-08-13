@@ -292,7 +292,7 @@ describe('TapStack Integration Tests', () => {
       // Verify RDS configuration
       Object.values(rdsResources).forEach(rds => {
         expect(rds.Properties.Engine).toBe('mysql');
-        expect(rds.Properties.EngineVersion).toBe('8.0.35');
+        expect(rds.Properties.EngineVersion).toBe('8.0.37');
         expect(rds.Properties.DBInstanceClass).toBe('db.t3.micro');
         expect(rds.Properties.AllocatedStorage).toBe('20');
         expect(rds.Properties.MultiAZ).toBe(true);
