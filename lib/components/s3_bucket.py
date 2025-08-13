@@ -58,14 +58,6 @@ class S3BucketComponent(ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    # Configure log bucket ACL
-    self.log_bucket_acl = aws.s3.BucketAclV2(
-      f"{name}-log-bucket-acl",
-      bucket=self.log_bucket.id,
-      acl="log-delivery-write",
-      opts=ResourceOptions(parent=self)
-    )
-
     # Create main S3 bucket
     self.bucket = aws.s3.Bucket(
       f"{name}-bucket",
