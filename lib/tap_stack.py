@@ -12,6 +12,7 @@ from typing import Optional
 
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 from pulumi import ResourceOptions
 
 
@@ -178,6 +179,11 @@ class TapStack(pulumi.ComponentResource):
         tags=self.tags,
         opts=ResourceOptions(parent=self.vpc)
     )
+    self.db_password = random.RandomPassword(
+        "db-password",
+        length=20,
+        special=True
+    ).result
 
     self.db = aws.rds.Instance(
         f"db-instance-{self.environment_suffix}",
@@ -186,7 +192,7 @@ class TapStack(pulumi.ComponentResource):
         instance_class="db.t3.micro",
         db_name="appdb",
         username="dbadmin",
-        password="Passw0rd123!",
+        password=self.db_password,
         skip_final_snapshot=True,
         db_subnet_group_name=self.db_subnet_group.name,
         vpc_security_group_ids=[self.db_security_group.id],
