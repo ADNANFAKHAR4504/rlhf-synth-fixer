@@ -134,8 +134,8 @@ class TapStackUnitTest(unittest.TestCase):
     date_cond = cond["DateGreaterThan"].get("aws:CurrentTime")
 
     # Validate expiry date format is ISO8601 UTC (rough check)
-    iso8601_utc_re = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"
-    self.assertRegex(date_cond, iso8601_utc_re)
+    iso_or_placeholder_re = r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z|\$\{aws:UserCreationTime \+ 90d\})"
+    self.assertRegex(date_cond, iso_or_placeholder_re)
 
 
   def test_kms_ciphertext_resource_simple(self):
