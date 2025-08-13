@@ -26,6 +26,12 @@ export interface TapStackArgs {
   environmentSuffix?: string;
 
   /**
+   * AWS region where resources should be deployed.
+   * Defaults to 'us-west-2' if not provided.
+   */
+  region?: string;
+
+  /**
    * Optional default tags to apply to resources.
    */
   tags?: pulumi.Input<{ [key: string]: string }>;
@@ -61,6 +67,7 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+    const region = args.region || 'us-west-2'; // Default region
     const tags = args.tags || {};
 
     // --- Instantiate Nested Components Here ---
@@ -73,10 +80,10 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environment: environmentSuffix, // Pass environmentSuffix as environment
         projectName: 'tap', // Clean project name without environment suffix
-        region: 'us-west-2', // Pass the region configuration
+        region: region, // Pass the configurable region
         tags: {
           ...tags,
-          DeploymentRegion: 'us-west-2', // Add region to tags for tracking
+          DeploymentRegion: region, // Add region to tags for tracking
         },
       },
       { parent: this }

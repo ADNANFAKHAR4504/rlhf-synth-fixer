@@ -69,6 +69,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
   public readonly albDnsName: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly s3BucketName: pulumi.Output<string>;
+  public readonly awsProvider: aws.Provider;
 
   constructor(
     name: string,
@@ -83,6 +84,21 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     const environment = args.environment || 'prod';
     const region = args.region || 'us-west-2'; // Default to us-west-2 as per PROMPT.md
 
+    // Create AWS provider for the specified region
+    this.awsProvider = new aws.Provider(
+      'aws-provider',
+      {
+        region: region,
+      },
+      { parent: this }
+    );
+
+    // Provider options to be used by all resources
+    const providerOpts: ResourceOptions = {
+      parent: this,
+      provider: this.awsProvider,
+    };
+
     // Create resource name with environment suffix
     const resourcePrefix = `${projectName}-${environment}`;
 
@@ -94,10 +110,10 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
       ...(args.tags || {}),
     };
 
-    // Get availability zones for the specified region
+    // Get availability zones for the specified region using the provider
     const availabilityZones = aws.getAvailabilityZones({
       state: 'available',
-    });
+    }, { provider: this.awsProvider });
 
     // VPC
     this.vpc = new aws.ec2.Vpc(
@@ -111,7 +127,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // Internet Gateway
@@ -124,7 +140,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // Public and Private Subnets
@@ -146,7 +162,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
             ...commonTags,
           },
         },
-        { parent: this }
+        providerOpts
       );
       this.publicSubnets.push(publicSubnet);
 
@@ -163,7 +179,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
             ...commonTags,
           },
         },
-        { parent: this }
+        providerOpts
       );
       this.privateSubnets.push(privateSubnet);
     }
@@ -182,7 +198,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
             ...commonTags,
           },
         },
-        { parent: this }
+        providerOpts
       );
       elasticIps.push(elasticIp);
 
@@ -196,7 +212,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
             ...commonTags,
           },
         },
-        { parent: this }
+        providerOpts
       );
       natGateways.push(natGateway);
     }
@@ -211,7 +227,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     new aws.ec2.Route(
@@ -221,7 +237,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         destinationCidrBlock: '0.0.0.0/0',
         gatewayId: internetGateway.id,
       },
-      { parent: this }
+      providerOpts
     );
 
     // Associate public subnets with public route table
@@ -232,7 +248,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           subnetId: subnet.id,
           routeTableId: publicRouteTable.id,
         },
-        { parent: this }
+        providerOpts
       );
     });
 
@@ -247,7 +263,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
             ...commonTags,
           },
         },
-        { parent: this }
+        providerOpts
       );
 
       new aws.ec2.Route(
@@ -257,7 +273,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           destinationCidrBlock: '0.0.0.0/0',
           natGatewayId: natGateways[index].id,
         },
-        { parent: this }
+        providerOpts
       );
 
       new aws.ec2.RouteTableAssociation(
@@ -266,7 +282,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           subnetId: subnet.id,
           routeTableId: privateRouteTable.id,
         },
-        { parent: this }
+        providerOpts
       );
     });
 
@@ -304,7 +320,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     const ec2SecurityGroup = new aws.ec2.SecurityGroup(
@@ -335,7 +351,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(
@@ -357,7 +373,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // IAM Role for EC2 with least privilege
@@ -382,7 +398,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         ],
         tags: commonTags,
       },
-      { parent: this }
+      providerOpts
     );
 
     const ec2InstanceProfile = new aws.iam.InstanceProfile(
@@ -392,7 +408,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         role: ec2Role.name,
         tags: commonTags,
       },
-      { parent: this }
+      providerOpts
     );
 
     // KMS Key for RDS encryption with key rotation
@@ -406,7 +422,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     new aws.kms.Alias(
@@ -415,7 +431,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         name: `alias/${resourcePrefix}-rds-key`,
         targetKeyId: rdsKmsKey.keyId,
       },
-      { parent: this }
+      providerOpts
     );
 
     // RDS Subnet Group
@@ -429,7 +445,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // Database credentials using AWS Secrets Manager
@@ -443,7 +459,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // Generate secret version with password
@@ -456,7 +472,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           password: 'TempPassword123!', // This will be rotated by AWS
         }),
       },
-      { parent: this }
+      providerOpts
     );
 
     // IAM Role for RDS Enhanced Monitoring
@@ -481,7 +497,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         ],
         tags: commonTags,
       },
-      { parent: this }
+      providerOpts
     );
 
     // RDS MySQL Instance with security enhancements
@@ -516,7 +532,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // Launch Template with security hardening
@@ -534,7 +550,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
                 values: ['amzn2-ami-hvm-*-x86_64-gp2'],
               },
             ],
-          })
+          }, { provider: this.awsProvider })
           .then(ami => ami.id),
         instanceType: 't3.micro',
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
@@ -593,7 +609,7 @@ systemctl enable amazon-cloudwatch-agent
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // Application Load Balancer with security enhancements
@@ -611,7 +627,7 @@ systemctl enable amazon-cloudwatch-agent
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // Target Group
@@ -638,7 +654,7 @@ systemctl enable amazon-cloudwatch-agent
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // ALB Listener
@@ -659,7 +675,7 @@ systemctl enable amazon-cloudwatch-agent
           ...commonTags,
         },
       },
-      { parent: this, dependsOn: [this.loadBalancer, targetGroup] }
+      { ...providerOpts, dependsOn: [this.loadBalancer, targetGroup] }
     );
 
     // Auto Scaling Group with enhanced health checks
@@ -698,7 +714,7 @@ systemctl enable amazon-cloudwatch-agent
           },
         ],
       },
-      { parent: this, dependsOn: [launchTemplate, targetGroup] }
+      { ...providerOpts, dependsOn: [launchTemplate, targetGroup] }
     );
 
     // S3 Bucket with enhanced security
@@ -713,7 +729,7 @@ systemctl enable amazon-cloudwatch-agent
           ...commonTags,
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // S3 Bucket Versioning
@@ -725,7 +741,7 @@ systemctl enable amazon-cloudwatch-agent
           status: 'Enabled',
         },
       },
-      { parent: this }
+      providerOpts
     );
 
     // S3 Bucket Server Side Encryption
@@ -742,7 +758,7 @@ systemctl enable amazon-cloudwatch-agent
           },
         ],
       },
-      { parent: this }
+      providerOpts
     );
 
     // S3 Bucket Public Access Block
@@ -755,7 +771,7 @@ systemctl enable amazon-cloudwatch-agent
         ignorePublicAcls: true,
         restrictPublicBuckets: true,
       },
-      { parent: this }
+      providerOpts
     );
 
     // Least privilege S3 policy for EC2 instances
@@ -784,7 +800,7 @@ systemctl enable amazon-cloudwatch-agent
             })
           ),
       },
-      { parent: this }
+      providerOpts
     );
 
     // Grant EC2 role access to database secret
@@ -809,7 +825,7 @@ systemctl enable amazon-cloudwatch-agent
           })
         ),
       },
-      { parent: this }
+      providerOpts
     );
 
     // Set outputs
