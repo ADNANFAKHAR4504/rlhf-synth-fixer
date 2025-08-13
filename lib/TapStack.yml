@@ -215,7 +215,7 @@ Resources:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
-      RuleNumber: 100
+      RuleNumber: 200
       Protocol: 6
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
@@ -293,7 +293,7 @@ Resources:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 100
+      RuleNumber: 200
       Protocol: 6
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
@@ -359,7 +359,7 @@ Resources:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
-      RuleNumber: 100
+      RuleNumber: 200
       Protocol: 6
       RuleAction: allow
       CidrBlock: 10.0.0.0/16
@@ -1057,7 +1057,8 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -1104,19 +1105,12 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: VPC_FLOW_LOGS_ENABLED
-
   ###########################################################################
-  # Security Hub (enable + default standards)
+  # Security Hub - intentionally not created by this stack
+  # Reason: If the account is already subscribed, creating AWS::SecurityHub::Hub
+  # returns AlreadyExists (409). Manage Security Hub at the org level or
+  # enable it once per account outside this baseline.
   ###########################################################################
-  SecurityHub:
-    Type: AWS::SecurityHub::Hub
-    Properties:
-      EnableDefaultStandards: true
-      AutoEnableControls: true
-      ControlFindingGenerator: SECURITY_CONTROL
-      Tags:
-        Project: !Ref ProjectName
-        Environment: !Ref Environment
 
   ###########################################################################
   # Outputs (kept + new)
