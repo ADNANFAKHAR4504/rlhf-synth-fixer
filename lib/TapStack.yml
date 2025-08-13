@@ -66,7 +66,7 @@ Parameters:
   SolutionStackName:
     Type: String
     Description: Elastic Beanstalk solution stack name for Node.js.
-    Default: '64bit Amazon Linux 2023 v6.2.0 running Node.js 20'
+    Default: '64bit Amazon Linux 2023 v6.6.3 running Node.js 20'
 
 Conditions:
   UseSecretsManagerCondition: !Equals [!Ref DBPasswordParameter, '']
