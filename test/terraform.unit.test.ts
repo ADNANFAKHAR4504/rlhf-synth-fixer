@@ -1,4 +1,5 @@
 import { App, Testing } from 'cdktf';
+import { TapStack } from '../lib/tap-stack';
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';
