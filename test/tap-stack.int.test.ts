@@ -7,31 +7,9 @@ import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Load the CloudFormation template
-let templateJson: any;
-try {
-  const templatePath = path.join(__dirname, '../lib/TapStack.json');
-  const templateContent = fs.readFileSync(templatePath, 'utf8');
-  templateJson = JSON.parse(templateContent);
-} catch (error) {
-  console.warn('No TapStack.json template found');
-}
-
-// Load outputs from file - these are required to run the tests
-let outputs: Record<string, string>;
-try {
-  outputs = JSON.parse(
-    fs.readFileSync('lib/TapStack.json', 'utf8')
-  );
-  console.log('Using CloudFormation outputs from file');
-} catch (error) {
-  console.error(
-    'Could not load outputs from file - lib/TapStack.json is required'
-  );
-  throw new Error(
-    'Required outputs file not found or invalid. Please ensure lib/TapStack.json exists and contains valid JSON.'
-  );
-}
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 // AWS SDK clients
 const stsClient = new STSClient({ region: 'us-east-1' });
