@@ -43,20 +43,20 @@ class WebApplicationStack(Stack):
       self, "ALB",
       vpc=vpc,
       internet_facing=True,
-      load_balancer_name="MyWebApplicationALB"
+      load_balancer_name="MyWebApplicationALB1"
     )
 
     listener = alb.add_listener("HTTPListener", port=80, open=True)
 
     db_sg = ec2.SecurityGroup(
-      self, "DBSecurityGroup",
+      self, "DBSecurityGroup1",
       vpc=vpc,
       allow_all_outbound=True,
       description="Allows access to the RDS database"
     )
 
     db_subnet_group = rds.SubnetGroup(
-      self, "DBSubnetGroup",
+      self, "DBSubnetGroup1",
       vpc=vpc,
       vpc_subnets=ec2.SubnetSelection(
         subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
@@ -66,7 +66,7 @@ class WebApplicationStack(Stack):
     
     # Security Group for the Web Servers (ASG)
     web_sg = ec2.SecurityGroup(
-        self, "WebSecurityGroup",
+        self, "WebSecurityGroup1",
         vpc=vpc,
         allow_all_outbound=True,
         description="Allows outbound traffic from web servers"
@@ -74,7 +74,7 @@ class WebApplicationStack(Stack):
 
     ## Ignore as DB quota is reached limit
     db_instance = rds.DatabaseInstance(
-      self, "MySQLDBInstance",
+      self, "MySQLDBInstance1",
       engine=rds.DatabaseInstanceEngine.mysql(
         version=rds.MysqlEngineVersion.VER_8_0_42
       ),
@@ -98,7 +98,7 @@ class WebApplicationStack(Stack):
     )
 
     role = iam.Role(
-      self, "WebServerRole",
+      self, "WebServerRole1",
       assumed_by=iam.ServicePrincipal("ec2.amazonaws.com")
     )
 
@@ -109,7 +109,7 @@ class WebApplicationStack(Stack):
     )
 
     asg = autoscaling.AutoScalingGroup(
-      self, "ASG",
+      self, "ASG1",
       vpc=vpc,
       vpc_subnets=ec2.SubnetSelection(
         subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
@@ -136,7 +136,7 @@ class WebApplicationStack(Stack):
       cooldown=Duration.minutes(5)
     )
 
-    topic = sns.Topic(self, "AlarmTopic")
+    topic = sns.Topic(self, "AlarmTopic1")
 
     alarm = cloudwatch.Alarm(
       self, "HighCPUAlarm",
@@ -160,13 +160,13 @@ class WebApplicationStack(Stack):
     )
 
     static_bucket = s3.Bucket(
-      self, "StaticAssetsBucket",
+      self, "StaticAssetsBucket1",
       removal_policy=RemovalPolicy.DESTROY,
       auto_delete_objects=True
     )
 
     cf = cloudfront.Distribution(
-      self, "CloudFrontDistribution",
+      self, "CloudFrontDistribution1",
       default_behavior=cloudfront.BehaviorOptions(
         origin=origins.LoadBalancerV2Origin(
           alb,
