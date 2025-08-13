@@ -74,15 +74,27 @@ def test_cloudfront_distribution_created(stack_template):
     }
   })
 
-def test_s3_bucket_created_with_correct_removal_policy(stack_template):
-  stack_template.has_resource_properties("AWS::S3::Bucket", {
-    "BucketEncryption": Match.any_value(),
-    "PublicAccessBlockConfiguration": Match.any_value()
+def test_s3_bucket_created_with_correct_removal_policy(template):
+  # Verifies the S3 bucket for static assets exists and is configured for auto-deletion.
+  template.has_resource_properties("AWS::S3::Bucket", {
+      "BucketEncryption": pytest.anything(),
+      "PublicAccessBlockConfiguration": pytest.anything()
   })
-  s3_bucket = stack_template.find_resources("AWS::S3::Bucket")
-  first_bucket = list(s3_bucket.values())[0]
-  assert "DeletionPolicy" in first_bucket
-  assert first_bucket["DeletionPolicy"] == "Delete"
+
+  # The DeletionPolicy is a top-level attribute, not a property.
+  # We must find the resource and check its attributes directly.
+  s3_bucket_resources = template.find_resources("AWS::S3::Bucket")
+  
+  # Assert that there is exactly one S3 bucket resource
+  assert len(s3_bucket_resources) == 1, "Expected exactly one S3 bucket resource"
+  
+  # Get the logical ID of the S3 bucket
+  s3_bucket_logical_id = list(s3_bucket_resources.keys())[0]
+  s3_bucket_resource = s3_bucket_resources[s3_bucket_logical_id]
+
+  # Check for the DeletionPolicy
+  assert "DeletionPolicy" in s3_bucket_resource, "DeletionPolicy not found on the S3 bucket resource"
+  assert s3_bucket_resource["DeletionPolicy"] == "Delete", "DeletionPolicy is not set to 'Delete'"
 
 def test_outputs_are_created(stack_template):
   stack_template.has_output("AlbDnsName", {
