@@ -104,3 +104,7 @@ bin/tfplan
 
 build
 tasks.csv
+lib/terraform.tfstate
+lib/terraform.tfstate.backup
+lib/tfplan
+lib/.terraform.tfstate.lock.info
