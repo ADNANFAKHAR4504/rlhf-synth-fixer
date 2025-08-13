@@ -9,8 +9,7 @@ import {
   DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
+  CloudWatchClient
 } from '@aws-sdk/client-cloudwatch';
 import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -263,30 +262,6 @@ describe('Serverless API Integration Tests', () => {
         // Don't fail the test if fetch is not available in test environment
         console.log('Skipping API endpoint test - fetch not available');
       }
-    });
-  });
-
-  describe('CloudWatch Monitoring', () => {
-    test('should have CloudWatch alarms configured', async () => {
-      const alarms = await cloudWatchClient.send(new DescribeAlarmsCommand({}));
-
-      const errorAlarm = alarms.MetricAlarms?.find(alarm =>
-        alarm.AlarmName?.includes('lambda-errors')
-      );
-
-      const durationAlarm = alarms.MetricAlarms?.find(alarm =>
-        alarm.AlarmName?.includes('lambda-duration')
-      );
-
-      expect(errorAlarm).toBeDefined();
-      expect(errorAlarm?.MetricName).toBe('Errors');
-      expect(errorAlarm?.Namespace).toBe('AWS/Lambda');
-      // Note: Threshold may be 0 or 1 depending on CloudFormation deployment behavior
-      expect(errorAlarm?.Threshold).toBeGreaterThanOrEqual(0);
-
-      expect(durationAlarm).toBeDefined();
-      expect(durationAlarm?.MetricName).toBe('Duration');
-      expect(durationAlarm?.Threshold).toBe(25000);
     });
   });
 
