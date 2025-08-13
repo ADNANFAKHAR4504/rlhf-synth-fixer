@@ -7,9 +7,7 @@ deployed infrastructure.
 """
 
 import json
-import os
 import subprocess
-import time
 import unittest
 import boto3
 from botocore.exceptions import ClientError
@@ -32,7 +30,7 @@ class TestTapStackLiveInfrastructure(unittest.TestCase):
 
   @classmethod
   def _get_pulumi_outputs(cls):
-    """Get outputs from deployed Pulumi stack or fallback to demo data."""
+    """Get outputs from LIVE deployed Pulumi stack - NO SKIPPING ALLOWED."""
     try:
       result = subprocess.run(
         ['pulumi', 'stack', 'output', '--json'],
@@ -41,38 +39,25 @@ class TestTapStackLiveInfrastructure(unittest.TestCase):
         check=True
       )
       outputs = json.loads(result.stdout)
+      
+      # Integration tests MUST run against live infrastructure
       if not outputs:
-        return cls._get_demo_outputs()
+        raise AssertionError(
+          "LIVE INTEGRATION TEST FAILURE: No Pulumi stack outputs found. "
+          "Deploy infrastructure first with 'pulumi up' before running integration tests."
+        )
+      
       return outputs
-    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
-      return cls._get_demo_outputs()
-    
-  @classmethod
-  def _get_demo_outputs(cls):
-    """Get demo outputs for testing when no deployment is available."""
-    # Check if there's a demo environment variable set for testing
-    if os.environ.get('USE_DEMO_DATA') != 'true':
-      raise unittest.SkipTest("Infrastructure not deployed and demo data not enabled")
-    
-    # Demo data for testing the integration test logic
-    timestamp = int(time.time())
-    env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'demo')
-    return {
-      'vpc_id': f'vpc-{env_suffix}-{timestamp}',
-      'vpc_ipv6_cidr_block': '2001:db8::/56',
-      'public_subnet_id': f'subnet-pub-{env_suffix}-{timestamp}',
-      'public_subnet_ipv6_cidr_block': '2001:db8:1::/64',
-      'private_subnet_id': f'subnet-prv-{env_suffix}-{timestamp}', 
-      'private_subnet_ipv6_cidr_block': '2001:db8:2::/64',
-      'security_group_id': f'sg-{env_suffix}-{timestamp}',
-      'instance1_id': f'i-{env_suffix}-{timestamp}abc',
-      'instance2_id': f'i-{env_suffix}-{timestamp}def',
-      'nat_gateway_id': f'nat-{env_suffix}-{timestamp}',
-      'egress_igw_id': f'eigw-{env_suffix}-{timestamp}',
-      'launch_template_id': f'lt-{env_suffix}-{timestamp}',
-      'autoscaling_group_name': f'web-server-asg-{env_suffix}',
-      'internet_gateway_id': f'igw-{env_suffix}-{timestamp}'
-    }
+    except subprocess.CalledProcessError as e:
+      raise AssertionError(
+        f"LIVE INTEGRATION TEST FAILURE: Cannot get Pulumi outputs (exit {e.returncode}). "
+        "Deploy infrastructure first with 'pulumi up' before running integration tests."
+      ) from e
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+      raise AssertionError(
+        f"LIVE INTEGRATION TEST FAILURE: Invalid Pulumi outputs - {e}. "
+        "Ensure infrastructure is properly deployed."
+      ) from e
 
   def test_vpc_exists_with_ipv6_configuration(self):
     """Test that VPC exists with both IPv4 and IPv6 CIDR blocks."""
