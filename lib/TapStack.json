@@ -1990,9 +1990,6 @@
     "IAMRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${Environment}-ec2-role-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
