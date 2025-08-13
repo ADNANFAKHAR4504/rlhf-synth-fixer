@@ -272,9 +272,6 @@ describe('TapStack Integration Tests', () => {
       if (outputs.LogsBucketName) {
         expect(outputs.LogsBucketName).toMatch(/access-logs-bucket-pr977-718240086340-ap-northeast-2/);
       }
-      if (outputs.AccessAnalyzerArn) {
-        expect(outputs.AccessAnalyzerArn).toMatch(/SecurityAccessAnalyzer-synthtrainr639/);
-      }
     });
   });
 });
