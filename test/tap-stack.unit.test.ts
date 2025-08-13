@@ -7,7 +7,7 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
+    // If you're testing a yaml template, run `pipenv run cfn-flip-to-json > lib/TapStack.json`
     // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
@@ -46,30 +46,29 @@ describe('TapStack CloudFormation Template', () => {
       );
       expect(idAttribute).toBeDefined();
       expect(idAttribute.AttributeType).toBe('S');
+    }); // ✅ FIXED: closed the test block properly
+
+    test('S3 event notification should be configured', () => {
+      template.hasResourceProperties('AWS::S3::BucketNotification', {
+        NotificationConfiguration: {
+          LambdaConfigurations: [
+            {
+              Event: 's3:ObjectCreated:*',
+            },
+          ],
+        },
+      });
+    });
+
+    test('Stack should be in us-east-1 region', () => {
+      expect(stack.region).toBe('us-east-1');
+    });
+
+    test('Required outputs should be exported', () => {
+      template.hasOutput('SourceBucketName', {});
+      template.hasOutput('ProcessedBucketName', {});
+      template.hasOutput('ImageProcessorFunctionArn', {});
+      template.hasOutput('ImageProcessorRoleArn', {});
     });
   });
-
-  test('S3 event notification should be configured', () => {
-    template.hasResourceProperties('AWS::S3::BucketNotification', {
-      NotificationConfiguration: {
-        LambdaConfigurations: [
-          {
-            Event: 's3:ObjectCreated:*',
-          },
-        ],
-      },
-    });
-  });
-
-  test('Stack should be in us-east-1 region', () => {
-    expect(stack.region).toBe('us-east-1');
-  });
-
-  test('Required outputs should be exported', () => {
-    template.hasOutput('SourceBucketName', {});
-    template.hasOutput('ProcessedBucketName', {});
-    template.hasOutput('ImageProcessorFunctionArn', {});
-    template.hasOutput('ImageProcessorRoleArn', {});
-  });
-});
 });
