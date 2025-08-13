@@ -22,6 +22,7 @@ with the "corp-" prefix and deployment limited to us-west-2 region.
 """
 # pylint: disable=too-many-lines
 
+import base64
 import json
 from typing import Dict, List, Optional
 
@@ -678,18 +679,16 @@ def create_eks_node_group(
     )
 
   # Create launch template with user data for proper EKS node configuration
-  user_data = cluster.name.apply(lambda cluster_name: f"""#!/bin/bash
+  user_data_script = cluster.name.apply(lambda cluster_name:
+                                        base64.b64encode(f"""#!/bin/bash
 /etc/eks/bootstrap.sh {cluster_name}
-""")
+""".encode()).decode()
+  )
 
   launch_template = aws.ec2.LaunchTemplate(
       "corp-eks-node-launch-template",
       vpc_security_group_ids=[eks_nodes_sg.id],
-      user_data=pulumi.Output.secret(
-          user_data.apply(
-              lambda ud: pulumi.Output.from_input(ud).apply(
-                  lambda x: __import__('base64').b64encode(
-                      x.encode()).decode()))),
+      user_data=user_data_script,
       tags={**tags, "Name": "corp-eks-node-launch-template"},
       opts=ResourceOptions(provider=provider)
   )
