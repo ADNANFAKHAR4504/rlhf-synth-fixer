@@ -438,25 +438,25 @@ Outputs:
 
 ## Key Features and Security Implementations:
 
-### 🔐 **Security Best Practices**
+### **Security Best Practices**
 - **Customer-managed KMS encryption** for DynamoDB with automatic key rotation
 - **Least privilege IAM policies** with resource-specific permissions
 - **Input validation** at API Gateway level with JSON schema
 - **CORS configuration** for secure cross-origin requests
 
-### 🏗️ **Architecture Components**
+### **Architecture Components**
 - **DynamoDB Table** with encryption at rest and point-in-time recovery
 - **Lambda Function** with proper error handling and logging
 - **API Gateway** with request validation and monitoring
 - **CloudWatch Monitoring** with error and duration alarms
 
-### 📊 **Monitoring & Alerting**
+### **Monitoring & Alerting**
 - CloudWatch Log Groups with retention policies
 - Error rate monitoring with SNS notifications
 - Performance monitoring for Lambda duration
 - API Gateway access logging and tracing
 
-### 🚀 **Deployment Instructions**
+### **Deployment Instructions**
 
 1. **Save the template** as `serverless_template.yaml`
 
@@ -483,7 +483,7 @@ curl -X POST $API_URL \
   -d '{"name": "Test Item"}'
 ```
 
-### 🔍 **Template Validation**
+### **Template Validation**
 The template includes comprehensive validation for:
 - JSON schema validation at API Gateway
 - IAM policy syntax and permissions
