@@ -54,16 +54,9 @@ describe('Web Application Stack Unit Tests', () => {
 
     test('should define all required parameters', () => {
       const params = template.Parameters;
-      // Updated to expect 3 parameters based on current template
-      expect(Object.keys(params).length).toBe(3);
+      expect(Object.keys(params).length).toBe(2);
       expect(params.DBMasterUsername).toBeDefined();
       expect(params.DynamoDBTableArnParameter).toBeDefined();
-      expect(params.ECRImageUriParameter).toBeDefined();
-
-      // Verify the ECRImageUriParameter has the correct default
-      expect(params.ECRImageUriParameter.Default).toBe(
-        'public.ecr.aws/lambda/nodejs:latest-x86_64'
-      );
     });
   });
 
@@ -218,13 +211,13 @@ describe('Web Application Stack Unit Tests', () => {
       expect(statement.Resource).toEqual({ Ref: 'DynamoDBTableArnParameter' });
     });
 
-    test('Lambda function should be configured to use a container image', () => {
+    test('Lambda function should be configured with inline code', () => {
       const lambda = template.Resources.PlaceholderLambda;
-      expect(lambda.Properties.PackageType).toBe('Image');
-      // Updated to match the current template which uses a parameter reference
-      expect(lambda.Properties.Code.ImageUri).toEqual({
-        Ref: 'ECRImageUriParameter',
-      });
+      expect(lambda.Properties.Runtime).toBe('nodejs20.x');
+      expect(lambda.Properties.Handler).toBe('index.handler');
+      // Check that inline code is provided
+      expect(lambda.Properties.Code.ZipFile).toBeDefined();
+      expect(lambda.Properties.Code.ZipFile).toContain('exports.handler');
 
       // Also verify the Lambda has proper VPC configuration
       expect(lambda.Properties.VpcConfig).toBeDefined();
@@ -238,19 +231,8 @@ describe('Web Application Stack Unit Tests', () => {
       const lambda = template.Resources.PlaceholderLambda;
       expect(lambda.Properties.Timeout).toBe(30);
       expect(lambda.Properties.MemorySize).toBe(512);
-
-      // Check ImageConfig if it exists
-      if (lambda.Properties.ImageConfig) {
-        expect(lambda.Properties.ImageConfig.Command).toEqual([
-          'index.handler',
-        ]);
-        expect(lambda.Properties.ImageConfig.EntryPoint).toEqual([
-          '/lambda-entrypoint.sh',
-        ]);
-        expect(lambda.Properties.ImageConfig.WorkingDirectory).toBe(
-          '/var/task'
-        );
-      }
+      expect(lambda.Properties.Runtime).toBe('nodejs20.x');
+      expect(lambda.Properties.Handler).toBe('index.handler');
     });
   });
 
@@ -264,7 +246,6 @@ describe('Web Application Stack Unit Tests', () => {
 
     test('should define all required outputs', () => {
       const outputs = template.Outputs;
-      // Updated to expect 5 outputs based on current template
       expect(Object.keys(outputs).length).toBe(5);
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.ALBDNSName).toBeDefined();

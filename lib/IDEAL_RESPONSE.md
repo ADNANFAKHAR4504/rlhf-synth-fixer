@@ -10,11 +10,7 @@ Parameters:
   DynamoDBTableArnParameter:
     Type: String
     Description: The ARN of the DynamoDB table for the Lambda function to access.
-    Default: 'arn:aws:dynamodb:*:*:table/placeholder-table'  # Default placeholder ARN
-  ECRImageUriParameter:
-    Type: String
-    Description: The URI of the container image for the Lambda function.
-    Default: 'public.ecr.aws/lambda/nodejs:20'  # AWS-provided public Lambda runtime image
+    Default: 'arn:aws:dynamodb:*:*:table/placeholder-table' # Default placeholder ARN
 
 Resources:
   # ------------------------------------------------------------#
@@ -439,17 +435,23 @@ Resources:
     Properties:
       FunctionName: WebApp-Placeholder-Function
       Role: !GetAtt LambdaExecutionRole.Arn
-      PackageType: Image
+      Runtime: nodejs20.x
+      Handler: index.handler
       Code:
-        ImageUri: !Ref ECRImageUriParameter
+        ZipFile: |
+          exports.handler = async (event) => {
+              console.log('Event:', JSON.stringify(event, null, 2));
+              return {
+                  statusCode: 200,
+                  body: JSON.stringify({
+                      message: 'Hello from Lambda!',
+                      timestamp: new Date().toISOString(),
+                      event: event
+                  })
+              };
+          };
       Timeout: 30
       MemorySize: 512
-      ImageConfig:
-        Command:
-          - index.handler
-        EntryPoint:
-          - /lambda-entrypoint.sh
-        WorkingDirectory: /var/task
       VpcConfig:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
