@@ -64,7 +64,7 @@ describe('TapStack', () => {
     const template = Template.fromStack(stack);
 
     template.hasResourceProperties('AWS::SSM::Parameter', {
-      Name: '/corp/tap/dev/us-east-1/bucket-name',
+      Name: `/corp/tap/${environmentSuffix.toLowerCase()}/us-east-1/bucket-name`,
       Type: 'String',
     });
   });
@@ -78,7 +78,7 @@ describe('TapStack', () => {
     const template = Template.fromStack(stack);
 
     template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-      DashboardName: 'Corp-Replication-dev-us-east-1-111111111111',
+      DashboardName: `Corp-Replication-${environmentSuffix.toLowerCase()}-us-east-1-111111111111`,
     });
   });
 
@@ -92,16 +92,16 @@ describe('TapStack', () => {
     const json = template.toJSON();
 
     expect(json.Outputs.CorpBucketName.Export.Name).toBe(
-      'Corp-BucketName-dev-us-east-1'
+      `Corp-BucketName-${environmentSuffix.toLowerCase()}-us-east-1`
     );
     expect(json.Outputs.CorpSyncFunctionArn.Export.Name).toBe(
-      'Corp-SyncFunctionArn-dev-us-east-1'
+      `Corp-SyncFunctionArn-${environmentSuffix.toLowerCase()}-us-east-1`
     );
     expect(json.Outputs.CorpDashboardUrl.Export.Name).toBe(
-      'Corp-DashboardUrl-dev-us-east-1'
+      `Corp-DashboardUrl-${environmentSuffix.toLowerCase()}-us-east-1`
     );
     expect(json.Outputs.CorpPeerRegion.Export.Name).toBe(
-      'Corp-PeerRegion-dev-us-east-1'
+      `Corp-PeerRegion-${environmentSuffix.toLowerCase()}-us-east-1`
     );
   });
 });
