@@ -364,7 +364,7 @@ def test_health_lambda_exists(pulumi_outputs, aws_clients):
     config = resp["Configuration"]
     assert config["FunctionArn"] == lambda_arn, f"Lambda ARN mismatch: {
         config['FunctionArn']} != {lambda_arn}"
-    assert config["Runtime"] == "python3.9", f"Unexpected Lambda runtime: {
+    assert config["Runtime"] == "python3.12", f"Unexpected Lambda runtime: {
         config['Runtime']}"
     assert config["State"] == "Active", f"Lambda function is not active: {
         config['State']}"

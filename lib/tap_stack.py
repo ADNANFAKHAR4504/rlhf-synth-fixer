@@ -72,7 +72,7 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     self.provider = provider
     self.region = "us-west-2"
     self.availability_zones = aws.get_availability_zones(
-        state="available").names[:2]
+        state="available", opts=pulumi.InvokeOptions(provider=provider)).names[:2]
 
     self.vpc = self._create_vpc()
     self.igw = self._create_internet_gateway()
@@ -950,7 +950,7 @@ def lambda_handler(event, context):
 
   lambda_func = aws.lambda_.Function(
       "corp-health-check-lambda",
-      runtime="python3.9",
+      runtime="python3.12",
       code=pulumi.AssetArchive(
           {"lambda_function.py": pulumi.StringAsset(lambda_code)}),
       handler="lambda_function.lambda_handler",
