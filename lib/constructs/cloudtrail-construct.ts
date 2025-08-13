@@ -10,7 +10,7 @@ export interface CloudTrailConstructProps {
 }
 
 export class CloudTrailConstruct extends Construct {
-  public readonly trail: cloudtrail.Trail;
+  public readonly trail?: cloudtrail.Trail;
   public readonly cloudTrailLogGroup: logs.LogGroup;
 
   constructor(scope: Construct, id: string, props: CloudTrailConstructProps) {
@@ -55,39 +55,42 @@ export class CloudTrailConstruct extends Construct {
       }
     );
 
-    // Create CloudTrail with comprehensive logging
-    this.trail = new cloudtrail.Trail(this, `CloudTrail-${environment}`, {
-      trailName: `CloudTrail-${environment}`,
-      bucket: cloudTrailBucket,
-      cloudWatchLogGroup: this.cloudTrailLogGroup,
-      cloudWatchLogsRetention: logs.RetentionDays.ONE_YEAR,
-      enableFileValidation: true,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      sendToCloudWatchLogs: true,
-      managementEvents: cloudtrail.ReadWriteType.ALL,
-    });
+    // Skip CloudTrail creation for PR environments to avoid trail limit
+    if (!environment.startsWith('pr')) {
+      // Create CloudTrail with comprehensive logging for non-PR environments only
+      this.trail = new cloudtrail.Trail(this, `CloudTrail-${environment}`, {
+        trailName: `CloudTrail-${environment}`,
+        bucket: cloudTrailBucket,
+        cloudWatchLogGroup: this.cloudTrailLogGroup,
+        cloudWatchLogsRetention: logs.RetentionDays.ONE_YEAR,
+        enableFileValidation: true,
+        includeGlobalServiceEvents: true,
+        isMultiRegionTrail: true,
+        sendToCloudWatchLogs: true,
+        managementEvents: cloudtrail.ReadWriteType.ALL,
+      });
 
-    // Add S3 data event selectors for monitoring specific buckets
-    s3BucketsToMonitor.forEach((bucket, _index) => {
-      this.trail.addS3EventSelector(
-        [
+      // Add S3 data event selectors for monitoring specific buckets
+      s3BucketsToMonitor.forEach((bucket, _index) => {
+        this.trail!.addS3EventSelector(
+          [
+            {
+              bucket: bucket,
+              objectPrefix: '',
+            },
+          ],
           {
-            bucket: bucket,
-            objectPrefix: '',
-          },
-        ],
-        {
-          readWriteType: cloudtrail.ReadWriteType.ALL,
-          includeManagementEvents: true,
-        }
-      );
-    });
+            readWriteType: cloudtrail.ReadWriteType.ALL,
+            includeManagementEvents: true,
+          }
+        );
+      });
 
-    // Tag CloudTrail resources
-    cdk.Tags.of(this.trail).add('Name', `CloudTrail-${environment}`);
-    cdk.Tags.of(this.trail).add('Component', 'Security');
-    cdk.Tags.of(this.trail).add('Environment', environment);
+      // Tag CloudTrail resources
+      cdk.Tags.of(this.trail).add('Name', `CloudTrail-${environment}`);
+      cdk.Tags.of(this.trail).add('Component', 'Security');
+      cdk.Tags.of(this.trail).add('Environment', environment);
+    }
     cdk.Tags.of(cloudTrailBucket).add(
       'Name',
       `CloudTrailBucket-${environment}`

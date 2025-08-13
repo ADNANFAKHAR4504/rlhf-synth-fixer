@@ -84,6 +84,8 @@ export class DatabaseConstruct extends Construct {
       storageEncrypted: true,
       storageEncryptionKey: undefined, // Use AWS managed key
       deletionProtection: environment === 'prod',
+      // For non-production environments, allow easier cleanup
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
 
       // SSL/TLS enforcement - Explicitly configured in parameter group
       // require_secure_transport: 'ON' ensures all connections use SSL/TLS
