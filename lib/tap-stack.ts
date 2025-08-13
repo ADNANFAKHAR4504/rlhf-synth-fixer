@@ -4,7 +4,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+// applicationautoscaling is no longer needed directly for this pattern
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -25,7 +25,7 @@ export class TapStack extends cdk.Stack {
     // Use stack name and unique suffix for uniqueness
     const stackName = cdk.Stack.of(this).stackName;
     const uniqueSuffix = this.node.addr.slice(-8);
-    const uniqueFunctionName = `${stackName}-lambda-nova-team-development-${uniqueSuffix}`;
+    const uniqueFunctionName = `${stackName}-lambda-nova-destruction-dev-${uniqueSuffix}`;
     const uniqueAliasName = `${stackName}-live-${uniqueSuffix}`;
 
     // Log Group for Lambda
@@ -78,7 +78,6 @@ export class TapStack extends cdk.Stack {
         NODE_ENV: 'development',
         LOG_LEVEL: 'info',
       },
-      // reservedConcurrentExecutions removed; provisioned concurrency is managed by alias
       description:
         'High-performance Lambda function for processing web requests in nova-team development environment',
     });
@@ -96,52 +95,27 @@ export class TapStack extends cdk.Stack {
     // Explicitly tag Lambda alias
     Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaAlias).add(k, v));
 
-    // Provisioned Concurrency Auto Scaling
-    lambdaAlias.addAutoScaling({
+    // CORRECTED: Provisioned Concurrency Auto Scaling using the high-level helper method.
+    // This is the recommended approach. It's cleaner and less verbose.
+    const scaling = lambdaAlias.addAutoScaling({
       minCapacity: 1,
       maxCapacity: 10,
     });
 
-    // Application Auto Scaling Role
-    const autoScalingRole = new iam.Role(this, 'AutoScalingRole', {
-      assumedBy: new iam.ServicePrincipal(
-        'application-autoscaling.amazonaws.com'
-      ),
-      // No managedPolicies property; AWSApplicationAutoscalingLambdaConcurrencyPolicy does not exist
+    // We then apply the target tracking policy directly to the scaling object.
+    scaling.scaleOnUtilization({
+      utilizationTarget: 0.70, // This is 70%
+      scaleInCooldown: cdk.Duration.seconds(300),
+      scaleOutCooldown: cdk.Duration.seconds(300),
+      policyName: `${stackName}-lambda-scaling-policy-nova-team-development`,
     });
-    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(autoScalingRole).add(k, v));
 
-    // Application Auto Scaling Target
-    const scalableTarget = new applicationautoscaling.ScalableTarget(
-      this,
-      'LambdaScalableTarget',
-      {
-        serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
-        resourceId: `function:${uniqueFunctionName}:${uniqueAliasName}`,
-        scalableDimension: 'lambda:function:ProvisionedConcurrency',
-        minCapacity: 1,
-        maxCapacity: 10,
-        role: autoScalingRole,
-      }
-    );
-    scalableTarget.node.addDependency(lambdaAlias);
-    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(scalableTarget).add(k, v));
+    // --- The following manual definitions have been REMOVED ---
+    // - new iam.Role(this, 'AutoScalingRole', ...
+    // - new applicationautoscaling.ScalableTarget(...
+    // - new applicationautoscaling.TargetTrackingScalingPolicy(...
+    // --- They are redundant because addAutoScaling() handles them ---
 
-    // Auto Scaling Policy
-    new applicationautoscaling.TargetTrackingScalingPolicy(
-      this,
-      'LambdaScalingPolicy',
-      {
-        scalingTarget: scalableTarget,
-        targetValue: 70.0,
-        predefinedMetric:
-          applicationautoscaling.PredefinedMetric.LAMBDA_PROVISIONED_CONCURRENCY_UTILIZATION,
-        scaleOutCooldown: cdk.Duration.seconds(300),
-        scaleInCooldown: cdk.Duration.seconds(300),
-        disableScaleIn: false,
-        policyName: `${stackName}-lambda-scaling-policy-nova-team-development`,
-      }
-    );
 
     // API Gateway HTTP API
     const httpApi = new apigateway.HttpApi(this, 'NovaHttpApi', {
