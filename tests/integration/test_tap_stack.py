@@ -70,7 +70,8 @@ class TestTapStackDirect(unittest.TestCase):
       response = self.dynamodb_client.describe_table(TableName=self.expected_dynamodb_table_name)
       table_status = response["Table"]["TableStatus"]
       self.assertIn(table_status, ["ACTIVE", "UPDATING"])
-      print(f"✓ DynamoDB table '{self.expected_dynamodb_table_name}' exists with status: {table_status}")
+      print(f"✓ DynamoDB table '{self.expected_dynamodb_table_name}' "
+            f"exists with status: {table_status}")
     except ClientError as e:
       if e.response['Error']['Code'] == 'ResourceNotFoundException':
         self.fail(f"DynamoDB table '{self.expected_dynamodb_table_name}' does not exist")
@@ -121,7 +122,8 @@ class TestTapStackDirect(unittest.TestCase):
       pitr_status = response['ContinuousBackupsDescription']['PointInTimeRecoveryDescription'][
         'PointInTimeRecoveryStatus']
       self.assertEqual(pitr_status, 'ENABLED')
-      print(f"✓ DynamoDB table '{self.expected_dynamodb_table_name}' has point-in-time recovery enabled")
+      print(f"✓ DynamoDB table '{self.expected_dynamodb_table_name}' "
+            f"has point-in-time recovery enabled")
     except ClientError as e:
       self.fail(f"Error checking DynamoDB point-in-time recovery: {e}")
 

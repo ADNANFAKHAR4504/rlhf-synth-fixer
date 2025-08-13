@@ -204,7 +204,8 @@ class TestTapStackComponents(unittest.TestCase):
     def test_impl():
       # Mock ARNs for dependencies
       s3_bucket_arn = Output.from_input("arn:aws:s3:::test-bucket")
-      dynamodb_table_arn = Output.from_input("arn:aws:dynamodb:us-east-1:123456789012:table/test-table")
+      dynamodb_table_arn = (Output.
+                            from_input("arn:aws:dynamodb:us-east-1:123456789012:table/test-table"))
 
       role_component = IAMRoleComponent(
         name="test-role",
