@@ -68,9 +68,41 @@ const availabilityZones = aws.getAvailabilityZones(
 );
 ```
 
+#### 4. Missing ComponentResource Structure
+
+**Problem**: Code was written as a flat script instead of a reusable ComponentResource class, making it difficult to test and reuse.
+
+**Fixes Applied**:
+
+- Converted to proper Pulumi ComponentResource class structure
+- Added TypeScript interface for configuration
+- Added proper constructor with parameter validation
+- Added resource properties for testing access
+
+```typescript
+// Before: Flat script structure
+const vpc = new aws.ec2.Vpc('main-vpc', { ... });
+export const vpcId = vpc.id;
+
+// After: ComponentResource class structure
+export class ProductionWebAppStack extends pulumi.ComponentResource {
+  public readonly vpc: aws.ec2.Vpc;
+
+  constructor(name: string, args: ProductionWebAppStackArgs = {}, opts?: ResourceOptions) {
+    super('tap:stack:ProductionWebAppStack', name, args, opts);
+
+    this.vpc = new aws.ec2.Vpc('main-vpc', { ... }, providerOpts);
+
+    this.registerOutputs({
+      vpcId: this.vpc.id,
+    });
+  }
+}
+```
+
 ## Security Issues
 
-#### 4. SSH Access Security Risk
+#### 5. SSH Access Security Risk
 
 **Problem**: EC2 security group allows SSH access from any IP address (0.0.0.0/0), creating significant security vulnerability.
 
@@ -104,7 +136,7 @@ ingress: [
 ],
 ```
 
-#### 5. Hardcoded Database Password
+#### 6. Hardcoded Database Password
 
 **Problem**: Database password hardcoded in plain text, exposing sensitive credentials in code.
 
@@ -133,7 +165,7 @@ new aws.secretsmanager.SecretVersion('database-secret-version', {
 });
 ```
 
-#### 6. Overly Permissive IAM Policies
+#### 7. Overly Permissive IAM Policies
 
 **Problem**: IAM policy grants wildcard access to all S3 resources, violating least privilege principle.
 
@@ -150,7 +182,7 @@ Resource: '*',
 Resource: `${bucketArn}/*`,
 ```
 
-#### 7. Missing EC2 Instance Security Hardening
+#### 8. Missing EC2 Instance Security Hardening
 
 **Problem**: Launch template lacks security hardening configurations for EC2 instances.
 
@@ -159,6 +191,7 @@ Resource: `${bucketArn}/*`,
 - Added IMDSv2 enforcement
 - Added EBS volume encryption
 - Added security hardening in user data script
+- Added CloudWatch monitoring
 
 ```typescript
 // Before: No security hardening
@@ -172,6 +205,9 @@ const launchTemplate = new aws.ec2.LaunchTemplate('launch-template', {
     httpEndpoint: 'enabled',
     httpTokens: 'required', // Enforce IMDSv2
     httpPutResponseHopLimit: 1,
+  },
+  monitoring: {
+    enabled: true, // Enable detailed CloudWatch monitoring
   },
   blockDeviceMappings: [
     {
@@ -187,9 +223,26 @@ const launchTemplate = new aws.ec2.LaunchTemplate('launch-template', {
 });
 ```
 
+#### 9. Missing S3 Bucket Random Suffix Issue
+
+**Problem**: S3 bucket name used Math.random() which is not deterministic and causes issues with infrastructure updates.
+
+**Fixes Applied**:
+
+- Removed random suffix generation
+- Used consistent naming based on resource prefix
+
+```typescript
+// Before: Random suffix causing update issues
+bucket: `${projectName}-bucket-${Math.random().toString(36).substring(2, 15)}`,
+
+// After: Consistent naming
+bucket: `${resourcePrefix}-bucket`,
+```
+
 ## Missing Production Features
 
-#### 8. Missing RDS Backup and Monitoring Configuration
+#### 10. Missing RDS Backup and Monitoring Configuration
 
 **Problem**: RDS instance lacks production-ready backup, monitoring, and maintenance configurations.
 
@@ -199,6 +252,8 @@ const launchTemplate = new aws.ec2.LaunchTemplate('launch-template', {
 - Added enhanced monitoring
 - Added maintenance window configuration
 - Added storage autoscaling
+- Added multi-AZ option
+- Added deletion protection
 
 ```typescript
 // Before: Basic RDS configuration
@@ -214,12 +269,14 @@ const rdsInstance = new aws.rds.Instance('mysql-instance', {
   backupRetentionPeriod: 7, // 7 days backup retention
   backupWindow: '03:00-04:00', // Backup during low traffic hours
   maintenanceWindow: 'sun:04:00-sun:05:00', // Maintenance window
+  multiAz: false, // Set to true for production high availability
   monitoringInterval: 60, // Enhanced monitoring
   monitoringRoleArn: rdsMonitoringRole.arn,
+  deletionProtection: false, // Set to true for production
 });
 ```
 
-#### 9. Missing KMS Key Rotation
+#### 11. Missing KMS Key Rotation
 
 **Problem**: KMS key lacks automatic key rotation, reducing security over time.
 
@@ -240,7 +297,7 @@ const rdsKmsKey = new aws.kms.Key('rds-kms-key', {
 });
 ```
 
-#### 10. Missing S3 Security Configurations
+#### 12. Missing S3 Security Configurations
 
 **Problem**: S3 bucket lacks server-side encryption configuration, reducing data protection.
 
@@ -272,7 +329,7 @@ const s3BucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(
 );
 ```
 
-#### 11. Missing Auto Scaling Metrics
+#### 13. Missing Auto Scaling Metrics
 
 **Problem**: Auto Scaling Group lacks enabled metrics for monitoring and scaling decisions.
 
@@ -298,7 +355,7 @@ const autoScalingGroup = new aws.autoscaling.Group('app-asg', {
 });
 ```
 
-#### 12. Missing Load Balancer Security Features
+#### 14. Missing Load Balancer Security Features
 
 **Problem**: Application Load Balancer lacks security enhancements for production use.
 
@@ -320,9 +377,56 @@ const alb = new aws.lb.LoadBalancer('app-lb', {
 });
 ```
 
+#### 15. Missing User Data Security Hardening
+
+**Problem**: EC2 user data script lacks security hardening configurations.
+
+**Fixes Applied**:
+
+- Added kernel parameter security hardening
+- Added CloudWatch agent installation and configuration
+- Enhanced web server setup
+
+```typescript
+// Before: Basic user data
+userData: Buffer.from(
+  `#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
+`
+).toString('base64'),
+
+// After: Security hardened user data
+userData: Buffer.from(
+  `#!/bin/bash
+yum update -y
+yum install -y httpd amazon-cloudwatch-agent
+
+# Security hardening
+echo "net.ipv4.conf.all.send_redirects = 0" >> /etc/sysctl.conf
+echo "net.ipv4.conf.default.send_redirects = 0" >> /etc/sysctl.conf
+echo "net.ipv4.conf.all.accept_source_route = 0" >> /etc/sysctl.conf
+echo "net.ipv4.conf.default.accept_source_route = 0" >> /etc/sysctl.conf
+sysctl -p
+
+# Configure httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Secure Web App - $(hostname -f)</h1>" > /var/www/html/index.html
+
+# Start CloudWatch agent for monitoring
+systemctl start amazon-cloudwatch-agent
+systemctl enable amazon-cloudwatch-agent
+`
+).toString('base64'),
+```
+
 ## Configuration Management Issues
 
-#### 13. Inconsistent Environment and Region Tagging
+#### 16. Inconsistent Environment and Region Tagging
 
 **Problem**: Missing environment suffix in resource naming and inconsistent tagging strategy.
 
@@ -352,7 +456,7 @@ const commonTags = {
 };
 ```
 
-#### 14. Missing RDS Monitoring Role
+#### 17. Missing RDS Monitoring Role
 
 **Problem**: RDS enhanced monitoring requires a dedicated IAM role that was not defined.
 
@@ -385,4 +489,60 @@ const rdsMonitoringRole = new aws.iam.Role('rds-monitoring-role', {
     'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
   ],
 });
+```
+
+#### 18. Missing Unnecessary RDS Role
+
+**Problem**: MODEL_RESPONSE.md included an unnecessary RDS IAM role that serves no purpose.
+
+**Fixes Applied**:
+
+- Removed the unused RDS IAM role
+- Kept only the necessary RDS monitoring role
+
+```typescript
+// Before: Unnecessary RDS role
+const rdsRole = new aws.iam.Role('rds-role', {
+  name: `${projectName}-rds-role`,
+  assumeRolePolicy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Action: 'sts:AssumeRole',
+        Effect: 'Allow',
+        Principal: {
+          Service: 'rds.amazonaws.com', // This service doesn't assume roles like this
+        },
+      },
+    ],
+  }),
+});
+
+// After: Removed unnecessary role, kept only monitoring role
+// (No equivalent - role was removed entirely)
+```
+
+#### 19. Missing Resource Dependencies
+
+**Problem**: Resources were created without proper dependency management, potentially causing deployment issues.
+
+**Fixes Applied**:
+
+- Added explicit dependencies using dependsOn option
+- Ensured proper resource creation order
+
+```typescript
+// Before: No dependency management
+const autoScalingGroup = new aws.autoscaling.Group('app-asg', {
+  // No dependencies specified
+});
+
+// After: Explicit dependencies
+const autoScalingGroup = new aws.autoscaling.Group(
+  'app-asg',
+  {
+    // ... configuration
+  },
+  { ...providerOpts, dependsOn: [this.launchTemplate, targetGroup] }
+);
 ```

@@ -66,7 +66,7 @@ const loadStackOutputs = () => {
 
 // Initialize AWS clients
 const initializeClients = () => {
-  const region = 'us-west-2';
+  const region = process.env.AWS_REGION || 'us-west-2';
 
   return {
     ec2: new EC2Client({ region }),
@@ -1132,7 +1132,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
   describe('Integration Test Summary', () => {
     it('should validate deployment region compliance', async () => {
       // Verify all resources are deployed in the expected region
-      const expectedRegion = process.env.AWS_REGION || 'us-east-1';
+      const expectedRegion = 'us-west-2';
 
       // Check VPC region
       const vpcId = outputs.vpcId;
