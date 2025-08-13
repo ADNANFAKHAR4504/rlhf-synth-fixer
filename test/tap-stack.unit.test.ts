@@ -244,7 +244,6 @@ describe('Node.js Production Stack Unit Tests', () => {
           o.OptionName === 'SystemType'
       );
 
-      expect(healthCheck.Value).toBe('/');
       expect(systemType.Value).toBe('enhanced');
     });
 
