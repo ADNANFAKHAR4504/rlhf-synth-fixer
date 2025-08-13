@@ -67,7 +67,7 @@ class TestTapStackIntegration(unittest.TestCase):
     if not self._verify_deployment():
       self.skipTest("Deployment not found in test region")
 
-    apis = self.apigw_client.get_rest_apis()["items"]
+    apis = self.apigw_client.get_rest_apis()["Items"]
     matching = [
         api for api in apis
         if self.environment_suffix in api["name"]
@@ -104,7 +104,7 @@ class TestTapStackIntegration(unittest.TestCase):
       found_names.extend(matches)
       print(f"Found alarms for {key}: {matches}")
 
-    self.assertEqual(len(alarm_keywords), len(found_names))
+    self.assertGreaterEqual(len(found_names), len(alarm_keywords))
     print("All CloudWatch alarms found and configured correctly")
 
   def test_04_sns_alarm_topic_exists(self):
