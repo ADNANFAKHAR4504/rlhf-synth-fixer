@@ -168,6 +168,47 @@ def find_available_subnet_cidrs(vpc_id: str):
         return ["10.0.100.0/24", "10.0.101.0/24"]
 
 
+def find_existing_route_tables(vpc_id):
+    """Find existing route tables in the VPC for reuse."""
+    try:
+        # Get all non-main route tables in the VPC
+        route_tables = aws.ec2.get_route_tables(
+            filters=[
+                aws.ec2.GetRouteTablesFilterArgs(name="vpc-id", values=[vpc_id]),
+                aws.ec2.GetRouteTablesFilterArgs(name="association.main", values=["false"])
+            ],
+            opts=pulumi.InvokeOptions(provider=aws_provider)
+        )
+        
+        if route_tables.ids and len(route_tables.ids) > 0:
+            pulumi.log.info(f"Found {len(route_tables.ids)} existing route tables")
+            
+            # Look for a public route table (has 0.0.0.0/0 route to IGW)
+            for rt_id in route_tables.ids:
+                try:
+                    rt_details = aws.ec2.get_route_table(
+                        id=rt_id,
+                        opts=pulumi.InvokeOptions(provider=aws_provider)
+                    )
+                    
+                    # Check if this route table has a public route
+                    for route in rt_details.routes:
+                        if (route.get("destination_cidr_block") == "0.0.0.0/0" and 
+                            route.get("gateway_id", "").startswith("igw-")):
+                            pulumi.log.info(f"Found suitable public route table: {rt_id}")
+                            return rt_id
+                except Exception as e:
+                    pulumi.log.warn(f"Could not check route table {rt_id}: {e}")
+                    continue
+        
+        pulumi.log.info("No suitable existing route tables found")
+        return None
+        
+    except Exception as e:
+        pulumi.log.warn(f"Error finding route tables: {e}")
+        return None
+
+
 def get_vpc_with_fallback():
     """Get VPC with intelligent fallback strategy to handle VPC limits."""
     try:
@@ -356,36 +397,41 @@ for i, az in enumerate(availability_zones):
     
     public_subnets.append(subnet)
 
-route_table = aws.ec2.RouteTable(
-    get_resource_name("public-route-table"),
-    vpc_id=vpc.id,
-    tags={
-        "Name": get_resource_name("public-route-table"),
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME
-    },
-    opts=pulumi.ResourceOptions(provider=aws_provider)
-)
+# Route table with reuse capability
+existing_route_table_id = find_existing_route_tables(vpc_id)
 
-public_route_table = aws.ec2.RouteTable(
-    get_resource_name("public-rt"),
-    vpc_id=vpc.id,
-    tags={
-        "Name": get_resource_name("public-rt"),
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME,
-        "Type": "Public"
-    },
-    opts=pulumi.ResourceOptions(provider=aws_provider)
-)
+if existing_route_table_id:
+    # Reuse existing route table
+    pulumi.log.info(f"Reusing existing route table: {existing_route_table_id}")
+    public_route_table = aws.ec2.RouteTable.get(
+        get_resource_name("public-rt"),
+        existing_route_table_id,
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+    )
+else:
+    # Create new route table
+    pulumi.log.info("Creating new route table...")
+    public_route_table = aws.ec2.RouteTable(
+        get_resource_name("public-rt"),
+        vpc_id=vpc.id,
+        tags={
+            "Name": get_resource_name("public-rt"),
+            "Environment": ENVIRONMENT,
+            "Project": PROJECT_NAME,
+            "Type": "Public"
+        },
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+    )
 
-ipv4_route = aws.ec2.Route(
-    get_resource_name("ipv4-route"),
-    route_table_id=public_route_table.id,
-    destination_cidr_block="0.0.0.0/0",
-    gateway_id=internet_gateway.id,
-    opts=pulumi.ResourceOptions(provider=aws_provider)
-)
+# Only create route if using new route table
+if not existing_route_table_id:
+    ipv4_route = aws.ec2.Route(
+        get_resource_name("ipv4-route"),
+        route_table_id=public_route_table.id,
+        destination_cidr_block="0.0.0.0/0",
+        gateway_id=internet_gateway.id,
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+    )
 
 # Skip IPv6 route for compatibility with reused VPCs
 # ipv6_route = aws.ec2.Route(
@@ -396,17 +442,20 @@ ipv4_route = aws.ec2.Route(
 #     opts=pulumi.ResourceOptions(provider=aws_provider)
 # )
 
-for i, subnet in enumerate(public_subnets):
-    aws.ec2.RouteTableAssociation(
-        get_resource_name(f"public-rta-{i + 1}"),
-        subnet_id=subnet.id,
-        route_table_id=public_route_table.id,
-        opts=pulumi.ResourceOptions(
-            provider=aws_provider,
-            protect=False,
-            depends_on=[subnet, public_route_table]
+# Only create route table associations if not using existing route table
+# (existing route tables may already have associations)
+if not existing_route_table_id:
+    for i, subnet in enumerate(public_subnets):
+        aws.ec2.RouteTableAssociation(
+            get_resource_name(f"public-rta-{i + 1}"),
+            subnet_id=subnet.id,
+            route_table_id=public_route_table.id,
+            opts=pulumi.ResourceOptions(
+                provider=aws_provider,
+                protect=False,
+                depends_on=[subnet, public_route_table]
+            )
         )
-    )
 
 alb_security_group = aws.ec2.SecurityGroup(
     get_resource_name("alb-sg"),
@@ -795,8 +844,10 @@ print("🔧 VPC Limit Optimization:")
 print("   • Automatic VPC reuse for existing project VPCs")
 print("   • Automatic Internet Gateway discovery and reuse")
 print("   • Automatic subnet discovery and reuse")
+print("   • Automatic route table discovery and reuse")
 print("   • Smart CIDR conflict avoidance for new subnets")
 print("   • Conditional IPv6 support based on existing VPC capabilities")
+print("   • Intelligent route table association handling")
 print("   • Fallback to default VPC if creation fails")
 print("   • Comprehensive error handling and logging")
 print("   • Resource tagging for better management")
