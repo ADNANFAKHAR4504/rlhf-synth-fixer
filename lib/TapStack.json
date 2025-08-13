@@ -1342,7 +1342,7 @@
       "UpdateReplacePolicy": "Delete",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "v1-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -1454,7 +1454,7 @@
       "UpdateReplacePolicy": "Delete",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "v1-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -1702,7 +1702,7 @@
       "UpdateReplacePolicy": "Delete",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "configg-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "v1-config-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -1920,29 +1920,9 @@
         }
       }
     },
-    "ConfigRecorderStatus": {
-      "Type": "AWS::Config::ConfigurationRecorder",
-      "DependsOn": [
-        "ConfigDeliveryChannel"
-      ],
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${Environment}-config-recorder-status-${EnvironmentSuffix}"
-        },
-        "RoleARN": {
-          "Fn::GetAtt": [
-            "ConfigRecorderRole",
-            "Arn"
-          ]
-        },
-        "RecordingGroup": {
-          "AllSupported": true
-        }
-      }
-    },
     "ConfigRuleS3PublicRead": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorderStatus",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-public-read-prohibited-${EnvironmentSuffix}"
@@ -1956,7 +1936,7 @@
     },
     "ConfigRuleS3PublicWrite": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorderStatus",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-public-write-prohibited-${EnvironmentSuffix}"
@@ -1970,7 +1950,7 @@
     },
     "ConfigRuleRDSEncrypted": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorderStatus",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "rds-storage-encrypted-${EnvironmentSuffix}"
@@ -1984,7 +1964,7 @@
     },
     "ConfigRuleUnrestrictedSSH": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorderStatus",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "restricted-ssh-${EnvironmentSuffix}"
