@@ -11,6 +11,7 @@
 │       ├── compute-stack.ts
 │       ├── database-stack.ts
 │       ├── kms-stack.ts
+│       ├── core-stack.ts
 │       ├── monitoring-stack.ts
 │       ├── network-stack.ts
 │       └── storage-stack.ts
@@ -130,31 +131,124 @@ export class ComputeStack extends Stack {
 ```
 
 ---
-### lib/stacks/database-stack.ts
+### lib/stacks/core-stack.ts
 ```typescript
-import { Stack, StackProps } from 'aws-cdk-lib';
-import { IVpc, SecurityGroup, Role } from 'aws-cdk-lib/aws-ec2';
-import { IKey } from 'aws-cdk-lib/aws-kms';
+import * as cdk from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
-import { DatabaseInstance } from 'aws-cdk-lib/aws-rds';
 
-export interface DatabaseStackProps extends StackProps {
-	vpc: IVpc;
-	dataKey: IKey;
-	appSecurityGroup: SecurityGroup;
-	appInstanceRole: Role;
+export interface DatabaseStackProps extends cdk.StackProps {
+  vpc: ec2.IVpc;
+  dataKey: kms.IKey;
+  appSecurityGroup: ec2.ISecurityGroup;
+  appInstanceRole: iam.IRole;
 }
 
-export class DatabaseStack extends Stack {
-	public readonly dbInstance: DatabaseInstance;
+export class DatabaseStack extends cdk.Stack {
+  public readonly dbInstance: rds.DatabaseInstance;
 
-	constructor(scope: Construct, id: string, props: DatabaseStackProps) {
-		super(scope, id, props);
-		if (!props.vpc || !props.dataKey || !props.appSecurityGroup || !props.appInstanceRole) {
-			throw new Error('Missing required props for DatabaseStack');
-		}
-		// ...actual resource definitions...
-	}
+  constructor(scope: Construct, id: string, props: DatabaseStackProps) {
+    super(scope, id, props);
+
+    // Use shared resources from CoreStack
+    const dbSg = new ec2.SecurityGroup(this, 'DbSg', {
+      vpc: props.vpc,
+      allowAllOutbound: true,
+    });
+    dbSg.addIngressRule(
+      props.appSecurityGroup,
+      ec2.Port.tcp(5432),
+      'App -> DB'
+    );
+
+    const dbCredentials = rds.Credentials.fromGeneratedSecret('postgres'); // in Secrets Manager
+
+    this.dbInstance = new rds.DatabaseInstance(this, 'Db', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_16,
+      }),
+      vpc: props.vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      securityGroups: [dbSg],
+      credentials: dbCredentials,
+      allocatedStorage: 100,
+      multiAz: true,
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MEDIUM
+      ),
+      storageEncrypted: true,
+      storageEncryptionKey: props.dataKey,
+      cloudwatchLogsExports: ['postgresql'],
+      cloudwatchLogsRetention: logs.RetentionDays.ONE_MONTH,
+      deletionProtection: true,
+      iamAuthentication: true,
+      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+      performanceInsightEncryptionKey: props.dataKey,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    // Grant read access to secret and connect permission to appInstanceRole
+    const secret = this.dbInstance.secret as secretsmanager.ISecret;
+    if (secret && props.appInstanceRole) {
+      secret.grantRead(props.appInstanceRole);
+      this.dbInstance.grantConnect(props.appInstanceRole, 'postgres');
+    }
+
+    new cdk.CfnOutput(this, 'DbEndpoint', {
+      value: this.dbInstance.instanceEndpoint.hostname,
+    });
+  }
+}
+```
+
+---
+### lib/stacks/database-stack.ts
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import { Construct } from 'constructs';
+
+export interface CoreStackProps extends cdk.StackProps {
+  vpcCidr?: string;
+}
+
+export class CoreStack extends cdk.Stack {
+  public readonly vpc: ec2.Vpc;
+  public readonly dataKey: kms.Key;
+  public readonly appSecurityGroup: ec2.SecurityGroup;
+  public readonly appInstanceRole: iam.Role;
+
+  constructor(scope: Construct, id: string, props: CoreStackProps = {}) {
+    super(scope, id, props);
+
+    this.vpc = new ec2.Vpc(this, 'AppVpc', {
+      cidr: props.vpcCidr || '10.0.0.0/16',
+      maxAzs: 2,
+    });
+
+    this.dataKey = new kms.Key(this, 'DataKey', {
+      enableKeyRotation: true,
+    });
+
+    this.appSecurityGroup = new ec2.SecurityGroup(this, 'AppSg', {
+      vpc: this.vpc,
+      allowAllOutbound: true,
+      description: 'Shared app security group',
+    });
+
+    this.appInstanceRole = new iam.Role(this, 'AppInstanceRole', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      description: 'Shared EC2 instance role',
+    });
+  }
 }
 ```
 

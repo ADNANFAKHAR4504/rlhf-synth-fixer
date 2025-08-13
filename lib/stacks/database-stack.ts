@@ -20,6 +20,7 @@ export class DatabaseStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id, props);
 
+    // Use shared resources from CoreStack
     const dbSg = new ec2.SecurityGroup(this, 'DbSg', {
       vpc: props.vpc,
       allowAllOutbound: true,
@@ -57,9 +58,12 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
+    // Grant read access to secret and connect permission to appInstanceRole
     const secret = this.dbInstance.secret as secretsmanager.ISecret;
-    secret.grantRead(props.appInstanceRole);
-    this.dbInstance.grantConnect(props.appInstanceRole, 'postgres');
+    if (secret && props.appInstanceRole) {
+      secret.grantRead(props.appInstanceRole);
+      this.dbInstance.grantConnect(props.appInstanceRole, 'postgres');
+    }
 
     new cdk.CfnOutput(this, 'DbEndpoint', {
       value: this.dbInstance.instanceEndpoint.hostname,
