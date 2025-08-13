@@ -72,9 +72,7 @@ export class TapStack extends cdk.Stack {
             new iam.PolicyStatement({
               sid: 'Allow RDS',
               effect: iam.Effect.ALLOW,
-              principals: [
-                new iam.ServicePrincipal('rds.amazonaws.com'),
-              ],
+              principals: [new iam.ServicePrincipal('rds.amazonaws.com')],
               actions: [
                 'kms:Encrypt',
                 'kms:Decrypt',
