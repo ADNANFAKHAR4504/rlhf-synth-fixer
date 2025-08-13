@@ -86,13 +86,6 @@ variable "db_username" {
   default     = "dbapp"
 }
 
-variable "db_password" {
-  description = "RDS master password"
-  type        = string
-  sensitive   = true
-  default     = "dbapppass"
-}
-
 #########################
 # VPC + Networking
 #########################
@@ -380,12 +373,25 @@ resource "aws_launch_template" "app_lt" {
   name_prefix   = "${var.project}-${var.environment}-lt"
   image_id      = var.ec2_ami_id
   instance_type = var.ec2_instance_type
+
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
+
   network_interfaces {
     security_groups = [aws_security_group.ec2_sg.id]
   }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 8
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
+
   tag_specifications {
     resource_type = "instance"
     tags          = local.common_tags
@@ -421,14 +427,35 @@ resource "aws_db_subnet_group" "rds_subnets" {
   tags       = local.common_tags
 }
 
+resource "aws_secretsmanager_secret" "db_password" {
+  name        = "${var.project}-${var.environment}-db-password"
+  description = "RDS master password for ${var.project} ${var.environment}"
+}
+
+resource "aws_secretsmanager_secret_version" "db_password_value" {
+  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_string = random_password.db_password.result
+}
+
+resource "random_password" "db_password" {
+  length           = 16
+  special          = true
+  override_special = "_%@"
+}
+
+
 resource "aws_db_instance" "mysql" {
+  depends_on = [
+    aws_secretsmanager_secret_version.db_password_value
+  ]
+
   identifier              = "a-${lower(var.project)}-${lower(var.environment)}-mysql"
   allocated_storage       = 20
   engine                  = "mysql"
   engine_version          = "8.0"
   instance_class          = "db.t3.micro"
   username                = var.db_username
-  password                = var.db_password
+  password                = jsondecode(data.aws_secretsmanager_secret_version.db_password.secret_string)
   multi_az                = true
   storage_encrypted       = true
   publicly_accessible     = false
@@ -450,4 +477,23 @@ output "alb_dns_name" {
 output "rds_endpoint" {
   description = "Endpoint of the RDS MySQL instance"
   value       = try(aws_db_instance.mysql.endpoint, "pending-endpoint")
+}
+output "autoscaling_group_name" {
+  description = "Name of the Auto Scaling Group"
+  value       = try(aws_autoscaling_group.app_asg.name, "pending-asg-name")
+}
+
+output "app_security_group_id" {
+  description = "ID of the application Security Group"
+  value       = try(aws_security_group.app_sg.id, "pending-sg-id")
+}
+
+output "alb_security_group_id" {
+  description = "ID of the ALB Security Group"
+  value       = try(aws_security_group.alb_sg.id, "pending-sg-id")
+}
+
+output "ec2_iam_role_name" {
+  description = "Name of the IAM role attached to EC2 instances"
+  value       = try(aws_iam_role.ec2_role.name, "pending-iam-role")
 }

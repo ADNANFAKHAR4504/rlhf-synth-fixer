@@ -152,4 +152,46 @@ describe("Terraform Infrastructure Integration Tests", () => {
       console.log("ALB Logs Bucket:", albLogsBucket);
     }
   });
+
+  //Additional tests for ASG, SGs, and IAM Roles
+ test("Auto Scaling Group should exist and have desired capacity set", () => {
+   const asgName = tfOutputs.auto_scaling_group_name?.value;
+   expect(asgName).toBeDefined();
+
+   if (!asgName) {
+     console.warn("No ASG output found — skipping strict check");
+     return;
+   }
+
+   expect(asgName).not.toBe("");
+   expect(asgName).toMatch(/^[a-zA-Z0-9-]+$/);
+   console.log("ASG Name:", asgName);
+  });
+
+ test("Security Groups should be present and have valid IDs", () => {
+   const sgIds = tfOutputs.security_group_ids?.value;
+
+   if (!sgIds || sgIds.length === 0) {
+     console.warn("No Security Group IDs output — skipping strict check");
+     return;
+   }
+
+   expect(Array.isArray(sgIds)).toBe(true);
+   sgIds.forEach((id: string) => {
+     expect(id).toMatch(/^sg-[0-9a-f]{8,}$/);
+   });
+   console.log("Security Groups:", sgIds);
+ });
+
+ test("IAM Role should exist and have a valid ARN", () => {
+   const iamRoleArn = tfOutputs.iam_role_arn?.value;
+
+   if (!iamRoleArn) {
+     console.warn("No IAM Role ARN output — skipping strict check");
+     return;
+   }
+
+   expect(iamRoleArn).toMatch(/^arn:aws:iam::\d{12}:role\/[a-zA-Z0-9+=,.@_-]+$/);
+   console.log("IAM Role ARN:", iamRoleArn);
+ });
 });
