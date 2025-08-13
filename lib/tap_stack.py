@@ -29,6 +29,39 @@ class TapStack(pulumi.ComponentResource):
         self.tags = args.tags
 
         # ==========================================
+        # 0. Networking: VPC + Private Subnets
+        # ==========================================
+        self.vpc = aws.ec2.Vpc(
+            f"vpc-{self.environment_suffix}",
+            cidr_block="10.0.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={**self.tags, "Name": f"vpc-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Two private subnets in different AZs
+        self.private_subnet1 = aws.ec2.Subnet(
+            f"private-subnet-1-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            cidr_block="10.0.1.0/24",
+            availability_zone="us-east-1a",
+            map_public_ip_on_launch=False,
+            tags={**self.tags, "Name": f"private-subnet-1-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
+        self.private_subnet2 = aws.ec2.Subnet(
+            f"private-subnet-2-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            cidr_block="10.0.2.0/24",
+            availability_zone="us-east-1b",
+            map_public_ip_on_launch=False,
+            tags={**self.tags, "Name": f"private-subnet-2-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
+        # ==========================================
         # 1. Default IAM Policy (Least Privilege)
         # ==========================================
         self.default_policy = aws.iam.Policy(
@@ -39,7 +72,7 @@ class TapStack(pulumi.ComponentResource):
                 "Version": "2012-10-17",
                 "Statement": [{
                     "Effect": "Allow",
-                    "Action": [],
+                    "Action": ["sts:GetCallerIdentity"],
                     "Resource": "*"
                 }]
             }),
@@ -50,18 +83,25 @@ class TapStack(pulumi.ComponentResource):
         # ==========================================
         # 2. Logging Bucket
         # ==========================================
-        self.logging_bucket = aws.s3.BucketV2(
+        self.logging_bucket = aws.s3.Bucket(
             f"logging-bucket-{self.environment_suffix}",
             bucket=f"tap-logging-{self.environment_suffix}",
-            acl="log-delivery-write",
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
-        self.logging_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        aws.s3.BucketOwnershipControls(
+            f"logging-bucket-ownership-{self.environment_suffix}",
+            bucket=self.logging_bucket.id,
+            rule=aws.s3.BucketOwnershipControlsRuleArgs(
+                object_ownership="BucketOwnerEnforced"
+            ),
+            opts=ResourceOptions(parent=self.logging_bucket)
+        )
+        aws.s3.BucketServerSideEncryptionConfiguration(
             f"logging-bucket-encryption-{self.environment_suffix}",
             bucket=self.logging_bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                     sse_algorithm="aws:kms"
                 )
             )],
@@ -71,22 +111,32 @@ class TapStack(pulumi.ComponentResource):
         # ==========================================
         # 3. Application Bucket with Logging
         # ==========================================
-        self.app_bucket = aws.s3.BucketV2(
+        self.app_bucket = aws.s3.Bucket(
             f"app-bucket-{self.environment_suffix}",
             bucket=f"tap-app-{self.environment_suffix}",
-            acl="private",
-            loggings=[aws.s3.BucketV2LoggingArgs(
-                target_bucket=self.logging_bucket.bucket,
-                target_prefix="app-bucket-logs/"
-            )],
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
-        self.app_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        aws.s3.BucketOwnershipControls(
+            f"app-bucket-ownership-{self.environment_suffix}",
+            bucket=self.app_bucket.id,
+            rule=aws.s3.BucketOwnershipControlsRuleArgs(
+                object_ownership="BucketOwnerEnforced"
+            ),
+            opts=ResourceOptions(parent=self.app_bucket)
+        )
+        aws.s3.BucketLogging(
+            f"app-bucket-logging-{self.environment_suffix}",
+            bucket=self.app_bucket.id,
+            target_bucket=self.logging_bucket.id,
+            target_prefix="app-bucket-logs/",
+            opts=ResourceOptions(parent=self.app_bucket)
+        )
+        aws.s3.BucketServerSideEncryptionConfiguration(
             f"app-bucket-encryption-{self.environment_suffix}",
             bucket=self.app_bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                     sse_algorithm="aws:kms"
                 )
             )],
@@ -94,48 +144,61 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # ==========================================
-        # 4. KMS Key for Sensitive Data Encryption
+        # 4. KMS Key
         # ==========================================
         self.kms_key = aws.kms.Key(
             f"kms-key-{self.environment_suffix}",
             description="KMS key for encrypting sensitive data",
             deletion_window_in_days=10,
             enable_key_rotation=True,
-            tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
 
         # ==========================================
-        # 5. Private Database (RDS example)
+        # 5. Private Database (RDS Postgres)
         # ==========================================
         self.db_subnet_group = aws.rds.SubnetGroup(
             f"db-subnet-group-{self.environment_suffix}",
-            subnet_ids=["subnet-12345678", "subnet-87654321"],  # Placeholder
+            subnet_ids=[self.private_subnet1.id, self.private_subnet2.id],
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
 
+        self.db_security_group = aws.ec2.SecurityGroup(
+            f"db-sg-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            description="DB security group - no public access",
+            ingress=[],  # No inbound rules by default
+            egress=[aws.ec2.SecurityGroupEgressArgs(
+                protocol="-1",
+                from_port=0,
+                to_port=0,
+                cidr_blocks=["0.0.0.0/0"]
+            )],
+            tags=self.tags,
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
         self.db = aws.rds.Instance(
-            f"db-instance-{self.environment_suffix}",   # resource name positional arg
-            allocated_storage=20,                       # keyword args for properties
+            f"db-instance-{self.environment_suffix}",
+            allocated_storage=20,
             engine="postgres",
             instance_class="db.t3.micro",
             db_name="appdb",
-            username="admin",
-            password="P@ssw0rd123!", # config.require_secret("dbPassword"),  # use Pulumi config secret
+            username="dbadmin",
+            password="Passw0rd123!",  # use config.require_secret in prod
             skip_final_snapshot=True,
-            db_subnet_group_name=self.db_subnet_group.name,  # Output[str] or str
-            vpc_security_group_ids=["sg-12345678"],          # list of strings
+            db_subnet_group_name=self.db_subnet_group.name,
+            vpc_security_group_ids=[self.db_security_group.id],
             publicly_accessible=False,
             storage_encrypted=True,
-            kms_key_id=self.kms_key.arn,                      # Output[str] or str
+            kms_key_id=self.kms_key.arn,
             tags=self.tags,
-            opts=pulumi.ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self)
         )
-                
 
         # ==========================================
-        # 6. Attach Default Policy to IAM Roles
+        # 6. Attach Default Policy to Roles
         # ==========================================
         self.attachments = []
         for role_name in ["app-role", "db-role"]:
@@ -163,6 +226,8 @@ class TapStack(pulumi.ComponentResource):
         # ==========================================
         # Outputs
         # ==========================================
+        pulumi.export("vpc_id", self.vpc.id)
+        pulumi.export("private_subnet_ids", [self.private_subnet1.id, self.private_subnet2.id])
         pulumi.export("logging_bucket_name", self.logging_bucket.bucket)
         pulumi.export("app_bucket_name", self.app_bucket.bucket)
         pulumi.export("db_instance_identifier", self.db.id)
@@ -170,3 +235,4 @@ class TapStack(pulumi.ComponentResource):
         pulumi.export("default_policy_arn", self.default_policy.arn)
 
         self.register_outputs({})
+
