@@ -94,6 +94,27 @@ def find_existing_vpc():
         return None
 
 
+def find_existing_igw(vpc_id: str):
+    """Find existing Internet Gateway for a specific VPC ID."""
+    try:
+        existing_igws = aws.ec2.get_internet_gateways(
+            filters=[
+                aws.ec2.GetInternetGatewaysFilterArgs(
+                    name="attachment.vpc-id",
+                    values=[vpc_id]
+                )
+            ],
+            opts=pulumi.InvokeOptions(provider=aws_provider)
+        )
+        
+        if existing_igws.ids and len(existing_igws.ids) > 0:
+            return existing_igws.ids[0]
+        return None
+    except Exception as e:
+        pulumi.log.warn(f"Could not find existing IGW for VPC {vpc_id}: {e}")
+        return None
+
+
 def get_vpc_with_fallback():
     """Get VPC with intelligent fallback strategy to handle VPC limits."""
     try:
@@ -102,15 +123,18 @@ def get_vpc_with_fallback():
         
         if existing_vpc_id:
             pulumi.log.info(f"Reusing existing VPC: {existing_vpc_id}")
-            return aws.ec2.Vpc.get(
-                get_resource_name("vpc"), 
-                existing_vpc_id, 
-                opts=pulumi.ResourceOptions(provider=aws_provider)
+            return (
+                aws.ec2.Vpc.get(
+                    get_resource_name("vpc"), 
+                    existing_vpc_id, 
+                    opts=pulumi.ResourceOptions(provider=aws_provider)
+                ),
+                existing_vpc_id
             )
         
         # Try to create new VPC
         pulumi.log.info("Creating new VPC...")
-        return aws.ec2.Vpc(
+        new_vpc = aws.ec2.Vpc(
             get_resource_name("vpc"),
             cidr_block="10.0.0.0/16",
             instance_tenancy="default",
@@ -125,6 +149,7 @@ def get_vpc_with_fallback():
             },
             opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
         )
+        return (new_vpc, None)
         
     except Exception as e:
         pulumi.log.warn(f"VPC creation failed, trying default VPC: {e}")
@@ -135,16 +160,19 @@ def get_vpc_with_fallback():
                 opts=pulumi.InvokeOptions(provider=aws_provider)
             )
             pulumi.log.info(f"Using default VPC: {default_vpc.id}")
-            return aws.ec2.Vpc.get(
-                "default-vpc", 
-                default_vpc.id, 
-                opts=pulumi.ResourceOptions(provider=aws_provider)
+            return (
+                aws.ec2.Vpc.get(
+                    "default-vpc", 
+                    default_vpc.id, 
+                    opts=pulumi.ResourceOptions(provider=aws_provider)
+                ),
+                default_vpc.id
             )
         except Exception as fallback_error:
             raise Exception(f"Both VPC creation and default VPC fallback failed: {e}")
 
 # Get VPC with intelligent fallback
-vpc = get_vpc_with_fallback()
+vpc, existing_vpc_id = get_vpc_with_fallback()
 
 availability_zones_data = aws.get_availability_zones(
     state="available",
@@ -163,9 +191,22 @@ amazon_linux_ami = aws.ec2.get_ami(
     opts=pulumi.InvokeOptions(provider=aws_provider)
 )
 
-def create_internet_gateway(vpc):
-    """Create Internet Gateway with error handling."""
+def create_internet_gateway(vpc, existing_vpc_id=None):
+    """Create or reuse Internet Gateway with error handling."""
     try:
+        # If we have an existing VPC ID, check for existing IGW
+        if existing_vpc_id:
+            existing_igw_id = find_existing_igw(existing_vpc_id)
+            if existing_igw_id:
+                pulumi.log.info(f"Reusing existing Internet Gateway: {existing_igw_id}")
+                return aws.ec2.InternetGateway.get(
+                    get_resource_name("igw"),
+                    existing_igw_id,
+                    opts=pulumi.ResourceOptions(provider=aws_provider)
+                )
+        
+        # Create new Internet Gateway if none exists
+        pulumi.log.info("Creating new Internet Gateway...")
         return aws.ec2.InternetGateway(
             get_resource_name("igw"),
             vpc_id=vpc.id,
@@ -176,12 +217,13 @@ def create_internet_gateway(vpc):
             },
             opts=pulumi.ResourceOptions(provider=aws_provider)
         )
+        
     except Exception as e:
-        pulumi.log.error(f"Internet Gateway creation failed: {e}")
-        raise
+        pulumi.log.error(f"Internet Gateway creation/discovery failed: {e}")
+        raise Exception(f"Could not create or find Internet Gateway: {e}")
 
-# Create Internet Gateway
-internet_gateway = create_internet_gateway(vpc)
+# Create or reuse Internet Gateway
+internet_gateway = create_internet_gateway(vpc, existing_vpc_id)
 
 public_subnets = []
 for i, az in enumerate(availability_zones):
@@ -628,9 +670,11 @@ print("   • Automated health checks and alarms")
 print("=" * 50)
 print("🔧 VPC Limit Optimization:")
 print("   • Automatic VPC reuse for existing project VPCs")
+print("   • Automatic Internet Gateway reuse for existing VPCs")
 print("   • Fallback to default VPC if creation fails")
 print("   • Comprehensive error handling and logging")
 print("   • Resource tagging for better management")
+print("   • IPv6 compatibility for both new and existing VPCs")
 print("=" * 50)
 
 # Add simple validation feedback
