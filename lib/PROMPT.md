@@ -29,19 +29,12 @@ It must create public and private subnets, each distributed across two Availabil
 
 Include an Internet Gateway for the public subnets and NAT Gateways for the private subnets to allow outbound internet access.
 
-S3 Logging Bucket Module:
-
-Create an S3LoggingBucketModule construct.
-
-The S3 bucket must have server-side encryption (SSE-S3) enabled by default.
-
-It must be configured to block all public access.
 
 EC2 Web Server Module:
 
 Create an Ec2InstanceModule construct.
 
-The instance should use a current Amazon Linux 2 AMI and be of type t2.micro.
+The instance should use a current Amazon Linux 2 AMI and be of type t3.micro.
 
 It must be placed in one of the public subnets and be assigned a public IP address.
 
@@ -55,7 +48,6 @@ Main Stack Specification (lib/tap-stack.ts):
 
 Define the main stack which extends TerraformStack.
 
-Instantiate the VpcModule, S3LoggingBucketModule, and Ec2InstanceModule.
 
 Pass the necessary outputs from the VPC module (e.g., VPC ID, public subnet ID) as inputs to the EC2 module.
 
