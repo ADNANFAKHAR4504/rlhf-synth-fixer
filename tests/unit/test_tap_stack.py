@@ -1,45 +1,40 @@
 import pytest
 from aws_cdk import App
-from aws_cdk.assertions import Template
+from aws_cdk.assertions import Template, Match
 from lib.tap_stack import WebApplicationStack
 
 @pytest.fixture(scope="module")
-def template():
+def stack_template():
   app = App()
   stack = WebApplicationStack(app, "MyTestStack")
   return Template.from_stack(stack)
 
-def test_vpc_created_with_correct_subnets(template):
-  # Verifies that a VPC with 2 public and 2 private subnets is created.
-  # The default behavior of max_azs=2 creates 2 subnets of each type.
-  template.resource_count_is("AWS::EC2::VPC", 1)
-  template.resource_count_is("AWS::EC2::Subnet", 4)
-  template.has_resource_properties("AWS::EC2::Subnet", {
+def test_vpc_created_with_correct_subnets(stack_template):
+  stack_template.resource_count_is("AWS::EC2::VPC", 1)
+  stack_template.resource_count_is("AWS::EC2::Subnet", 4)
+  stack_template.has_resource_properties("AWS::EC2::Subnet", {
     "MapPublicIpOnLaunch": True
   })
-  template.has_resource_properties("AWS::EC2::Subnet", {
+  stack_template.has_resource_properties("AWS::EC2::Subnet", {
     "MapPublicIpOnLaunch": False
   })
 
-def test_alb_created(template):
-  # Checks for the existence of an Application Load Balancer with the specified name.
-  template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
-  template.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
+def test_alb_created(stack_template):
+  stack_template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
+  stack_template.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
     "Name": "MyWebApplicationALB",
     "Scheme": "internet-facing"
   })
 
-def test_asg_created_and_configured(template):
-  # Ensures the Auto Scaling Group exists with correct instance type and scaling policy.
-  template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
-  template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
+def test_asg_created_and_configured(stack_template):
+  stack_template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
+  stack_template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
     "DesiredCapacity": "1",
     "MinSize": "1",
     "MaxSize": "3",
-    "LaunchConfigurationName": pytest.anything()
+    "LaunchConfigurationName": Match.any_value()
   })
-
-  template.has_resource_properties("AWS::AutoScaling::ScalingPolicy", {
+  stack_template.has_resource_properties("AWS::AutoScaling::ScalingPolicy", {
     "PolicyType": "TargetTrackingScaling",
     "TargetTrackingConfiguration": {
       "PredefinedMetricSpecification": {
@@ -49,27 +44,25 @@ def test_asg_created_and_configured(template):
     }
   })
 
-def test_cloudwatch_alarm_created(template):
-  # Validates the CloudWatch alarm for high CPU utilization and its SNS topic action.
-  template.resource_count_is("AWS::CloudWatch::Alarm", 1)
-  template.has_resource_properties("AWS::CloudWatch::Alarm", {
+def test_cloudwatch_alarm_created(stack_template):
+  stack_template.resource_count_is("AWS::CloudWatch::Alarm", 1)
+  stack_template.has_resource_properties("AWS::CloudWatch::Alarm", {
     "MetricName": "CPUUtilization",
     "Namespace": "AWS/EC2",
     "Threshold": 70.0,
     "ComparisonOperator": "GreaterThanThreshold",
     "EvaluationPeriods": 2,
     "DatapointsToAlarm": 2,
-    "AlarmActions": pytest.anything()
+    "AlarmActions": Match.any_value()
   })
 
-def test_cloudfront_distribution_created(template):
-  # Confirms CloudFront distribution is configured with both ALB and S3 origins.
-  template.resource_count_is("AWS::CloudFront::Distribution", 1)
-  template.has_resource_properties("AWS::CloudFront::Distribution", {
+def test_cloudfront_distribution_created(stack_template):
+  stack_template.resource_count_is("AWS::CloudFront::Distribution", 1)
+  stack_template.has_resource_properties("AWS::CloudFront::Distribution", {
     "DistributionConfig": {
       "Origins": [
-        pytest.anything(),  # ALB origin
-        pytest.anything()   # S3 origin
+        Match.any_value(),
+        Match.any_value()
       ],
       "DefaultCacheBehavior": {
         "ViewerProtocolPolicy": "redirect-to-https"
@@ -81,27 +74,23 @@ def test_cloudfront_distribution_created(template):
     }
   })
 
-def test_s3_bucket_created_with_correct_removal_policy(template):
-  # Verifies the S3 bucket for static assets exists and is configured for auto-deletion.
-  template.has_resource_properties("AWS::S3::Bucket", {
-    "BucketEncryption": pytest.anything(),
-    "PublicAccessBlockConfiguration": pytest.anything()
+def test_s3_bucket_created_with_correct_removal_policy(stack_template):
+  stack_template.has_resource_properties("AWS::S3::Bucket", {
+    "BucketEncryption": Match.any_value(),
+    "PublicAccessBlockConfiguration": Match.any_value()
   })
-
-  # Check for the DeletionPolicy
-  s3_bucket = template.find_resources("AWS::S3::Bucket")
+  s3_bucket = stack_template.find_resources("AWS::S3::Bucket")
   first_bucket = list(s3_bucket.values())[0]
   assert "DeletionPolicy" in first_bucket
   assert first_bucket["DeletionPolicy"] == "Delete"
 
-def test_outputs_are_created(template):
-  # Ensures the necessary CloudFormation outputs are defined.
-  template.has_output("AlbDnsName", {
+def test_outputs_are_created(stack_template):
+  stack_template.has_output("AlbDnsName", {
     "Export": {
       "Name": "MyTestStack-AlbDnsName"
     }
   })
-  template.has_output("CloudFrontDistributionDomainName", {
+  stack_template.has_output("CloudFrontDistributionDomainName", {
     "Export": {
       "Name": "MyTestStack-CloudFrontDistributionDomainName"
     }

@@ -2,7 +2,7 @@ Using AWS CDK in Python, design and deploy a web application on AWS that meets t
 
     Application Load Balancer (ALB): Deploy the web application behind an AWS Application Load Balancer to manage incoming HTTP/HTTPS traffic.
 
-    Amazon RDS (MySQL): Provision an Amazon RDS MySQL database instance for storing application data. (Ignore as DB quota is reached limit on aws account)
+    Amazon RDS (MySQL): Provision an Amazon RDS MySQL database instance for storing application data.
 
     IAM Roles and Policies: Configure IAM roles and policies to ensure all AWS resources follow the principle of least privilege.
 
