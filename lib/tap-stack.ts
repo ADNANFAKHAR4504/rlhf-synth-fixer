@@ -25,7 +25,6 @@ import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmana
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 
-// FIX: Added a second AZ and subnet CIDR for the DB subnets
 interface RegionConfig {
   readonly region: string;
   readonly vpcCidr: string;
@@ -37,7 +36,6 @@ interface RegionConfig {
   readonly azB: string;
 }
 
-// FIX: Updated region configs with info for a second AZ.
 const REGION_CONFIGS: RegionConfig[] = [
   {
     region: 'us-east-1',
@@ -96,9 +94,12 @@ export class MultiRegionSecurityStack extends TerraformStack {
 
     const centralProvider = providers.get('us-east-1')!;
 
+    // FIX: Define a unique suffix to be used for globally unique resource names.
+    const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
+
     const centralLogBucket = new S3Bucket(this, 'CentralLogBucket', {
       provider: centralProvider,
-      bucket: `securecore-central-logs-${Fn.substr(Fn.uuid(), 0, 8)}`,
+      bucket: `securecore-central-logs-${uniqueSuffix}`,
       tags: { ...COMMON_TAGS, Region: 'us-east-1', Name: 'central-log-bucket' },
     });
 
@@ -135,8 +136,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
       targetBucket: centralLogBucket.id,
       targetPrefix: 'log-bucket-access/',
     });
-
-    // FIX: Removed the IAM role and policy for Flow Logs as they are not needed for S3 destinations.
 
     for (const config of REGION_CONFIGS) {
       const regionProvider = providers.get(config.region)!;
@@ -188,7 +187,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         tags: { ...tags, Name: `private-subnet-${config.region}` },
       });
 
-      // FIX: Create two DB subnets in different AZs.
       const dbSubnetA = new Subnet(this, `DbSubnetA-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
@@ -254,7 +252,7 @@ export class MultiRegionSecurityStack extends TerraformStack {
         vpcId: vpc.id,
         tags: { ...tags, Name: `db-rt-${config.region}` },
       });
-      // Associate DB route table with both DB subnets
+
       new RouteTableAssociation(this, `DbRTAA-${config.region}`, {
         provider: regionProvider,
         subnetId: dbSubnetA.id,
@@ -322,7 +320,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         toPort: 0,
       });
 
-      // FIX: Removed the iamRoleArn from the FlowLog resource.
       new FlowLog(this, `FlowLog-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
@@ -343,7 +340,8 @@ export class MultiRegionSecurityStack extends TerraformStack {
         `DBSecret-${config.region}`,
         {
           provider: regionProvider,
-          name: `prod/rds/master_password/${config.region}`,
+          // FIX: Appended the unique suffix to the secret name to prevent collisions.
+          name: `prod/rds/master_password/${config.region}-${uniqueSuffix}`,
           tags: { ...tags, Name: `db-secret-${config.region}` },
         }
       );
@@ -358,7 +356,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         }
       );
 
-      // FIX: Pass both DB subnet IDs to the subnet group.
       const dbSubnetGroup = new DbSubnetGroup(
         this,
         `DbSubnetGroup-${config.region}`,
