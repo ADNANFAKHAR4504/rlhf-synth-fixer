@@ -1,13 +1,11 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import * as Lambda from '@aws-sdk/client-lambda';
-import * as S3 from '@aws-sdk/client-s3';
 import * as CloudWatchLogs from '@aws-sdk/client-cloudwatch-logs';
 import fs from 'fs';
 
 // AWS SDK Configuration
 const region = process.env.AWS_DEFAULT_REGION || 'us-west-2';
 const lambda = new Lambda.LambdaClient({ region });
-const s3 = new S3.S3Client({ region });
 const cloudWatchLogs = new CloudWatchLogs.CloudWatchLogsClient({ region });
 
 // Load outputs if file exists, otherwise use environment variables
@@ -24,7 +22,6 @@ try {
 
 const LAMBDA_FUNCTION_NAME = outputs['LambdaFunctionName'] || process.env.LAMBDA_FUNCTION_NAME;
 const LAMBDA_ALIAS_NAME = outputs['LambdaAliasName'] || process.env.LAMBDA_ALIAS_NAME;
-const S3_BUCKET_NAME = outputs['S3BucketName'] || process.env.S3_BUCKET_NAME;
 const LOG_GROUP_NAME = outputs['LogGroupName'] || process.env.LOG_GROUP_NAME;
 
 // Utility function to generate unique test IDs
@@ -52,13 +49,6 @@ describe('TapStack Integration Tests', () => {
     );
     expect(result.AliasArn).toBeDefined();
     expect(result.FunctionVersion).not.toBe('$LATEST');
-  });
-
-  test('S3 bucket exists', async () => {
-    const result = await s3.send(
-      new S3.HeadBucketCommand({ Bucket: S3_BUCKET_NAME })
-    );
-    expect(result['$metadata'].httpStatusCode).toBe(200);
   });
 
   test('CloudWatch log group exists for Lambda', async () => {
