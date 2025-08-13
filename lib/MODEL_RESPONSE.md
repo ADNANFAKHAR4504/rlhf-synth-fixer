@@ -1,3 +1,4 @@
+```typescript
 I'll create a secure and highly available AWS environment using Terraform. However, I notice you mentioned `.ts` files in the constraints, but Terraform uses `.tf` files with HCL syntax. I'll provide the solution using proper Terraform HCL syntax in `.tf` files.
 
 ## modules.tf
@@ -491,3 +492,5 @@ resource "aws_security_group" "ec2_sg" {
    ```
 
 This configuration creates a secure, highly available AWS environment with proper state management and follows Terraform best practices for modular structure and security.
+
+```

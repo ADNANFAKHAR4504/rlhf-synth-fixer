@@ -19,10 +19,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       ]
     },
     "state_bucket_arn": {
-      "value": "arn:aws:s3:::custom-state-bucket"
+      "value": "arn:aws:s3:::mock-tfstate-bucket"
     },
     "state_bucket_name": {
-      "value": "custom-state-bucket"
+      "value": "mock-tfstate-bucket"
     },
     "vpc_id": {
       "value": "mock-vpc-id"
@@ -82,10 +82,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       ]
     },
     "state_bucket_arn": {
-      "value": "arn:aws:s3:::iac-rlhf-tf-states"
+      "value": "arn:aws:s3:::mock-tfstate-bucket"
     },
     "state_bucket_name": {
-      "value": "iac-rlhf-tf-states"
+      "value": "mock-tfstate-bucket"
     },
     "vpc_id": {
       "value": "mock-vpc-id"

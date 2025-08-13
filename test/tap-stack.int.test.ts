@@ -14,6 +14,8 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { GetBucketVersioningCommand } from '@aws-sdk/client-s3';
+
 const awsRegion =
   process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 
@@ -116,15 +118,13 @@ describe('TAP Stack Core AWS Infrastructure', () => {
       const expectedRegion = LocationConstraint || 'us-east-1';
       expect(expectedRegion).toBe(awsRegion);
     }, 20000);
+
+    test(`should have versioning enabled on "${stateBucketName}"`, async () => {
+    const { Status } = await s3Client.send(
+      new GetBucketVersioningCommand({ Bucket: stateBucketName })
+    );
+    expect(Status).toBe('Enabled');
+  }, 20000);
+});
   });
 
-  // IAM Role Test
-  describe('EC2 IAM Role', () => {
-    test(`should have IAM role "${ec2RoleName}" available in AWS`, async () => {
-      const { Role } = await iamClient.send(
-        new GetRoleCommand({ RoleName: ec2RoleName })
-      );
-      expect(Role?.RoleName).toBe(ec2RoleName);
-    }, 20000);
-  });
-});

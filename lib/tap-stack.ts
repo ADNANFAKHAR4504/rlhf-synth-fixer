@@ -2,11 +2,13 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { TerraformOutput } from 'cdktf';
-import { createHighAvailabilityVpc } from './modules';
-import { createEc2S3StateRole } from './modules';
+import {
+  createEc2S3StateRole,
+  createHighAvailabilityVpc,
+  createStateBucket,
+} from './modules';
 
 // ? Import your stacks here
 // import { MyStack } from './my-stack';
@@ -64,10 +66,10 @@ export class TapStack extends TerraformStack {
     });
 
     // Define state object for bucketArn and bucketName
-    const state = {
-      bucketArn: `arn:aws:s3:::${stateBucket}`,
-      bucketName: stateBucket,
-    };
+    const state = createStateBucket(this, 'tap-state-bucket', {
+      namePrefix: stateBucket,
+      region: awsRegion, // or your preferred region variable
+    });
 
     // Create EC2 IAM role with access to the state bucket
     const ec2Role = createEc2S3StateRole(this, 'tap', {

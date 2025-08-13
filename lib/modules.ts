@@ -13,7 +13,6 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -57,23 +56,6 @@ export function createStateBucket(
       status: 'Enabled',
     },
   });
-
-  // Server side encryption using AES256
-  new S3BucketServerSideEncryptionConfigurationA(
-    stack,
-    `${id}-state-bucket-sse`,
-    {
-      bucket: bucket.id,
-
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
-        },
-      ],
-    }
-  );
 
   return { bucketName: bucket.bucket, bucketArn: bucket.arn };
 }
