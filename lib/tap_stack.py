@@ -753,13 +753,11 @@ def create_codepipeline(
   aws.s3.BucketServerSideEncryptionConfigurationV2(
       "corp-bucket-encryption",
       bucket=artifact_bucket.id,
-      server_side_encryption_configuration=[{
-          "rule": [{
-              "apply_server_side_encryption_by_default": {
-                  "sse_algorithm": "aws:kms",
-                  "kms_master_key_id": kms_key.arn,
-              }
-          }]
+      rules=[{
+          "apply_server_side_encryption_by_default": {
+              "sse_algorithm": "aws:kms",
+              "kms_master_key_id": kms_key.arn,
+          }
       }],
       opts=ResourceOptions(provider=provider)
   )
