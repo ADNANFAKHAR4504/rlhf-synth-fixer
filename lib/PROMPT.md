@@ -1,4 +1,4 @@
-You are tasked with deploying **serverless infrastructure** on AWS using **Terraform**, targeting the `us-west-2` region.  
+You are tasked with deploying **serverless infrastructure** on AWS using **Terraform**, targeting the `us-west-2` region..  
 Ensure **high availability** by utilizing at least **three availability zones** for all stateful resources (e.g., RDS).  
 Implement **best practices** for AWS serverless application deployment as follows:
 
