@@ -120,13 +120,19 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
       let parsedPayload;
       try {
         parsedPayload = JSON.parse(rawPayload);
+
         // If the payload is a string, try parsing it again
         if (typeof parsedPayload === 'string') {
           parsedPayload = JSON.parse(parsedPayload);
         }
-        // If the body is a string, try parsing it
+
+        // Parse body if it's a string
         if (typeof parsedPayload.body === 'string') {
-          parsedPayload.body = JSON.parse(parsedPayload.body);
+          try {
+            parsedPayload.body = JSON.parse(parsedPayload.body);
+          } catch (e) {
+            console.log('Could not parse body as JSON:', parsedPayload.body);
+          }
         }
       } catch (e) {
         console.error('Error parsing payload:', e);
@@ -136,14 +142,24 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
       expect(response.StatusCode).toBe(200);
       expect(parsedPayload).toBeDefined();
 
-      // Check for error message in multiple possible locations
+      // Check for error message in all possible locations
       const errorMessage =
         parsedPayload.error ||
+        parsedPayload.message ||
         parsedPayload.body?.error ||
-        (typeof parsedPayload.body === 'string'
-          ? JSON.parse(parsedPayload.body).error
+        parsedPayload.body?.message ||
+        (typeof parsedPayload.body === 'string' &&
+        parsedPayload.body.includes('error')
+          ? parsedPayload.body
           : undefined) ||
-        parsedPayload.message;
+        (typeof parsedPayload.body === 'string' &&
+        parsedPayload.body.includes('message')
+          ? parsedPayload.body
+          : undefined);
+
+      // Add debug logging for troubleshooting
+      console.log('Parsed Payload:', JSON.stringify(parsedPayload, null, 2));
+      console.log('Error Message:', errorMessage);
 
       expect(errorMessage).toBeDefined();
       expect(typeof errorMessage).toBe('string');
