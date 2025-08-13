@@ -18,7 +18,7 @@
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
   validation {
     condition     = length(var.aws_region) > 0
     error_message = "aws_region cannot be empty"
