@@ -93,8 +93,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
     }
 
     const centralProvider = providers.get('us-east-1')!;
-
-    // FIX: Define a unique suffix to be used for globally unique resource names.
     const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
 
     const centralLogBucket = new S3Bucket(this, 'CentralLogBucket', {
@@ -264,10 +262,11 @@ export class MultiRegionSecurityStack extends TerraformStack {
         routeTableId: dbRouteTable.id,
       });
 
+      // FIX: Appended uniqueSuffix to Security Group names
       const appSg = new SecurityGroup(this, `AppSG-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
-        name: `app-sg-${config.region}`,
+        name: `app-sg-${config.region}-${uniqueSuffix}`,
         description: 'Allow traffic from ALB and to DB',
         tags: { ...tags, Name: `app-sg-${config.region}` },
         egress: [
@@ -278,7 +277,7 @@ export class MultiRegionSecurityStack extends TerraformStack {
       const dbSg = new SecurityGroup(this, `DbSG-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
-        name: `db-sg-${config.region}`,
+        name: `db-sg-${config.region}-${uniqueSuffix}`,
         description: 'Allow traffic only from app security group',
         tags: { ...tags, Name: `db-sg-${config.region}` },
         ingress: [
@@ -340,7 +339,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         `DBSecret-${config.region}`,
         {
           provider: regionProvider,
-          // FIX: Appended the unique suffix to the secret name to prevent collisions.
           name: `prod/rds/master_password/${config.region}-${uniqueSuffix}`,
           tags: { ...tags, Name: `db-secret-${config.region}` },
         }
@@ -356,20 +354,22 @@ export class MultiRegionSecurityStack extends TerraformStack {
         }
       );
 
+      // FIX: Appended uniqueSuffix to DB Subnet Group name
       const dbSubnetGroup = new DbSubnetGroup(
         this,
         `DbSubnetGroup-${config.region}`,
         {
           provider: regionProvider,
-          name: `db-subnet-group-${config.region}`,
+          name: `db-subnet-group-${config.region}-${uniqueSuffix}`,
           subnetIds: [dbSubnetA.id, dbSubnetB.id],
           tags: { ...tags, Name: `db-subnet-group-${config.region}` },
         }
       );
 
+      // FIX: Appended uniqueSuffix to DB Instance identifier
       new DbInstance(this, `DB-${config.region}`, {
         provider: regionProvider,
-        identifier: `app-db-${config.region}`,
+        identifier: `app-db-${config.region}-${uniqueSuffix}`,
         engine: 'postgres',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
