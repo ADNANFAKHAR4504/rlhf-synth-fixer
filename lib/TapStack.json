@@ -1589,13 +1589,6 @@
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
                                 "Ref": "CloudTrailS3Bucket"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "AWS:SourceArn": {
-                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-cloudtrail"
-                                    }
-                                }
                             }
                         },
                         {
@@ -1606,14 +1599,11 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailS3Bucket}/*"
+                                "Fn::Sub": "${CloudTrailS3Bucket}/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control",
-                                    "AWS:SourceArn": {
-                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-cloudtrail"
-                                    }
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
                             }
                         },
