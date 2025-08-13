@@ -5,28 +5,6 @@ This is the production-ready implementation of a VPC infrastructure using AWS CD
 ## bin/tap.ts
 
 ```ts
-#!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
-
-const app = new cdk.App();
-
-// Get environment suffix from context or use default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-
-new TapStack(app, `TapStack${environmentSuffix}`, {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
-  },
-  environmentSuffix: environmentSuffix,
-});
-```
-
-## lib/tap-stack.ts
-
-```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -104,7 +82,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Create public subnet 1 in us-east-1a with CIDR 172.16.1.0/24
+    // Create public subnet 1 in us-east-1a with explicit CfnSubnet construct
     const publicSubnet1 = new ec2.CfnSubnet(this, 'PublicSubnet1', {
       availabilityZone: 'us-east-1a',
       vpcId: vpc.vpcId,
@@ -122,7 +100,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // Create public subnet 2 in us-east-1b with CIDR 172.16.2.0/24
+    // Create public subnet 2 in us-east-1b with explicit CfnSubnet construct
     const publicSubnet2 = new ec2.CfnSubnet(this, 'PublicSubnet2', {
       availabilityZone: 'us-east-1b',
       vpcId: vpc.vpcId,
@@ -182,10 +160,10 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Add dependencies
+    // Add explicit dependencies for better resource management
     defaultRoute.addDependency(igwAttachment);
-    routeTableAssociation1.addDependency(publicSubnet1);
-    routeTableAssociation2.addDependency(publicSubnet2);
+    routeTableAssociation1.addDependency(publicRouteTable);
+    routeTableAssociation2.addDependency(publicRouteTable);
 
     // Add tags to VPC
     cdk.Tags.of(vpc).add('Name', `${environmentSuffix}-VPC-Main`);
@@ -231,6 +209,10 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Add dependencies for VPC endpoints
+    s3VpcEndpoint.addDependency(publicRouteTable);
+    dynamoDBVpcEndpoint.addDependency(publicRouteTable);
+
     // Output important resources
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
@@ -244,18 +226,29 @@ export class TapStack extends cdk.Stack {
       exportName: `${environmentSuffix}-VPC-CIDR`,
     });
 
-    [publicSubnet1, publicSubnet2].forEach((subnet, index) => {
-      new cdk.CfnOutput(this, `PublicSubnet${index + 1}Id`, {
-        value: subnet.ref,
-        description: `Public Subnet ${index + 1} ID`,
-        exportName: `${environmentSuffix}-PublicSubnet-${index + 1}-ID`,
-      });
+    // Output subnet information
+    new cdk.CfnOutput(this, 'PublicSubnet1Id', {
+      value: publicSubnet1.ref,
+      description: 'Public Subnet 1 ID',
+      exportName: `${environmentSuffix}-PublicSubnet-1-ID`,
+    });
 
-      new cdk.CfnOutput(this, `PublicSubnet${index + 1}Az`, {
-        value: subnet.availabilityZone!,
-        description: `Public Subnet ${index + 1} Availability Zone`,
-        exportName: `${environmentSuffix}-PublicSubnet-${index + 1}-AZ`,
-      });
+    new cdk.CfnOutput(this, 'PublicSubnet1Az', {
+      value: publicSubnet1.availabilityZone!,
+      description: 'Public Subnet 1 Availability Zone',
+      exportName: `${environmentSuffix}-PublicSubnet-1-AZ`,
+    });
+
+    new cdk.CfnOutput(this, 'PublicSubnet2Id', {
+      value: publicSubnet2.ref,
+      description: 'Public Subnet 2 ID',
+      exportName: `${environmentSuffix}-PublicSubnet-2-ID`,
+    });
+
+    new cdk.CfnOutput(this, 'PublicSubnet2Az', {
+      value: publicSubnet2.availabilityZone!,
+      description: 'Public Subnet 2 Availability Zone',
+      exportName: `${environmentSuffix}-PublicSubnet-2-AZ`,
     });
 
     new cdk.CfnOutput(this, 'InternetGatewayId', {
