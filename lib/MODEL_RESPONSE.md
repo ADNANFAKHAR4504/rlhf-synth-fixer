@@ -1,45 +1,88 @@
 Model Provided Response is as below
-``` yaml
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure with comprehensive security controls'
+Description: >
+  IaC-AWS-Nova-Model-Breaking: Security-first multi-tier web application infrastructure
+  for deployment in us-west-2. This template includes comprehensive security controls
+  covering network isolation, IAM, encryption, WAF, logging, automated patching,
+  credential management, auditing, monitoring, and MFA enforcement.
 
-# ====================================
-# PARAMETERS SECTION
-# ====================================
+# ============================================================================
+# PARAMETERS
+# ============================================================================
+# Parameters section for customizable values
 Parameters:
-  # SSH access CIDR block for EC2 instances
+  # CIDR block for SSH access to web servers
   SSHAccessCIDR:
     Type: String
-    Default: '10.0.0.0/8'
-    Description: 'CIDR block allowed to SSH to EC2 instances'
+    Description: 'The IPv4 CIDR block allowed for SSH access to the web-tier EC2 instances. Please restrict this to your IP.'
+    Default: '0.0.0.0/0' # WARNING: Not secure for production. Change to a specific IP.
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
-  
+    ConstraintDescription: 'Must be a valid IP CIDR range (e.g., 192.168.1.0/24).'
+
   # Database master username
   DBMasterUsername:
     Type: String
-    Default: 'admin'
-    Description: 'Master username for RDS database'
-    MinLength: 1
+    Default: 'dbadmin'
+    Description: 'Master username for the RDS database. Stored in AWS Secrets Manager.'
+    NoEcho: true
+    MinLength: 4
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-  
-  # Environment name for resource naming
-  EnvironmentName:
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters.'
+
+  # Project name for consistent resource naming
+  ProjectName:
     Type: String
     Default: 'IaC-AWS-Nova-Model-Breaking'
-    Description: 'Environment name for resource naming'
+    Description: 'A unique project name used for resource naming and tagging.'
 
-# ====================================
-# RESOURCES SECTION
-# ====================================
+  # Email address for security alarm notifications
+  OperatorEmail:
+    Type: String
+    Description: 'Email address to receive security alarm notifications from the SNS topic.'
+    AllowedPattern: '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    ConstraintDescription: 'Must be a valid email address.'
+
+# ============================================================================
+# METADATA
+# ============================================================================
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Network Configuration'
+        Parameters:
+          - ProjectName
+          - SSHAccessCIDR
+      - Label:
+          default: 'Database Configuration'
+        Parameters:
+          - DBMasterUsername
+      - Label:
+          default: 'Monitoring & Notifications'
+        Parameters:
+          - OperatorEmail
+    ParameterLabels:
+      ProjectName:
+        default: 'Project Name'
+      SSHAccessCIDR:
+        default: 'SSH Access CIDR'
+      DBMasterUsername:
+        default: 'Database Admin Username'
+      OperatorEmail:
+        default: 'Operator Email for Alarms'
+
+# ============================================================================
+# RESOURCES
+# ============================================================================
 Resources:
-  
-  # ====================================
+
+  # ============================================================================
   # 1. VPC AND NETWORK ISOLATION
-  # ====================================
-  
-  # Main VPC with 10.0.0.0/16 CIDR
+  # ============================================================================
+
+  # Main VPC with a /16 CIDR block for network isolation
   MainVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -48,28 +91,24 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-VPC'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-VPC'
 
-  # Internet Gateway for public subnet internet access
+  # Internet Gateway to allow communication between the VPC and the internet
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-IGW'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-IGW'
 
-  # Attach Internet Gateway to VPC
+  # Attach the Internet Gateway to the VPC
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref MainVPC
 
-  # Public Subnet in AZ-1 for ALB and NAT Gateway
+  # Public Subnet in AZ-1 for internet-facing resources like the ALB and NAT Gateway
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -79,9 +118,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ1'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Public-Subnet-AZ1'
 
   # Public Subnet in AZ-2 for high availability
   PublicSubnet2:
@@ -93,11 +130,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ2'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Public-Subnet-AZ2'
 
-  # Private App Subnet in AZ-1 for EC2 instances
+  # Private App Subnet in AZ-1 for application EC2 instances
   PrivateAppSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -106,9 +141,7 @@ Resources:
       CidrBlock: '10.0.11.0/24'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-App-Subnet-AZ1'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Private-App-Subnet-AZ1'
 
   # Private App Subnet in AZ-2 for high availability
   PrivateAppSubnet2:
@@ -119,11 +152,9 @@ Resources:
       CidrBlock: '10.0.12.0/24'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-App-Subnet-AZ2'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Private-App-Subnet-AZ2'
 
-  # Private Data Subnet in AZ-1 for RDS
+  # Private Data Subnet in AZ-1 for the RDS database
   PrivateDataSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -132,11 +163,9 @@ Resources:
       CidrBlock: '10.0.21.0/24'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-Data-Subnet-AZ1'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Private-Data-Subnet-AZ1'
 
-  # Private Data Subnet in AZ-2 for RDS high availability
+  # Private Data Subnet in AZ-2 for high availability
   PrivateDataSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -145,35 +174,23 @@ Resources:
       CidrBlock: '10.0.22.0/24'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-Data-Subnet-AZ2'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Private-Data-Subnet-AZ2'
 
-  # Elastic IP for NAT Gateway 1
+  # Elastic IP for NAT Gateway in AZ-1
   NatGateway1EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-NAT-EIP-1'
-        - Key: Project
-          Value: !Ref EnvironmentName
 
-  # Elastic IP for NAT Gateway 2
+  # Elastic IP for NAT Gateway in AZ-2
   NatGateway2EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-NAT-EIP-2'
-        - Key: Project
-          Value: !Ref EnvironmentName
 
-  # NAT Gateway 1 for private subnet outbound internet access
+  # NAT Gateway in Public Subnet 1 to allow outbound internet from private subnets
   NatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -181,11 +198,9 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-NAT-Gateway-1'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-NAT-GW-AZ1'
 
-  # NAT Gateway 2 for high availability
+  # NAT Gateway in Public Subnet 2 for redundancy
   NatGateway2:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -193,22 +208,18 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-NAT-Gateway-2'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-NAT-GW-AZ2'
 
-  # Public Route Table
+  # Route table for public subnets to route traffic to the Internet Gateway
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MainVPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Routes'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Public-Routes'
 
-  # Default public route to Internet Gateway
+  # Default public route to the Internet Gateway
   DefaultPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
@@ -217,31 +228,30 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
-  # Associate public subnets with public route table
+  # Associate public subnet 1 with the public route table
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
 
+  # Associate public subnet 2 with the public route table
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
-  # Private Route Table 1 for AZ-1
+  # Route table for private subnets in AZ-1 to route traffic to NAT Gateway 1
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MainVPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-Routes-AZ1'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Private-Routes-AZ1'
 
-  # Default private route to NAT Gateway 1
+  # Default private route in AZ-1 to NAT Gateway 1
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
     Properties:
@@ -249,31 +259,30 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NatGateway1
 
-  # Associate private subnets in AZ-1 with private route table 1
+  # Associate private app subnet 1 with its route table
   PrivateAppSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateAppSubnet1
 
+  # Associate private data subnet 1 with its route table
   PrivateDataSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateDataSubnet1
 
-  # Private Route Table 2 for AZ-2
+  # Route table for private subnets in AZ-2 to route traffic to NAT Gateway 2
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MainVPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-Routes-AZ2'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Private-Routes-AZ2'
 
-  # Default private route to NAT Gateway 2
+  # Default private route in AZ-2 to NAT Gateway 2
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
     Properties:
@@ -281,28 +290,30 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NatGateway2
 
-  # Associate private subnets in AZ-2 with private route table 2
+  # Associate private app subnet 2 with its route table
   PrivateAppSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateAppSubnet2
 
+  # Associate private data subnet 2 with its route table
   PrivateDataSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateDataSubnet2
 
-  # ====================================
-  # 2. IAM ROLE FOR TAG-BASED S3 ACCESS
-  # ====================================
-  
-  # S3 bucket for application data
+  # ============================================================================
+  # 2. IAM ROLE FOR TAG-BASED S3 ACCESS & 8. SECURE CREDENTIAL MANAGEMENT
+  # ============================================================================
+
+  # S3 bucket for application data, encrypted and non-public
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-app-data-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'app-data-${ProjectName}-${AWS::AccountId}-${AWS::Region}'
+      AccessControl: Private
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -313,16 +324,14 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-AppData'
         - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Ref ProjectName
 
-  # IAM Role for EC2 instances with tag-based S3 access
+  # IAM Role for EC2 instances to grant necessary permissions
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-EC2-Role'
+      RoleName: !Sub '${ProjectName}-EC2-Instance-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -331,10 +340,11 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        # Required for Systems Manager to manage the instance (e.g., for patching)
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Policies:
-        # Tag-based S3 access policy - only allows access if EC2 instance has S3Access=Approved tag
-        - PolicyName: TagBasedS3Access
+        # Policy for tag-based access to the S3 bucket
+        - PolicyName: S3TagBasedAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -342,314 +352,290 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${ApplicationDataBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ApplicationDataBucket}/*'
                 Condition:
                   StringEquals:
                     'ec2:ResourceTag/S3Access': 'Approved'
-        # Secrets Manager access for database credentials
-        - PolicyName: SecretsManagerAccess
+        # Policy to allow retrieving the database password from Secrets Manager
+        - PolicyName: SecretsManagerReadAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Ref DatabaseCredentials
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-EC2-Role'
-        - Key: Project
-          Value: !Ref EnvironmentName
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseSecret
 
-  # Instance Profile for EC2 instances
+  # Instance profile to attach the role to EC2 instances
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${EnvironmentName}-EC2-Profile'
+      InstanceProfileName: !Sub '${ProjectName}-EC2-Instance-Profile'
       Roles:
         - !Ref EC2InstanceRole
 
-  # ====================================
+  # ============================================================================
   # 3. APPLICATION AND DATABASE SECURITY GROUPS
-  # ====================================
-  
-  # Security Group for Application Load Balancer
+  # ============================================================================
+
+  # Security group for the Application Load Balancer
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-ALB-SG'
-      GroupDescription: 'Security group for Application Load Balancer'
+      GroupName: !Sub '${ProjectName}-ALB-SG'
+      GroupDescription: 'Allow HTTP/HTTPS traffic to the ALB'
       VpcId: !Ref MainVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTP access from internet'
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS access from internet'
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-ALB-SG'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-ALB-SG'
 
-  # Web Security Group for EC2 instances - only allows HTTPS from ALB and SSH from specific CIDR
+  # Security group for the web application EC2 instances
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-Web-SG'
-      GroupDescription: 'Security group for web application EC2 instances'
+      GroupName: !Sub '${ProjectName}-Web-SG'
+      GroupDescription: 'Allow HTTPS from ALB and SSH from specified CIDR'
       VpcId: !Ref MainVPC
       SecurityGroupIngress:
+        # Rule to allow inbound HTTPS traffic only from the ALB
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: 'HTTPS access from ALB only'
+        # Rule to allow inbound SSH traffic only from the specified CIDR block
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref SSHAccessCIDR
-          Description: 'SSH access from specified CIDR'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Web-SG'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-Web-SG'
 
-  # Database Security Group - only allows MySQL access from Web Security Group
+  # Security group for the RDS database instance
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-Database-SG'
-      GroupDescription: 'Security group for RDS database'
+      GroupName: !Sub '${ProjectName}-DB-SG'
+      GroupDescription: 'Allow DB traffic only from the Web Security Group'
       VpcId: !Ref MainVPC
       SecurityGroupIngress:
+        # Rule to allow inbound traffic on the MySQL port only from the web servers
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref WebSecurityGroup
-          Description: 'MySQL access from web tier only'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Database-SG'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-DB-SG'
 
-  # ====================================
-  # 4. DATA ENCRYPTION IN TRANSIT (SSL/TLS)
-  # ====================================
-  
-  # RDS Parameter Group enforcing SSL/TLS connections
-  DatabaseParameterGroup:
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      DBParameterGroupName: !Sub '${EnvironmentName}-mysql-ssl-params'
-      Description: 'Parameter group enforcing SSL/TLS for MySQL'
-      Family: mysql8.0
-      Parameters:
-        require_secure_transport: 'ON'
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-MySQL-SSL-Params'
-        - Key: Project
-          Value: !Ref EnvironmentName
+  # ============================================================================
+  # 4. DATA ENCRYPTION IN TRANSIT (SSL/TLS) & 8. SECURE CREDENTIAL MANAGEMENT
+  # ============================================================================
 
-  # DB Subnet Group for RDS
-  DatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group'
-      DBSubnetGroupDescription: 'Subnet group for RDS database'
-      SubnetIds:
-        - !Ref PrivateDataSubnet1
-        - !Ref PrivateDataSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-DB-SubnetGroup'
-        - Key: Project
-          Value: !Ref EnvironmentName
-
-  # ====================================
-  # 8. SECURE CREDENTIAL MANAGEMENT
-  # ====================================
-  
-  # Secrets Manager secret for database credentials
-  DatabaseCredentials:
+  # Secret in AWS Secrets Manager to store and auto-generate the database password
+  DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${EnvironmentName}/database/credentials'
-      Description: 'RDS database master credentials'
+      Name: !Sub '${ProjectName}/rds/credentials'
+      Description: 'RDS database credentials for the project.'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
       Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-DB-Credentials'
         - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Ref ProjectName
 
-  # RDS MySQL Database Instance with SSL enforcement
+  # RDS Parameter Group to enforce SSL/TLS connections
+  DatabaseParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: 'Parameter group to enforce SSL connections'
+      Family: mysql8.0
+      Parameters:
+        require_secure_transport: 'ON'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # RDS Subnet Group to place the database in the private data subnets
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS instance'
+      SubnetIds:
+        - !Ref PrivateDataSubnet1
+        - !Ref PrivateDataSubnet2
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # RDS MySQL instance with encryption at rest and in transit enforced
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Delete
+    DeletionPolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-mysql-db'
+      DBInstanceIdentifier: !Sub '${ProjectName}-mysql-db'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.35'
       AllocatedStorage: 20
       StorageType: gp2
+      # Enforce Encryption at Rest
       StorageEncrypted: true
       DBParameterGroupName: !Ref DatabaseParameterGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseCredentials}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseCredentials}:SecretString:password}}'
-      BackupRetentionPeriod: 7
-      MultiAZ: false
+      # Retrieve credentials securely from Secrets Manager
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      MultiAZ: false # Set to true for production HA
       PubliclyAccessible: false
-      DeletionProtection: false
+      DeletionProtection: false # Set to true for production
+      BackupRetentionPeriod: 7
       Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-MySQL-DB'
         - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Ref ProjectName
 
-  # ====================================
+  # ============================================================================
   # 5. AWS WAF INTEGRATION
-  # ====================================
-  
-  # WAFv2 WebACL with OWASP Top 10 protection
-  WebApplicationFirewall:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Name: !Sub '${EnvironmentName}-WebACL'
-      Description: 'WAF WebACL for OWASP Top 10 protection'
-      Scope: REGIONAL
-      DefaultAction:
-        Allow: {}
-      Rules:
-        # AWS Managed Common Rule Set
-        - Name: AWSManagedRulesCommonRuleSet
-          Priority: 1
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: CommonRuleSetMetric
-        # AWS Managed SQL Injection Rule Set
-        - Name: AWSManagedRulesSQLiRuleSet
-          Priority: 2
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesSQLiRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: SQLiRuleSetMetric
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${EnvironmentName}-WebACL'
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-WebACL'
-        - Key: Project
-          Value: !Ref EnvironmentName
+  # ============================================================================
 
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${EnvironmentName}-ALB'
-      Scheme: internet-facing
+      Name: !Sub '${ProjectName}-ALB'
       Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
       Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-ALB'
         - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Ref ProjectName
 
-  # Associate WAF WebACL with ALB
+  # ALB Target Group
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-TG'
+      VpcId: !Ref MainVPC
+      Port: 443 # Target EC2 instances on HTTPS
+      Protocol: HTTPS
+      HealthCheckProtocol: HTTPS
+      HealthCheckPath: /
+      Matcher:
+        HttpCode: 200,403 # A 403 response from a default web server is also healthy
+      TargetType: instance
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ALB Listener - Redirects HTTP to a fixed response; a real setup would have an HTTPS listener
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            ContentType: text/plain
+            MessageBody: 'Cannot connect via HTTP. Please use HTTPS.'
+            StatusCode: '403'
+    # NOTE: A production listener for HTTPS on port 443 would be added here.
+    # It requires a certificate ARN from ACM, which is outside the scope of this template.
+    # Example:
+    # ALBListenerHTTPS:
+    #   Type: AWS::ElasticLoadBalancingV2::Listener
+    #   Properties:
+    #     LoadBalancerArn: !Ref ApplicationLoadBalancer
+    #     Protocol: HTTPS
+    #     Port: 443
+    #     Certificates:
+    #       - CertificateArn: 'arn:aws:acm:us-west-2:ACCOUNT_ID:certificate/CERTIFICATE_ID'
+    #     DefaultActions:
+    #       - Type: forward
+    #         TargetGroupArn: !Ref ALBTargetGroup
+
+  # AWS WAFv2 WebACL with AWS Managed Rules for OWASP Top 10 threats
+  WebApplicationFirewall:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${ProjectName}-WebACL'
+      Description: 'WAF WebACL to protect the ALB from common web exploits'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ProjectName}-WAF-Metric'
+      Rules:
+        - Name: AWS-Managed-Common-Rule-Set
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: WAF-Common-Rule-Metric
+        - Name: AWS-Managed-SQLi-Rule-Set
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: WAF-SQLi-Rule-Metric
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Associate the WAF WebACL with the Application Load Balancer
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebApplicationFirewall.Arn
 
-  # Target Group for ALB
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub '${EnvironmentName}-TG'
-      Port: 443
-      Protocol: HTTPS
-      VpcId: !Ref MainVPC
-      HealthCheckPath: /health
-      HealthCheckProtocol: HTTPS
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 5
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-TargetGroup'
-        - Key: Project
-          Value: !Ref EnvironmentName
-
-  # ALB Listener
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-
-  # ====================================
+  # ============================================================================
   # 6. API GATEWAY LOGGING
-  # ====================================
-  
-  # CloudWatch Log Group for API Gateway
-  APIGatewayLogGroup:
+  # ============================================================================
+
+  # CloudWatch Log Group for API Gateway access and execution logs
+  ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/apigateway/${EnvironmentName}'
+      LogGroupName: !Sub '/aws/api-gateway/${ProjectName}'
       RetentionInDays: 14
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-APIGateway-Logs'
-        - Key: Project
-          Value: !Ref EnvironmentName
 
-  # IAM Role for API Gateway logging
-  APIGatewayLoggingRole:
+  # IAM Role for API Gateway to write logs to CloudWatch
+  ApiGatewayCloudWatchRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-APIGateway-Logging-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -658,85 +644,81 @@ Resources:
               Service: apigateway.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-APIGateway-Logging-Role'
-        - Key: Project
-          Value: !Ref EnvironmentName
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
 
-  # API Gateway Account configuration for logging
-  APIGatewayAccount:
+  # API Gateway Account settings to associate the logging role
+  ApiGatewayAccount:
     Type: AWS::ApiGateway::Account
     Properties:
-      CloudWatchRoleArn: !GetAtt APIGatewayLoggingRole.Arn
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
 
   # Sample REST API Gateway
-  SampleAPI:
+  SampleRestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub '${EnvironmentName}-Sample-API'
-      Description: 'Sample REST API with comprehensive logging'
+      Name: !Sub '${ProjectName}-SampleAPI'
+      Description: 'Sample API with comprehensive logging enabled'
       EndpointConfiguration:
         Types:
           - REGIONAL
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-Sample-API'
-        - Key: Project
-          Value: !Ref EnvironmentName
 
-  # API Gateway Resource
-  APIResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref SampleAPI
-      ParentId: !GetAtt SampleAPI.RootResourceId
-      PathPart: 'sample'
-
-  # API Gateway Method
-  APIMethod:
+  # Sample API Method
+  ApiMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref SampleAPI
-      ResourceId: !Ref APIResource
+      RestApiId: !Ref SampleRestApi
+      ResourceId: !GetAtt SampleRestApi.RootResourceId
       HttpMethod: GET
       AuthorizationType: NONE
       Integration:
         Type: MOCK
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseTemplates:
-              application/json: '{"message": "Hello from API Gateway"}'
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-      MethodResponses:
-        - StatusCode: 200
 
-  # API Gateway Deployment
-  APIDeployment:
+  # API Gateway Deployment to make the API callable
+  ApiDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: APIMethod
+    DependsOn: ApiMethod
     Properties:
-      RestApiId: !Ref SampleAPI
-      StageName: prod
-      StageDescription:
-        AccessLogSetting:
-          DestinationArn: !GetAtt APIGatewayLogGroup.Arn
-          Format: '$requestId $requestTime $httpMethod $resourcePath $status $responseLength'
-        LoggingLevel: INFO
-        DataTraceEnabled: true
-        MetricsEnabled: true
+      RestApiId: !Ref SampleRestApi
 
-  # ====================================
+  # API Gateway Stage with logging fully configured
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: 'prod'
+      RestApiId: !Ref SampleRestApi
+      DeploymentId: !Ref ApiDeployment
+      # Enable full request/response logging
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      # Configure access logging format and destination
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: >-
+          {
+          "requestId": "$context.requestId",
+          "ip": "$context.identity.sourceIp",
+          "caller": "$context.identity.caller",
+          "user": "$context.identity.user",
+          "requestTime": "$context.requestTime",
+          "httpMethod": "$context.httpMethod",
+          "resourcePath": "$context.resourcePath",
+          "status": "$context.status",
+          "protocol": "$context.protocol",
+          "responseLength": "$context.responseLength"
+          }
+
+  # ============================================================================
   # 7. AUTOMATED SECURITY PATCHING VIA LAMBDA
-  # ====================================
-  
-  # IAM Role for Lambda patching function
+  # ============================================================================
+
+  # IAM Role for the Lambda patch-automation function
   LambdaPatchingRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-Lambda-Patching-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -745,97 +727,358 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        # Basic Lambda execution permissions (for logging)
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       Policies:
-        - PolicyName: SSMPatchingPolicy
+        - PolicyName: SSMSendCommandPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - ssm:SendCommand
-                  - ssm:DescribeInstanceInformation
-                  - ssm:DescribeCommandInvocations
                   - ec2:DescribeInstances
-                Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-Lambda-Patching-Role'
-        - Key: Project
-          Value: !Ref EnvironmentName
+                  - ssm:SendCommand
+                Resource: '*' # Scoped to all resources for simplicity; can be restricted
 
-  # Lambda function for automated patching
-  PatchingLambdaFunction:
+  # Lambda function to trigger SSM Patch Manager
+  AutomatedPatchingFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentName}-AutoPatch-Function'
-      Description: 'Automated security patching for EC2 instances'
-      Runtime: python3.9
-      Handler: index.lambda_handler
+      FunctionName: !Sub '${ProjectName}-Auto-Patcher'
+      Description: 'Triggers SSM Run Command to patch EC2 instances tagged for patching.'
+      Handler: 'index.lambda_handler'
       Role: !GetAtt LambdaPatchingRole.Arn
-      Timeout: 300
+      Runtime: python3.9
+      Timeout: 120
       Code:
         ZipFile: |
           import boto3
-          import json
-          
+          import logging
+          import os
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          ssm_client = boto3.client('ssm')
+
           def lambda_handler(event, context):
-              ssm = boto3.client('ssm')
-              ec2 = boto3.client('ec2')
-              
+              tag_key = 'PatchGroup'
+              tag_value = 'WebApp'
+              document_name = 'AWS-RunPatchBaseline'
+
               try:
-                  # Get instances with PatchGroup=WebApp tag
-                  response = ec2.describe_instances(
-                      Filters=[
-                          {
-                              'Name': 'tag:PatchGroup',
-                              'Values': ['WebApp']
-                          },
-                          {
-                              'Name': 'instance-state-name',
-                              'Values': ['running']
-                          }
-                      ]
+                  logger.info(f"Searching for running instances with tag '{tag_key}:{tag_value}'")
+                  # Using resourcegroupstaggingapi is more efficient than describe_instances
+                  paginator = boto3.client('resourcegroupstaggingapi').get_paginator('get_resources')
+                  pages = paginator.paginate(
+                      TagFilters=[{'Key': tag_key, 'Values': [tag_value]}],
+                      ResourceTypeFilters=['ec2:instance']
                   )
-                  
+
                   instance_ids = []
-                  for reservation in response['Reservations']:
-                      for instance in reservation['Instances']:
-                          instance_ids.append(instance['InstanceId'])
+                  for page in pages:
+                      for resource in page['ResourceTagMappingList']:
+                          instance_ids.append(resource['ResourceARN'].split('/')[-1])
                   
                   if not instance_ids:
-                      print("No instances found with PatchGroup=WebApp tag")
-                      return {
-                          'statusCode': 200,
-                          'body': json.dumps('No instances found for patching')
-                      }
+                      logger.info("No instances found with the specified patch tag. Exiting.")
+                      return {'statusCode': 200, 'body': 'No instances to patch.'}
+
+                  logger.info(f"Found {len(instance_ids)} instance(s): {', '.join(instance_ids)}")
                   
-                  # Send patch command
-                  command_response = ssm.send_command(
+                  response = ssm_client.send_command(
                       InstanceIds=instance_ids,
-                      DocumentName='AWS-RunPatchBaseline',
-                      Parameters={
-                          'Operation': ['Install']
-                      }
+                      DocumentName=document_name,
+                      Parameters={'Operation': ['Install']},
+                      Comment=f'Automated patching triggered by Lambda function {context.function_name}'
                   )
+                  command_id = response['Command']['CommandId']
+                  logger.info(f"Successfully sent command {command_id} to {len(instance_ids)} instance(s).")
                   
-                  print(f"Patch command sent to instances: {instance_ids}")
-                  print(f"Command ID: {command_response['Command']['CommandId']}")
-                  
-                  return {
-                      'statusCode': 200,
-                      'body': json.dumps(f'Patching initiated for {len(instance_ids)} instances')
-                  }
-                  
+                  return {'statusCode': 200, 'body': f"Patch command {command_id} sent."}
+
               except Exception as e:
-                  print(f"Error: {str(e)}")
-                  return {
-                      'statusCode': 500,
-                      'body': json.dumps(f'Error: {str(e)}')
-                  }
+                  logger.error(f"An error occurred: {str(e)}")
+                  raise e
+
+  # EventBridge (CloudWatch Events) Rule to trigger the Lambda weekly
+  PatchingEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-Weekly-Patch-Schedule'
+      Description: 'Triggers the auto-patching Lambda function every Sunday at 2 AM UTC.'
+      # cron(Minutes Hours Day-of-month Month Day-of-week Year)
+      ScheduleExpression: 'cron(0 2 ? * SUN *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt AutomatedPatchingFunction.Arn
+          Id: 'AutoPatchingLambdaTarget'
+
+  # Permission for EventBridge to invoke the Lambda function
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt AutomatedPatchingFunction.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt PatchingEventRule.Arn
+
+  # ============================================================================
+  # 9. COMPREHENSIVE AUDITING WITH CLOUDTRAIL
+  # ============================================================================
+
+  # S3 bucket to store CloudTrail logs securely
+  CloudTrailLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'cloudtrail-logs-${ProjectName}-${AWS::AccountId}-${AWS::Region}'
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # S3 Bucket Policy to allow CloudTrail service to write logs
+  CloudTrailLogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailLogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AWSCloudTrailAclCheck'
+            Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CloudTrailLogBucket.Arn
+          - Sid: 'AWSCloudTrailWrite'
+            Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  # CloudWatch Log Group for the CloudTrail trail
+  CloudTrailLogGroupForTrail:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}-Trail'
+      RetentionInDays: 365
+
+  # IAM Role for CloudTrail to send logs to CloudWatch Logs
+  CloudTrailToCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailToCloudWatchPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CloudTrailLogGroupForTrail.Arn
+
+  # Organization-wide, multi-region CloudTrail trail for comprehensive auditing
+  AuditTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailLogBucketPolicy
+    Properties:
+      TrailName: !Sub '${ProjectName}-Audit-Trail'
+      S3BucketName: !Ref CloudTrailLogBucket
+      IsLogging: true
+      # Enable for all regions
+      IsMultiRegionTrail: true
+      # Include management events from all services
+      IncludeGlobalServiceEvents: true
+      # Send logs to CloudWatch Logs for real-time analysis
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroupForTrail.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailToCloudWatchRole.Arn
+      # Enable log file validation to ensure integrity
+      EnableLogFileValidation: true
+      # Log S3 and Lambda data events for deeper visibility
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values:
+                - !Sub 'arn:aws:s3:::'
+            - Type: 'AWS::Lambda::Function'
+              Values:
+                - 'arn:aws:lambda'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ============================================================================
+  # 10. REAL-TIME MONITORING AND ALARMS
+  # ============================================================================
+
+  # SNS Topic for sending alarm notifications
+  SecurityAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub '${ProjectName} Security Alarms'
+      TopicName: !Sub '${ProjectName}-Security-Alarms'
+      Subscription:
+        - Endpoint: !Ref OperatorEmail
+          Protocol: email
+
+  # CloudWatch Metric Filter to parse CloudTrail logs for unauthorized API calls
+  AccessDeniedMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroupForTrail
+      FilterPattern: '{ ($.errorCode = "*AccessDenied*") || ($.errorMessage = "Access Denied") || ($.errorCode = "UnauthorizedOperation") }'
+      MetricTransformations:
+        - MetricName: 'AccessDeniedCount'
+          MetricNamespace: 'CloudTrailMetrics'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # CloudWatch Alarm that triggers when too many unauthorized calls are detected
+  AccessDeniedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-Unauthorized-API-Calls-Alarm'
+      AlarmDescription: 'Alarm triggers if 3 or more unauthorized API calls are detected in 5 minutes.'
+      Namespace: 'CloudTrailMetrics'
+      MetricName: 'AccessDeniedCount'
+      Statistic: Sum
+      Period: 300 # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref SecurityAlarmTopic
+      TreatMissingData: notBreaching
+
+  # ============================================================================
+  # 11. ENFORCE MULTI-FACTOR AUTHENTICATION (MFA)
+  # ============================================================================
+
+  # Customer-managed IAM policy that denies actions if MFA is not present
+  EnforceMFAPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub '${ProjectName}-Enforce-MFA-Policy'
+      Description: 'Denies all actions if the principal is not authenticated with MFA.'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyAllIfNotMFA
+            Effect: Deny
+            Action: '*'
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                'aws:MultiFactorAuthPresent': 'false'
+
+  # IAM Group for users who must use MFA
+  MFAEnforcedUsersGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: 'MFA-Enforced-Users'
+      ManagedPolicyArns:
+        - !Ref EnforceMFAPolicy
+
+# ============================================================================
+# DUMMY WEB SERVER RESOURCES FOR DEMONSTRATION
+# ============================================================================
+
+  # Launch Template for the web servers
+  AppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${ProjectName}-App-Launch-Template'
+      LaunchTemplateData:
+        ImageId: 'ami-09afc2a792c81ce2c' # Amazon Linux 2 AMI for us-west-2
+        InstanceType: t2.micro
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebSecurityGroup
+        # Tagging is critical for our policies and automation
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${ProjectName}-WebApp-Instance'
+              - Key: Project
+                Value: !Ref ProjectName
+              # Tag for the automated patching Lambda function
+              - Key: PatchGroup
+                Value: 'WebApp'
+              # Tag for the tag-based S3 access policy
+              - Key: S3Access
+                Value: 'Approved'
+
+  # Auto Scaling Group for the web servers
+  AppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${ProjectName}-ASG'
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      VPCZoneIdentifier:
+        - !Ref PrivateAppSubnet1
+        - !Ref PrivateAppSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AppLaunchTemplate
+        Version: !GetAtt AppLaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-AutoPatch-Function'
-        - Key: Project
-          Value: !Ref EnvironmentName
+          Value: !Sub '${ProjectName}-WebApp-Instance'
+          PropagateAtLaunch: true
+
+# ============================================================================
+# OUTPUTS
+# ============================================================================
+Outputs:
+  VPCId:
+    Description: 'ID of the newly created VPC'
+    Value: !Ref MainVPC
+  ALBDNSName:
+    Description: 'DNS name of the Application Load Balancer'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+  ApplicationDataBucketName:
+    Description: 'Name of the S3 bucket for application data'
+    Value: !Ref ApplicationDataBucket
+  CloudTrailLogBucketName:
+    Description: 'Name of the S3 bucket for CloudTrail logs'
+    Value: !Ref CloudTrailLogBucket
+  DatabaseEndpoint:
+    Description: 'Endpoint address of the RDS database instance'
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+  DatabaseSecretARN:
+    Description: 'ARN of the Secrets Manager secret for DB credentials'
+    Value: !Ref DatabaseSecret
+  SecurityAlarmTopicARN:
+    Description: 'ARN of the SNS topic for security alarms'
+    Value: !Ref SecurityAlarmTopic
+  MFAEnforcedGroupName:
+    Description: 'Name of the IAM Group where MFA is enforced'
+    Value: !Ref MFAEnforcedUsersGroup
 ```
