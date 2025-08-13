@@ -79,21 +79,6 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
             Resource: '*'
-          - Sid: Allow EC2 Role
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-            Resource: '*'
-          - Sid: Allow Lambda Role
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt LambdaExecutionRole.Arn
-            Action:
-              - kms:Decrypt
-            Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-s3-encryption-key'
@@ -218,7 +203,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: !Select [0, !GetAZs !Ref 'AWS::Region']
       CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
@@ -316,7 +301,7 @@ Resources:
                 Action:
                   - kms:Decrypt
                   - kms:GenerateDataKey
-                Resource: !GetAtt S3EncryptionKey.Arn
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
         - PolicyName: !Sub '${ProjectName}-${Environment}-ec2-logs-policy'
           PolicyDocument:
             Version: '2012-10-17'
@@ -372,7 +357,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - kms:Decrypt
-                Resource: !GetAtt S3EncryptionKey.Arn
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-lambda-role'
