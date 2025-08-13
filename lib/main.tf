@@ -321,7 +321,7 @@ resource "aws_lb" "app_alb" {
   name               = lower("${var.project}-${var.environment}-alb")
   internal           = false
   load_balancer_type = "application"
-  subnets            = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+  subnets            = [aws_subnet.public[0].id, aws_subnet.public[1].id]
   security_groups    = [aws_security_group.alb_sg.id]
 
   access_logs {
