@@ -29,10 +29,11 @@ describe('TapStack', () => {
 
     test('creates nested stack for image processing', () => {
       // Check that a nested stack is created
-      template.hasResourceProperties('AWS::CloudFormation::Stack', {
+      template.hasResource('AWS::CloudFormation::Stack', {
         Type: 'AWS::CloudFormation::Stack',
         DeletionPolicy: 'Delete',
         UpdateReplacePolicy: 'Delete',
+        Properties: Match.anyValue(), // We just verify the resource exists with properties
       });
     });
   });
@@ -54,10 +55,7 @@ describe('TapStack', () => {
         },
       });
 
-      const customTemplate = Template.fromStack(customStack);
-      expect(customStack.node.tryGetContext('environmentSuffix')).toBe(
-        customSuffix
-      );
+      expect(customStack.environmentSuffix).toBe(customSuffix);
     });
 
     test('defaults to dev when no suffix provided', () => {
@@ -69,9 +67,7 @@ describe('TapStack', () => {
       });
 
       // Check stack properties instead of nested stack parameters
-      expect(
-        defaultStack.node.tryGetContext('environmentSuffix') || 'dev'
-      ).toBe('dev');
+      expect(defaultStack.environmentSuffix || 'dev').toBe('dev');
     });
   });
 });

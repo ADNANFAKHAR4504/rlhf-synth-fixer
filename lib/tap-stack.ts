@@ -7,19 +7,17 @@ interface TapStackProps extends cdk.StackProps {
 }
 
 export class TapStack extends cdk.Stack {
+  public readonly environmentSuffix: string;
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
+    this.environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Create the Image Processing Stack as a nested stack
-    new ImageProcessingStack(this, `ImageProcessing${environmentSuffix}`, {
-      existingS3BucketName: `existing-images-bucket-${environmentSuffix}`,
-      environmentSuffix: environmentSuffix,
+    new ImageProcessingStack(this, `ImageProcessing${this.environmentSuffix}`, {
+      existingS3BucketName: `existing-images-bucket-${this.environmentSuffix}`,
+      environmentSuffix: this.environmentSuffix,
     });
   }
 }
