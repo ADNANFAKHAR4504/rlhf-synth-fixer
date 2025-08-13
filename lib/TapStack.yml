@@ -45,6 +45,11 @@ Parameters:
     Default: 'example@example.com'
     ConstraintDescription: Must be a valid email address
 
+  EnvironmentSuffix:
+    Type: String
+    Description: Suffix for resource naming to avoid conflicts
+    Default: dev
+
 # =============================================================================
 # RESOURCES
 # =============================================================================
@@ -55,7 +60,7 @@ Resources:
   AlarmNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${Environment}-serverless-app-alarms'
+      TopicName: !Sub '${Environment}-serverless-app-alarms-${EnvironmentSuffix}'
       DisplayName: !Sub 'Serverless App Alarms - ${Environment}'
       KmsMasterKeyId: alias/aws/sns
 
@@ -72,7 +77,7 @@ Resources:
   StaticContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-serverless-app-static-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-app-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -120,7 +125,7 @@ Resources:
   ApplicationTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${Environment}-serverless-app-data'
+      TableName: !Sub '${Environment}-serverless-app-data-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: id
@@ -200,7 +205,7 @@ Resources:
   ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/apigateway/${Environment}-serverless-app'
+      LogGroupName: !Sub '/aws/apigateway/${Environment}-serverless-app-${EnvironmentSuffix}'
       RetentionInDays: 30
       # Note: Removed KmsKeyId as CloudWatch Logs uses AWS managed keys by default
       # If you need customer-managed KMS, create a KMS key and reference its ARN
@@ -208,7 +213,7 @@ Resources:
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${Environment}-serverless-app-function'
+      LogGroupName: !Sub '/aws/lambda/${Environment}-serverless-app-function-${EnvironmentSuffix}'
       RetentionInDays: 30
       # Note: Removed KmsKeyId as CloudWatch Logs uses AWS managed keys by default
       # If you need customer-managed KMS, create a KMS key and reference its ARN
@@ -314,7 +319,7 @@ Resources:
   ServerlessAppFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${Environment}-serverless-app-function'
+      FunctionName: !Sub '${Environment}-serverless-app-function-${EnvironmentSuffix}'
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -474,7 +479,7 @@ Resources:
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub '${Environment}-serverless-app-api'
+      Name: !Sub '${Environment}-serverless-app-api-${EnvironmentSuffix}'
       Description: !Sub 'Serverless application API - ${Environment}'
       EndpointConfiguration:
         Types:
@@ -596,7 +601,7 @@ Resources:
   LambdaErrorRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-lambda-error-rate'
+      AlarmName: !Sub '${Environment}-lambda-error-rate-${EnvironmentSuffix}'
       AlarmDescription: !Sub 'Lambda function error rate alarm for ${Environment}'
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -618,7 +623,7 @@ Resources:
   LambdaDurationAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-lambda-duration'
+      AlarmName: !Sub '${Environment}-lambda-duration-${EnvironmentSuffix}'
       AlarmDescription: !Sub 'Lambda function duration alarm for ${Environment}'
       MetricName: Duration
       Namespace: AWS/Lambda
@@ -638,7 +643,7 @@ Resources:
   LambdaThrottlesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-lambda-throttles'
+      AlarmName: !Sub '${Environment}-lambda-throttles-${EnvironmentSuffix}'
       AlarmDescription: !Sub 'Lambda function throttles alarm for ${Environment}'
       MetricName: Throttles
       Namespace: AWS/Lambda
@@ -658,7 +663,7 @@ Resources:
   ApiGateway4xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-apigateway-4xx-errors'
+      AlarmName: !Sub '${Environment}-apigateway-4xx-errors-${EnvironmentSuffix}'
       AlarmDescription: !Sub 'API Gateway 4xx errors alarm for ${Environment}'
       MetricName: 4XXError
       Namespace: AWS/ApiGateway
@@ -680,7 +685,7 @@ Resources:
   ApiGateway5xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-apigateway-5xx-errors'
+      AlarmName: !Sub '${Environment}-apigateway-5xx-errors-${EnvironmentSuffix}'
       AlarmDescription: !Sub 'API Gateway 5xx errors alarm for ${Environment}'
       MetricName: 5XXError
       Namespace: AWS/ApiGateway
@@ -704,7 +709,7 @@ Resources:
   ApiGatewayLatencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-apigateway-latency'
+      AlarmName: !Sub '${Environment}-apigateway-latency-${EnvironmentSuffix}'
       AlarmDescription: !Sub 'API Gateway latency alarm for ${Environment}'
       MetricName: Latency
       Namespace: AWS/ApiGateway
@@ -736,58 +741,58 @@ Outputs:
     Description: API Gateway endpoint URL
     Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
     Export:
-      Name: !Sub '${Environment}-api-gateway-url'
+      Name: !Sub '${Environment}-api-gateway-url-${EnvironmentSuffix}'
 
   DynamoDBTableName:
     Description: DynamoDB table name
     Value: !Ref ApplicationTable
     Export:
-      Name: !Sub '${Environment}-dynamodb-table-name'
+      Name: !Sub '${Environment}-dynamodb-table-name-${EnvironmentSuffix}'
 
   S3BucketName:
     Description: S3 bucket name for static content
     Value: !Ref StaticContentBucket
     Export:
-      Name: !Sub '${Environment}-s3-bucket-name'
+      Name: !Sub '${Environment}-s3-bucket-name-${EnvironmentSuffix}'
 
   LambdaFunctionName:
     Description: Lambda function name
     Value: !Ref ServerlessAppFunction
     Export:
-      Name: !Sub '${Environment}-lambda-function-name'
+      Name: !Sub '${Environment}-lambda-function-name-${EnvironmentSuffix}'
 
   LambdaFunctionArn:
     Description: Lambda function ARN
     Value: !GetAtt ServerlessAppFunction.Arn
     Export:
-      Name: !Sub '${Environment}-lambda-function-arn'
+      Name: !Sub '${Environment}-lambda-function-arn-${EnvironmentSuffix}'
 
   ApiGatewayId:
     Description: API Gateway ID
     Value: !Ref ApiGateway
     Export:
-      Name: !Sub '${Environment}-api-gateway-id'
+      Name: !Sub '${Environment}-api-gateway-id-${EnvironmentSuffix}'
 
   DynamoDBTableArn:
     Description: DynamoDB table ARN
     Value: !GetAtt ApplicationTable.Arn
     Export:
-      Name: !Sub '${Environment}-dynamodb-table-arn'
+      Name: !Sub '${Environment}-dynamodb-table-arn-${EnvironmentSuffix}'
 
   S3BucketArn:
     Description: S3 bucket ARN
     Value: !GetAtt StaticContentBucket.Arn
     Export:
-      Name: !Sub '${Environment}-s3-bucket-arn'
+      Name: !Sub '${Environment}-s3-bucket-arn-${EnvironmentSuffix}'
 
   AlarmTopicArn:
     Description: SNS topic ARN for CloudWatch alarms
     Value: !Ref AlarmNotificationTopic
     Export:
-      Name: !Sub '${Environment}-alarm-topic-arn'
+      Name: !Sub '${Environment}-alarm-topic-arn-${EnvironmentSuffix}'
 
   ApiGatewayStageArn:
     Description: API Gateway Stage ARN
     Value: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}'
     Export:
-      Name: !Sub '${Environment}-api-gateway-stage-arn'
+      Name: !Sub '${Environment}-api-gateway-stage-arn-${EnvironmentSuffix}'
