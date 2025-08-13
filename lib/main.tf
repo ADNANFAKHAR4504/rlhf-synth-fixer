@@ -1,7 +1,7 @@
 ############################################################
-# main.tf — Single-file AWS stack (no external modules)
-# - Variables, locals, data sources, resources, outputs
-# - Provider is defined separately in provider.tf and uses var.aws_region
+# main.tf — Single-file AWS stack (brand new, no external modules)
+# All variables, locals, data sources, resources, and outputs live here.
+# NOTE: provider.tf should exist separately and use var.aws_region.
 ############################################################
 
 ########################
@@ -31,7 +31,7 @@ variable "project" {
 }
 
 variable "environment" {
-  description = "Deployment environment."
+  description = "Deployment environment (dev|staging|prod)."
   type        = string
   default     = "dev"
 
@@ -58,8 +58,7 @@ variable "public_subnet_cidrs" {
   default     = ["10.0.1.0/24", "10.0.2.0/24"]
 
   validation {
-    condition = length(var.public_subnet_cidrs) == 2 &&
-      length([for c in var.public_subnet_cidrs : c if can(cidrhost(c, 0))]) == 2
+    condition     = length(var.public_subnet_cidrs) == 2 && alltrue([for c in var.public_subnet_cidrs : can(cidrhost(c, 0))])
     error_message = "public_subnet_cidrs must be a list of exactly two valid CIDRs."
   }
 }
@@ -70,8 +69,7 @@ variable "private_subnet_cidrs" {
   default     = ["10.0.101.0/24", "10.0.102.0/24"]
 
   validation {
-    condition = length(var.private_subnet_cidrs) == 2 &&
-      length([for c in var.private_subnet_cidrs : c if can(cidrhost(c, 0))]) == 2
+    condition     = length(var.private_subnet_cidrs) == 2 && alltrue([for c in var.private_subnet_cidrs : can(cidrhost(c, 0))])
     error_message = "private_subnet_cidrs must be a list of exactly two valid CIDRs."
   }
 }
@@ -88,8 +86,7 @@ variable "bucket_name" {
   default     = ""
 
   validation {
-    condition = length(trimspace(var.bucket_name)) == 0 ||
-      (length(trimspace(var.bucket_name)) >= 3 && length(trimspace(var.bucket_name)) <= 63)
+    condition     = length(trimspace(var.bucket_name)) == 0 || (length(trimspace(var.bucket_name)) >= 3 && length(trimspace(var.bucket_name)) <= 63)
     error_message = "bucket_name must be empty or 3–63 characters."
   }
 }
@@ -100,7 +97,7 @@ variable "allowed_ssh_cidrs" {
   default     = []
 
   validation {
-    condition     = length([for c in var.allowed_ssh_cidrs : c if can(cidrhost(c, 0))]) == length(var.allowed_ssh_cidrs)
+    condition     = alltrue([for c in var.allowed_ssh_cidrs : can(cidrhost(c, 0))])
     error_message = "Every item in allowed_ssh_cidrs must be a valid CIDR."
   }
 }
@@ -459,5 +456,5 @@ output "s3_bucket_name" {
 
 output "nat_gateway_id" {
   description = "NAT Gateway ID (empty in dev)"
-  value       = local.enable_nat ? aws_nat_gateway.ngw[0].id : ""
+  value       = try(aws_nat_gateway.ngw[0].id, "")
 }
