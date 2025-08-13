@@ -1,6 +1,14 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Gold Standard Secure S3 Bucket with comprehensive security controls and compliance features",
+    "Parameters": {
+        "ExternalAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID of the trusted external partner for cross-account access",
+            "AllowedPattern": "[0-9]{12}",
+            "ConstraintDescription": "Must be a valid 12-digit AWS Account ID"
+        }
+    },
     "Resources": {
         "S3EncryptionKey": {
             "Type": "AWS::KMS::Key",
@@ -61,6 +69,9 @@
         "LoggingBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "secure-logs-${AWS::AccountId}-${AWS::Region}"
+                },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "BlockPublicPolicy": true,
@@ -106,6 +117,9 @@
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "secure-data-${AWS::AccountId}-${AWS::Region}"
+                },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
@@ -235,6 +249,33 @@
                             "Condition": {
                                 "Bool": {
                                     "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowCrossAccountRead",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${ExternalAccountId}:role/ExternalDataReaderRole"
+                                }
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:GetObjectVersion",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${SecureDataBucket}/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${SecureDataBucket}"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "true"
                                 }
                             }
                         },

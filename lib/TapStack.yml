@@ -1,7 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Gold Standard Secure S3 Bucket with comprehensive security controls and compliance features'
 
-# No parameters needed for this secure S3 bucket template
+Parameters:
+  ExternalAccountId:
+    Type: String
+    Description: 'AWS Account ID of the trusted external partner for cross-account access'
+    AllowedPattern: '[0-9]{12}'
+    ConstraintDescription: 'Must be a valid 12-digit AWS Account ID'
 
 Resources:
   # KMS Key for S3 bucket encryption
@@ -44,7 +49,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # BucketName: Let CloudFormation auto-generate to avoid naming conflicts
+      BucketName: !Sub 'secure-logs-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -74,7 +79,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      # BucketName: Let CloudFormation auto-generate to avoid naming conflicts
+      BucketName: !Sub 'secure-data-${AWS::AccountId}-${AWS::Region}'
       # Enable versioning for data protection
       VersioningConfiguration:
         Status: Enabled
@@ -161,21 +166,21 @@ Resources:
               Bool:
                 'aws:SecureTransport': 'false'
           
-          # Grant cross-account read access to external partner (commented out - requires role to exist in external account)
-          # - Sid: 'AllowCrossAccountRead'
-          #   Effect: Allow
-          #   Principal:
-          #     AWS: !Sub 'arn:aws:iam::${ExternalAccountId}:role/ExternalDataReaderRole'
-          #   Action:
-          #     - 's3:GetObject'
-          #     - 's3:GetObjectVersion'
-          #     - 's3:ListBucket'
-          #   Resource:
-          #     - !Sub '${SecureDataBucket}/*'
-          #     - !Sub '${SecureDataBucket}'
-          #   Condition:
-          #     Bool:
-          #       'aws:SecureTransport': 'true'
+          # Grant cross-account read access to external partner
+          - Sid: 'AllowCrossAccountRead'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${ExternalAccountId}:role/ExternalDataReaderRole'
+            Action:
+              - 's3:GetObject'
+              - 's3:GetObjectVersion'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub 'arn:aws:s3:::${SecureDataBucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureDataBucket}'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'true'
           
           # Allow current account full access with secure transport
           - Sid: 'AllowAccountAccess'
