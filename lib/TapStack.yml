@@ -592,13 +592,15 @@ Resources:
 
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    DependsOn: ConfigurationRecorder
     Properties:
       Name: default
       S3BucketName: !Ref ConfigBucket
       S3KeyPrefix: config
       SnsTopicARN: !Ref ConfigTopic
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: Daily
+        DeliveryFrequency: TwentyFour_Hours
+          
 
   S3BucketLoggingEnabledRule:
     Type: AWS::Config::ConfigRule
