@@ -227,12 +227,19 @@ describe('SecureInfrastructureStack Unit Tests', () => {
       });
     });
 
-    test('should create CloudTrail', () => {
-      template.hasResource('AWS::CloudTrail::Trail', {
-        Properties: {
-          TrailName: Match.stringLikeRegexp('.*CloudTrail.*'),
-        },
-      });
+    test('should create CloudTrail for non-PR environments', () => {
+      // For PR environments, CloudTrail is not created to avoid trail limit
+      const environment = 'test'; // This test uses 'test' environment
+      if (!environment.startsWith('pr')) {
+        template.hasResource('AWS::CloudTrail::Trail', {
+          Properties: {
+            TrailName: Match.stringLikeRegexp('.*CloudTrail.*'),
+          },
+        });
+      } else {
+        // For PR environments, CloudTrail should not be created
+        template.resourceCountIs('AWS::CloudTrail::Trail', 0);
+      }
     });
   });
 

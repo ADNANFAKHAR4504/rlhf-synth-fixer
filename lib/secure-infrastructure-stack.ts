@@ -97,7 +97,9 @@ export class SecureInfrastructureStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'CloudTrailArn', {
-      value: cloudTrailConstruct.trail?.trailArn || 'CloudTrail not created for this environment',
+      value:
+        cloudTrailConstruct.trail?.trailArn ||
+        'CloudTrail not created for this environment',
       description: 'CloudTrail ARN',
     });
   }

@@ -450,7 +450,13 @@ describe('AWS Resource Validation Tests', () => {
   });
 
   describe('CloudTrail and Monitoring', () => {
-    test('should have CloudTrail with comprehensive logging', async () => {
+    test('should have CloudTrail with comprehensive logging for non-PR environments', async () => {
+      // Skip CloudTrail test for PR environments since they don't create CloudTrail
+      if (environment.startsWith('pr')) {
+        console.log(`Skipping CloudTrail test for PR environment: ${environment}`);
+        return;
+      }
+
       const trailName = `CloudTrail-${environment}`;
 
       try {

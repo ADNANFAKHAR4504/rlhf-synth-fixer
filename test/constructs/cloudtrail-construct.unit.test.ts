@@ -99,6 +99,9 @@ describe('CloudTrailConstruct Unit Tests', () => {
         },
       });
     });
+  });
+
+
 
     test('should tag S3 bucket correctly', () => {
       template.hasResource('AWS::S3::Bucket', {
@@ -224,6 +227,26 @@ describe('CloudTrailConstruct Unit Tests', () => {
       template.hasResource('AWS::S3::Bucket', {});
       template.hasResource('AWS::Logs::LogGroup', {});
       template.hasResource('AWS::CloudTrail::Trail', {});
+    });
+  });
+
+  describe('PR Environment CloudTrail Creation', () => {
+    beforeEach(() => {
+      const cloudTrailConstruct = new CloudTrailConstruct(stack, 'TestCloudTrailConstruct', {
+        environment: 'pr123',
+      });
+      template = Template.fromStack(stack);
+    });
+
+    test('should not create CloudTrail for PR environments', () => {
+      // For PR environments, CloudTrail should not be created to avoid trail limit
+      template.resourceCountIs('AWS::CloudTrail::Trail', 0);
+    });
+
+    test('should still create S3 bucket and CloudWatch Log Group for PR environments', () => {
+      // S3 bucket and CloudWatch Log Group should still be created
+      template.hasResource('AWS::S3::Bucket', {});
+      template.hasResource('AWS::Logs::LogGroup', {});
     });
   });
 });
