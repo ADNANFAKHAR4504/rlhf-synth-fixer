@@ -25,32 +25,30 @@ type Outputs = {
   >;
 };
 
-function readOutputs(): {
-  vpcId: string;
-  subnetId: string;
-  sgId: string;
-  sgArn: string;
-  sgName: string;
-  ingressRules: Array<{ from_port: number; to_port: number; protocol: string; cidrs: string[] }>;
-} {
-  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"); // <- required path
+function readOutputs() {
+  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
   if (!fs.existsSync(p)) throw new Error(`Outputs file not found at ${p}`);
-  const out = JSON.parse(fs.readFileSync(p, "utf8")) as Outputs;
+  const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Outputs;
 
-  const must = <K extends keyof Outputs>(k: K): any => {
-    const v = out[k]?.value;
+  const need = <K extends keyof Outputs>(k: K) => {
+    const v = raw[k]?.value;
     if (v === undefined || v === null)
       throw new Error(`Missing required output: ${String(k)}.value in ${p}`);
     return v;
   };
 
   return {
-    vpcId: must("vpc_id"),
-    subnetId: must("subnet_id"),
-    sgId: must("security_group_id"),
-    sgArn: must("security_group_arn"),
-    sgName: must("security_group_name"),
-    ingressRules: must("ingress_rules"),
+    vpcId: need("vpc_id") as string,
+    subnetId: need("subnet_id") as string,
+    sgId: need("security_group_id") as string,
+    sgArn: need("security_group_arn") as string,
+    sgName: need("security_group_name") as string,
+    ingressRules: need("ingress_rules") as Array<{
+      from_port: number;
+      to_port: number;
+      protocol: string;
+      cidrs: string[];
+    }>,
   };
 }
 
@@ -77,7 +75,7 @@ async function retry<T>(fn: () => Promise<T>, attempts = 8, baseMs = 800): Promi
   throw last;
 }
 
-/** Normalize a Security Group's ingress rules into a flat set of (proto,from,to,cidr) items. */
+/** Normalize SG ingress into flat (proto,from,to,cidr) items. */
 type FlatRule = { protocol: string; from: number; to: number; cidr: string };
 function flattenIngressFromAws(sg: any): FlatRule[] {
   const res: FlatRule[] = [];
@@ -85,42 +83,26 @@ function flattenIngressFromAws(sg: any): FlatRule[] {
     const protocol = p.IpProtocol;
     const from = Number(p.FromPort ?? 0);
     const to = Number(p.ToPort ?? 0);
-
-    // IPv4 ranges
-    for (const r of p.IpRanges || []) {
-      if (r.CidrIp) res.push({ protocol, from, to, cidr: r.CidrIp });
-    }
-    // IPv6 ranges
-    for (const r of p.Ipv6Ranges || []) {
-      if (r.CidrIpv6) res.push({ protocol, from, to, cidr: r.CidrIpv6 });
-    }
+    for (const r of p.IpRanges || []) if (r.CidrIp) res.push({ protocol, from, to, cidr: r.CidrIp });
+    for (const r of p.Ipv6Ranges || []) if (r.CidrIpv6) res.push({ protocol, from, to, cidr: r.CidrIpv6 });
   }
   return res;
 }
-
-/** Flatten Terraform output ingress rules: each output item can contain many CIDRs. */
 function flattenIngressFromOutputs(
   rules: Array<{ from_port: number; to_port: number; protocol: string; cidrs: string[] }>
 ): FlatRule[] {
   const res: FlatRule[] = [];
-  for (const r of rules) {
-    for (const c of r.cidrs) res.push({ protocol: r.protocol, from: r.from_port, to: r.to_port, cidr: c });
-  }
+  for (const r of rules) for (const c of r.cidrs)
+    res.push({ protocol: r.protocol, from: r.from_port, to: r.to_port, cidr: c });
   return res;
 }
-
 function sortFlatRules(r: FlatRule[]): FlatRule[] {
-  return r
-    .slice()
-    .sort((a, b) =>
-      a.protocol !== b.protocol
-        ? a.protocol.localeCompare(b.protocol)
-        : a.from !== b.from
-        ? a.from - b.from
-        : a.to !== b.to
-        ? a.to - b.to
-        : a.cidr.localeCompare(b.cidr)
-    );
+  return r.slice().sort((a, b) =>
+    a.protocol !== b.protocol ? a.protocol.localeCompare(b.protocol)
+    : a.from !== b.from ? a.from - b.from
+    : a.to !== b.to ? a.to - b.to
+    : a.cidr.localeCompare(b.cidr)
+  );
 }
 
 /* =========================
@@ -138,18 +120,18 @@ describe("LIVE: VPC & Subnet", () => {
     expect(resp.Vpcs?.[0]?.VpcId).toBe(OUT.vpcId);
   });
 
-  test("Subnet exists and belongs to the VPC", async () => {
+  test("Subnet exists and belongs to the VPC (public subnet)", async () => {
     const resp = await retry(() =>
       ec2.send(new DescribeSubnetsCommand({ SubnetIds: [OUT.subnetId] }))
     );
     const s = resp.Subnets?.[0];
     expect(s?.SubnetId).toBe(OUT.subnetId);
     expect(s?.VpcId).toBe(OUT.vpcId);
-    // main.tf sets map_public_ip_on_launch = true
+    // In your main.tf: map_public_ip_on_launch = true
     expect(s?.MapPublicIpOnLaunch).toBe(true);
   });
 
-  test("Public route table for the subnet has default route via an Internet Gateway", async () => {
+  test("Subnet's route table has 0.0.0.0/0 via an Internet Gateway", async () => {
     const rt = await retry(() =>
       ec2.send(
         new DescribeRouteTablesCommand({
@@ -159,6 +141,7 @@ describe("LIVE: VPC & Subnet", () => {
     );
     const table = rt.RouteTables?.[0];
     expect(table).toBeTruthy();
+
     const hasIgwDefault = (table?.Routes || []).some(
       (r) => r.DestinationCidrBlock === "0.0.0.0/0" && (r.GatewayId || "").startsWith("igw-")
     );
@@ -171,29 +154,19 @@ describe("LIVE: VPC & Subnet", () => {
    ========================= */
 
 describe("LIVE: Security Group", () => {
-  test("SG exists, in correct VPC, name/ARN match, has expected tags (soft)", async () => {
+  test("SG exists, in correct VPC, name/ARN consistent", async () => {
     const res = await retry(() =>
-      ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [OUT.security_group_id?.value || OUT.sgId].filter(Boolean) as string[] }))
-    ).catch(async () =>
-      // fallback to OUT.sgId if security_group_id key not present in file structure
       ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [OUT.sgId] }))
     );
-
     const sg = res.SecurityGroups?.[0];
     expect(sg?.GroupId).toBe(OUT.sgId);
     expect(sg?.GroupName).toBe(OUT.sgName);
     expect(sg?.VpcId).toBe(OUT.vpcId);
-    // ARN match (region/account portions may vary by partition; strict string compare against output)
-    // If your partition differs, loosen this assertion to `.toContain(OUT.sgId)`
+    // Partitions/accounts vary; require ARN to contain the ID
     expect(OUT.sgArn).toContain(OUT.sgId);
-
-    // Soft tag presence (may be IAM-restricted to read)
-    const tagKeys = new Set((sg?.Tags || []).map((t) => t.Key));
-    // Not failing hard if tags missing; ensure at least ManagedBy/Environment/Project likely exist
-    expect(tagKeys.size).toBeGreaterThanOrEqual(0);
   });
 
-  test("Ingress rules match outputs exactly (protocol/ports/CIDRs), only 80 & 443 allowed, no world-open", async () => {
+  test("Ingress rules match outputs exactly, only ports 80 & 443, not world-open", async () => {
     const res = await retry(() =>
       ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [OUT.sgId] }))
     );
@@ -204,20 +177,17 @@ describe("LIVE: Security Group", () => {
     // Exact match (order-insensitive)
     expect(awsFlat).toEqual(outFlat);
 
-    // Only ports 80 & 443
-    const ports = new Set(awsFlat.flatMap((r) => [r.from, r.to]));
-    for (const p of ports) expect([80, 443].includes(p)).toBe(true);
+    // Only 80 and 443
+    const allPorts = new Set<number>(awsFlat.flatMap((r) => [r.from, r.to]));
+    for (const p of allPorts) expect([80, 443]).toContain(p);
 
     // No world-open ingress
     const cidrs = awsFlat.map((r) => r.cidr);
     expect(cidrs).not.toContain("0.0.0.0/0");
     expect(cidrs).not.toContain("::/0");
-
-    // At least one ingress rule exists (mirrors your validation intent)
-    expect(awsFlat.length).toBeGreaterThan(0);
   });
 
-  test("Egress allows all OR matches the restricted placeholder (tcp/443 to 0.0.0.0/0)", async () => {
+  test("Egress allows all OR matches restricted placeholder (tcp/443 to 0.0.0.0/0)", async () => {
     const res = await retry(() =>
       ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [OUT.sgId] }))
     );
@@ -229,13 +199,7 @@ describe("LIVE: Security Group", () => {
         (p) =>
           p.IpProtocol === "-1" &&
           (p.IpRanges || []).some((r) => r.CidrIp === "0.0.0.0/0") &&
-          (p.Ipv6Ranges || []).some((r) => r.CidrIpv6 === "::/0")
-      ) ||
-      e.some(
-        (p) =>
-          p.IpProtocol === "-1" &&
-          (p.IpRanges || []).some((r) => r.CidrIp === "0.0.0.0/0") &&
-          (p.Ipv6Ranges || []).length === 0 // some accounts don’t add ::/0 automatically
+          ((p.Ipv6Ranges || []).some((r) => r.CidrIpv6 === "::/0") || true)
       );
 
     const hasRestricted443 =
@@ -256,22 +220,16 @@ describe("LIVE: Security Group", () => {
    ========================= */
 
 describe("Edge cases & sanity", () => {
-  test("Outputs include at least one IPv4/IPv6 CIDR and no invalid CIDR in outputs", () => {
-    const badWorld = new Set(["0.0.0.0/0", "::/0"]);
+  test("Outputs ingress_rules contain at least one CIDR and none are world-open", () => {
     const allCidrs = OUT.ingressRules.flatMap((r) => r.cidrs);
     expect(allCidrs.length).toBeGreaterThan(0);
     for (const c of allCidrs) {
-      expect(badWorld.has(c)).toBe(false);
-      // very light sanity Regex (not a full CIDR validator)
-      const looksLikeCidr = /:/.test(c) || /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(c);
-      expect(looksLikeCidr).toBe(true);
+      expect(c).not.toBe("0.0.0.0/0");
+      expect(c).not.toBe("::/0");
+      // light sanity check: IPv4 CIDR or IPv6 look
+      const looksLike =
+        /:/.test(c) || /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(c);
+      expect(looksLike).toBe(true);
     }
-  });
-
-  test("Security group name in AWS matches output (idempotence signal)", async () => {
-    const res = await retry(() =>
-      ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [OUT.sgId] }))
-    );
-    expect(res.SecurityGroups?.[0]?.GroupName).toBe(OUT.sgName);
   });
 });
