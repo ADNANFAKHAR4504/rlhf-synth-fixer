@@ -270,14 +270,18 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
   });
 
   test("ensures no hardcoded values in module inputs", () => {
-    // All module inputs should reference other modules or variables, not hardcoded strings/numbers
+    // Extract only module blocks (not variable blocks)
+    const moduleBlocks = hcl.match(/module\s+"[^"]+"\s*{[^}]*}/g) || [];
+    const moduleContent = moduleBlocks.join('\n');
+    
+    // Look for hardcoded string assignments in module blocks only
     const moduleInputPattern = /(\w+)\s*=\s*"[^"]*"/g;
-    const matches = [...hcl.matchAll(moduleInputPattern)];
+    const matches = [...moduleContent.matchAll(moduleInputPattern)];
     
     // Filter out 'source' assignments which should be hardcoded paths
     const nonSourceMatches = matches.filter(match => match[1] !== 'source');
     
-    // Should have no hardcoded string values except for source paths
+    // Should have no hardcoded string values in module inputs except for source paths
     expect(nonSourceMatches).toHaveLength(0);
   });
 
