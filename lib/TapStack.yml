@@ -14,10 +14,6 @@ Parameters:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod).'
-    AllowedValues:
-      - dev
-      - staging
-      - prod
     ConstraintDescription: 'Must be one of: dev, staging, or prod.'
 
 Mappings:

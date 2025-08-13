@@ -15,10 +15,6 @@ Parameters:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod).'
-    AllowedValues:
-      - dev
-      - staging
-      - prod
     ConstraintDescription: 'Must be one of: dev, staging, or prod.'
 
 Mappings:
@@ -150,7 +146,12 @@ Resources:
                   - !Sub '${NovaDataBucket.Arn}/*'
               - Sid: 'CloudWatchLogsAccess'
                 Effect: Allow
-                Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']
+                Action:
+                  [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                  ]
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/nova-app*:*'
               # FIX: Permissions for the role to use the KMS key are now defined here.
               # This breaks the circular dependency.
