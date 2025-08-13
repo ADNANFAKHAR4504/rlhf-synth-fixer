@@ -74,7 +74,7 @@ export class TapStack extends pulumi.ComponentResource {
    * @param args Configuration arguments including environment suffix and tags.
    * @param opts Pulumi options.
    */
-  constructor (name: string, args: TapStackArgs, opts?: ResourceOptions) {
+  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
