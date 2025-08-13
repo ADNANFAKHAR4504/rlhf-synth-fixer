@@ -373,7 +373,7 @@ resource "aws_db_subnet_group" "rds_subnets" {
 }
 
 resource "aws_db_instance" "mysql" {
-  identifier              = "${var.project}-${var.environment}-mysql"
+  identifier              = "a-${lower(var.project)}-${lower(var.environment)}-mysql"
   allocated_storage       = 20
   engine                  = "mysql"
   engine_version          = "8.0"
