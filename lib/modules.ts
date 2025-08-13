@@ -339,7 +339,7 @@ export class ComputeModule extends Construct {
         id: launchTemplate.id,
         version: '$Latest',
       },
-      targetGroupArns: [targetGroup.arn],
+      // targetGroupArns: [targetGroup.arn],
       healthCheckType: 'EC2',
       healthCheckGracePeriod: 0, // 10 minutes
       tag: [
