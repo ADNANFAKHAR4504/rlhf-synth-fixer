@@ -73,6 +73,37 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Inline Lambda code as a single-quoted string to satisfy lint rules
+    const syncFunctionInline = [
+      "'use strict';",
+      "const AWS = require('aws-sdk');",
+      'const ssm = new AWS.SSM();',
+      "const s3 = new AWS.S3({ signatureVersion: 'v4' });",
+      'exports.handler = async (event) => {',
+      '  const destRegion = process.env.DEST_REGION;',
+      '  const paramName = process.env.DEST_PARAM_PATH;',
+      "  if (!destRegion || !paramName) { throw new Error('Missing DEST_REGION or DEST_PARAM_PATH'); }",
+      '  const param = await ssm.getParameter({ Name: paramName, WithDecryption: false }).promise();',
+      '  const destBucket = param.Parameter && param.Parameter.Value;',
+      "  if (!destBucket) { throw new Error('Destination bucket parameter not found'); }",
+      '  const results = await Promise.all(event.Records.map(async (record) => {',
+      '    if (!record || !record.s3 || !record.s3.object) return;',
+      '    const srcBucket = record.s3.bucket.name;',
+      "    const key = decodeURIComponent((record.s3.object.key || '').replace(/\\+/g, ' '));",
+      '    if (!key) return;',
+      '    const copySource = encodeURI(`${srcBucket}/${key}`);',
+      '    await s3.copyObject({',
+      '      CopySource: copySource,',
+      '      Bucket: destBucket,',
+      '      Key: key,',
+      "      ACL: 'bucket-owner-full-control',",
+      "      MetadataDirective: 'COPY'",
+      '    }).promise();',
+      '  }));',
+      '  return { statusCode: 200, copied: results ? results.length : 0 };',
+      '};',
+    ].join('\n');
+
     const syncFunction = new lambda.Function(this, 'Corp-S3SyncFunction', {
       functionName: `Corp-S3Sync-${currentRegion}-${normalizedEnv}`,
       description: 'Copies newly created S3 objects to the peer region bucket',
@@ -84,35 +115,7 @@ export class TapStack extends cdk.Stack {
         DEST_PARAM_PATH: peerBucketParamPath,
         DEST_REGION: peerRegion,
       },
-      code: lambda.Code.fromInline(
-        `'use strict';\n` +
-          `const AWS = require('aws-sdk');\n` +
-          `const ssm = new AWS.SSM();\n` +
-          `const s3 = new AWS.S3({ signatureVersion: 'v4' });\n` +
-          `exports.handler = async (event) => {\n` +
-          `  const destRegion = process.env.DEST_REGION;\n` +
-          `  const paramName = process.env.DEST_PARAM_PATH;\n` +
-          `  if (!destRegion || !paramName) { throw new Error('Missing DEST_REGION or DEST_PARAM_PATH'); }\n` +
-          `  const param = await ssm.getParameter({ Name: paramName, WithDecryption: false }).promise();\n` +
-          `  const destBucket = param.Parameter && param.Parameter.Value;\n` +
-          `  if (!destBucket) { throw new Error('Destination bucket parameter not found'); }\n` +
-          `  const results = await Promise.all(event.Records.map(async (record) => {\n` +
-          `    if (!record || !record.s3 || !record.s3.object) return;\n` +
-          `    const srcBucket = record.s3.bucket.name;\n` +
-          `    const key = decodeURIComponent((record.s3.object.key || '').replace(/\\+/g, ' '));\n` +
-          `    if (!key) return;\n` +
-          `    const copySource = encodeURI(\`${'${'}srcBucket${'}'}\/${'${'}key${'}'}\`);\n` +
-          `    await s3.copyObject({\n` +
-          `      CopySource: copySource,\n` +
-          `      Bucket: destBucket,\n` +
-          `      Key: key,\n` +
-          `      ACL: 'bucket-owner-full-control',\n` +
-          `      MetadataDirective: 'COPY'\n` +
-          `    }).promise();\n` +
-          `  }));\n` +
-          `  return { statusCode: 200, copied: results ? results.length : 0 };\n` +
-          `};\n`
-      ),
+      code: lambda.Code.fromInline(syncFunctionInline),
     });
 
     // Least-privilege IAM for the sync function
