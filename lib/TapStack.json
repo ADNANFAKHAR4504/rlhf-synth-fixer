@@ -39,7 +39,8 @@
                         "KMSKeyAlias",
                         "CloudTrailBucketName",
                         "NotificationEmail",
-                        "AllowedIPRanges"
+                        "AllowedIPRanges",
+                        "EnableGuardDuty"
                     ]
                 }
             ],
@@ -94,6 +95,9 @@
                 },
                 "AllowedIPRanges": {
                     "default": "Allowed IP Ranges"
+                },
+                "EnableGuardDuty": {
+                    "default": "Enable GuardDuty"
                 }
             }
         }
@@ -231,6 +235,15 @@
                 "true",
                 "false"
             ]
+        },
+        "EnableGuardDuty": {
+            "Type": "String",
+            "Description": "Enable GuardDuty detector creation (set to false if already exists)",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
         }
     },
     "Conditions": {
@@ -266,6 +279,21 @@
                     "Ref": "EnableVPCFlowLogs"
                 },
                 "true"
+            ]
+        },
+        "EnableGuardDutyCondition": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableGuardDuty"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Condition": "IsPrimaryRegion"
+                }
             ]
         }
     },
@@ -1846,7 +1874,7 @@
         },
         "GuardDutyDetector": {
             "Type": "AWS::GuardDuty::Detector",
-            "Condition": "IsPrimaryRegion",
+            "Condition": "EnableGuardDutyCondition",
             "Properties": {
                 "Enable": true,
                 "FindingPublishingFrequency": "FIFTEEN_MINUTES"
@@ -2356,11 +2384,11 @@
             "Description": "GuardDuty Detector ID",
             "Value": {
                 "Fn::If": [
-                    "IsPrimaryRegion",
+                    "EnableGuardDutyCondition",
                     {
                         "Ref": "GuardDutyDetector"
                     },
-                    "N/A - Not Primary Region"
+                    "N/A - GuardDuty Disabled or Not Primary Region"
                 ]
             }
         },

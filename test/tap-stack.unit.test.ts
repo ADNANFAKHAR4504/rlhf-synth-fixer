@@ -60,6 +60,7 @@ describe('TapStack CloudFormation Template', () => {
       'NotificationEmail',
       'EnableVPCFlowLogs',
       'EnableNATGateway',
+      'EnableGuardDuty',
     ];
 
     test('should have all required parameters', () => {
@@ -135,6 +136,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Conditions.EnableVPCFlowLogsCondition).toBeDefined();
       expect(template.Conditions.EnableVPCFlowLogsCondition).toEqual({
         'Fn::Equals': [{ Ref: 'EnableVPCFlowLogs' }, 'true'],
+      });
+    });
+
+    test('should have EnableGuardDutyCondition condition', () => {
+      expect(template.Conditions.EnableGuardDutyCondition).toBeDefined();
+      expect(template.Conditions.EnableGuardDutyCondition).toEqual({
+        'Fn::And': [
+          { 'Fn::Equals': [{ Ref: 'EnableGuardDuty' }, 'true'] },
+          { Condition: 'IsPrimaryRegion' },
+        ],
       });
     });
   });
@@ -685,10 +696,10 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('GuardDuty', () => {
-    test('should have GuardDuty detector', () => {
+    test('should have GuardDuty detector with conditional creation', () => {
       const detector = template.Resources.GuardDutyDetector;
       expect(detector.Type).toBe('AWS::GuardDuty::Detector');
-      expect(detector.Condition).toBe('IsPrimaryRegion');
+      expect(detector.Condition).toBe('EnableGuardDutyCondition');
       expect(detector.Properties.Enable).toBe(true);
       expect(detector.Properties.FindingPublishingFrequency).toBe(
         'FIFTEEN_MINUTES'
@@ -858,7 +869,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(17); // Updated parameter count
+      expect(parameterCount).toBe(18); // Updated parameter count with EnableGuardDuty
     });
 
     test('should have correct output count', () => {

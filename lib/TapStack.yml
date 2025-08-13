@@ -26,6 +26,7 @@ Metadata:
             CloudTrailBucketName,
             NotificationEmail,
             AllowedIPRanges,
+            EnableGuardDuty,
           ]
     ParameterLabels:
       ProjectName:
@@ -62,6 +63,8 @@ Metadata:
         default: 'Notification Email'
       AllowedIPRanges:
         default: 'Allowed IP Ranges'
+      EnableGuardDuty:
+        default: 'Enable GuardDuty'
 
 Parameters:
   ProjectName:
@@ -184,11 +187,19 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
+  EnableGuardDuty:
+    Type: String
+    Description: 'Enable GuardDuty detector creation (set to false if already exists)'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
   IsProductionEnvironment: !Equals [!Ref Environment, 'prod']
   EnableNATGatewayCondition: !Equals [!Ref EnableNATGateway, 'true']
   EnableVPCFlowLogsCondition: !Equals [!Ref EnableVPCFlowLogs, 'true']
+  EnableGuardDutyCondition:
+    !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
 
 Resources:
   ### VPC & Networking ###
@@ -962,7 +973,7 @@ Resources:
   ### GuardDuty ###
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
-    Condition: IsPrimaryRegion
+    Condition: EnableGuardDutyCondition
     Properties:
       Enable: true
       FindingPublishingFrequency: FIFTEEN_MINUTES
@@ -1334,7 +1345,11 @@ Outputs:
   GuardDutyDetectorId:
     Description: 'GuardDuty Detector ID'
     Value:
-      !If [IsPrimaryRegion, !Ref GuardDutyDetector, 'N/A - Not Primary Region']
+      !If [
+        EnableGuardDutyCondition,
+        !Ref GuardDutyDetector,
+        'N/A - GuardDuty Disabled or Not Primary Region',
+      ]
 
   CloudTrailArn:
     Description: 'CloudTrail ARN'
