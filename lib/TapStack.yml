@@ -15,6 +15,11 @@ Parameters:
     Type: String
     Default: webapp
     Description: Name of the web application
+    
+  EnvironmentSuffix:
+    Type: String
+    Default: ""
+    Description: Unique suffix for resource names to avoid conflicts between deployments
 
 Mappings:
   EnvironmentConfig:
@@ -42,7 +47,7 @@ Resources:
   EnvironmentS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ApplicationName}-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ApplicationName}-${Environment}${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -72,9 +77,8 @@ Resources:
 
   SharedConfigBucket:
     Type: AWS::S3::Bucket
-    Condition: IsProductionEnvironment
     Properties:
-      BucketName: !Sub '${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ApplicationName}-shared-config${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -91,6 +95,8 @@ Resources:
           Value: SharedConfiguration
         - Key: Application
           Value: !Ref ApplicationName
+        - Key: Environment
+          Value: !Ref Environment
 
 
   # =====================================================
@@ -99,7 +105,7 @@ Resources:
   EnvironmentDynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${ApplicationName}-${Environment}-data'
+      TableName: !Sub '${ApplicationName}-${Environment}${EnvironmentSuffix}-data'
       BillingMode: !FindInMap [EnvironmentConfig, !Ref Environment, DynamoDBBillingMode]
       AttributeDefinitions:
         - AttributeName: id
@@ -131,7 +137,7 @@ Resources:
   ApplicationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ApplicationName}-${Environment}-execution-role'
+      RoleName: !Sub '${ApplicationName}-${Environment}${EnvironmentSuffix}-execution-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -153,7 +159,7 @@ Resources:
   EnvironmentS3Policy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${ApplicationName}-${Environment}-s3-policy'
+      PolicyName: !Sub '${ApplicationName}-${Environment}${EnvironmentSuffix}-s3-policy'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -171,21 +177,15 @@ Resources:
               - s3:GetObject
               - s3:ListBucket
             Resource:
-              - !If
-                - IsProductionEnvironment
-                - !Sub 'arn:aws:s3:::${SharedConfigBucket}'
-                - !Sub 'arn:aws:s3:::${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}'
-              - !If
-                - IsProductionEnvironment
-                - !Sub 'arn:aws:s3:::${SharedConfigBucket}/*'
-                - !Sub 'arn:aws:s3:::${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}/*'
+              - !Sub 'arn:aws:s3:::${SharedConfigBucket}'
+              - !Sub 'arn:aws:s3:::${SharedConfigBucket}/*'
       Roles:
         - !Ref ApplicationExecutionRole
 
   EnvironmentDynamoDBPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${ApplicationName}-${Environment}-dynamodb-policy'
+      PolicyName: !Sub '${ApplicationName}-${Environment}${EnvironmentSuffix}-dynamodb-policy'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -204,7 +204,7 @@ Resources:
   CloudWatchLogsPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${ApplicationName}-${Environment}-cloudwatch-policy'
+      PolicyName: !Sub '${ApplicationName}-${Environment}${EnvironmentSuffix}-cloudwatch-policy'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -221,7 +221,7 @@ Resources:
   SSMParameterPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${ApplicationName}-${Environment}-ssm-policy'
+      PolicyName: !Sub '${ApplicationName}-${Environment}${EnvironmentSuffix}-ssm-policy'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -231,21 +231,18 @@ Resources:
               - ssm:GetParameters
               - ssm:GetParametersByPath
             Resource: 
-              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationName}/${Environment}/*'
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationName}/${Environment}${EnvironmentSuffix}/*'
           - Effect: Allow
             Action:
               - kms:Decrypt
-            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
-            Condition:
-              StringEquals:
-                'kms:ViaService': !Sub 'ssm.${AWS::Region}.amazonaws.com'
+            Resource: !GetAtt SSMKMSKey.Arn
       Roles:
         - !Ref ApplicationExecutionRole
 
   ApplicationInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ApplicationName}-${Environment}-instance-profile'
+      InstanceProfileName: !Sub '${ApplicationName}-${Environment}${EnvironmentSuffix}-instance-profile'
       Roles:
         - !Ref ApplicationExecutionRole
 
@@ -255,7 +252,7 @@ Resources:
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}/application'
+      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}${EnvironmentSuffix}/application'
       RetentionInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
       Tags:
         - Key: Environment
@@ -266,7 +263,7 @@ Resources:
   PerformanceLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}/performance'
+      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}${EnvironmentSuffix}/performance'
       RetentionInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
       Tags:
         - Key: Environment
@@ -277,7 +274,7 @@ Resources:
   ResourceUtilizationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}/resources'
+      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}${EnvironmentSuffix}/resources'
       RetentionInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
       Tags:
         - Key: Environment
@@ -286,14 +283,62 @@ Resources:
           Value: !Ref ApplicationName
 
   # =====================================================
-  # SSM PARAMETER STORE
+  # KMS KEY FOR SSM ENCRYPTION
   # =====================================================
+  SSMKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for SSM Parameter Store encryption in ${Environment} environment'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key by SSM
+            Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: '*'
+          - Sid: Allow application role to use the key
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt ApplicationExecutionRole.Arn
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  SSMKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ApplicationName}-${Environment}${EnvironmentSuffix}-ssm-key'
+      TargetKeyId: !Ref SSMKMSKey
+
+  # =====================================================
+  # SSM PARAMETER STORE
+  # ======================================================
   DatabaseConnectionParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '/${ApplicationName}/${Environment}/database/connection-string'
-      Type: String
-      Value: !Sub 'dynamodb://table=${ApplicationName}-${Environment}-data;region=${AWS::Region}'
+      Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/database/connection-string'
+      Type: SecureString
+      KeyId: !Ref SSMKMSKey
+      Value: !Sub 'dynamodb://table=${ApplicationName}-${Environment}${EnvironmentSuffix}-data;region=${AWS::Region}'
       Description: !Sub 'Database connection string for ${Environment} environment'
       Tags:
         Environment: !Ref Environment
@@ -302,8 +347,9 @@ Resources:
   APIConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '/${ApplicationName}/${Environment}/api/config'
-      Type: String
+      Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/api/config'
+      Type: SecureString
+      KeyId: !Ref SSMKMSKey
       Value: !Sub
         - |
           {
@@ -321,8 +367,9 @@ Resources:
   S3ConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '/${ApplicationName}/${Environment}/s3/bucket-name'
-      Type: String
+      Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/s3/bucket-name'
+      Type: SecureString
+      KeyId: !Ref SSMKMSKey
       Value: !Ref EnvironmentS3Bucket
       Description: !Sub 'S3 bucket name for ${Environment} environment'
       Tags:
@@ -332,12 +379,10 @@ Resources:
   SharedConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '/${ApplicationName}/${Environment}/s3/shared-config-bucket'
-      Type: String
-      Value: !If
-        - IsProductionEnvironment
-        - !Ref SharedConfigBucket
-        - !Sub '${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}'
+      Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/s3/shared-config-bucket'
+      Type: SecureString
+      KeyId: !Ref SSMKMSKey
+      Value: !Ref SharedConfigBucket
       Description: 'Shared configuration S3 bucket name'
       Tags:
         Environment: !Ref Environment
@@ -346,9 +391,10 @@ Resources:
   ApplicationSecretsParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '/${ApplicationName}/${Environment}/secrets/app-key'
-      Type: String
-      Value: !Sub 'secret-key-for-${Environment}-${AWS::AccountId}'
+      Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/secrets/app-key'
+      Type: SecureString
+      KeyId: !Ref SSMKMSKey
+      Value: !Sub 'secret-key-for-${Environment}${EnvironmentSuffix}-${AWS::AccountId}'
       Description: !Sub 'Application secrets for ${Environment} environment'
       Tags:
         Environment: !Ref Environment
@@ -361,10 +407,7 @@ Outputs:
 
   SharedConfigBucket:
     Description: Shared configuration S3 bucket name
-    Value: !If
-      - IsProductionEnvironment
-      - !Ref SharedConfigBucket
-      - !Sub '${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}'
+    Value: !Ref SharedConfigBucket
 
   DynamoDBTableName:
     Description: Environment-specific DynamoDB table name
@@ -380,7 +423,15 @@ Outputs:
 
   SSMParameterPrefix:
     Description: SSM Parameter Store prefix for this environment
-    Value: !Sub '/${ApplicationName}/${Environment}/'
+    Value: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/'
+    
+  SSMKMSKeyId:
+    Description: KMS Key ID for SSM Parameter Store encryption
+    Value: !Ref SSMKMSKey
+    
+  SSMKMSKeyAlias:
+    Description: KMS Key Alias for SSM Parameter Store encryption
+    Value: !Ref SSMKMSKeyAlias
 
   InstanceProfileArn:
     Description: Instance profile ARN for EC2 instances
