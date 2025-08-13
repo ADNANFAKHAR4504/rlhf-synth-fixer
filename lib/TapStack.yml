@@ -1,0 +1,420 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IaC - AWS Nova Model Breaking - Secure AWS Environment with Least Privilege Access'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'nova-model-breaking'
+    Description: 'Project name used for resource naming and tagging'
+  
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment designation'
+  
+  SSHKeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: 'EC2 Key Pair for SSH access'
+  
+  KMSKeyAlias:
+    Type: String
+    Default: 'nova-s3-encryption'
+    Description: 'Alias for KMS key used for S3 encryption'
+
+Resources:
+  # KMS Key for S3 Encryption
+  S3EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS Key for S3 bucket encryption in Nova Model Breaking project'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow S3 Service
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-s3-encryption-key'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # KMS Key Alias
+  S3EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${KMSKeyAlias}'
+      TargetKeyId: !Ref S3EncryptionKey
+
+  # S3 Bucket for Access Logs
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-access-logs-${AWS::AccountId}'
+      # Block all public access - security requirement
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # Enable encryption at rest using KMS
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
+            BucketKeyEnabled: true
+      # Lifecycle policy to manage log retention
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-access-logs'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Main S3 Bucket with Security Requirements
+  MainS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-main-${AWS::AccountId}'
+      # Block all public access - security requirement
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # Enable server access logging - security requirement
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'main-bucket-access-logs/'
+      # Enable encryption at rest using KMS - security requirement
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
+            BucketKeyEnabled: true
+      # Enable versioning for data protection
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-main-bucket'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # VPC for network isolation
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-vpc'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-igw'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Attach Internet Gateway to VPC
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnet
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: 'us-west-2a'  # Explicit region requirement
+      CidrBlock: '10.0.1.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-subnet'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Route Table for Public Subnet
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-rt'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Default Public Route
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  # Associate Public Subnet with Route Table
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  # Security Group - Restrictive SSH access only
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-${Environment}-ssh-sg'
+      GroupDescription: 'Security group allowing SSH access from specific IP range only'
+      VpcId: !Ref VPC
+      # Only allow SSH on port 22 from specific IP range - security requirement
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '203.0.113.0/24'  # Restricted IP range as specified
+          Description: 'SSH access from authorized IP range only'
+      # Explicit outbound rules for better security posture
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP outbound for package updates'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS outbound for secure communications'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-ssh-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # IAM Role for EC2 instances - Least privilege principle
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-ec2-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      # Least privilege policy - only essential S3 permissions
+      Policies:
+        - PolicyName: !Sub '${ProjectName}-${Environment}-ec2-s3-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow read/write access to main bucket only
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${MainS3Bucket}/*'
+              # Allow listing of main bucket only
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Ref MainS3Bucket
+              # Allow KMS operations for S3 encryption
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt S3EncryptionKey.Arn
+        # CloudWatch logs policy for monitoring
+        - PolicyName: !Sub '${ProjectName}-${Environment}-ec2-logs-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:us-west-2:${AWS::AccountId}:log-group:/aws/ec2/${ProjectName}*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-ec2-role'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Instance Profile for EC2 Role
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${ProjectName}-${Environment}-ec2-profile'
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # IAM Role for Lambda functions - Least privilege principle
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      # Minimal permissions for Lambda execution
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub '${ProjectName}-${Environment}-lambda-s3-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Read-only access to main S3 bucket
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${MainS3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Ref MainS3Bucket
+              # KMS permissions for S3 decryption
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !GetAtt S3EncryptionKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-lambda-role'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Log Group for application logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${ProjectName}-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-log-group'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID for the secure environment'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-vpc-id'
+
+  PublicSubnetId:
+    Description: 'Public Subnet ID'
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-public-subnet-id'
+
+  SSHSecurityGroupId:
+    Description: 'Security Group ID for SSH access'
+    Value: !Ref SSHSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ssh-sg-id'
+
+  MainS3BucketName:
+    Description: 'Main S3 Bucket Name'
+    Value: !Ref MainS3Bucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-main-bucket-name'
+
+  MainS3BucketArn:
+    Description: 'Main S3 Bucket ARN'
+    Value: !GetAtt MainS3Bucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-main-bucket-arn'
+
+  EC2InstanceRoleArn:
+    Description: 'EC2 Instance Role ARN'
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ec2-role-arn'
+
+  EC2InstanceProfileArn:
+    Description: 'EC2 Instance Profile ARN'
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ec2-profile-arn'
+
+  LambdaExecutionRoleArn:
+    Description: 'Lambda Execution Role ARN'
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-lambda-role-arn'
+
+  KMSKeyId:
+    Description: 'KMS Key ID for S3 encryption'
+    Value: !Ref S3EncryptionKey
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-kms-key-id'
+
+  KMSKeyArn:
+    Description: 'KMS Key ARN for S3 encryption'
+    Value: !GetAtt S3EncryptionKey.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-kms-key-arn'
