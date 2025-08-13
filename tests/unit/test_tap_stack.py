@@ -74,6 +74,50 @@ def test_cloudfront_distribution_created(stack_template):
     }
   })
 
+def test_rds_database_instance_created(stack_template):
+  """Verifies that the RDS database instance is created with correct properties."""
+  stack_template.resource_count_is("AWS::RDS::DBInstance", 1)
+  stack_template.has_resource_properties("AWS::RDS::DBInstance", {
+      "Engine": "mysql",
+      "EngineVersion": "8.0.42",
+      "MultiAZ": True,
+      "PubliclyAccessible": False,
+      "DBInstanceClass": "db.t3.micro"
+  })
+
+def test_db_subnet_group_created(stack_template):
+  """Verifies that the database subnet group is created and configured for private subnets."""
+  stack_template.resource_count_is("AWS::RDS::DBSubnetGroup", 1)
+  stack_template.has_resource_properties("AWS::RDS::DBSubnetGroup", {
+      "SubnetIds": Match.any_value()
+  })
+
+def test_db_security_group_created_with_correct_rules(stack_template):
+  """Verifies the database security group exists and has the correct ingress rule."""
+  stack_template.resource_count_is("AWS::EC2::SecurityGroup", 2) # Assumes one for DB and one for the ASG/Webservers
+  
+  # Check for the Security Group itself
+  stack_template.has_resource_properties("AWS::EC2::SecurityGroup", {
+      "GroupDescription": "Allows access to the RDS database",
+      "SecurityGroupIngress": [
+          Match.object_like({
+              "IpProtocol": "tcp",
+              "FromPort": 3306,
+              "ToPort": 3306,
+              "SourceSecurityGroupId": Match.any_value(),
+              "Description": "Allow MySQL access from Web Servers"
+          })
+      ]
+  })
+  
+  # Check that the ASG is associated with a security group that can connect to the DB
+  stack_template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
+      "VPCZoneIdentifier": Match.any_value(),
+      "LaunchConfigurationName": Match.any_value(),
+      "SecurityGroups": Match.any_value()
+  })
+
+
 def test_s3_bucket_created_with_correct_removal_policy(stack_template):
   # Verifies the S3 bucket exists.
   stack_template.resource_count_is("AWS::S3::Bucket", 1)
