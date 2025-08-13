@@ -42,7 +42,6 @@ Parameters:
     Type: String
     Description: Email address for CloudWatch alarm notifications
     AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
-    Default: 'example@example.com'
     ConstraintDescription: Must be a valid email address
 
 # =============================================================================
@@ -121,7 +120,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub '${Environment}-serverless-app-data'
-      BillingMode: ON_DEMAND
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -221,6 +220,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${Environment}-serverless-app-lambda-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -292,6 +292,7 @@ Resources:
   ApiGatewayCloudWatchRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${Environment}-serverless-app-apigateway-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
