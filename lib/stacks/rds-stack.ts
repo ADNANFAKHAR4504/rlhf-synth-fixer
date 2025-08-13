@@ -1,0 +1,141 @@
+/**
+ * rds-stack.ts
+ *
+ * This module defines the RDS stack for creating encrypted database instances
+ * with automated backups and monitoring.
+ */
+import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
+import { ResourceOptions } from '@pulumi/pulumi';
+
+export interface RdsStackArgs {
+  environmentSuffix?: string;
+  tags?: pulumi.Input<{ [key: string]: string }>;
+  privateSubnetIds: pulumi.Input<string>[];
+  dbSecurityGroupId: pulumi.Input<string>;
+  rdsKmsKeyArn: pulumi.Input<string>;
+  dbSecretArn: pulumi.Input<string>;
+  instanceClass?: string;
+}
+
+export class RdsStack extends pulumi.ComponentResource {
+  public readonly dbInstanceId: pulumi.Output<string>;
+  public readonly dbInstanceArn: pulumi.Output<string>;
+  public readonly dbInstanceEndpoint: pulumi.Output<string>;
+  public readonly dbInstancePort: pulumi.Output<number>;
+
+  constructor(name: string, args: RdsStackArgs, opts?: ResourceOptions) {
+    super('tap:rds:RdsStack', name, args, opts);
+
+    const environmentSuffix = args.environmentSuffix || 'dev';
+    const instanceClass = args.instanceClass || 'db.t3.micro';
+    const tags = args.tags || {};
+
+    // Create DB subnet group
+    const dbSubnetGroup = new aws.rds.SubnetGroup(
+      `tap-db-subnet-group-${environmentSuffix}`,
+      {
+        name: `tap-db-subnet-group-${environmentSuffix}`,
+        subnetIds: args.privateSubnetIds,
+        tags: {
+          Name: `tap-db-subnet-group-${environmentSuffix}`,
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create monitoring role for RDS
+    const monitoringRole = new aws.iam.Role(
+      `tap-rds-monitoring-role-${environmentSuffix}`,
+      {
+        name: `tap-rds-monitoring-role-${environmentSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'monitoring.rds.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: {
+          Name: `tap-rds-monitoring-role-${environmentSuffix}`,
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `tap-rds-monitoring-attachment-${environmentSuffix}`,
+      {
+        role: monitoringRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+      },
+      { parent: this }
+    );
+
+    // Create RDS instance
+    const dbInstance = new aws.rds.Instance(
+      `tap-db-${environmentSuffix}`,
+      {
+        identifier: `tap-db-${environmentSuffix}`,
+        instanceClass: instanceClass,
+        engine: 'mysql',
+        engineVersion: '8.0',
+        allocatedStorage: 20,
+        storageType: 'gp3',
+        storageEncrypted: true,
+        kmsKeyId: args.rdsKmsKeyArn,
+
+        dbName: 'tapdb',
+        username: 'admin',
+        manageMasterUserPassword: true,
+        masterUserSecretKmsKeyId: args.rdsKmsKeyArn,
+
+        vpcSecurityGroupIds: [args.dbSecurityGroupId],
+        dbSubnetGroupName: dbSubnetGroup.name,
+
+        backupRetentionPeriod: 7,
+        backupWindow: '03:00-04:00',
+        maintenanceWindow: 'sun:04:00-sun:05:00',
+
+        skipFinalSnapshot: false,
+        finalSnapshotIdentifier: `tap-db-final-snapshot-${environmentSuffix}`,
+        deleteAutomatedBackups: false,
+
+        enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
+        monitoringInterval: 60,
+        monitoringRoleArn: monitoringRole.arn,
+
+        performanceInsightsEnabled: true,
+        performanceInsightsKmsKeyId: args.rdsKmsKeyArn,
+        performanceInsightsRetentionPeriod: 7,
+
+        tags: {
+          Name: `tap-db-${environmentSuffix}`,
+          Purpose: 'MainDatabase',
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    this.dbInstanceId = dbInstance.id;
+    this.dbInstanceArn = dbInstance.arn;
+    this.dbInstanceEndpoint = dbInstance.endpoint;
+    this.dbInstancePort = dbInstance.port;
+
+    this.registerOutputs({
+      dbInstanceId: this.dbInstanceId,
+      dbInstanceArn: this.dbInstanceArn,
+      dbInstanceEndpoint: this.dbInstanceEndpoint,
+      dbInstancePort: this.dbInstancePort,
+    });
+  }
+}
