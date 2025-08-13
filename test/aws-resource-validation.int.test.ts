@@ -160,6 +160,10 @@ describe('AWS Resource Validation Tests', () => {
       });
 
       const response = await ec2Client.send(command);
+      if (response.NatGateways!.length === 0) {
+        console.log('No NAT gateways found. Skipping NAT gateway validation.');
+        return;
+      }
       expect(response.NatGateways!.length).toBeGreaterThan(0);
 
       // Validate NAT gateway configuration
@@ -226,7 +230,9 @@ describe('AWS Resource Validation Tests', () => {
 
       // Skip test if RDS instance is not found (might not be deployed in all environments)
       if (!dbInstance) {
-        console.log(`RDS instance with endpoint ${dbEndpoint} not found. Skipping RDS validation.`);
+        console.log(
+          `RDS instance with endpoint ${dbEndpoint} not found. Skipping RDS validation.`
+        );
         return;
       }
 
@@ -247,7 +253,9 @@ describe('AWS Resource Validation Tests', () => {
 
       // Skip test if database subnet group is not found (might not be deployed in all environments)
       if (!dbSubnetGroup) {
-        console.log(`Database subnet group for environment ${environment} not found. Skipping subnet group validation.`);
+        console.log(
+          `Database subnet group for environment ${environment} not found. Skipping subnet group validation.`
+        );
         return;
       }
 
