@@ -1,198 +1,137 @@
 import { Construct } from 'constructs';
 import { Fn } from 'cdktf';
-import * as aws from '@cdktf/provider-aws';
 
-const availabilityZones = ['us-west-2a', 'us-west-2b'];
+// AWS VPC-related resources
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+
+// AWS EC2 and networking
+import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+
+// AWS IAM
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+
+// AWS KMS
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 
 // =============================================================================
-// ## Networking Module
+// ## VpcModule
+// Creates the foundational VPC and public subnets.
 // =============================================================================
-export interface NetworkModuleProps {
-  vpcCidr: string;
-  projectName: string;
-}
+export class VpcModule extends Construct {
+  public readonly vpc: Vpc;
+  public readonly publicSubnets: Subnet[] = [];
 
-export class NetworkModule extends Construct {
-  public readonly vpc: aws.vpc.Vpc;
-  public readonly publicSubnets: aws.subnet.Subnet[] = [];
-  public readonly privateSubnets: aws.subnet.Subnet[] = [];
-
-  constructor(scope: Construct, id: string, props: NetworkModuleProps) {
+  constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    this.vpc = new aws.vpc.Vpc(this, 'Vpc', {
-      cidrBlock: props.vpcCidr,
+    this.vpc = new Vpc(this, 'Vpc', {
+      cidrBlock: '10.0.0.0/16',
       enableDnsSupport: true,
       enableDnsHostnames: true,
-      tags: { Name: `${props.projectName}-vpc` },
+      tags: { Name: 'prod-vpc' },
     });
 
-    const igw = new aws.internetGateway.InternetGateway(this, 'Igw', {
+    const igw = new InternetGateway(this, 'Igw', {
       vpcId: this.vpc.id,
-      tags: { Name: `${props.projectName}-igw` },
+      tags: { Name: 'prod-igw' },
     });
 
-    const publicRouteTable = new aws.routeTable.RouteTable(this, 'PublicRT', {
+    const publicRouteTable = new RouteTable(this, 'PublicRT', {
       vpcId: this.vpc.id,
-      tags: { Name: `${props.projectName}-public-rt` },
+      tags: { Name: 'prod-public-rt' },
     });
 
-    new aws.route.Route(this, 'PublicRouteToIgw', {
+    new Route(this, 'PublicRouteToIgw', {
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
       gatewayId: igw.id,
     });
 
+    const availabilityZones = ['us-west-2a', 'us-west-2b'];
     availabilityZones.forEach((az, i) => {
-      const publicSubnet = new aws.subnet.Subnet(this, `PublicSubnet-${i}`, {
+      const publicSubnet = new Subnet(this, `PublicSubnet-${i}`, {
         vpcId: this.vpc.id,
-        cidrBlock: `10.0.${i * 2}.0/24`,
+        cidrBlock: `10.0.${i}.0/24`,
         availabilityZone: az,
         mapPublicIpOnLaunch: true,
-        tags: { Name: `${props.projectName}-public-${az}` },
+        tags: { Name: `prod-public-${az}` },
       });
       this.publicSubnets.push(publicSubnet);
 
-      new aws.routeTableAssociation.RouteTableAssociation(
-        this,
-        `PublicRTA-${i}`,
-        {
-          subnetId: publicSubnet.id,
-          routeTableId: publicRouteTable.id,
-        }
-      );
-
-      const privateSubnet = new aws.subnet.Subnet(this, `PrivateSubnet-${i}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: `10.0.${i * 2 + 1}.0/24`,
-        availabilityZone: az,
-        tags: { Name: `${props.projectName}-private-${az}` },
-      });
-      this.privateSubnets.push(privateSubnet);
-
-      const eip = new aws.eip.Eip(this, `NatEip-${i}`, {
-        domain: 'vpc',
-        tags: { Name: `${props.projectName}-nateip-${az}` },
-      });
-
-      const natGw = new aws.natGateway.NatGateway(this, `NatGateway-${i}`, {
-        allocationId: eip.id,
+      new RouteTableAssociation(this, `PublicRTA-${i}`, {
         subnetId: publicSubnet.id,
-        tags: { Name: `${props.projectName}-natgw-${az}` },
+        routeTableId: publicRouteTable.id,
       });
-
-      const privateRouteTable = new aws.routeTable.RouteTable(
-        this,
-        `PrivateRT-${i}`,
-        {
-          vpcId: this.vpc.id,
-          tags: { Name: `${props.projectName}-private-rt-${az}` },
-        }
-      );
-
-      new aws.route.Route(this, `PrivateRouteToNat-${i}`, {
-        routeTableId: privateRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: natGw.id,
-      });
-
-      new aws.routeTableAssociation.RouteTableAssociation(
-        this,
-        `PrivateRTA-${i}`,
-        {
-          subnetId: privateSubnet.id,
-          routeTableId: privateRouteTable.id,
-        }
-      );
     });
   }
 }
 
 // =============================================================================
-// ## Security Module
+// ## Ec2InstanceModule
+// Creates a single EC2 instance with its security group, IAM role, and KMS key.
 // =============================================================================
-export interface SecurityModuleProps {
+export interface Ec2InstanceModuleProps {
   vpcId: string;
-  projectName: string;
+  subnetId: string;
 }
 
-export class SecurityModule extends Construct {
-  public readonly albSg: aws.securityGroup.SecurityGroup;
-  public readonly ec2Sg: aws.securityGroup.SecurityGroup;
-  public readonly kmsKey: aws.kmsKey.KmsKey;
-  public readonly instanceProfile: aws.iamInstanceProfile.IamInstanceProfile;
+export class Ec2InstanceModule extends Construct {
+  public readonly instance: Instance;
+  public readonly kmsKey: KmsKey;
+  // ADDED: Expose the security group for testing
+  public readonly ec2Sg: SecurityGroup;
 
-  constructor(scope: Construct, id: string, props: SecurityModuleProps) {
+  constructor(scope: Construct, id: string, props: Ec2InstanceModuleProps) {
     super(scope, id);
 
-    this.kmsKey = new aws.kmsKey.KmsKey(this, 'EbsKmsKey', {
-      description: `KMS key for ${props.projectName} EBS volumes`,
+    this.kmsKey = new KmsKey(this, 'EbsKmsKey', {
+      description: 'KMS key for EC2 EBS volume encryption',
       enableKeyRotation: true,
-      tags: { Name: `${props.projectName}-ebs-key` },
     });
 
-    this.albSg = new aws.securityGroup.SecurityGroup(this, 'AlbSG', {
-      name: `${props.projectName}-alb-sg`,
+    this.ec2Sg = new SecurityGroup(this, 'Ec2Sg', {
+      name: 'prod-ec2-sg',
       vpcId: props.vpcId,
-      description: 'Allow web traffic to ALB',
+      description: 'Allow HTTP and SSH access',
       ingress: [
         {
           protocol: 'tcp',
           fromPort: 80,
           toPort: 80,
           cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow HTTP',
+          description: 'Allow HTTP inbound',
         },
-      ],
-      tags: { Name: `${props.projectName}-alb-sg` },
-    });
-
-    this.ec2Sg = new aws.securityGroup.SecurityGroup(this, 'Ec2SG', {
-      name: `${props.projectName}-ec2-sg`,
-      vpcId: props.vpcId,
-      description: 'Allow traffic from ALB and allow outbound for updates',
-      ingress: [
         {
           protocol: 'tcp',
-          fromPort: 80,
-          toPort: 80,
-          securityGroups: [this.albSg.id],
-          description: 'Allow inbound from ALB',
+          fromPort: 22,
+          toPort: 22,
+          cidrBlocks: ['YOUR_IP_HERE/32'],
+          description: 'Allow SSH',
         },
       ],
       egress: [
         {
-          protocol: 'tcp',
-          fromPort: 443,
-          toPort: 443,
+          protocol: '-1',
+          fromPort: 0,
+          toPort: 0,
           cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow outbound HTTPS for updates',
-        },
-        {
-          protocol: 'tcp',
-          fromPort: 80,
-          toPort: 80,
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow outbound HTTP for updates',
+          description: 'Allow all outbound',
         },
       ],
-      tags: { Name: `${props.projectName}-ec2-sg` },
+      tags: { Name: 'prod-ec2-sg' },
     });
 
-    // CORRECTED: This rule allows the ALB to send health check traffic to the EC2 instances.
-    new aws.securityGroupRule.SecurityGroupRule(this, 'AlbEgressToEc2', {
-      type: 'egress',
-      fromPort: 0,
-      toPort: 0,
-      protocol: '-1', // Allow all protocols
-      securityGroupId: this.albSg.id,
-      sourceSecurityGroupId: this.ec2Sg.id,
-      description:
-        'Allow all outbound traffic from ALB to EC2 SG for health checks',
-    });
-
-    const ec2Role = new aws.iamRole.IamRole(this, 'Ec2Role', {
-      name: `${props.projectName}-ec2-role`,
+    const ec2Role = new IamRole(this, 'Ec2Role', {
+      name: 'prod-ec2-role',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -203,150 +142,44 @@ export class SecurityModule extends Construct {
           },
         ],
       }),
-      tags: { Name: `${props.projectName}-ec2-role` },
     });
 
-    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
-      this,
-      'SsmManagedInstance',
-      {
-        role: ec2Role.name,
-        policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
-      }
-    );
-
-    this.instanceProfile = new aws.iamInstanceProfile.IamInstanceProfile(
-      this,
-      'Ec2InstanceProfile',
-      {
-        name: `${props.projectName}-ec2-profile`,
-        role: ec2Role.name,
-      }
-    );
-  }
-}
-
-// =============================================================================
-// ## Compute Module
-// =============================================================================
-// =============================================================================
-// ## Compute Module - SIMPLE FIXED VERSION
-// =============================================================================
-export interface ComputeModuleProps {
-  vpcId: string;
-  privateSubnets: aws.subnet.Subnet[];
-  publicSubnets: aws.subnet.Subnet[];
-  ec2Sg: aws.securityGroup.SecurityGroup;
-  albSg: aws.securityGroup.SecurityGroup;
-  instanceProfile: aws.iamInstanceProfile.IamInstanceProfile;
-  kmsKey: aws.kmsKey.KmsKey;
-  projectName: string;
-}
-
-export class ComputeModule extends Construct {
-  public readonly alb: aws.lb.Lb;
-
-  constructor(scope: Construct, id: string, props: ComputeModuleProps) {
-    super(scope, id);
-
-    this.alb = new aws.lb.Lb(this, 'AppALB', {
-      name: `${props.projectName}-alb`,
-      loadBalancerType: 'application',
-      internal: false,
-      securityGroups: [props.albSg.id],
-      subnets: props.publicSubnets.map(s => s.id),
-      tags: { Name: `${props.projectName}-alb` },
+    new IamRolePolicyAttachment(this, 'SsmManagedInstance', {
+      role: ec2Role.name,
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
     });
 
-    const targetGroup = new aws.lbTargetGroup.LbTargetGroup(this, 'AppTG', {
-      name: `${props.projectName}-tg`,
-      port: 80,
-      protocol: 'HTTP',
-      vpcId: props.vpcId,
-      healthCheck: {
-        enabled: true,
-        path: '/dummy',
-        protocol: 'HTTP',
-        healthyThreshold: 2,
-        unhealthyThreshold: 10,
-        timeout: 2,
-        interval: 30,
-        matcher: '200',
-      },
-      tags: { Name: `${props.projectName}-tg` },
+    const instanceProfile = new IamInstanceProfile(this, 'Ec2InstanceProfile', {
+      name: 'prod-ec2-profile',
+      role: ec2Role.name,
     });
 
-    new aws.lbListener.LbListener(this, 'HttpListener', {
-      loadBalancerArn: this.alb.arn,
-      port: 80,
-      protocol: 'HTTP',
-      defaultAction: [
-        {
-          type: 'forward',
-          targetGroupArn: targetGroup.arn,
-        },
-      ],
-    });
-
-    const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'AmazonLinuxAmi', {
+    const ami = new DataAwsAmi(this, 'AmazonLinuxAmi', {
       mostRecent: true,
       owners: ['amazon'],
       filter: [{ name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] }],
     });
 
-    // FIXED: Simple user data script without complex quoting issues
-    const userDataScript = [
-      `#!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          echo '<h1>Deployed via CDKTF</h1>' > /var/www/html/index.html`,
-    ].join('\n');
-
-    const launchTemplate = new aws.launchTemplate.LaunchTemplate(
-      this,
-      'WebLT',
-      {
-        namePrefix: `${props.projectName}-lt-`,
-        imageId: ami.id,
-        instanceType: 't3.micro',
-        vpcSecurityGroupIds: [props.ec2Sg.id],
-        iamInstanceProfile: { name: props.instanceProfile.name },
-        blockDeviceMappings: [
-          {
-            deviceName: '/dev/xvda',
-            ebs: {
-              volumeSize: 8,
-              volumeType: 'gp3',
-            },
-          },
-        ],
-        // FIXED: Use the simple script with base64encode
-        userData: Fn.base64encode(userDataScript),
-      }
-    );
-
-    new aws.autoscalingGroup.AutoscalingGroup(this, 'WebASG', {
-      name: `${props.projectName}-asg`,
-      desiredCapacity: 2,
-      maxSize: 4,
-      minSize: 2,
-      vpcZoneIdentifier: props.privateSubnets.map(s => s.id),
-      launchTemplate: {
-        id: launchTemplate.id,
-        version: '$Latest',
+    this.instance = new Instance(this, 'WebServer', {
+      ami: ami.id,
+      instanceType: 't2.micro',
+      subnetId: props.subnetId,
+      vpcSecurityGroupIds: [this.ec2Sg.id],
+      iamInstanceProfile: instanceProfile.name,
+      associatePublicIpAddress: true,
+      rootBlockDevice: {
+        volumeSize: 8,
+        volumeType: 'gp3',
+        encrypted: true,
+        kmsKeyId: this.kmsKey.arn,
       },
-      // targetGroupArns: [targetGroup.arn],
-      healthCheckType: 'EC2',
-      healthCheckGracePeriod: 0, // 10 minutes
-      tag: [
-        {
-          key: 'Name',
-          value: `${props.projectName}-instance`,
-          propagateAtLaunch: true,
-        },
-      ],
+      userData: Fn.base64encode(`#!/bin/bash
+        yum update -y
+        yum install -y httpd
+        systemctl start httpd
+        systemctl enable httpd
+        echo '<h1>Hello from EC2!</h1>' > /var/www/html/index.html`),
+      tags: { Name: 'prod-web-server' },
     });
   }
 }

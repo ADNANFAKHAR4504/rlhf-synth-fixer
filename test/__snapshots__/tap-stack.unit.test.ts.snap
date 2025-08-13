@@ -1,15 +1,23 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props and match snapshot 1`] = `
+exports[`TapStack Unit Tests (Redesigned Architecture) Stack Configuration and Synthesis TapStack should instantiate with custom props and match snapshot 1`] = `
 "{
   "output": {
-    "ApplicationLoadBalancerDNS": {
-      "description": "Public DNS name of the Application Load Balancer",
-      "value": "mock-alb.dns.name.com"
-    },
     "ApplicationURL": {
-      "description": "URL to access the web application (HTTP only)",
-      "value": "http://mock-alb.dns.name.com"
+      "description": "URL to access the web application",
+      "value": "http://192.0.2.1"
+    },
+    "Ec2SecurityGroupId": {
+      "description": "ID of the EC2 instance security group",
+      "value": "mock-ec2-sg-id"
+    },
+    "InstanceId": {
+      "description": "ID of the EC2 instance",
+      "value": "mock-instance-id"
+    },
+    "InstancePublicIp": {
+      "description": "Public IP address of the EC2 instance",
+      "value": "192.0.2.1"
     },
     "KmsKeyArn": {
       "description": "ARN of the KMS key for EBS encryption",
@@ -31,7 +39,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
             }
           }
         ],
-        "region": "us-east-1"
+        "region": "us-west-2"
       }
     ]
   },
@@ -54,16 +62,24 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
 }"
 `;
 
-exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with default props and match snapshot 1`] = `
+exports[`TapStack Unit Tests (Redesigned Architecture) Stack Configuration and Synthesis TapStack should instantiate with default props and match snapshot 1`] = `
 "{
   "output": {
-    "ApplicationLoadBalancerDNS": {
-      "description": "Public DNS name of the Application Load Balancer",
-      "value": "mock-alb.dns.name.com"
-    },
     "ApplicationURL": {
-      "description": "URL to access the web application (HTTP only)",
-      "value": "http://mock-alb.dns.name.com"
+      "description": "URL to access the web application",
+      "value": "http://192.0.2.1"
+    },
+    "Ec2SecurityGroupId": {
+      "description": "ID of the EC2 instance security group",
+      "value": "mock-ec2-sg-id"
+    },
+    "InstanceId": {
+      "description": "ID of the EC2 instance",
+      "value": "mock-instance-id"
+    },
+    "InstancePublicIp": {
+      "description": "Public IP address of the EC2 instance",
+      "value": "192.0.2.1"
     },
     "KmsKeyArn": {
       "description": "ARN of the KMS key for EBS encryption",

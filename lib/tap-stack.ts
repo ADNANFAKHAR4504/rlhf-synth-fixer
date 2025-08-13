@@ -4,7 +4,7 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
-import { NetworkModule, SecurityModule, ComputeModule } from './modules';
+import { VpcModule, Ec2InstanceModule } from './modules';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -21,20 +21,16 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'prod';
-    const awsRegion = props?.awsRegion || AWS_REGION_OVERRIDE || 'us-east-1';
+    const awsRegion = AWS_REGION_OVERRIDE;
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'your-tf-states-bucket-name';
     const defaultTags = props?.defaultTags || { tags: {} };
-    const projectName = `webapp-${environmentSuffix}`;
 
-    // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      // CORRECTED: The defaultTags property now correctly uses an array.
       defaultTags: [defaultTags],
     });
 
-    // --- S3 Backend ---
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
@@ -42,47 +38,42 @@ export class TapStack extends TerraformStack {
       encrypt: true,
     });
 
-    // --- Infrastructure Modules ---
-    const network = new NetworkModule(this, 'NetworkInfrastructure', {
-      vpcCidr: '10.0.0.0/16',
-      projectName: projectName,
+    const vpc = new VpcModule(this, 'VpcInfrastructure');
+
+    const ec2 = new Ec2InstanceModule(this, 'Ec2InstanceInfrastructure', {
+      vpcId: vpc.vpc.id,
+      subnetId: vpc.publicSubnets[0].id,
     });
 
-    const security = new SecurityModule(this, 'SecurityInfrastructure', {
-      vpcId: network.vpc.id,
-      projectName: projectName,
+    new TerraformOutput(this, 'InstanceId', {
+      description: 'ID of the EC2 instance',
+      value: ec2.instance.id,
     });
 
-    const compute = new ComputeModule(this, 'ComputeInfrastructure', {
-      vpcId: network.vpc.id,
-      publicSubnets: network.publicSubnets,
-      privateSubnets: network.privateSubnets,
-      albSg: security.albSg,
-      ec2Sg: security.ec2Sg,
-      kmsKey: security.kmsKey,
-      instanceProfile: security.instanceProfile,
-      projectName: projectName,
-    });
-
-    // --- Outputs ---
-    new TerraformOutput(this, 'ApplicationLoadBalancerDNS', {
-      description: 'Public DNS name of the Application Load Balancer',
-      value: compute.alb.dnsName,
+    new TerraformOutput(this, 'InstancePublicIp', {
+      description: 'Public IP address of the EC2 instance',
+      value: ec2.instance.publicIp,
     });
 
     new TerraformOutput(this, 'ApplicationURL', {
-      description: 'URL to access the web application (HTTP only)',
-      value: `http://${compute.alb.dnsName}`,
+      description: 'URL to access the web application',
+      value: `http://${ec2.instance.publicIp}`,
     });
 
     new TerraformOutput(this, 'KmsKeyArn', {
       description: 'ARN of the KMS key for EBS encryption',
-      value: security.kmsKey.arn,
+      value: ec2.kmsKey.arn,
     });
 
     new TerraformOutput(this, 'VpcId', {
       description: 'ID of the provisioned VPC',
-      value: network.vpc.id,
+      value: vpc.vpc.id,
+    });
+
+    // ADDED: Output for the EC2 security group ID
+    new TerraformOutput(this, 'Ec2SecurityGroupId', {
+      description: 'ID of the EC2 instance security group',
+      value: ec2.ec2Sg.id,
     });
   }
 }
