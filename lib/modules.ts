@@ -264,6 +264,12 @@ export class ComputeModule extends Construct {
         enabled: true,
         path: '/',
         protocol: 'HTTP',
+        // IMPROVED: Better health check settings
+        healthyThreshold: 2,
+        unhealthyThreshold: 2,
+        timeout: 5,
+        interval: 30,
+        matcher: '200',
       },
       tags: { Name: `${props.projectName}-tg` },
     });
@@ -306,14 +312,74 @@ export class ComputeModule extends Construct {
             },
           },
         ],
-        userData: Fn.base64encode(
-          `#!/bin/bash
-                 yum update -y
-                 yum install -y httpd
-                 systemctl start httpd
-                 systemctl enable httpd
-                 echo '<h1>Deployed via CDKTF</h1>' > /var/www/html/index.html`
-        ),
+        // IMPROVED: Enhanced user data script with better error handling and logging
+        userData: Fn.base64encode(`#!/bin/bash
+# Log all output to a file for debugging
+exec > >(tee /var/log/user-data.log)
+exec 2>&1
+
+echo "Starting user data script execution at $(date)"
+
+# Update the system
+echo "Updating system packages..."
+yum update -y
+if [ $? -ne 0 ]; then
+  echo "Failed to update packages"
+  exit 1
+fi
+
+# Install httpd
+echo "Installing httpd..."
+yum install -y httpd
+if [ $? -ne 0 ]; then
+  echo "Failed to install httpd"
+  exit 1
+fi
+
+# Start and enable httpd
+echo "Starting and enabling httpd..."
+systemctl start httpd
+systemctl enable httpd
+
+# Create a simple index page
+echo "Creating index.html..."
+cat > /var/www/html/index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CDKTF Webapp</title>
+    <meta http-equiv="refresh" content="5">
+</head>
+<body>
+    <h1>🚀 Deployed via CDKTF</h1>
+    <p>Instance ID: <span id="instance-id">Loading...</span></p>
+    <p>Current Time: <span id="time"></span></p>
+    <script>
+        // Get instance metadata
+        fetch('/latest/meta-data/instance-id')
+            .then(response => response.text())
+            .then(data => document.getElementById('instance-id').textContent = data)
+            .catch(err => document.getElementById('instance-id').textContent = 'Unable to fetch');
+        
+        // Update time
+        document.getElementById('time').textContent = new Date().toLocaleString();
+    </script>
+</body>
+</html>
+EOF
+
+# Create a health check endpoint
+echo "Creating health check endpoint..."
+echo "OK" > /var/www/html/health
+
+# Ensure httpd is running
+systemctl status httpd
+if [ $? -eq 0 ]; then
+  echo "User data script completed successfully at $(date)"
+else
+  echo "HTTP service is not running properly"
+  exit 1
+fi`),
       }
     );
 
@@ -329,7 +395,8 @@ export class ComputeModule extends Construct {
       },
       targetGroupArns: [targetGroup.arn],
       healthCheckType: 'ELB',
-      healthCheckGracePeriod: 300,
+      // IMPROVED: Longer grace period to allow user data script to complete
+      healthCheckGracePeriod: 600, // 10 minutes instead of 5
       tag: [
         {
           key: 'Name',
