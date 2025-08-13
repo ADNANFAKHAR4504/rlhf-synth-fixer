@@ -57,13 +57,24 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly s3BucketName: pulumi.Output<string>;
 
+  // Additional outputs for integration testing
+  public readonly albName: pulumi.Output<string>;
+  public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly ec2RoleName: pulumi.Output<string>;
+  public readonly ec2InstanceProfileName: pulumi.Output<string>;
+  public readonly ec2PolicyName: pulumi.Output<string>;
+  public readonly rdsInstanceId: pulumi.Output<string>;
+  public readonly projectName: string;
+  public readonly environment: string;
+  public readonly resourcePrefix: string;
+
   /**
    * Creates a new TapStack component.
    * @param name The logical name of this Pulumi component.
    * @param args Configuration arguments including environment suffix and tags.
    * @param opts Pulumi options.
    */
-  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+  constructor (name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
@@ -106,8 +117,20 @@ export class TapStack extends pulumi.ComponentResource {
     this.rdsEndpoint = this.webAppStack.rdsEndpoint;
     this.s3BucketName = this.webAppStack.s3BucketName;
 
+    // Additional outputs for integration testing
+    this.albName = this.webAppStack.loadBalancer.name;
+    this.autoScalingGroupName = this.webAppStack.autoScalingGroup.name;
+    this.ec2RoleName = this.webAppStack.ec2Role.name;
+    this.ec2InstanceProfileName = this.webAppStack.ec2InstanceProfile.name;
+    this.ec2PolicyName = this.webAppStack.ec2S3Policy.name;
+    this.rdsInstanceId = this.webAppStack.database.id;
+    this.projectName = 'tap';
+    this.environment = environmentSuffix;
+    this.resourcePrefix = `tap-${environmentSuffix}`;
+
     // Register the outputs of this component.
     this.registerOutputs({
+      // Basic infrastructure
       albDnsName: this.albDnsName,
       rdsEndpoint: this.rdsEndpoint,
       s3BucketName: this.s3BucketName,
@@ -116,6 +139,17 @@ export class TapStack extends pulumi.ComponentResource {
       privateSubnetIds: this.webAppStack.privateSubnets.map(
         subnet => subnet.id
       ),
+
+      // Additional outputs for integration testing
+      albName: this.albName,
+      autoScalingGroupName: this.autoScalingGroupName,
+      ec2RoleName: this.ec2RoleName,
+      ec2InstanceProfileName: this.ec2InstanceProfileName,
+      ec2PolicyName: this.ec2PolicyName,
+      rdsInstanceId: this.rdsInstanceId,
+      projectName: this.projectName,
+      environment: this.environment,
+      resourcePrefix: this.resourcePrefix,
     });
   }
 }

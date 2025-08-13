@@ -51,3 +51,14 @@ export const publicSubnetIds = stack.webAppStack.publicSubnets.map(
 export const privateSubnetIds = stack.webAppStack.privateSubnets.map(
   subnet => subnet.id
 );
+
+// Additional exports for integration testing
+export const albName = stack.albName;
+export const autoScalingGroupName = stack.autoScalingGroupName;
+export const ec2RoleName = stack.ec2RoleName;
+export const ec2InstanceProfileName = stack.ec2InstanceProfileName;
+export const ec2PolicyName = stack.ec2PolicyName;
+export const rdsInstanceId = stack.rdsInstanceId;
+export const projectName = stack.projectName;
+export const environment = stack.environment;
+export const resourcePrefix = stack.resourcePrefix;
