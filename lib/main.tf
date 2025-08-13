@@ -14,6 +14,11 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
+# Random ID for general resource naming
+resource "random_id" "resource_suffix" {
+  byte_length = 4
+}
+
 # VPC - Logically isolated network
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -21,7 +26,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-vpc"
+    Name = "${var.project_name}-vpc-${local.name_suffix}"
   })
 }
 
@@ -30,7 +35,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-igw"
+    Name = "${var.project_name}-igw-${local.name_suffix}"
   })
 }
 
@@ -44,7 +49,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-public-subnet-${count.index + 1}"
+    Name = "${var.project_name}-public-subnet-${count.index + 1}-${local.name_suffix}"
     Type = "Public"
     AZ   = var.availability_zones[count.index]
   })
@@ -59,7 +64,7 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
+    Name = "${var.project_name}-private-subnet-${count.index + 1}-${local.name_suffix}"
     Type = "Private"
     AZ   = var.availability_zones[count.index]
   })
@@ -73,7 +78,7 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-nat-eip-${count.index + 1}"
+    Name = "${var.project_name}-nat-eip-${count.index + 1}-${local.name_suffix}"
   })
 }
 
@@ -85,7 +90,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-nat-gw-${count.index + 1}"
+    Name = "${var.project_name}-nat-gw-${count.index + 1}-${local.name_suffix}"
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -101,7 +106,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-public-rt"
+    Name = "${var.project_name}-public-rt-${local.name_suffix}"
   })
 }
 
@@ -117,7 +122,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
+    Name = "${var.project_name}-private-rt-${count.index + 1}-${local.name_suffix}"
   })
 }
 

@@ -49,6 +49,12 @@ variable "project_name" {
   default     = "secure-foundation"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming"
+  type        = string
+  default     = ""
+}
+
 variable "allowed_ssh_cidr" {
   description = "CIDR block allowed for SSH access"
   type        = string
@@ -57,7 +63,11 @@ variable "allowed_ssh_cidr" {
 
 # Common tags to be applied to all resources
 locals {
+  # Create a unique suffix for resource naming
+  name_suffix = var.environment_suffix != "" ? var.environment_suffix : random_id.resource_suffix.hex
+
   common_tags = {
+    Name        = "${var.project_name}-${local.name_suffix}"
     Environment = var.environment
     Owner       = var.owner
     Project     = var.project_name
