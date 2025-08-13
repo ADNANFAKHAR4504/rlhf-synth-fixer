@@ -29,23 +29,89 @@ class TestTapStackIntegration(unittest.TestCase):
   def setUp(self):
     """Set up AWS credentials from environment for live testing"""
     self.aws_region = os.getenv("AWS_REGION", "us-west-1")
+
+    # Current values from flat-outputs.json
     self.api_gateway_url = flat_outputs.get("api_gateway_url")
     self.lambda_function_name = flat_outputs.get("lambda_function_name")
     self.dynamodb_table_name = flat_outputs.get("dynamodb_table_name")
     self.vpc_id = flat_outputs.get("vpc_id")
 
-    # Fail early if outputs are missing
-    missing = [
-        key for key in [
-            "api_gateway_url",
-            "lambda_function_name",
-            "dynamodb_table_name",
-            "vpc_id"
-        ] if flat_outputs.get(key) is None
-    ]
-    if missing:
-      raise ValueError(f"Missing required stack outputs: {', '.join(missing)}")
+    required = [
+        "api_gateway_url",
+        "lambda_function_name",
+        "dynamodb_table_name",
+        "vpc_id"]
+    missing = [k for k in required if not flat_outputs.get(k)]
 
+    if missing:
+      # Live discovery via AWS by the canonical names used in tap_stack.py
+      session = boto3.session.Session(region_name=self.aws_region)
+      apigw = session.client("apigateway")
+      lam = session.client("lambda")
+      ddb = session.client("dynamodb")
+      ec2 = session.client("ec2")
+
+      discovered = {}
+
+      # API Gateway REST API named "tap-serverless-api" with stage "prod"
+      if "api_gateway_url" in missing:
+        apis = apigw.get_rest_apis(limit=500).get("items", [])
+        api = next((a for a in apis if a.get("name")
+                   == "tap-serverless-api"), None)
+        if api and api.get("id"):
+          discovered["api_gateway_url"] = f"https://{
+              api['id']}.execute-api.{
+              self.aws_region}.amazonaws.com/prod"
+
+      # Lambda function named "tap-serverless-function"
+      if "lambda_function_name" in missing:
+        try:
+          lam.get_function(FunctionName="tap-serverless-function")
+          discovered["lambda_function_name"] = "tap-serverless-function"
+        except lam.exceptions.ResourceNotFoundException:
+          for page in lam.get_paginator("list_functions").paginate():
+            if any(fn.get("FunctionName") ==
+                   "tap-serverless-function" for fn in page.get("Functions", [])):
+              discovered["lambda_function_name"] = "tap-serverless-function"
+              break
+
+      # DynamoDB table named "tap-serverless-table"
+      if "dynamodb_table_name" in missing:
+        try:
+          ddb.describe_table(TableName="tap-serverless-table")
+          discovered["dynamodb_table_name"] = "tap-serverless-table"
+        except ddb.exceptions.ResourceNotFoundException:
+          pass
+
+      # VPC tagged Name = "tap-serverless-vpc"
+      if "vpc_id" in missing:
+        vpcs = ec2.describe_vpcs(
+            Filters=[{"Name": "tag:Name", "Values": ["tap-serverless-vpc"]}]
+        ).get("Vpcs", [])
+        if vpcs:
+          discovered["vpc_id"] = vpcs[0].get("VpcId")
+
+      # Merge and persist the recovered values
+      updated = dict(flat_outputs)
+      updated.update({k: v for k, v in discovered.items() if v})
+
+      still_missing = [k for k in required if not updated.get(k)]
+      if still_missing:
+        raise ValueError(
+            f"Missing required stack outputs: {
+                ', '.join(still_missing)}")
+
+      os.makedirs(os.path.dirname(flat_outputs_path), exist_ok=True)
+      with open(flat_outputs_path, "w", encoding="utf-8") as f:
+        json.dump(updated, f)
+
+      # Update instance fields
+      self.api_gateway_url = updated["api_gateway_url"]
+      self.lambda_function_name = updated["lambda_function_name"]
+      self.dynamodb_table_name = updated["dynamodb_table_name"]
+      self.vpc_id = updated["vpc_id"]
+
+    # init clients
     self.lambda_client = boto3.client("lambda", region_name=self.aws_region)
     self.apigw_client = boto3.client("apigateway", region_name=self.aws_region)
     self.dynamodb_client = boto3.client(
