@@ -14,6 +14,7 @@ from typing import Optional
 
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 from pulumi import ResourceOptions
 
 
@@ -159,6 +160,16 @@ class TapStack(pulumi.ComponentResource):
     # ==========================================
     # 5. Private Database (RDS Postgres)
     # ==========================================
+
+    # Generate a secure random DB password (stable across deployments)
+    db_password = random.RandomPassword(
+        f"db-password-{self.environment_suffix}",
+        length=16,
+        special=True,
+        override_special="_%@",
+        keepers={"env": self.environment_suffix}  # Only changes if env changes
+    ).result
+
     self.db_subnet_group = aws.rds.SubnetGroup(
         f"db-subnet-group-{self.environment_suffix}",
         subnet_ids=[self.private_subnet1.id, self.private_subnet2.id],
@@ -188,7 +199,8 @@ class TapStack(pulumi.ComponentResource):
         instance_class="db.t3.micro",
         db_name="appdb",
         username="dbadmin",
-        password=pulumi.Output.secret("Passw0rd123!"),
+        # secure random password since we do not have access to secrets manager
+        password=db_password,
         skip_final_snapshot=True,
         db_subnet_group_name=self.db_subnet_group.name,
         vpc_security_group_ids=[self.db_security_group.id],
