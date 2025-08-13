@@ -118,8 +118,6 @@ def test_s3_bucket_created_with_correct_removal_policy(stack_template):
   # Verifies the S3 bucket exists.
   stack_template.resource_count_is("AWS::S3::Bucket", 1)
 
-  # Check for the DeletionPolicy using find_resources.
-  # This is a more robust way to check for top-level resource attributes.
   s3_bucket_resources = stack_template.find_resources("AWS::S3::Bucket")
   
   # Assert that there is exactly one S3 bucket resource.
