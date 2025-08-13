@@ -131,7 +131,7 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
         parsedPayload = rawPayload;
       }
 
-      expect(response.StatusCode).toBeOneOf([200, 204]);
+      expect(response.StatusCode).toBe(200);
       expect(parsedPayload).toBeDefined();
 
       // Enhanced error message extraction
