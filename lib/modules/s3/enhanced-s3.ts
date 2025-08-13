@@ -14,10 +14,10 @@ export interface EnhancedSecureS3BucketArgs {
 }
 
 export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
-  public readonly bucket: aws.s3.BucketV2;
+  public readonly bucket: aws.s3.Bucket;
   public readonly bucketPolicy: aws.s3.BucketPolicy;
   public readonly publicAccessBlock: aws.s3.BucketPublicAccessBlock;
-  public readonly accessLogsBucket?: aws.s3.BucketV2;
+  public readonly accessLogsBucket?: aws.s3.Bucket;
   public readonly notification?: aws.s3.BucketNotification;
 
   constructor(
@@ -29,7 +29,7 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
 
     // Create access logs bucket if logging is enabled
     if (args.enableAccessLogging) {
-      this.accessLogsBucket = new aws.s3.BucketV2(
+      this.accessLogsBucket = new aws.s3.Bucket(
         `${name}-access-logs`,
         {
           bucket: `${args.bucketName || name}-access-logs`,
@@ -54,7 +54,7 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
     }
 
     // Create main S3 bucket with enhanced security
-    this.bucket = new aws.s3.BucketV2(
+    this.bucket = new aws.s3.Bucket(
       `${name}-bucket`,
       {
         bucket: args.bucketName,
@@ -247,7 +247,7 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
 
     // Configure object lock if enabled
     if (args.enableObjectLock) {
-      new aws.s3.BucketObjectLockConfigurationV2(
+      new aws.s3.BucketObjectLockConfiguration(
         `${name}-object-lock`,
         {
           bucket: this.bucket.id,

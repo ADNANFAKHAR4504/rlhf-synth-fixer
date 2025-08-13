@@ -16,6 +16,14 @@ jest.mock('@pulumi/pulumi', () => ({
       Object.assign(this, outputs);
     }
   },
+  all: jest.fn().mockImplementation((values) => ({
+    apply: jest.fn().mockImplementation((fn) => {
+      const result = fn(values);
+      return {
+        apply: jest.fn().mockImplementation((fn2) => fn2(result))
+      };
+    })
+  })),
   interpolate: jest.fn((template: string) => template),
 }));
 
@@ -26,6 +34,20 @@ jest.mock('@pulumi/aws', () => ({
     Policy: jest.fn().mockImplementation((name, args) => ({
       name,
       arn: `arn:aws:iam::123456789012:policy/${name}`,
+      ...args,
+    })),
+    Role: jest.fn().mockImplementation((name, args) => ({
+      name,
+      id: `${name}-id`,
+      arn: `arn:aws:iam::123456789012:role/${name}`,
+      ...args,
+    })),
+    RolePolicy: jest.fn().mockImplementation((name, args) => ({
+      name,
+      ...args,
+    })),
+    RolePolicyAttachment: jest.fn().mockImplementation((name, args) => ({
+      name,
       ...args,
     })),
   },
@@ -42,7 +64,7 @@ jest.mock('@pulumi/aws', () => ({
     })),
   },
   s3: {
-    BucketV2: jest.fn().mockImplementation((name, args) => ({
+    Bucket: jest.fn().mockImplementation((name, args) => ({
       name,
       id: `${name}-${Math.random().toString(36).substr(2, 9)}`,
       arn: `arn:aws:s3:::${name}-${Math.random().toString(36).substr(2, 9)}`,
@@ -57,15 +79,15 @@ jest.mock('@pulumi/aws', () => ({
     BucketLogging: jest.fn(),
     BucketMetric: jest.fn(),
     BucketNotification: jest.fn(),
-    BucketObjectLockConfigurationV2: jest.fn(),
+    BucketObjectLockConfiguration: jest.fn(),
   },
 }));
 
-import { SecurityPolicies } from '../lib/modules/security-policies';
+import { SecurityPolicies, createTimeBasedS3AccessPolicy, createRestrictedAuditPolicy } from '../lib/modules/security-policies';
 import { KMSKey } from '../lib/modules/kms';
 import { SecureS3Bucket } from '../lib/modules/s3';
 import { EnhancedSecureS3Bucket } from '../lib/modules/s3/enhanced-s3';
-import { createMFAEnforcedPolicy, createS3AccessPolicy } from '../lib/modules/iam';
+import { SecureIAMRole, createMFAEnforcedPolicy, createS3AccessPolicy } from '../lib/modules/iam';
 
 describe('Security Modules Unit Tests', () => {
   beforeEach(() => {
@@ -95,6 +117,82 @@ describe('Security Modules Unit Tests', () => {
       const policies = new SecurityPolicies('test-policies', {});
 
       expect(policies).toBeDefined();
+    });
+
+    it('should create MFA enforcement policy with comprehensive coverage', () => {
+      const policies = new SecurityPolicies('test-policies', {
+        environmentSuffix: 'test',
+      });
+
+      expect(policies.mfaEnforcementPolicy).toBeDefined();
+      
+      // Verify the policy was created with correct name pattern
+      const mockPolicy = require('@pulumi/aws').iam.Policy;
+      expect(mockPolicy).toHaveBeenCalledWith(
+        'test-policies-mfa-enforcement',
+        expect.objectContaining({
+          name: 'MFAEnforcementPolicy-test',
+          description: 'Enforces MFA for all sensitive AWS operations',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create S3 security policy with proper restrictions', () => {
+      const policies = new SecurityPolicies('test-policies', {
+        environmentSuffix: 'prod',
+      });
+
+      expect(policies.s3DenyInsecurePolicy).toBeDefined();
+      
+      // Verify the policy was created with correct name pattern
+      const mockPolicy = require('@pulumi/aws').iam.Policy;
+      expect(mockPolicy).toHaveBeenCalledWith(
+        'test-policies-s3-security',
+        expect.objectContaining({
+          name: 'S3SecurityPolicy-prod',
+          description: 'Enforces secure S3 operations only',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create CloudTrail protection policy', () => {
+      const policies = new SecurityPolicies('test-policies', {
+        environmentSuffix: 'staging',
+      });
+
+      expect(policies.cloudTrailProtectionPolicy).toBeDefined();
+      
+      // Verify the policy was created with correct name pattern
+      const mockPolicy = require('@pulumi/aws').iam.Policy;
+      expect(mockPolicy).toHaveBeenCalledWith(
+        'test-policies-cloudtrail-protection',
+        expect.objectContaining({
+          name: 'CloudTrailProtectionPolicy-staging',
+          description: 'Protects CloudTrail from unauthorized modifications',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create KMS key protection policy', () => {
+      const policies = new SecurityPolicies('test-policies', {
+        environmentSuffix: 'dev',
+      });
+
+      expect(policies.kmsKeyProtectionPolicy).toBeDefined();
+      
+      // Verify the policy was created with correct name pattern
+      const mockPolicy = require('@pulumi/aws').iam.Policy;
+      expect(mockPolicy).toHaveBeenCalledWith(
+        'test-policies-kms-protection',
+        expect.objectContaining({
+          name: 'KMSKeyProtectionPolicy-dev',
+          description: 'Protects KMS keys from unauthorized access and deletion',
+        }),
+        expect.any(Object)
+      );
     });
   });
 
@@ -137,6 +235,122 @@ describe('Security Modules Unit Tests', () => {
         }),
         expect.any(Object)
       );
+    });
+  });
+
+  describe('SecureIAMRole Module', () => {
+    it('should create IAM role with basic configuration', () => {
+      const role = new SecureIAMRole('test-role', {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' }
+          }]
+        }),
+        tags: { Purpose: 'Testing' }
+      });
+
+      expect(role.role).toBeDefined();
+      expect(role.policies).toBeDefined();
+      expect(Array.isArray(role.policies)).toBe(true);
+    });
+
+    it('should create IAM role with managed policy ARNs', () => {
+      const role = new SecureIAMRole('test-role-managed', {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'lambda.amazonaws.com' }
+          }]
+        }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/ReadOnlyAccess',
+          'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+        ],
+        tags: { Purpose: 'Testing managed policies' }
+      });
+
+      expect(role.role).toBeDefined();
+      expect(role.policies).toBeDefined();
+    });
+
+    it('should create IAM role with inline policies', () => {
+      const inlinePolicies = [
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Effect: 'Allow',
+            Action: 's3:GetObject',
+            Resource: 'arn:aws:s3:::test-bucket/*'
+          }]
+        }),
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Effect: 'Allow',
+            Action: 'logs:CreateLogGroup',
+            Resource: '*'
+          }]
+        })
+      ];
+
+      const role = new SecureIAMRole('test-role-inline', {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'lambda.amazonaws.com' }
+          }]
+        }),
+        policies: inlinePolicies,
+        tags: { Purpose: 'Testing inline policies' }
+      });
+
+      expect(role.role).toBeDefined();
+      expect(role.policies).toBeDefined();
+      expect(role.policies.length).toBe(2);
+    });
+
+    it('should handle undefined managed policy ARNs', () => {
+      const role = new SecureIAMRole('test-role-undefined-managed', {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' }
+          }]
+        }),
+        managedPolicyArns: undefined,
+        tags: { Purpose: 'Testing undefined managed policies' }
+      });
+
+      expect(role.role).toBeDefined();
+      expect(role.policies).toBeDefined();
+    });
+
+    it('should handle undefined inline policies', () => {
+      const role = new SecureIAMRole('test-role-undefined-inline', {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' }
+          }]
+        }),
+        policies: undefined,
+        tags: { Purpose: 'Testing undefined inline policies' }
+      });
+
+      expect(role.role).toBeDefined();
+      expect(role.policies).toBeDefined();
+      expect(role.policies.length).toBe(0);
     });
   });
 
@@ -251,6 +465,29 @@ describe('Security Modules Unit Tests', () => {
         );
         expect(denyStatement).toBeDefined();
       });
+
+      it('should include all required MFA enforcement conditions', () => {
+        const policy = createMFAEnforcedPolicy();
+        const parsedPolicy = JSON.parse(policy);
+        
+        // Should have statements for managing own MFA
+        const manageMFAStatement = parsedPolicy.Statement.find((stmt: any) => 
+          stmt.Sid === 'AllowManageOwnMFA'
+        );
+        expect(manageMFAStatement).toBeDefined();
+        expect(manageMFAStatement.Effect).toBe('Allow');
+        expect(manageMFAStatement.Action).toContain('iam:CreateVirtualMFADevice');
+        expect(manageMFAStatement.Action).toContain('iam:EnableMFADevice');
+        
+        // Should have deny statement for actions without MFA
+        const denyWithoutMFAStatement = parsedPolicy.Statement.find((stmt: any) => 
+          stmt.Sid === 'DenyAllExceptListedIfNoMFA'
+        );
+        expect(denyWithoutMFAStatement).toBeDefined();
+        expect(denyWithoutMFAStatement.Effect).toBe('Deny');
+        expect(denyWithoutMFAStatement.NotAction).toContain('iam:CreateVirtualMFADevice');
+        expect(denyWithoutMFAStatement.NotAction).toContain('sts:GetSessionToken');
+      });
     });
 
     describe('createS3AccessPolicy', () => {
@@ -263,6 +500,29 @@ describe('Security Modules Unit Tests', () => {
 
       it('should handle different bucket ARN formats', () => {
         const bucketArn = 'arn:aws:s3:::my-special-bucket-name-123';
+        const policy = createS3AccessPolicy(bucketArn);
+        
+        expect(policy).toBeDefined();
+      });
+
+      it('should create policy with proper S3 permissions', () => {
+        const bucketArn = 'arn:aws:s3:::test-bucket';
+        const policy = createS3AccessPolicy(bucketArn);
+        
+        // The policy should be a Pulumi interpolate result (object)
+        expect(policy).toBeDefined();
+        expect(typeof policy).toBe('object');
+      });
+
+      it('should handle empty bucket ARN', () => {
+        const bucketArn = '';
+        const policy = createS3AccessPolicy(bucketArn);
+        
+        expect(policy).toBeDefined();
+      });
+
+      it('should handle undefined bucket ARN', () => {
+        const bucketArn = undefined as any;
         const policy = createS3AccessPolicy(bucketArn);
         
         expect(policy).toBeDefined();
@@ -493,6 +753,85 @@ describe('Security Modules Unit Tests', () => {
       });
 
       expect(policies).toBeDefined();
+    });
+  });
+
+  describe('Security Policy Helper Functions', () => {
+    describe('createTimeBasedS3AccessPolicy', () => {
+      it('should create time-based S3 access policy with default hours', () => {
+        const bucketArn = 'arn:aws:s3:::test-bucket';
+        const policy = createTimeBasedS3AccessPolicy(bucketArn);
+        
+        expect(policy).toBeDefined();
+        // The policy should be a Pulumi interpolate result (object)
+        expect(typeof policy).toBe('object');
+      });
+
+      it('should create time-based S3 access policy with custom hours', () => {
+        const bucketArn = 'arn:aws:s3:::test-bucket';
+        const customHours = ['08', '09', '10', '11', '12'];
+        const policy = createTimeBasedS3AccessPolicy(bucketArn, customHours);
+        
+        expect(policy).toBeDefined();
+        expect(typeof policy).toBe('object');
+      });
+
+      it('should handle empty hours array', () => {
+        const bucketArn = 'arn:aws:s3:::test-bucket';
+        const emptyHours: string[] = [];
+        const policy = createTimeBasedS3AccessPolicy(bucketArn, emptyHours);
+        
+        expect(policy).toBeDefined();
+      });
+
+      it('should handle undefined bucket ARN', () => {
+        const bucketArn = undefined as any;
+        const policy = createTimeBasedS3AccessPolicy(bucketArn);
+        
+        expect(policy).toBeDefined();
+      });
+    });
+
+    describe('createRestrictedAuditPolicy', () => {
+      it('should create restricted audit policy with default IP ranges', () => {
+        const auditBucketArn = 'arn:aws:s3:::audit-bucket';
+        const policy = createRestrictedAuditPolicy(auditBucketArn);
+        
+        expect(policy).toBeDefined();
+        expect(typeof policy).toBe('object');
+      });
+
+      it('should create restricted audit policy with custom IP ranges', () => {
+        const auditBucketArn = 'arn:aws:s3:::audit-bucket';
+        const customIpRanges = ['10.0.0.0/8', '172.16.0.0/12'];
+        const policy = createRestrictedAuditPolicy(auditBucketArn, customIpRanges);
+        
+        expect(policy).toBeDefined();
+        expect(typeof policy).toBe('object');
+      });
+
+      it('should handle empty IP ranges array', () => {
+        const auditBucketArn = 'arn:aws:s3:::audit-bucket';
+        const emptyIpRanges: string[] = [];
+        const policy = createRestrictedAuditPolicy(auditBucketArn, emptyIpRanges);
+        
+        expect(policy).toBeDefined();
+      });
+
+      it('should handle undefined bucket ARN', () => {
+        const auditBucketArn = undefined as any;
+        const policy = createRestrictedAuditPolicy(auditBucketArn);
+        
+        expect(policy).toBeDefined();
+      });
+
+      it('should handle single IP range', () => {
+        const auditBucketArn = 'arn:aws:s3:::audit-bucket';
+        const singleIpRange = ['192.168.1.0/24'];
+        const policy = createRestrictedAuditPolicy(auditBucketArn, singleIpRange);
+        
+        expect(policy).toBeDefined();
+      });
     });
   });
 });

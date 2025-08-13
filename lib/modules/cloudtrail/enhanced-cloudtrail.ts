@@ -32,7 +32,7 @@ export class EnhancedCloudTrail extends pulumi.ComponentResource {
       `${name}-log-group`,
       {
         name: `/aws/cloudtrail/${name}`,
-        retentionInDays: 2555, // 7 years for compliance
+        retentionInDays: 2557, // 7 years for compliance (valid value)
         kmsKeyId: args.kmsKeyId,
         tags: { ...commonTags, ...args.tags },
       },

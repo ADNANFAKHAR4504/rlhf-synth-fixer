@@ -25,6 +25,18 @@ export interface TapStackArgs {
    * Optional default tags to apply to resources.
    */
   tags?: pulumi.Input<{ [key: string]: string }>;
+
+  /**
+   * Optional list of allowed IP ranges for security policies.
+   * Defaults to ['203.0.113.0/24'] if not provided.
+   */
+  allowedIpRanges?: string[];
+
+  /**
+   * Optional flag to enable enhanced security features.
+   * Defaults to false if not provided.
+   */
+  enableEnhancedSecurity?: boolean;
 }
 
 /**
@@ -74,19 +86,23 @@ export class TapStack extends pulumi.ComponentResource {
    * @param args Configuration arguments including environment suffix and tags.
    * @param opts Pulumi options.
    */
-  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+  constructor(name: string, args?: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
-    const environmentSuffix = args.environmentSuffix || 'dev';
-    const tags = args.tags || {};
+    const environmentSuffix = args?.environmentSuffix || 'dev';
+    const tags = args?.tags || {};
+    const allowedIpRanges = args?.allowedIpRanges;
+    const enableEnhancedSecurity = args?.enableEnhancedSecurity;
 
     // --- Instantiate Nested Components Here ---
     // Create the security infrastructure stack
     const securityStack = new SecurityStack(
-      'tap-security',
+      'security-infrastructure',
       {
         environmentSuffix: environmentSuffix,
         tags: tags,
+        allowedIpRanges: allowedIpRanges,
+        enableEnhancedSecurity: enableEnhancedSecurity,
       },
       { parent: this }
     );

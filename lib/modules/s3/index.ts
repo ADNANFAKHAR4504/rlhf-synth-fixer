@@ -10,7 +10,7 @@ export interface SecureS3BucketArgs {
 }
 
 export class SecureS3Bucket extends pulumi.ComponentResource {
-  public readonly bucket: aws.s3.BucketV2;
+  public readonly bucket: aws.s3.Bucket;
   public readonly bucketPolicy: aws.s3.BucketPolicy;
   public readonly publicAccessBlock: aws.s3.BucketPublicAccessBlock;
 
@@ -22,7 +22,7 @@ export class SecureS3Bucket extends pulumi.ComponentResource {
     super('custom:security:SecureS3Bucket', name, {}, opts);
 
     // Create S3 bucket
-    this.bucket = new aws.s3.BucketV2(
+    this.bucket = new aws.s3.Bucket(
       `${name}-bucket`,
       {
         bucket: args.bucketName,
