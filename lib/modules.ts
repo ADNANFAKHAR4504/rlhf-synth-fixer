@@ -6,9 +6,6 @@ const availabilityZones = ['us-west-2a', 'us-west-2b'];
 
 // =============================================================================
 // ## Networking Module
-//
-// Creates a highly available network foundation with a VPC, public/private
-// subnets, and a resilient NAT Gateway setup (one per Availability Zone).
 // =============================================================================
 export interface NetworkModuleProps {
   vpcCidr: string;

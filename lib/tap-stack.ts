@@ -27,10 +27,10 @@ export class TapStack extends TerraformStack {
     const defaultTags = props?.defaultTags || { tags: {} };
     const projectName = `webapp-${environmentSuffix}`;
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      // CORRECTED: The defaultTags property expects an array of tag objects.
+      // CORRECTED: The defaultTags property now correctly uses an array.
       defaultTags: [defaultTags],
     });
 
