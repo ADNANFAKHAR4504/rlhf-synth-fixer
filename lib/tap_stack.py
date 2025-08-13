@@ -236,6 +236,7 @@ def get_vpc_with_fallback():
     if existing_vpcs.ids and len(existing_vpcs.ids) > 0:
       pulumi.log.info(f"Found {len(existing_vpcs.ids)} existing project VPCs")
       pulumi.log.info("Strategy: Use existing VPC to avoid quota limits")
+      pulumi.log.info("Smart IGW and subnet management will follow VPC strategy")
       
       # Use the first available VPC to avoid quota issues
       vpc_id = existing_vpcs.ids[0]
@@ -253,7 +254,8 @@ def get_vpc_with_fallback():
       )
     
     # Only create new VPC if no existing ones found
-    pulumi.log.info("No existing VPCs found, creating new VPC...")
+    pulumi.log.info("No existing VPCs found, creating completely new infrastructure...")
+    pulumi.log.info("New VPC will have new IGW and fresh subnets")
     new_vpc = aws.ec2.Vpc(
       get_resource_name("vpc"),
       cidr_block="10.0.0.0/16",
@@ -314,29 +316,58 @@ amazon_linux_ami = aws.ec2.get_ami(
   opts=pulumi.InvokeOptions(provider=aws_provider)
 )
 
-def create_internet_gateway(current_vpc):
-  """Create new Internet Gateway instead of reusing existing ones."""
+def create_internet_gateway(vpc, vpc_id_from_lookup):
+  """Smart IGW management: reuse existing or create new based on VPC source."""
   try:
-    # Always create new Internet Gateway for independent deployment
-    pulumi.log.info("Creating completely new Internet Gateway...")
+    if vpc_id_from_lookup:
+      # VPC came from lookup, check for existing IGW
+      pulumi.log.info("Checking for existing Internet Gateway in reused VPC...")
+      try:
+        existing_igws = aws.ec2.get_internet_gateways(
+          filters=[
+            aws.ec2.GetInternetGatewaysFilterArgs(
+              name="attachment.vpc-id", 
+              values=[vpc_id_from_lookup]
+            )
+          ],
+          opts=pulumi.InvokeOptions(provider=aws_provider)
+        )
+        
+        if existing_igws.ids and len(existing_igws.ids) > 0:
+          igw_id = existing_igws.ids[0]
+          pulumi.log.info(f"Reusing existing Internet Gateway: {igw_id}")
+          return aws.ec2.InternetGateway.get(
+            get_resource_name("igw"),
+            igw_id,
+            opts=pulumi.ResourceOptions(
+              provider=aws_provider,
+              protect=False,
+              retain_on_delete=False
+            )
+          )
+      except (pulumi.InvokeError, IndexError) as e:
+        pulumi.log.warn(f"Could not find existing IGW, will create new: {e}")
+    
+    # Create new IGW for new VPC or if no existing IGW found
+    pulumi.log.info("Creating new Internet Gateway...")
     return aws.ec2.InternetGateway(
       get_resource_name("igw"),
-      vpc_id=current_vpc.id,
+      vpc_id=vpc.id,
       tags={
         "Name": get_resource_name("igw"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
-        "DeploymentType": "Independent"
+        "ManagedBy": "Pulumi-IaC"
       },
-      opts=pulumi.ResourceOptions(provider=aws_provider)
+      opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
     )
     
-  except (pulumi.InvokeError, AttributeError) as e:
-    pulumi.log.error(f"Internet Gateway creation failed: {e}")
-    raise ValueError(f"Could not create Internet Gateway: {e}") from e
+  except (pulumi.InvokeError, ValueError, AttributeError) as e:
+    pulumi.log.error(f"IGW creation/lookup failed: {e}")
+    raise ValueError(f"Failed to create or find Internet Gateway: {e}") from e
 
-# Create new Internet Gateway for independent deployment
-internet_gateway = create_internet_gateway(vpc)
+# Create/reuse Internet Gateway with smart management
+internet_gateway = create_internet_gateway(vpc, existing_vpc_id)
 
 def find_existing_subnets(vpc_id: str, target_azs: list):
   """Find existing subnets in the VPC that can be reused."""
