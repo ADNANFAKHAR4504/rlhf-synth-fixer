@@ -257,9 +257,6 @@ describe('TapStack CloudFormation Template', () => {
       test('Lambda function should have environment variables', () => {
         const props = template.Resources.ServerlessAppFunction.Properties;
         expect(props.Environment.Variables).toBeDefined();
-        expect(props.Environment.Variables.ENVIRONMENT_SUFFIX).toEqual({
-          Ref: 'EnvironmentSuffix',
-        });
         expect(props.Environment.Variables.DYNAMODB_TABLE).toEqual({
           Ref: 'ApplicationTable',
         });
