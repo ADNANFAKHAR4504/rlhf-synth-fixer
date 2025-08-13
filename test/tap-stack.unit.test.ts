@@ -39,7 +39,7 @@ describe('TapStack CloudFormation Template', () => {
     test('ProjectName parameter should have correct properties', () => {
       const param = template.Parameters.ProjectName;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('cf-secure-project');
+      expect(param.Default).toBe('cfn-secure-project');
       expect(param.AllowedPattern).toBe('^[a-z0-9-]+$');
     });
 

@@ -26,18 +26,18 @@ try {
     APIGatewayRoleArn:
       'arn:aws:iam::***:role/TapStackpr1008-APIGatewayCloudWatchRole-0ZYvsNCguFFH',
     PrivateSubnetIds: 'subnet-033ce19b99775262b,subnet-090259a777e69e6ff',
-    WAFLogGroupName: 'aws-waf-logs-cf-secure-project-pr1008',
+    WAFLogGroupName: 'aws-waf-logs-cfn-secure-project-pr1008',
     LambdaExecutionRoleArn:
       'arn:aws:iam::***:role/TapStackpr1008-LambdaExecutionRole-GQyzstdgM5fN',
-    ApplicationDataBucketName: 'cf-secure-project-pr1008-app-data-***',
-    APILogsBucketName: 'cf-secure-project-pr1008-api-logs-***',
+    ApplicationDataBucketName: 'cfn-secure-project-pr1008-app-data-***',
+    APILogsBucketName: 'cfn-secure-project-pr1008-api-logs-***',
     PublicSubnetId: 'subnet-0b1586a14c9338eee',
-    APIGatewayLogGroupName: '/aws/apigateway/cf-secure-project-pr1008',
+    APIGatewayLogGroupName: '/aws/apigateway/cfn-secure-project-pr1008',
     WebACLId:
-      'cf-secure-project-pr1008-web-acl|825548c3-45ec-488f-a773-fe8953f49919|REGIONAL',
+      'cfn-secure-project-pr1008-web-acl|825548c3-45ec-488f-a773-fe8953f49919|REGIONAL',
     APIGatewayId: 'jqn7elwr7k',
     WebACLArn:
-      'arn:aws:wafv2:us-west-2:***:regional/webacl/cf-secure-project-pr1008-web-acl/825548c3-45ec-488f-a773-fe8953f49919',
+      'arn:aws:wafv2:us-west-2:***:regional/webacl/cfn-secure-project-pr1008-web-acl/825548c3-45ec-488f-a773-fe8953f49919',
   };
 }
 
@@ -123,10 +123,10 @@ describe('CloudFormation Stack Integration Tests', () => {
 
       // Updated regex to handle *** at the end of bucket names
       expect(outputs.ApplicationDataBucketName).toMatch(
-        /cf-secure-project-[^-]+-app-data-(\d{12}|\*{3})$/
+        /cfn-secure-project-[^-]+-app-data-(\d{12}|\*{3})$/
       );
       expect(outputs.APILogsBucketName).toMatch(
-        /cf-secure-project-[^-]+-api-logs-(\d{12}|\*{3})$/
+        /cfn-secure-project-[^-]+-api-logs-(\d{12}|\*{3})$/
       );
     });
 
@@ -173,7 +173,7 @@ describe('CloudFormation Stack Integration Tests', () => {
   describe('Resource Naming Validation', () => {
     test('all resources should include environment suffix', () => {
       const bucketName = outputs.ApplicationDataBucketName;
-      const match = bucketName.match(/cf-secure-project-([^-]+)-app-data/);
+      const match = bucketName.match(/cfn-secure-project-([^-]+)-app-data/);
 
       if (match) {
         const envSuffix = match[1];
