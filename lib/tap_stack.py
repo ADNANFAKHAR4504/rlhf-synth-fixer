@@ -54,12 +54,6 @@ class WebApplicationStack(Stack):
       allow_all_outbound=True,
       description="Allows access to the RDS database"
     )
-
-    db_sg.add_ingress_rule(
-      peer=web_sg,
-      connection=ec2.Port.tcp(3306),
-      description="Allow MySQL access from web servers"
-    )
     
     db_subnet_group = rds.SubnetGroup(
       self, "DBSubnetGroup1",
@@ -76,6 +70,12 @@ class WebApplicationStack(Stack):
       vpc=vpc,
       allow_all_outbound=True,
       description="Allows outbound traffic from web servers"
+    )
+    
+    db_sg.add_ingress_rule(
+      peer=web_sg,
+      connection=ec2.Port.tcp(3306),
+      description="Allow MySQL access from web servers"
     )
     
     web_sg.add_ingress_rule(
