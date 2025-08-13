@@ -22,7 +22,7 @@ const tfDir = path.resolve(__dirname, "../lib");
 
 describe("Terraform Security Group Configuration (Mocked)", () => {
   const testVars = {
-    aws_region: "us-east-1",
+    aws_region: "us-west-2",
     vpc_id: "vpc-1234567890abcdef0",
     allowed_ipv4_cidrs: ["203.0.113.0/24"],
     allowed_ipv6_cidrs: [],
@@ -30,7 +30,7 @@ describe("Terraform Security Group Configuration (Mocked)", () => {
     security_group_name: "app-http-https-sg-test",
     backend_bucket: "dummy-bucket",
     backend_key: "dummy/terraform.tfstate",
-    backend_region: "us-east-1",
+    backend_region: "us-west-2",
     backend_dynamodb_table: "dummy-lock-table",
   };
 
