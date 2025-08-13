@@ -313,18 +313,9 @@ export class TapStack extends cdk.Stack {
       });
 
       // Add bucket notification for security monitoring
+      // Only add OBJECT_CREATED notification to avoid overlapping configurations
       bucket.addEventNotification(
         s3.EventType.OBJECT_CREATED,
-        new s3n.SnsDestination(this.securityTopic)
-      );
-
-      bucket.addEventNotification(
-        s3.EventType.OBJECT_REMOVED,
-        new s3n.SnsDestination(this.securityTopic)
-      );
-
-      bucket.addEventNotification(
-        s3.EventType.OBJECT_REMOVED_DELETE_MARKER_CREATED,
         new s3n.SnsDestination(this.securityTopic)
       );
 
