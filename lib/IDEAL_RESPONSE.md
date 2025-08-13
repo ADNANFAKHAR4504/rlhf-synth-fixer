@@ -17,14 +17,14 @@ Parameters:
     Description: Whether to deploy Lambda functions inside a VPC
 
   VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC ID where Lambda functions will be deployed
+    Type: String
     Default: vpc-00000000
+    Description: VPC ID where Lambda functions will be deployed (required when EnableVPC is true)
 
   PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: List of private subnet IDs for Lambda deployment
-    Default: subnet-00000000,subnet-00000001
+    Type: CommaDelimitedList
+    Description: List of private subnet IDs for Lambda deployment (required when EnableVPC is true)
+    Default: 'subnet-00000000,subnet-00000001'
 
   ApplicationName:
     Type: String
@@ -39,7 +39,21 @@ Parameters:
 Conditions:
   UseVPC: !Equals [!Ref EnableVPC, 'true']
 
+Rules:
+  RequireVpcParametersWhenEnabled:
+    RuleCondition: !Equals [!Ref EnableVPC, 'true']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref VpcId, '']]
+        AssertDescription: VpcId must be provided when EnableVPC is true
+      - Assert:
+          Fn::Not:
+            - Fn::Contains:
+                - !Ref PrivateSubnetIds
+                - ''
+        AssertDescription: PrivateSubnetIds must be provided when EnableVPC is true
+
 Resources:
+  # DynamoDB Table with encryption at rest
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Delete
@@ -66,6 +80,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ApplicationName}-${EnvironmentSuffix}-dynamodb'
 
+  # Security Group for Lambda functions
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Condition: UseVPC
@@ -89,10 +104,10 @@ Resources:
         - Key: Application
           Value: !Ref ApplicationName
 
+  # IAM Role for Lambda functions
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ApplicationName}-${EnvironmentSuffix}-lambda-execution-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -127,6 +142,7 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}-${EnvironmentSuffix}-*'
 
+  # Lambda function for CREATE operations (POST)
   CreateFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -158,16 +174,37 @@ Resources:
           def lambda_handler(event, context):
               try:
                   body = json.loads(event['body']) if event.get('body') else {}
+                  
                   item = {
                       'id': str(uuid.uuid4()),
                       'created_at': datetime.utcnow().isoformat(),
                       **body
                   }
+                  
                   table.put_item(Item=item)
-                  return { 'statusCode': 201, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps(item) }
+                  
+                  return {
+                      'statusCode': 201,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps(item)
+                  }
               except Exception as e:
-                  return { 'statusCode': 500, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': str(e)}) }
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Tags:
+        - Key: Application
+          Value: !Ref ApplicationName
 
+  # Lambda function for READ operations (GET)
   ReadFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -197,19 +234,55 @@ Resources:
 
           def lambda_handler(event, context):
               try:
+                  # Check if specific ID is requested
                   item_id = event.get('pathParameters', {}).get('id') if event.get('pathParameters') else None
+                  
                   if item_id:
+                      # Get specific item
                       response = table.get_item(Key={'id': item_id})
                       if 'Item' in response:
-                          return { 'statusCode': 200, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps(response['Item']) }
+                          return {
+                              'statusCode': 200,
+                              'headers': {
+                                  'Content-Type': 'application/json',
+                                  'Access-Control-Allow-Origin': '*'
+                              },
+                              'body': json.dumps(response['Item'])
+                          }
                       else:
-                          return { 'statusCode': 404, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'Item not found'}) }
+                          return {
+                              'statusCode': 404,
+                              'headers': {
+                                  'Content-Type': 'application/json',
+                                  'Access-Control-Allow-Origin': '*'
+                              },
+                              'body': json.dumps({'error': 'Item not found'})
+                          }
                   else:
+                      # Get all items
                       response = table.scan()
-                      return { 'statusCode': 200, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps(response['Items']) }
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps(response['Items'])
+                      }
               except Exception as e:
-                  return { 'statusCode': 500, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': str(e)}) }
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Tags:
+        - Key: Application
+          Value: !Ref ApplicationName
 
+  # Lambda function for UPDATE operations (PUT)
   UpdateFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -241,18 +314,56 @@ Resources:
               try:
                   item_id = event.get('pathParameters', {}).get('id')
                   if not item_id:
-                      return { 'statusCode': 400, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'ID is required'}) }
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'ID is required'})
+                      }
+                  
                   body = json.loads(event['body']) if event.get('body') else {}
                   body['updated_at'] = datetime.utcnow().isoformat()
+                  
+                  # Check if item exists
                   response = table.get_item(Key={'id': item_id})
                   if 'Item' not in response:
-                      return { 'statusCode': 404, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'Item not found'}) }
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'Item not found'})
+                      }
+                  
+                  # Update item
                   updated_item = {**response['Item'], **body}
                   table.put_item(Item=updated_item)
-                  return { 'statusCode': 200, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps(updated_item) }
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps(updated_item)
+                  }
               except Exception as e:
-                  return { 'statusCode': 500, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': str(e)}) }
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Tags:
+        - Key: Application
+          Value: !Ref ApplicationName
 
+  # Lambda function for DELETE operations (DELETE)
   DeleteFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -283,15 +394,51 @@ Resources:
               try:
                   item_id = event.get('pathParameters', {}).get('id')
                   if not item_id:
-                      return { 'statusCode': 400, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'ID is required'}) }
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'ID is required'})
+                      }
+                  
+                  # Check if item exists
                   response = table.get_item(Key={'id': item_id})
                   if 'Item' not in response:
-                      return { 'statusCode': 404, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': 'Item not found'}) }
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'Item not found'})
+                      }
+                  
+                  # Delete item
                   table.delete_item(Key={'id': item_id})
-                  return { 'statusCode': 204, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+                  
+                  return {
+                      'statusCode': 204,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      }
+                  }
               except Exception as e:
-                  return { 'statusCode': 500, 'headers': { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, 'body': json.dumps({'error': str(e)}) }
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Tags:
+        - Key: Application
+          Value: !Ref ApplicationName
 
+  # API Gateway REST API
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -301,6 +448,7 @@ Resources:
         Types:
           - REGIONAL
 
+  # API Gateway Resource for items collection
   ItemsResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -308,6 +456,7 @@ Resources:
       ParentId: !GetAtt ApiGateway.RootResourceId
       PathPart: items
 
+  # API Gateway Resource for individual items
   ItemResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -315,6 +464,7 @@ Resources:
       ParentId: !Ref ItemsResource
       PathPart: '{id}'
 
+  # POST method for creating items
   PostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -327,6 +477,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${CreateFunction.Arn}/invocations'
 
+  # GET method for reading all items
   GetItemsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -339,6 +490,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${ReadFunction.Arn}/invocations'
 
+  # GET method for reading specific item
   GetItemMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -351,6 +503,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${ReadFunction.Arn}/invocations'
 
+  # PUT method for updating items
   PutMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -363,6 +516,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${UpdateFunction.Arn}/invocations'
 
+  # DELETE method for deleting items
   DeleteMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -375,6 +529,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${DeleteFunction.Arn}/invocations'
 
+  # Lambda permissions for API Gateway
   CreateFunctionPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -407,6 +562,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*'
 
+  # API Gateway Deployment
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
@@ -444,5 +600,3 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
 ```
-
-Insert here the ideal response
