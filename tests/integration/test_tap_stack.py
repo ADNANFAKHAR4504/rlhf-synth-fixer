@@ -8,7 +8,6 @@ Tests actual AWS resources created by the Pulumi stack.
 import unittest
 
 import boto3
-import pulumi
 from pulumi import automation
 from lib.tap_stack import TapStack, TapStackArgs
 
