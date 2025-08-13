@@ -79,7 +79,7 @@ class TapStack(pulumi.ComponentResource):
     # ------------------- S3 for request logs (V2 resources) -----------------
     log_bucket = aws.s3.BucketV2(
         f"serverless-logs-{self.environment_suffix}",
-        bucket=pulumi.Output.concat(project, "-logs-", self.environment_suffix),
+        bucket=pulumi.Output.concat(project.lower(), "-logs-", self.environment_suffix.lower()),
         tags={**self.tags, "Purpose": "Lambda Logs"},
         force_destroy=True,
         opts=parent_opts,
