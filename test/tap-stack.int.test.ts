@@ -31,19 +31,20 @@ interface StackOutputs {
 
 // Mock outputs for local testing
 const mockOutputs: StackOutputs = {
-  ApiGatewayUrl: 'https://p7newda925.execute-api.us-east-1.amazonaws.com/dev',
+  ApiGatewayUrl:
+    'https://ucjs45ugzk.execute-api.us-east-1.amazonaws.com/pr1107',
   ApiGatewayStageArn:
-    'arn:aws:apigateway:us-east-1::/restapis/p7newda925/stages/dev',
+    'arn:aws:apigateway:us-east-1::/restapis/ucjs45ugzk/stages/pr1107',
   DynamoDBTableArn:
-    'arn:aws:dynamodb:us-east-1:***:table/dev-serverless-app-data-pr1107',
+    'arn:aws:dynamodb:us-east-1:***:table/serverless-app-data-pr1107',
   LambdaFunctionArn:
-    'arn:aws:lambda:us-east-1:***:function:dev-serverless-app-function-pr1107',
-  DynamoDBTableName: 'dev-serverless-app-data-pr1107',
-  ApiGatewayId: 'p7newda925',
-  S3BucketArn: 'arn:aws:s3:::dev-app-pr1107-***',
-  LambdaFunctionName: 'dev-serverless-app-function-pr1107',
-  S3BucketName: 'dev-app-pr1107-***',
-  AlarmTopicArn: 'arn:aws:sns:us-east-1:***:dev-serverless-app-alarms-pr1107',
+    'arn:aws:lambda:us-east-1:***:function:serverless-app-function-pr1107',
+  DynamoDBTableName: 'serverless-app-data-pr1107',
+  ApiGatewayId: 'ucjs45ugzk',
+  S3BucketArn: 'arn:aws:s3:::app-pr1107-***',
+  LambdaFunctionName: 'serverless-app-function-pr1107',
+  S3BucketName: 'app-pr1107-***',
+  AlarmTopicArn: 'arn:aws:sns:us-east-1:***:serverless-app-alarms-pr1107',
 };
 
 // Helper function to load CDK outputs

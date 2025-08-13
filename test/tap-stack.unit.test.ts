@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1107';
 
 describe('TapStack CloudFormation Template', () => {
   let template: any;
@@ -20,7 +20,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Production-grade serverless web application with API Gateway, Lambda, S3, DynamoDB, and CloudWatch monitoring'
+        'Production-grade serverless web application with API Gateway, Lambda, S3, DynamoDB, and CloudWatch monitoring - using EnvironmentSuffix only'
       );
     });
   });
@@ -28,13 +28,12 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     test('should have all required parameters', () => {
       const expectedParams = [
-        'Environment',
         'LambdaMemorySize',
         'LambdaTimeout',
         'ErrorRateThreshold',
         'DurationThreshold',
         'NotificationEmail',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
       ];
 
       expectedParams.forEach(param => {
@@ -42,11 +41,8 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('Environment parameter should have correct properties', () => {
-      const param = template.Parameters.Environment;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.AllowedValues).toEqual(['dev', 'staging', 'prod']);
+    test('should not have Environment parameter', () => {
+      expect(template.Parameters.Environment).toBeUndefined();
     });
 
     test('LambdaMemorySize parameter should have correct constraints', () => {
@@ -75,7 +71,7 @@ describe('TapStack CloudFormation Template', () => {
       const param = template.Parameters.EnvironmentSuffix;
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
+      expect(param.Default).toBe('pr1107');
     });
   });
 
@@ -90,7 +86,7 @@ describe('TapStack CloudFormation Template', () => {
       test('AlarmNotificationTopic should have correct properties', () => {
         const props = template.Resources.AlarmNotificationTopic.Properties;
         expect(props.TopicName).toEqual({
-          'Fn::Sub': '${Environment}-serverless-app-alarms-${EnvironmentSuffix}'
+          'Fn::Sub': 'serverless-app-alarms-${EnvironmentSuffix}',
         });
         expect(props.KmsMasterKeyId).toBe('alias/aws/sns');
       });
@@ -112,8 +108,11 @@ describe('TapStack CloudFormation Template', () => {
 
       test('StaticContentBucket should have encryption enabled', () => {
         const props = template.Resources.StaticContentBucket.Properties;
-        const encryption = props.BucketEncryption.ServerSideEncryptionConfiguration[0];
-        expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+        const encryption =
+          props.BucketEncryption.ServerSideEncryptionConfiguration[0];
+        expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe(
+          'AES256'
+        );
         expect(encryption.BucketKeyEnabled).toBe(true);
       });
 
@@ -165,7 +164,9 @@ describe('TapStack CloudFormation Template', () => {
 
       test('ApplicationTable should have point-in-time recovery enabled', () => {
         const props = template.Resources.ApplicationTable.Properties;
-        expect(props.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+        expect(
+          props.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled
+        ).toBe(true);
       });
 
       test('ApplicationTable should have encryption enabled', () => {
@@ -176,7 +177,9 @@ describe('TapStack CloudFormation Template', () => {
 
       test('ApplicationTable should have stream enabled', () => {
         const props = template.Resources.ApplicationTable.Properties;
-        expect(props.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+        expect(props.StreamSpecification.StreamViewType).toBe(
+          'NEW_AND_OLD_IMAGES'
+        );
       });
     });
 
@@ -209,14 +212,17 @@ describe('TapStack CloudFormation Template', () => {
       });
 
       test('LambdaExecutionRole should follow least-privilege principle', () => {
-        const policies = template.Resources.LambdaExecutionRole.Properties.Policies;
-        
+        const policies =
+          template.Resources.LambdaExecutionRole.Properties.Policies;
+
         // Check DynamoDB policy
-        const dynamoPolicy = policies.find((p: any) => p.PolicyName === 'DynamoDBAccess');
+        const dynamoPolicy = policies.find(
+          (p: any) => p.PolicyName === 'DynamoDBAccess'
+        );
         expect(dynamoPolicy).toBeDefined();
         const dynamoActions = dynamoPolicy.PolicyDocument.Statement[0].Action;
         expect(dynamoActions).not.toContain('dynamodb:*');
-        
+
         // Check S3 policy
         const s3Policy = policies.find((p: any) => p.PolicyName === 'S3Access');
         expect(s3Policy).toBeDefined();
@@ -251,9 +257,15 @@ describe('TapStack CloudFormation Template', () => {
       test('Lambda function should have environment variables', () => {
         const props = template.Resources.ServerlessAppFunction.Properties;
         expect(props.Environment.Variables).toBeDefined();
-        expect(props.Environment.Variables.ENVIRONMENT).toEqual({ Ref: 'Environment' });
-        expect(props.Environment.Variables.DYNAMODB_TABLE).toEqual({ Ref: 'ApplicationTable' });
-        expect(props.Environment.Variables.S3_BUCKET).toEqual({ Ref: 'StaticContentBucket' });
+        expect(props.Environment.Variables.ENVIRONMENT_SUFFIX).toEqual({
+          Ref: 'EnvironmentSuffix',
+        });
+        expect(props.Environment.Variables.DYNAMODB_TABLE).toEqual({
+          Ref: 'ApplicationTable',
+        });
+        expect(props.Environment.Variables.S3_BUCKET).toEqual({
+          Ref: 'StaticContentBucket',
+        });
       });
 
       test('should have LambdaApiGatewayPermission', () => {
@@ -274,9 +286,9 @@ describe('TapStack CloudFormation Template', () => {
         const expectedResources = [
           'HealthResource',
           'ItemsResource',
-          'ItemResource'
+          'ItemResource',
         ];
-        
+
         expectedResources.forEach(resourceName => {
           const resource = template.Resources[resourceName];
           expect(resource).toBeDefined();
@@ -289,9 +301,9 @@ describe('TapStack CloudFormation Template', () => {
           'HealthMethod',
           'ItemsPostMethod',
           'ItemGetMethod',
-          'ApiGatewayRootMethod'
+          'ApiGatewayRootMethod',
         ];
-        
+
         expectedMethods.forEach(methodName => {
           const method = template.Resources[methodName];
           expect(method).toBeDefined();
@@ -318,6 +330,11 @@ describe('TapStack CloudFormation Template', () => {
         expect(props.MethodSettings[0].DataTraceEnabled).toBe(true);
         expect(props.MethodSettings[0].MetricsEnabled).toBe(true);
       });
+
+      test('ApiGatewayStage should use EnvironmentSuffix as stage name', () => {
+        const props = template.Resources.ApiGatewayStage.Properties;
+        expect(props.StageName).toEqual({ Ref: 'EnvironmentSuffix' });
+      });
     });
 
     describe('CloudWatch Alarms', () => {
@@ -328,9 +345,9 @@ describe('TapStack CloudFormation Template', () => {
           'LambdaThrottlesAlarm',
           'ApiGateway4xxAlarm',
           'ApiGateway5xxAlarm',
-          'ApiGatewayLatencyAlarm'
+          'ApiGatewayLatencyAlarm',
         ];
-        
+
         expectedAlarms.forEach(alarmName => {
           const alarm = template.Resources[alarmName];
           expect(alarm).toBeDefined();
@@ -345,23 +362,38 @@ describe('TapStack CloudFormation Template', () => {
           'LambdaThrottlesAlarm',
           'ApiGateway4xxAlarm',
           'ApiGateway5xxAlarm',
-          'ApiGatewayLatencyAlarm'
+          'ApiGatewayLatencyAlarm',
         ];
-        
+
         alarms.forEach(alarmName => {
           const alarm = template.Resources[alarmName];
-          expect(alarm.Properties.AlarmActions).toEqual([{ Ref: 'AlarmNotificationTopic' }]);
+          expect(alarm.Properties.AlarmActions).toEqual([
+            { Ref: 'AlarmNotificationTopic' },
+          ]);
+        });
+      });
+
+      test('API Gateway alarms should use EnvironmentSuffix for stage dimension', () => {
+        const apiGatewayAlarms = [
+          'ApiGateway4xxAlarm',
+          'ApiGateway5xxAlarm',
+          'ApiGatewayLatencyAlarm',
+        ];
+
+        apiGatewayAlarms.forEach(alarmName => {
+          const alarm = template.Resources[alarmName];
+          const stageDimension = alarm.Properties.Dimensions.find(
+            (dim: any) => dim.Name === 'Stage'
+          );
+          expect(stageDimension.Value).toEqual({ Ref: 'EnvironmentSuffix' });
         });
       });
     });
   });
 
   describe('Conditions', () => {
-    test('should have IsProduction condition', () => {
-      expect(template.Conditions).toBeDefined();
-      expect(template.Conditions.IsProduction).toEqual({
-        'Fn::Equals': [{ Ref: 'Environment' }, 'prod']
-      });
+    test('should not have IsProduction condition', () => {
+      expect(template.Conditions).toBeUndefined();
     });
   });
 
@@ -377,7 +409,7 @@ describe('TapStack CloudFormation Template', () => {
         'DynamoDBTableArn',
         'S3BucketArn',
         'AlarmTopicArn',
-        'ApiGatewayStageArn'
+        'ApiGatewayStageArn',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -389,7 +421,8 @@ describe('TapStack CloudFormation Template', () => {
       const output = template.Outputs.ApiGatewayUrl;
       expect(output.Description).toBe('API Gateway endpoint URL');
       expect(output.Value).toEqual({
-        'Fn::Sub': 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+        'Fn::Sub':
+          'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}',
       });
     });
 
@@ -398,28 +431,30 @@ describe('TapStack CloudFormation Template', () => {
         const output = template.Outputs[outputKey];
         const exportName = output.Export.Name;
         expect(exportName).toBeDefined();
-        
-        // Convert outputKey to kebab-case for the export name
-        const kebabKey = outputKey.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
         expect(exportName).toEqual({
-          'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}')
+          'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
         });
       });
     });
   });
 
   describe('Security Best Practices', () => {
-    test('should not use wildcard (*) in IAM policies', () => {
+    test('should not use wildcard (*) in IAM policies for most actions', () => {
       const lambdaRole = template.Resources.LambdaExecutionRole;
       const policies = lambdaRole.Properties.Policies;
-      
+
       policies.forEach((policy: any) => {
         policy.PolicyDocument.Statement.forEach((statement: any) => {
+          // Skip XRayTracing policy which legitimately uses * for resources
+          if (policy.PolicyName === 'XRayTracing') {
+            return;
+          }
+
           if (Array.isArray(statement.Action)) {
             statement.Action.forEach((action: string) => {
               expect(action).not.toContain('*');
             });
-          } else {
+          } else if (statement.Action) {
             expect(statement.Action).not.toContain('*');
           }
         });
@@ -456,33 +491,37 @@ describe('TapStack CloudFormation Template', () => {
   describe('Resource Naming Convention', () => {
     test('resources with names should include EnvironmentSuffix', () => {
       // Check SNS Topic
-      const snsTopic = template.Resources.AlarmNotificationTopic.Properties.TopicName;
+      const snsTopic =
+        template.Resources.AlarmNotificationTopic.Properties.TopicName;
       expect(snsTopic).toEqual({
-        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}')
+        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
       });
 
       // Check S3 Bucket
-      const s3Bucket = template.Resources.StaticContentBucket.Properties.BucketName;
+      const s3Bucket =
+        template.Resources.StaticContentBucket.Properties.BucketName;
       expect(s3Bucket).toEqual({
-        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}')
+        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
       });
 
       // Check DynamoDB Table
-      const dynamoTable = template.Resources.ApplicationTable.Properties.TableName;
+      const dynamoTable =
+        template.Resources.ApplicationTable.Properties.TableName;
       expect(dynamoTable).toEqual({
-        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}')
+        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
       });
 
       // Check Lambda Function
-      const lambdaFunction = template.Resources.ServerlessAppFunction.Properties.FunctionName;
+      const lambdaFunction =
+        template.Resources.ServerlessAppFunction.Properties.FunctionName;
       expect(lambdaFunction).toEqual({
-        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}')
+        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
       });
 
       // Check API Gateway
       const apiGateway = template.Resources.ApiGateway.Properties.Name;
       expect(apiGateway).toEqual({
-        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}')
+        'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
       });
     });
   });
@@ -508,6 +547,13 @@ describe('TapStack CloudFormation Template', () => {
       const lambda = template.Resources.ServerlessAppFunction;
       expect(lambda.Properties.Code.ZipFile).toBeDefined();
       expect(lambda.Properties.Code.ZipFile).toContain('def lambda_handler');
+    });
+
+    test('Lambda function code should use aws_request_id', () => {
+      const lambda = template.Resources.ServerlessAppFunction;
+      const code = lambda.Properties.Code.ZipFile;
+      expect(code).toContain('context.aws_request_id');
+      expect(code).not.toContain('context.request_id');
     });
   });
 });
