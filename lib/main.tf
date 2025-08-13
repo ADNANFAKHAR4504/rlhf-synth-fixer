@@ -671,8 +671,9 @@ resource "aws_cloudfront_distribution" "content_distribution" {
 
 # WAF Web ACL for CloudFront
 resource "aws_wafv2_web_acl" "cloudfront_waf" {
-  name  = "cloudfront-security-waf"
-  scope = "CLOUDFRONT"
+  provider = aws.us_east_1
+  name     = "cloudfront-security-waf"
+  scope    = "CLOUDFRONT"
 
   default_action {
     allow {}
@@ -740,7 +741,7 @@ resource "aws_wafv2_web_acl" "cloudfront_waf" {
 
 # CloudWatch Log Group for VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flowlogs"
+  name              = "/aws/vpc/flowlogs-${var.environment_suffix}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.flow_logs_key.arn
 
@@ -848,7 +849,7 @@ resource "aws_instance" "web_server" {
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = base64encode(<<-EOF
+  user_data_base64 = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
     yum install -y httpd
