@@ -45,6 +45,9 @@ export class TapStack extends cdk.Stack {
       logEncryptionKey: kmsConstruct.logEncryptionKey,
     });
 
+    // Ensure NetworkConstruct waits for KmsConstruct to be fully created
+    networkConstruct.node.addDependency(kmsConstruct);
+
     // Output important resource information
     new cdk.CfnOutput(this, 'VpcId', {
       value: networkConstruct.vpc.vpcId,

@@ -78,9 +78,12 @@ export class NetworkConstruct extends Construct {
         'vpc'
       )}`,
       retention: RetentionDays.ONE_YEAR, // Retain logs for compliance
-      encryptionKey: props.logEncryptionKey,
+      encryptionKey: props.logEncryptionKey, // Now properly configured with permissions
       removalPolicy: RemovalPolicy.RETAIN,
     });
+
+    // Add explicit dependency to ensure KMS key is created before LogGroup
+    flowLogGroup.node.addDependency(props.logEncryptionKey);
 
     new FlowLog(this, 'VpcFlowLog', {
       resourceType: FlowLogResourceType.fromVpc(this.vpc),

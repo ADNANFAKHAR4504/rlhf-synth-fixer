@@ -2,6 +2,7 @@ import { Construct } from 'constructs';
 import { Key, KeyUsage, KeySpec } from 'aws-cdk-lib/aws-kms';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { TaggingUtils } from '../utils/tagging';
+import { PolicyDocument, PolicyStatement, Effect, AccountRootPrincipal, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 
 export interface KmsConstructProps {
   environment: string;
@@ -35,6 +36,18 @@ export class KmsConstruct extends Construct {
         props.service,
         'data-key'
       ),
+      // Add key policy for general data encryption
+      policy: new PolicyDocument({
+        statements: [
+          // Allow the account root user full access
+          new PolicyStatement({
+            effect: Effect.ALLOW,
+            principals: [new AccountRootPrincipal()],
+            actions: ['kms:*'],
+            resources: ['*'],
+          }),
+        ],
+      }),
     });
 
     // KMS Key for CloudTrail and CloudWatch logs encryption
@@ -49,6 +62,31 @@ export class KmsConstruct extends Construct {
         props.service,
         'log-key'
       ),
+      // Add key policy to allow CloudWatch Logs to use this key
+      policy: new PolicyDocument({
+        statements: [
+          // Allow the account root user full access
+          new PolicyStatement({
+            effect: Effect.ALLOW,
+            principals: [new AccountRootPrincipal()],
+            actions: ['kms:*'],
+            resources: ['*'],
+          }),
+          // Allow CloudWatch Logs to use this key for encryption
+          new PolicyStatement({
+            effect: Effect.ALLOW,
+            principals: [new ServicePrincipal('logs.amazonaws.com')],
+            actions: [
+              'kms:Encrypt*',
+              'kms:Decrypt*',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:Describe*',
+            ],
+            resources: ['*'],
+          }),
+        ],
+      }),
     });
 
     // KMS Key for database encryption
@@ -63,6 +101,18 @@ export class KmsConstruct extends Construct {
         props.service,
         'db-key'
       ),
+      // Add key policy for database encryption
+      policy: new PolicyDocument({
+        statements: [
+          // Allow the account root user full access
+          new PolicyStatement({
+            effect: Effect.ALLOW,
+            principals: [new AccountRootPrincipal()],
+            actions: ['kms:*'],
+            resources: ['*'],
+          }),
+        ],
+      }),
     });
 
     // Apply standard tags to all KMS keys
