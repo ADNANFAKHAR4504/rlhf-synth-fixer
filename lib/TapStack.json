@@ -37,7 +37,6 @@
                     },
                     "Parameters": [
                         "KMSKeyAlias",
-                        "CloudTrailBucketName",
                         "NotificationEmail",
                         "AllowedIPRanges",
                         "EnableGuardDuty",
@@ -87,9 +86,6 @@
                 },
                 "KMSKeyAlias": {
                     "default": "KMS Key Alias"
-                },
-                "CloudTrailBucketName": {
-                    "default": "CloudTrail Bucket Name"
                 },
                 "NotificationEmail": {
                     "default": "Notification Email"
@@ -208,12 +204,6 @@
             "AllowedPattern": "^[a-zA-Z0-9/_-]+$",
             "MinLength": 1,
             "MaxLength": 256
-        },
-        "CloudTrailBucketName": {
-            "Type": "String",
-            "Description": "S3 bucket name suffix for CloudTrail logs",
-            "Default": "cloudtrail-logs",
-            "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
         },
         "NotificationEmail": {
             "Type": "String",
@@ -1425,10 +1415,9 @@
         },
         "SecureS3Bucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-secure-bucket-${AWS::AccountId}-${AWS::StackName}"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
@@ -1571,10 +1560,9 @@
         "CloudTrailS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Condition": "EnableCloudTrailCondition",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-${CloudTrailBucketName}-${AWS::AccountId}-${AWS::StackName}"
-                },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
@@ -1965,13 +1953,7 @@
                     ]
                 },
                 "PubliclyAccessible": false,
-                "DeletionProtection": {
-                    "Fn::If": [
-                        "IsProductionEnvironment",
-                        true,
-                        false
-                    ]
-                }
+                "DeletionProtection": false
             }
         },
         "DynamoDBTable": {

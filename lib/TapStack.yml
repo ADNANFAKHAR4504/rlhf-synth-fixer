@@ -23,7 +23,6 @@ Metadata:
         Parameters:
           [
             KMSKeyAlias,
-            CloudTrailBucketName,
             NotificationEmail,
             AllowedIPRanges,
             EnableGuardDuty,
@@ -58,8 +57,6 @@ Metadata:
         default: 'Enable VPC Flow Logs'
       KMSKeyAlias:
         default: 'KMS Key Alias'
-      CloudTrailBucketName:
-        default: 'CloudTrail Bucket Name'
       NotificationEmail:
         default: 'Notification Email'
       AllowedIPRanges:
@@ -164,12 +161,6 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9/_-]+$'
     MinLength: 1
     MaxLength: 256
-
-  CloudTrailBucketName:
-    Type: String
-    Description: 'S3 bucket name suffix for CloudTrail logs'
-    Default: 'cloudtrail-logs'
-    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
 
   NotificationEmail:
     Type: String
@@ -745,8 +736,9 @@ Resources:
   ### S3 Buckets ###
   SecureS3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-secure-bucket-${AWS::AccountId}-${AWS::StackName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -819,8 +811,9 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Condition: EnableCloudTrailCondition
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-${CloudTrailBucketName}-${AWS::AccountId}-${AWS::StackName}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -1019,7 +1012,7 @@ Resources:
       BackupRetentionPeriod: !If [IsProductionEnvironment, 7, 1]
       MultiAZ: !If [IsProductionEnvironment, true, false]
       PubliclyAccessible: false
-      DeletionProtection: !If [IsProductionEnvironment, true, false]
+      DeletionProtection: false
 
   ### DynamoDB ###
   DynamoDBTable:

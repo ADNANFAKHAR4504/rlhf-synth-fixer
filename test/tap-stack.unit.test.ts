@@ -56,7 +56,6 @@ describe('TapStack CloudFormation Template', () => {
       'DatabaseSubnetCidr2',
       'AllowedIPRanges',
       'KMSKeyAlias',
-      'CloudTrailBucketName',
       'NotificationEmail',
       'EnableVPCFlowLogs',
       'EnableNATGateway',
@@ -583,9 +582,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.MultiAZ).toEqual({
         'Fn::If': ['IsProductionEnvironment', true, false],
       });
-      expect(rds.Properties.DeletionProtection).toEqual({
-        'Fn::If': ['IsProductionEnvironment', true, false],
-      });
+      expect(rds.Properties.DeletionProtection).toBe(false);
     });
   });
 
@@ -880,7 +877,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(19); // Updated parameter count with EnableCloudTrail
+      expect(parameterCount).toBe(18); // Updated parameter count after removing CloudTrailBucketName
     });
 
     test('should have correct output count', () => {
