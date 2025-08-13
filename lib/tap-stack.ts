@@ -362,8 +362,7 @@ systemctl restart httpd
     );
 
     // ECS Cluster with blue/green deployment capability
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _ecsCluster = new ecs.Cluster(
+    const ecsCluster = new ecs.Cluster(
       this,
       `CloudEnvECSCluster-${environmentSuffix}`,
       {
@@ -374,8 +373,7 @@ systemctl restart httpd
     );
 
     // CloudWatch Log Groups
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _appLogGroup = new logs.LogGroup(
+    const appLogGroup = new logs.LogGroup(
       this,
       `AppLogGroup-${environmentSuffix}`,
       {
@@ -385,8 +383,7 @@ systemctl restart httpd
       }
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _ecsLogGroup = new logs.LogGroup(
+    const ecsLogGroup = new logs.LogGroup(
       this,
       `ECSLogGroup-${environmentSuffix}`,
       {
@@ -509,30 +506,115 @@ systemctl restart httpd
     //   resourceArn: alb.loadBalancerArn,
     // });
 
-    // Stack outputs
+    // Stack outputs - providing both naming conventions for test compatibility
     new cdk.CfnOutput(this, `LoadBalancerDNS-${environmentSuffix}`, {
       value: alb.loadBalancerDnsName,
       description: 'Application Load Balancer DNS name',
+      exportName: `LoadBalancerDNS-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LoadBalancerDNS', {
+      value: alb.loadBalancerDnsName,
+      description: 'Application Load Balancer DNS name (alternate naming)',
+      exportName: `LoadBalancerDNS-alt-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, `DatabaseEndpoint-${environmentSuffix}`, {
       value: dbCluster.clusterEndpoint.hostname,
       description: 'RDS Aurora cluster endpoint',
+      exportName: `DatabaseEndpoint-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+      value: dbCluster.clusterEndpoint.hostname,
+      description: 'RDS Aurora cluster endpoint (alternate naming)',
+      exportName: `DatabaseEndpoint-alt-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, `S3BucketName-${environmentSuffix}`, {
       value: bucket.bucketName,
       description: 'S3 bucket name for application data',
+      exportName: `S3BucketName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: bucket.bucketName,
+      description: 'S3 bucket name for application data (alternate naming)',
+      exportName: `S3BucketName-alt-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, `CloudFrontDistribution-${environmentSuffix}`, {
       value: distribution.distributionDomainName,
       description: 'CloudFront distribution domain name',
+      exportName: `CloudFrontDistribution-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'CloudFrontDistribution', {
+      value: distribution.distributionDomainName,
+      description: 'CloudFront distribution domain name (alternate naming)',
+      exportName: `CloudFrontDistribution-alt-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, `EFSFileSystemId-${environmentSuffix}`, {
       value: fileSystem.fileSystemId,
       description: 'EFS file system ID',
+      exportName: `EFSFileSystemId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EFSFileSystemId', {
+      value: fileSystem.fileSystemId,
+      description: 'EFS file system ID (alternate naming)',
+      exportName: `EFSFileSystemId-alt-${environmentSuffix}`,
+    });
+
+    // Additional monitoring and cluster outputs
+    new cdk.CfnOutput(this, `ECSClusterName-${environmentSuffix}`, {
+      value: ecsCluster.clusterName,
+      description: 'ECS Cluster name',
+      exportName: `ECSClusterName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ECSClusterName', {
+      value: ecsCluster.clusterName,
+      description: 'ECS Cluster name (alternate naming)',
+      exportName: `ECSClusterName-alt-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, `CloudWatchDashboard-${environmentSuffix}`, {
+      value: dashboard.dashboardName,
+      description: 'CloudWatch Dashboard name',
+      exportName: `CloudWatchDashboard-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'CloudWatchDashboard', {
+      value: dashboard.dashboardName,
+      description: 'CloudWatch Dashboard name (alternate naming)',
+      exportName: `CloudWatchDashboard-alt-${environmentSuffix}`,
+    });
+
+    // Log Group outputs for monitoring
+    new cdk.CfnOutput(this, `AppLogGroup-${environmentSuffix}`, {
+      value: appLogGroup.logGroupName,
+      description: 'Application Log Group name',
+      exportName: `AppLogGroup-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'AppLogGroup', {
+      value: appLogGroup.logGroupName,
+      description: 'Application Log Group name (alternate naming)',
+      exportName: `AppLogGroup-alt-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, `ECSLogGroup-${environmentSuffix}`, {
+      value: ecsLogGroup.logGroupName,
+      description: 'ECS Log Group name',
+      exportName: `ECSLogGroup-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ECSLogGroup', {
+      value: ecsLogGroup.logGroupName,
+      description: 'ECS Log Group name (alternate naming)',
+      exportName: `ECSLogGroup-alt-${environmentSuffix}`,
     });
   }
 }
