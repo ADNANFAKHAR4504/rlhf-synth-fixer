@@ -8,6 +8,7 @@ Tests actual AWS resources created by the Pulumi stack.
 import unittest
 
 import boto3
+import pulumi
 from pulumi import automation
 from lib.tap_stack import TapStack, TapStackArgs
 
@@ -31,7 +32,8 @@ class TestTapStack(unittest.TestCase):
     stack = automation.create_or_select_stack(
       stack_name=cls.stack_name,
       project_name=cls.project_name,
-      program=pulumi_program
+      program=pulumi_program,
+      opts=automation.LocalWorkspaceOptions(secrets_provider="plaintext")
     )
 
     print("Deploying Pulumi stack...")
