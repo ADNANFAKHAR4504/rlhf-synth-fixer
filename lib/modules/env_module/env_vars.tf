@@ -21,8 +21,8 @@ locals {
 
   instance_type = {
     default = "t2.micro"
-    staging = "t3.micro"
-    production = "a1.large"
+    staging = "t3.small"
+    production = "t3.large"
   }
 
   as_group_desired = {

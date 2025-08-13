@@ -86,6 +86,39 @@ resource "aws_iam_role" "ec2_role" {
   tags = var.common_tags
 }
 
+# IAM Policy for accessing Secrets Manager
+resource "aws_iam_policy" "secrets_access" {
+  name        = "${var.environment}-${var.project_name}-secrets-access"
+  description = "Policy for accessing secrets"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = "arn:aws:secretsmanager:*:*:secret:${var.environment}/${var.project_name}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Resource = "arn:aws:ssm:*:*:parameter/${var.environment}/${var.project_name}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_secrets" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.secrets_access.arn
+}
 
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   role       = aws_iam_role.ec2_role.name
