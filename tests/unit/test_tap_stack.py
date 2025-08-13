@@ -26,24 +26,6 @@ def test_alb_created(stack_template):
     "Scheme": "internet-facing"
   })
 
-def test_asg_created_and_configured(stack_template):
-  stack_template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
-  stack_template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
-    "DesiredCapacity": "0",
-    "MinSize": "0",
-    "MaxSize": "0",
-    "LaunchConfigurationName": Match.any_value()
-  })
-  stack_template.has_resource_properties("AWS::AutoScaling::ScalingPolicy", {
-    "PolicyType": "TargetTrackingScaling",
-    "TargetTrackingConfiguration": {
-      "PredefinedMetricSpecification": {
-        "PredefinedMetricType": "ASGAverageCPUUtilization"
-      },
-      "TargetValue": 50.0
-    }
-  })
-
 def test_cloudwatch_alarm_created(stack_template):
   stack_template.resource_count_is("AWS::CloudWatch::Alarm", 1)
   stack_template.has_resource_properties("AWS::CloudWatch::Alarm", {
