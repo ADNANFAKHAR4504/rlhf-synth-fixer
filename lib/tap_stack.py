@@ -208,7 +208,7 @@ class TapStack(TerraformStack):
     self.bucket = S3Bucket(
       self,
       "tap_bucket",
-      bucket=f"secure-app-bucket-{region}-{construct_id.lower()}",
+      bucket=f"secure-app-bucket{construct_id.lower()}",
       tags={"Environment": "Production", "Name": "secure-app-bucket"},
     )
     S3BucketPublicAccessBlock(
@@ -268,7 +268,6 @@ class TapStack(TerraformStack):
       "db",
       identifier="secure-postgres-db",
       engine="postgres",
-      engine_version="15.4",
       instance_class="db.t3.micro",
       allocated_storage=20,
       storage_type="gp2",
