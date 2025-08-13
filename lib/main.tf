@@ -275,6 +275,35 @@ resource "aws_s3_bucket" "alb_logs" {
   tags   = local.common_tags
 }
 
+# Explicit dependency: allow ELB to write logs
+resource "aws_s3_bucket_policy" "alb_logs_policy" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AWSLogDeliveryWrite"
+        Effect    = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.alb_logs.arn}/*"
+      },
+      {
+        Sid       = "AWSLogDeliveryAclCheck"
+        Effect    = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action    = "s3:GetBucketAcl"
+        Resource  = aws_s3_bucket.alb_logs.arn
+      }
+    ]
+  })
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
   rule {
@@ -287,18 +316,21 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
 #########################
 # ALB + Target Group + Listener
 #########################
+# Application Load Balancer
 resource "aws_lb" "app_alb" {
-  name               = "${var.project}-${var.environment}-alb"
+  name               = lower("${var.project}-${var.environment}-alb")
+  internal           = false
   load_balancer_type = "application"
+  subnets            = [aws_subnet.public_1.id, aws_subnet.public_2.id]
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = aws_subnet.public[*].id
+
   access_logs {
     bucket  = aws_s3_bucket.alb_logs.bucket
     enabled = true
   }
-  tags = local.common_tags
-}
 
+  depends_on = [aws_s3_bucket_policy.alb_logs_policy] # Ensure bucket & policy exist first
+}
 resource "aws_lb_target_group" "app_tg" {
   name     = "${var.project}-${var.environment}-tg"
   port     = 80
