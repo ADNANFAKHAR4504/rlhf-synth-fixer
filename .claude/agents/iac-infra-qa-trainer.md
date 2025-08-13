@@ -106,9 +106,8 @@ in structure to the `lib/MODEL_RESPONSE.md`.
 - Verify solution meets requirements
 - Important!: Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
   - Dont forget to Fix them if they are failing.
-- Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the IDEAL_RESPONSE from the
-MODEL_RESPONSE. Do not mention the QA process. only focus in the infrastructure changes needed
-to fix the MODEL_RESPONSE.
+- Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the `lib/IDEAL_RESPONSE.md` from the
+initial `lib/MODEL_RESPONSE`. Do not mention the QA process. only focus in the infrastructure changes needed to fix the MODEL_RESPONSE.
 
 ### 6. Cleanup
 
