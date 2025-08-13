@@ -4,7 +4,10 @@ import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
-new TapStack(app, 'TapStack', {
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+
+new TapStack(app, stackName, {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-west-2',
