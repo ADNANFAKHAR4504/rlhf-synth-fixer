@@ -1,0 +1,1351 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'NovaModel Secure Infrastructure - Self-Contained and Parameterized CloudFormation Template for any environment.'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'prod'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod).'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters.'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: '10.0.0.0/16'
+    PublicSubnet1:
+      CIDR: '10.0.1.0/24'
+    PublicSubnet2:
+      CIDR: '10.0.2.0/24'
+    PrivateSubnet1:
+      CIDR: '10.0.11.0/24'
+    PrivateSubnet2:
+      CIDR: '10.0.12.0/24'
+
+Resources:
+  # =====================================
+  # Random Password Generation
+  # =====================================
+
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'novamodel-sec-${EnvironmentSuffix}-db-password-${AWS::StackName}'
+      Description: 'RDS Master Password'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  ApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'novamodel-sec-${EnvironmentSuffix}-api-key-${AWS::StackName}'
+      Description: API Gateway API Key
+      GenerateSecretString:
+        PasswordLength: 40
+        ExcludePunctuation: true
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  # =====================================
+  # VPC and Networking Resources
+  # =====================================
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-vpc'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-igw'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-public-subnet-1'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-public-subnet-2'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-private-subnet-1'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-private-subnet-2'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-nat-eip-1'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-nat-eip-2'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-nat-1'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-nat-2'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-public-rt'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-private-rt-1'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-private-rt-2'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # =====================================
+  # Security Groups
+  # =====================================
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-alb-sg'
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP from internet
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS from internet
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-alb-sg'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-ec2-sg'
+      GroupDescription: Security group for EC2 instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Allow HTTP from ALB
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Allow HTTPS from ALB
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-ec2-sg'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-rds-sg'
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: Allow MySQL from EC2 instances
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Allow MySQL from Lambda functions
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-rds-sg'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-lambda-sg'
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-lambda-sg'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  # =====================================
+  # KMS Keys
+  # =====================================
+
+  EBSKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for EBS volume encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key for EBS
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-ebs-kms'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  EBSKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/novamodel-sec-${EnvironmentSuffix}-ebs'
+      TargetKeyId: !Ref EBSKMSKey
+
+  # =====================================
+  # IAM Roles and Policies
+  # =====================================
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBWritePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                Resource: !GetAtt DynamoDBTable.Arn
+        - PolicyName: S3ReadPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource: !Sub '${S3DataBucket.Arn}/*'
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub '${S3DataBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                Resource: !GetAtt S3DataBucket.Arn
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*'
+        - PolicyName: SecretsManagerReadPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource:
+                  - !Ref DBPasswordSecret
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  CloudTrailServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudTrailLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !GetAtt CloudTrailLogGroup.Arn
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  # =====================================
+  # S3 Buckets
+  # =====================================
+
+  S3CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # FIX: Used a shorter, compliant naming scheme for global uniqueness.
+      BucketName: !Sub 'nm-sec-${EnvironmentSuffix}-ct-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-cloudtrail-bucket'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  S3CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt S3CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${S3CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  S3DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # FIX: Used a shorter, compliant naming scheme for global uniqueness.
+      BucketName: !Sub 'nm-sec-${EnvironmentSuffix}-data-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-data-bucket'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  # =====================================
+  # RDS Database
+  # =====================================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-db-subnet-${AWS::StackName}'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-db-subnet-group'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  SecretRDSAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBPasswordSecret
+      TargetId: !Ref RDSDatabase
+      TargetType: AWS::RDS::DBInstance
+
+  RDSDatabase:
+    Type: AWS::RDS::DBInstance
+    # FIX: Added UpdateReplacePolicy to protect against accidental deletion on replacement.
+    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Snapshot
+    Properties:
+      # FIX: Used a shorter name for the DB Identifier. Assumes one stack per env suffix.
+      DBInstanceIdentifier: !Sub 'novamodel-sec-${EnvironmentSuffix}-db'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.35'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      AllocatedStorage: 20
+      StorageType: gp3
+      StorageEncrypted: true
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      MultiAZ: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-mysql-db'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  # =====================================
+  # DynamoDB Table
+  # =====================================
+
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'novamodel-sec-${EnvironmentSuffix}-table-${AWS::StackName}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-dynamodb-table'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  # =====================================
+  # Lambda Function
+  # =====================================
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      # FIX: Replaced invalid AWS::StackId with AWS::StackName for naming.
+      FunctionName: !Sub 'novamodel-sec-${EnvironmentSuffix}-lambda-${AWS::StackName}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['DYNAMODB_TABLE_NAME'])
+
+          def lambda_handler(event, context):
+              try:
+                  # Process the incoming event
+                  item = {
+                      'id': context.aws_request_id,
+                      'timestamp': int(datetime.now().timestamp()),
+                      'event_data': json.dumps(event)
+                  }
+
+                  # Write to DynamoDB
+                  table.put_item(Item=item)
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'message': 'Data processed successfully'})
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref DynamoDBTable
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Timeout: 30
+      MemorySize: 256
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-lambda-function'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  # =====================================
+  # API Gateway
+  # =====================================
+
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'novamodel-sec-${EnvironmentSuffix}-api'
+      Description: !Sub 'Secure API Gateway for NovaModel (${EnvironmentSuffix})'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: process
+
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiGatewayMethod
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      Description: !Sub '${EnvironmentSuffix} deployment'
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: !Ref EnvironmentSuffix
+      RestApiId: !Ref ApiGatewayRestApi
+      DeploymentId: !Ref ApiGatewayDeployment
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  ApiGatewayUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ApiGatewayStage
+    Properties:
+      UsagePlanName: !Sub 'novamodel-sec-${EnvironmentSuffix}-usage-plan'
+      Description: !Sub 'Usage plan for ${EnvironmentSuffix} API'
+      ApiStages:
+        - ApiId: !Ref ApiGatewayRestApi
+          Stage: !Ref EnvironmentSuffix
+      Throttle:
+        BurstLimit: 500
+        RateLimit: 100
+      Quota:
+        Limit: 10000
+        Period: DAY
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  ApiGatewayApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub 'novamodel-sec-${EnvironmentSuffix}-api-key'
+      Description: !Sub 'API key for ${EnvironmentSuffix} API access'
+      Enabled: true
+      GenerateDistinctId: true
+      Tags:
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  ApiGatewayUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiGatewayApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiGatewayUsagePlan
+
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*/*'
+
+  # =====================================
+  # EC2 Instance
+  # =====================================
+
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub 'novamodel-sec-${EnvironmentSuffix}-lt-${AWS::StackName}'
+      LaunchTemplateData:
+        ImageId: ami-0c02fb55731490381 # Amazon Linux 2023 AMI in us-east-1
+        InstanceType: t3.micro
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !Ref EBSKMSKey
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: !Sub
+            - |
+              #!/bin/bash
+              yum update -y
+              yum install -y amazon-cloudwatch-agent aws-cli
+
+              # Install sample web server
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+
+              # Create health check endpoint
+              echo "OK" > /var/www/html/health
+
+              # Create sample index page
+              cat > /var/www/html/index.html <<EOF
+              <!DOCTYPE html>
+              <html>
+              <head>
+                  <title>NovaModel Secure Environment</title>
+              </head>
+              <body>
+                  <h1>NovaModel Secure Environment</h1>
+                  <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+                  <p>Environment: ${EnvSuffix}</p>
+                  <p>Project: NovaModelBreaking</p>
+              </body>
+              </html>
+              EOF
+
+              # Configure CloudWatch agent
+              cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+              {
+                "metrics": {
+                  "namespace": "NovaModel/${EnvSuffix}",
+                  "metrics_collected": {
+                    "cpu": {
+                      "measurement": [
+                        {"name": "cpu_usage_idle", "rename": "CPU_IDLE", "unit": "Percent"},
+                        {"name": "cpu_usage_iowait", "rename": "CPU_IOWAIT", "unit": "Percent"}
+                      ],
+                      "metrics_collection_interval": 60
+                    },
+                    "disk": {
+                      "measurement": [
+                        {"name": "used_percent", "rename": "DISK_USED", "unit": "Percent"}
+                      ],
+                      "metrics_collection_interval": 60,
+                      "resources": ["/"]
+                    },
+                    "mem": {
+                      "measurement": [
+                        {"name": "mem_used_percent", "rename": "MEM_USED", "unit": "Percent"}
+                      ],
+                      "metrics_collection_interval": 60
+                    }
+                  }
+                },
+                "logs": {
+                  "logs_collected": {
+                    "files": {
+                      "collect_list": [
+                        {
+                          "file_path": "/var/log/messages",
+                          "log_group_name": "/aws/ec2/novamodel-sec-${EnvSuffix}",
+                          "log_stream_name": "{instance_id}/messages"
+                        },
+                        {
+                          "file_path": "/var/log/httpd/access_log",
+                          "log_group_name": "/aws/ec2/novamodel-sec-${EnvSuffix}",
+                          "log_stream_name": "{instance_id}/httpd-access"
+                        },
+                        {
+                          "file_path": "/var/log/httpd/error_log",
+                          "log_group_name": "/aws/ec2/novamodel-sec-${EnvSuffix}",
+                          "log_stream_name": "{instance_id}/httpd-error"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+              EOF
+
+              # Start CloudWatch agent
+              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+            - { EnvSuffix: !Ref EnvironmentSuffix }
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-ec2-instance'
+              - Key: Project
+                Value: NovaModelBreaking
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+              - Key: Owner
+                Value: DevSecOpsTeam
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-ebs-volume'
+              - Key: Project
+                Value: NovaModelBreaking
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+              - Key: Owner
+                Value: DevSecOpsTeam
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+      SubnetId: !Ref PrivateSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-ec2-instance'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  # =====================================
+  # Application Load Balancer
+  # =====================================
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'novamodel-${EnvironmentSuffix}-alb-${AWS::StackName}'
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-alb'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'novamodel-${EnvironmentSuffix}-tg-${AWS::StackName}'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Targets:
+        - Id: !Ref EC2Instance
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-target-group'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  # =====================================
+  # CloudWatch Logs
+  # =====================================
+
+  CloudFormationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/cloudformation/novamodel-sec-${EnvironmentSuffix}-stack'
+      RetentionInDays: 30
+
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/novamodel-sec-${EnvironmentSuffix}'
+      RetentionInDays: 90
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # FIX: Replaced invalid AWS::StackId with AWS::StackName for naming.
+      LogGroupName: !Sub '/aws/lambda/novamodel-sec-${EnvironmentSuffix}-lambda-${AWS::StackName}'
+      RetentionInDays: 30
+
+  EC2LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/novamodel-sec-${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  # =====================================
+  # CloudTrail
+  # =====================================
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - S3CloudTrailBucketPolicy
+    Properties:
+      # FIX: Replaced invalid AWS::StackId with AWS::StackName for naming.
+      TrailName: !Sub 'novamodel-sec-${EnvironmentSuffix}-trail-${AWS::StackName}'
+      S3BucketName: !Ref S3CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - IncludeManagementEvents: true
+          ReadWriteType: All
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${S3DataBucket.Arn}/'
+            - Type: AWS::DynamoDB::Table
+              Values:
+                - !GetAtt DynamoDBTable.Arn
+            - Type: AWS::Lambda::Function
+              Values:
+                - !GetAtt LambdaFunction.Arn
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailServiceRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-trail'
+        - Key: Project
+          Value: NovaModelBreaking
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevSecOpsTeam
+
+# =====================================
+# Outputs
+# =====================================
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  ALBDNSName:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DNS'
+
+  ApiGatewayUrl:
+    Description: API Gateway URL
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-API-URL'
+
+  ApiKeyId:
+    Description: API Gateway API Key ID (retrieve the key value from Secrets Manager or the console)
+    # FIX: Corrected the reference to point to the actual ApiKey resource.
+    Value: !Ref ApiGatewayApiKey
+    Export:
+      Name: !Sub '${AWS::StackName}-API-KEY-ID'
+
+  S3DataBucketName:
+    Description: S3 Data Bucket Name
+    Value: !Ref S3DataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-DATA-BUCKET'
+
+  S3CloudTrailBucketName:
+    Description: S3 CloudTrail Bucket Name
+    Value: !Ref S3CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-CLOUDTRAIL-BUCKET'
+
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref DynamoDBTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DYNAMODB-TABLE'
+
+  RDSEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt RDSDatabase.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-ENDPOINT'
+
+  DBSecretArn:
+    Description: ARN of the secret containing RDS credentials
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-SECRET-ARN'
+
+  LambdaFunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LAMBDA-ARN'
+
+  CloudTrailArn:
+    Description: CloudTrail ARN
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CLOUDTRAIL-ARN'
+
+  EBSKMSKeyId:
+    Description: KMS Key ID for EBS Encryption
+    Value: !Ref EBSKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-EBS-KMS-KEY-ID'
+
+  EC2InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref EC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-INSTANCE-ID'
+
+  StackId:
+    Description: Stack ID for reference
+    Value: !Ref AWS::StackId
+    Export:
+      Name: !Sub '${AWS::StackName}-STACK-ID'
