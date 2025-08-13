@@ -215,7 +215,8 @@ class TapStack(pulumi.ComponentResource):
     # --- Lambda Function ---
     lambda_function = aws.lambda_.Function(
         f"handler-{self.environment_suffix}",
-        name=pulumi.Output.concat(project, "-handler-", self.environment_suffix),
+        name=pulumi.Output.concat(
+            project, "-handler-", self.environment_suffix),
         runtime="python3.9",
         role=lambda_role.arn,
         handler="handler.lambda_handler",
@@ -309,7 +310,8 @@ class TapStack(pulumi.ComponentResource):
     deployment = aws.apigateway.Deployment(
         f"api-deploy-{self.environment_suffix}",
         rest_api=rest_api.id,
-        description=pulumi.Output.concat("Deployment for ", self.environment_suffix),
+        description=pulumi.Output.concat(
+            "Deployment for ", self.environment_suffix),
         # Force a new deployment when routes/integrations change
         triggers={
             "redeploy-hash": pulumi.Output.all(
@@ -317,7 +319,10 @@ class TapStack(pulumi.ComponentResource):
             ).apply(lambda parts: "-".join(parts)),
         },
         opts=parent_opts.merge(
-            pulumi.ResourceOptions(depends_on=[proxy_integration, root_integration])
+            pulumi.ResourceOptions(
+                depends_on=[
+                    proxy_integration,
+                    root_integration])
         ),
     )
 
@@ -356,7 +361,8 @@ class TapStack(pulumi.ComponentResource):
         settings={
             "metrics_enabled": True,
             "logging_level": "INFO",  # OFF | ERROR | INFO
-            "data_trace_enabled": True,  # full request/response data (careful in prod)
+            # full request/response data (careful in prod)
+            "data_trace_enabled": True,
             "throttling_burst_limit": 5000,
             "throttling_rate_limit": 2000,
         },
