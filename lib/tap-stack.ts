@@ -417,6 +417,76 @@ export class TapStack extends cdk.Stack {
       },
     });
 
+    // 10. IAM Password Policy Setup via Lambda Function
+    // Using a Lambda function to set the IAM password policy directly
+    const passwordPolicyFunction = new lambda.Function(
+      this,
+      'PasswordPolicyFunction',
+      {
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: 'index.lambda_handler',
+        code: lambda.Code.fromInline(`
+import boto3
+import json
+
+def lambda_handler(event, context):
+    """Set IAM account password policy"""
+    try:
+        iam = boto3.client('iam')
+        
+        # Set account password policy
+        response = iam.update_account_password_policy(
+            MinimumPasswordLength=12,
+            RequireSymbols=True,
+            RequireNumbers=True,
+            RequireUppercaseCharacters=True,
+            RequireLowercaseCharacters=True,
+            AllowUsersToChangePassword=True,
+            MaxPasswordAge=90,
+            PasswordReusePrevention=24
+        )
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'IAM password policy updated successfully',
+                'response': response
+            })
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': str(e)
+            })
+        }
+      `),
+        timeout: cdk.Duration.minutes(5),
+        description: 'Lambda function to set IAM account password policy',
+      }
+    );
+
+    // Grant IAM permissions to the password policy function
+    passwordPolicyFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'iam:UpdateAccountPasswordPolicy',
+          'iam:GetAccountPasswordPolicy',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // Invoke the function after stack deployment
+    new cdk.CustomResource(this, 'PasswordPolicyCustomResource', {
+      serviceToken: passwordPolicyFunction.functionArn,
+      properties: {
+        // This will trigger the Lambda function during deployment
+        timestamp: new Date().toISOString(),
+      },
+    });
+
     // 11. SNS Topic for security notifications
     const securityTopic = new sns.Topic(this, 'SecurityNotificationsTopic', {
       topicName: `security-alerts-${environmentSuffix}`,

@@ -539,7 +539,7 @@ describe('TapStack Security Infrastructure', () => {
     });
   });
 
-  describe('Security Compliance Requirements (16 Total)', () => {
+  describe('Security Compliance Requirements (15 Total)', () => {
     test('Requirement 1: IAM roles follow least privilege', () => {
       const roles = template.findResources('AWS::IAM::Role');
       expect(Object.keys(roles).length).toBeGreaterThan(0);
