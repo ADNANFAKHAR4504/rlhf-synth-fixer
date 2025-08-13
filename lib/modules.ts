@@ -108,18 +108,23 @@ export function createHighAvailabilityVpc(
     tags: { Name: `${opts.namePrefix}-igw` },
   });
 
-  const publicSubnetIds: string[] = [];
-  const privateSubnetIds: string[] = [];
-
   // Create one NAT gateway per AZ for high availability
   const natEips: Eip[] = [];
   const natGateways: NatGateway[] = [];
 
+  const publicSubnetIds: string[] = [];
+  const privateSubnetIds: string[] = [];
+
   for (let i = 0; i < azCount; i++) {
     const az = Fn.element(azs.names, i);
+
+    const pubCidr = Fn.cidrsubnet(cidr, 4, i);
+
+    const privCidr = Fn.cidrsubnet(cidr, 4, i + azCount);
+
     const pubSubnet = new Subnet(stack, `${id}-pub-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: '10.217.10.0/27',
+      cidrBlock: pubCidr,
       availabilityZone: az,
       mapPublicIpOnLaunch: true,
       tags: { Name: `${opts.namePrefix}-public-${i}` },
@@ -127,7 +132,7 @@ export function createHighAvailabilityVpc(
 
     const privSubnet = new Subnet(stack, `${id}-priv-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: '10.217.10.128/26',
+      cidrBlock: privCidr,
       availabilityZone: az,
       mapPublicIpOnLaunch: false,
       tags: { Name: `${opts.namePrefix}-private-${i}` },
