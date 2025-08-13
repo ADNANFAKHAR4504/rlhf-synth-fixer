@@ -85,6 +85,7 @@ def test_rds_database_instance_created(stack_template):
       "DBInstanceClass": "db.t3.micro"
   })
 
+
 def test_db_subnet_group_created(stack_template):
   """Verifies that the database subnet group is created and configured for private subnets."""
   stack_template.resource_count_is("AWS::RDS::DBSubnetGroup", 1)
@@ -92,13 +93,26 @@ def test_db_subnet_group_created(stack_template):
       "SubnetIds": Match.any_value()
   })
   
-  # Check that the ASG is associated with a security group that can connect to the DB
+def test_asg_created_and_configured(stack_template):
+  """Verifies the Auto Scaling Group has the correct configuration, including a security group."""
+  stack_template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
   stack_template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
-      "VPCZoneIdentifier": Match.any_value(),
-      "LaunchConfigurationName": Match.any_value(),
-      "SecurityGroups": Match.any_value()
+    "DesiredCapacity": "1",
+    "MinSize": "1",
+    "MaxSize": "3",
+    "LaunchConfigurationName": Match.any_value(),
+    "SecurityGroups": [Match.any_value()], # Now correctly checks for the presence of a security group
+    "VPCZoneIdentifier": Match.any_value()
   })
-
+  stack_template.has_resource_properties("AWS::AutoScaling::ScalingPolicy", {
+    "PolicyType": "TargetTrackingScaling",
+    "TargetTrackingConfiguration": {
+      "PredefinedMetricSpecification": {
+        "PredefinedMetricType": "ASGAverageCPUUtilization"
+      },
+      "TargetValue": 50.0
+    }
+  })
 
 def test_s3_bucket_created_with_correct_removal_policy(stack_template):
   # Verifies the S3 bucket exists.
