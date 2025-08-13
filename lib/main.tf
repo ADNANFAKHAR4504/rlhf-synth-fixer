@@ -367,7 +367,7 @@ resource "aws_autoscaling_group" "app_asg" {
 # RDS MySQL Multi-AZ
 #########################
 resource "aws_db_subnet_group" "rds_subnets" {
-  name       = "${var.project}-${var.environment}-rds-subnet-group"
+  name       = lower("${var.project}-${var.environment}-rds-subnet-group")
   subnet_ids = aws_subnet.private[*].id
   tags       = local.common_tags
 }
