@@ -1,5 +1,4 @@
 import { Construct } from 'constructs';
-// FIX: Removed 'App' as it was unused in this file.
 import { TerraformStack, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
@@ -25,43 +24,50 @@ import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-sec
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
+// FIX: Added a second AZ and subnet CIDR for the DB subnets
 interface RegionConfig {
   readonly region: string;
   readonly vpcCidr: string;
   readonly publicSubnetCidr: string;
   readonly privateSubnetCidr: string;
-  readonly dbSubnetCidr: string;
-  readonly az: string;
+  readonly dbSubnetACidr: string;
+  readonly dbSubnetBCidr: string;
+  readonly azA: string;
+  readonly azB: string;
 }
 
+// FIX: Updated region configs with info for a second AZ.
 const REGION_CONFIGS: RegionConfig[] = [
   {
     region: 'us-east-1',
     vpcCidr: '10.1.0.0/16',
     publicSubnetCidr: '10.1.1.0/24',
     privateSubnetCidr: '10.1.2.0/24',
-    dbSubnetCidr: '10.1.3.0/24',
-    az: 'us-east-1a',
+    dbSubnetACidr: '10.1.3.0/24',
+    dbSubnetBCidr: '10.1.4.0/24',
+    azA: 'us-east-1a',
+    azB: 'us-east-1b',
   },
   {
     region: 'us-west-2',
     vpcCidr: '10.2.0.0/16',
     publicSubnetCidr: '10.2.1.0/24',
     privateSubnetCidr: '10.2.2.0/24',
-    dbSubnetCidr: '10.2.3.0/24',
-    az: 'us-west-2a',
+    dbSubnetACidr: '10.2.3.0/24',
+    dbSubnetBCidr: '10.2.4.0/24',
+    azA: 'us-west-2a',
+    azB: 'us-west-2b',
   },
   {
     region: 'eu-central-1',
     vpcCidr: '10.3.0.0/16',
     publicSubnetCidr: '10.3.1.0/24',
     privateSubnetCidr: '10.3.2.0/24',
-    dbSubnetCidr: '10.3.3.0/24',
-    az: 'eu-central-1a',
+    dbSubnetACidr: '10.3.3.0/24',
+    dbSubnetBCidr: '10.3.4.0/24',
+    azA: 'eu-central-1a',
+    azB: 'eu-central-1b',
   },
 ];
 
@@ -75,7 +81,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // --- Add Providers ---
     new RandomProvider(this, 'random');
 
     const providers = new Map<string, AwsProvider>();
@@ -91,7 +96,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
 
     const centralProvider = providers.get('us-east-1')!;
 
-    // --- Centralized Logging S3 Bucket (in us-east-1) ---
     const centralLogBucket = new S3Bucket(this, 'CentralLogBucket', {
       provider: centralProvider,
       bucket: `securecore-central-logs-${Fn.substr(Fn.uuid(), 0, 8)}`,
@@ -132,54 +136,13 @@ export class MultiRegionSecurityStack extends TerraformStack {
       targetPrefix: 'log-bucket-access/',
     });
 
-    // --- IAM Role for VPC Flow Logs ---
-    const flowLogsRole = new IamRole(this, 'FlowLogsRole', {
-      provider: centralProvider,
-      name: 'vpc-flow-logs-s3-role',
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: { Service: 'vpc-flow-logs.amazonaws.com' },
-          },
-        ],
-      }),
-    });
+    // FIX: Removed the IAM role and policy for Flow Logs as they are not needed for S3 destinations.
 
-    const flowLogsPolicy = new IamPolicy(this, 'FlowLogsPolicy', {
-      provider: centralProvider,
-      name: 'vpc-flow-logs-s3-policy',
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: [
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-              'logs:DescribeLogStreams',
-            ],
-            Effect: 'Allow',
-            Resource: '*',
-          },
-        ],
-      }),
-    });
-
-    new IamRolePolicyAttachment(this, 'FlowLogsRoleAttachment', {
-      provider: centralProvider,
-      role: flowLogsRole.name,
-      policyArn: flowLogsPolicy.arn,
-    });
-
-    // --- Multi-Region Resource Loop ---
     for (const config of REGION_CONFIGS) {
       const regionProvider = providers.get(config.region)!;
 
       const tags = { ...COMMON_TAGS, Region: config.region };
 
-      // --- Networking ---
       const vpc = new Vpc(this, `VPC-${config.region}`, {
         provider: regionProvider,
         cidrBlock: config.vpcCidr,
@@ -198,7 +161,7 @@ export class MultiRegionSecurityStack extends TerraformStack {
         provider: regionProvider,
         vpcId: vpc.id,
         cidrBlock: config.publicSubnetCidr,
-        availabilityZone: config.az,
+        availabilityZone: config.azA,
         mapPublicIpOnLaunch: true,
         tags: { ...tags, Name: `public-subnet-${config.region}` },
       });
@@ -220,18 +183,28 @@ export class MultiRegionSecurityStack extends TerraformStack {
         provider: regionProvider,
         vpcId: vpc.id,
         cidrBlock: config.privateSubnetCidr,
-        availabilityZone: config.az,
+        availabilityZone: config.azA,
         mapPublicIpOnLaunch: false,
         tags: { ...tags, Name: `private-subnet-${config.region}` },
       });
 
-      const dbSubnet = new Subnet(this, `DbSubnet-${config.region}`, {
+      // FIX: Create two DB subnets in different AZs.
+      const dbSubnetA = new Subnet(this, `DbSubnetA-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
-        cidrBlock: config.dbSubnetCidr,
-        availabilityZone: config.az,
+        cidrBlock: config.dbSubnetACidr,
+        availabilityZone: config.azA,
         mapPublicIpOnLaunch: false,
-        tags: { ...tags, Name: `db-subnet-${config.region}` },
+        tags: { ...tags, Name: `db-subnet-a-${config.region}` },
+      });
+
+      const dbSubnetB = new Subnet(this, `DbSubnetB-${config.region}`, {
+        provider: regionProvider,
+        vpcId: vpc.id,
+        cidrBlock: config.dbSubnetBCidr,
+        availabilityZone: config.azB,
+        mapPublicIpOnLaunch: false,
+        tags: { ...tags, Name: `db-subnet-b-${config.region}` },
       });
 
       const publicRouteTable = new RouteTable(
@@ -281,9 +254,15 @@ export class MultiRegionSecurityStack extends TerraformStack {
         vpcId: vpc.id,
         tags: { ...tags, Name: `db-rt-${config.region}` },
       });
-      new RouteTableAssociation(this, `DbRTA-${config.region}`, {
+      // Associate DB route table with both DB subnets
+      new RouteTableAssociation(this, `DbRTAA-${config.region}`, {
         provider: regionProvider,
-        subnetId: dbSubnet.id,
+        subnetId: dbSubnetA.id,
+        routeTableId: dbRouteTable.id,
+      });
+      new RouteTableAssociation(this, `DbRTAB-${config.region}`, {
+        provider: regionProvider,
+        subnetId: dbSubnetB.id,
         routeTableId: dbRouteTable.id,
       });
 
@@ -343,13 +322,13 @@ export class MultiRegionSecurityStack extends TerraformStack {
         toPort: 0,
       });
 
+      // FIX: Removed the iamRoleArn from the FlowLog resource.
       new FlowLog(this, `FlowLog-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
         trafficType: 'ALL',
         logDestinationType: 's3',
         logDestination: centralLogBucket.arn,
-        iamRoleArn: flowLogsRole.arn,
         tags: { ...tags, Name: `flow-log-${config.region}` },
       });
 
@@ -379,13 +358,14 @@ export class MultiRegionSecurityStack extends TerraformStack {
         }
       );
 
+      // FIX: Pass both DB subnet IDs to the subnet group.
       const dbSubnetGroup = new DbSubnetGroup(
         this,
         `DbSubnetGroup-${config.region}`,
         {
           provider: regionProvider,
           name: `db-subnet-group-${config.region}`,
-          subnetIds: [dbSubnet.id],
+          subnetIds: [dbSubnetA.id, dbSubnetB.id],
           tags: { ...tags, Name: `db-subnet-group-${config.region}` },
         }
       );
