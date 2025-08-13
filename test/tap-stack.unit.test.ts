@@ -1,74 +1,251 @@
 import fs from 'fs';
 import path from 'path';
 
-const stack = { region: process.env.AWS_REGION || 'us-east-1' };
-
 describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If you're testing a yaml template, run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Load the JSON template converted from YAML
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('TurnAroundPromptTable should be queryable', async () => {
-      const tableName =
-        template.Resources.TurnAroundPromptTable.Properties.TableName;
-      expect(tableName).toBeDefined();
-      expect(typeof tableName['Fn::Sub']).toBe('string');
+  describe('Template Structure', () => {
+    test('template should have correct format version', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('TurnAroundPromptTable should have correct capacity settings', async () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    test('template should have proper description', () => {
+      expect(template.Description).toContain('IaC - AWS Nova Model Breaking');
+      expect(template.Description).toContain('Secure AWS Environment');
+    });
+  });
+
+  describe('Region Validation', () => {
+    test('should have region validation condition', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.IsUSWest2).toBeDefined();
+      expect(template.Conditions.IsUSWest2['Fn::Equals']).toEqual([
+        { 'Ref': 'AWS::Region' },
+        'us-west-2'
+      ]);
     });
 
-    test('TurnAroundPromptTable should have proper key structure', async () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-      const attributes = table.Properties.AttributeDefinitions;
+    test('should have region validation resource', () => {
+      expect(template.Resources.RegionValidation).toBeDefined();
+      expect(template.Resources.RegionValidation.Type).toBe('AWS::CloudFormation::WaitConditionHandle');
+      expect(template.Resources.RegionValidation.Condition).toBe('IsUSWest2');
+    });
+  });
 
-      // Verify primary key setup
-      expect(keySchema).toBeDefined();
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+  describe('KMS Key Configuration', () => {
+    test('S3EncryptionKey should be properly configured', () => {
+      const key = template.Resources.S3EncryptionKey;
+      expect(key).toBeDefined();
+      expect(key.Type).toBe('AWS::KMS::Key');
+      expect(key.Properties.Description).toContain('KMS Key for S3 bucket encryption');
+    });
 
-      // Verify attribute definitions match key schema
-      expect(attributes).toBeDefined();
-      expect(attributes).toHaveLength(1);
-      const idAttribute = attributes.find(
-        (attr: any) => attr.AttributeName === 'id'
-      );
-      expect(idAttribute).toBeDefined();
-      expect(idAttribute.AttributeType).toBe('S');
-    }); // ✅ FIXED: closed the test block properly
+    test('KMS key should have proper policy with least privilege', () => {
+      const key = template.Resources.S3EncryptionKey;
+      const policy = key.Properties.KeyPolicy;
+      expect(policy.Version).toBe('2012-10-17');
+      expect(policy.Statement).toHaveLength(4); // Admin, S3 Service, EC2 Role, Lambda Role
+    });
 
-    test('S3 event notification should be configured', () => {
-      template.hasResourceProperties('AWS::S3::BucketNotification', {
-        NotificationConfiguration: {
-          LambdaConfigurations: [
-            {
-              Event: 's3:ObjectCreated:*',
-            },
-          ],
-        },
+    test('should have KMS key alias', () => {
+      const alias = template.Resources.S3EncryptionKeyAlias;
+      expect(alias).toBeDefined();
+      expect(alias.Type).toBe('AWS::KMS::Alias');
+      expect(alias.Properties.TargetKeyId).toEqual({ 'Ref': 'S3EncryptionKey' });
+    });
+  });
+
+  describe('S3 Bucket Configuration', () => {
+    test('MainS3Bucket should have proper security configuration', () => {
+      const bucket = template.Resources.MainS3Bucket;
+      expect(bucket).toBeDefined();
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      
+      const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
+      expect(publicAccess.BlockPublicAcls).toBe(true);
+      expect(publicAccess.BlockPublicPolicy).toBe(true);
+      expect(publicAccess.IgnorePublicAcls).toBe(true);
+      expect(publicAccess.RestrictPublicBuckets).toBe(true);
+    });
+
+    test('MainS3Bucket should have encryption enabled', () => {
+      const bucket = template.Resources.MainS3Bucket;
+      const encryption = bucket.Properties.BucketEncryption;
+      expect(encryption).toBeDefined();
+      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({ 'Ref': 'S3EncryptionKey' });
+    });
+
+    test('MainS3Bucket should have access logging configured', () => {
+      const bucket = template.Resources.MainS3Bucket;
+      const logging = bucket.Properties.LoggingConfiguration;
+      expect(logging).toBeDefined();
+      expect(logging.DestinationBucketName).toEqual({ 'Ref': 'S3AccessLogsBucket' });
+      expect(logging.LogFilePrefix).toBe('main-bucket-access-logs/');
+    });
+
+    test('S3AccessLogsBucket should be properly configured', () => {
+      const logsBucket = template.Resources.S3AccessLogsBucket;
+      expect(logsBucket).toBeDefined();
+      expect(logsBucket.Type).toBe('AWS::S3::Bucket');
+      
+      const publicAccess = logsBucket.Properties.PublicAccessBlockConfiguration;
+      expect(publicAccess.BlockPublicAcls).toBe(true);
+      expect(publicAccess.BlockPublicPolicy).toBe(true);
+      expect(publicAccess.IgnorePublicAcls).toBe(true);
+      expect(publicAccess.RestrictPublicBuckets).toBe(true);
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('SSHSecurityGroup should allow only SSH on port 22', () => {
+      const sg = template.Resources.SSHSecurityGroup;
+      expect(sg).toBeDefined();
+      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+      
+      const ingressRules = sg.Properties.SecurityGroupIngress;
+      expect(ingressRules).toHaveLength(1);
+      expect(ingressRules[0].IpProtocol).toBe('tcp');
+      expect(ingressRules[0].FromPort).toBe(22);
+      expect(ingressRules[0].ToPort).toBe(22);
+      expect(ingressRules[0].CidrIp).toBe('203.0.113.0/24');
+    });
+
+    test('SSHSecurityGroup should have minimal egress rules', () => {
+      const sg = template.Resources.SSHSecurityGroup;
+      const egressRules = sg.Properties.SecurityGroupEgress;
+      expect(egressRules).toHaveLength(2);
+      
+      // Check for HTTP and HTTPS outbound only
+      const httpRule = egressRules.find((rule: any) => rule.FromPort === 80);
+      const httpsRule = egressRules.find((rule: any) => rule.FromPort === 443);
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
+    });
+  });
+
+  describe('IAM Roles - Least Privilege', () => {
+    test('EC2InstanceRole should have minimal S3 permissions', () => {
+      const role = template.Resources.EC2InstanceRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      const policies = role.Properties.Policies;
+      expect(policies).toHaveLength(2); // S3 policy and logs policy
+      
+      const s3Policy = policies.find((p: any) => p.PolicyName.includes('s3-policy'));
+      expect(s3Policy).toBeDefined();
+      
+      const s3Statements = s3Policy.PolicyDocument.Statement;
+      expect(s3Statements).toHaveLength(3); // Object actions, List bucket, KMS
+    });
+
+    test('LambdaExecutionRole should have minimal permissions', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      const managedPolicies = role.Properties.ManagedPolicyArns;
+      expect(managedPolicies).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
+      
+      const policies = role.Properties.Policies;
+      expect(policies).toHaveLength(1); // Only S3 read policy
+    });
+
+    test('should have EC2 instance profile', () => {
+      const profile = template.Resources.EC2InstanceProfile;
+      expect(profile).toBeDefined();
+      expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
+      expect(profile.Properties.Roles).toEqual([{ 'Ref': 'EC2InstanceRole' }]);
+    });
+  });
+
+  describe('VPC and Networking', () => {
+    test('VPC should have proper CIDR and DNS settings', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    test('PublicSubnet should be in us-west-2a', () => {
+      const subnet = template.Resources.PublicSubnet;
+      expect(subnet).toBeDefined();
+      expect(subnet.Type).toBe('AWS::EC2::Subnet');
+      expect(subnet.Properties.AvailabilityZone).toBe('us-west-2a');
+      expect(subnet.Properties.CidrBlock).toBe('10.0.1.0/24');
+    });
+
+    test('should have internet gateway and routing configured', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.InternetGatewayAttachment).toBeDefined();
+      expect(template.Resources.PublicRouteTable).toBeDefined();
+      expect(template.Resources.DefaultPublicRoute).toBeDefined();
+      expect(template.Resources.PublicSubnetRouteTableAssociation).toBeDefined();
+    });
+  });
+
+  describe('CloudWatch Logs', () => {
+    test('ApplicationLogGroup should be properly configured', () => {
+      const logGroup = template.Resources.ApplicationLogGroup;
+      expect(logGroup).toBeDefined();
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.RetentionInDays).toBe(30);
+    });
+  });
+
+  describe('Template Outputs', () => {
+    test('should have all required outputs', () => {
+      const outputs = template.Outputs;
+      expect(outputs).toBeDefined();
+      
+      const requiredOutputs = [
+        'VPCId', 'PublicSubnetId', 'SSHSecurityGroupId', 
+        'MainS3BucketName', 'MainS3BucketArn', 
+        'EC2InstanceRoleArn', 'EC2InstanceProfileArn', 
+        'LambdaExecutionRoleArn', 'KMSKeyId', 'KMSKeyArn'
+      ];
+      
+      requiredOutputs.forEach(outputName => {
+        expect(outputs[outputName]).toBeDefined();
+        expect(outputs[outputName].Description).toBeDefined();
+        expect(outputs[outputName].Value).toBeDefined();
+        expect(outputs[outputName].Export).toBeDefined();
       });
     });
+  });
 
-    test('Stack should be in us-east-1 region', () => {
-      expect(stack.region).toBe('us-east-1');
-    });
-
-    test('Required outputs should be exported', () => {
-      template.hasOutput('SourceBucketName', {});
-      template.hasOutput('ProcessedBucketName', {});
-      template.hasOutput('ImageProcessorFunctionArn', {});
-      template.hasOutput('ImageProcessorRoleArn', {});
+  describe('Resource Tagging', () => {
+    test('all resources should have proper tags', () => {
+      const resourcesWithTags = [
+        'S3EncryptionKey', 'S3AccessLogsBucket', 'MainS3Bucket',
+        'VPC', 'InternetGateway', 'PublicSubnet', 'PublicRouteTable',
+        'SSHSecurityGroup', 'EC2InstanceRole', 'LambdaExecutionRole',
+        'ApplicationLogGroup'
+      ];
+      
+      resourcesWithTags.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.Properties.Tags).toBeDefined();
+        
+        const tags = resource.Properties.Tags;
+        const nameTag = tags.find((tag: any) => tag.Key === 'Name');
+        const projectTag = tags.find((tag: any) => tag.Key === 'Project');
+        const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+        
+        expect(nameTag).toBeDefined();
+        expect(projectTag).toBeDefined();
+        expect(envTag).toBeDefined();
+      });
     });
   });
 });
