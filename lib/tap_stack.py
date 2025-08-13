@@ -10,7 +10,7 @@ import pulumi_aws as aws
 config = pulumi.Config()
 
 ENVIRONMENT = config.get("environment") or "dev"
-AWS_REGION = "us-east-1"
+AWS_REGION = "us-west-2"
 INSTANCE_TYPE = "t3.micro"
 PROJECT_NAME = "dswa-v5"
 
