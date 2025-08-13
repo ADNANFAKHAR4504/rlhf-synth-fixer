@@ -34,20 +34,8 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have ExternalAccountId parameter', () => {
-      expect(template.Parameters.ExternalAccountId).toBeDefined();
-    });
-
-    test('ExternalAccountId parameter should have correct properties', () => {
-      const externalAccountParam = template.Parameters.ExternalAccountId;
-      expect(externalAccountParam.Type).toBe('String');
-      expect(externalAccountParam.Description).toBe(
-        'AWS Account ID of the trusted external partner for cross-account access'
-      );
-      expect(externalAccountParam.AllowedPattern).toBe('[0-9]{12}');
-      expect(externalAccountParam.ConstraintDescription).toBe(
-        'Must be a valid 12-digit AWS Account ID'
-      );
+    test('should have no parameters (template is self-contained)', () => {
+      expect(template.Parameters).toBeUndefined();
     });
   });
 
@@ -199,9 +187,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBe(5);
     });
 
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+    test('should have no parameters', () => {
+      expect(template.Parameters).toBeUndefined();
     });
 
     test('should have exactly four outputs', () => {

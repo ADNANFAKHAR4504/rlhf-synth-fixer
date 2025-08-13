@@ -1,14 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Gold Standard Secure S3 Bucket with comprehensive security controls and compliance features",
-    "Parameters": {
-        "ExternalAccountId": {
-            "Type": "String",
-            "Description": "AWS Account ID of the trusted external partner for cross-account access",
-            "AllowedPattern": "[0-9]{12}",
-            "ConstraintDescription": "Must be a valid 12-digit AWS Account ID"
-        }
-    },
     "Resources": {
         "S3EncryptionKey": {
             "Type": "AWS::KMS::Key",

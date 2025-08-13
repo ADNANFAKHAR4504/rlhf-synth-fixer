@@ -37,7 +37,12 @@ The TapStack template has been updated to implement a "gold standard" secure S3 
    - Account-level access control
 
 ### ✅ Issues Found and Resolved During Deployment
-1. **Invalid NotificationConfiguration**: 
+1. **Unused ExternalAccountId Parameter**: 
+   - Issue: Template had a required ExternalAccountId parameter that was not being used, causing validation errors and lint warnings
+   - Resolution: Removed the unused parameter entirely since cross-account access was not needed
+   - Impact: Template now validates successfully without any lint warnings or deployment errors
+
+2. **Invalid NotificationConfiguration**: 
    - Issue: CloudWatchConfigurations is not a valid CloudFormation property for S3 buckets
    - Resolution: Removed the invalid notification configuration
    - Impact: Template now validates correctly
