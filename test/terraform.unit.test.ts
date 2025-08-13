@@ -1,5 +1,5 @@
 import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from '../lib';
 
 describe('Stack Structure', () => {
   let app: App;
