@@ -12,9 +12,9 @@ resource "aws_vpc" "main" {
     Name = "${var.environment}-${var.organization_name}-vpc"
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # Internet Gateway
@@ -25,9 +25,9 @@ resource "aws_internet_gateway" "main" {
     Name = "${var.environment}-${var.organization_name}-igw"
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # Subnets
@@ -64,7 +64,7 @@ data "aws_availability_zones" "available" {
 # KMS Module
 module "kms" {
   source = "./modules/kms"
-  
+
   environment       = var.environment
   organization_name = var.organization_name
 }
@@ -72,39 +72,39 @@ module "kms" {
 # IAM Module
 module "iam" {
   source = "./modules/iam"
-  
+
   environment       = var.environment
   organization_name = var.organization_name
-  kms_key_arn      = module.kms.key_arn
+  kms_key_arn       = module.kms.key_arn
 }
 
 # Security Groups Module
 module "security_groups" {
   source = "./modules/security-groups"
-  
+
   environment         = var.environment
   organization_name   = var.organization_name
-  vpc_id             = aws_vpc.main.id
+  vpc_id              = aws_vpc.main.id
   allowed_cidr_blocks = var.allowed_cidr_blocks
 }
 
 # S3 Module
 module "s3" {
   source = "./modules/s3"
-  
+
   environment       = var.environment
   organization_name = var.organization_name
-  kms_key_arn      = module.kms.key_arn
+  kms_key_arn       = module.kms.key_arn
 }
 
 # CloudTrail Module
 module "cloudtrail" {
   source = "./modules/cloudtrail"
-  
+
   environment       = var.environment
   organization_name = var.organization_name
-  s3_bucket_name   = module.s3.cloudtrail_bucket_name
-  kms_key_arn      = module.kms.key_arn
+  s3_bucket_name    = module.s3.cloudtrail_bucket_name
+  kms_key_arn       = module.kms.key_arn
 }
 
 # Route Tables

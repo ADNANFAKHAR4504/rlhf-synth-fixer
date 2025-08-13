@@ -2,13 +2,13 @@
 resource "aws_iam_account_password_policy" "strict" {
   minimum_password_length        = 14
   require_lowercase_characters   = true
-  require_numbers               = true
+  require_numbers                = true
   require_uppercase_characters   = true
-  require_symbols               = true
+  require_symbols                = true
   allow_users_to_change_password = true
-  max_password_age              = 90
-  password_reuse_prevention     = 12
-  hard_expiry                   = true
+  max_password_age               = 90
+  password_reuse_prevention      = 12
+  hard_expiry                    = true
 }
 
 # IAM Role for EC2 instances (least privilege)
@@ -28,9 +28,9 @@ resource "aws_iam_role" "ec2_role" {
     ]
   })
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # IAM Policy for EC2 role (minimal permissions)
@@ -85,9 +85,9 @@ resource "aws_iam_role" "cloudtrail_role" {
     ]
   })
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # Example IAM User with MFA enforcement
@@ -95,9 +95,9 @@ resource "aws_iam_user" "example_user" {
   name = "${var.environment}-${var.organization_name}-user"
   path = "/"
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # IAM Policy to enforce MFA

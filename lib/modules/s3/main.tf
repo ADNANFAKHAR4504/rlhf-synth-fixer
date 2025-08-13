@@ -2,9 +2,9 @@
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${var.environment}-${var.organization_name}-cloudtrail-logs-${random_string.bucket_suffix.result}"
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 
   tags = {
     Name    = "${var.environment}-${var.organization_name}-cloudtrail-logs"
@@ -80,16 +80,16 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.environment}-${var.organization_name}-cloudtrail"
           }
         }
       },
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.cloudtrail.arn,
           "${aws_s3_bucket.cloudtrail.arn}/*"
@@ -108,9 +108,9 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 resource "aws_s3_bucket" "app_data" {
   bucket = "${var.environment}-${var.organization_name}-app-data-${random_string.app_bucket_suffix.result}"
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 
   tags = {
     Name    = "${var.environment}-${var.organization_name}-app-data"

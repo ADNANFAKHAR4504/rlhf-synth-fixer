@@ -47,9 +47,9 @@ resource "aws_kms_key" "main" {
     Name = "${var.environment}-${var.organization_name}-kms-key"
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 resource "aws_kms_alias" "main" {

@@ -51,16 +51,6 @@ resource "aws_cloudtrail" "main" {
     read_write_type                  = "All"
     include_management_events        = true
     exclude_management_event_sources = []
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
-    }
-
-    data_resource {
-      type   = "AWS::Lambda::Function"
-      values = ["arn:aws:lambda:*"]
-    }
   }
 
   # Enable encryption using KMS
@@ -88,25 +78,25 @@ resource "aws_cloudtrail" "main" {
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_policy]
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # CloudWatch Log Group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/${var.environment}-${var.organization_name}"
   retention_in_days = 90
-  kms_key_id        = var.kms_key_arn
+  # kms_key_id        = var.kms_key_arn
 
   tags = {
     Name        = "${var.environment}-${var.organization_name}-cloudtrail-logs"
     Environment = var.environment
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # IAM role for CloudTrail to write to CloudWatch Logs
@@ -136,6 +126,7 @@ resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
     Version = "2012-10-17"
     Statement = [
       {
+        Effect = "Allow"
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",

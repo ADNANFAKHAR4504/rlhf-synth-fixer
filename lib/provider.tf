@@ -10,13 +10,13 @@ terraform {
 
 provider "aws" {
   region = var.primary_region
-  
+
   default_tags {
     tags = {
-      Environment   = var.environment
-      Organization  = "FinancialServices"
-      ManagedBy     = "Terraform"
-      Compliance    = "SOX-PCI-DSS"
+      Environment  = var.environment
+      Organization = "FinancialServices"
+      ManagedBy    = "Terraform"
+      Compliance   = "SOX-PCI-DSS"
     }
   }
 }
@@ -24,13 +24,13 @@ provider "aws" {
 provider "aws" {
   alias  = "secondary"
   region = var.secondary_region
-  
+
   default_tags {
     tags = {
-      Environment   = var.environment
-      Organization  = "FinancialServices"
-      ManagedBy     = "Terraform"
-      Compliance    = "SOX-PCI-DSS"
+      Environment  = var.environment
+      Organization = "FinancialServices"
+      ManagedBy    = "Terraform"
+      Compliance   = "SOX-PCI-DSS"
     }
   }
 }
