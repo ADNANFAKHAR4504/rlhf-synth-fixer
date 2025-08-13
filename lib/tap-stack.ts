@@ -19,6 +19,7 @@ import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy'; // FIX: Import S3BucketPolicy
 import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
@@ -133,6 +134,34 @@ export class MultiRegionSecurityStack extends TerraformStack {
       bucket: centralLogBucket.id,
       targetBucket: centralLogBucket.id,
       targetPrefix: 'log-bucket-access/',
+    });
+
+    // FIX: Add a bucket policy to allow the log delivery service to write to the bucket.
+    new S3BucketPolicy(this, 'CentralLogBucketPolicy', {
+      provider: centralProvider,
+      bucket: centralLogBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSLogDeliveryWrite',
+            Effect: 'Allow',
+            Principal: { Service: 'delivery.logs.amazonaws.com' },
+            Action: 's3:PutObject',
+            Resource: `${centralLogBucket.arn}/*`,
+            Condition: {
+              StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
+            },
+          },
+          {
+            Sid: 'AWSLogDeliveryAclCheck',
+            Effect: 'Allow',
+            Principal: { Service: 'delivery.logs.amazonaws.com' },
+            Action: 's3:GetBucketAcl',
+            Resource: centralLogBucket.arn,
+          },
+        ],
+      }),
     });
 
     for (const config of REGION_CONFIGS) {
@@ -330,7 +359,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
       const dbPassword = new Password(this, `DBPassword-${config.region}`, {
         length: 16,
         special: true,
-        // FIX: Removed characters forbidden by RDS ('/', '@', '"')
         overrideSpecial: '_-.',
       });
 
