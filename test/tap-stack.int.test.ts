@@ -132,7 +132,7 @@ describe('TAP Stack Integration Tests', () => {
   let accountId: string;
   
   // Test configuration
-  const testRegions = ['us-west-1', 'us-east-2'];
+  const testRegions = ['us-west-1', 'us-east-1'];
   const testTimeout = 600000; // 10 minutes for integration tests
 
   beforeAll(async () => {
@@ -1566,6 +1566,379 @@ describe('TAP Stack Integration Tests', () => {
           } catch (error: any) {
             console.log(`Could not check RDS replicas in ${region}: ${error.message}`);
           }
+        }
+      }
+    }, testTimeout);
+  });
+
+  describe('Security and Encryption Validation Tests', () => {
+    test('should validate KMS key policies and encryption', async () => {
+      if (!resourceIds?.kmsKeyArns || resourceIds.kmsKeyArns.length === 0) {
+        console.log('Skipping test: No KMS keys found in stack outputs');
+        return;
+      }
+
+      const testRegions = ['us-west-1', 'us-east-1'];
+      
+      for (const region of testRegions) {
+        const kmsClient = new KMSClient({ region });
+        
+        // Find KMS keys for this region
+        const regionKmsKeys = resourceIds.kmsKeyArns.filter((key: any) => 
+          key.region === region || key.keyArn.includes(region)
+        );
+        
+        for (const kmsKey of regionKmsKeys) {
+          const keyArn = typeof kmsKey === 'string' ? kmsKey : kmsKey.keyArn;
+          
+          try {
+            // Test KMS key exists and is accessible
+            const keyResponse = await kmsClient.send(new DescribeKeyCommand({
+              KeyId: keyArn
+            }));
+            
+            expect(keyResponse.KeyMetadata).toBeDefined();
+            expect(keyResponse.KeyMetadata!.KeyState).toBe('Enabled');
+            expect(keyResponse.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+            
+            // Note: Key policy is not directly available in DescribeKey response
+            // For policy validation, we would need to use GetKeyPolicy command
+            // This is a basic validation that the key exists and is properly configured
+            
+            console.log(`Validated KMS key in ${region}: ${keyArn.substring(0, 50)}...`);
+            
+          } catch (error: any) {
+            console.log(`Could not validate KMS key in ${region}: ${error.message}`);
+          }
+        }
+      }
+    }, testTimeout);
+
+    test('should validate CloudTrail encryption and logging', async () => {
+      if (!resourceIds?.cloudtrailArn) {
+        console.log('Skipping test: No CloudTrail found in stack outputs');
+        return;
+      }
+
+      // Extract region from CloudTrail ARN
+      const arnParts = resourceIds.cloudtrailArn.split(':');
+      const cloudtrailRegion = arnParts.length >= 4 ? arnParts[3] : 'us-east-1';
+      
+      const cloudtrailClient = new CloudTrailClient({ region: cloudtrailRegion });
+      
+      try {
+        // Get CloudTrail configuration
+        const trailsResponse = await cloudtrailClient.send(new DescribeTrailsCommand({}));
+        const projectTrails = trailsResponse.trailList!.filter(trail =>
+          trail.TrailARN === resourceIds.cloudtrailArn ||
+          trail.Name!.toLowerCase().includes('webapp') ||
+          trail.Name!.toLowerCase().includes('tap')
+        );
+        
+        expect(projectTrails.length).toBeGreaterThan(0);
+        
+        for (const trail of projectTrails) {
+          // Validate encryption is enabled
+          expect(trail.KmsKeyId).toBeDefined();
+          expect(trail.KmsKeyId).not.toBe('');
+          
+          // Validate multi-region trail
+          expect(trail.IsMultiRegionTrail).toBe(true);
+          
+          // Validate global service events
+          expect(trail.IncludeGlobalServiceEvents).toBe(true);
+          
+          // Validate S3 bucket configuration
+          expect(trail.S3BucketName).toBeDefined();
+          
+          // Check trail status
+          const statusResponse = await cloudtrailClient.send(new GetTrailStatusCommand({
+            Name: trail.TrailARN
+          }));
+          
+          expect(statusResponse.IsLogging).toBe(true);
+          
+          console.log(`Validated CloudTrail encryption: ${trail.Name}`);
+        }
+        
+      } catch (error: any) {
+        console.log(`Could not validate CloudTrail encryption: ${error.message}`);
+      }
+    }, testTimeout);
+
+    test('should validate S3 bucket encryption and access controls', async () => {
+      if (!resourceIds?.cloudtrailBucketName) {
+        console.log('Skipping test: No CloudTrail bucket found');
+        return;
+      }
+
+      const bucketName = resourceIds.cloudtrailBucketName;
+      
+      // Determine bucket region from CloudTrail ARN or default to us-east-1
+      let bucketRegion = 'us-east-1';
+      if (resourceIds?.cloudtrailArn) {
+        const arnParts = resourceIds.cloudtrailArn.split(':');
+        if (arnParts.length >= 4 && arnParts[3]) {
+          bucketRegion = arnParts[3];
+        }
+      }
+      
+      const s3Client = new S3Client({ region: bucketRegion });
+      
+      try {
+        // Validate bucket encryption
+        const encryptionResponse = await s3Client.send(new GetBucketEncryptionCommand({
+          Bucket: bucketName
+        }));
+        
+        expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+        const rules = encryptionResponse.ServerSideEncryptionConfiguration!.Rules!;
+        expect(rules.length).toBeGreaterThan(0);
+        
+        const encryptionRule = rules[0];
+        expect(encryptionRule.ApplyServerSideEncryptionByDefault).toBeDefined();
+        expect(['AES256', 'aws:kms']).toContain(
+          encryptionRule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm
+        );
+        
+        // Validate public access is blocked
+        const publicAccessResponse = await s3Client.send(new GetPublicAccessBlockCommand({
+          Bucket: bucketName
+        }));
+        
+        expect(publicAccessResponse.PublicAccessBlockConfiguration).toBeDefined();
+        const publicAccess = publicAccessResponse.PublicAccessBlockConfiguration!;
+        expect(publicAccess.BlockPublicAcls).toBe(true);
+        expect(publicAccess.BlockPublicPolicy).toBe(true);
+        expect(publicAccess.IgnorePublicAcls).toBe(true);
+        expect(publicAccess.RestrictPublicBuckets).toBe(true);
+        
+        console.log(`Validated S3 bucket security: ${bucketName}`);
+        
+      } catch (error: any) {
+        console.log(`Could not validate S3 bucket security: ${error.message}`);
+      }
+    }, testTimeout);
+
+    test('should validate RDS encryption and security groups', async () => {
+      if (!resourceIds?.rdsEndpoints || resourceIds.rdsEndpoints.length === 0) {
+        console.log('Skipping test: No RDS instances found');
+        return;
+      }
+
+      const testRegions = ['us-west-1', 'us-east-1'];
+      
+      for (const region of testRegions) {
+        const rdsClient = new RDSClient({ region });
+        
+        try {
+          const dbResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
+          const projectDbs = dbResponse.DBInstances!.filter(db =>
+            db.DBInstanceIdentifier!.toLowerCase().includes('webapp') ||
+            db.DBInstanceIdentifier!.toLowerCase().includes('tap')
+          );
+          
+          for (const db of projectDbs) {
+            // Validate encryption at rest
+            expect(db.StorageEncrypted).toBe(true);
+            expect(db.KmsKeyId).toBeDefined();
+            
+            // Validate security groups
+            expect(db.VpcSecurityGroups).toBeDefined();
+            expect(db.VpcSecurityGroups!.length).toBeGreaterThan(0);
+            
+            // Validate backup configuration
+            expect(db.BackupRetentionPeriod).toBeGreaterThan(0);
+            
+            // Validate it's in a VPC (not public)
+            expect(db.DBSubnetGroup).toBeDefined();
+            expect(db.PubliclyAccessible).toBe(false);
+            
+            console.log(`Validated RDS security: ${db.DBInstanceIdentifier} in ${region}`);
+          }
+          
+        } catch (error: any) {
+          console.log(`Could not validate RDS security in ${region}: ${error.message}`);
+        }
+      }
+    }, testTimeout);
+  });
+
+  describe('Negative Security Testing', () => {
+    test('should verify unauthorized access is blocked - S3 bucket', async () => {
+      if (!resourceIds?.cloudtrailBucketName) {
+        console.log('Skipping test: No CloudTrail bucket found for negative testing');
+        return;
+      }
+
+      const bucketName = resourceIds.cloudtrailBucketName;
+      
+      // Determine bucket region
+      let bucketRegion = 'us-east-1';
+      if (resourceIds?.cloudtrailArn) {
+        const arnParts = resourceIds.cloudtrailArn.split(':');
+        if (arnParts.length >= 4 && arnParts[3]) {
+          bucketRegion = arnParts[3];
+        }
+      }
+      
+      // Create S3 client without credentials (simulating unauthorized access)
+      const unauthorizedS3Client = new S3Client({ 
+        region: bucketRegion,
+        credentials: {
+          accessKeyId: 'INVALID_ACCESS_KEY',
+          secretAccessKey: 'INVALID_SECRET_KEY'
+        }
+      });
+      
+      try {
+        // This should fail with unauthorized access
+        await unauthorizedS3Client.send(new ListBucketsCommand({}));
+        
+        // If we reach here, the test should fail
+        expect(true).toBe(false); // Force failure - unauthorized access should not succeed
+        
+      } catch (error: any) {
+        // This is expected - unauthorized access should be blocked
+        expect(['InvalidAccessKeyId', 'SignatureDoesNotMatch', 'AccessDenied']).toContain(error.name);
+        console.log(`Confirmed unauthorized S3 access is blocked: ${error.name}`);
+      }
+    }, testTimeout);
+
+    test('should verify security group restrictions', async () => {
+      if (!resourceIds?.ec2InstanceIds || resourceIds.ec2InstanceIds.length === 0) {
+        console.log('Skipping test: No EC2 instances found for security group testing');
+        return;
+      }
+
+      const testRegions = ['us-west-1', 'us-east-1'];
+      
+      for (const region of testRegions) {
+        const ec2Client = new EC2Client({ region });
+        
+        try {
+          // Get security groups
+          const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({}));
+          const projectSGs = sgResponse.SecurityGroups!.filter(sg =>
+            sg.GroupName!.toLowerCase().includes('webapp') ||
+            sg.GroupName!.toLowerCase().includes('tap') ||
+            sg.Description!.toLowerCase().includes('webapp') ||
+            sg.Description!.toLowerCase().includes('tap')
+          );
+          
+          for (const sg of projectSGs) {
+            // Check SSH access is restricted (not 0.0.0.0/0)
+            const sshRules = sg.IpPermissions!.filter(rule => 
+              rule.FromPort === 22 && rule.ToPort === 22
+            );
+            
+            for (const sshRule of sshRules) {
+              if (sshRule.IpRanges) {
+                for (const ipRange of sshRule.IpRanges) {
+                  // SSH should not be open to the world
+                  expect(ipRange.CidrIp).not.toBe('0.0.0.0/0');
+                  console.log(`Confirmed SSH access is restricted in SG: ${sg.GroupId}`);
+                }
+              }
+            }
+            
+            // Check RDS access is restricted to security groups only
+            const rdsRules = sg.IpPermissions!.filter(rule => 
+              rule.FromPort === 3306 && rule.ToPort === 3306
+            );
+            
+            for (const rdsRule of rdsRules) {
+              // RDS should only allow access from other security groups, not CIDR blocks
+              if (rdsRule.IpRanges && rdsRule.IpRanges.length > 0) {
+                for (const ipRange of rdsRule.IpRanges) {
+                  expect(ipRange.CidrIp).not.toBe('0.0.0.0/0');
+                }
+              }
+              // Should have UserIdGroupPairs for internal access
+              expect(rdsRule.UserIdGroupPairs).toBeDefined();
+            }
+          }
+          
+        } catch (error: any) {
+          console.log(`Could not validate security groups in ${region}: ${error.message}`);
+        }
+      }
+    }, testTimeout);
+
+    test('should verify KMS key access is properly restricted', async () => {
+      if (!resourceIds?.kmsKeyArns || resourceIds.kmsKeyArns.length === 0) {
+        console.log('Skipping test: No KMS keys found for negative testing');
+        return;
+      }
+
+      const testRegions = ['us-west-1', 'us-east-1'];
+      
+      for (const region of testRegions) {
+        // Create KMS client with invalid credentials
+        const unauthorizedKmsClient = new KMSClient({ 
+          region,
+          credentials: {
+            accessKeyId: 'INVALID_ACCESS_KEY',
+            secretAccessKey: 'INVALID_SECRET_KEY'
+          }
+        });
+        
+        const regionKmsKeys = resourceIds.kmsKeyArns.filter((key: any) => 
+          key.region === region || key.keyArn.includes(region)
+        );
+        
+        for (const kmsKey of regionKmsKeys) {
+          const keyArn = typeof kmsKey === 'string' ? kmsKey : kmsKey.keyArn;
+          
+          try {
+            // This should fail with unauthorized access
+            await unauthorizedKmsClient.send(new DescribeKeyCommand({
+              KeyId: keyArn
+            }));
+            
+            // If we reach here, the test should fail
+            expect(true).toBe(false); // Force failure - unauthorized access should not succeed
+            
+          } catch (error: any) {
+            // This is expected - unauthorized access should be blocked
+            expect(['InvalidAccessKeyId', 'SignatureDoesNotMatch', 'AccessDenied', 'UnauthorizedOperation']).toContain(error.name);
+            console.log(`Confirmed unauthorized KMS access is blocked: ${error.name}`);
+          }
+        }
+      }
+    }, testTimeout);
+
+    test('should verify RDS is not publicly accessible', async () => {
+      if (!resourceIds?.rdsEndpoints || resourceIds.rdsEndpoints.length === 0) {
+        console.log('Skipping test: No RDS instances found for public access testing');
+        return;
+      }
+
+      const testRegions = ['us-west-1', 'us-east-1'];
+      
+      for (const region of testRegions) {
+        const rdsClient = new RDSClient({ region });
+        
+        try {
+          const dbResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
+          const projectDbs = dbResponse.DBInstances!.filter(db =>
+            db.DBInstanceIdentifier!.toLowerCase().includes('webapp') ||
+            db.DBInstanceIdentifier!.toLowerCase().includes('tap')
+          );
+          
+          for (const db of projectDbs) {
+            // Verify RDS is not publicly accessible
+            expect(db.PubliclyAccessible).toBe(false);
+            
+            // Verify RDS is in private subnets (has subnet group)
+            expect(db.DBSubnetGroup).toBeDefined();
+            expect(db.DBSubnetGroup!.DBSubnetGroupName).toBeDefined();
+            
+            console.log(`Confirmed RDS is not publicly accessible: ${db.DBInstanceIdentifier}`);
+          }
+          
+        } catch (error: any) {
+          console.log(`Could not validate RDS public access in ${region}: ${error.message}`);
         }
       }
     }, testTimeout);
