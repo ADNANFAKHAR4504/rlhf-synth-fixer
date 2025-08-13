@@ -42,12 +42,15 @@ Mappings:
       DynamoDBBillingMode: PROVISIONED
       S3StorageClass: STANDARD_IA
 
+Conditions:
+  IsProductionEnvironment: !Equals [!Ref Environment, 'production']
+  IsDevelopmentEnvironment: !Equals [!Ref Environment, 'development']
+  IsTestingEnvironment: !Equals [!Ref Environment, 'testing']
+
 Resources:
   # =====================================================
   # S3 BUCKETS
   # =====================================================
-  
-  # Environment-specific S3 bucket
   EnvironmentS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -67,16 +70,15 @@ Resources:
         Rules:
           - Id: TransitionToIA
             Status: Enabled
-            Transition:
-              StorageClass: !FindInMap [EnvironmentConfig, !Ref Environment, S3StorageClass]
-              TransitionInDays: 30
+            Transitions:
+              - StorageClass: !FindInMap [EnvironmentConfig, !Ref Environment, S3StorageClass]
+                TransitionInDays: 30
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Application
           Value: !Ref ApplicationName
 
-  # Centralized shared configuration bucket (only created once)
   SharedConfigBucket:
     Type: AWS::S3::Bucket
     Condition: IsProductionEnvironment
@@ -102,8 +104,6 @@ Resources:
   # =====================================================
   # DYNAMODB TABLES
   # =====================================================
-  
-  # Environment-specific DynamoDB table
   EnvironmentDynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -119,12 +119,10 @@ Resources:
           KeyType: HASH
         - AttributeName: timestamp
           KeyType: RANGE
-      ProvisionedThroughput:
-        !If
-          - IsProductionEnvironment
-          - ReadCapacityUnits: 10
-            WriteCapacityUnits: 10
-          - !Ref AWS::NoValue
+      ProvisionedThroughput: !If
+        - IsProductionEnvironment
+        - { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+        - !Ref AWS::NoValue
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: !If [IsProductionEnvironment, true, false]
       SSESpecification:
@@ -138,8 +136,6 @@ Resources:
   # =====================================================
   # IAM ROLES AND POLICIES
   # =====================================================
-  
-  # Application execution role
   ApplicationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -162,7 +158,6 @@ Resources:
         - Key: Application
           Value: !Ref ApplicationName
 
-  # Environment-specific S3 access policy
   EnvironmentS3Policy:
     Type: AWS::IAM::Policy
     Properties:
@@ -177,8 +172,8 @@ Resources:
               - s3:DeleteObject
               - s3:ListBucket
             Resource:
-              - !Sub '${EnvironmentS3Bucket}/*'
-              - !GetAtt EnvironmentS3Bucket.Arn
+              - !Sub 'arn:aws:s3:::${EnvironmentS3Bucket}'
+              - !Sub 'arn:aws:s3:::${EnvironmentS3Bucket}/*'
           - Effect: Allow
             Action:
               - s3:GetObject
@@ -186,16 +181,15 @@ Resources:
             Resource:
               - !If
                 - IsProductionEnvironment
-                - !Sub '${SharedConfigBucket}/*'
-                - !Sub 'arn:aws:s3:::${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}/*'
+                - !Sub 'arn:aws:s3:::${SharedConfigBucket}'
+                - !Sub 'arn:aws:s3:::${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}'
               - !If
                 - IsProductionEnvironment
-                - !GetAtt SharedConfigBucket.Arn
-                - !Sub 'arn:aws:s3:::${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}'
+                - !Sub 'arn:aws:s3:::${SharedConfigBucket}/*'
+                - !Sub 'arn:aws:s3:::${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}/*'
       Roles:
         - !Ref ApplicationExecutionRole
 
-  # Environment-specific DynamoDB access policy
   EnvironmentDynamoDBPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -212,17 +206,9 @@ Resources:
               - dynamodb:Query
               - dynamodb:Scan
             Resource: !GetAtt EnvironmentDynamoDBTable.Arn
-          - Effect: Deny
-            Action:
-              - dynamodb:*
-            Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ApplicationName}-*'
-            Condition:
-              StringNotEquals:
-                'dynamodb:TableName': !Sub '${ApplicationName}-${Environment}-data'
       Roles:
         - !Ref ApplicationExecutionRole
 
-  # CloudWatch logs policy
   CloudWatchLogsPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -240,7 +226,6 @@ Resources:
       Roles:
         - !Ref ApplicationExecutionRole
 
-  # SSM Parameter Store policy
   SSMParameterPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -265,7 +250,6 @@ Resources:
       Roles:
         - !Ref ApplicationExecutionRole
 
-  # Instance profile for EC2 instances
   ApplicationInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -276,8 +260,6 @@ Resources:
   # =====================================================
   # CLOUDWATCH LOG GROUPS
   # =====================================================
-  
-  # Application log group
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -289,7 +271,6 @@ Resources:
         - Key: Application
           Value: !Ref ApplicationName
 
-  # Performance monitoring log group
   PerformanceLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -301,7 +282,6 @@ Resources:
         - Key: Application
           Value: !Ref ApplicationName
 
-  # Resource utilization log group
   ResourceUtilizationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -316,8 +296,6 @@ Resources:
   # =====================================================
   # SSM PARAMETER STORE
   # =====================================================
-  
-  # Database connection string (encrypted)
   DatabaseConnectionParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -330,26 +308,26 @@ Resources:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
 
-  # API configuration (encrypted)
   APIConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '/${ApplicationName}/${Environment}/api/config'
       Type: SecureString
-      Value: !Sub |
-        {
-          "timeout": 30,
-          "retries": 3,
-          "environment": "${Environment}",
-          "log_level": "${Environment == 'production' && 'INFO' || 'DEBUG'}"
-        }
+      Value: !Sub
+        - |
+          {
+            "timeout": 30,
+            "retries": 3,
+            "environment": "${Environment}",
+            "log_level": "${LogLevel}"
+          }
+        - LogLevel: !If [IsProductionEnvironment, "INFO", "DEBUG"]
       KeyId: !Ref KMSKeyId
       Description: !Sub 'API configuration for ${Environment} environment'
       Tags:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
 
-  # S3 bucket configuration
   S3ConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -361,7 +339,6 @@ Resources:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
 
-  # Shared configuration bucket parameter
   SharedConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -376,7 +353,6 @@ Resources:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
 
-  # Application secrets (encrypted)
   ApplicationSecretsParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -389,25 +365,10 @@ Resources:
         Environment: !Ref Environment
         Application: !Ref ApplicationName
 
-# =====================================================
-# CONDITIONS
-# =====================================================
-
-Conditions:
-  IsProductionEnvironment: !Equals [!Ref Environment, 'production']
-  IsDevelopmentEnvironment: !Equals [!Ref Environment, 'development']
-  IsTestingEnvironment: !Equals [!Ref Environment, 'testing']
-
-# =====================================================
-# OUTPUTS
-# =====================================================
-
 Outputs:
   EnvironmentS3Bucket:
     Description: Environment-specific S3 bucket name
     Value: !Ref EnvironmentS3Bucket
-    Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket'
 
   SharedConfigBucket:
     Description: Shared configuration S3 bucket name
@@ -415,35 +376,23 @@ Outputs:
       - IsProductionEnvironment
       - !Ref SharedConfigBucket
       - !Sub '${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}'
-    Export:
-      Name: !Sub '${AWS::StackName}-SharedConfigBucket'
 
   DynamoDBTableName:
     Description: Environment-specific DynamoDB table name
     Value: !Ref EnvironmentDynamoDBTable
-    Export:
-      Name: !Sub '${AWS::StackName}-DynamoDBTable'
 
   ApplicationExecutionRoleArn:
     Description: ARN of the application execution role
     Value: !GetAtt ApplicationExecutionRole.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-ExecutionRoleArn'
 
   ApplicationLogGroupName:
     Description: CloudWatch log group name for application logs
     Value: !Ref ApplicationLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-LogGroup'
 
   SSMParameterPrefix:
     Description: SSM Parameter Store prefix for this environment
     Value: !Sub '/${ApplicationName}/${Environment}/'
-    Export:
-      Name: !Sub '${AWS::StackName}-SSMPrefix'
 
   InstanceProfileArn:
     Description: Instance profile ARN for EC2 instances
     Value: !GetAtt ApplicationInstanceProfile.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-InstanceProfile'

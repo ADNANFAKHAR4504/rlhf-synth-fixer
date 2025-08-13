@@ -1,9 +1,7 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
@@ -14,197 +12,171 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  // 1. Validate Parameters
+  test('Parameters should be correctly defined with expected defaults and allowed values', () => {
+    expect(template.Parameters.Environment.Type).toBe('String');
+    expect(template.Parameters.Environment.Default).toBe('development');
+    expect(template.Parameters.Environment.AllowedValues).toEqual(['development', 'testing', 'production']);
+
+    expect(template.Parameters.ApplicationName.Type).toBe('String');
+    expect(template.Parameters.ApplicationName.Default).toBe('webapp');
+
+    expect(template.Parameters.KMSKeyId.Type).toBe('String');
+    expect(template.Parameters.KMSKeyId.Default).toBe('alias/aws/ssm');
+
+    expect(template.Parameters.LogRetentionDays.Type).toBe('Number');
+    expect(template.Parameters.LogRetentionDays.AllowedValues).toContain(30);
+  });
+
+  // 2. Validate Mappings presence and keys
+  test('Mappings "EnvironmentConfig" should contain all environments with required keys', () => {
+    const mapping = template.Mappings.EnvironmentConfig;
+    expect(mapping).toBeDefined();
+
+    ['development', 'testing', 'production'].forEach(env => {
+      expect(mapping[env]).toHaveProperty('LogRetention');
+      expect(mapping[env]).toHaveProperty('DynamoDBBillingMode');
+      expect(mapping[env]).toHaveProperty('S3StorageClass');
     });
   });
 
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+  // 3. Validate Conditions are correct
+  test('Conditions for environment checks should be defined properly', () => {
+    const cond = template.Conditions;
+
+    expect(cond.IsProductionEnvironment).toEqual({
+      'Fn::Equals': [{ Ref: 'Environment' }, 'production'],
     });
 
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
+    expect(cond.IsDevelopmentEnvironment).toEqual({
+      'Fn::Equals': [{ Ref: 'Environment' }, 'development'],
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-  });
-
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    expect(cond.IsTestingEnvironment).toEqual({
+      'Fn::Equals': [{ Ref: 'Environment' }, 'testing'],
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
+  // 4. Validate Resources
+  test('EnvironmentS3Bucket resource should have correct properties', () => {
+    const bucket = template.Resources.EnvironmentS3Bucket;
+    expect(bucket.Type).toBe('AWS::S3::Bucket');
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
+    const props = bucket.Properties;
+    expect(props.BucketName['Fn::Sub']).toMatch(/\${ApplicationName}-\${Environment}-\${AWS::AccountId}-\${AWS::Region}/);
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
+    expect(props.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+    expect(props.VersioningConfiguration.Status).toBe('Enabled');
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
+    // Check LifecycleConfiguration rules for transition
+    const transitionRule = props.LifecycleConfiguration.Rules.find((rule: { Id: string; }) => rule.Id === 'TransitionToIA');
+    expect(transitionRule).toBeDefined();
+    expect(transitionRule.Status).toBe('Enabled');
+    expect(transitionRule.Transitions[0].StorageClass['Fn::FindInMap'][0]).toBe('EnvironmentConfig');
+  });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+  test('SharedConfigBucket should have Condition "IsProductionEnvironment"', () => {
+    const sharedBucket = template.Resources.SharedConfigBucket;
+    expect(sharedBucket.Condition).toBe('IsProductionEnvironment');
+  });
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
+  test('EnvironmentDynamoDBTable has correct key schema and provisioned throughput conditional on environment', () => {
+    const dynamo = template.Resources.EnvironmentDynamoDBTable;
+    expect(dynamo.Type).toBe('AWS::DynamoDB::Table');
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    const { KeySchema, AttributeDefinitions } = dynamo.Properties;
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    expect(KeySchema).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ AttributeName: 'id', KeyType: 'HASH' }),
+        expect.objectContaining({ AttributeName: 'timestamp', KeyType: 'RANGE' }),
+      ])
+    );
+
+    expect(AttributeDefinitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ AttributeName: 'id', AttributeType: 'S' }),
+        expect.objectContaining({ AttributeName: 'timestamp', AttributeType: 'N' }),
+      ])
+    );
+
+    // ProvisionedThroughput should be conditional
+    expect(dynamo.Properties.ProvisionedThroughput).toEqual({
+      'Fn::If': [
+        'IsProductionEnvironment',
+        { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
+        { Ref: 'AWS::NoValue' },
+      ],
     });
   });
 
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
+  test('IAM Role has correct AssumeRolePolicyDocument and ManagedPolicyArns', () => {
+    const role = template.Resources.ApplicationExecutionRole;
+    expect(role.Type).toBe('AWS::IAM::Role');
 
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
+    const assumePolicy = role.Properties.AssumeRolePolicyDocument.Statement[0];
+    expect(assumePolicy.Effect).toBe('Allow');
+    expect(assumePolicy.Principal.Service).toEqual(
+      expect.arrayContaining(['ec2.amazonaws.com', 'lambda.amazonaws.com', 'ecs-tasks.amazonaws.com'])
+    );
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
+    expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy');
+  });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
+  test('IAM Policies are attached to the ApplicationExecutionRole', () => {
+    const s3Policy = template.Resources.EnvironmentS3Policy;
+    expect(s3Policy.Properties.Roles).toEqual([ { Ref: 'ApplicationExecutionRole' } ]);
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
+    const dynamoPolicy = template.Resources.EnvironmentDynamoDBPolicy;
+    expect(dynamoPolicy.Properties.Roles).toEqual([ { Ref: 'ApplicationExecutionRole' } ]);
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+    const cwPolicy = template.Resources.CloudWatchLogsPolicy;
+    expect(cwPolicy.Properties.Roles).toEqual([ { Ref: 'ApplicationExecutionRole' } ]);
+
+    const ssmPolicy = template.Resources.SSMParameterPolicy;
+    expect(ssmPolicy.Properties.Roles).toEqual([ { Ref: 'ApplicationExecutionRole' } ]);
+  });
+
+  test('CloudWatch LogGroups have correct RetentionInDays from Mappings', () => {
+    ['ApplicationLogGroup', 'PerformanceLogGroup', 'ResourceUtilizationLogGroup'].forEach(logGroupName => {
+      const logGroup = template.Resources[logGroupName];
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.RetentionInDays['Fn::FindInMap']).toEqual(['EnvironmentConfig', { Ref: 'Environment' }, 'LogRetention']);
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
+  test('SSM Parameters use correct KeyId and value formatting', () => {
+    const dbParam = template.Resources.DatabaseConnectionParameter;
+    expect(dbParam.Properties.Type).toBe('SecureString');
+    expect(dbParam.Properties.KeyId).toEqual({ Ref: 'KMSKeyId' });
+    expect(dbParam.Properties.Name['Fn::Sub']).toMatch(/\/\$\{ApplicationName\}\/\$\{Environment\}\/database\/connection-string/);
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
+    const apiParam = template.Resources.APIConfigParameter;
+    expect(apiParam.Properties.Type).toBe('SecureString');
+    expect(apiParam.Properties.Value['Fn::Sub']).toBeDefined();
 
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
+    const sharedConfigParam = template.Resources.SharedConfigParameter;
+    expect(sharedConfigParam.Properties.Value['Fn::If'][0]).toBe('IsProductionEnvironment');
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  // 5. Validate Outputs
+  test('Outputs should reference correct resources and conditional values', () => {
+    const outputs = template.Outputs;
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
+    expect(outputs.EnvironmentS3Bucket.Value.Ref).toBe('EnvironmentS3Bucket');
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
-    });
+    expect(outputs.SharedConfigBucket.Value['Fn::If'][0]).toBe('IsProductionEnvironment');
+
+    expect(outputs.DynamoDBTableName.Value.Ref).toBe('EnvironmentDynamoDBTable');
+
+    expect(outputs.ApplicationExecutionRoleArn.Value['Fn::GetAtt'][0]).toBe('ApplicationExecutionRole');
+
+    expect(outputs.ApplicationLogGroupName.Value.Ref).toBe('ApplicationLogGroup');
+
+    expect(outputs.SSMParameterPrefix.Value['Fn::Sub']).toMatch(/\/\$\{ApplicationName\}\/\$\{Environment\}\//);
+
+    expect(outputs.InstanceProfileArn.Value['Fn::GetAtt'][0]).toBe('ApplicationInstanceProfile');
   });
 });
