@@ -1,41 +1,53 @@
-import fs from 'fs';
-import path from 'path';
+import AWS from 'aws-sdk';
+import { execSync } from 'child_process';
 
-describe('TapStack Outputs', () => {
+describe('TapStack Integration Tests', () => {
   let outputs: Record<string, any>;
+  const region = process.env.AWS_REGION || 'us-east-1';
 
   beforeAll(() => {
-    const outputsPath = path.join(__dirname, '../cdktf.out/flat-outputs.json');
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    // Run terraform output -json and parse
+    const outputJson = execSync('terraform output -json', { encoding: 'utf-8' });
+    outputs = JSON.parse(outputJson);
   });
 
-  test('vpc_id should be a non-empty string', () => {
-    expect(typeof outputs.vpc_id.value).toBe('string');
-    expect(outputs.vpc_id.value).not.toHaveLength(0);
+  test('VPC exists', async () => {
+    const ec2 = new AWS.EC2({ region });
+    const vpcId = outputs.vpc_id.value;
+    const result = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+    expect(result.Vpcs?.length).toBeGreaterThan(0);
   });
 
-  test('public_subnet_ids should be a non-empty array', () => {
-    expect(Array.isArray(outputs.public_subnet_ids.value)).toBe(true);
-    expect(outputs.public_subnet_ids.value.length).toBeGreaterThan(0);
+  test('Public subnets exist', async () => {
+    const ec2 = new AWS.EC2({ region });
+    const subnets = outputs.public_subnet_ids.value;
+    const result = await ec2.describeSubnets({ SubnetIds: subnets }).promise();
+    expect(result.Subnets?.length).toBe(subnets.length);
   });
 
-  test('private_subnet_ids should be a non-empty array', () => {
-    expect(Array.isArray(outputs.private_subnet_ids.value)).toBe(true);
-    expect(outputs.private_subnet_ids.value.length).toBeGreaterThan(0);
+  test('Private subnets exist', async () => {
+    const ec2 = new AWS.EC2({ region });
+    const subnets = outputs.private_subnet_ids.value;
+    const result = await ec2.describeSubnets({ SubnetIds: subnets }).promise();
+    expect(result.Subnets?.length).toBe(subnets.length);
   });
 
-  test('state_bucket_name should be a valid string', () => {
-    expect(typeof outputs.state_bucket_name.value).toBe('string');
-    expect(outputs.state_bucket_name.value).toMatch(/^[a-z0-9.-]+$/);
+  test('State bucket exists', async () => {
+    const s3 = new AWS.S3({ region });
+    const bucketName = outputs.state_bucket_name.value;
+    const result = await s3.headBucket({ Bucket: bucketName }).promise();
+    expect(result).toBeDefined();
   });
 
-  test('state_bucket_arn should start with arn:aws:s3:::', () => {
-    expect(typeof outputs.state_bucket_arn.value).toBe('string');
-    expect(outputs.state_bucket_arn.value).toMatch(/^arn:aws:s3:::/);
+  test('State bucket ARN format is valid', () => {
+    const bucketArn = outputs.state_bucket_arn.value;
+    expect(bucketArn).toMatch(/^arn:aws:s3:::[a-z0-9.\-_]{3,63}$/);
   });
 
-  test('ec2_role_name should be a non-empty string', () => {
-    expect(typeof outputs.ec2_role_name.value).toBe('string');
-    expect(outputs.ec2_role_name.value).not.toHaveLength(0);
+  test('EC2 IAM role exists', async () => {
+    const iam = new AWS.IAM();
+    const roleName = outputs.ec2_role_name.value;
+    const result = await iam.getRole({ RoleName: roleName }).promise();
+    expect(result.Role?.RoleName).toBe(roleName);
   });
 });
