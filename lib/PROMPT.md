@@ -4,7 +4,7 @@ Environment & Architecture:
 
 Purpose: Set up a backend for a new web application using AWS managed serverless services.
 
-Backend compute: Use AWS Lambda functions written in Python 3.8.
+Backend compute: Use AWS Lambda functions written in Python 3.12.
 
 API management: API Gateway should be configured to handle HTTP requests and route them to Lambda functions. It must support all standard CRUD HTTP methods (GET, POST, PUT, DELETE).
 
@@ -32,7 +32,7 @@ Environment variables should be used in Lambda for configuration where appropria
 
 Constraints Recap:
 
-Lambda runtime: Python 3.8
+Lambda runtime: Python 3.12
 
 DynamoDB: On-demand (PAY_PER_REQUEST) capacity mode
 
