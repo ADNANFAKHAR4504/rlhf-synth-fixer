@@ -35,6 +35,13 @@ Metadata:
           - KeyPairName
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: "Suffix for resource naming to support multiple deployments"
+    Default: "dev"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
   EnvironmentName:
     Type: String
     Default: "production"
@@ -114,8 +121,14 @@ Parameters:
     ConstraintDescription: "Must start with a letter and contain only alphanumeric characters and underscores"
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "Name of an existing EC2 KeyPair to enable SSH access"
+    Type: String
+    Default: ""
+    Description: "Name of an existing EC2 KeyPair to enable SSH access (leave empty for no SSH access)"
+    AllowedPattern: "^$|^[a-zA-Z0-9-]+$"
+    ConstraintDescription: "Must be empty or a valid key pair name"
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
   # KMS Key for encryption
@@ -154,7 +167,7 @@ Resources:
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub "alias/${ProjectName}-key"
+      AliasName: !Sub "alias/${ProjectName}-${EnvironmentSuffix}-key"
       TargetKeyId: !Ref KMSKey
 
   # VPC and Networking
@@ -166,7 +179,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-VPC"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-VPC"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -177,7 +190,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-IGW"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-IGW"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -199,7 +212,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Public-Subnet-1"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Public-Subnet-1"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -214,7 +227,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Public-Subnet-2"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Public-Subnet-2"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -229,7 +242,7 @@ Resources:
       CidrBlock: !Select [0, !Ref PrivateSubnetCidrs]
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Private-Subnet-1"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Private-Subnet-1"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -243,7 +256,7 @@ Resources:
       CidrBlock: !Select [1, !Ref PrivateSubnetCidrs]
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Private-Subnet-2"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Private-Subnet-2"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -256,7 +269,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Public-RouteTable"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Public-RouteTable"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -290,7 +303,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-NAT-EIP"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-NAT-EIP"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -303,7 +316,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-NAT-Gateway"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-NAT-Gateway"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -315,7 +328,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Private-RouteTable"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Private-RouteTable"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -357,7 +370,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-ALB-SG"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-ALB-SG"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -383,7 +396,7 @@ Resources:
           CidrIp: 10.0.0.0/16
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-WebServer-SG"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-WebServer-SG"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -401,7 +414,7 @@ Resources:
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Database-SG"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Database-SG"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -411,7 +424,7 @@ Resources:
   ApplicationBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${ProjectName}-${AWS::AccountId}-${EnvironmentName}-appdata"
+      BucketName: !Sub "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-appdata"
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -423,29 +436,91 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-App-Bucket"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # S3 Bucket for CloudTrail logs
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-cloudtrail"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-CloudTrail-Bucket"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Bucket Policy for CloudTrail
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${CloudTrailBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": bucket-owner-full-control
 
   # CloudTrail for logging
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub "${ProjectName}-${EnvironmentName}-trail"
-      S3BucketName: !Ref ApplicationBucket
+      TrailName: !Sub "${ProjectName}-${EnvironmentSuffix}-trail"
+      S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
+      IsMultiRegionTrail: false
       IsLogging: true
+      EnableLogFileValidation: true
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
           DataResources:
             - Type: "AWS::S3::Object"
               Values:
-                - !Sub "${ApplicationBucket}/"
+                - !Sub "${ApplicationBucket.Arn}/*"
 
   # IAM Roles
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${EnvironmentName}-EC2-Role"
+      RoleName: !Sub "${ProjectName}-${EnvironmentSuffix}-EC2-Role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -472,7 +547,7 @@ Resources:
                 Resource: !Ref ApplicationBucket
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-EC2-Role"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-EC2-Role"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -481,7 +556,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${ProjectName}-${EnvironmentName}-EC2-Profile"
+      InstanceProfileName: !Sub "${ProjectName}-${EnvironmentSuffix}-EC2-Profile"
       Roles:
         - !Ref EC2InstanceRole
 
@@ -495,7 +570,27 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-DB-Subnet-Group"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-DB-Subnet-Group"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Database Secret
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ProjectName}-${EnvironmentSuffix}-db-password"
+      Description: !Sub "Database password for ${ProjectName}"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      KmsKeyId: !Ref KMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-DB-Secret"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -512,7 +607,7 @@ Resources:
         collation_server: utf8mb4_unicode_ci
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-DB-Parameter-Group"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-DB-Parameter-Group"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -522,7 +617,7 @@ Resources:
   Database:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-${EnvironmentName}-db"
+      DBInstanceIdentifier: !Sub "${ProjectName}-${EnvironmentSuffix}-db"
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
       EngineVersion: "8.0.42"
@@ -531,7 +626,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${ProjectName}-${EnvironmentName}-db-password:SecretString:password}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
       DBName: !Ref DBName
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
@@ -539,10 +634,10 @@ Resources:
       DBParameterGroupName: !Ref DBParameterGroup
       BackupRetentionPeriod: 7
       MultiAZ: true
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Database"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Database"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -552,7 +647,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${ProjectName}-${EnvironmentName}-alb"
+      Name: !Sub "${ProjectName}-${EnvironmentSuffix}-alb"
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
@@ -563,7 +658,7 @@ Resources:
         - !Ref ALBSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-ALB"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-ALB"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -572,7 +667,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${ProjectName}-${EnvironmentName}-tg"
+      Name: !Sub "${ProjectName}-${EnvironmentSuffix}-tg"
       Port: 80
       Protocol: HTTP
       TargetType: instance
@@ -585,7 +680,7 @@ Resources:
       UnhealthyThresholdCount: 2
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-Target-Group"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Target-Group"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -605,11 +700,14 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub "${ProjectName}-${EnvironmentName}-lt"
+      LaunchTemplateName: !Sub "${ProjectName}-${EnvironmentSuffix}-lt"
       LaunchTemplateData:
         ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI in us-east-1
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If
+          - HasKeyPair
+          - !Ref KeyPairName
+          - !Ref "AWS::NoValue"
         IamInstanceProfile:
           Name: !Ref EC2InstanceProfile
         SecurityGroupIds:
@@ -644,9 +742,9 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub "${ProjectName}-WebServer"
+                Value: !Sub "${ProjectName}-${EnvironmentSuffix}-WebServer"
               - Key: Environment
-                Value: !Ref EnvironmentName
+                Value: Production
               - Key: Project
                 Value: !Ref ProjectName
 
@@ -654,7 +752,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub "${ProjectName}-${EnvironmentName}-asg"
+      AutoScalingGroupName: !Sub "${ProjectName}-${EnvironmentSuffix}-asg"
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -670,7 +768,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-ASG"
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-ASG"
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -684,7 +782,7 @@ Resources:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AutoScalingGroupName: !Ref AutoScalingGroup
-      PolicyName: !Sub "${ProjectName}-${EnvironmentName}-scale-up"
+      PolicyName: !Sub "${ProjectName}-${EnvironmentSuffix}-scale-up"
       PolicyType: TargetTrackingScaling
       TargetTrackingConfiguration:
         PredefinedMetricSpecification:
@@ -695,7 +793,7 @@ Resources:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AutoScalingGroupName: !Ref AutoScalingGroup
-      PolicyName: !Sub "${ProjectName}-${EnvironmentName}-scale-down"
+      PolicyName: !Sub "${ProjectName}-${EnvironmentSuffix}-scale-down"
       PolicyType: TargetTrackingScaling
       TargetTrackingConfiguration:
         PredefinedMetricSpecification:
@@ -706,7 +804,7 @@ Resources:
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-${EnvironmentName}-high-cpu"
+      AlarmName: !Sub "${ProjectName}-${EnvironmentSuffix}-high-cpu"
       AlarmDescription: "Scale up if CPU > 70% for 5 minutes"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -722,7 +820,7 @@ Resources:
   LowCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-${EnvironmentName}-low-cpu"
+      AlarmName: !Sub "${ProjectName}-${EnvironmentSuffix}-low-cpu"
       AlarmDescription: "Scale down if CPU < 30% for 5 minutes"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
