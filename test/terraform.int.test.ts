@@ -41,8 +41,19 @@ describe('Terraform Infrastructure Integration Tests', () => {
     
     expect(vpc).toBeDefined();
     expect(vpc?.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
-    expect(vpc?.EnableDnsHostnames?.Value).toBe(true);
-    expect(vpc?.EnableDnsSupport?.Value).toBe(true);
+    
+    // Get VPC attributes separately
+    const attributesResponse = await ec2.describeVpcAttribute({
+      VpcId: outputs.vpc_id,
+      Attribute: 'enableDnsHostnames'
+    }).promise();
+    expect(attributesResponse.EnableDnsHostnames?.Value).toBe(true);
+    
+    const supportResponse = await ec2.describeVpcAttribute({
+      VpcId: outputs.vpc_id,
+      Attribute: 'enableDnsSupport'
+    }).promise();
+    expect(supportResponse.EnableDnsSupport?.Value).toBe(true);
   });
 
   // Integration Test 2: Subnets are properly distributed across AZs
