@@ -1,5 +1,3 @@
-// tap-stack.ts
-
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -7,7 +5,7 @@ import {
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
-// Import individual stacks
+// Import resource constructs (not stacks)
 import { Ec2Stack } from './ec2-stack';
 import { KmsStack } from './kms-stack';
 import { LambdaStack } from './lambda-stack';
@@ -28,7 +26,6 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    // Move region override logic here so it reads the env at instantiation time
     const AWS_REGION_OVERRIDE = process.env.AWS_REGION || '';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
@@ -37,13 +34,11 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
     });
 
-    // Configure S3 Backend for state management
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
@@ -51,10 +46,9 @@ export class TapStack extends TerraformStack {
       encrypt: true,
     });
 
-    // Add override for locking state files
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // Instantiate individual resource stacks
+    // Instantiate resource constructs (not stacks)
     const vpcStack = new VpcStack(this, 'prodVpcStack', {
       environmentSuffix,
     });

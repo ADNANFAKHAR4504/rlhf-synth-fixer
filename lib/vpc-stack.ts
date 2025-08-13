@@ -1,25 +1,19 @@
 // lib/vpc-stack.ts
 
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 interface VpcStackProps {
   environmentSuffix?: string;
 }
 
-export class VpcStack extends TerraformStack {
+export class VpcStack extends Construct {
   public readonly vpcId: string;
   public readonly subnetIds: string[];
 
   constructor(scope: Construct, id: string, props?: VpcStackProps) {
     super(scope, id);
-
-    new AwsProvider(this, 'aws', {
-      region: 'us-east-1', // or pass region from props
-    });
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 

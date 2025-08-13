@@ -1,47 +1,28 @@
 // lib/s3-stack.ts
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 interface S3StackProps {
   environmentSuffix?: string;
-  vpcId: string;
+  vpcId?: string;
 }
 
-export class S3Stack extends TerraformStack {
+export class S3Stack extends Construct {
   public readonly kmsKeyId: string;
 
-  constructor(scope: Construct, id: string, props: S3StackProps) {
+  constructor(scope: Construct, id: string, props?: S3StackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // AWS Provider
-    new AwsProvider(this, 'aws', {
-      region: 'us-east-1', // or use a region from props
-    });
-
-    // KMS Key for Encryption
-    const kmsKey = new KmsKey(this, 'prodMasterKey', {
-      description: 'Master KMS key for production environment',
+    // KMS Key for S3 encryption
+    const kmsKey = new KmsKey(this, 'prodS3KmsKey', {
+      description: 'KMS key for S3 bucket encryption',
       enableKeyRotation: true,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'Enable IAM User Permissions',
-            Effect: 'Allow',
-            Principal: { AWS: '*' },
-            Action: 'kms:*',
-            Resource: '*',
-          },
-        ],
-      }),
       tags: {
-        Name: `prod-master-kms-key-${environmentSuffix}`,
+        Name: `prod-s3-kms-key-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
     });
@@ -54,7 +35,8 @@ export class S3Stack extends TerraformStack {
       serverSideEncryptionConfiguration: {
         rule: {
           applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
+            sseAlgorithm: 'aws:kms',
+            kmsMasterKeyId: kmsKey.id,
           },
         },
       },

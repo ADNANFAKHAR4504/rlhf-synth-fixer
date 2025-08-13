@@ -9,15 +9,14 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
 const stateBucketRegion =
   process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
+const awsRegion = process.env.AWS_REGION || 'us-west-2';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Calculate the stack name
-const stackName = `TapStack${environmentSuffix}`;
-// Make sure ENVIRONMENT_SUFFIX is set correctly in your pipeline/environment
+// Use a fixed stack name so only one stack is created
+const stackName = `TapStack-${environmentSuffix}`;
 
-// defautlTags is structured in adherence to the AwsProviderDefaultTags interface
+// defaultTags is structured in adherence to the AwsProviderDefaultTags interface
 const defaultTags = {
   tags: {
     Environment: environmentSuffix,

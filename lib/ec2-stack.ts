@@ -1,27 +1,20 @@
 // lib/ec2-stack.ts
 
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 interface Ec2StackProps {
   environmentSuffix?: string;
-  vpcId: string;
+  vpcId?: string;
 }
 
-export class Ec2Stack extends TerraformStack {
-  constructor(scope: Construct, id: string, props: Ec2StackProps) {
+export class Ec2Stack extends Construct {
+  constructor(scope: Construct, id: string, props?: Ec2StackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // AWS Provider
-    new AwsProvider(this, 'aws', {
-      region: 'us-east-1', // or use a region from props
-    });
-
-    // EC2 Role
+    // EC2 Role (example, add EC2 instance as needed)
     new IamRole(this, 'prodEc2Role', {
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -41,6 +34,6 @@ export class Ec2Stack extends TerraformStack {
       },
     });
 
-    // EC2 Instance
+    // You can add EC2 instance resource here if needed
   }
 }

@@ -1,15 +1,13 @@
 // lib/kms-stack.ts
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 interface KmsStackProps {
   environmentSuffix?: string;
 }
 
-export class KmsStack extends TerraformStack {
+export class KmsStack extends Construct {
   public readonly kmsKeyId: string;
 
   constructor(scope: Construct, id: string, props?: KmsStackProps) {
@@ -17,13 +15,8 @@ export class KmsStack extends TerraformStack {
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // AWS Provider
-    new AwsProvider(this, 'aws', {
-      region: 'us-east-1', // or use a region from props
-    });
-
-    // KMS Key for Encryption
-    const masterKmsKey = new KmsKey(this, 'prodMasterKey', {
+    // KMS Key
+    const kmsKey = new KmsKey(this, 'prodMasterKey', {
       description: 'Master KMS key for production environment',
       enableKeyRotation: true,
       policy: JSON.stringify({
@@ -44,6 +37,6 @@ export class KmsStack extends TerraformStack {
       },
     });
 
-    this.kmsKeyId = masterKmsKey.id;
+    this.kmsKeyId = kmsKey.id;
   }
 }

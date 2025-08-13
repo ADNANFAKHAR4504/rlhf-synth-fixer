@@ -2,27 +2,18 @@
 
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 interface LambdaStackProps {
   environmentSuffix?: string;
-  vpcId: string;
+  vpcId?: string;
 }
 
-export class LambdaStack extends TerraformStack {
-  public readonly lambdaExecutionRole: IamRole;
-
-  constructor(scope: Construct, id: string, props: LambdaStackProps) {
+export class LambdaStack extends Construct {
+  constructor(scope: Construct, id: string, props?: LambdaStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-
-    // AWS Provider
-    new AwsProvider(this, 'aws', {
-      region: 'us-east-1', // or use a region from props
-    });
 
     // Lambda Execution Role
     const lambdaExecutionRole = new IamRole(this, 'prodLambdaExecutionRole', {
@@ -44,8 +35,6 @@ export class LambdaStack extends TerraformStack {
       },
     });
 
-    this.lambdaExecutionRole = lambdaExecutionRole;
-
     // Lambda Function
     new LambdaFunction(this, 'prodSecureLambda', {
       functionName: `prod-secure-lambda-${environmentSuffix}`,
@@ -58,10 +47,12 @@ export class LambdaStack extends TerraformStack {
           ENVIRONMENT: environmentSuffix,
         },
       },
-      vpcConfig: {
-        subnetIds: [props.vpcId],
-        securityGroupIds: [],
-      },
+      vpcConfig: props?.vpcId
+        ? {
+            subnetIds: [],
+            securityGroupIds: [],
+          }
+        : undefined,
       tags: {
         Name: `prod-secure-lambda-${environmentSuffix}`,
         Environment: environmentSuffix,
