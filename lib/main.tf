@@ -597,6 +597,11 @@ resource "aws_lb_target_group" "app" {
     unhealthy_threshold = 2
   }
 
+  # Ensure proper dependency management during destroy
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-tg"
   })
@@ -609,8 +614,12 @@ resource "aws_lb_listener" "app" {
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    type = "forward"
+    forward {
+      target_group {
+        arn = aws_lb_target_group.app.arn
+      }
+    }
   }
 
   tags = local.common_tags
