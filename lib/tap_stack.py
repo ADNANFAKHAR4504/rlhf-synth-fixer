@@ -27,7 +27,7 @@ class TapStack(pulumi.ComponentResource):
 
     self.environment_suffix = args.environment_suffix
     self.tags = args.tags
-    self.unique_suffix = pulumi.get_stack()
+    self.unique_suffix = pulumi.get_stack().lower()
 
     # ==========================================
     # 0. Networking: VPC + Private Subnets
