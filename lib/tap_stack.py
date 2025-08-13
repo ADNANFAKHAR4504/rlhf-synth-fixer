@@ -12,6 +12,7 @@ from cdktf import (LocalBackend, TerraformOutput, TerraformStack,
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
     CloudwatchMetricAlarm
+from cdktf_cdktf_provider_aws.data_aws_vpcs import DataAwsVpcs
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.ecs_cluster import EcsCluster
@@ -102,10 +103,36 @@ class TapStack(TerraformStack):
         )
         alert_email = TerraformVariable(self, "alert_email", type="string", default="alerts@example.com")
 
+        # Optional adoption variables to use existing resources instead of creating new ones
+        existing_vpc_id = TerraformVariable(self, "existing_vpc_id", type="string", default="")
+        existing_public_subnet_ids = TerraformVariable(
+            self,
+            "existing_public_subnet_ids",
+            type="list(string)",
+            default=[],
+        )
+        existing_private_subnet_ids = TerraformVariable(
+            self,
+            "existing_private_subnet_ids",
+            type="list(string)",
+            default=[],
+        )
+        existing_alb_sg_id = TerraformVariable(self, "existing_alb_sg_id", type="string", default="")
+        existing_fargate_sg_id = TerraformVariable(self, "existing_fargate_sg_id", type="string", default="")
+        existing_rds_sg_id = TerraformVariable(self, "existing_rds_sg_id", type="string", default="")
+        existing_alb_arn = TerraformVariable(self, "existing_alb_arn", type="string", default="")
+        existing_tg_arn = TerraformVariable(self, "existing_tg_arn", type="string", default="")
+        existing_cluster_name = TerraformVariable(self, "existing_cluster_name", type="string", default="")
+        existing_execution_role_name = TerraformVariable(self, "existing_execution_role_name", type="string", default="")
+        existing_task_role_name = TerraformVariable(self, "existing_task_role_name", type="string", default="")
+        existing_db_subnet_group_name = TerraformVariable(self, "existing_db_subnet_group_name", type="string", default="")
+
         # Common tags
         common_tags = {"Environment": "Production"}
 
         # Networking: VPC, subnets, IGW, NAT, routes
+        # Attempt to adopt an existing VPC: prefer provided var, else by Name tag; otherwise create
+        existing_vpcs = DataAwsVpcs(self, "existing_vpcs", tags={"Name": "production-vpc"})
         vpc = Vpc(
             self,
             "vpc",
@@ -114,8 +141,20 @@ class TapStack(TerraformStack):
             enable_dns_support=True,
             tags={**common_tags, "Name": "production-vpc"},
         )
+        # Create the VPC only when neither an existing id is provided nor one with the expected Name tag is found
+        self.add_override(
+            "resource.aws_vpc.vpc.count",
+            "${var.existing_vpc_id != \"\" || length(data.aws_vpcs.existing_vpcs.ids) > 0 ? 0 : 1}",
+        )
+        # Use the provided id, or discovered id, or the created one
+        vpc_id = "${var.existing_vpc_id != \"\" ? var.existing_vpc_id : (length(data.aws_vpcs.existing_vpcs.ids) > 0 ? data.aws_vpcs.existing_vpcs.ids[0] : aws_vpc.vpc[0].id)}"
 
-        igw = InternetGateway(self, "igw", vpc_id=vpc.id, tags={**common_tags, "Name": "production-igw"})
+        igw = InternetGateway(self, "igw", vpc_id=vpc_id, tags={**common_tags, "Name": "production-igw"})
+        # Create IGW only when we created the VPC (cannot reliably adopt IGW)
+        self.add_override(
+            "resource.aws_internet_gateway.igw.count",
+            "${var.existing_vpc_id != \"\" || length(data.aws_vpcs.existing_vpcs.ids) > 0 ? 0 : 1}",
+        )
 
         azs = [f"{aws_region}a", f"{aws_region}b"]
         public_subnets: List[Subnet] = []
@@ -124,20 +163,24 @@ class TapStack(TerraformStack):
             public = Subnet(
                 self,
                 f"public-{i+1}",
-                vpc_id=vpc.id,
+                vpc_id=vpc_id,
                 cidr_block=f"10.0.{i+1}.0/24",
                 availability_zone=az,
                 map_public_ip_on_launch=True,
                 tags={**common_tags, "Name": f"public-{i+1}", "Type": "Public"},
             )
+            # Create only if user didn't provide public subnet ids
+            public.add_override("count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
             private = Subnet(
                 self,
                 f"private-{i+1}",
-                vpc_id=vpc.id,
+                vpc_id=vpc_id,
                 cidr_block=f"10.0.{i+11}.0/24",
                 availability_zone=az,
                 tags={**common_tags, "Name": f"private-{i+1}", "Type": "Private"},
             )
+            # Create only if user didn't provide private subnet ids
+            private.add_override("count", "${length(var.existing_private_subnet_ids) == 0 ? 1 : 0}")
             public_subnets.append(public)
             private_subnets.append(private)
 
@@ -152,8 +195,12 @@ class TapStack(TerraformStack):
                 tags={**common_tags, "Name": f"nat-{i+1}"},
             )
             nat_gateways.append(nat)
+        # NATs should only exist when we create subnets ourselves
+        self.add_override("resource.aws_nat_gateway.nat-1.count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
+        self.add_override("resource.aws_nat_gateway.nat-2.count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
 
-        public_rt = RouteTable(self, "public-rt", vpc_id=vpc.id, tags={**common_tags, "Name": "public-rt"})
+        public_rt = RouteTable(self, "public-rt", vpc_id=vpc_id, tags={**common_tags, "Name": "public-rt"})
+        public_rt.add_override("count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
         Route(
             self,
             "public-default",
@@ -168,9 +215,10 @@ class TapStack(TerraformStack):
             rt = RouteTable(
                 self,
                 f"private-rt-{i+1}",
-                vpc_id=vpc.id,
+                vpc_id=vpc_id,
                 tags={**common_tags, "Name": f"private-rt-{i+1}"},
             )
+            rt.add_override("count", "${length(var.existing_private_subnet_ids) == 0 ? 1 : 0}")
             Route(
                 self,
                 f"private-default-{i+1}",
@@ -179,15 +227,21 @@ class TapStack(TerraformStack):
                 nat_gateway_id=nat.id,
             )
             RouteTableAssociation(self, f"priv-assoc-{i+1}", subnet_id=s.id, route_table_id=rt.id)
+        # Associations/Routes created only when we created RTs
+        self.add_override("resource.aws_route_table_association.priv-assoc-1.count", "${length(var.existing_private_subnet_ids) == 0 ? 1 : 0}")
+        self.add_override("resource.aws_route_table_association.priv-assoc-2.count", "${length(var.existing_private_subnet_ids) == 0 ? 1 : 0}")
+        self.add_override("resource.aws_route_table_association.pub-assoc-1.count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
+        self.add_override("resource.aws_route_table_association.pub-assoc-2.count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
 
         # Security groups
         alb_sg = SecurityGroup(
             self,
             "alb-sg",
             name="production-alb-sg",
-            vpc_id=vpc.id,
+            vpc_id=vpc_id,
             tags={**common_tags, "Name": "alb-sg"},
         )
+        alb_sg.add_override("count", "${var.existing_alb_sg_id == \"\" ? 1 : 0}")
         SecurityGroupRule(
             self,
             "alb-http",
@@ -213,9 +267,10 @@ class TapStack(TerraformStack):
             self,
             "fargate-sg",
             name="production-fargate-sg",
-            vpc_id=vpc.id,
+            vpc_id=vpc_id,
             tags={**common_tags, "Name": "fargate-sg"},
         )
+        fargate_sg.add_override("count", "${var.existing_fargate_sg_id == \"\" ? 1 : 0}")
         SecurityGroupRule(
             self,
             "svc-from-alb",
@@ -231,9 +286,10 @@ class TapStack(TerraformStack):
             self,
             "rds-sg",
             name="production-rds-sg",
-            vpc_id=vpc.id,
+            vpc_id=vpc_id,
             tags={**common_tags, "Name": "rds-sg"},
         )
+        rds_sg.add_override("count", "${var.existing_rds_sg_id == \"\" ? 1 : 0}")
         SecurityGroupRule(
             self,
             "rds-from-svc",
@@ -301,6 +357,7 @@ class TapStack(TerraformStack):
             role=ecs_exec_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
         )
+        ecs_exec_role.add_override("count", "${var.existing_execution_role_name == \"\" ? 1 : 0}")
 
         ecs_task_role = IamRole(
             self,
@@ -343,11 +400,13 @@ class TapStack(TerraformStack):
         IamRolePolicyAttachment(
             self, "ecs-task-secrets-policy", role=ecs_task_role.name, policy_arn=secrets_policy.arn
         )
+        ecs_task_role.add_override("count", "${var.existing_task_role_name == \"\" ? 1 : 0}")
 
         # Secrets Manager (values from sensitive vars)
         db_secret = SecretsmanagerSecret(
             self, "db-secret", name="production/database/credentials", description="DB credentials"
         )
+        db_secret.add_override("count", "${1}")
         SecretsmanagerSecretVersion(
             self,
             "db-secret-v",
@@ -366,6 +425,7 @@ class TapStack(TerraformStack):
         app_secret = SecretsmanagerSecret(
             self, "app-secret", name="production/application/secrets", description="App secrets"
         )
+        app_secret.add_override("count", "${1}")
         SecretsmanagerSecretVersion(
             self,
             "app-secret-v",
@@ -428,6 +488,7 @@ class TapStack(TerraformStack):
             setting=[{"name": "containerInsights", "value": "enabled"}],
             tags={**common_tags, "Name": "production-ecs-cluster"},
         )
+        cluster.add_override("count", "${var.existing_cluster_name == \"\" ? 1 : 0}")
         alb = Lb(
             self,
             "alb",
@@ -439,13 +500,14 @@ class TapStack(TerraformStack):
             enable_deletion_protection=True,
             tags={**common_tags, "Name": "production-alb"},
         )
+        alb.add_override("count", "${var.existing_alb_arn == \"\" ? 1 : 0}")
         tg = LbTargetGroup(
             self,
             "tg",
             name="production-app-tg",
             port=8080,
             protocol="HTTP",
-            vpc_id=vpc.id,
+            vpc_id=vpc_id,
             target_type="ip",
             health_check={
                 "enabled": True,
@@ -460,6 +522,7 @@ class TapStack(TerraformStack):
             },
             tags={**common_tags, "Name": "production-app-tg"},
         )
+        tg.add_override("count", "${var.existing_tg_arn == \"\" ? 1 : 0}")
         LbListener(
             self,
             "listener",
@@ -477,6 +540,9 @@ class TapStack(TerraformStack):
                 )
             ],
         )
+        # Use existing ALB/TG if provided
+        self.add_override("resource.aws_lb_listener.listener.load_balancer_arn", "${var.existing_alb_arn != \"\" ? var.existing_alb_arn : aws_lb.alb[0].arn}")
+        self.add_override("resource.aws_lb_listener.listener.default_action.0.forward.target_group.0.arn", "${var.existing_tg_arn != \"\" ? var.existing_tg_arn : aws_lb_target_group.tg[0].arn}")
 
         task_def = EcsTaskDefinition(
             self,
