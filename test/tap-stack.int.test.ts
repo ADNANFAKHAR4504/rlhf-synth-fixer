@@ -237,9 +237,8 @@ describe('VPC Infrastructure Integration Tests', () => {
   });
 
   function findOutputKey(outputs: any, suffix: string) {
-    return Object.values(outputs).find((_, keyIndex) => 
-      Object.keys(outputs)[keyIndex].endsWith(suffix)
-    );
+    const match = Object.entries(outputs).find(([key]) => key.endsWith(suffix));
+    return match ? match[1] : undefined;
   }
 
   test('All required outputs should be present when deployed', () => {
