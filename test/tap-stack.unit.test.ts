@@ -48,7 +48,7 @@ describe('TapStack Unit Tests', () => {
   describe('Stack Configuration and Synthesis', () => {
     test('should instantiate with default props and match snapshot', () => {
       app = new App();
-      stack = new TapStack(app, 'TestDefaultStack');
+      stack = new TapStack(app, 'TestDefaultStack', { awsRegion: 'us-west-2' });
       const synthesized = Testing.synth(stack);
 
       expect(stack).toBeDefined();
@@ -60,7 +60,7 @@ describe('TapStack Unit Tests', () => {
   describe('VpcModule', () => {
     beforeEach(() => {
       app = new App();
-      stack = new TapStack(app, 'TestVpc');
+      stack = new TapStack(app, 'TestVpc', { awsRegion: 'us-west-2' });
       Testing.fullSynth(stack);
     });
 
@@ -88,7 +88,7 @@ describe('TapStack Unit Tests', () => {
   describe('S3Module', () => {
     beforeEach(() => {
       app = new App();
-      stack = new TapStack(app, 'TestS3');
+      stack = new TapStack(app, 'TestS3', { awsRegion: 'us-west-2' });
       Testing.fullSynth(stack);
     });
 
@@ -120,7 +120,7 @@ describe('TapStack Unit Tests', () => {
   describe('IamModule', () => {
     beforeEach(() => {
       app = new App();
-      stack = new TapStack(app, 'TestIam');
+      stack = new TapStack(app, 'TestIam', { awsRegion: 'us-west-2' });
       Testing.fullSynth(stack);
     });
 
@@ -151,7 +151,7 @@ describe('TapStack Unit Tests', () => {
   describe('SecurityModule', () => {
     beforeEach(() => {
       app = new App();
-      stack = new TapStack(app, 'TestSecurity');
+      stack = new TapStack(app, 'TestSecurity', { awsRegion: 'us-west-2' });
       Testing.fullSynth(stack);
     });
 
@@ -176,7 +176,7 @@ describe('TapStack Unit Tests', () => {
   describe('Ec2Module', () => {
     beforeEach(() => {
       app = new App();
-      stack = new TapStack(app, 'TestEc2');
+      stack = new TapStack(app, 'TestEc2', { awsRegion: 'us-west-2' });
       Testing.fullSynth(stack);
     });
 
@@ -202,5 +202,28 @@ describe('TapStack Unit Tests', () => {
       expect(outputs.ec2_instance_id.value).toEqual('mock-instance-id');
       expect(outputs.ec2_instance_public_ip.value).toEqual('1.2.3.4');
     });
+  });
+
+  // --- Branch coverage for awsRegion selection ---
+  test('should use props.awsRegion when AWS_REGION_OVERRIDE is falsy', () => {
+    delete process.env.AWS_REGION_OVERRIDE; // ensure falsy
+    const { TapStack } = require('../lib/tap-stack');
+    const app = new App();
+    const stack = new TapStack(app, 'TestFallback', { awsRegion: 'us-west-2' });
+    const synthesized = Testing.synth(stack);
+
+    expect(synthesized).toContain('us-west-2');
+  });
+
+  test('should use AWS_REGION_OVERRIDE when provided', () => {
+    process.env.AWS_REGION_OVERRIDE = 'us-west-2';
+    const { TapStack } = require('../lib/tap-stack');
+    const app = new App();
+    const stack = new TapStack(app, 'TestOverride', { awsRegion: 'us-west-2' });
+    const synthesized = Testing.synth(stack);
+
+    expect(synthesized).toContain('us-west-2');
+
+    delete process.env.AWS_REGION_OVERRIDE; // cleanup
   });
 });

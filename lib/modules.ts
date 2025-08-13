@@ -138,7 +138,7 @@ export class S3Module extends Construct {
   constructor(scope: Construct, id: string, props: S3ModuleProps) {
     super(scope, id);
 
-    const bucketName = props.bucketName ?? `${id.toLowerCase()}-appdata`;
+    const bucketName = props.bucketName ?? `${id.toLowerCase()}-appdata-new`;
     const tags = mergeTags(
       { Environment: props.tags.Environment, Owner: props.tags.Owner },
       props.tags
@@ -178,7 +178,7 @@ export class IamModule extends Construct {
     super(scope, id);
 
     const baseName = props.name ?? `${props.name}-${id}`;
-    const roleName = `${baseName}-roles-new`;
+    const roleName = `${baseName}-role`;
     const tags = mergeTags(
       { Environment: props.tags.Environment, Owner: props.tags.Owner },
       props.tags
