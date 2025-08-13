@@ -358,6 +358,14 @@ resource "aws_security_group" "ecs_service" {
     security_groups = [aws_security_group.alb.id]
   }
 
+  ingress {
+    description     = "Application port from ALB"
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
   egress {
     description = "All outbound traffic"
     from_port   = 0
@@ -635,7 +643,7 @@ resource "aws_lb" "main" {
 # ALB Target Group
 resource "aws_lb_target_group" "app" {
   name        = "${local.name_prefix}-tg"
-  port        = 80
+  port        = 8080
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"
@@ -652,11 +660,6 @@ resource "aws_lb_target_group" "app" {
     unhealthy_threshold = 2
   }
 
-  # Ensure proper dependency management during destroy
-  lifecycle {
-    create_before_destroy = true
-  }
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-tg"
   })
@@ -669,12 +672,8 @@ resource "aws_lb_listener" "app" {
   protocol          = "HTTP"
 
   default_action {
-    type = "forward"
-    forward {
-      target_group {
-        arn = aws_lb_target_group.app.arn
-      }
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
   }
 
   tags = local.common_tags
