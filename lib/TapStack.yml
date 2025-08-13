@@ -664,14 +664,27 @@ Resources:
 
   CloudTrailLogBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
     Properties:
-      # S3 bucket names must be <= 63 characters
       BucketName: !Sub '${ProjectNameLower}-ctlogs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      VersioningConfiguration:
+        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldLogs
+            Status: Enabled
+            Prefix: ''
+            ExpirationInDays: 365
+      ObjectOwnership: BucketOwnerEnforced
 
   CloudTrailLogBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -680,6 +693,7 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          # Allow CloudTrail to write logs
           - Sid: 'AWSCloudTrailAclCheck'
             Effect: Allow
             Principal:
@@ -695,6 +709,31 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
+          # Deny non-CloudTrail principals from writing
+          - Sid: 'DenyNonCloudTrailWrite'
+            Effect: Deny
+            NotPrincipal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+          # Deny unencrypted uploads
+          - Sid: 'DenyUnEncryptedObjectUploads'
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          # Deny insecure (non-SSL) requests
+          - Sid: 'DenyInsecureTransport'
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub '${CloudTrailLogBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
 
   MainCloudTrail:
     Type: AWS::CloudTrail::Trail
