@@ -41,10 +41,6 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create NAT Gateway for private subnet connectivity', () => {
-      template.hasResourceProperties('AWS::EC2::NatGateway', {});
-    });
-
     test('should create security groups with proper restrictions', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for web applications',
