@@ -465,7 +465,7 @@ resource "aws_db_instance" "mysql" {
   engine_version          = "8.0"
   instance_class          = "db.t3.micro"
   username                = var.db_username
-  password                = jsondecode(data.aws_secretsmanager_secret_version.db_password.secret_string)
+  password                = data.aws_secretsmanager_secret_version.db_password.secret_string
   multi_az                = true
   storage_encrypted       = true
   publicly_accessible     = false
