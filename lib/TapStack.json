@@ -62,6 +62,9 @@
       },
       "ap-south-1": {
         "AMI": "ami-0059e0da390478151"
+      },
+      "eu-west-2": {
+        "AMI": "ami-0a7812c0557366d50"
       }
     },
     "EnvironmentMap": {
