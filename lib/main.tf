@@ -351,7 +351,7 @@ resource "aws_instance" "app" {
   monitoring                  = local.enable_detailed_monitoring
 
   root_block_device {
-    volume_size = 8
+    volume_size = 30
     volume_type = "gp3"
   }
 
