@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -258,7 +258,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Developer-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Developer-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'), // Should be restricted to specific principals
+        assumedBy: new iam.AccountRootPrincipal(),
         description:
           'Role for developers with limited access to development resources',
       }
@@ -297,7 +297,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Admin-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Admin-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'), // Should be restricted to specific principals
+        assumedBy: new iam.AccountRootPrincipal(),
         description: 'Role for administrators with elevated access',
       }
     );
@@ -331,7 +331,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Auditor-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Auditor-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'), // Should be restricted to specific principals
+        assumedBy: new iam.AccountRootPrincipal(),
         description: 'Role for auditors with read-only access',
       }
     );
@@ -375,7 +375,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Database-${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_4,
+          version: rds.PostgresEngineVersion.VER_16_3,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
