@@ -217,12 +217,23 @@ export class TapStack extends cdk.Stack {
     // VPC Flow Logs for monitoring
     const flowLogsRole = new iam.Role(this, 'FlowLogsRole', {
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/VPCFlowLogsDeliveryRolePolicy'
-        ),
-      ],
     });
+
+    // Add the necessary permissions for VPC Flow Logs to write to CloudWatch Logs
+    flowLogsRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowFlowLogsToCloudWatchLogs',
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+          'logs:DescribeLogGroups',
+          'logs:DescribeLogStreams',
+        ],
+        resources: ['*'],
+      })
+    );
 
     const flowLogsGroup = new cdk.aws_logs.LogGroup(this, 'VPCFlowLogs', {
       retention: cdk.aws_logs.RetentionDays.ONE_MONTH,
