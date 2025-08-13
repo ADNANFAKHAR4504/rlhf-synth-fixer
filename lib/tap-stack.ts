@@ -2,9 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { SecureInfrastructureStack } from './secure-infrastructure-stack';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
