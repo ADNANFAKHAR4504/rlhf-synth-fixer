@@ -608,7 +608,7 @@ systemctl enable amazon-cloudwatch-agent
     );
 
     // ALB Listener
-    const albListener = new aws.lb.Listener(
+    new aws.lb.Listener(
       'app-listener',
       {
         loadBalancerArn: this.loadBalancer.arn,
