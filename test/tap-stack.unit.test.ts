@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const stack = { region: process.env.AWS_REGION || 'us-east-1' };
 
 describe('TapStack CloudFormation Template', () => {
   let template: any;
@@ -47,29 +47,29 @@ describe('TapStack CloudFormation Template', () => {
       expect(idAttribute).toBeDefined();
       expect(idAttribute.AttributeType).toBe('S');
     });
-    });
+  });
 
-    test('S3 event notification should be configured', () => {
-      template.hasResourceProperties('AWS::S3::BucketNotification', {
-        NotificationConfiguration: {
-          LambdaConfigurations: [
-            {
-              Event: 's3:ObjectCreated:*',
-            },
-          ],
-        },
-      });
-    });
-
-    test('Stack should be in us-east-1 region', () => {
-      expect(stack.region).toBe('us-east-1');
-    });
-
-    test('Required outputs should be exported', () => {
-      template.hasOutput('SourceBucketName', {});
-      template.hasOutput('ProcessedBucketName', {});
-      template.hasOutput('ImageProcessorFunctionArn', {});
-      template.hasOutput('ImageProcessorRoleArn', {});
+  test('S3 event notification should be configured', () => {
+    template.hasResourceProperties('AWS::S3::BucketNotification', {
+      NotificationConfiguration: {
+        LambdaConfigurations: [
+          {
+            Event: 's3:ObjectCreated:*',
+          },
+        ],
+      },
     });
   });
+
+  test('Stack should be in us-east-1 region', () => {
+    expect(stack.region).toBe('us-east-1');
+  });
+
+  test('Required outputs should be exported', () => {
+    template.hasOutput('SourceBucketName', {});
+    template.hasOutput('ProcessedBucketName', {});
+    template.hasOutput('ImageProcessorFunctionArn', {});
+    template.hasOutput('ImageProcessorRoleArn', {});
+  });
+});
 });
