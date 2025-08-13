@@ -29,10 +29,10 @@ tags = config.get_object('tags') or {
   'ManagedBy': 'Pulumi',
 }
 
-logging_bucket_name = config.require('logging.bucketName')
+logging_bucket_name = config.get('logging.bucketName') or f"tap-security-logs-{environment_suffix}"
 ssh_allowed_cidrs = config.get_object('ssh.allowedCidrs') or ['10.0.0.0/8']
 cloudtrail_kms_key_arn = config.get_secret('cloudtrail.kmsKeyArn')
-cloudtrail_enable_data_events = config.get_bool('cloudtrail.enableDataEvents')
+cloudtrail_enable_data_events = config.get_bool('cloudtrail.enableDataEvents') or True
 nacl_subnet_ids = config.get_object('nacl.subnetIds') or []
 lambda_kms_key_arn = config.get_secret('lambda.kmsKeyArn')
 waf_rate_limit = config.get_int('waf.rateLimit') or 1000
