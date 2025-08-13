@@ -723,7 +723,7 @@ describe('TapStack', () => {
           // Access the database instance to test the conditional logic
           // We need to simulate a scenario where database.secret could be undefined
           const testSecretValue: string | undefined = undefined;
-          const conditionalResult = testSecretValue?.toString() || 'No secret created';
+          const conditionalResult = testSecretValue || 'No secret created';
           
           // Add a test output to verify the conditional logic works
           new cdk.CfnOutput(this, 'TestConditionalOutput', {
