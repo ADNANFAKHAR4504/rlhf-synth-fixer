@@ -1,44 +1,36 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
+// Configuration - Prefer live CloudFormation outputs by default
 import {
   CloudFormationClient,
   DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
 import axios from 'axios';
-import fs from 'fs';
 
-// These integration tests run with mock outputs for CI (no AWS calls)
-// In real pipelines, the cfn-outputs file would be produced by deployment step
-describe('TapStack Integration Tests (live or mocked outputs)', () => {
+// Always run against live CloudFormation outputs
+describe('TapStack Integration Tests (live)', () => {
   let outputs: any;
-  const isLive = process.env.LIVE === 'true';
 
   beforeAll(async () => {
-    if (isLive) {
-      const region = process.env.AWS_REGION || 'us-east-1';
-      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      const stackName = process.env.STACK_NAME || `TapStack${envSuffix}`;
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+    const stackName = process.env.STACK_NAME || `TapStack-${envSuffix}`;
 
-      const cf = new CloudFormationClient({ region });
-      const resp = await cf.send(
-        new DescribeStacksCommand({ StackName: stackName })
+    const cf = new CloudFormationClient({ region });
+    const resp = await cf.send(
+      new DescribeStacksCommand({ StackName: stackName })
+    );
+    const stack = resp.Stacks?.[0];
+    if (!stack || !stack.Outputs) {
+      throw new Error(
+        `Could not load CloudFormation outputs for stack ${stackName}`
       );
-      const stack = resp.Stacks?.[0];
-      if (!stack || !stack.Outputs) {
-        throw new Error(
-          `Could not load CloudFormation outputs for stack ${stackName}`
-        );
-      }
-      outputs = (stack.Outputs || []).reduce(
-        (acc: any, o: any) => {
-          if (o.OutputKey && o.OutputValue) acc[o.OutputKey] = o.OutputValue;
-          return acc;
-        },
-        {} as Record<string, string>
-      );
-    } else {
-      const path = 'test/fixtures/flat-outputs.json';
-      outputs = JSON.parse(fs.readFileSync(path, 'utf8'));
     }
+    outputs = (stack.Outputs || []).reduce(
+      (acc: any, o: any) => {
+        if (o.OutputKey && o.OutputValue) acc[o.OutputKey] = o.OutputValue;
+        return acc;
+      },
+      {} as Record<string, string>
+    );
   });
 
   test('01 - has ApiGatewayUrl', () => {
@@ -98,7 +90,7 @@ describe('TapStack Integration Tests (live or mocked outputs)', () => {
     ).toBe(true);
   });
 
-  test('14 - Flat outputs shape is an object', () => {
+  test('14 - outputs shape is an object', () => {
     expect(typeof outputs).toBe('object');
     expect(Array.isArray(outputs)).toBe(false);
   });
@@ -127,16 +119,13 @@ describe('TapStack Integration Tests (live or mocked outputs)', () => {
     expect(outputs.ApiGatewayUrl.endsWith('/prod')).toBe(true);
   });
 
-  if (isLive) {
-    describe('Live API checks', () => {
-      test('20 - GET /items returns 200 and an array', async () => {
-        const base = outputs.ApiGatewayUrl.replace(/\/$/, '');
-        const url = `${base}/items`;
-        const resp = await axios.get(url, { timeout: 20000 });
-        expect(resp.status).toBe(200);
-        // Body should be JSON array per ReadFunction scan
-        expect(Array.isArray(resp.data)).toBe(true);
-      });
+  describe('Live API checks', () => {
+    test('20 - GET /items returns 200 and an array', async () => {
+      const base = outputs.ApiGatewayUrl.replace(/\/$/, '');
+      const url = `${base}/items`;
+      const resp = await axios.get(url, { timeout: 20000 });
+      expect(resp.status).toBe(200);
+      expect(Array.isArray(resp.data)).toBe(true);
     });
-  }
+  });
 });
