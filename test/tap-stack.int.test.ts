@@ -55,7 +55,7 @@ describe('TapStack Integration Tests', () => {
     );
     expect(result.AliasArn).toBeDefined();
     expect(result.FunctionVersion).not.toBe('$LATEST');
-    expect(result.Name).toMatch(/^TapStackpr1087-live-[a-zA-Z0-9]+$/);
+    expect(result.Name).toMatch(/^TapStack.*-live-[a-zA-Z0-9]+$/); // Match dynamic alias name pattern
   });
 
   test('CloudWatch log group exists for Lambda', async () => {
