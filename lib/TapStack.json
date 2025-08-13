@@ -50,6 +50,11 @@
       "MaxLength": 128,
       "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]+$",
       "ConstraintDescription": "Must be at least 8 characters long and contain alphanumeric and special characters"
+    },
+    "ExistingConfigRecorderName": {
+      "Type": "String",
+      "Default": "default",
+      "Description": "Name of the existing AWS Config Configuration Recorder to use instead of creating a new one"
     }
   },
   "Mappings": {
@@ -1885,27 +1890,6 @@
         ]
       }
     },
-    "ConfigRecorder": {
-      "Type": "AWS::Config::ConfigurationRecorder",
-      "DependsOn": [
-        "ConfigBucketPolicy"
-      ],
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${Environment}-config-recorder-${EnvironmentSuffix}"
-        },
-        "RoleARN": {
-          "Fn::GetAtt": [
-            "ConfigRecorderRole",
-            "Arn"
-          ]
-        },
-        "RecordingGroup": {
-          "AllSupported": true,
-          "IncludeGlobalResourceTypes": true
-        }
-      }
-    },
     "ConfigDeliveryChannel": {
       "Type": "AWS::Config::DeliveryChannel",
       "Properties": {
@@ -1922,7 +1906,6 @@
     },
     "ConfigRuleS3PublicRead": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-public-read-prohibited-${EnvironmentSuffix}"
@@ -1936,7 +1919,6 @@
     },
     "ConfigRuleS3PublicWrite": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-public-write-prohibited-${EnvironmentSuffix}"
@@ -1950,7 +1932,6 @@
     },
     "ConfigRuleRDSEncrypted": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "rds-storage-encrypted-${EnvironmentSuffix}"
@@ -1964,7 +1945,6 @@
     },
     "ConfigRuleUnrestrictedSSH": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "restricted-ssh-${EnvironmentSuffix}"
@@ -2529,7 +2509,7 @@
     "ConfigRecorderName": {
       "Description": "AWS Config Recorder Name",
       "Value": {
-        "Ref": "ConfigRecorder"
+        "Ref": "ExistingConfigRecorderName"
       },
       "Export": {
         "Name": {
