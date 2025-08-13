@@ -23,14 +23,13 @@ module.exports = {
       statements: 70,
     },
   },
-  testTimeout: 30000,
   silent: false,
   verbose: true,
   // Configuration for integration tests
   testTimeout: 30000, // 30 seconds timeout for integration tests
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   // Handle AWS SDK and other external dependencies
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@aws-sdk/(.*)$': '<rootDir>/node_modules/@aws-sdk/$1',
   },
   // Environment variables for tests
