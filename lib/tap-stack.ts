@@ -69,22 +69,9 @@ export class TapStack extends cdk.Stack {
       }),
     });
 
-    // Create a VPC instead of looking up default VPC to avoid synthesis issues
-    const vpc = new ec2.Vpc(this, `VPC${environmentSuffix}`, {
-      maxAzs: 2,
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
+    // Use default VPC
+    const vpc = ec2.Vpc.fromLookup(this, `VPC${environmentSuffix}`, {
+      isDefault: true,
     });
 
     // Security Group for ALB (allow 'HTTP/HTTPS' from internet)
@@ -300,9 +287,10 @@ export class TapStack extends cdk.Stack {
         role: lambdaRole,
         vpc,
         vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PUBLIC,
         },
         securityGroups: [lambdaSecurityGroup],
+        allowPublicSubnet: true,
         logGroup: lambdaLogGroup,
         environment: {
           NODE_OPTIONS: '--enable-source-maps',

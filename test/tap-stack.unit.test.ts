@@ -69,18 +69,14 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create VPC with proper configuration', () => {
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16',
-        EnableDnsHostnames: true,
-        EnableDnsSupport: true,
-      });
-
-      // Should have public and private subnets
-      template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
-
-      // Should have NAT gateway
-      template.resourceCountIs('AWS::EC2::NatGateway', 1);
+    test('should use default VPC (no VPC resources created)', () => {
+      // Should not create any VPC resources since using default VPC
+      template.resourceCountIs('AWS::EC2::VPC', 0);
+      template.resourceCountIs('AWS::EC2::Subnet', 0);
+      template.resourceCountIs('AWS::EC2::NatGateway', 0);
+      
+      // Should still create security groups that use the VPC
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
     });
   });
 
@@ -293,7 +289,7 @@ describe('TapStack', () => {
       });
     });
 
-    test('should place Lambda in VPC with private subnets', () => {
+    test('should place Lambda in VPC with public subnets', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         VpcConfig: {
           SubnetIds: Match.anyValue(),
