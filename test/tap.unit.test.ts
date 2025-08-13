@@ -21,7 +21,7 @@ describe('tap.ts', () => {
   });
 
   it('provisions all stacks for each region', () => {
-    const regions = ['us-east-1', 'us-west-2'];
+    const regions = ['us-east-2', 'us-west-2'];
     process.env.CDK_DEFAULT_ACCOUNT = '123456789012';
     app.node.setContext('dept', 'eng');
     app.node.setContext('environmentSuffix', 'int');
