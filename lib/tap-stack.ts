@@ -300,22 +300,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Add network activity events for VPC endpoints (new 2025 feature)
+    // Add advanced event selectors for comprehensive logging
     const cfnTrail = trail.node.defaultChild as cloudtrail.CfnTrail;
     cfnTrail.addPropertyOverride('AdvancedEventSelectors', [
-      {
-        Name: 'VPC Endpoint Network Activity Events',
-        FieldSelectors: [
-          {
-            Field: 'eventCategory',
-            Equals: ['NetworkActivityEvents'],
-          },
-          {
-            Field: 'resources.type',
-            Equals: ['AWS::EC2::VPCEndpoint'],
-          },
-        ],
-      },
       {
         Name: 'All Management Events',
         FieldSelectors: [
@@ -335,6 +322,13 @@ export class TapStack extends cdk.Stack {
           {
             Field: 'resources.type',
             Equals: ['AWS::S3::Object'],
+          },
+          {
+            Field: 'resources.ARN',
+            StartsWith: [
+              `${cloudTrailBucket.bucketArn}/`,
+              `${dataBucket.bucketArn}/`,
+            ],
           },
         ],
       },
@@ -392,7 +386,6 @@ export class TapStack extends cdk.Stack {
         assumedBy: new iam.AccountRootPrincipal(),
         description: 'Role for administrators with elevated access',
         maxSessionDuration: cdk.Duration.hours(2), // Shorter session for admins
-        externalIds: [`SecureCorp-Admin-${environmentSuffix}-ExternalId`], // Add external ID for security
       }
     );
 
