@@ -15,30 +15,29 @@ try {
   );
   outputs = {
     HealthEndpoint:
-      'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod/health',
+      'https://jqn7elwr7k.execute-api.us-west-2.amazonaws.com/dev/health',
     SecureEndpoint:
-      'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod/secure',
-    S3VPCEndpointId: 'vpce-0fb5875dfdf689a0e',
-    VPCId: 'vpc-0f6656239792e7205',
-    SecurityGroupId: 'sg-01eaa9dbde3e78a7e',
-    APIGatewayURL:
-      'https://of9ae211vg.execute-api.us-east-1.amazonaws.com/prod',
-    APIGatewayVPCEndpointId: 'vpce-0a237cf285dc49d10',
+      'https://jqn7elwr7k.execute-api.us-west-2.amazonaws.com/dev/secure',
+    S3VPCEndpointId: 'vpce-0a092660271388783',
+    VPCId: 'vpc-0b7c1582b18b05573',
+    SecurityGroupId: 'sg-05b50bdedd813ac1d',
+    APIGatewayURL: 'https://jqn7elwr7k.execute-api.us-west-2.amazonaws.com/dev',
+    APIGatewayVPCEndpointId: 'vpce-01f89b1e27388246e',
     APIGatewayRoleArn:
-      'arn:aws:iam::149536495831:role/test-APIGatewayCloudWatchRole-ihKflMpoe7no',
-    PrivateSubnetIds: 'subnet-02863e34f51440cf5,subnet-01dbd41a0a20e4ece',
-    WAFLogGroupName: 'aws-waf-logs-cf-secure-project-dev',
+      'arn:aws:iam::***:role/TapStackpr1008-APIGatewayCloudWatchRole-0ZYvsNCguFFH',
+    PrivateSubnetIds: 'subnet-033ce19b99775262b,subnet-090259a777e69e6ff',
+    WAFLogGroupName: 'aws-waf-logs-cf-secure-project-pr1008',
     LambdaExecutionRoleArn:
-      'arn:aws:iam::149536495831:role/test-LambdaExecutionRole-4foQIhdePEQT',
-    ApplicationDataBucketName: 'cf-secure-project-dev-app-data-149536495831',
-    APILogsBucketName: 'cf-secure-project-dev-api-logs-149536495831',
-    PublicSubnetId: 'subnet-0c02a25e8c0f8335c',
-    APIGatewayLogGroupName: '/aws/apigateway/cf-secure-project-dev',
+      'arn:aws:iam::***:role/TapStackpr1008-LambdaExecutionRole-GQyzstdgM5fN',
+    ApplicationDataBucketName: 'cf-secure-project-pr1008-app-data-***',
+    APILogsBucketName: 'cf-secure-project-pr1008-api-logs-***',
+    PublicSubnetId: 'subnet-0b1586a14c9338eee',
+    APIGatewayLogGroupName: '/aws/apigateway/cf-secure-project-pr1008',
     WebACLId:
-      'cf-secure-project-dev-web-acl|fcf3a972-ef8c-452f-b396-a10eb5136d5a|REGIONAL',
-    APIGatewayId: 'of9ae211vg',
+      'cf-secure-project-pr1008-web-acl|825548c3-45ec-488f-a773-fe8953f49919|REGIONAL',
+    APIGatewayId: 'jqn7elwr7k',
     WebACLArn:
-      'arn:aws:wafv2:us-east-1:149536495831:regional/webacl/cf-secure-project-dev-web-acl/fcf3a972-ef8c-452f-b396-a10eb5136d5a',
+      'arn:aws:wafv2:us-west-2:***:regional/webacl/cf-secure-project-pr1008-web-acl/825548c3-45ec-488f-a773-fe8953f49919',
   };
 }
 
