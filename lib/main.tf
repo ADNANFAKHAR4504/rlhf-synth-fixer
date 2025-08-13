@@ -1,22 +1,31 @@
 ###########################################################
 # main.tf
-# Single-file Terraform stack: HTTP/HTTPS-only Security Group
+# Terraform stack: VPC + Secure HTTP/HTTPS-only Security Group
 # ---------------------------------------------------------
-# Usage example:
+# Usage:
 # terraform init
-# terraform plan -var='vpc_id=vpc-12345678' -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
-# terraform apply -var='vpc_id=vpc-12345678' -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
-# Verify:
+# terraform plan -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
+# terraform apply -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
+#
+# Verification:
 # aws ec2 describe-security-groups --group-ids <security_group_id>
 ###########################################################
 
 terraform {
   required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
 }
 
 ########################
 # Variables
 ########################
+
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
@@ -24,15 +33,6 @@ variable "aws_region" {
   validation {
     condition     = length(var.aws_region) > 0
     error_message = "aws_region cannot be empty"
-  }
-}
-
-variable "vpc_id" {
-  description = "ID of the VPC where the Security Group will be created"
-  type        = string
-  validation {
-    condition     = can(regex("^vpc-[0-9a-f]{8,17}$", var.vpc_id))
-    error_message = "Invalid VPC ID format. Use 'vpc-xxxxxxxx' or 'vpc-xxxxxxxxxxxxxxxxx'."
   }
 }
 
@@ -72,12 +72,15 @@ variable "tags" {
   default = {
     Owner       = "devops"
     Environment = "dev"
+    Project     = "iac-test-automations"
+    ManagedBy   = "Terraform"
   }
 }
 
 ########################
 # Validation
 ########################
+
 locals {
   cidr_validation_error = length(var.allowed_ipv4_cidrs) == 0 && length(var.allowed_ipv6_cidrs) == 0
 }
@@ -86,20 +89,60 @@ resource "null_resource" "cidr_check" {
   count = local.cidr_validation_error ? 1 : 0
 
   provisioner "local-exec" {
-    command = "echo 'Error: allowed_ipv4_cidrs and allowed_ipv6_cidrs cannot both be empty — at least one CIDR is required' && exit 1"
+    command = "echo 'Error: allowed_ipv4_cidrs and allowed_ipv6_cidrs cannot both be empty — at least one CIDR is required for inbound traffic' && exit 1"
   }
+}
+
+########################
+# Networking Resources
+########################
+
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags                 = var.tags
+}
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+  tags   = var.tags
+}
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = "${var.aws_region}a"
+  tags                    = var.tags
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  tags   = var.tags
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
 }
 
 ########################
 # Security Group
 ########################
+
 resource "aws_security_group" "app_sg" {
   name        = var.security_group_name
   description = var.security_group_description
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
   tags        = var.tags
 
-  # IPv4 ingress
+  # IPv4 ingress rules
   dynamic "ingress" {
     for_each = var.allowed_ipv4_cidrs
     content {
@@ -122,14 +165,14 @@ resource "aws_security_group" "app_sg" {
     }
   }
 
-  # IPv6 ingress
+  # IPv6 ingress rules
   dynamic "ingress" {
     for_each = var.allowed_ipv6_cidrs
     content {
-      description    = "Allow HTTP from IPv6 ${ingress.value}"
-      from_port      = 80
-      to_port        = 80
-      protocol       = "tcp"
+      description      = "Allow HTTP from IPv6 ${ingress.value}"
+      from_port        = 80
+      to_port          = 80
+      protocol         = "tcp"
       ipv6_cidr_blocks = [ingress.value]
     }
   }
@@ -137,15 +180,15 @@ resource "aws_security_group" "app_sg" {
   dynamic "ingress" {
     for_each = var.allowed_ipv6_cidrs
     content {
-      description    = "Allow HTTPS from IPv6 ${ingress.value}"
-      from_port      = 443
-      to_port        = 443
-      protocol       = "tcp"
+      description      = "Allow HTTPS from IPv6 ${ingress.value}"
+      from_port        = 443
+      to_port          = 443
+      protocol         = "tcp"
       ipv6_cidr_blocks = [ingress.value]
     }
   }
 
-  # Egress
+  # Egress rules
   dynamic "egress" {
     for_each = var.allow_all_outbound ? [1] : []
     content {
@@ -165,7 +208,7 @@ resource "aws_security_group" "app_sg" {
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"] # adjust for stricter control if needed
+      cidr_blocks = ["0.0.0.0/0"]
     }
   }
 }
@@ -173,6 +216,15 @@ resource "aws_security_group" "app_sg" {
 ########################
 # Outputs
 ########################
+
+output "vpc_id" {
+  value = aws_vpc.main.id
+}
+
+output "subnet_id" {
+  value = aws_subnet.public.id
+}
+
 output "security_group_id" {
   value = aws_security_group.app_sg.id
 }
