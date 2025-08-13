@@ -7,14 +7,40 @@ export interface TapStackProps extends cdk.StackProps {
 }
 
 export class TapStack extends cdk.Stack {
+  private getCidrRanges(environmentSuffix: string) {
+    // Generate unique CIDR ranges based on environment to avoid conflicts
+    let baseCidr = '172.16.0.0/16';
+    let subnet1Cidr = '172.16.1.0/24';
+    let subnet2Cidr = '172.16.2.0/24';
+
+    // For different environments, you can customize these ranges
+    // Example: dev -> 172.16.0.0/16, staging -> 172.17.0.0/16, prod -> 172.18.0.0/16
+    if (environmentSuffix === 'staging') {
+      baseCidr = '172.17.0.0/16';
+      subnet1Cidr = '172.17.1.0/24';
+      subnet2Cidr = '172.17.2.0/24';
+    } else if (environmentSuffix === 'prod') {
+      baseCidr = '172.18.0.0/16';
+      subnet1Cidr = '172.18.1.0/24';
+      subnet2Cidr = '172.18.2.0/24';
+    }
+
+    return {
+      vpcCidr: baseCidr,
+      subnet1Cidr,
+      subnet2Cidr,
+    };
+  }
+
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
     const { environmentSuffix } = props;
+    const cidrRanges = this.getCidrRanges(environmentSuffix);
 
     // Create VPC with specified CIDR block
     const vpc = new ec2.Vpc(this, 'VPC', {
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+      ipAddresses: ec2.IpAddresses.cidr(cidrRanges.vpcCidr),
       availabilityZones: ['us-east-1a', 'us-east-1b'],
       subnetConfiguration: [], // We'll create subnets manually with specific CIDRs
       enableDnsHostnames: true,
@@ -49,11 +75,11 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Create public subnet 1 in us-east-1a with CIDR 10.0.1.0/24
+    // Create public subnet 1 in us-east-1a with CIDR 172.16.1.0/24
     const publicSubnet1 = new ec2.CfnSubnet(this, 'PublicSubnet1', {
       availabilityZone: 'us-east-1a',
       vpcId: vpc.vpcId,
-      cidrBlock: '10.0.1.0/24',
+      cidrBlock: cidrRanges.subnet1Cidr,
       mapPublicIpOnLaunch: true,
       tags: [
         {
@@ -67,11 +93,11 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // Create public subnet 2 in us-east-1b with CIDR 10.0.2.0/24
+    // Create public subnet 2 in us-east-1b with CIDR 172.16.2.0/24
     const publicSubnet2 = new ec2.CfnSubnet(this, 'PublicSubnet2', {
       availabilityZone: 'us-east-1b',
       vpcId: vpc.vpcId,
-      cidrBlock: '10.0.2.0/24',
+      cidrBlock: cidrRanges.subnet2Cidr,
       mapPublicIpOnLaunch: true,
       tags: [
         {
@@ -128,9 +154,9 @@ export class TapStack extends cdk.Stack {
     );
 
     // Add dependencies
-    defaultRoute.addDependsOn(igwAttachment);
-    routeTableAssociation1.addDependsOn(publicSubnet1);
-    routeTableAssociation2.addDependsOn(publicSubnet2);
+    defaultRoute.addDependency(igwAttachment);
+    routeTableAssociation1.addDependency(publicSubnet1);
+    routeTableAssociation2.addDependency(publicSubnet2);
 
     // Add tags to VPC
     cdk.Tags.of(vpc).add('Name', `${environmentSuffix}-VPC-Main`);

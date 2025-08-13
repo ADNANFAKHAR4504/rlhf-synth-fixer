@@ -23,7 +23,7 @@ describe('TapStack', () => {
   describe('VPC Configuration', () => {
     test('creates VPC with correct CIDR block', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16',
+        CidrBlock: '172.16.0.0/16',
         EnableDnsHostnames: true,
         EnableDnsSupport: true,
       });
@@ -80,7 +80,7 @@ describe('TapStack', () => {
     test('public subnet 1 has correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::Subnet', {
         AvailabilityZone: 'us-east-1a',
-        CidrBlock: '10.0.1.0/24',
+        CidrBlock: '172.16.1.0/24',
         MapPublicIpOnLaunch: true,
         VpcId: { Ref: Match.anyValue() },
       });
@@ -89,7 +89,7 @@ describe('TapStack', () => {
     test('public subnet 2 has correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::Subnet', {
         AvailabilityZone: 'us-east-1b',
-        CidrBlock: '10.0.2.0/24',
+        CidrBlock: '172.16.2.0/24',
         MapPublicIpOnLaunch: true,
         VpcId: { Ref: Match.anyValue() },
       });

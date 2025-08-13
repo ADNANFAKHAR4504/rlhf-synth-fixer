@@ -5,7 +5,7 @@ import fs from 'fs';
 // Mock outputs for testing without deployment
 const mockOutputs = {
   VpcId: 'vpc-1234567890abcdef0',
-  VpcCidr: '10.0.0.0/16',
+  VpcCidr: '172.16.0.0/16',
   PublicSubnet1Id: 'subnet-1234567890abcdef0',
   PublicSubnet2Id: 'subnet-1234567890abcdef1',
   PublicSubnet1Az: 'us-east-1a',
@@ -41,7 +41,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       // For simulation, we verify the output structure
       expect(outputs.VpcId).toBeDefined();
       expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]+$/);
-      expect(outputs.VpcCidr).toBe('10.0.0.0/16');
+      expect(outputs.VpcCidr).toBe('172.16.0.0/16');
     });
 
     test('VPC has DNS support and hostnames enabled', async () => {
@@ -73,14 +73,14 @@ describe('VPC Infrastructure Integration Tests', () => {
       // const subnets = await ec2Client.send(new DescribeSubnetsCommand({
       //   SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
       // }));
-      // expect(subnets.Subnets[0].CidrBlock).toBe('10.0.1.0/24');
-      // expect(subnets.Subnets[1].CidrBlock).toBe('10.0.2.0/24');
+      // expect(subnets.Subnets[0].CidrBlock).toBe('172.16.1.0/24');
+      // expect(subnets.Subnets[1].CidrBlock).toBe('172.16.2.0/24');
       expect(outputs.PublicSubnet1Id).toBeTruthy();
       expect(outputs.PublicSubnet2Id).toBeTruthy();
 
       // Verify specific CIDR blocks are guaranteed
-      // Subnet 1 should be 10.0.1.0/24 in us-east-1a
-      // Subnet 2 should be 10.0.2.0/24 in us-east-1b
+      // Subnet 1 should be 172.16.1.0/24 in us-east-1a
+      // Subnet 2 should be 172.16.2.0/24 in us-east-1b
     });
 
     test('subnets have public IP on launch enabled', async () => {
@@ -161,22 +161,22 @@ describe('VPC Infrastructure Integration Tests', () => {
 
   describe('Network Connectivity', () => {
     test('VPC CIDR block is correctly configured', () => {
-      expect(outputs.VpcCidr).toBe('10.0.0.0/16');
+      expect(outputs.VpcCidr).toBe('172.16.0.0/16');
     });
 
     test('subnet CIDR blocks are within VPC CIDR range', () => {
       // Verify subnet CIDRs are subsets of VPC CIDR
-      expect(outputs.VpcCidr).toBe('10.0.0.0/16');
+      expect(outputs.VpcCidr).toBe('172.16.0.0/16');
       expect(outputs.PublicSubnet1Id).toBeTruthy();
       expect(outputs.PublicSubnet2Id).toBeTruthy();
-      // Subnets should be exactly 10.0.1.0/24 and 10.0.2.0/24
+      // Subnets should be exactly 172.16.1.0/24 and 172.16.2.0/24
       // This is now guaranteed by using CfnSubnet with explicit CIDR blocks
     });
 
     test('specific CIDR blocks are guaranteed', () => {
       // With the updated implementation using CfnSubnet, we now have:
-      // - Subnet 1: 10.0.1.0/24 in us-east-1a
-      // - Subnet 2: 10.0.2.0/24 in us-east-1b
+      // - Subnet 1: 172.16.1.0/24 in us-east-1a
+      // - Subnet 2: 172.16.2.0/24 in us-east-1b
       // This provides predictable network layout for applications
       expect(outputs.PublicSubnet1Id).toBeTruthy();
       expect(outputs.PublicSubnet2Id).toBeTruthy();
@@ -241,7 +241,7 @@ describe('VPC Infrastructure Integration Tests', () => {
     test('complete VPC infrastructure is deployed', () => {
       // Verify all required components exist
       expect(outputs.VpcId).toBeDefined();
-      expect(outputs.VpcCidr).toBe('10.0.0.0/16');
+      expect(outputs.VpcCidr).toBe('172.16.0.0/16');
       expect(outputs.PublicSubnet1Id).toBeDefined();
       expect(outputs.PublicSubnet2Id).toBeDefined();
       expect(outputs.InternetGatewayId).toBeDefined();
