@@ -25,6 +25,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiat
       "value": "mock-instance-profile"
     },
     "public_subnet_id": {
+      "value": "mock-public-subnet-id"
     },
     "security_group_id": {
       "value": "mock-sg-id"

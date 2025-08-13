@@ -68,7 +68,7 @@ export class VpcModule extends Construct {
     const vpcName = props.name ?? 'tap-vpc';
 
     const vpc = new Vpc(this, 'Vpc', {
-      cidrBlock: props.cidr ?? '10.0.0.0/24',
+      cidrBlock: props.cidr ?? '10.0.0.0/16',
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
@@ -178,7 +178,7 @@ export class IamModule extends Construct {
     super(scope, id);
 
     const baseName = props.name ?? `${props.name}-${id}`;
-    const roleName = `${baseName}-role-new`;
+    const roleName = `${baseName}-roles-new`;
     const tags = mergeTags(
       { Environment: props.tags.Environment, Owner: props.tags.Owner },
       props.tags
