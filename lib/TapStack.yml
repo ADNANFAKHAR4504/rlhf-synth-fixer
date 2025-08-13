@@ -665,6 +665,7 @@ Resources:
   CloudTrailLogBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub '${ProjectNameLower}-ctlogs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -684,7 +685,6 @@ Resources:
             Status: Enabled
             Prefix: ''
             ExpirationInDays: 365
-      ObjectOwnership: BucketOwnerEnforced
 
   CloudTrailLogBucketPolicy:
     Type: AWS::S3::BucketPolicy
