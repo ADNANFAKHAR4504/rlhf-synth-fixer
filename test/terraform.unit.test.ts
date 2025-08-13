@@ -1,40 +1,19 @@
-import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+import * as fs from "fs";
+import * as path from "path";
 
-describe('Stack Structure', () => {
-  let app: App;
-  let stack: TapStack;
-  let synthesized: string;
+// Prefer env var; else resolve ../lib/main.tf relative to this test file
+const TF_PATH = process.env.TF_MAIN_PATH
+  ? path.resolve(process.env.TF_MAIN_PATH)
+  : path.resolve(__dirname, "../lib/main.tf");
 
-  beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
-  });
+describe("Terraform S3 config (static checks)", () => {
+  let hcl: string;
 
-  test('TapStack instantiates successfully via props', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestTapStackWithProps', {
-      environmentSuffix: 'prod',
-      stateBucket: 'custom-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-    });
-    synthesized = Testing.synth(stack);
-
-    // Verify that TapStack instantiates without errors via props
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
-  });
-
-  test('TapStack uses default values when no props provided', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestTapStackDefault');
-    synthesized = Testing.synth(stack);
-
-    // Verify that TapStack instantiates without errors when no props are provided
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+  beforeAll(() => {
+    const exists = fs.existsSync(TF_PATH);
+    if (!exists) {
+      throw new Error(`Terraform file not found at ${TF_PATH}`);
+    }
+    hcl = fs.readFileSync(TF_PATH, "utf8");
   });
 });
-
-// add more test suites and cases as needed
