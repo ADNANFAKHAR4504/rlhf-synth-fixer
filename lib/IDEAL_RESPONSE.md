@@ -1,8 +1,8 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Deploys a highly available, secure, and scalable Node.js application using Elastic Beanstalk,
-  RDS for PostgreSQL, and a custom domain with HTTPS.
+  Deploys a highly available, secure, and scalable Node.js application using a decoupled
+  Application Load Balancer, Elastic Beanstalk, RDS for PostgreSQL, and a custom domain with HTTPS.
 
 Metadata:
   cfn-lint:
@@ -14,7 +14,7 @@ Parameters:
   DomainName:
     Type: String
     Description: The custom domain name for your application (e.g., myapp.example.com).
-    Default: app.tap.us-west-2.meerio.com
+    Default: app.meerio.com # Corrected Default
 
   HostedZoneName:
     Type: String
@@ -72,40 +72,6 @@ Parameters:
 Conditions:
   UseSecretsManagerCondition: !Equals [!Ref DBPasswordParameter, '']
   HasS3Bucket: !Not [!Equals [!Ref S3BucketName, '']]
-
-Mappings:
-  # Hosted Zone IDs for Elastic Beanstalk environments in various regions
-  EBHostedZoneIds:
-    us-east-1:
-      'Id': 'Z117KPS5GTRQ2G'
-    us-east-2:
-      'Id': 'Z14L4L79SAUB5T'
-    us-west-1:
-      'Id': 'Z1M58G0W56PQJA'
-    us-west-2:
-      'Id': 'Z38NKT9BP95V3O'
-    eu-west-1:
-      'Id': 'Z2NYPWQ7DFZAZH'
-    eu-west-2:
-      'Id': 'Z1BFK442Y2223G'
-    eu-west-3:
-      'Id': 'Z29O4M5B72C6T7'
-    eu-central-1:
-      'Id': 'Z1FR84AW7210X3'
-    ap-northeast-1:
-      'Id': 'Z1R25G3KIG2GBW'
-    ap-northeast-2:
-      'Id': 'Z3JE5OI70L4Z0Q'
-    ap-southeast-1:
-      'Id': 'Z16FZ9L249IFLT'
-    ap-southeast-2:
-      'Id': 'Z2PCDNR3VC2G1N'
-    ap-south-1:
-      'Id': 'Z18D5FSROUN65A'
-    sa-east-1:
-      'Id': 'Z10X7K2B4QSOFV'
-    ca-central-1:
-      'Id': 'ZJFCZL7SSZB5I'
 
 Resources:
   # ------------------------------------------------------------#
@@ -401,6 +367,62 @@ Resources:
         - !Ref BeanstalkInstanceRole
 
   # ------------------------------------------------------------#
+  #  Application Load Balancer (Decoupled from Beanstalk)
+  # ------------------------------------------------------------#
+  WebAppALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-ALB'
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Scheme: internet-facing
+      Type: application
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ALB'
+
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-TG'
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 80
+      HealthCheckPath: '/'
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-TG'
+
+  WebAppListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref WebAppALB
+      Protocol: HTTPS
+      Port: 443
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebAppTargetGroup
+
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref WebAppALB
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: '443'
+            StatusCode: HTTP_301
+
+  # ------------------------------------------------------------#
   #  RDS Database
   # ------------------------------------------------------------#
   DBSubnetGroup:
@@ -461,6 +483,9 @@ Resources:
         - Namespace: 'aws:autoscaling:launchconfiguration'
           OptionName: 'InstanceType'
           Value: 't3.small'
+        - Namespace: 'aws:autoscaling:launchconfiguration' # Add AppSecurityGroup to instances
+          OptionName: 'SecurityGroups'
+          Value: !Ref AppSecurityGroup
 
         # VPC Configuration
         - Namespace: 'aws:ec2:vpc'
@@ -470,47 +495,19 @@ Resources:
           OptionName: 'Subnets'
           Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
         - Namespace: 'aws:ec2:vpc'
-          OptionName: 'ELBSubnets'
-          Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
-        - Namespace: 'aws:ec2:vpc'
           OptionName: 'AssociatePublicIpAddress'
           Value: 'false'
 
-        # Load Balancer Configuration
+        # Load Balancer Configuration - NOW DECOUPLED
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'LoadBalancerType'
-          Value: 'application'
+          Value: 'none' # Tell Beanstalk not to create a load balancer
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'ServiceRole'
           Value: !Ref BeanstalkServiceRole
-        - Namespace: 'aws:elbv2:loadbalancer'
-          OptionName: 'IdleTimeout'
-          Value: '300'
-        - Namespace: 'aws:elbv2:loadbalancer'
-          OptionName: 'SecurityGroups'
-          Value: !Ref LoadBalancerSecurityGroup
-
-        # HTTPS Listener
-        - Namespace: 'aws:elbv2:listener:443'
-          OptionName: 'Protocol'
-          Value: 'HTTPS'
-        - Namespace: 'aws:elbv2:listener:443'
-          OptionName: 'SSLCertificateArns'
-          Value: !Ref CertificateArn
-
-        # HTTP to HTTPS Redirect
-        - Namespace: 'aws:elbv2:listener:80'
-          OptionName: 'Protocol'
-          Value: 'HTTP'
-        - Namespace: 'aws:elbv2:listener:80'
-          OptionName: 'ListenerEnabled'
-          Value: 'true'
         - Namespace: 'aws:elasticbeanstalk:environment:process:default'
-          OptionName: 'Protocol'
-          Value: 'HTTP'
-        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
-          OptionName: 'Port'
-          Value: '80'
+          OptionName: 'TargetGroupARNs'
+          Value: !Ref WebAppTargetGroup # Link to the external Target Group
 
         # Auto Scaling Configuration
         - Namespace: 'aws:autoscaling:asg'
@@ -539,7 +536,7 @@ Resources:
         - Namespace: 'aws:elasticbeanstalk:healthreporting:system'
           OptionName: 'SystemType'
           Value: 'enhanced'
-        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
+        - Namespace: 'aws:elasticbeanstalk:application:healthcheck' # Correct namespace for health check
           OptionName: 'HealthCheckPath'
           Value: '/'
 
@@ -589,21 +586,22 @@ Resources:
       Name: !Ref DomainName
       Type: A
       AliasTarget:
-        HostedZoneId: !FindInMap [EBHostedZoneIds, !Ref 'AWS::Region', Id]
-        DNSName: !GetAtt BeanstalkEnvironment.EndpointURL
+        # Correctly reference the new ALB's own Hosted Zone ID and DNS Name
+        HostedZoneId: !GetAtt WebAppALB.CanonicalHostedZoneID
+        DNSName: !GetAtt WebAppALB.DNSName
 
 Outputs:
   ApplicationURL:
-    Description: The URL of the Elastic Beanstalk environment.
+    Description: The URL of the application.
     Value: !Sub 'https://${DomainName}'
     Export:
       Name: !Sub '${AWS::StackName}-ApplicationURL'
 
-  ElasticBeanstalkURL:
-    Description: The direct Elastic Beanstalk environment URL.
-    Value: !GetAtt BeanstalkEnvironment.EndpointURL
+  LoadBalancerURL:
+    Description: The direct URL of the Application Load Balancer.
+    Value: !GetAtt WebAppALB.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-EBEndpoint'
+      Name: !Sub '${AWS::StackName}-LoadBalancerURL'
 
   RDSEndpoint:
     Description: The endpoint for the RDS database instance.

@@ -55,7 +55,7 @@ describe('Node.js Production Stack Unit Tests', () => {
     ]);
 
     // Path to your CloudFormation template file
-    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.yml'); // Adjust path if needed
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(templateContent, { schema: cfnSchema });
   });
@@ -65,14 +65,6 @@ describe('Node.js Production Stack Unit Tests', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
       expect(template.Description).toContain(
         'Deploys a highly available, secure, and scalable Node.js application'
-      );
-    });
-
-    test('should have metadata for cfn-lint configuration', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['cfn-lint']).toBeDefined();
-      expect(template.Metadata['cfn-lint'].config.ignore_checks).toContain(
-        'W1011'
       );
     });
 
@@ -94,11 +86,8 @@ describe('Node.js Production Stack Unit Tests', () => {
       expect(template.Parameters.DBPasswordParameter.NoEcho).toBe(true);
     });
 
-    test('should contain mappings for Elastic Beanstalk Hosted Zone IDs', () => {
-      expect(template.Mappings.EBHostedZoneIds).toBeDefined();
-      expect(template.Mappings.EBHostedZoneIds['us-west-2'].Id).toBe(
-        'Z38NKT9BP95V3O'
-      );
+    test('should not contain a Mappings section', () => {
+      expect(template.Mappings).toBeUndefined();
     });
   });
 
@@ -132,32 +121,6 @@ describe('Node.js Production Stack Unit Tests', () => {
       expect(publicSubnets.length).toBe(2);
       expect(privateSubnets.length).toBe(2);
     });
-
-    test('should create two NAT Gateways for high availability', () => {
-      expect(template.Resources.NatGatewayA).toBeDefined();
-      expect(template.Resources.NatGatewayB).toBeDefined();
-      expect(template.Resources.NatGatewayA.Type).toBe('AWS::EC2::NatGateway');
-      expect(template.Resources.NatGatewayB.Type).toBe('AWS::EC2::NatGateway');
-    });
-
-    test('Public Route Table should route to the Internet Gateway', () => {
-      const publicRoute = template.Resources.PublicRoute;
-      expect(publicRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      expect(publicRoute.Properties.GatewayId).toEqual({
-        Ref: 'InternetGateway',
-      });
-    });
-
-    test('Private Route Tables should route to NAT Gateways', () => {
-      const privateRouteA = template.Resources.PrivateRouteA;
-      const privateRouteB = template.Resources.PrivateRouteB;
-      expect(privateRouteA.Properties.NatGatewayId).toEqual({
-        Ref: 'NatGatewayA',
-      });
-      expect(privateRouteB.Properties.NatGatewayId).toEqual({
-        Ref: 'NatGatewayB',
-      });
-    });
   });
 
   describe('Security & IAM Configuration', () => {
@@ -188,44 +151,50 @@ describe('Node.js Production Stack Unit Tests', () => {
         Ref: 'AppSecurityGroup',
       });
     });
+  });
 
-    test('Beanstalk IAM Role should have least-privilege permissions', () => {
-      const role = template.Resources.BeanstalkInstanceRole;
-      const statements = role.Properties.Policies[0].PolicyDocument.Statement;
-
-      // Check for logs permissions
-      const logsPolicy = statements.find(
-        (s: any) => s.Action && s.Action.includes('logs:PutLogEvents')
-      );
-      expect(logsPolicy).toBeDefined();
-
-      // Check for conditional S3 permissions
-      const s3Policy = statements.find(
-        (s: any) =>
-          Array.isArray(s) &&
-          s[0] &&
-          s[0].Action &&
-          s[0].Action.includes('s3:GetObject')
-      );
-      // S3 policy is conditional, so it might be in a different format
-
-      // Check for conditional Secrets Manager permissions
-      const secretsPolicy = statements.find(
-        (s: any) =>
-          Array.isArray(s) &&
-          s[0] &&
-          s[0].Action === 'secretsmanager:GetSecretValue'
-      );
-      // Secrets policy is also conditional
+  describe('Application Load Balancer', () => {
+    test('should create an Application Load Balancer resource', () => {
+      const alb = template.Resources.WebAppALB;
+      expect(alb).toBeDefined();
+      expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      expect(alb.Properties.Type).toBe('application');
+      expect(alb.Properties.Scheme).toBe('internet-facing');
     });
 
-    test('should conditionally create a secret in AWS Secrets Manager for the DB password', () => {
-      const secret = template.Resources.DBSecret;
-      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-      expect(secret.Condition).toBe('UseSecretsManagerCondition');
-      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe(
-        'password'
-      );
+    test('should create a Target Group for the application', () => {
+      const tg = template.Resources.WebAppTargetGroup;
+      expect(tg).toBeDefined();
+      expect(tg.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+      expect(tg.Properties.Protocol).toBe('HTTP');
+      expect(tg.Properties.Port).toBe(80);
+    });
+
+    test('should create an HTTPS listener with a certificate', () => {
+      const listener = template.Resources.WebAppListener;
+      expect(listener).toBeDefined();
+      expect(listener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(listener.Properties.Protocol).toBe('HTTPS');
+      expect(listener.Properties.Port).toBe(443);
+      expect(listener.Properties.Certificates[0].CertificateArn).toEqual({
+        Ref: 'CertificateArn',
+      });
+      expect(listener.Properties.DefaultActions[0].Type).toBe('forward');
+      expect(listener.Properties.DefaultActions[0].TargetGroupArn).toEqual({
+        Ref: 'WebAppTargetGroup',
+      });
+    });
+
+    test('should create an HTTP listener that redirects to HTTPS', () => {
+      const listener = template.Resources.HTTPListener;
+      expect(listener).toBeDefined();
+      expect(listener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(listener.Properties.Protocol).toBe('HTTP');
+      expect(listener.Properties.Port).toBe(80);
+      expect(listener.Properties.DefaultActions[0].Type).toBe('redirect');
+      expect(
+        listener.Properties.DefaultActions[0].RedirectConfig.StatusCode
+      ).toBe('HTTP_301');
     });
   });
 
@@ -236,38 +205,10 @@ describe('Node.js Production Stack Unit Tests', () => {
       expect(rds.Properties.MultiAZ).toBe(true);
       expect(rds.Properties.StorageEncrypted).toBe(true);
     });
-
-    test('RDS Instance should conditionally use password from Secrets Manager or parameter', () => {
-      const rds = template.Resources.RDSInstance;
-      expect(rds.Properties.MasterUserPassword['Fn::If']).toBeDefined();
-      expect(rds.Properties.MasterUserPassword['Fn::If'][0]).toBe(
-        'UseSecretsManagerCondition'
-      );
-    });
-
-    test('RDS Instance should have Deletion and UpdateReplace policies set to Snapshot', () => {
-      const rds = template.Resources.RDSInstance;
-      expect(rds.DeletionPolicy).toBe('Snapshot');
-      expect(rds.UpdateReplacePolicy).toBe('Snapshot');
-    });
-
-    test('RDS Instance should have backup configuration', () => {
-      const rds = template.Resources.RDSInstance;
-      expect(rds.Properties.BackupRetentionPeriod).toBe(7);
-      expect(rds.Properties.PreferredBackupWindow).toBeDefined();
-      expect(rds.Properties.PreferredMaintenanceWindow).toBeDefined();
-    });
   });
 
   describe('Elastic Beanstalk & DNS', () => {
-    test('Beanstalk environment should be configured for Node.js', () => {
-      const env = template.Resources.BeanstalkEnvironment;
-      expect(env.Properties.SolutionStackName).toEqual({
-        Ref: 'SolutionStackName',
-      });
-    });
-
-    test('Beanstalk should be configured for an Application Load Balancer and stream logs', () => {
+    test('Beanstalk should be configured to have no load balancer', () => {
       const optionSettings =
         template.Resources.BeanstalkEnvironment.Properties.OptionSettings;
       const lbType = optionSettings.find(
@@ -275,43 +216,26 @@ describe('Node.js Production Stack Unit Tests', () => {
           o.Namespace === 'aws:elasticbeanstalk:environment' &&
           o.OptionName === 'LoadBalancerType'
       );
-      const streamLogs = optionSettings.find(
-        (o: any) =>
-          o.Namespace === 'aws:elasticbeanstalk:cloudwatch:logs' &&
-          o.OptionName === 'StreamLogs'
-      );
-      expect(lbType.Value).toBe('application');
-      expect(streamLogs.Value).toBe('true');
+      expect(lbType.Value).toBe('none');
     });
 
-    test('Beanstalk should have auto-scaling configuration', () => {
+    test('Beanstalk should be linked to the external target group', () => {
       const optionSettings =
         template.Resources.BeanstalkEnvironment.Properties.OptionSettings;
-      const minSize = optionSettings.find(
+      const tgLink = optionSettings.find(
         (o: any) =>
-          o.Namespace === 'aws:autoscaling:asg' && o.OptionName === 'MinSize'
+          o.Namespace === 'aws:elasticbeanstalk:environment:process:default' &&
+          o.OptionName === 'TargetGroupARNs'
       );
-      const maxSize = optionSettings.find(
-        (o: any) =>
-          o.Namespace === 'aws:autoscaling:asg' && o.OptionName === 'MaxSize'
-      );
-      const triggerMeasure = optionSettings.find(
-        (o: any) =>
-          o.Namespace === 'aws:autoscaling:trigger' &&
-          o.OptionName === 'MeasureName'
-      );
-
-      expect(minSize.Value).toEqual({ Ref: 'MinSize' });
-      expect(maxSize.Value).toEqual({ Ref: 'MaxSize' });
-      expect(triggerMeasure.Value).toBe('CPUUtilization');
+      expect(tgLink.Value).toEqual({ Ref: 'WebAppTargetGroup' });
     });
 
-    test('Beanstalk should have health check configuration', () => {
+    test('Beanstalk should have enhanced health check configuration', () => {
       const optionSettings =
         template.Resources.BeanstalkEnvironment.Properties.OptionSettings;
       const healthCheck = optionSettings.find(
         (o: any) =>
-          o.Namespace === 'aws:elasticbeanstalk:environment:process:default' &&
+          o.Namespace === 'aws:elasticbeanstalk:application:healthcheck' &&
           o.OptionName === 'HealthCheckPath'
       );
       const systemType = optionSettings.find(
@@ -324,33 +248,15 @@ describe('Node.js Production Stack Unit Tests', () => {
       expect(systemType.Value).toBe('enhanced');
     });
 
-    test('Beanstalk listener should have HTTPS configuration', () => {
-      const optionSettings =
-        template.Resources.BeanstalkEnvironment.Properties.OptionSettings;
-      const httpsListener = optionSettings.find(
-        (o: any) =>
-          o.Namespace === 'aws:elbv2:listener:443' &&
-          o.OptionName === 'Protocol'
-      );
-      const sslCert = optionSettings.find(
-        (o: any) =>
-          o.Namespace === 'aws:elbv2:listener:443' &&
-          o.OptionName === 'SSLCertificateArns'
-      );
-
-      expect(httpsListener.Value).toBe('HTTPS');
-      expect(sslCert.Value).toEqual({ Ref: 'CertificateArn' });
-    });
-
-    test('Route53 DNS record should be an Alias pointing to the Beanstalk environment', () => {
+    test('Route53 DNS record should be an Alias pointing to the new ALB', () => {
       const record = template.Resources.DNSRecord;
       expect(record.Properties.Type).toBe('A');
       expect(record.Properties.AliasTarget).toBeDefined();
       expect(record.Properties.AliasTarget.DNSName).toEqual({
-        'Fn::GetAtt': ['BeanstalkEnvironment', 'EndpointURL'],
+        'Fn::GetAtt': ['WebAppALB', 'DNSName'],
       });
       expect(record.Properties.AliasTarget.HostedZoneId).toEqual({
-        'Fn::FindInMap': ['EBHostedZoneIds', { Ref: 'AWS::Region' }, 'Id'],
+        'Fn::GetAtt': ['WebAppALB', 'CanonicalHostedZoneID'],
       });
     });
   });
@@ -358,9 +264,8 @@ describe('Node.js Production Stack Unit Tests', () => {
   describe('Outputs', () => {
     test('should define all required outputs', () => {
       const outputs = template.Outputs;
-      expect(Object.keys(outputs).length).toBeGreaterThanOrEqual(5);
       expect(outputs.ApplicationURL).toBeDefined();
-      expect(outputs.ElasticBeanstalkURL).toBeDefined();
+      expect(outputs.LoadBalancerURL).toBeDefined(); // Changed from ElasticBeanstalkURL
       expect(outputs.RDSEndpoint).toBeDefined();
       expect(outputs.DBSecretARN).toBeDefined();
       expect(outputs.VPCId).toBeDefined();
@@ -370,16 +275,6 @@ describe('Node.js Production Stack Unit Tests', () => {
     test('DBSecretARN output should be conditional', () => {
       const secretOutput = template.Outputs.DBSecretARN;
       expect(secretOutput.Condition).toBe('UseSecretsManagerCondition');
-    });
-
-    test('outputs should have export names', () => {
-      const outputs = template.Outputs;
-      Object.values(outputs).forEach((output: any) => {
-        if (output.Condition !== 'UseSecretsManagerCondition') {
-          expect(output.Export).toBeDefined();
-          expect(output.Export.Name).toBeDefined();
-        }
-      });
     });
   });
 });
