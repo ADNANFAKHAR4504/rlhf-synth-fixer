@@ -17,7 +17,7 @@ describe('TapStack', () => {
     stack = new TapStack(app, `TestTapStack${environmentSuffix}`, {
       env: {
         account: '123456789012',
-        region: 'ap-northeast-1',
+        region: 'ap-northeast-2',
       },
     });
     template = Template.fromStack(stack);
@@ -351,7 +351,7 @@ describe('TapStack', () => {
       const testStack = new TapStack(testApp, 'TestStacktest123', {
         env: {
           account: '123456789012',
-          region: 'ap-northeast-1',
+          region: 'ap-northeast-2',
         },
       });
       const testTemplate = Template.fromStack(testStack);
@@ -366,7 +366,7 @@ describe('TapStack', () => {
       const testStack = new TapStack(testApp, 'TestStackdefault', {
         env: {
           account: '123456789012',
-          region: 'ap-northeast-1',
+          region: 'ap-northeast-2',
         },
       });
       const testTemplate = Template.fromStack(testStack);

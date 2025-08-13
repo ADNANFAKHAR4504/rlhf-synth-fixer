@@ -37,10 +37,10 @@ if (fs.existsSync(outputsPath)) {
 }
 
 // Initialize AWS clients
-const s3Client = new S3Client({ region: 'ap-northeast-1' });
-const ec2Client = new EC2Client({ region: 'ap-northeast-1' });
-const iamClient = new IAMClient({ region: 'ap-northeast-1' });
-const accessAnalyzerClient = new AccessAnalyzerClient({ region: 'ap-northeast-1' });
+const s3Client = new S3Client({ region: 'ap-northeast-2' });
+const ec2Client = new EC2Client({ region: 'ap-northeast-2' });
+const iamClient = new IAMClient({ region: 'ap-northeast-2' });
+const accessAnalyzerClient = new AccessAnalyzerClient({ region: 'ap-northeast-2' });
 
 describe('TapStack Integration Tests', () => {
   describe('VPC Infrastructure', () => {
@@ -120,7 +120,7 @@ describe('TapStack Integration Tests', () => {
           },
           {
             Name: 'service-name',
-            Values: [`com.amazonaws.ap-northeast-1.s3`],
+            Values: [`com.amazonaws.ap-northeast-2.s3`],
           },
         ],
       });
