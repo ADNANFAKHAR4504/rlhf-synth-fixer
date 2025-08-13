@@ -24,7 +24,7 @@ class TestTapStackSynthesis:
         stack = TapStack(app, "TapStackBackend")
         synth = json.loads(Testing.synth(stack))
         # Provider region
-        expected_region = os.getenv("AWS_REGION", "us-east-2")
+        expected_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-west-2"
         assert synth.get("provider", {}).get("aws", [{}])[0]["region"] == expected_region
         # Local backend settings
         backend = synth.get("terraform", {}).get("backend", {})
