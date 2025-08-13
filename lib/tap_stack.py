@@ -513,7 +513,7 @@ def create_rds(
   rds_instance = aws.rds.Instance(
       "corp-rds-instance",
       engine="postgres",
-      engine_version="13.7",
+      engine_version="15.4",
       instance_class="db.t3.medium",
       allocated_storage=20,
       db_subnet_group_name=subnet_group.name,
@@ -728,7 +728,7 @@ def create_codepipeline(
   aws.iam.RolePolicyAttachment(
       "codepipeline-access",
       role=pipeline_role.name,
-      policy_arn="arn:aws:iam::aws:policy/AWSCodePipelineFullAccess",
+      policy_arn="arn:aws:iam::aws:policy/AWSCodePipelineServiceRole",
       opts=ResourceOptions(provider=provider)
   )
 
@@ -755,6 +755,31 @@ def create_codepipeline(
               "kms_master_key_id": kms_key.arn,
           }
       }],
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Add S3 access for CodePipeline artifacts
+  aws.iam.RolePolicy(
+      "codepipeline-s3-policy",
+      role=pipeline_role.id,
+      policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Effect": "Allow",
+                  "Action": [
+                      "s3:GetBucketVersioning",
+                      "s3:GetObject",
+                      "s3:GetObjectVersion",
+                      "s3:PutObject"
+                  ],
+                  "Resource": [
+                      artifact_bucket.arn,
+                      pulumi.Output.concat(artifact_bucket.arn, "/*")
+                  ]
+              }
+          ]
+      }),
       opts=ResourceOptions(provider=provider)
   )
 

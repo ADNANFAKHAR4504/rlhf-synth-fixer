@@ -228,18 +228,22 @@ class TestHelpers(unittest.TestCase):
 
   @patch("lib.tap_stack.aws.ssm.Parameter",
          return_value=MagicMock(value="ghtoken"))
+  @patch("lib.tap_stack.pulumi.Output.concat",
+         return_value="arn:aws:s3:::bucketname/*")
   @patch("lib.tap_stack.aws.codepipeline.Pipeline")
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
+         return_value=MagicMock())
+  @patch("lib.tap_stack.aws.iam.RolePolicy",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role",
          return_value=MagicMock(arn="arn", name="role"))
   @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.s3.Bucket",
-         return_value=MagicMock(bucket="bucketname"))
+         return_value=MagicMock(bucket="bucketname", arn="arn:aws:s3:::bucketname"))
   def test_create_codepipeline(
-          self, _bucket, _encryption, _role, _attachment,
-          mock_pipeline_class, _ssm):
+          self, _bucket, _encryption, _role, _role_policy, _attachment,
+          mock_pipeline_class, _concat, _ssm):
     """Ensure create_codepipeline provisions a pipeline with GitHub source integration."""
     mock_provider = MagicMock()
     mock_pipeline_instance = MagicMock()
