@@ -540,7 +540,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Condition: EnableVPCFlowLogsCondition
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${ProjectName}-${Environment}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${ProjectName}-${Environment}-${AWS::StackName}'
       RetentionInDays: !If [IsProductionEnvironment, 90, 14]
 
   VPCFlowLogs:
@@ -746,7 +746,7 @@ Resources:
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-secure-bucket-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-${Environment}-secure-bucket-${AWS::AccountId}-${AWS::StackName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -820,7 +820,7 @@ Resources:
     Type: AWS::S3::Bucket
     Condition: EnableCloudTrailCondition
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-${CloudTrailBucketName}-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-${Environment}-${CloudTrailBucketName}-${AWS::AccountId}-${AWS::StackName}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -953,19 +953,19 @@ Resources:
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/${ProjectName}-${Environment}'
+      LogGroupName: !Sub '/aws/s3/${ProjectName}-${Environment}-${AWS::StackName}'
       RetentionInDays: !If [IsProductionEnvironment, 365, 30]
 
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-${Environment}'
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-${Environment}-${AWS::StackName}'
       RetentionInDays: !If [IsProductionEnvironment, 365, 30]
 
   SecurityLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/security/${ProjectName}-${Environment}'
+      LogGroupName: !Sub '/aws/security/${ProjectName}-${Environment}-${AWS::StackName}'
       RetentionInDays: !If [IsProductionEnvironment, 365, 30]
 
   ### CloudTrail ###
@@ -1005,7 +1005,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-rds'
+      DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-rds-${AWS::StackName}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.39'
@@ -1025,7 +1025,7 @@ Resources:
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${ProjectName}-${Environment}-dynamodb-table'
+      TableName: !Sub '${ProjectName}-${Environment}-dynamodb-table-${AWS::StackName}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: id
@@ -1066,7 +1066,7 @@ Resources:
   SecurityLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-${Environment}-security-function'
+      FunctionName: !Sub '${ProjectName}-${Environment}-security-function-${AWS::StackName}'
       Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn

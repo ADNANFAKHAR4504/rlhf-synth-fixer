@@ -1028,7 +1028,7 @@
             "Condition": "EnableVPCFlowLogsCondition",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs/${ProjectName}-${Environment}"
+                    "Fn::Sub": "/aws/vpc/flowlogs/${ProjectName}-${Environment}-${AWS::StackName}"
                 },
                 "RetentionInDays": {
                     "Fn::If": [
@@ -1427,7 +1427,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-secure-bucket-${AWS::AccountId}"
+                    "Fn::Sub": "${ProjectName}-${Environment}-secure-bucket-${AWS::AccountId}-${AWS::StackName}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1573,7 +1573,7 @@
             "Condition": "EnableCloudTrailCondition",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-${CloudTrailBucketName}-${AWS::AccountId}"
+                    "Fn::Sub": "${ProjectName}-${Environment}-${CloudTrailBucketName}-${AWS::AccountId}-${AWS::StackName}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -1840,7 +1840,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/s3/${ProjectName}-${Environment}"
+                    "Fn::Sub": "/aws/s3/${ProjectName}-${Environment}-${AWS::StackName}"
                 },
                 "RetentionInDays": {
                     "Fn::If": [
@@ -1855,7 +1855,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${ProjectName}-${Environment}"
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${Environment}-${AWS::StackName}"
                 },
                 "RetentionInDays": {
                     "Fn::If": [
@@ -1870,7 +1870,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/security/${ProjectName}-${Environment}"
+                    "Fn::Sub": "/aws/security/${ProjectName}-${Environment}-${AWS::StackName}"
                 },
                 "RetentionInDays": {
                     "Fn::If": [
@@ -1928,7 +1928,7 @@
             "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-rds"
+                    "Fn::Sub": "${ProjectName}-${Environment}-rds-${AWS::StackName}"
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
@@ -1978,7 +1978,7 @@
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "TableName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-dynamodb-table"
+                    "Fn::Sub": "${ProjectName}-${Environment}-dynamodb-table-${AWS::StackName}"
                 },
                 "BillingMode": "PAY_PER_REQUEST",
                 "AttributeDefinitions": [
@@ -2053,7 +2053,7 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-security-function"
+                    "Fn::Sub": "${ProjectName}-${Environment}-security-function-${AWS::StackName}"
                 },
                 "Runtime": "python3.12",
                 "Handler": "index.lambda_handler",
