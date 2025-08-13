@@ -109,24 +109,6 @@ export class EnhancedCloudTrail extends pulumi.ComponentResource {
         cloudWatchLogsGroupArn: pulumi.interpolate`${this.logGroup.arn}:*`,
         cloudWatchLogsRoleArn: cloudTrailRole.arn,
 
-        // Comprehensive event selectors for maximum audit coverage
-        eventSelectors: [
-          {
-            readWriteType: 'All',
-            includeManagementEvents: true,
-            dataResources: [
-              {
-                type: 'AWS::S3::Object',
-                values: ['arn:aws:s3:::*/*'],
-              },
-              {
-                type: 'AWS::S3::Bucket',
-                values: ['arn:aws:s3:::*'],
-              },
-            ],
-          },
-        ],
-
         // Advanced event selectors for more granular logging
         advancedEventSelectors: [
           {
