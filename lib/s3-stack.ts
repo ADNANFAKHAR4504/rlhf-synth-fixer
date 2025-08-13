@@ -72,17 +72,23 @@ export class S3Stack extends cdk.Stack {
       bucket: this.dataBucket,
     });
 
+    // Allow Lambda to read objects without encryption condition
     dataBucketPolicy.document.addStatements(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal('lambda.amazonaws.com')],
-        actions: ['s3:GetObject', 's3:PutObject'],
+        actions: ['s3:GetObject'],
         resources: [`${this.dataBucket.bucketArn}/*`],
-        conditions: {
-          StringEquals: {
-            's3:x-amz-server-side-encryption': 'AES256',
-          },
-        },
+      })
+    );
+
+    // Allow Lambda to put objects (encryption is enforced by bucket default encryption)
+    dataBucketPolicy.document.addStatements(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('lambda.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${this.dataBucket.bucketArn}/*`],
       })
     );
 
