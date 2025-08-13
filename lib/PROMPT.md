@@ -10,11 +10,11 @@ This prompt is designed to instruct an AI model in generating an AWS CDK TypeScr
   - Ensure all IAM roles have the least privileges necessary.
   - Enable multi-factor authentication (MFA) for all IAM users.
   - Encrypt all data at rest using the AWS KMS service.
-- **Proposed Statement:** The target infrastructure environment includes AWS resources primarily within the us-east-1 and us-west-2 regions. You will use **CDK with TypeScript** to configure the security of a multi-account AWS setup. Naming conventions should follow company standards (e.g., dept-env-purpose, such as hr-prod-database). IAM roles and policies should adhere to least privilege principles.
+- **Proposed Statement:** The target infrastructure environment includes AWS resources primarily within the us-east-2 and us-west-2 regions. You will use **CDK with TypeScript** to configure the security of a multi-account AWS setup. Naming conventions should follow company standards (e.g., dept-env-purpose, such as hr-prod-database). IAM roles and policies should adhere to least privilege principles.
 
 ### **Requirements (Steps for the AI)**
 
-1. **CDK Project Structure:** Create a CDK project in TypeScript with a file structure that can manage resources across multiple AWS accounts and regions (us-east-1, us-west-2).
+1. **CDK Project Structure:** Create a CDK project in TypeScript with a file structure that can manage resources across multiple AWS accounts and regions (us-east-2, us-west-2).
 2. **IAM and Authentication:**
    - Define IAM roles for both development and production environments, ensuring each role's policies grant only the minimum permissions required for its function (principle of least privilege).
    - Create a CDK construct or function that configures a policy requiring all IAM users to use Multi-Factor Authentication (MFA).

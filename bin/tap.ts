@@ -20,7 +20,7 @@ export function main(app?: cdk.App) {
     | string
     | undefined;
 
-  ['us-east-1', 'us-west-2'].forEach(region => {
+  ['us-east-2', 'us-west-2'].forEach(region => {
     new KmsStack(appInstance, `${dept}-${envSuffix}-${purpose}-kms-${region}`, {
       env: { account: process.env.CDK_DEFAULT_ACCOUNT, region },
       dept,
@@ -63,7 +63,7 @@ export function main(app?: cdk.App) {
       appInstance,
       `${dept}-${envSuffix}-${purpose}-mfa-scp`,
       {
-        env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
+        env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-2' },
         dept,
         envName: envSuffix,
         purpose,
