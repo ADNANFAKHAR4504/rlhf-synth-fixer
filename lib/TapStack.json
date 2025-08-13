@@ -1019,8 +1019,8 @@
                 "MultiAZ": false,
                 "PubliclyAccessible": false,
                 "DeletionProtection": false,
-                "EnablePerformanceInsights": true,
-                "MonitoringInterval": 60,
+                "EnablePerformanceInsights": false,
+                "MonitoringInterval": 0,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1311,7 +1311,7 @@
             }
         },
         "ApplicationLoadBalancerDNS": {
-            "Description": "Application Load Balancer DNS name",
+            "Description": "Application Load Balancer DNS name - Access your application at http://[this-value]",
             "Value": {
                 "Fn::GetAtt": [
                     "ApplicationLoadBalancer",
@@ -1321,6 +1321,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+                }
+            }
+        },
+        "ApplicationURL": {
+            "Description": "Complete URL to access your application",
+            "Value": {
+                "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-App-URL"
                 }
             }
         },
@@ -1392,6 +1403,10 @@
                     "Fn::Sub": "${AWS::StackName}-Security-LogGroup"
                 }
             }
+        },
+        "DeploymentNotes": {
+            "Description": "Post-deployment notes",
+            "Value": "Stack deployed successfully. ALB health checks target /health endpoint. Wait 2-3 minutes for instances to pass health checks."
         }
     }
 }

@@ -526,8 +526,8 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       DeletionProtection: false
-      EnablePerformanceInsights: true
-      MonitoringInterval: 60
+      EnablePerformanceInsights: false
+      MonitoringInterval: 0
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-database-${Environment}'
@@ -690,10 +690,16 @@ Outputs:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
   ApplicationLoadBalancerDNS:
-    Description: 'Application Load Balancer DNS name'
+    Description: 'Application Load Balancer DNS name - Access your application at http://[this-value]'
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
+
+  ApplicationURL:
+    Description: 'Complete URL to access your application'
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-App-URL'
 
   DatabaseEndpoint:
     Description: 'RDS Database endpoint'
@@ -730,3 +736,7 @@ Outputs:
     Value: !Ref SecurityLogGroup
     Export:
       Name: !Sub '${AWS::StackName}-Security-LogGroup'
+
+  DeploymentNotes:
+    Description: 'Post-deployment notes'
+    Value: 'Stack deployed successfully. ALB health checks target /health endpoint. Wait 2-3 minutes for instances to pass health checks.'
