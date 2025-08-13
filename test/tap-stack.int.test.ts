@@ -66,7 +66,7 @@ const loadStackOutputs = () => {
 
 // Initialize AWS clients
 const initializeClients = () => {
-  const region = process.env.AWS_REGION || 'us-west-2';
+  const region = 'us-west-2';
 
   return {
     ec2: new EC2Client({ region }),
