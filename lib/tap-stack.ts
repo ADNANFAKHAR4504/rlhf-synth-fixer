@@ -74,7 +74,7 @@ export class TapStack extends cdk.Stack {
       isDefault: true,
     });
 
-    // Security Group for ALB (allow "HTTP/HTTPS" from internet)
+    // Security Group for ALB (allow 'HTTP/HTTPS' from internet)
     const albSecurityGroup = new ec2.SecurityGroup(
       this,
       `ALBSecurityGroup${environmentSuffix}`,
