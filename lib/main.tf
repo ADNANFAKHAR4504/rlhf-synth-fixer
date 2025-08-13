@@ -4,26 +4,26 @@ module "secure_environment" {
   source = "./secure_env"
 
   # Pass variables to the module
-  trusted_account_id = var.trusted_account_id
+  trusted_account_id  = var.trusted_account_id
   allowed_cidr_blocks = var.allowed_cidr_blocks
-  instance_type      = var.instance_type
-  key_pair_name      = var.key_pair_name
+  instance_type       = var.instance_type
+  key_pair_name       = var.key_pair_name
 }
 
 # Root level variables
 variable "trusted_account_id" {
   description = "AWS Account ID that is allowed to assume the cross-account role"
   type        = string
-  default     = "123456789012"  # Replace with actual trusted account ID
+  default     = "123456789012" # Replace with actual trusted account ID
 }
 
 variable "allowed_cidr_blocks" {
   description = "List of CIDR blocks allowed to access HTTP/HTTPS ports"
   type        = list(string)
   default = [
-    "10.0.0.0/8",     # Private network range
-    "172.16.0.0/12",  # Private network range
-    "192.168.0.0/16"  # Private network range
+    "10.0.0.0/8",    # Private network range
+    "172.16.0.0/12", # Private network range
+    "192.168.0.0/16" # Private network range
   ]
 }
 
@@ -36,7 +36,7 @@ variable "instance_type" {
 variable "key_pair_name" {
   description = "Name of the EC2 Key Pair for instance access"
   type        = string
-  default     = "secure-env-key"  # Replace with your actual key pair name
+  default     = "secure-env-key" # Replace with your actual key pair name
 }
 
 # Output values from the module

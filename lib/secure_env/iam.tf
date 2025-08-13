@@ -1,7 +1,7 @@
 # IAM role for cross-account access with least privilege
 resource "aws_iam_role" "cross_account_role" {
   name = "SecureCrossAccountRole"
-  
+
   # Trust policy allowing the specified account to assume this role
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

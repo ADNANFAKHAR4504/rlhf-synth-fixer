@@ -2,7 +2,7 @@
 
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -21,16 +21,16 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-west-2"  # Change to your preferred region
-  
+  region = "us-west-2" # Change to your preferred region
+
   # Default tags applied to all resources
   default_tags {
     tags = {
       Environment = "Production"
-      Owner      = "SecurityTeam"
-      Project    = "SecureEnvironment"
-      ManagedBy  = "Terraform"
-      CreatedBy  = "RootModule"
+      Owner       = "SecurityTeam"
+      Project     = "SecureEnvironment"
+      ManagedBy   = "Terraform"
+      CreatedBy   = "RootModule"
     }
   }
 }

@@ -1,8 +1,8 @@
 locals {
   common_tags = {
     Environment = "Production"
-    Owner      = "SecurityTeam"
-    Project    = "SecureEnvironment"
-    ManagedBy  = "Terraform"
+    Owner       = "SecurityTeam"
+    Project     = "SecureEnvironment"
+    ManagedBy   = "Terraform"
   }
 }
