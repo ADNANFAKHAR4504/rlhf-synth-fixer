@@ -341,6 +341,22 @@ def test_codepipeline_exists(pulumi_outputs, aws_clients):
     assert expected_stages.issubset(
         stage_names), f"Pipeline missing expected stages. Found: {stage_names}"
 
+    # Verify Build stage configuration
+    build_stage = next(
+        stage for stage in pipeline["stages"] if stage["name"] == "Build")
+    build_action = build_stage["actions"][0]
+    assert build_action["actionTypeId"]["provider"] == "CodeBuild", "Build should use CodeBuild provider"
+    assert "corp-codebuild-project" in build_action["configuration"][
+        "ProjectName"], "Build should reference correct CodeBuild project"
+
+    # Verify Deploy stage configuration
+    deploy_stage = next(
+        stage for stage in pipeline["stages"] if stage["name"] == "Deploy")
+    deploy_action = deploy_stage["actions"][0]
+    assert deploy_action["actionTypeId"]["provider"] == "CodeBuild", "Deploy should use CodeBuild provider"
+    assert "corp-codebuild-deploy-project" in deploy_action["configuration"][
+        "ProjectName"], "Deploy should reference correct CodeBuild deploy project"
+
     # Verify source stage configuration
     source_stage = next(
         stage for stage in pipeline["stages"] if stage["name"] == "Source")

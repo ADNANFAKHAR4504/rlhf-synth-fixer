@@ -259,6 +259,14 @@ class TestHelpers(unittest.TestCase):
     mock_output.apply.return_value = "{\"Version\":\"2012-10-17\"}"
     _output_all.return_value = mock_output
 
+    # Mock second CodeBuild project call
+    _codebuild.side_effect = [
+        MagicMock(
+            arn="arn:aws:codebuild:us-west-2:123456789012:project/corp-codebuild-project"),
+        MagicMock(
+            arn="arn:aws:codebuild:us-west-2:123456789012:project/corp-codebuild-deploy-project")
+    ]
+
     kms_key = MagicMock(id="kid", arn="arn")
     tags = {"Environment": "Production"}
     cp = create_codepipeline(

@@ -819,12 +819,34 @@ def create_codepipeline(
       opts=ResourceOptions(provider=provider)
   )
 
+  # Create separate CodeBuild project for deployment
+  codebuild_deploy_project = aws.codebuild.Project(
+      "corp-codebuild-deploy-project",
+      name="corp-codebuild-deploy-project",
+      service_role=codebuild_role.arn,
+      artifacts=aws.codebuild.ProjectArtifactsArgs(
+          type="CODEPIPELINE"
+      ),
+      environment=aws.codebuild.ProjectEnvironmentArgs(
+          compute_type="BUILD_GENERAL1_SMALL",
+          image="aws/codebuild/amazonlinux2-x86_64-standard:5.0",
+          type="LINUX_CONTAINER",
+      ),
+      source=aws.codebuild.ProjectSourceArgs(
+          type="CODEPIPELINE",
+          buildspec="version: 0.2\nphases:\n  build:\n    commands:\n      - echo Deploy completed on `date`"
+      ),
+      tags={**tags, "Name": "corp-codebuild-deploy-project"},
+      opts=ResourceOptions(provider=provider)
+  )
+
   # Create custom inline policy for CodePipeline after all resources are
   # defined
   codepipeline_policy = pulumi.Output.all(
       bucket_arn=artifact_bucket.arn,
       codebuild_role_arn=codebuild_role.arn,
-      codebuild_project_arn=codebuild_project.arn
+      codebuild_project_arn=codebuild_project.arn,
+      codebuild_deploy_project_arn=codebuild_deploy_project.arn
   ).apply(lambda args: json.dumps({
       "Version": "2012-10-17",
       "Statement": [
@@ -853,7 +875,7 @@ def create_codepipeline(
                   "codebuild:StartBuild",
                   "codebuild:BatchGetBuilds"
               ],
-              "Resource": [args["codebuild_project_arn"]]
+              "Resource": [args["codebuild_project_arn"], args["codebuild_deploy_project_arn"]]
           }
       ]
   }))
@@ -918,6 +940,7 @@ def create_codepipeline(
                   "provider": "CodeBuild",
                   "input_artifacts": [build_output],
                   "version": "1",
+                  "configuration": {"ProjectName": "corp-codebuild-deploy-project"},
                   "run_order": 1,
               }],
           },
