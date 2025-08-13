@@ -772,3 +772,31 @@ bucket: `${environment}-${projectName}-cloudtrail-logs`,
 ```
 
 **Impact**: Infrastructure drift, resource management chaos.
+
+### 13. **BREAKING: Invalid VPC Flow Logs Format Fields**
+**Issue**: VPC Flow Logs configuration used incorrect field names in the log format string.
+
+**Problem**:
+- Used `windowstart` instead of `start`
+- Used `windowend` instead of `end` 
+- Used `flowlogstatus` instead of `log-status`
+- AWS API rejects these invalid field names
+
+**Error Message**:
+```
+InvalidParameter: Unknown fields provided: 'windowstart', 'flowlogstatus', 'windowend'
+```
+
+**Original Code**:
+```typescript
+logFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}',
+```
+
+**Fixed Code**:
+```typescript
+logFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}',
+```
+
+**Impact**: VPC Flow Logs creation fails, preventing network traffic monitoring and security compliance.
+
+**Reference**: [AWS VPC Flow Logs Available Fields](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html#flow-logs-fields)

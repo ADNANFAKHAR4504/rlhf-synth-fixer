@@ -187,7 +187,7 @@ describe('VPC Flow Logs Unit Tests', () => {
       expect(aws.ec2.FlowLog).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          logFormat: expect.stringMatching(/.*\$\{version\}.*\$\{account-id\}.*\$\{interface-id\}.*\$\{srcaddr\}.*\$\{dstaddr\}.*\$\{srcport\}.*\$\{dstport\}.*\$\{protocol\}.*\$\{packets\}.*\$\{bytes\}.*\$\{action\}.*\$\{flowlogstatus\}.*/)
+          logFormat: expect.stringMatching(/.*\$\{version\}.*\$\{account-id\}.*\$\{interface-id\}.*\$\{srcaddr\}.*\$\{dstaddr\}.*\$\{srcport\}.*\$\{dstport\}.*\$\{protocol\}.*\$\{packets\}.*\$\{bytes\}.*\$\{action\}.*\$\{log-status\}.*/)
         }),
         expect.any(Object)
       );

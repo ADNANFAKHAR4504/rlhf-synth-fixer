@@ -776,7 +776,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           trafficType: 'ALL',
           logDestinationType: 's3',
           logDestination: pulumi.interpolate`${vpcFlowLogsBucket.arn}/vpc-flow-logs/`,
-          logFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}',
+          logFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}',
           tags: {
             ...commonTags,
             Name: `${projectName}-${environment}-vpc-flow-logs-${region}`,
