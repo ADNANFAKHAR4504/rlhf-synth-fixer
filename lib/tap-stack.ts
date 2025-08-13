@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {

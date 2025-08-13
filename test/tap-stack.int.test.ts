@@ -1,21 +1,21 @@
 ﻿// Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import {
-  DynamoDBClient,
-  PutItemCommand,
-  GetItemCommand,
   DeleteItemCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  KMSClient,
   DescribeKeyCommand,
+  KMSClient,
   ListAliasesCommand,
 } from '@aws-sdk/client-kms';
+import fs from 'fs';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';

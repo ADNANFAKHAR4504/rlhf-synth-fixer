@@ -1,5 +1,5 @@
 ﻿import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Unit Tests', () => {
