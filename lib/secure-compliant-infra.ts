@@ -576,7 +576,8 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         `${projectName}-${environment}-key-${region}`,
         {
           keyName: `${projectName}-${environment}-key-${region}`,
-          publicKey: `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... ${projectName}-${environment}-${region}`, // Replace with actual public key
+          publicKey:
+            'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCfRo5a85SwGJL6c38HwiKzuCzIxOcY0WFnwSjFTr5Sfxc5UTHPP7tYtNzLyiLNFY8X7fKzBXWujXqLZHOFH7Yk9jKOsNh17b5kCv4VRx+IRNnG7CiBVK+Vgh0JMrmQWK2Wc5yaT9+ANucTMZ8aQhmRJbJ1tHPGylf71gAudWTlq+bEDiXECJWVfcI/Osqw3HmyC2GEA0tjJrt+rtR/9cpXeVXczEh8kVAoCAexvhWqJ1qEOcL//XDNVLvqrCpydDbjxiXJ2uwUuO8XGG0kSMD7iEOt9MLIwiSuj9JX6V4JBktYk0uOD+1U9PIVexovs2SrWuiWTdqGVVqXxcV18tfp test-key',
           tags: {
             ...commonTags,
             Name: `${projectName}-${environment}-key-${region}`,
