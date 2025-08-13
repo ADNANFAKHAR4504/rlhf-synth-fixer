@@ -184,11 +184,29 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Reduced VPC endpoints to avoid service limits
+    // Enhanced VPC endpoints for complete coverage
     const secretsManagerEndpoint = vpc.addInterfaceEndpoint(
       `SecretsManager-VPC-Endpoint-${environmentSuffix}`,
       {
         service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        privateDnsEnabled: true,
+      }
+    );
+
+    const kmsVpcEndpoint = vpc.addInterfaceEndpoint(
+      `KMS-VPC-Endpoint-${environmentSuffix}`,
+      {
+        service: ec2.InterfaceVpcEndpointAwsService.KMS,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        privateDnsEnabled: true,
+      }
+    );
+
+    const ec2Endpoint = vpc.addInterfaceEndpoint(
+      `EC2-VPC-Endpoint-${environmentSuffix}`,
+      {
+        service: ec2.InterfaceVpcEndpointAwsService.EC2,
         subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         privateDnsEnabled: true,
       }
@@ -332,6 +350,19 @@ export class TapStack extends cdk.Stack {
           },
         ],
       },
+      {
+        Name: 'VPC Endpoint Network Activity Events',
+        FieldSelectors: [
+          {
+            Field: 'eventCategory',
+            Equals: ['NetworkActivityEvents'],
+          },
+          {
+            Field: 'resources.type',
+            Equals: ['AWS::EC2::VPCEndpoint'],
+          },
+        ],
+      },
     ]);
 
     // IAM Roles for different user types with least privilege
@@ -342,7 +373,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Developer-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Developer-${environmentSuffix}`,
-        assumedBy: new iam.AccountRootPrincipal(),
+        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
         description:
           'Role for developers with limited access to development resources',
         maxSessionDuration: cdk.Duration.hours(4), // Limit session duration
@@ -383,7 +414,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Admin-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Admin-${environmentSuffix}`,
-        assumedBy: new iam.AccountRootPrincipal(),
+        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
         description: 'Role for administrators with elevated access',
         maxSessionDuration: cdk.Duration.hours(2), // Shorter session for admins
       }
@@ -422,7 +453,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Auditor-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Auditor-${environmentSuffix}`,
-        assumedBy: new iam.AccountRootPrincipal(),
+        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
         description: 'Role for auditors with read-only access',
         maxSessionDuration: cdk.Duration.hours(8), // Longer for auditing tasks
       }
@@ -574,6 +605,16 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VPCEndpointSecretsManagerId', {
       value: secretsManagerEndpoint.vpcEndpointId,
       description: 'Secrets Manager VPC Endpoint ID',
+    });
+
+    new cdk.CfnOutput(this, 'VPCEndpointKMSId', {
+      value: kmsVpcEndpoint.vpcEndpointId,
+      description: 'KMS VPC Endpoint ID',
+    });
+
+    new cdk.CfnOutput(this, 'VPCEndpointEC2Id', {
+      value: ec2Endpoint.vpcEndpointId,
+      description: 'EC2 VPC Endpoint ID',
     });
 
     // Tags for compliance
