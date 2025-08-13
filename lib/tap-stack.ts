@@ -156,7 +156,6 @@ export class TapStack extends cdk.Stack {
       this,
       `SecureCorp-CloudTrail-Bucket-${environmentSuffix}`,
       {
-        bucketName: `securecorp-cloudtrail-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: securityKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -220,7 +219,6 @@ export class TapStack extends cdk.Stack {
       this,
       `SecureCorp-Data-${environmentSuffix}`,
       {
-        bucketName: `securecorp-data-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: securityKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
