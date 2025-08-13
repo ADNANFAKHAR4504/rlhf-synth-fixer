@@ -36,8 +36,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create S3 VPC Endpoint for secure private access
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const s3VpcEndpoint = vpc.addGatewayEndpoint('S3Endpoint', {
+    vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
       subnets: [
         {
@@ -46,13 +45,26 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // Create secure S3 bucket with versioning
+    // Create a logs bucket for access logging first
+    const logsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
+      bucketName: `access-logs-bucket-${environmentSuffix}-${this.account}-${this.region}`,
+      versioned: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    // Create secure S3 bucket with versioning and server access logging
     const dataBucket = new s3.Bucket(this, 'SecureDataBucket', {
       bucketName: `secure-data-bucket-${environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
+      serverAccessLogsBucket: logsBucket,
+      serverAccessLogsPrefix: 'access-logs/',
       lifecycleRules: [
         {
           id: 'DeleteIncompleteMultipartUploads',
@@ -71,40 +83,6 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
-
-    // Create a logs bucket for access logging
-    const logsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
-      bucketName: `access-logs-bucket-${environmentSuffix}-${this.account}-${this.region}`,
-      versioned: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    // Configure server access logging for the logs bucket
-    logsBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowAccessLogging',
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('logging.s3.amazonaws.com')],
-        actions: ['s3:PutObject'],
-        resources: [`${logsBucket.bucketArn}/*`],
-        conditions: {
-          StringEquals: {
-            's3:x-amz-acl': 'bucket-owner-full-control',
-          },
-        },
-      })
-    );
-
-    // Enable server access logging on the data bucket
-    const cfnDataBucket = dataBucket.node.defaultChild as s3.CfnBucket;
-    cfnDataBucket.loggingConfiguration = {
-      destinationBucketName: logsBucket.bucketName,
-      logFilePrefix: 'access-logs/',
-    };
 
     // Create IAM role with least privilege permissions for S3 access
     const s3AccessRole = new iam.Role(this, 'S3AccessRole', {
@@ -225,23 +203,24 @@ export class TapStack extends cdk.Stack {
     // VPC Flow Logs for monitoring
     const flowLogsRole = new iam.Role(this, 'FlowLogsRole', {
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+      inlinePolicies: {
+        FlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              resources: [`arn:aws:logs:${this.region}:${this.account}:*`],
+            }),
+          ],
+        }),
+      },
     });
-
-    // Add the necessary permissions for VPC Flow Logs to write to CloudWatch Logs
-    flowLogsRole.addToPolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowFlowLogsToCloudWatchLogs',
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'logs:CreateLogGroup',
-          'logs:CreateLogStream',
-          'logs:PutLogEvents',
-          'logs:DescribeLogGroups',
-          'logs:DescribeLogStreams',
-        ],
-        resources: ['*'],
-      })
-    );
 
     const flowLogsGroup = new logs.LogGroup(this, 'VPCFlowLogs', {
       retention: logs.RetentionDays.ONE_MONTH,
