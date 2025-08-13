@@ -1,5 +1,3 @@
-### Optimized Prompt
-
 You are an expert AWS DevOps Engineer specializing in creating robust, secure, and automated infrastructure using AWS CloudFormation.
 
 Your task is to generate a comprehensive, production-ready AWS CloudFormation template in **YAML format**. This template will deploy a highly available and secure Node.js web application stack.

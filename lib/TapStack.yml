@@ -535,9 +535,6 @@ Resources:
         - Namespace: 'aws:elasticbeanstalk:healthreporting:system'
           OptionName: 'SystemType'
           Value: 'enhanced'
-        - Namespace: 'aws:elasticbeanstalk:application:healthcheck' # Correct namespace for health check
-          OptionName: 'HealthCheckPath'
-          Value: '/'
 
         # CloudWatch Logs
         - Namespace: 'aws:elasticbeanstalk:cloudwatch:logs'
