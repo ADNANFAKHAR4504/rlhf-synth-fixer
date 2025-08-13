@@ -222,8 +222,16 @@ class TapStack(TerraformStack):
     )
 
     # Web/application Security Group: allow only 80/443 from allowed CIDRs
-    # Reuse-or-create: Web SG
+    # Reuse-or-create: Web SG (ensure same VPC)
     web_sg_id_value = os.getenv("EXISTING_WEB_SG_ID")
+    if web_sg_id_value and boto3 is not None:
+      try:
+        ec2 = boto3.client("ec2", region_name=region)
+        resp = ec2.describe_security_groups(GroupIds=[web_sg_id_value])
+        if resp["SecurityGroups"][0]["VpcId"] != vpc_id_value:
+          web_sg_id_value = None
+      except Exception:
+        web_sg_id_value = None
     web_sg = None
     if not web_sg_id_value and boto3 is not None and vpc_id_value:
       try:
@@ -300,15 +308,15 @@ class TapStack(TerraformStack):
       bucket_name_for_output = existing_bucket_name
     else:
       # Preserve attributes expected by existing tests
-      self.bucket_versioning = {"enabled": True}
-      self.bucket_encryption = {
-        "rule": {
-          "apply_server_side_encryption_by_default": {"sse_algorithm": "AES256"}
-        }
+    self.bucket_versioning = {"enabled": True}
+    self.bucket_encryption = {
+      "rule": {
+        "apply_server_side_encryption_by_default": {"sse_algorithm": "AES256"}
       }
-      self.bucket = S3Bucket(
-        self,
-        "tap_bucket",
+    }
+    self.bucket = S3Bucket(
+      self,
+      "tap_bucket",
         bucket=f"secure-app-bucket{construct_id.lower()}",
         tags={"Environment": "Production", "Name": "secure-app-bucket"},
       )
@@ -338,14 +346,25 @@ class TapStack(TerraformStack):
       )
       bucket_name_for_output = self.bucket.bucket
 
-    # Reuse-or-create: DB subnet group
+    # Reuse-or-create: DB subnet group (validate VPC match)
     existing_db_subnet_group_name = os.getenv("EXISTING_DB_SUBNET_GROUP_NAME")
+    if existing_db_subnet_group_name and boto3 is not None:
+      try:
+        rds = boto3.client("rds", region_name=region)
+        resp = rds.describe_db_subnet_groups(DBSubnetGroupName=existing_db_subnet_group_name)
+        vpc_of_group = resp["DBSubnetGroups"][0]["VpcId"]
+        if vpc_of_group != vpc_id_value:
+          existing_db_subnet_group_name = None
+      except Exception:
+        existing_db_subnet_group_name = None
     if not existing_db_subnet_group_name and boto3 is not None:
       try:
         rds = boto3.client("rds", region_name=region)
-        probe_name = "db-subnets"
-        rds.describe_db_subnet_groups(DBSubnetGroupName=probe_name)
-        existing_db_subnet_group_name = probe_name
+        resp = rds.describe_db_subnet_groups()
+        for g in resp.get("DBSubnetGroups", []):
+          if g.get("VpcId") == vpc_id_value:
+            existing_db_subnet_group_name = g.get("DBSubnetGroupName")
+            break
       except Exception:
         pass
     db_subnet_group_name_value = existing_db_subnet_group_name
@@ -359,8 +378,16 @@ class TapStack(TerraformStack):
         tags={"Environment": "Production"},
       )
       db_subnet_group_name_value = db_subnets.name
-    # Reuse-or-create: DB SG
+    # Reuse-or-create: DB SG (ensure same VPC)
     db_sg_id_value = os.getenv("EXISTING_DB_SG_ID")
+    if db_sg_id_value and boto3 is not None:
+      try:
+        ec2 = boto3.client("ec2", region_name=region)
+        resp = ec2.describe_security_groups(GroupIds=[db_sg_id_value])
+        if resp["SecurityGroups"][0]["VpcId"] != vpc_id_value:
+          db_sg_id_value = None
+      except Exception:
+        db_sg_id_value = None
     db_sg = None
     if not db_sg_id_value and boto3 is not None and vpc_id_value:
       try:
