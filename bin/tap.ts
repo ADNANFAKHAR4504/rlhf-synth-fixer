@@ -42,7 +42,6 @@ const databaseStack = new DatabaseStack(app, 'DatabaseStack', {
   appSecurityGroup: coreStack.appSecurityGroup,
   appInstanceRole: coreStack.appInstanceRole,
 });
-databaseStack.addDependency(coreStack);
 
 // Monitoring (CloudWatch alarms) – needs ALB/ASG/DB references
 const monitoringStack = new MonitoringStack(app, 'MonitoringStack', {
