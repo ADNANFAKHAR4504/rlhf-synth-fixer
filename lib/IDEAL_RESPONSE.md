@@ -39,7 +39,7 @@ class SecureAwsInfraStack(TerraformStack):
         super().__init__(scope, construct_id)
 
         # Configuration
-        region = os.getenv("AWS_REGION", "us-west-2")
+        region = os.getenv("AWS_REGION", "us-east-2")
         allowed_cidrs = [cidr.strip() for cidr in os.getenv("ALLOWED_CIDRS", "203.0.113.0/24").split(",")]
 
         # Providers

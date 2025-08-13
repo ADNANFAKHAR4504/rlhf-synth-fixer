@@ -40,7 +40,7 @@ class TapStack(TerraformStack):
     super().__init__(scope, construct_id)
 
     # Config
-    region = os.getenv("AWS_REGION", kwargs.get("aws_region", "us-west-2"))
+    region = os.getenv("AWS_REGION", kwargs.get("aws_region", "us-east-2"))
     allowed_cidrs = [
       cidr.strip()
       for cidr in os.getenv("ALLOWED_CIDRS", "203.0.113.0/24").split(",")
