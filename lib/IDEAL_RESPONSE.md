@@ -30,6 +30,10 @@ from cdktf_cdktf_provider_aws.flow_log import FlowLog
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.data_aws_kms_key import DataAwsKmsKey
+try:
+    import boto3  # Optional: for auto-detect reuse
+except Exception:
+    boto3 = None
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
 
