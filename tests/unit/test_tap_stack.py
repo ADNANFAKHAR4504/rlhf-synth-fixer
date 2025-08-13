@@ -144,10 +144,9 @@ class TestHelpers(unittest.TestCase):
     vpc.id = "vpc-123"
     sample_tags = {"Environment": "Production"}
     sgs = create_security_groups(vpc, sample_tags, mock_provider)
-    self.assertIn("web_sg", sgs)
+    self.assertIn("alb_sg", sgs)
     self.assertIn("db_sg", sgs)
     self.assertIn("eks_sg", sgs)
-    self.assertIn("alb_sg", sgs)
 
   @patch("lib.tap_stack.random.RandomPassword",
          return_value=MagicMock(result="generated-password"))
@@ -210,10 +209,12 @@ class TestHelpers(unittest.TestCase):
     cluster = MagicMock()
     cluster.name = "eks-cluster"
     public_subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
+    eks_sg = MagicMock(id="sg-123")
     tags = {"Environment": "Production"}
     ng = create_eks_node_group(
         cluster=cluster,
         public_subnets=public_subnets,
+        eks_sg=eks_sg,
         tags=tags,
         provider=mock_provider
     )
@@ -335,19 +336,22 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.aws.get_region")
   @patch("lib.tap_stack.create_monitoring_lambda",
          return_value=MagicMock(name="lambda"))
+  @patch("lib.tap_stack.create_cloudwatch_alarms", return_value=None)
   @patch("lib.tap_stack.create_codepipeline",
          return_value=MagicMock(name="pipeline"))
   @patch("lib.tap_stack.create_alb",
-         return_value=(MagicMock(dns_name="alb"),
+         return_value=(MagicMock(dns_name="alb", arn_suffix="alb-suffix"),
                        MagicMock(arn="tg"), MagicMock()))
   @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock())
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
+  @patch("lib.tap_stack.create_s3_buckets",
+         return_value={"app_bucket": MagicMock(bucket="test-bucket")})
   @patch("lib.tap_stack.create_rds",
          return_value=MagicMock(id="rds", endpoint="db"))
   @patch("lib.tap_stack.create_security_groups",
-         return_value={"web_sg": MagicMock(), "db_sg": MagicMock(),
-                       "eks_sg": MagicMock(), "alb_sg": MagicMock()})
+         return_value={"alb_sg": MagicMock(), "db_sg": MagicMock(),
+                       "eks_sg": MagicMock()})
   @patch("lib.tap_stack.create_kms_key",
          return_value=MagicMock(id="kms", arn="arn"))
   @patch("lib.tap_stack.SecureVPC",
@@ -369,19 +373,22 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.aws.get_region")
   @patch("lib.tap_stack.create_monitoring_lambda",
          return_value=MagicMock(name="lambda"))
+  @patch("lib.tap_stack.create_cloudwatch_alarms", return_value=None)
   @patch("lib.tap_stack.create_codepipeline",
          return_value=MagicMock(name="pipeline"))
   @patch("lib.tap_stack.create_alb",
-         return_value=(MagicMock(dns_name="alb"),
+         return_value=(MagicMock(dns_name="alb", arn_suffix="alb-suffix"),
                        MagicMock(arn="tg"), MagicMock()))
   @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock())
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
+  @patch("lib.tap_stack.create_s3_buckets",
+         return_value={"app_bucket": MagicMock(bucket="test-bucket")})
   @patch("lib.tap_stack.create_rds",
          return_value=MagicMock(id="rds", endpoint="db"))
   @patch("lib.tap_stack.create_security_groups",
-         return_value={"web_sg": MagicMock(), "db_sg": MagicMock(),
-                       "eks_sg": MagicMock(), "alb_sg": MagicMock()})
+         return_value={"alb_sg": MagicMock(), "db_sg": MagicMock(),
+                       "eks_sg": MagicMock()})
   @patch("lib.tap_stack.create_kms_key",
          return_value=MagicMock(id="kms", arn="arn"))
   @patch("lib.tap_stack.SecureVPC",
@@ -407,19 +414,22 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.aws.get_region")
   @patch("lib.tap_stack.create_monitoring_lambda",
          return_value=MagicMock(name="lambda"))
+  @patch("lib.tap_stack.create_cloudwatch_alarms", return_value=None)
   @patch("lib.tap_stack.create_codepipeline",
          return_value=MagicMock(name="pipeline"))
   @patch("lib.tap_stack.create_alb",
-         return_value=(MagicMock(dns_name="alb"),
+         return_value=(MagicMock(dns_name="alb", arn_suffix="alb-suffix"),
                        MagicMock(arn="tg"), MagicMock()))
   @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock())
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
+  @patch("lib.tap_stack.create_s3_buckets",
+         return_value={"app_bucket": MagicMock(bucket="test-bucket")})
   @patch("lib.tap_stack.create_rds",
          return_value=MagicMock(id="rds", endpoint="db"))
   @patch("lib.tap_stack.create_security_groups",
-         return_value={"web_sg": MagicMock(), "db_sg": MagicMock(),
-                       "eks_sg": MagicMock(), "alb_sg": MagicMock()})
+         return_value={"alb_sg": MagicMock(), "db_sg": MagicMock(),
+                       "eks_sg": MagicMock()})
   @patch("lib.tap_stack.create_kms_key",
          return_value=MagicMock(id="kms", arn="arn"))
   @patch("lib.tap_stack.SecureVPC",

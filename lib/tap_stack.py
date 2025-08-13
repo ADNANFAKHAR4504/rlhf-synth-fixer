@@ -375,71 +375,14 @@ def create_security_groups(
     vpc: aws.ec2.Vpc, tags: Dict[str, str], provider: aws.Provider
 ) -> Dict[str, aws.ec2.SecurityGroup]:
   """
-  Create simple security groups - very permissive for testing.
+  Create simple, permissive security groups for EKS to work reliably.
   """
 
-  web_sg = aws.ec2.SecurityGroup(
-      "corp-web-sg",
-      vpc_id=vpc.id,
-      description="Allow HTTP and HTTPS inbound",
-      ingress=[
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"]
-          ),
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=443, to_port=443, cidr_blocks=["0.0.0.0/0"]
-          ),
-      ],
-      egress=[
-          aws.ec2.SecurityGroupEgressArgs(
-              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
-          )
-      ],
-      tags={**tags, "Name": "corp-web-sg"},
-      opts=ResourceOptions(provider=provider)
-  )
-
-  db_sg = aws.ec2.SecurityGroup(
-      "corp-db-sg",
-      vpc_id=vpc.id,
-      description="Allow Postgres inbound",
-      ingress=[
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=5432, to_port=5432, cidr_blocks=["10.0.0.0/16"]
-          )
-      ],
-      egress=[
-          aws.ec2.SecurityGroupEgressArgs(
-              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
-          )
-      ],
-      tags={**tags, "Name": "corp-db-sg"},
-      opts=ResourceOptions(provider=provider)
-  )
-
-  # Simple EKS security group - allow everything
-  eks_sg = aws.ec2.SecurityGroup(
-      "corp-eks-sg",
-      vpc_id=vpc.id,
-      description="EKS security group - allow all",
-      ingress=[
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
-          )
-      ],
-      egress=[
-          aws.ec2.SecurityGroupEgressArgs(
-              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
-          )
-      ],
-      tags={**tags, "Name": "corp-eks-sg"},
-      opts=ResourceOptions(provider=provider)
-  )
-
+  # ALB Security Group - Only HTTP/HTTPS from internet
   alb_sg = aws.ec2.SecurityGroup(
       "corp-alb-sg",
       vpc_id=vpc.id,
-      description="Security group for Application Load Balancer",
+      description="ALB - Allow HTTP/HTTPS from internet",
       ingress=[
           aws.ec2.SecurityGroupIngressArgs(
               protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"]
@@ -457,11 +400,58 @@ def create_security_groups(
       opts=ResourceOptions(provider=provider)
   )
 
+  # Single EKS Security Group - Allow everything for cluster communication
+  eks_sg = aws.ec2.SecurityGroup(
+      "corp-eks-sg",
+      vpc_id=vpc.id,
+      description="EKS cluster and nodes - permissive for testing",
+      ingress=[
+          # Allow all traffic from within VPC for EKS communication
+          aws.ec2.SecurityGroupIngressArgs(
+              protocol="-1", from_port=0, to_port=0, cidr_blocks=["10.0.0.0/16"]
+          ),
+          # Allow HTTP from ALB for NGINX
+          aws.ec2.SecurityGroupIngressArgs(
+              protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"]
+          ),
+          # Allow HTTPS from internet (for testing)
+          aws.ec2.SecurityGroupIngressArgs(
+              protocol="tcp", from_port=443, to_port=443, cidr_blocks=["0.0.0.0/0"]
+          ),
+      ],
+      egress=[
+          # Allow all outbound - nodes need internet access
+          aws.ec2.SecurityGroupEgressArgs(
+              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
+          )
+      ],
+      tags={**tags, "Name": "corp-eks-sg"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Database Security Group - Only from VPC
+  db_sg = aws.ec2.SecurityGroup(
+      "corp-db-sg",
+      vpc_id=vpc.id,
+      description="RDS PostgreSQL - VPC access only",
+      ingress=[
+          aws.ec2.SecurityGroupIngressArgs(
+              protocol="tcp", from_port=5432, to_port=5432, cidr_blocks=["10.0.0.0/16"]
+          )
+      ],
+      egress=[
+          aws.ec2.SecurityGroupEgressArgs(
+              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
+          )
+      ],
+      tags={**tags, "Name": "corp-db-sg"},
+      opts=ResourceOptions(provider=provider)
+  )
+
   return {
-      "web_sg": web_sg,
-      "db_sg": db_sg,
-      "eks_sg": eks_sg,
       "alb_sg": alb_sg,
+      "eks_sg": eks_sg,
+      "db_sg": db_sg,
   }
 
 
@@ -534,7 +524,7 @@ def create_eks_cluster(
     provider: aws.Provider,
 ) -> aws.eks.Cluster:
   """
-  Create a simple EKS cluster.
+  Create EKS cluster with simplified security group.
   """
   eks_role = aws.iam.Role(
       "corp-eks-role",
@@ -562,10 +552,11 @@ def create_eks_cluster(
 
   cluster = aws.eks.Cluster(
       "corp-eks-cluster",
+      name="corp-eks-cluster",  # Explicit cluster name
       role_arn=eks_role.arn,
       vpc_config=aws.eks.ClusterVpcConfigArgs(
-          subnet_ids=subnet_ids,  # Use both public and private subnets
-          security_group_ids=[eks_sg.id],
+          subnet_ids=subnet_ids,
+          security_group_ids=[eks_sg.id],  # Use simplified security group
           endpoint_public_access=True,
           endpoint_private_access=True,
       ),
@@ -577,13 +568,13 @@ def create_eks_cluster(
 
 def create_eks_node_group(
     cluster: aws.eks.Cluster,
-    # Use public subnets for internet access
     public_subnets: List[aws.ec2.Subnet],
+    eks_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
     provider: aws.Provider,
 ) -> aws.eks.NodeGroup:
   """
-  Create simple EKS node group in public subnets for internet access.
+  Create EKS node group with explicit security group assignment for proper cluster joining.
   """
   node_role = aws.iam.Role(
       "corp-eks-node-role",
@@ -602,10 +593,12 @@ def create_eks_node_group(
       tags={**tags, "Name": "corp-eks-node-role"},
       opts=ResourceOptions(provider=provider)
   )
+  # Enhanced IAM policies for EKS nodes
   policies = [
       "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
       "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
       "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+      "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",  # For SSM access
   ]
   for i, pol_arn in enumerate(policies):
     aws.iam.RolePolicyAttachment(
@@ -615,21 +608,70 @@ def create_eks_node_group(
         opts=ResourceOptions(provider=provider)
     )
 
+  # Create node group with explicit security group assignment
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
+      node_group_name="corp-eks-cluster-nodegroup1",  # Explicit name pattern
       node_role_arn=node_role.arn,
-      # Use public subnets for internet access
       subnet_ids=[s.id for s in public_subnets],
       instance_types=["t3.small"],
       capacity_type="ON_DEMAND",
       scaling_config=aws.eks.NodeGroupScalingConfigArgs(
-          desired_size=1, min_size=1, max_size=2
+          desired_size=1, min_size=1, max_size=1  # Minimum for testing
       ),
-      tags={**tags, "Name": "corp-eks-node-group"},
+      # CRITICAL: Assign security group to nodes for cluster communication
+      remote_access=aws.eks.NodeGroupRemoteAccessArgs(
+          source_security_group_ids=[eks_sg.id],  # Use the EKS security group
+      ),
+      tags={**tags, "Name": "corp-eks-cluster-nodegroup1"},
       opts=ResourceOptions(provider=provider)
   )
   return node_group
+
+
+def create_s3_buckets(
+    kms_key: aws.kms.Key,
+    tags: Dict[str, str],
+    provider: aws.Provider,
+) -> Dict[str, aws.s3.Bucket]:
+  """
+  Create required S3 buckets with encryption.
+  """
+  # Application data bucket
+  app_bucket = aws.s3.Bucket(
+      "corp-app-bucket",
+      acl="private",
+      versioning=aws.s3.BucketVersioningArgs(enabled=True),
+      tags={**tags, "Name": "corp-app-bucket"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Configure server-side encryption
+  aws.s3.BucketServerSideEncryptionConfigurationV2(
+      "corp-app-bucket-encryption",
+      bucket=app_bucket.id,
+      rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+          apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+              sse_algorithm="aws:kms",
+              kms_master_key_id=kms_key.arn,
+          )
+      )],
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Block public access
+  aws.s3.BucketPublicAccessBlock(
+      "corp-app-bucket-pab",
+      bucket=app_bucket.id,
+      block_public_acls=True,
+      block_public_policy=True,
+      ignore_public_acls=True,
+      restrict_public_buckets=True,
+      opts=ResourceOptions(provider=provider)
+  )
+
+  return {"app_bucket": app_bucket}
 
 
 def create_alb(
@@ -660,11 +702,13 @@ def create_alb(
       vpc_id=public_subnets[0].vpc_id,
       health_check=aws.lb.TargetGroupHealthCheckArgs(
           path="/",
-          interval=30,
+          protocol="HTTP",
+          port="80",
+          interval=10,  # Faster health checks for testing
           timeout=5,
           healthy_threshold=2,
-          unhealthy_threshold=3,
-          matcher="200-399",
+          unhealthy_threshold=2,
+          matcher="200",
       ),
       tags={**tags, "Name": "corp-alb-target-group"},
       opts=ResourceOptions(provider=provider)
@@ -1068,6 +1112,54 @@ def lambda_handler(event, context):
   return lambda_func
 
 
+def create_cloudwatch_alarms(
+    alb: aws.lb.LoadBalancer,
+    rds_instance: aws.rds.Instance,
+    tags: Dict[str, str],
+    provider: aws.Provider,
+) -> None:
+  """
+  Create basic CloudWatch alarms for monitoring.
+  """
+  # ALB unhealthy target alarm
+  aws.cloudwatch.MetricAlarm(
+      "corp-alb-unhealthy-targets",
+      alarm_name="corp-alb-unhealthy-targets",
+      comparison_operator="GreaterThanThreshold",
+      evaluation_periods=2,
+      metric_name="UnHealthyHostCount",
+      namespace="AWS/ApplicationELB",
+      period=60,
+      statistic="Average",
+      threshold=0,
+      alarm_description="ALB has unhealthy targets",
+      dimensions={
+          "LoadBalancer": alb.arn_suffix,
+      },
+      tags={**tags, "Name": "corp-alb-unhealthy-targets"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # RDS CPU alarm
+  aws.cloudwatch.MetricAlarm(
+      "corp-rds-high-cpu",
+      alarm_name="corp-rds-high-cpu",
+      comparison_operator="GreaterThanThreshold",
+      evaluation_periods=2,
+      metric_name="CPUUtilization",
+      namespace="AWS/RDS",
+      period=300,
+      statistic="Average",
+      threshold=80,
+      alarm_description="RDS CPU utilization is high",
+      dimensions={
+          "DBInstanceIdentifier": rds_instance.id,
+      },
+      tags={**tags, "Name": "corp-rds-high-cpu"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+
 class TapStack(pulumi.ComponentResource):
   """
   The main Pulumi component resource representing the entire infrastructure stack.
@@ -1097,8 +1189,11 @@ class TapStack(pulumi.ComponentResource):
 
     sgs = create_security_groups(vpc_module.vpc, tags, provider)
     db_sg = sgs["db_sg"]
-    eks_sg = sgs["eks_sg"]
+    eks_sg = sgs["eks_sg"]  # Simplified single EKS security group
     alb_sg = sgs["alb_sg"]
+
+    # Create S3 buckets
+    s3_buckets = create_s3_buckets(kms_key, tags, provider)
 
     rds_instance = create_rds(
         subnets=vpc_module.private_subnets,
@@ -1116,21 +1211,27 @@ class TapStack(pulumi.ComponentResource):
         vpc_module.private_subnets]
 
     eks_cluster = create_eks_cluster(
-        subnet_ids=all_subnet_ids,  # Cluster can use both public and private
-        eks_sg=eks_sg,
+        subnet_ids=all_subnet_ids,
+        eks_sg=eks_sg,  # Use simplified security group
         tags=tags,
         provider=provider
     )
-    # Node group uses public subnets for internet access
+
+    # Node group uses public subnets for internet access with explicit
+    # security group
     eks_node_group = create_eks_node_group(
         cluster=eks_cluster,
         public_subnets=vpc_module.public_subnets,
+        eks_sg=eks_sg,  # Pass security group to node group
         tags=tags,
         provider=provider
     )
 
     alb, target_group, _ = create_alb(
         vpc_module.public_subnets, alb_sg, tags, provider)
+
+    # Create CloudWatch monitoring
+    create_cloudwatch_alarms(alb, rds_instance, tags, provider)
 
     github_token_param = f"/{prefix}/{args.environment_suffix}/githubToken"
 
@@ -1179,9 +1280,14 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("eks_node_group_name", eks_node_group.node_group_name)
     pulumi.export("alb_dns_name", alb.dns_name)
     pulumi.export("alb_target_group_arn", target_group.arn)
+    pulumi.export("s3_app_bucket_name", s3_buckets["app_bucket"].bucket)
     pulumi.export("codepipeline_name", pipeline.name)
     pulumi.export("health_lambda_name", health_lambda.name)
     pulumi.export("health_lambda_arn", health_lambda.arn)
+
+    # NGINX deployment instructions
+    pulumi.export("nginx_deployment_instructions",
+                  "After EKS cluster is ready, deploy NGINX using: kubectl apply -f nginx-deployment.yaml")
 
     self.register_outputs(
         {
