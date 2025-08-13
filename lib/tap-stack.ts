@@ -56,6 +56,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly albDnsName: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly s3BucketName: pulumi.Output<string>;
+  public readonly rdsIdentifier: pulumi.Output<string>;
+  public readonly launchTemplateName: pulumi.Output<string>;
 
   // Additional outputs for integration testing
   public readonly albName: pulumi.Output<string>;
@@ -118,6 +120,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.albDnsName = this.webAppStack.albDnsName;
     this.rdsEndpoint = this.webAppStack.rdsEndpoint;
     this.s3BucketName = this.webAppStack.s3BucketName;
+    this.rdsIdentifier = this.webAppStack.rdsIdentifier;
+    this.launchTemplateName = this.webAppStack.launchTemplateName;
 
     // Additional outputs for integration testing
     this.albName = this.webAppStack.loadBalancer.name;
@@ -138,6 +142,8 @@ export class TapStack extends pulumi.ComponentResource {
       albDnsName: this.albDnsName,
       rdsEndpoint: this.rdsEndpoint,
       s3BucketName: this.s3BucketName,
+      rdsIdentifier: this.rdsIdentifier,
+      launchTemplateName: this.launchTemplateName,
       vpcId: this.webAppStack.vpc.id,
       publicSubnetIds: this.webAppStack.publicSubnets.map(subnet => subnet.id),
       privateSubnetIds: this.webAppStack.privateSubnets.map(

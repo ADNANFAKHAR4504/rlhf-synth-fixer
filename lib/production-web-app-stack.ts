@@ -69,6 +69,8 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
   public readonly albDnsName: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly s3BucketName: pulumi.Output<string>;
+  public readonly rdsIdentifier: pulumi.Output<string>;
+  public readonly launchTemplateName: pulumi.Output<string>;
 
   // Additional resource references for testing
   public readonly ec2Role: aws.iam.Role;
@@ -76,6 +78,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
   public readonly ec2S3Policy: aws.iam.RolePolicy;
   public readonly rdsKmsKey: aws.kms.Key;
   public readonly rdsKmsAlias: aws.kms.Alias;
+  public readonly launchTemplate: aws.ec2.LaunchTemplate;
   public readonly awsProvider: aws.Provider;
 
   // Configuration properties
@@ -553,7 +556,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     );
 
     // Launch Template with security hardening
-    const launchTemplate = new aws.ec2.LaunchTemplate(
+    this.launchTemplate = new aws.ec2.LaunchTemplate(
       'launch-template',
       {
         name: `${this.resourcePrefix}-launch-template`,
@@ -711,7 +714,7 @@ systemctl enable amazon-cloudwatch-agent
         maxSize: 6,
         desiredCapacity: 2,
         launchTemplate: {
-          id: launchTemplate.id,
+          id: this.launchTemplate.id,
           version: '$Latest',
         },
         enabledMetrics: [
@@ -736,7 +739,7 @@ systemctl enable amazon-cloudwatch-agent
           },
         ],
       },
-      { ...providerOpts, dependsOn: [launchTemplate, targetGroup] }
+      { ...providerOpts, dependsOn: [this.launchTemplate, targetGroup] }
     );
 
     // S3 Bucket with enhanced security
@@ -852,6 +855,8 @@ systemctl enable amazon-cloudwatch-agent
     this.albDnsName = this.loadBalancer.dnsName;
     this.rdsEndpoint = this.database.endpoint;
     this.s3BucketName = this.bucket.id;
+    this.rdsIdentifier = this.database.identifier;
+    this.launchTemplateName = this.launchTemplate.name;
 
     // Register outputs
     this.registerOutputs({
@@ -867,12 +872,14 @@ systemctl enable amazon-cloudwatch-agent
       // Database
       rdsEndpoint: this.rdsEndpoint,
       rdsInstanceId: this.database.id,
+      rdsIdentifier: this.rdsIdentifier,
 
       // Storage
       s3BucketName: this.s3BucketName,
 
       // Compute
       autoScalingGroupName: this.autoScalingGroup.name,
+      launchTemplateName: this.launchTemplateName,
 
       // IAM
       ec2RoleName: this.ec2Role.name,
