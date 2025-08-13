@@ -221,10 +221,10 @@ def _check_route_table_for_public_route(rt_id):
 
 
 def get_vpc_with_fallback():
-  """Smart independent deployment: cleanup old resources first, then create fresh ones."""
+  """Smart independent deployment: avoid resource conflicts by reusing existing infrastructure."""
   try:
-    # First, try to find and cleanup unused VPCs to free up quota
-    pulumi.log.info("Checking for old unused VPCs to cleanup...")
+    # Find existing VPCs to reuse and avoid quota limits
+    pulumi.log.info("Checking for existing VPCs to reuse...")
     existing_vpcs = aws.ec2.get_vpcs(
       filters=[
         aws.ec2.GetVpcsFilterArgs(name="tag:Project", values=[PROJECT_NAME]),
@@ -235,7 +235,7 @@ def get_vpc_with_fallback():
     
     if existing_vpcs.ids and len(existing_vpcs.ids) > 0:
       pulumi.log.info(f"Found {len(existing_vpcs.ids)} existing project VPCs")
-      pulumi.log.info("Strategy: Use existing VPC to avoid quota limits")
+      pulumi.log.info("Strategy: Reuse existing VPC to avoid quota limits and dependency conflicts")
       pulumi.log.info("Smart IGW and subnet management will follow VPC strategy")
       
       # Use the first available VPC to avoid quota issues
@@ -246,8 +246,8 @@ def get_vpc_with_fallback():
           vpc_id,
           opts=pulumi.ResourceOptions(
             provider=aws_provider,
-            protect=False,  # Allow deletion when not needed
-            retain_on_delete=False  # Clean deletion
+            protect=True,  # Protect from deletion to avoid dependency conflicts
+            retain_on_delete=True  # Keep VPC to avoid dependency issues
           )
         ),
         vpc_id
@@ -270,7 +270,11 @@ def get_vpc_with_fallback():
         "ManagedBy": "Pulumi-IaC",
         "DeploymentType": "Smart-Independent"
       },
-      opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
+      opts=pulumi.ResourceOptions(
+        provider=aws_provider, 
+        protect=False,
+        retain_on_delete=False
+      )
     )
     return (new_vpc, None)
     
@@ -384,7 +388,11 @@ def get_or_create_route_table(vpc, existing_vpc_id, internet_gateway):
         return aws.ec2.RouteTable.get(
           get_resource_name("public-rt"),
           existing_route_table,
-          opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
+          opts=pulumi.ResourceOptions(
+            provider=aws_provider, 
+            protect=True,  # Protect existing route tables
+            retain_on_delete=True  # Avoid dependency conflicts
+          )
         )
     
     # Create new route table for new VPC
@@ -478,7 +486,11 @@ def get_or_create_subnets(vpc, existing_vpc_id, availability_zones):
           aws.ec2.Subnet.get(
             f"{get_resource_name('public-subnet')}-{i+1}",
             subnet['id'],
-            opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
+            opts=pulumi.ResourceOptions(
+              provider=aws_provider, 
+              protect=True,  # Protect existing subnets from deletion
+              retain_on_delete=True  # Avoid dependency conflicts
+            )
           ) for i, subnet in enumerate(existing_subnets[:2])
         ]
     
@@ -555,9 +567,9 @@ public_route_table = get_or_create_route_table(vpc, existing_vpc_id, internet_ga
 #     opts=pulumi.ResourceOptions(provider=aws_provider)
 # )
 
-# Smart route table associations: only for new subnets
-if not existing_vpc_id:
-  # Only create associations if we created new subnets
+# Smart route table associations: only for new subnets in new VPCs
+if not existing_vpc_id and internet_gateway:
+  # Only create associations if we created new subnets and new route table
   pulumi.log.info("Creating route table associations for new subnets...")
   for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
@@ -571,7 +583,7 @@ if not existing_vpc_id:
       )
     )
 else:
-  pulumi.log.info("Skipping route table associations for existing VPC (should already exist)")
+  pulumi.log.info("Skipping route table associations for existing VPC (infrastructure already configured)")
 
 alb_security_group = aws.ec2.SecurityGroup(
   get_resource_name("alb-sg"),
@@ -969,12 +981,12 @@ print("   • Smart reuse of existing suitable infrastructure")
 print("   • Dynamic CIDR allocation to avoid conflicts")
 print("   • Selective creation of only needed resources")
 print("   • Fallback to default VPC if all else fails")
-print("   • Clean resource lifecycle management")
+print("   • Dependency conflict avoidance and protection")
 print("   • Automated dependency resolution")
 print("   • Quota-aware deployment strategy")
 print("   • Comprehensive error handling and logging")
 print("   • Resource tagging for better management")
-print("   • Protection against AWS service limits")
+print("   • Protection against AWS service limits and conflicts")
 print("=" * 50)
 
 # Add smart validation feedback
@@ -982,7 +994,7 @@ pulumi.export("vpc_optimization", {
   "reuse_enabled": True,  # Smart reuse when needed for quota management
   "quota_management": True,
   "smart_deployment": True,
-  "cleanup_strategy": True,
+  "dependency_protection": True,
   "fallback_enabled": True,
   "error_handling": True,
   "deployment_time": str(int(time.time()))
