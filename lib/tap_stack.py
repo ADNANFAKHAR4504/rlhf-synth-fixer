@@ -831,42 +831,32 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["example_dynamodb_table"] = example_table.name
 
   def _enable_guardduty_all_regions(self):
-    """Enable GuardDuty across all configured regions with proper provider management."""
+    """Enable GuardDuty across all configured regions with proper import logic."""
     pulumi.log.info("Configuring GuardDuty across regions...")
     guardduty_detectors: Dict[str, pulumi.Output[str]] = {}
     
     for region in self.guardduty_regions:
       # Create unique provider name per region to avoid conflicts
-      provider_name = f"guardduty-provider-{region}-{self.env}"
+      provider_name = f"guardduty-{region}-{self.environment_suffix}"
       provider = aws.Provider(provider_name, region=region)
       
       try:
         # Check if GuardDuty detector already exists in this region
-        existing_detectors = aws.guardduty.get_detector(opts=pulumi.InvokeOptions(provider=provider))
+        existing_detector = aws.guardduty.get_detector(opts=pulumi.InvokeOptions(provider=provider))
         
-        if existing_detectors and existing_detectors.id:
-          # Import existing detector (only for regions where we expect existing detectors)
-          if region in ["us-east-1", "us-west-2"]:
-            pulumi.log.info(f"Importing existing GuardDuty detector in {region}")
-            detector = aws.guardduty.Detector(
-              f"guardduty-{region}-{self.env}",
-              enable=True,
-              tags=self._apply_tags({"Purpose": "ThreatDetection", "Region": region}),
-              opts=ResourceOptions(
-                provider=provider,
-                import_=existing_detectors.id,
-                parent=self
-              ),
-            )
-          else:
-            # For eu-west-1 and other regions, create new detector even if one exists
-            pulumi.log.info(f"Creating new GuardDuty detector in {region}")
-            detector = aws.guardduty.Detector(
-              f"guardduty-{region}-{self.env}",
-              enable=True,
-              tags=self._apply_tags({"Purpose": "ThreatDetection", "Region": region}),
-              opts=ResourceOptions(provider=provider, parent=self),
-            )
+        if existing_detector and existing_detector.id:
+          # Import existing detector with minimal inputs and ignore mismatches
+          pulumi.log.info(f"Importing existing GuardDuty detector {existing_detector.id} in {region}")
+          detector = aws.guardduty.Detector(
+            f"guardduty-{region}-{self.env}",
+            enable=True,
+            opts=ResourceOptions(
+              provider=provider,
+              import_=existing_detector.id,
+              ignore_changes=["datasources", "finding_publishing_frequency", "tags"],
+              parent=self
+            ),
+          )
           guardduty_detectors[region] = detector.id
         else:
           # Create new detector if none exists
