@@ -7,8 +7,8 @@ import json
 import os
 from typing import List
 
-from cdktf import (LocalBackend, TerraformOutput,
-                   TerraformStack, TerraformVariable)
+from cdktf import (LocalBackend, TerraformOutput, TerraformStack,
+                   TerraformVariable)
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
     CloudwatchMetricAlarm
