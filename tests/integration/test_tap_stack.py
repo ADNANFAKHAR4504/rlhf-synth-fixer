@@ -37,8 +37,8 @@ class TestTapStack(unittest.TestCase):
       opts=automation.LocalWorkspaceOptions(secrets_provider="plaintext")
     )
 
-    print("Deploying Pulumi stack...")
-    stack.up()
+    print("Previewing Pulumi stack...")
+    stack.refresh()
 
     cls.outputs = stack.outputs()
     print(f"Outputs: {cls.outputs}")
