@@ -317,39 +317,15 @@ amazon_linux_ami = aws.ec2.get_ami(
 )
 
 def create_internet_gateway(vpc, vpc_id_from_lookup):
-  """Smart IGW management: reuse existing or create new based on VPC source."""
+  """Smart IGW management: create only for new VPCs, skip for existing ones."""
   try:
     if vpc_id_from_lookup:
-      # VPC came from lookup, check for existing IGW
-      pulumi.log.info("Checking for existing Internet Gateway in reused VPC...")
-      try:
-        existing_igws = aws.ec2.get_internet_gateways(
-          filters=[
-            aws.ec2.GetInternetGatewaysFilterArgs(
-              name="attachment.vpc-id", 
-              values=[vpc_id_from_lookup]
-            )
-          ],
-          opts=pulumi.InvokeOptions(provider=aws_provider)
-        )
-        
-        if existing_igws.ids and len(existing_igws.ids) > 0:
-          igw_id = existing_igws.ids[0]
-          pulumi.log.info(f"Reusing existing Internet Gateway: {igw_id}")
-          return aws.ec2.InternetGateway.get(
-            get_resource_name("igw"),
-            igw_id,
-            opts=pulumi.ResourceOptions(
-              provider=aws_provider,
-              protect=False,
-              retain_on_delete=False
-            )
-          )
-      except (pulumi.InvokeError, IndexError) as e:
-        pulumi.log.warn(f"Could not find existing IGW, will create new: {e}")
+      # VPC came from lookup, it already has IGW and route tables
+      pulumi.log.info("Using existing VPC infrastructure (IGW, routes, subnets)")
+      return None  # Signal that we're using existing infrastructure
     
-    # Create new IGW for new VPC or if no existing IGW found
-    pulumi.log.info("Creating new Internet Gateway...")
+    # Create new IGW only for new VPCs
+    pulumi.log.info("Creating new Internet Gateway for new VPC...")
     return aws.ec2.InternetGateway(
       get_resource_name("igw"),
       vpc_id=vpc.id,
@@ -362,9 +338,85 @@ def create_internet_gateway(vpc, vpc_id_from_lookup):
       opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
     )
     
-  except (pulumi.InvokeError, ValueError, AttributeError) as e:
-    pulumi.log.error(f"IGW creation/lookup failed: {e}")
-    raise ValueError(f"Failed to create or find Internet Gateway: {e}") from e
+  except Exception as e:
+    pulumi.log.error(f"IGW creation failed: {e}")
+    raise ValueError(f"Failed to create Internet Gateway: {e}") from e
+
+def find_existing_public_route_table(vpc_id: str):
+  """Find an existing public route table in the VPC."""
+  try:
+    route_tables = aws.ec2.get_route_tables(
+      filters=[
+        aws.ec2.GetRouteTablesFilterArgs(name="vpc-id", values=[vpc_id]),
+        aws.ec2.GetRouteTablesFilterArgs(name="association.main", values=["false"])
+      ],
+      opts=pulumi.InvokeOptions(provider=aws_provider)
+    )
+    
+    if not route_tables.ids or len(route_tables.ids) == 0:
+      pulumi.log.info("No suitable existing route tables found")
+      return None
+      
+    pulumi.log.info(f"Found {len(route_tables.ids)} existing route tables")
+    
+    # Look for a public route table (has 0.0.0.0/0 route to IGW)
+    for rt_id in route_tables.ids:
+      public_rt_id = _check_route_table_for_public_route(rt_id)
+      if public_rt_id:
+        return public_rt_id
+    
+    pulumi.log.info("No suitable existing route tables found")
+    return None
+    
+  except Exception as e:
+    pulumi.log.warn(f"Could not search for route tables: {e}")
+    return None
+
+def get_or_create_route_table(vpc, existing_vpc_id, internet_gateway):
+  """Smart route table management: find existing or create new."""
+  try:
+    if existing_vpc_id:
+      # For existing VPC, find existing public route table
+      pulumi.log.info("Looking for existing public route table...")
+      existing_route_table = find_existing_public_route_table(existing_vpc_id)
+      if existing_route_table:
+        pulumi.log.info(f"Using existing route table: {existing_route_table}")
+        return aws.ec2.RouteTable.get(
+          get_resource_name("public-rt"),
+          existing_route_table,
+          opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
+        )
+    
+    # Create new route table for new VPC
+    pulumi.log.info("Creating new route table for new VPC...")
+    route_table = aws.ec2.RouteTable(
+      get_resource_name("public-rt"),
+      vpc_id=vpc.id,
+      tags={
+        "Name": get_resource_name("public-rt"),
+        "Environment": ENVIRONMENT,
+        "Project": PROJECT_NAME,
+        "Type": "Public",
+        "ManagedBy": "Pulumi-IaC"
+      },
+      opts=pulumi.ResourceOptions(provider=aws_provider)
+    )
+    
+    # Create IPv4 route for new route table
+    if internet_gateway:
+      aws.ec2.Route(
+        get_resource_name("ipv4-route"),
+        route_table_id=route_table.id,
+        destination_cidr_block="0.0.0.0/0",
+        gateway_id=internet_gateway.id,
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+      )
+    
+    return route_table
+    
+  except Exception as e:
+    pulumi.log.error(f"Route table creation/lookup failed: {e}")
+    raise ValueError(f"Failed to get or create route table: {e}") from e
 
 # Create/reuse Internet Gateway with smart management
 internet_gateway = create_internet_gateway(vpc, existing_vpc_id)
@@ -435,27 +487,8 @@ for i, az in enumerate(availability_zones):
   
   public_subnets.append(subnet)
 
-# Route table with simplified association logic
-public_route_table = aws.ec2.RouteTable(
-  get_resource_name("public-rt"),
-  vpc_id=vpc.id,
-  tags={
-    "Name": get_resource_name("public-rt"),
-    "Environment": ENVIRONMENT,
-    "Project": PROJECT_NAME,
-    "Type": "Public"
-  },
-  opts=pulumi.ResourceOptions(provider=aws_provider)
-)
-
-# Create IPv4 route for new route table
-ipv4_route = aws.ec2.Route(
-  get_resource_name("ipv4-route"),
-  route_table_id=public_route_table.id,
-  destination_cidr_block="0.0.0.0/0",
-  gateway_id=internet_gateway.id,
-  opts=pulumi.ResourceOptions(provider=aws_provider)
-)
+# Smart route table management
+public_route_table = get_or_create_route_table(vpc, existing_vpc_id, internet_gateway)
 
 # Skip IPv6 route for compatibility with reused VPCs
 # ipv6_route = aws.ec2.Route(
