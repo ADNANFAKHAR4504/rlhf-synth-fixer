@@ -4,12 +4,10 @@ test_tap_stack_integration.py
 Integration tests for live deployed TapStack Pulumi infrastructure.
 Tests actual AWS resources created by the Pulumi stack.
 """
-import os
+
 import unittest
 
 import boto3
-import pulumi
-import pulumi_aws as aws
 from pulumi import automation
 from lib.tap_stack import TapStack, TapStackArgs
 
