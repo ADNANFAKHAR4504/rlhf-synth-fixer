@@ -44,6 +44,7 @@ variable "aws_region" {
 variable "allowed_cidrs" {
   description = "List of CIDR blocks allowed to access RDS"
   type        = list(string)
+  default     = ["10.0.10.0/24"]
 }
 
 variable "ec2_instance_type" {
