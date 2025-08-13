@@ -114,39 +114,6 @@
                                 "kms:GenerateDataKey"
                             ],
                             "Resource": "*"
-                        },
-                        {
-                            "Sid": "Allow EC2 Role",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::GetAtt": [
-                                        "EC2InstanceRole",
-                                        "Arn"
-                                    ]
-                                }
-                            },
-                            "Action": [
-                                "kms:Decrypt",
-                                "kms:GenerateDataKey"
-                            ],
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "Allow Lambda Role",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::GetAtt": [
-                                        "LambdaExecutionRole",
-                                        "Arn"
-                                    ]
-                                }
-                            },
-                            "Action": [
-                                "kms:Decrypt"
-                            ],
-                            "Resource": "*"
                         }
                     ]
                 },
@@ -262,11 +229,6 @@
                                 "StringEquals": {
                                     "aws:SourceAccount": {
                                         "Ref": "AWS::AccountId"
-                                    }
-                                },
-                                "ArnLike": {
-                                    "aws:SourceArn": {
-                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${MainS3Bucket}"
                                     }
                                 }
                             }
@@ -401,7 +363,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-west-2a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": "10.0.1.0/24",
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
@@ -540,9 +509,6 @@
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-ec2-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -590,10 +556,7 @@
                                         "kms:GenerateDataKey"
                                     ],
                                     "Resource": {
-                                        "Fn::GetAtt": [
-                                            "S3EncryptionKey",
-                                            "Arn"
-                                        ]
+                                        "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
                                     }
                                 }
                             ]
@@ -647,9 +610,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-ec2-profile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2InstanceRole"
@@ -660,9 +620,6 @@
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-lambda-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -710,10 +667,7 @@
                                         "kms:Decrypt"
                                     ],
                                     "Resource": {
-                                        "Fn::GetAtt": [
-                                            "S3EncryptionKey",
-                                            "Arn"
-                                        ]
+                                        "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
                                     }
                                 }
                             ]
