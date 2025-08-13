@@ -1,5 +1,7 @@
 import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib';
+import { Construct } from 'constructs';
+import { TerraformStack, TerraformOutput } from 'cdktf';
+import * as aws from '@cdktf/provider-aws';
 
 describe('Stack Structure', () => {
   let app: App;
