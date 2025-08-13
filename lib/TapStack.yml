@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, CloudTrail, AWS Config, VPC Flow Logs, MFA, S3 SSE+logs, DNSSEC.
+Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, AWS Config, VPC Flow Logs, MFA, S3 SSE+logs, DNSSEC.
 
 Metadata:
-  Version: 1.0.2
+  Version: 1.0.3
 
 Mappings:
   OrgCIDR:
@@ -24,7 +24,7 @@ Resources:
   EncryptionKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: KMS for S3, EBS, CloudWatch Logs, CloudTrail
+      Description: KMS for S3, EBS, CloudWatch Logs
       EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
@@ -33,11 +33,6 @@ Resources:
             Effect: Allow
             Principal: { AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root" }
             Action: "kms:*"
-            Resource: "*"
-          - Sid: AllowCloudTrail
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: [ "kms:Decrypt","kms:DescribeKey","kms:Encrypt","kms:GenerateDataKey*","kms:ReEncrypt*" ]
             Resource: "*"
           - Sid: AllowLogs
             Effect: Allow
@@ -202,8 +197,7 @@ Resources:
             Action: s3:PutObject
             Resource: !Sub "${AccessLogsBucket.Arn}/*"
             Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
+              StringEquals: { s3:x-amz-acl: bucket-owner-full-control }
 
   ApplicationBucket:
     Type: AWS::S3::Bucket
@@ -222,9 +216,6 @@ Resources:
             ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref EncryptionKey
-
-  
-
 
   ConfigBucket:
     Type: AWS::S3::Bucket
@@ -256,15 +247,13 @@ Resources:
             Principal: { Service: config.amazonaws.com }
             Action: s3:GetBucketAcl
             Resource: !GetAtt ConfigBucket.Arn
-            Condition:
-              StringEquals: { aws:SourceAccount: !Ref AWS::AccountId }
+            Condition: { StringEquals: { aws:SourceAccount: !Ref AWS::AccountId } }
           - Sid: AWSConfigBucketExistenceCheck
             Effect: Allow
             Principal: { Service: config.amazonaws.com }
             Action: s3:ListBucket
             Resource: !GetAtt ConfigBucket.Arn
-            Condition:
-              StringEquals: { aws:SourceAccount: !Ref AWS::AccountId }
+            Condition: { StringEquals: { aws:SourceAccount: !Ref AWS::AccountId } }
           - Sid: AWSConfigBucketDelivery
             Effect: Allow
             Principal: { Service: config.amazonaws.com }
@@ -282,8 +271,6 @@ Resources:
       LogGroupName: !Sub "/aws/${AWS::StackName}/application"
       RetentionInDays: 30
       KmsKeyId: !GetAtt EncryptionKey.Arn
-
-  
 
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
@@ -318,8 +305,7 @@ Resources:
     Properties:
       Roles: [ !Ref EC2Role ]
 
-  
-
+  # (Single) AWS Config role — keep this one
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:
@@ -407,8 +393,7 @@ Resources:
               - iam:GetAccountSummary
             Resource: "*"
             Condition:
-              BoolIfExists:
-                aws:MultiFactorAuthPresent: "false"
+              BoolIfExists: { aws:MultiFactorAuthPresent: "false" }
 
   AllUsersGroup:
     Type: AWS::IAM::Group
@@ -487,12 +472,10 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
       SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
 
-
   # ---------------- AWS Config ----------------
   ConfigTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${AWS::StackName}-config-topic"
       KmsMasterKeyId: !Ref EncryptionKey
 
   ConfigurationRecorder:
@@ -503,57 +486,51 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
+      RecordingMode:
+        RecordingFrequency: CONTINUOUS  # valid per CFN spec
 
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
-    DependsOn: ConfigurationRecorder
+    DependsOn: [ConfigurationRecorder, ConfigBucketPolicy]
     Properties:
       Name: default
       S3BucketName: !Ref ConfigBucket
       S3KeyPrefix: config
       SnsTopicARN: !Ref ConfigTopic
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-          
+        DeliveryFrequency: TwentyFour_Hours  # valid enum
 
   S3BucketLoggingEnabledRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
+    DependsOn: [ConfigurationRecorder, DeliveryChannel]
     Properties:
       ConfigRuleName: s3-bucket-logging-enabled
       Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_LOGGING_ENABLED }
 
-  S3BucketSSEEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
-    Properties:
-      ConfigRuleName: s3-bucket-server-side-encryption-enabled
-      Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED }
-
   CloudTrailEnabledRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
+    DependsOn: [ConfigurationRecorder, DeliveryChannel]
     Properties:
       ConfigRuleName: cloud-trail-enabled
       Source: { Owner: AWS, SourceIdentifier: CLOUD_TRAIL_ENABLED }
 
   VPCFlowLogsEnabledRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
+    DependsOn: [ConfigurationRecorder, DeliveryChannel]
     Properties:
       ConfigRuleName: vpc-flow-logs-enabled
       Source: { Owner: AWS, SourceIdentifier: VPC_FLOW_LOGS_ENABLED }
 
   IAMUserMFAEnabledRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
+    DependsOn: [ConfigurationRecorder, DeliveryChannel]
     Properties:
       ConfigRuleName: iam-user-mfa-enabled
       Source: { Owner: AWS, SourceIdentifier: IAM_USER_MFA_ENABLED }
 
   RestrictedSSHRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
+    DependsOn: [ConfigurationRecorder, DeliveryChannel]
     Properties:
       ConfigRuleName: incoming-ssh-disabled
       Source: { Owner: AWS, SourceIdentifier: INCOMING_SSH_DISABLED }
