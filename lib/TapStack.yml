@@ -35,11 +35,17 @@ Parameters:
     Description: "Your IP in CIDR notation (e.g., 203.0.113.5/32) for secure SSH access."
     Default: "0.0.0.0/0" # WARNING: Insecure. Allows SSH from anywhere.
 
+  WebAppAssetsBucketName:
+    Type: String
+    Description: "Globally unique, all-lowercase S3 bucket name for static assets (must be lowercase, no uppercase allowed)"
+    Default: "webapp-assets-s3-bucket-name-east-1" # <-- Change this to a unique, lowercase value per deployment
+
 Resources:
   WebAppAssets:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-${AWS::Region}-${AWS::AccountId}-assets"
+      # CloudFormation does not support Fn::ToLower, so use a parameter for lowercase bucket name.
+      BucketName: !Ref WebAppAssetsBucketName
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
