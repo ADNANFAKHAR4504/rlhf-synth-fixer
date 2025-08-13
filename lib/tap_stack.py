@@ -123,6 +123,7 @@ class TapStack(TerraformStack):
         existing_alb_arn = TerraformVariable(self, "existing_alb_arn", type="string", default="")
         existing_tg_arn = TerraformVariable(self, "existing_tg_arn", type="string", default="")
         existing_cluster_name = TerraformVariable(self, "existing_cluster_name", type="string", default="")
+        existing_cluster_arn = TerraformVariable(self, "existing_cluster_arn", type="string", default="")
         existing_execution_role_name = TerraformVariable(self, "existing_execution_role_name", type="string", default="")
         existing_task_role_name = TerraformVariable(self, "existing_task_role_name", type="string", default="")
         existing_execution_role_arn = TerraformVariable(self, "existing_execution_role_arn", type="string", default="")
@@ -352,6 +353,27 @@ class TapStack(TerraformStack):
             protocol="-1",
             cidr_blocks=["0.0.0.0/0"],
             security_group_id=rds_sg.id,
+        )
+
+        # Locals to normalize references between adopted vs created resources
+        self.add_override(
+            "locals",
+            {
+                "vpc_id": vpc_id,
+                "public_subnet_ids": '${length(var.existing_public_subnet_ids) > 0 ? var.existing_public_subnet_ids : [aws_subnet.public-1[0].id, aws_subnet.public-2[0].id]}',
+                "private_subnet_ids": '${length(var.existing_private_subnet_ids) > 0 ? var.existing_private_subnet_ids : [aws_subnet.private-1[0].id, aws_subnet.private-2[0].id]}',
+                "alb_sg_id": '${var.existing_alb_sg_id != "" ? var.existing_alb_sg_id : aws_security_group.alb-sg[0].id}',
+                "fargate_sg_id": '${var.existing_fargate_sg_id != "" ? var.existing_fargate_sg_id : aws_security_group.fargate-sg[0].id}',
+                "rds_sg_id": '${var.existing_rds_sg_id != "" ? var.existing_rds_sg_id : aws_security_group.rds-sg[0].id}',
+                "alb_arn": '${var.existing_alb_arn != "" ? var.existing_alb_arn : aws_lb.alb[0].arn}',
+                "tg_arn": '${var.existing_tg_arn != "" ? var.existing_tg_arn : aws_lb_target_group.tg[0].arn}',
+                "cluster_id": '${var.existing_cluster_arn != "" ? var.existing_cluster_arn : aws_ecs_cluster.ecs-cluster[0].id}',
+                "cluster_name": '${var.existing_cluster_name != "" ? var.existing_cluster_name : aws_ecs_cluster.ecs-cluster[0].name}',
+                "execution_role_arn": '${var.existing_execution_role_arn != "" ? var.existing_execution_role_arn : aws_iam_role.ecs-exec-role[0].arn}',
+                "task_role_arn": '${var.existing_task_role_arn != "" ? var.existing_task_role_arn : aws_iam_role.ecs-task-role[0].arn}',
+                "db_secret_arn": '${aws_secretsmanager_secret.db-secret[0].arn}',
+                "app_secret_arn": '${aws_secretsmanager_secret.app-secret[0].arn}',
+            },
         )
 
         # IAM for ECS and Secrets access
@@ -613,7 +635,7 @@ class TapStack(TerraformStack):
             self,
             "service",
             name="production-app-service",
-            cluster=cluster.id,
+            cluster="${local.cluster_id}",
             task_definition=task_def.arn,
             desired_count=2,
             launch_type="FARGATE",
