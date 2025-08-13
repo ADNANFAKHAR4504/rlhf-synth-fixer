@@ -3,21 +3,21 @@
 // a highly-available VPC (public + private subnets across two AZs) and an IAM role limited to the
 // S3 state bucket.
 
-import { TerraformStack, Fn } from 'cdktf';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { Route } from '@cdktf/provider-aws/lib/route';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Fn, TerraformStack } from 'cdktf';
 
 // ---- Interfaces ----
 export interface VpcOutputs {
@@ -119,7 +119,7 @@ export function createHighAvailabilityVpc(
     const az = Fn.element(azs.names, i);
     const pubSubnet = new Subnet(stack, `${id}-pub-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: `10.0.${i}.0/24`,
+      cidrBlock: '10.0.0.0/16',
       availabilityZone: az,
       mapPublicIpOnLaunch: true,
       tags: { Name: `${opts.namePrefix}-public-${i}` },
@@ -127,7 +127,7 @@ export function createHighAvailabilityVpc(
 
     const privSubnet = new Subnet(stack, `${id}-priv-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: `10.0.${i + 100}.0/24`,
+      cidrBlock: '10.0.0.0/16',
       availabilityZone: az,
       mapPublicIpOnLaunch: false,
       tags: { Name: `${opts.namePrefix}-private-${i}` },
