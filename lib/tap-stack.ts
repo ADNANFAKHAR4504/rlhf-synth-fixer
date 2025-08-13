@@ -40,6 +40,7 @@ export class TapStack extends cdk.Stack {
     this.securityTopic = this.createSecurityTopic();
 
     // Create CloudWatch Log Groups with KMS encryption
+    // Using dependency to ensure KMS key is fully created first
     const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
       logGroupName: `/aws/vpc/flowlogs/${this.commonTags.Project}-${this.commonTags.Environment}`,
       retention: logs.RetentionDays.ONE_MONTH,
@@ -51,6 +52,10 @@ export class TapStack extends cdk.Stack {
       retention: logs.RetentionDays.ONE_YEAR,
       encryptionKey: this.kmsKey,
     });
+
+    // Add explicit dependency to ensure KMS key is fully created before log groups
+    flowLogGroup.node.addDependency(this.kmsKey);
+    cloudTrailLogGroup.node.addDependency(this.kmsKey);
 
     // Create VPC with security best practices
     const vpc = this.createVpc(props.vpcCidr || '10.0.0.0/16', flowLogGroup);
