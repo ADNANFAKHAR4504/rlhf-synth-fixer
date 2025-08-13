@@ -63,7 +63,7 @@ const loadStackOutputs = () => {
 // Initialize AWS clients with the actual deployment region
 const initializeClients = (region?: string) => {
   // If no region provided, we'll determine it from stack outputs later
-  const defaultRegion = region || 'us-west-2';
+  const defaultRegion = region || 'ap-south-1';
 
   return {
     ec2: new EC2Client({ region: defaultRegion }),
@@ -133,7 +133,7 @@ describe('TAP Stack Integration Tests', () => {
     resourceIds = extractResourceIds(stackOutputs[stackName]);
 
     // Determine the actual deployment region from stack outputs
-    let deploymentRegion = 'us-west-2'; // Default fallback
+    let deploymentRegion = 'ap-south-1'; // Default fallback
 
     // Try to get region from CloudTrail ARN
     if (resourceIds?.cloudtrailArn) {
@@ -148,7 +148,7 @@ describe('TAP Stack Integration Tests', () => {
 
     // If no region from CloudTrail, try VPC regions
     if (
-      deploymentRegion === 'us-west-2' &&
+      deploymentRegion === 'ap-south-1' &&
       resourceIds?.vpcIds &&
       resourceIds.vpcIds.length > 0
     ) {
@@ -671,7 +671,7 @@ describe('TAP Stack Integration Tests', () => {
         expect(bucket).toBeDefined();
 
         // Get bucket region from stack deployment information
-        let bucketRegion = 'us-west-2'; // Default fallback
+        let bucketRegion = 'ap-south-1'; // Default fallback
 
         // First, check if CloudTrail ARN contains region information
         if (resourceIds?.cloudtrailArn) {
@@ -684,7 +684,7 @@ describe('TAP Stack Integration Tests', () => {
 
         // If no region from CloudTrail ARN, try to get from VPC deployment regions
         if (
-          bucketRegion === 'us-west-2' &&
+          bucketRegion === 'ap-south-1' &&
           resourceIds?.vpcIds &&
           resourceIds.vpcIds.length > 0
         ) {
@@ -712,10 +712,10 @@ describe('TAP Stack Integration Tests', () => {
 
           // If the inferred region doesn't work, fall back to common regions
           const fallbackRegions = [
-            'us-west-2',
-            'us-west-2',
+            'ap-south-1',
+            'ap-south-1',
             'us-west-1',
-            'us-west-2',
+            'ap-south-1',
           ];
           for (const region of fallbackRegions) {
             if (region === bucketRegion) continue; // Skip already tried region
@@ -1142,7 +1142,7 @@ describe('TAP Stack Integration Tests', () => {
         const _webAclId = resourceIds.webAclArn.split('/').pop();
 
         const elbClient = new ElasticLoadBalancingV2Client({
-          region: 'us-west-2',
+          region: 'ap-south-1',
         });
 
         try {
@@ -1159,7 +1159,7 @@ describe('TAP Stack Integration Tests', () => {
 
           if (projectLoadBalancers.length > 0) {
             // Verify WAF association with load balancers
-            const wafClient = new WAFV2Client({ region: 'us-west-2' });
+            const wafClient = new WAFV2Client({ region: 'ap-south-1' });
 
             const resourcesResponse = await wafClient.send(
               new ListResourcesForWebACLCommand({
@@ -1211,7 +1211,7 @@ describe('TAP Stack Integration Tests', () => {
 
           // Get bucket region
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          let _bucketRegion = 'us-west-2';
+          let _bucketRegion = 'ap-south-1';
           try {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const _headResponse = await clients.s3.send(
@@ -1225,7 +1225,7 @@ describe('TAP Stack Integration Tests', () => {
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
               _bucketRegion =
                 errorMetadata?.httpHeaders?.['x-amz-bucket-region'] ||
-                'us-west-2';
+                'ap-south-1';
             }
           }
         }
@@ -1306,7 +1306,7 @@ describe('TAP Stack Integration Tests', () => {
     test(
       'E2E should verify IAM roles follow least privilege principle',
       async () => {
-        const iamClient = new IAMClient({ region: 'us-west-2' }); // IAM is global but use us-west-2
+        const iamClient = new IAMClient({ region: 'ap-south-1' }); // IAM is global but use ap-south-1
 
         const rolesResponse = await iamClient.send(new ListRolesCommand({}));
 
@@ -1429,7 +1429,7 @@ describe('TAP Stack Integration Tests', () => {
         const bucketName = resourceIds.cloudtrailBucketName;
 
         // Get bucket region from stack deployment information
-        let bucketRegion = 'us-west-2'; // Default fallback
+        let bucketRegion = 'ap-south-1'; // Default fallback
 
         // First, check if CloudTrail ARN contains region information
         if (resourceIds?.cloudtrailArn) {
@@ -1442,7 +1442,7 @@ describe('TAP Stack Integration Tests', () => {
 
         // If no region from CloudTrail ARN, try to get from VPC deployment regions
         if (
-          bucketRegion === 'us-west-2' &&
+          bucketRegion === 'ap-south-1' &&
           resourceIds?.vpcIds &&
           resourceIds.vpcIds.length > 0
         ) {
@@ -1470,10 +1470,10 @@ describe('TAP Stack Integration Tests', () => {
 
           // If the inferred region doesn't work, fall back to common regions
           const fallbackRegions = [
-            'us-west-2',
-            'us-west-2',
+            'ap-south-1',
+            'ap-south-1',
             'us-west-1',
-            'us-west-2',
+            'ap-south-1',
           ];
           for (const region of fallbackRegions) {
             if (region === bucketRegion) continue; // Skip already tried region
@@ -1519,7 +1519,7 @@ describe('TAP Stack Integration Tests', () => {
       'E2E should have load balancers configured for high availability',
       async () => {
         // Check if load balancers exist in the infrastructure
-        const testRegions = ['us-west-1', 'us-west-2'];
+        const testRegions = ['us-west-1', 'ap-south-1'];
         let foundLoadBalancers = false;
 
         for (const region of testRegions) {
@@ -1812,7 +1812,7 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        const testRegions = ['us-west-1', 'us-west-2'];
+        const testRegions = ['us-west-1', 'ap-south-1'];
 
         for (const region of testRegions) {
           const cloudwatchClient = new CloudWatchClient({ region });
@@ -1979,7 +1979,7 @@ describe('TAP Stack Integration Tests', () => {
 
         // Check for RDS read replicas across regions
         if (resourceIds?.rdsEndpoints && resourceIds.rdsEndpoints.length > 0) {
-          const testRegions = ['us-west-1', 'us-west-2'];
+          const testRegions = ['us-west-1', 'ap-south-1'];
 
           for (const region of testRegions) {
             try {
@@ -2038,7 +2038,7 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        const testRegions = ['us-west-1', 'us-west-2'];
+        const testRegions = ['us-west-1', 'ap-south-1'];
 
         for (const region of testRegions) {
           const kmsClient = new KMSClient({ region });
@@ -2092,7 +2092,7 @@ describe('TAP Stack Integration Tests', () => {
         // Extract region from CloudTrail ARN
         const arnParts = resourceIds.cloudtrailArn.split(':');
         const cloudtrailRegion =
-          arnParts.length >= 4 ? arnParts[3] : 'us-west-2';
+          arnParts.length >= 4 ? arnParts[3] : 'ap-south-1';
 
         const cloudtrailClient = new CloudTrailClient({
           region: cloudtrailRegion,
@@ -2156,8 +2156,8 @@ describe('TAP Stack Integration Tests', () => {
 
         const bucketName = resourceIds.cloudtrailBucketName;
 
-        // Determine bucket region from CloudTrail ARN or default to us-west-2
-        let bucketRegion = 'us-west-2';
+        // Determine bucket region from CloudTrail ARN or default to ap-south-1
+        let bucketRegion = 'ap-south-1';
         if (resourceIds?.cloudtrailArn) {
           const arnParts = resourceIds.cloudtrailArn.split(':');
           if (arnParts.length >= 4 && arnParts[3]) {
@@ -2228,7 +2228,7 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        const testRegions = ['us-west-1', 'us-west-2'];
+        const testRegions = ['us-west-1', 'ap-south-1'];
 
         for (const region of testRegions) {
           const rdsClient = new RDSClient({ region });
@@ -2289,7 +2289,7 @@ describe('TAP Stack Integration Tests', () => {
         const _bucketName = resourceIds.cloudtrailBucketName;
 
         // Determine bucket region
-        let bucketRegion = 'us-west-2';
+        let bucketRegion = 'ap-south-1';
         if (resourceIds?.cloudtrailArn) {
           const arnParts = resourceIds.cloudtrailArn.split(':');
           if (arnParts.length >= 4 && arnParts[3]) {
@@ -2340,7 +2340,7 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        const testRegions = ['us-west-1', 'us-west-2'];
+        const testRegions = ['us-west-1', 'ap-south-1'];
 
         for (const region of testRegions) {
           const ec2Client = new EC2Client({ region });
@@ -2410,7 +2410,7 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        const testRegions = ['us-west-1', 'us-west-2'];
+        const testRegions = ['us-west-1', 'ap-south-1'];
 
         for (const region of testRegions) {
           // Create KMS client with invalid credentials
@@ -2470,7 +2470,7 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        const testRegions = ['us-west-1', 'us-west-2'];
+        const testRegions = ['us-west-1', 'ap-south-1'];
 
         for (const region of testRegions) {
           const rdsClient = new RDSClient({ region });

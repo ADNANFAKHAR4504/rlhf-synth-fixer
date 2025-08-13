@@ -16,7 +16,7 @@ Restrict SSH access to the EC2 instances to IP address `203.0.113.0/24`.
 Enable encryption at rest for all databases.  
 Use AWS Key Management Service (KMS) for managing encryption keys.  
 Ensure that no security group allows unrestricted ingress traffic on port 22.  
-Deploy resources across two AWS regions for high availability: `us-west-1` and `us-west-2`.  
+Deploy resources across two AWS regions for high availability: `us-west-1` and `ap-south-1`.  
 Log all API requests made to AWS services using AWS CloudTrail.  
 Create an S3 bucket for storing CloudTrail logs with all access logs enabled.  
 Implement AWS WAF rules to protect against SQL injection attacks.

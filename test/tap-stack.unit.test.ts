@@ -7,8 +7,8 @@
  */
 
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack';
 import { SecureCompliantInfra } from '../lib/secure-compliant-infra';
+import { TapStack } from '../lib/tap-stack';
 
 // Mock Pulumi runtime
 jest.mock('@pulumi/pulumi', () => ({
@@ -29,22 +29,22 @@ jest.mock('../lib/secure-compliant-infra', () => ({
     // Mock the outputs that SecureCompliantInfra should provide
     this.vpcIds = pulumi.output([
       { region: 'us-west-1', vpcId: 'vpc-12345' },
-      { region: 'us-east-2', vpcId: 'vpc-67890' }
+      { region: 'ap-south-1', vpcId: 'vpc-67890' }
     ]);
     this.ec2InstanceIds = pulumi.output([
       { region: 'us-west-1', instanceIds: ['i-12345', 'i-23456'] },
-      { region: 'us-east-2', instanceIds: ['i-34567', 'i-45678'] }
+      { region: 'ap-south-1', instanceIds: ['i-34567', 'i-45678'] }
     ]);
     this.rdsEndpoints = pulumi.output([
       { region: 'us-west-1', endpoint: 'test-db-west.cluster-xyz.us-west-1.rds.amazonaws.com' },
-      { region: 'us-east-2', endpoint: 'test-db-east.cluster-xyz.us-east-2.rds.amazonaws.com' }
+      { region: 'ap-south-1', endpoint: 'test-db-east.cluster-xyz.ap-south-1.rds.amazonaws.com' }
     ]);
     this.cloudtrailArn = pulumi.output('arn:aws:cloudtrail:us-west-1:123456789012:trail/test-trail');
     this.webAclArn = pulumi.output('arn:aws:wafv2:us-west-1:123456789012:global/webacl/test-waf-acl/12345');
     this.cloudtrailBucketName = pulumi.output('test-cloudtrail-bucket-12345');
     this.kmsKeyArns = pulumi.output([
       { region: 'us-west-1', keyArn: 'arn:aws:kms:us-west-1:123456789012:key/12345678-1234-1234-1234-123456789012' },
-      { region: 'us-east-2', keyArn: 'arn:aws:kms:us-east-2:123456789012:key/87654321-4321-4321-4321-210987654321' }
+      { region: 'ap-south-1', keyArn: 'arn:aws:kms:ap-south-1:123456789012:key/87654321-4321-4321-4321-210987654321' }
     ]);
     return this;
   })
@@ -67,7 +67,7 @@ describe('TapStack Unit Tests', () => {
           environment: 'dev',
           allowedSshCidr: '203.0.113.0/24',
           vpcCidr: '10.0.0.0/16',
-          regions: ['us-west-1', 'us-east-2']
+          regions: ['us-west-1', 'ap-south-1']
         }),
         expect.objectContaining({
           parent: expect.any(Object)
@@ -81,7 +81,7 @@ describe('TapStack Unit Tests', () => {
         projectName: 'custom-project',
         allowedSshCidr: '192.168.1.0/24',
         vpcCidr: '172.16.0.0/16',
-        regions: ['us-west-2', 'eu-west-1']
+        regions: ['ap-south-1', 'eu-west-1']
       };
 
       const stack = new TapStack('test-stack', customArgs);
@@ -94,7 +94,7 @@ describe('TapStack Unit Tests', () => {
           environment: 'prod',
           allowedSshCidr: '192.168.1.0/24',
           vpcCidr: '172.16.0.0/16',
-          regions: ['us-west-2', 'eu-west-1']
+          regions: ['ap-south-1', 'eu-west-1']
         }),
         expect.objectContaining({
           parent: expect.any(Object)
@@ -258,13 +258,13 @@ describe('TapStack Unit Tests', () => {
 
     it('should handle multi-region deployment', () => {
       const stack = new TapStack('test-stack', {
-        regions: ['us-west-1', 'us-east-2', 'eu-west-1']
+        regions: ['us-west-1', 'ap-south-1', 'eu-west-1']
       });
 
       expect(SecureCompliantInfra).toHaveBeenCalledWith(
         'secure-infra',
         expect.objectContaining({
-          regions: ['us-west-1', 'us-east-2', 'eu-west-1']
+          regions: ['us-west-1', 'ap-south-1', 'eu-west-1']
         }),
         expect.any(Object)
       );
@@ -276,7 +276,7 @@ describe('TapStack Unit Tests', () => {
       expect(SecureCompliantInfra).toHaveBeenCalledWith(
         'secure-infra',
         expect.objectContaining({
-          regions: ['us-west-1', 'us-east-2']
+          regions: ['us-west-1', 'ap-south-1']
         }),
         expect.any(Object)
       );

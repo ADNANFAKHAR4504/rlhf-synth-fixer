@@ -35,8 +35,8 @@ availabilityZone: azs.names[i],
 stack = new TapStack("TestTapStackWithProps", {
   environmentSuffix: "prod",
   stateBucket: "custom-state-bucket",
-  stateBucketRegion: "us-west-2",
-  awsRegion: "us-west-2",
+  stateBucketRegion: "ap-south-1",
+  awsRegion: "ap-south-1",
 });
 ```
 
@@ -374,7 +374,7 @@ kmsKeys.map(({ region, key }) => ({
 // Generate a short random suffix to avoid bucket name conflicts
 const randomSuffix = Math.random().toString(36).substring(2, 8);
 
-// S3 bucket for CloudTrail logs (single bucket in us-east-2)
+// S3 bucket for CloudTrail logs (single bucket in ap-south-1)
 const cloudtrailBucket = new aws.s3.Bucket(
   `${projectName}-${environment}-cloudtrail-logs`,
   {
@@ -382,7 +382,7 @@ const cloudtrailBucket = new aws.s3.Bucket(
     forceDestroy: true,
     tags: commonTags,
   },
-  { provider: providers.find(p => p.region === 'us-east-2')?.provider, parent: this }
+  { provider: providers.find(p => p.region === 'ap-south-1')?.provider, parent: this }
 );
 ```
 
@@ -430,11 +430,11 @@ All issues have been successfully resolved:
 - ✅ Deprecated S3 resource replaced with current version
 - ✅ S3 bucket naming simplified to use clean environment-project pattern
 - ✅ EC2 key pair dependency removed (SSH access can be added later if needed)
-- ✅ AWS region configuration mismatch resolved (us-east-1 → us-east-2)
+- ✅ AWS region configuration mismatch resolved (us-east-1 → ap-south-1)
 - ✅ Infrastructure refactored into proper class-based architecture
 - ✅ Environment configuration now passed from TapStack to SecureCompliantInfra
 - ✅ Resource hierarchy properly managed with parent relationships
 - ✅ Infrastructure code maintains all original functionality
 - ✅ Test files updated to match actual interface definitions
 
-The infrastructure code now follows the project's coding standards, uses proper architectural patterns, and should deploy successfully across `us-west-1` and `us-east-2` regions with clean resource names and proper configuration management that matches the AWS environment setup.
+The infrastructure code now follows the project's coding standards, uses proper architectural patterns, and should deploy successfully across `us-west-1` and `ap-south-1` regions with clean resource names and proper configuration management that matches the AWS environment setup.

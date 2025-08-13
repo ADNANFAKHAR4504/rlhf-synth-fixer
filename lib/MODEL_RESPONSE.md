@@ -17,7 +17,7 @@ const commonTags = {
 };
 
 // Regions for multi-region deployment
-const regions = ["us-west-1", "us-west-2"];
+const regions = ["us-west-1", "ap-south-1"];
 
 // Create providers for each region
 const providers = regions.map(region => ({
@@ -43,24 +43,24 @@ const kmsAliases = kmsKeys.map(({ region, key }) => ({
     }, { provider: providers.find(p => p.region === region)?.provider })
 }));
 
-// S3 bucket for CloudTrail logs (single bucket in us-west-2)
+// S3 bucket for CloudTrail logs (single bucket in ap-south-1)
 const cloudtrailBucket = new aws.s3.Bucket(`${projectName}-${environment}-cloudtrail-logs`, {
     bucket: `${projectName}-${environment}-cloudtrail-logs-${Date.now()}`,
     tags: commonTags,
-}, { provider: providers.find(p => p.region === "us-west-2")?.provider });
+}, { provider: providers.find(p => p.region === "ap-south-1")?.provider });
 
 // S3 bucket for access logs
 const accessLogsBucket = new aws.s3.Bucket(`${projectName}-${environment}-access-logs`, {
     bucket: `${projectName}-${environment}-access-logs-${Date.now()}`,
     tags: commonTags,
-}, { provider: providers.find(p => p.region === "us-west-2")?.provider });
+}, { provider: providers.find(p => p.region === "ap-south-1")?.provider });
 
 // Enable access logging on CloudTrail bucket
 const cloudtrailBucketLogging = new aws.s3.BucketLoggingV2(`${projectName}-${environment}-cloudtrail-logging`, {
     bucket: cloudtrailBucket.id,
     targetBucket: accessLogsBucket.id,
     targetPrefix: "cloudtrail-access-logs/",
-}, { provider: providers.find(p => p.region === "us-west-2")?.provider });
+}, { provider: providers.find(p => p.region === "ap-south-1")?.provider });
 
 // CloudTrail bucket policy
 const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(`${projectName}-${environment}-cloudtrail-policy`, {
@@ -89,7 +89,7 @@ const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(`${projectName}-${environ
             }
         ]
     }))
-}, { provider: providers.find(p => p.region === "us-west-2")?.provider });
+}, { provider: providers.find(p => p.region === "ap-south-1")?.provider });
 
 // CloudTrail
 const cloudtrail = new aws.cloudtrail.Trail(`${projectName}-${environment}-cloudtrail`, {
@@ -100,7 +100,7 @@ const cloudtrail = new aws.cloudtrail.Trail(`${projectName}-${environment}-cloud
     enableLogging: true,
     tags: commonTags,
 }, { 
-    provider: providers.find(p => p.region === "us-west-2")?.provider,
+    provider: providers.find(p => p.region === "ap-south-1")?.provider,
     dependsOn: [cloudtrailBucketPolicy]
 });
 
@@ -149,7 +149,7 @@ const webAcl = new aws.wafv2.WebAcl(`${projectName}-${environment}-waf`, {
         metricName: `${projectName}-${environment}-waf`,
         sampledRequestsEnabled: true
     }
-}, { provider: providers.find(p => p.region === "us-west-2")?.provider });
+}, { provider: providers.find(p => p.region === "ap-south-1")?.provider });
 
 // Create infrastructure for each region
 const regionalInfra = providers.map(({ region, provider }) => {
@@ -435,7 +435,7 @@ This Pulumi TypeScript configuration (`secureCompliantInfra.ts`) implements all 
 
 ## Key Features Implemented:
 
-1. **Multi-Region Deployment**: Resources deployed across `us-west-1` and `us-west-2`
+1. **Multi-Region Deployment**: Resources deployed across `us-west-1` and `ap-south-1`
 2. **Proper Tagging**: All resources tagged with `Project` and `Environment`
 3. **IAM Least Privilege**: EC2 roles with minimal required permissions
 4. **Restricted SSH Access**: Security groups only allow SSH from `203.0.113.0/24`

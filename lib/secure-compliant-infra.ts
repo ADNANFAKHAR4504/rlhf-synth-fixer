@@ -42,7 +42,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
     const environment = args.environment || 'prod';
     const allowedSshCidr = args.allowedSshCidr || '203.0.113.0/24';
     const vpcCidr = args.vpcCidr || '10.0.0.0/16';
-    const regions = args.regions || ['us-west-1', 'us-west-2'];
+    const regions = args.regions || ['us-west-1', 'ap-south-1'];
 
     // Common tags for all resources
     const commonTags = {
@@ -116,7 +116,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       ),
     }));
 
-    // S3 bucket for CloudTrail logs (single bucket in us-west-2)
+    // S3 bucket for CloudTrail logs (single bucket in ap-south-1)
     const cloudtrailBucket = new aws.s3.Bucket(
       `${projectName}-${environment}-cloudtrail-logs`,
       {
@@ -125,7 +125,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         tags: commonTags,
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
@@ -145,7 +145,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         ],
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
@@ -161,7 +161,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         restrictPublicBuckets: true,
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
@@ -174,7 +174,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         tags: commonTags,
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
@@ -194,7 +194,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         ],
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
@@ -210,7 +210,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         restrictPublicBuckets: true,
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
@@ -224,7 +224,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         targetPrefix: 'cloudtrail-access-logs/',
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
@@ -262,7 +262,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         ),
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
@@ -276,13 +276,13 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         includeGlobalServiceEvents: true,
         isMultiRegionTrail: true,
         enableLogging: true,
-        kmsKeyId: kmsKeys.find(k => k.region === 'us-west-2')?.key.arn,
+        kmsKeyId: kmsKeys.find(k => k.region === 'ap-south-1')?.key.arn,
         // Remove event selectors to use default management events only
         // eventSelectors can be added later with specific bucket ARNs if needed
         tags: commonTags,
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         dependsOn: [cloudtrailBucketPolicy],
         parent: this,
       }
@@ -337,7 +337,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         },
       },
       {
-        provider: providers.find(p => p.region === 'us-west-2')?.provider,
+        provider: providers.find(p => p.region === 'ap-south-1')?.provider,
         parent: this,
       }
     );
