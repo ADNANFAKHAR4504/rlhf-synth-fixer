@@ -488,7 +488,7 @@ output "rds_endpoint" {
   description = "Endpoint of the RDS MySQL instance"
   value       = try(aws_db_instance.mysql.endpoint, "pending-endpoint")
 }
-output "autoscaling_group_name" {
+output "auto_scaling_group_name" {
   description = "Name of the Auto Scaling Group"
   value       = try(aws_autoscaling_group.app_asg.name, "pending-asg-name")
 }
