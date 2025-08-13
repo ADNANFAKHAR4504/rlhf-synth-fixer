@@ -4,7 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-cfn-lint = "*"
 cfn-flip = "*"
 aws-cdk-lib = "2.202.0"
 constructs = ">=10.0.0,<11.0.0"
@@ -14,6 +13,7 @@ pulumi_random = "*"
 pulumi = "==3.109.0" 
 pulumi-aws = ">=6.0.0,<7.0.0"
 pytest-cov = "*"
+cfn-lint = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -23,7 +23,12 @@ pytest-env = "*"
 pylint = "*"
 pytest = "*"
 requests = "*"
+<<<<<<< HEAD
 pytest-cov = "*"
+=======
+cfn-lint = "*"
+cfn-flip = "*"
+>>>>>>> 73ac46b3f9651ec393e68b0fa6c7958b4ed324ab
 
 [requires]
 python_version = "3.12.11"
