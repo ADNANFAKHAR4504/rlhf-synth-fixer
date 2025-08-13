@@ -55,3 +55,11 @@ module "ec2_module" {
 output "lb_domain" {
   value = module.lb_module.alb_dns_name
 }
+
+output "vpc_id" {
+  value = module.vpc_module.vpc_id
+}
+
+output "lb_arn" {
+  value = module.lb_module.alb_arn
+}
