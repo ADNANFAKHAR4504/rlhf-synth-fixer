@@ -1201,7 +1201,6 @@ Resources:
       FunctionName: !Ref SecurityLambdaFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
       SourceAccount: !Ref AWS::AccountId
 
   LambdaDeadLetterQueue:
