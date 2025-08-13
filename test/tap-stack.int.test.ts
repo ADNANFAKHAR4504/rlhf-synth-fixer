@@ -121,8 +121,6 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
       let parsedPayload;
       try {
         parsedPayload = JSON.parse(rawPayload);
-
-        // If the payload is a string, try parsing it again
         if (typeof parsedPayload === 'string') {
           parsedPayload = JSON.parse(parsedPayload);
         }
@@ -131,62 +129,47 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
         parsedPayload = rawPayload;
       }
 
-      expect(response.StatusCode).toBe(200);
+      expect(response.StatusCode).toBe(200); // Allow 500 for initialization errors
       expect(parsedPayload).toBeDefined();
 
       // Enhanced error message extraction
       let errorMessage;
 
-      // Case 1: Check body as string
+      // Check if this is a Lambda initialization error
+      if (
+        typeof parsedPayload === 'string' &&
+        parsedPayload.includes('unable to import module')
+      ) {
+        console.error('Lambda Initialization Error:', parsedPayload);
+        throw new Error(
+          'Lambda function failed to initialize. Check deployment and dependencies.'
+        );
+      }
+
+      // Rest of the error message extraction...
       if (typeof parsedPayload.body === 'string') {
         try {
           const bodyObj = JSON.parse(parsedPayload.body);
-          errorMessage =
-            bodyObj.error || bodyObj.message || bodyObj.errorMessage;
+          errorMessage = bodyObj.error || bodyObj.message;
         } catch (e) {
           errorMessage = parsedPayload.body;
         }
       }
 
-      // Case 2: Check body as object
       if (!errorMessage && typeof parsedPayload.body === 'object') {
-        errorMessage =
-          parsedPayload.body.error ||
-          parsedPayload.body.message ||
-          parsedPayload.body.errorMessage;
+        errorMessage = parsedPayload.body?.error || parsedPayload.body?.message;
       }
 
-      // Case 3: Check top level properties
       if (!errorMessage) {
-        errorMessage =
-          parsedPayload.error ||
-          parsedPayload.message ||
-          parsedPayload.errorMessage;
+        errorMessage = parsedPayload.error || parsedPayload.message;
       }
 
-      // Case 4: Handle stringified error object
-      if (!errorMessage && typeof parsedPayload === 'string') {
-        try {
-          const obj = JSON.parse(parsedPayload);
-          errorMessage = obj.error || obj.message || obj.errorMessage;
-        } catch (e) {
-          // If parsing fails, use the string itself
-          errorMessage = parsedPayload;
-        }
-      }
-
-      // Debug logging
-      console.log('Parsed Payload:', JSON.stringify(parsedPayload, null, 2));
-      console.log('Extracted Error Message:', errorMessage);
-
-      // Assertions
       expect(errorMessage).toBeDefined();
       expect(typeof errorMessage).toBe('string');
       expect(errorMessage.toLowerCase()).toMatch(
         /missing|invalid|required|parameter/i
       );
     });
-    // ...existing code...
   });
 
   describe('SNS Topic Tests', () => {
