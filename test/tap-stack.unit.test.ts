@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
@@ -14,7 +14,7 @@ describe('TapStack', () => {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-east-1',
+        region: 'ca-central-1',
       },
     });
     template = Template.fromStack(stack);
@@ -56,7 +56,7 @@ describe('TapStack', () => {
     test('creates three types of subnets', () => {
       // CDK creates 3 AZs by default with 3 subnet types each
       template.resourceCountIs('AWS::EC2::Subnet', 9); // 3 AZs x 3 subnet types
-      
+
       // Check for public subnets
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
@@ -97,10 +97,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Gateway',
         ServiceName: {
-          'Fn::Join': [
-            '',
-            ['com.amazonaws.', { Ref: 'AWS::Region' }, '.s3'],
-          ],
+          'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, '.s3']],
         },
       });
     });
@@ -108,7 +105,7 @@ describe('TapStack', () => {
     test('creates KMS VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Interface',
-        ServiceName: 'com.amazonaws.us-east-1.kms',
+        ServiceName: 'com.amazonaws.ca-central-1.kms',
         PrivateDnsEnabled: true,
       });
     });
@@ -116,7 +113,7 @@ describe('TapStack', () => {
     test('creates Secrets Manager VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Interface',
-        ServiceName: 'com.amazonaws.us-east-1.secretsmanager',
+        ServiceName: 'com.amazonaws.ca-central-1.secretsmanager',
         PrivateDnsEnabled: true,
       });
     });
@@ -124,7 +121,7 @@ describe('TapStack', () => {
     test('creates EC2 VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Interface',
-        ServiceName: 'com.amazonaws.us-east-1.ec2',
+        ServiceName: 'com.amazonaws.ca-central-1.ec2',
         PrivateDnsEnabled: true,
       });
     });
@@ -161,9 +158,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: Match.objectLike({
           'Fn::Join': Match.arrayWith([
-            Match.arrayWith([
-              Match.stringLikeRegexp('securecorp-cloudtrail'),
-            ]),
+            Match.arrayWith([Match.stringLikeRegexp('securecorp-cloudtrail')]),
           ]),
         }),
         BucketEncryption: {
@@ -185,9 +180,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: Match.objectLike({
           'Fn::Join': Match.arrayWith([
-            Match.arrayWith([
-              Match.stringLikeRegexp('securecorp-data'),
-            ]),
+            Match.arrayWith([Match.stringLikeRegexp('securecorp-data')]),
           ]),
         }),
         BucketEncryption: {
@@ -207,7 +200,7 @@ describe('TapStack', () => {
 
     test('buckets have DESTROY removal policy', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      Object.values(buckets).forEach((bucket) => {
+      Object.values(buckets).forEach(bucket => {
         expect(bucket.DeletionPolicy).toBe('Delete');
         expect(bucket.UpdateReplacePolicy).toBe('Delete');
       });
@@ -215,13 +208,15 @@ describe('TapStack', () => {
 
     test('buckets have lifecycle rules for CloudTrail bucket', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      const cloudTrailBucket = Object.values(buckets).find((bucket: any) => 
+      const cloudTrailBucket = Object.values(buckets).find((bucket: any) =>
         JSON.stringify(bucket).includes('CloudTrail')
       );
-      
+
       expect(cloudTrailBucket).toBeDefined();
-      expect(cloudTrailBucket?.Properties?.LifecycleConfiguration?.Rules).toBeDefined();
-      
+      expect(
+        cloudTrailBucket?.Properties?.LifecycleConfiguration?.Rules
+      ).toBeDefined();
+
       const rules = cloudTrailBucket?.Properties?.LifecycleConfiguration?.Rules;
       expect(rules).toEqual(
         expect.arrayContaining([
@@ -292,7 +287,8 @@ describe('TapStack', () => {
     test('creates Developer role with limited permissions', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
         RoleName: `SecureCorp-Developer-${environmentSuffix}`,
-        Description: 'Role for developers with limited access to development resources',
+        Description:
+          'Role for developers with limited access to development resources',
       });
     });
 
@@ -301,13 +297,14 @@ describe('TapStack', () => {
         RoleName: `SecureCorp-Admin-${environmentSuffix}`,
         Description: 'Role for administrators with elevated access',
       });
-      
+
       // Check for PowerUserAccess in a more flexible way
       const roles = template.findResources('AWS::IAM::Role');
-      const adminRole = Object.values(roles).find((role: any) =>
-        role.Properties?.RoleName === `SecureCorp-Admin-${environmentSuffix}`
+      const adminRole = Object.values(roles).find(
+        (role: any) =>
+          role.Properties?.RoleName === `SecureCorp-Admin-${environmentSuffix}`
       );
-      
+
       expect(adminRole).toBeDefined();
       const managedPolicies = adminRole?.Properties?.ManagedPolicyArns || [];
       const hasPowerUserAccess = managedPolicies.some((policy: any) =>
@@ -321,13 +318,15 @@ describe('TapStack', () => {
         RoleName: `SecureCorp-Auditor-${environmentSuffix}`,
         Description: 'Role for auditors with read-only access',
       });
-      
+
       // Check for ReadOnlyAccess in a more flexible way
       const roles = template.findResources('AWS::IAM::Role');
-      const auditorRole = Object.values(roles).find((role: any) =>
-        role.Properties?.RoleName === `SecureCorp-Auditor-${environmentSuffix}`
+      const auditorRole = Object.values(roles).find(
+        (role: any) =>
+          role.Properties?.RoleName ===
+          `SecureCorp-Auditor-${environmentSuffix}`
       );
-      
+
       expect(auditorRole).toBeDefined();
       const managedPolicies = auditorRole?.Properties?.ManagedPolicyArns || [];
       const hasReadOnlyAccess = managedPolicies.some((policy: any) =>
@@ -342,7 +341,7 @@ describe('TapStack', () => {
           RoleName: `SecureCorp-Admin-${environmentSuffix}`,
         },
       });
-      
+
       template.hasResourceProperties('AWS::IAM::Policy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
@@ -405,7 +404,7 @@ describe('TapStack', () => {
         KmsKeyId: Match.anyValue(),
       });
     });
-    
+
     test('database generates credentials secret', () => {
       // CDK generates a secret for database credentials
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
@@ -502,7 +501,7 @@ describe('TapStack', () => {
   describe('Security Best Practices', () => {
     test('S3 buckets have versioning enabled', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      Object.values(buckets).forEach((bucket) => {
+      Object.values(buckets).forEach(bucket => {
         expect(bucket.Properties.VersioningConfiguration).toEqual({
           Status: 'Enabled',
         });
@@ -511,7 +510,7 @@ describe('TapStack', () => {
 
     test('S3 buckets have public access blocked', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      Object.values(buckets).forEach((bucket) => {
+      Object.values(buckets).forEach(bucket => {
         expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
@@ -530,7 +529,7 @@ describe('TapStack', () => {
 
     test('Security groups have restrictive ingress rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
-      Object.values(securityGroups).forEach((sg) => {
+      Object.values(securityGroups).forEach(sg => {
         if (sg.Properties.SecurityGroupIngress) {
           sg.Properties.SecurityGroupIngress.forEach((rule: any) => {
             // Should not allow 0.0.0.0/0 ingress

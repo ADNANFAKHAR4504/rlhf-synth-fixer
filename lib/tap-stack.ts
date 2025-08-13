@@ -19,37 +19,45 @@ export class TapStack extends cdk.Stack {
     const { environmentSuffix } = props;
 
     // Create KMS key for proper encryption
-    const securityKey = new kms.Key(this, `SecureCorp-MasterKey-${environmentSuffix}`, {
-      description: 'SecureCorp master encryption key for data at rest',
-      enableKeyRotation: true,
-      keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
-      keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      policy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            sid: 'Enable IAM User Permissions',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.AccountRootPrincipal()],
-            actions: ['kms:*'],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow CloudWatch Logs',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal(`logs.${cdk.Aws.REGION}.amazonaws.com`)],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey'
-            ],
-            resources: ['*'],
-          }),
-        ],
-      }),
-    });
+    const securityKey = new kms.Key(
+      this,
+      `SecureCorp-MasterKey-${environmentSuffix}`,
+      {
+        description: 'SecureCorp master encryption key for data at rest',
+        enableKeyRotation: true,
+        keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
+        keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        policy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              sid: 'Enable IAM User Permissions',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.AccountRootPrincipal()],
+              actions: ['kms:*'],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              sid: 'Allow CloudWatch Logs',
+              effect: iam.Effect.ALLOW,
+              principals: [
+                new iam.ServicePrincipal(
+                  `logs.${cdk.Aws.REGION}.amazonaws.com`
+                ),
+              ],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: ['*'],
+            }),
+          ],
+        }),
+      }
+    );
 
     securityKey.addAlias(`alias/securecorp-master-key-${environmentSuffix}`);
 
@@ -430,7 +438,7 @@ export class TapStack extends cdk.Stack {
     const privateSubnets = vpc.selectSubnets({
       subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
     });
-    
+
     privateSubnets.subnets.forEach((subnet, index) => {
       dbSecurityGroup.addIngressRule(
         ec2.Peer.ipv4(subnet.ipv4CidrBlock),
@@ -486,7 +494,6 @@ export class TapStack extends cdk.Stack {
       value: securityKey.keyArn,
       description: 'KMS Key ARN for encryption',
     });
-
 
     new cdk.CfnOutput(this, 'CloudTrailArn', {
       value: trail.trailArn,
