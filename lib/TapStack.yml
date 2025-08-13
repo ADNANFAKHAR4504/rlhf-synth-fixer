@@ -20,12 +20,6 @@ Parameters:
     Default: INFO
     Description: 'Log level for Lambda function'
 
-  DeploymentRegion: # New parameter for the deployment region
-    Type: String
-    Default: us-east-1
-    Description: 'The AWS region where resources will be deployed'
-    AllowedPattern: '^[a-z]{2}-[a-z]+-[1-9]{1}$'
-    ConstraintDescription: 'Must be a valid AWS region (e.g., us-east-1)'
 
 Resources:
   LambdaExecutionRole:
@@ -59,8 +53,7 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                # Use DeploymentRegion for the log group ARN
-                Resource: !Sub 'arn:aws:logs:${DeploymentRegion}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-data-processor:*'
+                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-data-processor:*'
 
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
@@ -140,7 +133,7 @@ Resources:
           STAGE: !Ref Environment
           LOG_LEVEL: !Ref LogLevel
           TABLE_NAME: !Ref DataTable
-          REGION: !Ref DeploymentRegion # Use the new DeploymentRegion parameter
+          REGION: us-east-1
       Timeout: 30
       MemorySize: 128
 
@@ -150,8 +143,7 @@ Resources:
       FunctionName: !Ref DataProcessorFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      # Use DeploymentRegion in SourceArn
-      SourceArn: !Sub 'arn:aws:execute-api:${DeploymentRegion}:${AWS::AccountId}:${DataApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${DataApi}/*/*'
 
   DataApi:
     Type: AWS::ApiGateway::RestApi
@@ -179,8 +171,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        # Use DeploymentRegion in Lambda integration URI
-        Uri: !Sub 'arn:aws:apigateway:${DeploymentRegion}:lambda:path/2015-03-31/functions/${DataProcessorFunction.Arn}/invocations'
+        Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${DataProcessorFunction.Arn}/invocations'
       MethodResponses:
         - StatusCode: 200
           ResponseModels:
@@ -309,8 +300,7 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: 'API Gateway endpoint URL'
-    # Use DeploymentRegion in the output URL
-    Value: !Sub 'https://${DataApi}.execute-api.${DeploymentRegion}.amazonaws.com/${Environment}/data'
+    Value: !Sub 'https://${DataApi}.execute-api.us-east-1.amazonaws.com/${Environment}/data'
     Export:
       Name: !Sub '${AWS::StackName}-ApiEndpoint'
 

@@ -92,7 +92,7 @@ Resources:
           logger.setLevel(getattr(logging, log_level))
 
           # Initialize DynamoDB client
-          dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION'))
+          dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('REGION'))
           table_name = os.environ.get('TABLE_NAME')
           table = dynamodb.Table(table_name)
 
@@ -144,7 +144,7 @@ Resources:
       Environment:
         Variables:
           STAGE: !Ref Environment
-          AWS_REGION: us-east-1
+          REGION: us-east-1
           LOG_LEVEL: !Ref LogLevel
           TABLE_NAME: !Ref DataTable
       Timeout: 30

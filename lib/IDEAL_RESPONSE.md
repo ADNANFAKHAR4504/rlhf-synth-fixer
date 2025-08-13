@@ -89,7 +89,7 @@ Resources:
       Environment:
         Variables:
           STAGE: !Ref Environment
-          AWS_REGION: us-east-1
+          REGION: us-east-1
           LOG_LEVEL: !Ref LogLevel
           TABLE_NAME: !Ref DataTable
       Code:
@@ -107,7 +107,7 @@ Resources:
           logger = logging.getLogger()
 
           # Initialize DynamoDB client
-          dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION'))
+          dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('REGION'))
           table = dynamodb.Table(os.environ.get('TABLE_NAME'))
 
           def lambda_handler(event, context):
@@ -381,10 +381,10 @@ Outputs:
 
 - **Environment Variables**:
   - STAGE: References Environment parameter  
-  - AWS_REGION: HARDCODED to "us-east-1" (not parameterized for compliance)
+  - REGION: HARDCODED to "us-east-1" (not parameterized for compliance)
   - LOG_LEVEL: References LogLevel parameter
   - TABLE_NAME: References the DynamoDB table
-- **Lambda Code**: Uses os.environ.get('AWS_REGION') instead of os.environ.get('REGION')
+- **Lambda Code**: Uses os.environ.get('REGION') for region configuration
 - **IAM Role**: Follows least privilege principle with only necessary permissions:
   - CloudWatch Logs: CreateLogStream, PutLogEvents
   - DynamoDB: PutItem access only
@@ -407,7 +407,7 @@ Outputs:
 ### 6. Region Constraint
 
 - All resources explicitly reference us-east-1 region where required
-- Lambda environment variable AWS_REGION set to us-east-1
+- Lambda environment variable REGION set to us-east-1
 - API Gateway URLs and ARNs reference us-east-1
 
 ## Security and Best Practices
