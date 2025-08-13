@@ -71,8 +71,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.webAppStack = new ProductionWebAppStack(
       'production-web-app',
       {
-        environmentSuffix: environmentSuffix,
-        projectName: `tap-${environmentSuffix}`,
+        environment: environmentSuffix, // Pass environmentSuffix as environment
+        projectName: 'tap', // Clean project name without environment suffix
         tags: tags,
       },
       { parent: this }

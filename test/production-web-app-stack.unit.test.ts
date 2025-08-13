@@ -172,16 +172,16 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(stack).toBeDefined();
     });
 
-    it('should create stack with custom environment suffix', () => {
+    it('should create stack with custom environment', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
-        environmentSuffix: 'staging',
+        environment: 'staging',
       });
       expect(stack).toBeDefined();
     });
 
     it('should create stack with custom tags', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
-        environmentSuffix: 'test',
+        environment: 'test',
         tags: { Environment: 'test', Project: 'tap', Owner: 'team-alpha' },
       });
       expect(stack).toBeDefined();
@@ -191,7 +191,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
         vpcCidr: '192.168.0.0/16',
         projectName: 'full-custom-app',
-        environmentSuffix: 'prod',
+        environment: 'prod',
         tags: {
           Environment: 'production',
           Project: 'enterprise-app',
@@ -206,7 +206,7 @@ describe('ProductionWebAppStack Component Tests', () => {
   describe('Edge Cases and Error Handling', () => {
     it('should handle undefined tags gracefully', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
-        environmentSuffix: 'test',
+        environment: 'test',
         tags: undefined,
       });
       expect(stack).toBeDefined();
@@ -214,7 +214,7 @@ describe('ProductionWebAppStack Component Tests', () => {
 
     it('should handle null tags gracefully', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
-        environmentSuffix: 'test',
+        environment: 'test',
         tags: null as any,
       });
       expect(stack).toBeDefined();
@@ -222,7 +222,7 @@ describe('ProductionWebAppStack Component Tests', () => {
 
     it('should handle empty tags object', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
-        environmentSuffix: 'test',
+        environment: 'test',
         tags: {},
       });
       expect(stack).toBeDefined();
@@ -232,7 +232,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       const falsyValues = [false, 0, '', NaN];
       falsyValues.forEach((value, index) => {
         const stack = new ProductionWebAppStack(`test-web-app-${index}`, {
-          environmentSuffix: 'test',
+          environment: 'test',
           tags: { falsyTest: value as any },
         });
         expect(stack).toBeDefined();
@@ -243,7 +243,7 @@ describe('ProductionWebAppStack Component Tests', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
         vpcCidr: '', // Should fall back to default
         projectName: '', // Should fall back to default
-        environmentSuffix: '',
+        environment: '',
       });
       expect(stack).toBeDefined();
     });
@@ -262,7 +262,7 @@ describe('ProductionWebAppStack Component Tests', () => {
     beforeEach(() => {
       stack = new ProductionWebAppStack('test-web-app', {
         projectName: 'test-project',
-        environmentSuffix: 'test',
+        environment: 'test',
       });
     });
 
@@ -672,7 +672,7 @@ describe('ProductionWebAppStack Component Tests', () => {
     it('should use consistent naming patterns', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
         projectName: 'naming-test',
-        environmentSuffix: 'dev',
+        environment: 'dev',
       });
 
       const aws = require('@pulumi/aws');

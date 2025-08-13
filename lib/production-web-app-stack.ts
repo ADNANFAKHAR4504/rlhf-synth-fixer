@@ -36,9 +36,9 @@ export interface ProductionWebAppStackArgs {
   projectName?: string;
 
   /**
-   * Environment suffix for resource naming
+   * Environment name (e.g., 'dev', 'staging', 'prod')
    */
-  environmentSuffix?: string;
+  environment?: string;
 
   /**
    * Additional tags to apply to resources
@@ -74,15 +74,14 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     // Configuration with defaults
     const vpcCidr = args.vpcCidr || '10.0.0.0/16';
     const projectName = args.projectName || 'production-web-app';
-    const environmentSuffix = args.environmentSuffix || 'prod';
+    const environment = args.environment || 'prod';
 
     // Create resource name with environment suffix
-    const resourcePrefix = `${projectName}-${environmentSuffix}`;
+    const resourcePrefix = `${projectName}-${environment}`;
 
     // Common tags
     const commonTags = {
-      Environment:
-        environmentSuffix.charAt(0).toUpperCase() + environmentSuffix.slice(1),
+      Environment: environment.charAt(0).toUpperCase() + environment.slice(1),
       Project: projectName,
       ...(args.tags || {}),
     };
@@ -660,9 +659,7 @@ systemctl enable amazon-cloudwatch-agent
           },
           {
             key: 'Environment',
-            value:
-              environmentSuffix.charAt(0).toUpperCase() +
-              environmentSuffix.slice(1),
+            value: environment.charAt(0).toUpperCase() + environment.slice(1),
             propagateAtLaunch: true,
           },
         ],
