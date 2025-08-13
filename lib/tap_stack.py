@@ -40,7 +40,6 @@ class TapStack(pulumi.ComponentResource):
         opts=ResourceOptions(parent=self)
     )
 
-    # Two private subnets in different AZs
     self.private_subnet1 = aws.ec2.Subnet(
         f"private-subnet-1-{self.environment_suffix}",
         vpc_id=self.vpc.id,
@@ -97,11 +96,11 @@ class TapStack(pulumi.ComponentResource):
         ),
         opts=ResourceOptions(parent=self.logging_bucket)
     )
-    aws.s3.BucketServerSideEncryptionConfiguration(
+    aws.s3.BucketServerSideEncryptionConfigurationV2(
         f"logging-bucket-encryption-{self.environment_suffix}",
         bucket=self.logging_bucket.id,
-        rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+        rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
                 sse_algorithm="aws:kms"
             )
         )],
@@ -132,11 +131,11 @@ class TapStack(pulumi.ComponentResource):
         target_prefix="app-bucket-logs/",
         opts=ResourceOptions(parent=self.app_bucket)
     )
-    aws.s3.BucketServerSideEncryptionConfiguration(
+    aws.s3.BucketServerSideEncryptionConfigurationV2(
         f"app-bucket-encryption-{self.environment_suffix}",
         bucket=self.app_bucket.id,
-        rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+        rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
                 sse_algorithm="aws:kms"
             )
         )],
@@ -168,7 +167,7 @@ class TapStack(pulumi.ComponentResource):
         f"db-sg-{self.environment_suffix}",
         vpc_id=self.vpc.id,
         description="DB security group - no public access",
-        ingress=[],  # No inbound rules by default
+        ingress=[],
         egress=[aws.ec2.SecurityGroupEgressArgs(
             protocol="-1",
             from_port=0,
@@ -186,7 +185,7 @@ class TapStack(pulumi.ComponentResource):
         instance_class="db.t3.micro",
         db_name="appdb",
         username="dbadmin",
-        password="Passw0rd123!",  # use config.require_secret in prod
+        password="Passw0rd123!",
         skip_final_snapshot=True,
         db_subnet_group_name=self.db_subnet_group.name,
         vpc_security_group_ids=[self.db_security_group.id],
