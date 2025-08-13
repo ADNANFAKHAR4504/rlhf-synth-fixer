@@ -236,21 +236,23 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('Network Connectivity', () => {
-    test('All required outputs should be present when deployed', () => {
-      // Check that all expected outputs exist
-      const requiredOutputs = ['VpcId', 'PublicSubnetIds', 'ServiceNetworkId'];
-      
-      // If no outputs exist, skip this test (deployment not done)
-      if (Object.keys(outputs).length === 0) {
-        console.log('No deployment outputs found - infrastructure not deployed yet');
-        return;
-      }
-      
-      // If we have outputs, verify all required ones are present
-      for (const output of requiredOutputs) {
-        expect(outputs[output]).toBeDefined();
-      }
-    });
+  function findOutputKey(outputs: any, suffix: string) {
+    return Object.values(outputs).find((_, keyIndex) => 
+      Object.keys(outputs)[keyIndex].endsWith(suffix)
+    );
+  }
+
+  test('All required outputs should be present when deployed', () => {
+    const requiredSuffixes = ['VpcId', 'PublicSubnetIds', 'ServiceNetworkId'];
+
+    if (Object.keys(outputs).length === 0) {
+      console.log('No deployment outputs found - infrastructure not deployed yet');
+      return;
+    }
+
+    for (const suffix of requiredSuffixes) {
+      const value = findOutputKey(outputs, suffix);
+      expect(value).toBeDefined();
+    }
   });
 });
