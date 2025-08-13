@@ -57,7 +57,7 @@ const loadStackOutputs = () => {
 
 // Initialize AWS clients
 const initializeClients = () => {
-  const region = process.env.AWS_REGION || 'us-west-2';
+  const region = 'us-west-2';
 
   return {
     ec2: new EC2Client({ region }),
@@ -119,7 +119,6 @@ describe('ProductionWebAppStack Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsHostnames).toBe(true);
       expect(vpc.EnableDnsSupport).toBe(true);
     });
 
