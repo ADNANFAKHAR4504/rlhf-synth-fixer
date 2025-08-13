@@ -1076,7 +1076,7 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}"
+                    "Fn::Sub": "secure-buckets-${AWS::AccountId}-us-west-2-tapstack-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1188,7 +1188,7 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "cloudtrail-logs-${AWS::AccountId}-us-west-2-tapstack-${Environment}"
+                    "Fn::Sub": "cloudtrail-log-${AWS::AccountId}-us-west-2-tapstack-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1373,7 +1373,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}/*"
+                                        "Fn::Sub": "arn:aws:s3:::secure-buckets-${AWS::AccountId}-us-west-2-tapstack-${Environment}/*"
                                     }
                                 },
                                 {
@@ -1382,7 +1382,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}"
+                                        "Fn::Sub": "arn:aws:s3:::secure-buckets-${AWS::AccountId}-us-west-2-tapstack-${Environment}"
                                     }
                                 }
                             ]

@@ -49,3 +49,10 @@
 **Failure**: VPC endpoint test failed due to missing subnet IDs
 **Root Cause**: VPC endpoints might not have subnet IDs depending on configuration type
 **Resolution**: Made test flexible to handle cases where subnet IDs don't exist (e.g., Gateway endpoints)
+
+## Current Configuration
+
+### S3 Bucket Naming
+Both S3 buckets use lowercase naming conventions with environment suffix to ensure compliance with S3 bucket naming requirements and provide environment-specific uniqueness:
+- **Main S3 Bucket**: `secure-buckets-{accountId}-us-west-2-tapstack-{environment}`
+- **CloudTrail S3 Bucket**: `cloudtrail-log-{accountId}-us-west-2-tapstack-{environment}`
