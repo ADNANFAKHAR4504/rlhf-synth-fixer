@@ -512,7 +512,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-database-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.4.6'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
