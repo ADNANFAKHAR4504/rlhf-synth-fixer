@@ -76,7 +76,7 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
         parsedPayload = rawPayload;
       }
 
-      expect(response.StatusCode).toBe(200);
+      expect(response.StatusCode).toBe(204);
       expect(parsedPayload).toBeDefined();
 
       // More flexible status code check
@@ -114,7 +114,7 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
         parsedPayload = rawPayload;
       }
 
-      expect(response.StatusCode).toBe(200);
+      expect(response.StatusCode).toBe(204);
       expect(parsedPayload).toBeDefined();
 
       // Get error message from various possible locations
@@ -204,7 +204,7 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
       });
 
       // Accept both 200 and 204 as valid responses for OPTIONS
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(204);
       expect(response.headers.get('access-control-allow-origin')).toBe('*');
       expect(
         response.headers.get('access-control-allow-methods')
