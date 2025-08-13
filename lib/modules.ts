@@ -119,7 +119,7 @@ export function createHighAvailabilityVpc(
     const az = Fn.element(azs.names, i);
     const pubSubnet = new Subnet(stack, `${id}-pub-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: '10.0.0.0/26',
+      cidrBlock: '10.0.1.0/24',
       availabilityZone: az,
       mapPublicIpOnLaunch: true,
       tags: { Name: `${opts.namePrefix}-public-${i}` },
@@ -127,7 +127,7 @@ export function createHighAvailabilityVpc(
 
     const privSubnet = new Subnet(stack, `${id}-priv-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: '10.0.0.0/26',
+      cidrBlock: '10.0.2.0/24',
       availabilityZone: az,
       mapPublicIpOnLaunch: false,
       tags: { Name: `${opts.namePrefix}-private-${i}` },
