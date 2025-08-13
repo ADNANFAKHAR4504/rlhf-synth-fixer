@@ -1,4 +1,4 @@
-Model provided
+### Model provided response below
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Scalable web application infrastructure with S3, EC2, and RDS

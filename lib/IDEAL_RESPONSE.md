@@ -1,4 +1,4 @@
-Ideal fixed resposne is as below:
+### Ideal fixed resposne is as below:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
