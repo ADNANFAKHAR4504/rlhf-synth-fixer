@@ -76,7 +76,9 @@ class TestSecureVPC(unittest.TestCase):
   @patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock())
   def test_securevpc_full_creation(self, *_):
     """Test complete SecureVPC creation to cover all internal methods."""
-    vpc = SecureVPC("test-vpc", "10.0.0.0/16", {"Environment": "Test"})
+    mock_provider = MagicMock()
+    vpc = SecureVPC("test-vpc", "10.0.0.0/16",
+                    {"Environment": "Test"}, mock_provider)
 
     # Verify all attributes are set
     self.assertIsNotNone(vpc.vpc)
@@ -115,7 +117,8 @@ class TestSecureVPC(unittest.TestCase):
          return_value=MagicMock(names=["us-west-2a", "us-west-2b"]))
   def test_securevpc_init(self, *_):
     """Ensure SecureVPC calls all internal creation methods and assigns expected attributes."""
-    vpc = SecureVPC("test", "10.0.0.0/16", {"Env": "Test"})
+    mock_provider = MagicMock()
+    vpc = SecureVPC("test", "10.0.0.0/16", {"Env": "Test"}, mock_provider)
     self.assertEqual(vpc.vpc, "vpc")
     self.assertEqual(vpc.igw, "igw")
     self.assertEqual(vpc.public_subnets, ["pub1", "pub2"])
@@ -132,8 +135,9 @@ class TestHelpers(unittest.TestCase):
   @patch("lib.tap_stack.aws.kms.Alias", return_value=MagicMock())
   def test_create_kms_key(self, mock_alias, mock_key, _):
     """Verify that create_kms_key creates a KMS key and alias with correct tags."""
+    mock_provider = MagicMock()
     sample_tags = {"Environment": "Production"}
-    key = create_kms_key(sample_tags)
+    key = create_kms_key(sample_tags, mock_provider)
     self.assertEqual(key, mock_key.return_value)
     mock_alias.assert_called_once()
 
@@ -141,10 +145,11 @@ class TestHelpers(unittest.TestCase):
          side_effect=lambda *a, **k: MagicMock(id="sg", **k))
   def test_create_security_groups(self, _):
     """Ensure create_security_groups returns all required security groups."""
+    mock_provider = MagicMock()
     vpc = MagicMock()
     vpc.id = "vpc-123"
     sample_tags = {"Environment": "Production"}
-    sgs = create_security_groups(vpc, sample_tags)
+    sgs = create_security_groups(vpc, sample_tags, mock_provider)
     self.assertIn("web_sg", sgs)
     self.assertIn("db_sg", sgs)
     self.assertIn("eks_sg", sgs)
@@ -157,11 +162,18 @@ class TestHelpers(unittest.TestCase):
   @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=MagicMock())
   def test_create_rds(self, *_):
     """Verify that create_rds provisions an encrypted RDS instance with fetched password."""
+    mock_provider = MagicMock()
     subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
     db_sg = MagicMock(id="sg-123")
     kms_key = MagicMock(id="kid")
     tags = {"Environment": "Production"}
-    rds = create_rds(subnets, db_sg, kms_key, tags, "/app/dbpass")
+    rds = create_rds(
+        subnets,
+        db_sg,
+        kms_key,
+        tags,
+        "/app/dbpass",
+        mock_provider)
     self.assertEqual(rds.endpoint, "db-endpoint")
 
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
@@ -171,6 +183,7 @@ class TestHelpers(unittest.TestCase):
   @patch("lib.tap_stack.aws.eks.Cluster")
   def test_create_eks_cluster(self, mock_cluster_class, *_):
     """Validate create_eks_cluster provisions an EKS cluster with IAM role attached."""
+    mock_provider = MagicMock()
     mock_cluster_instance = MagicMock()
     mock_cluster_instance.name = "cluster"
     mock_cluster_instance.endpoint = "eks-endpoint"
@@ -180,7 +193,7 @@ class TestHelpers(unittest.TestCase):
     subnets = ["subnet1", "subnet2"]
     sg = MagicMock()
     tags = {"Environment": "Production"}
-    cluster = create_eks_cluster(vpc, subnets, sg, tags)
+    cluster = create_eks_cluster(vpc, subnets, sg, tags, mock_provider)
     self.assertEqual(cluster.name, "cluster")
 
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
@@ -189,6 +202,7 @@ class TestHelpers(unittest.TestCase):
   @patch("lib.tap_stack.aws.eks.NodeGroup")
   def test_create_eks_node_group(self, mock_ng_class, *_):
     """Ensure create_eks_node_group provisions a node group with correct scaling configuration."""
+    mock_provider = MagicMock()
     mock_ng_instance = MagicMock()
     mock_ng_instance.node_group_name = "nodes"
     mock_ng_class.return_value = mock_ng_instance
@@ -198,7 +212,7 @@ class TestHelpers(unittest.TestCase):
     subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
     sg = MagicMock()
     tags = {"Environment": "Production"}
-    ng = create_eks_node_group(cluster, subnets, sg, tags)
+    ng = create_eks_node_group(cluster, subnets, sg, tags, mock_provider)
     self.assertEqual(ng.node_group_name, "nodes")
 
   @patch("lib.tap_stack.aws.lb.Listener", return_value=MagicMock())
@@ -208,13 +222,14 @@ class TestHelpers(unittest.TestCase):
          return_value=MagicMock(dns_name="alb-dns"))
   def test_create_alb(self, *_):
     """Verify create_alb provisions ALB, TargetGroup, and Listener."""
+    mock_provider = MagicMock()
     subs = [
         MagicMock(
             id="public1", vpc_id="vpc"), MagicMock(
             id="public2", vpc_id="vpc")]
     sg = MagicMock()
     tags = {"Environment": "Production"}
-    alb, tg, _ = create_alb(subs, sg, tags)
+    alb, tg, _ = create_alb(subs, sg, tags, mock_provider)
     self.assertEqual(alb.dns_name, "alb-dns")
     self.assertEqual(tg.arn, "tg-arn")
 
@@ -233,6 +248,7 @@ class TestHelpers(unittest.TestCase):
           self, _bucket, _encryption, _role, _attachment,
           mock_pipeline_class, _ssm):
     """Ensure create_codepipeline provisions a pipeline with GitHub source integration."""
+    mock_provider = MagicMock()
     mock_pipeline_instance = MagicMock()
     mock_pipeline_instance.name = "pipeline"
     mock_pipeline_class.return_value = mock_pipeline_instance
@@ -242,7 +258,7 @@ class TestHelpers(unittest.TestCase):
     cp = create_codepipeline(
         role_name="role", repo_owner="owner", repo_name="repo",
         repo_branch="main", github_oauth_token_param="/github/token",
-        kms_key=kms_key, tags=tags
+        kms_key=kms_key, tags=tags, provider=mock_provider
     )
     self.assertEqual(cp.name, "pipeline")
 
@@ -258,6 +274,7 @@ class TestHelpers(unittest.TestCase):
   @patch("lib.tap_stack.aws.lambda_.Function")
   def test_create_monitoring_lambda(self, mock_lambda_class, *_):
     """Validate that create_monitoring_lambda provisions a Lambda with schedule and permissions."""
+    mock_provider = MagicMock()
     mock_lambda_instance = MagicMock()
     mock_lambda_instance.name = "lambda"
     mock_lambda_instance.arn = "arn"
@@ -267,7 +284,7 @@ class TestHelpers(unittest.TestCase):
     sg = MagicMock()
     kms_key = MagicMock(arn="arn")
     tags = {"Environment": "Production"}
-    fn = create_monitoring_lambda(subnets, sg, kms_key, tags)
+    fn = create_monitoring_lambda(subnets, sg, kms_key, tags, mock_provider)
     self.assertEqual(fn.name, "lambda")
 
 
