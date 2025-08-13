@@ -27,6 +27,7 @@ class TapStack(pulumi.ComponentResource):
 
     self.environment_suffix = args.environment_suffix
     self.tags = args.tags
+    self.unique_suffix = pulumi.get_stack()
 
     # ==========================================
     # 0. Networking: VPC + Private Subnets
@@ -84,7 +85,7 @@ class TapStack(pulumi.ComponentResource):
     # ==========================================
     self.logging_bucket = aws.s3.Bucket(
         f"logging-bucket-{self.environment_suffix}",
-        bucket=f"tap-logging-{self.environment_suffix}",
+        bucket=f"tap-logging-{self.environment_suffix}-{self.unique_suffix}",
         tags=self.tags,
         opts=ResourceOptions(parent=self)
     )
@@ -112,7 +113,7 @@ class TapStack(pulumi.ComponentResource):
     # ==========================================
     self.app_bucket = aws.s3.BucketV2(
         f"app-bucket-{self.environment_suffix}",
-        bucket=f"tap-app-{self.environment_suffix}",
+        bucket=f"tap-app-{self.environment_suffix}-{self.unique_suffix}",
         tags=self.tags,
         opts=ResourceOptions(parent=self)
     )
