@@ -1,4 +1,12 @@
 #############################################
+# main.tf — Single-file stack (variables, data, locals, resources, outputs)
+# NOTE: Your provider.tf already configures:
+#   - provider "aws" { region = var.aws_region }
+#   - backend "s3" with DynamoDB state locking
+# Do NOT add providers/backends here.
+#############################################
+
+#############################################
 # Variables (provider.tf reads var.aws_region)
 #############################################
 variable "project" {
@@ -18,7 +26,7 @@ variable "environment" {
 }
 
 variable "aws_region" {
-  description = "AWS region (used by provider.tf)."
+  description = "AWS region (referenced by provider.tf)."
   type        = string
   default     = "us-east-1"
 }
@@ -48,7 +56,7 @@ variable "instance_type" {
 }
 
 variable "bucket_name" {
-  description = "Optional explicit S3 bucket name. If empty, a name is derived from project and environment."
+  description = "Optional explicit S3 bucket name. If empty, one is derived."
   type        = string
   default     = ""
 }
@@ -57,6 +65,13 @@ variable "allowed_ssh_cidrs" {
   description = "CIDR ranges that can SSH to the instance. If empty, no SSH ingress rule is created."
   type        = list(string)
   default     = []
+}
+
+# Optional: switch S3 default encryption to SSE-KMS by passing a key (ID or ARN).
+variable "kms_key_id" {
+  description = "Optional KMS Key ID/ARN for S3 default encryption. If empty, AES256 is used."
+  type        = string
+  default     = ""
 }
 
 #################
@@ -80,18 +95,16 @@ data "aws_ami" "al2023" {
 # Locals
 ############
 locals {
-  name_prefix  = lower("${var.project}-${var.environment}")
-  azs          = slice(data.aws_availability_zones.available.names, 0, 2)
+  name_prefix = lower("${var.project}-${var.environment}")
+  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
 
   # Feature toggles by environment
-  enable_nat                  = var.environment != "dev"
-  enable_detailed_monitoring  = var.environment != "dev"
-  instance_in_public_subnet   = var.environment == "dev"
+  enable_nat                 = var.environment != "dev"
+  enable_detailed_monitoring = var.environment != "dev"
+  instance_in_public_subnet  = var.environment == "dev"
 
-  # Derived bucket name if none supplied
-  effective_bucket_name = length(trim(var.bucket_name)) > 0
-    ? var.bucket_name
-    : replace("${local.name_prefix}-app-bucket", "_", "-")
+  # Derived bucket name if none supplied (keep as ONE expression to avoid parser errors)
+  effective_bucket_name = length(trim(var.bucket_name)) > 0 ? lower(replace(var.bucket_name, "_", "-")) : lower(replace("${local.name_prefix}-app-bucket", "_", "-"))
 
   public_subnets = {
     for idx, cidr in var.public_subnet_cidrs :
@@ -208,7 +221,7 @@ resource "aws_eip" "nat" {
 resource "aws_nat_gateway" "this" {
   count         = local.enable_nat ? 1 : 0
   allocation_id = aws_eip.nat[0].id
-  subnet_id     = aws_subnet.public["0"].id    # place NAT in first public subnet
+  subnet_id     = aws_subnet.public["0"].id # place NAT in first public subnet
 
   tags = {
     Name        = "${local.name_prefix}-nat"
@@ -237,7 +250,7 @@ resource "aws_route_table_association" "private" {
 ###########################
 resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app-sg"
-  description = "App SG"
+  description = "App security group"
   vpc_id      = aws_vpc.this.id
 
   # Egress: allow all
@@ -256,7 +269,7 @@ resource "aws_security_group" "app" {
   }
 }
 
-# Optional SSH ingress rules — created only when CIDRs are provided
+# Optional SSH ingress — ONLY created when CIDRs are provided
 resource "aws_security_group_rule" "ssh_ingress" {
   for_each          = toset(var.allowed_ssh_cidrs)
   type              = "ingress"
@@ -287,7 +300,6 @@ resource "aws_instance" "app" {
     Environment = var.environment
   }
 
-  # Ensure routing infra exists first
   depends_on = [
     aws_route.public_default,
     aws_route_table_association.public,
@@ -308,15 +320,29 @@ resource "aws_s3_bucket" "this" {
   }
 }
 
+# Modern secure default: disable ACLs, bucket owner enforced
+resource "aws_s3_bucket_ownership_controls" "this" {
+  bucket = aws_s3_bucket.this.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+# Block all public access
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket                  = aws_s3_bucket.this.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+
+  depends_on = [aws_s3_bucket_ownership_controls.this]
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+# Default server-side encryption
+# Choose AES256 when kms_key_id is empty; otherwise apply SSE-KMS
+resource "aws_s3_bucket_server_side_encryption_configuration" "sse_aes256" {
+  count  = var.kms_key_id == "" ? 1 : 0
   bucket = aws_s3_bucket.this.id
 
   rule {
@@ -324,14 +350,52 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
       sse_algorithm = "AES256"
     }
   }
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }
 
-# Enable versioning only in staging/prod
+resource "aws_s3_bucket_server_side_encryption_configuration" "sse_kms" {
+  count  = var.kms_key_id != "" ? 1 : 0
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = var.kms_key_id
+    }
+  }
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
+}
+
+# Versioning: enable in staging/prod, suspend in dev
 resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
   versioning_configuration {
     status = var.environment == "dev" ? "Suspended" : "Enabled"
   }
+
+  depends_on = [
+    aws_s3_bucket_public_access_block.this,
+    aws_s3_bucket_server_side_encryption_configuration.sse_aes256,
+    aws_s3_bucket_server_side_encryption_configuration.sse_kms
+  ]
+}
+
+# Optional hardening: clean up incomplete multipart uploads
+resource "aws_s3_bucket_lifecycle_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    id     = "abort-incomplete-mpu"
+    status = "Enabled"
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.this]
 }
 
 ##########
@@ -375,6 +439,16 @@ output "instance_public_ip" {
 output "s3_bucket_name" {
   value       = aws_s3_bucket.this.bucket
   description = "S3 bucket name"
+}
+
+output "s3_bucket_arn" {
+  value       = aws_s3_bucket.this.arn
+  description = "S3 bucket ARN"
+}
+
+output "s3_versioning_status" {
+  value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
+  description = "S3 versioning status (Enabled/Suspended)"
 }
 
 output "nat_gateway_id" {
