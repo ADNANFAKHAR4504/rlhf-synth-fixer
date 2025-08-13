@@ -736,6 +736,7 @@ Resources:
   ### S3 Buckets ###
   SecureS3Bucket:
     Type: AWS::S3::Bucket
+    DependsOn: SecurityLambdaPermission
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
