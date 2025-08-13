@@ -16,6 +16,11 @@
             "Type": "String",
             "Default": "webapp",
             "Description": "Name of the web application"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Unique suffix for resource names to avoid conflicts between deployments"
         }
     },
     "Mappings": {
@@ -45,6 +50,20 @@
                 },
                 "production"
             ]
+        },
+        "IsStandardStorageClass": {
+            "Fn::Equals": [
+                {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "S3StorageClass"
+                    ]
+                },
+                "STANDARD"
+            ]
         }
     },
     "Resources": {
@@ -52,7 +71,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${ApplicationName}-${Environment}${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -73,22 +92,30 @@
                     "Status": "Enabled"
                 },
                 "LifecycleConfiguration": {
-                    "Rules": [
+                    "Fn::If": [
+                        "IsStandardStorageClass",
                         {
-                            "Id": "TransitionToIA",
-                            "Status": "Enabled",
-                            "Transitions": [
+                            "Ref": "AWS::NoValue"
+                        },
+                        {
+                            "Rules": [
                                 {
-                                    "StorageClass": {
-                                        "Fn::FindInMap": [
-                                            "EnvironmentConfig",
-                                            {
-                                                "Ref": "Environment"
+                                    "Id": "TransitionToIA",
+                                    "Status": "Enabled",
+                                    "Transitions": [
+                                        {
+                                            "StorageClass": {
+                                                "Fn::FindInMap": [
+                                                    "EnvironmentConfig",
+                                                    {
+                                                        "Ref": "Environment"
+                                                    },
+                                                    "S3StorageClass"
+                                                ]
                                             },
-                                            "S3StorageClass"
-                                        ]
-                                    },
-                                    "TransitionInDays": 30
+                                            "TransitionInDays": 30
+                                        }
+                                    ]
                                 }
                             ]
                         }
@@ -112,10 +139,9 @@
         },
         "SharedConfigBucket": {
             "Type": "AWS::S3::Bucket",
-            "Condition": "IsProductionEnvironment",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${ApplicationName}-shared-config${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -145,6 +171,12 @@
                         "Value": {
                             "Ref": "ApplicationName"
                         }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     }
                 ]
             }
@@ -153,7 +185,7 @@
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "TableName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-data"
+                    "Fn::Sub": "${ApplicationName}-${Environment}${EnvironmentSuffix}-data"
                 },
                 "BillingMode": {
                     "Fn::FindInMap": [
@@ -228,7 +260,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-execution-role"
+                    "Fn::Sub": "${ApplicationName}-${Environment}${EnvironmentSuffix}-execution-role"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -269,7 +301,7 @@
             "Type": "AWS::IAM::Policy",
             "Properties": {
                 "PolicyName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-s3-policy"
+                    "Fn::Sub": "${ApplicationName}-${Environment}${EnvironmentSuffix}-s3-policy"
                 },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -299,26 +331,10 @@
                             ],
                             "Resource": [
                                 {
-                                    "Fn::If": [
-                                        "IsProductionEnvironment",
-                                        {
-                                            "Fn::Sub": "arn:aws:s3:::${SharedConfigBucket}"
-                                        },
-                                        {
-                                            "Fn::Sub": "arn:aws:s3:::${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}"
-                                        }
-                                    ]
+                                    "Fn::Sub": "arn:aws:s3:::${SharedConfigBucket}"
                                 },
                                 {
-                                    "Fn::If": [
-                                        "IsProductionEnvironment",
-                                        {
-                                            "Fn::Sub": "arn:aws:s3:::${SharedConfigBucket}/*"
-                                        },
-                                        {
-                                            "Fn::Sub": "arn:aws:s3:::${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}/*"
-                                        }
-                                    ]
+                                    "Fn::Sub": "arn:aws:s3:::${SharedConfigBucket}/*"
                                 }
                             ]
                         }
@@ -335,7 +351,7 @@
             "Type": "AWS::IAM::Policy",
             "Properties": {
                 "PolicyName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-dynamodb-policy"
+                    "Fn::Sub": "${ApplicationName}-${Environment}${EnvironmentSuffix}-dynamodb-policy"
                 },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -370,7 +386,7 @@
             "Type": "AWS::IAM::Policy",
             "Properties": {
                 "PolicyName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-cloudwatch-policy"
+                    "Fn::Sub": "${ApplicationName}-${Environment}${EnvironmentSuffix}-cloudwatch-policy"
                 },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -400,7 +416,7 @@
             "Type": "AWS::IAM::Policy",
             "Properties": {
                 "PolicyName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-ssm-policy"
+                    "Fn::Sub": "${ApplicationName}-${Environment}${EnvironmentSuffix}-ssm-policy"
                 },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -414,7 +430,7 @@
                             ],
                             "Resource": [
                                 {
-                                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationName}/${Environment}/*"
+                                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationName}/${Environment}${EnvironmentSuffix}/*"
                                 }
                             ]
                         },
@@ -424,14 +440,10 @@
                                 "kms:Decrypt"
                             ],
                             "Resource": {
-                                "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "kms:ViaService": {
-                                        "Fn::Sub": "ssm.${AWS::Region}.amazonaws.com"
-                                    }
-                                }
+                                "Fn::GetAtt": [
+                                    "SSMKMSKey",
+                                    "Arn"
+                                ]
                             }
                         }
                     ]
@@ -447,7 +459,7 @@
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-instance-profile"
+                    "Fn::Sub": "${ApplicationName}-${Environment}${EnvironmentSuffix}-instance-profile"
                 },
                 "Roles": [
                     {
@@ -460,7 +472,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/${ApplicationName}/${Environment}/application"
+                    "Fn::Sub": "/aws/${ApplicationName}/${Environment}${EnvironmentSuffix}/application"
                 },
                 "RetentionInDays": {
                     "Fn::FindInMap": [
@@ -491,7 +503,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/${ApplicationName}/${Environment}/performance"
+                    "Fn::Sub": "/aws/${ApplicationName}/${Environment}${EnvironmentSuffix}/performance"
                 },
                 "RetentionInDays": {
                     "Fn::FindInMap": [
@@ -522,7 +534,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/${ApplicationName}/${Environment}/resources"
+                    "Fn::Sub": "/aws/${ApplicationName}/${Environment}${EnvironmentSuffix}/resources"
                 },
                 "RetentionInDays": {
                     "Fn::FindInMap": [
@@ -549,15 +561,99 @@
                 ]
             }
         },
+        "SSMKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for SSM Parameter Store encryption in ${Environment} environment"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow use of the key by SSM",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ssm.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey*",
+                                "kms:ReEncrypt*"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow application role to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "ApplicationExecutionRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "SSMKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${ApplicationName}-${Environment}${EnvironmentSuffix}-ssm-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "SSMKMSKey"
+                }
+            }
+        },
         "DatabaseConnectionParameter": {
             "Type": "AWS::SSM::Parameter",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "/${ApplicationName}/${Environment}/database/connection-string"
+                    "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/database/connection-string"
                 },
-                "Type": "String",
+                "Type": "SecureString",
+                "KeyId": {
+                    "Ref": "SSMKMSKey"
+                },
                 "Value": {
-                    "Fn::Sub": "dynamodb://table=${ApplicationName}-${Environment}-data;region=${AWS::Region}"
+                    "Fn::Sub": "dynamodb://table=${ApplicationName}-${Environment}${EnvironmentSuffix}-data;region=${AWS::Region}"
                 },
                 "Description": {
                     "Fn::Sub": "Database connection string for ${Environment} environment"
@@ -576,9 +672,12 @@
             "Type": "AWS::SSM::Parameter",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "/${ApplicationName}/${Environment}/api/config"
+                    "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/api/config"
                 },
-                "Type": "String",
+                "Type": "SecureString",
+                "KeyId": {
+                    "Ref": "SSMKMSKey"
+                },
                 "Value": {
                     "Fn::Sub": [
                         "{\n  \"timeout\": 30,\n  \"retries\": 3,\n  \"environment\": \"${Environment}\",\n  \"log_level\": \"${LogLevel}\"\n}\n",
@@ -610,9 +709,12 @@
             "Type": "AWS::SSM::Parameter",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "/${ApplicationName}/${Environment}/s3/bucket-name"
+                    "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/s3/bucket-name"
                 },
-                "Type": "String",
+                "Type": "SecureString",
+                "KeyId": {
+                    "Ref": "SSMKMSKey"
+                },
                 "Value": {
                     "Ref": "EnvironmentS3Bucket"
                 },
@@ -633,19 +735,14 @@
             "Type": "AWS::SSM::Parameter",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "/${ApplicationName}/${Environment}/s3/shared-config-bucket"
+                    "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/s3/shared-config-bucket"
                 },
-                "Type": "String",
+                "Type": "SecureString",
+                "KeyId": {
+                    "Ref": "SSMKMSKey"
+                },
                 "Value": {
-                    "Fn::If": [
-                        "IsProductionEnvironment",
-                        {
-                            "Ref": "SharedConfigBucket"
-                        },
-                        {
-                            "Fn::Sub": "${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}"
-                        }
-                    ]
+                    "Ref": "SharedConfigBucket"
                 },
                 "Description": "Shared configuration S3 bucket name",
                 "Tags": {
@@ -662,11 +759,14 @@
             "Type": "AWS::SSM::Parameter",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "/${ApplicationName}/${Environment}/secrets/app-key"
+                    "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/secrets/app-key"
                 },
-                "Type": "String",
+                "Type": "SecureString",
+                "KeyId": {
+                    "Ref": "SSMKMSKey"
+                },
                 "Value": {
-                    "Fn::Sub": "secret-key-for-${Environment}-${AWS::AccountId}"
+                    "Fn::Sub": "secret-key-for-${Environment}${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "Description": {
                     "Fn::Sub": "Application secrets for ${Environment} environment"
@@ -692,15 +792,7 @@
         "SharedConfigBucket": {
             "Description": "Shared configuration S3 bucket name",
             "Value": {
-                "Fn::If": [
-                    "IsProductionEnvironment",
-                    {
-                        "Ref": "SharedConfigBucket"
-                    },
-                    {
-                        "Fn::Sub": "${ApplicationName}-shared-config-${AWS::AccountId}-${AWS::Region}"
-                    }
-                ]
+                "Ref": "SharedConfigBucket"
             }
         },
         "DynamoDBTableName": {
@@ -727,7 +819,19 @@
         "SSMParameterPrefix": {
             "Description": "SSM Parameter Store prefix for this environment",
             "Value": {
-                "Fn::Sub": "/${ApplicationName}/${Environment}/"
+                "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/"
+            }
+        },
+        "SSMKMSKeyId": {
+            "Description": "KMS Key ID for SSM Parameter Store encryption",
+            "Value": {
+                "Ref": "SSMKMSKey"
+            }
+        },
+        "SSMKMSKeyAlias": {
+            "Description": "KMS Key Alias for SSM Parameter Store encryption",
+            "Value": {
+                "Ref": "SSMKMSKeyAlias"
             }
         },
         "InstanceProfileArn": {
