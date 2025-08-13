@@ -1,10 +1,17 @@
-// test/terraform.int.test.ts
 import { execSync } from 'child_process';
 
 describe('Terraform Infrastructure Integration Tests', () => {
   let tfOutputs: Record<string, any> = {};
 
   beforeAll(() => {
+    // Initialize Terraform backend (reconfigure if needed)
+    execSync('cd lib && terraform init -input=false -reconfigure', {
+      stdio: 'inherit',
+    });
+
+    // Apply the plan if needed (optional for live tests)
+    // execSync('cd lib && terraform apply -auto-approve', { stdio: 'inherit' });
+
     // Get Terraform outputs as JSON
     const output = execSync('cd lib && terraform output -json', {
       encoding: 'utf-8',
@@ -14,7 +21,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   test('ALB DNS name should exist and be non-empty', () => {
     expect(tfOutputs).toHaveProperty('alb_dns_name');
-    expect(tfOutputs.alb_dns_name.value).toMatch(/^.+$/); // Not empty
+    expect(tfOutputs.alb_dns_name.value).toMatch(/^.+$/);
   });
 
   test('RDS endpoint should exist and look like a hostname', () => {
@@ -27,4 +34,3 @@ describe('Terraform Infrastructure Integration Tests', () => {
     expect(tfOutputs.app_data_bucket.value).toMatch(/^[a-z0-9-]+$/);
   });
 });
-
