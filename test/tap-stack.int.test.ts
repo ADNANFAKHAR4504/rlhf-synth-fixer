@@ -1,27 +1,27 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  S3Client,
-  HeadBucketCommand,
-  ListObjectVersionsCommand,
-} from '@aws-sdk/client-s3';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeVpcEndpointsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  IAMClient,
-  GetRoleCommand,
-  ListRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
 import {
   AccessAnalyzerClient,
   GetAnalyzerCommand,
 } from '@aws-sdk/client-accessanalyzer';
+import {
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  GetRoleCommand,
+  IAMClient,
+  ListRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
+import {
+  HeadBucketCommand,
+  ListObjectVersionsCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Load deployment outputs
 const outputsPath = path.join(
@@ -37,10 +37,10 @@ if (fs.existsSync(outputsPath)) {
 }
 
 // Initialize AWS clients
-const s3Client = new S3Client({ region: 'us-east-1' });
-const ec2Client = new EC2Client({ region: 'us-east-1' });
-const iamClient = new IAMClient({ region: 'us-east-1' });
-const accessAnalyzerClient = new AccessAnalyzerClient({ region: 'us-east-1' });
+const s3Client = new S3Client({ region: 'ap-northeast-1' });
+const ec2Client = new EC2Client({ region: 'ap-northeast-1' });
+const iamClient = new IAMClient({ region: 'ap-northeast-1' });
+const accessAnalyzerClient = new AccessAnalyzerClient({ region: 'ap-northeast-1' });
 
 describe('TapStack Integration Tests', () => {
   describe('VPC Infrastructure', () => {
@@ -120,7 +120,7 @@ describe('TapStack Integration Tests', () => {
           },
           {
             Name: 'service-name',
-            Values: [`com.amazonaws.us-east-1.s3`],
+            Values: [`com.amazonaws.ap-northeast-1.s3`],
           },
         ],
       });
