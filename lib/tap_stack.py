@@ -8,6 +8,7 @@ It orchestrates the instantiation of other resource-specific components
 and manages environment-specific configurations.
 """
 
+import time
 from typing import Optional
 
 import pulumi
@@ -57,6 +58,9 @@ class TapStack(pulumi.ComponentResource):
 
     self.environment_suffix = args.environment_suffix
     self.tags = args.tags
+    
+    # Add unique timestamp to avoid resource conflicts
+    self.unique_suffix = f"{self.environment_suffix}-{int(time.time())}"
 
     # Helper function to derive IPv6 subnet CIDR from VPC CIDR
     def derive_ipv6_subnet_cidr(vpc_cidr, subnet_number):
@@ -73,7 +77,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create a VPC with both IPv4 and IPv6 CIDR blocks
     self.vpc = aws.ec2.Vpc(
-      f"ipv6-vpc-{self.environment_suffix}",
+      f"ipv6-vpc-{self.unique_suffix}",
       cidr_block="10.0.0.0/16",
       enable_dns_support=True,
       enable_dns_hostnames=True,
@@ -87,7 +91,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create an Internet Gateway
     self.igw = aws.ec2.InternetGateway(
-      f"igw-{self.environment_suffix}",
+      f"igw-{self.unique_suffix}",
       vpc_id=self.vpc.id,
       tags={
         "Environment": "Production",
@@ -98,7 +102,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create a public subnet with IPv6 CIDR block
     self.public_subnet = aws.ec2.Subnet(
-      f"public-subnet-{self.environment_suffix}",
+      f"public-subnet-{self.unique_suffix}",
       vpc_id=self.vpc.id,
       cidr_block="10.0.11.0/24",
       ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
@@ -118,7 +122,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create a private subnet with IPv6 CIDR block
     self.private_subnet = aws.ec2.Subnet(
-      f"private-subnet-{self.environment_suffix}",
+      f"private-subnet-{self.unique_suffix}",
       vpc_id=self.vpc.id,
       cidr_block="10.0.12.0/24",
       ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
@@ -137,7 +141,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create a route table for the public subnet
     self.public_rt = aws.ec2.RouteTable(
-      f"public-rt-{self.environment_suffix}",
+      f"public-rt-{self.unique_suffix}",
       vpc_id=self.vpc.id,
       routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -158,14 +162,14 @@ class TapStack(pulumi.ComponentResource):
 
     # Associate the public route table with the public subnet
     self.public_rta = aws.ec2.RouteTableAssociation(
-      f"public-rta-{self.environment_suffix}",
+      f"public-rta-{self.unique_suffix}",
       subnet_id=self.public_subnet.id,
       route_table_id=self.public_rt.id,
       opts=ResourceOptions(parent=self))
 
     # Create a NAT Gateway for the private subnet
     self.eip = aws.ec2.Eip(
-      f"nat-eip-{self.environment_suffix}",
+      f"nat-eip-{self.unique_suffix}",
       vpc=True,
       tags={
         "Environment": "Production",
@@ -175,7 +179,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self))
 
     self.nat_gateway = aws.ec2.NatGateway(
-      f"nat-gateway-{self.environment_suffix}",
+      f"nat-gateway-{self.unique_suffix}",
       allocation_id=self.eip.id,
       subnet_id=self.public_subnet.id,
       tags={
@@ -187,7 +191,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create an Egress-Only Internet Gateway for private subnet IPv6 access
     self.egress_igw = aws.ec2.EgressOnlyInternetGateway(
-      f"egress-igw-{self.environment_suffix}",
+      f"egress-igw-{self.unique_suffix}",
       vpc_id=self.vpc.id,
       tags={
         "Environment": "Production",
@@ -198,7 +202,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create a route table for the private subnet
     self.private_rt = aws.ec2.RouteTable(
-      f"private-rt-{self.environment_suffix}",
+      f"private-rt-{self.unique_suffix}",
       vpc_id=self.vpc.id,
       routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -219,14 +223,14 @@ class TapStack(pulumi.ComponentResource):
 
     # Associate the private route table with the private subnet
     self.private_rta = aws.ec2.RouteTableAssociation(
-      f"private-rta-{self.environment_suffix}",
+      f"private-rta-{self.unique_suffix}",
       subnet_id=self.private_subnet.id,
       route_table_id=self.private_rt.id,
       opts=ResourceOptions(parent=self))
 
     # Create a security group allowing SSH, HTTP, and HTTPS access
     self.security_group = aws.ec2.SecurityGroup(
-      f"sec-group-{self.environment_suffix}",
+      f"sec-group-{self.unique_suffix}",
       vpc_id=self.vpc.id,
       ingress=[
         aws.ec2.SecurityGroupIngressArgs(
@@ -284,7 +288,7 @@ echo "<p>IPv6 Address: $(curl -s http://169.254.169.254/latest/meta-data/network
 
     # Create a launch template for the auto-scaling group
     self.launch_template = aws.ec2.LaunchTemplate(
-      f"web-server-lt-{self.environment_suffix}",
+      f"web-server-lt-{self.unique_suffix}",
       image_id=ami.id,
       instance_type="t3.micro",
       vpc_security_group_ids=[self.security_group.id],
@@ -309,7 +313,7 @@ echo "<p>IPv6 Address: $(curl -s http://169.254.169.254/latest/meta-data/network
 
     # Create EC2 instances with static IPv6 addresses in public subnet
     self.instance1 = aws.ec2.Instance(
-      f"web-server-1-{self.environment_suffix}",
+      f"web-server-1-{self.unique_suffix}",
       ami=ami.id,
       instance_type="t3.micro",
       subnet_id=self.public_subnet.id,
@@ -320,7 +324,7 @@ echo "<p>IPv6 Address: $(curl -s http://169.254.169.254/latest/meta-data/network
         "Environment": "Production",
         "Project": "IPv6StaticTest",
         "ManagedBy": "Pulumi",
-        "Name": f"web-server-1-{self.environment_suffix}"
+        "Name": f"web-server-1-{self.unique_suffix}"
       },
       opts=pulumi.ResourceOptions(
         replace_on_changes=["subnet_id", "ipv6_address_count"],
@@ -329,7 +333,7 @@ echo "<p>IPv6 Address: $(curl -s http://169.254.169.254/latest/meta-data/network
       ))
 
     self.instance2 = aws.ec2.Instance(
-      f"web-server-2-{self.environment_suffix}",
+      f"web-server-2-{self.unique_suffix}",
       ami=ami.id,
       instance_type="t3.micro",
       subnet_id=self.public_subnet.id,
@@ -340,7 +344,7 @@ echo "<p>IPv6 Address: $(curl -s http://169.254.169.254/latest/meta-data/network
         "Environment": "Production",
         "Project": "IPv6StaticTest",
         "ManagedBy": "Pulumi",
-        "Name": f"web-server-2-{self.environment_suffix}"
+        "Name": f"web-server-2-{self.unique_suffix}"
       },
       opts=pulumi.ResourceOptions(
         replace_on_changes=["subnet_id", "ipv6_address_count"],
@@ -350,7 +354,7 @@ echo "<p>IPv6 Address: $(curl -s http://169.254.169.254/latest/meta-data/network
 
     # Create an auto-scaling group for high availability
     self.asg = aws.autoscaling.Group(
-      f"web-server-asg-{self.environment_suffix}",
+      f"web-server-asg-{self.unique_suffix}",
       launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
         id=self.launch_template.id,
         version="$Latest"
