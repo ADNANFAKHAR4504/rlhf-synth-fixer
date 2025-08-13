@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
@@ -14,7 +14,7 @@ describe('TapStack', () => {
       environmentSuffix: testEnvironmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-east-1',
+        region: 'ap-northeast-1',
       },
     });
     template = Template.fromStack(stack);
@@ -26,7 +26,7 @@ describe('TapStack', () => {
       const defaultStack = new TapStack(defaultApp, 'DefaultStack', {
         env: {
           account: '123456789012',
-          region: 'us-east-1',
+          region: 'ap-northeast-1',
         },
       });
       const defaultTemplate = Template.fromStack(defaultStack);

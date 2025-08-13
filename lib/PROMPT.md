@@ -12,7 +12,7 @@ I need to create secure AWS infrastructure using CDK TypeScript with the followi
 
 6. Tag all resources with 'Environment' set to 'Production'.
 
-7. Deploy in us-east-1 region.
+7. Deploy in ap-northeast-1 region.
 
 8. Provide outputs for S3 bucket name and DynamoDB table ARN.
 

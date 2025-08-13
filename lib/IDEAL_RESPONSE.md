@@ -29,7 +29,7 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
+    region: 'ap-northeast-1',
   },
 });
 ```
@@ -411,7 +411,7 @@ export class TapStack extends cdk.Stack {
 ### 10. **Deployment Safety**
 - Resources are destroyable (no Retain policies)
 - Environment suffix prevents conflicts
-- Region-specific deployment (us-east-1)
+- Region-specific deployment (ap-northeast-1)
 - Self-sufficient deployment (no external dependencies)
 
 This implementation provides defense-in-depth security with multiple layers of protection, following AWS Well-Architected Framework security pillar best practices for 2025.

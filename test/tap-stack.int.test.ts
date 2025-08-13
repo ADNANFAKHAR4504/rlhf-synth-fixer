@@ -1,47 +1,46 @@
 // Integration tests for deployed AWS infrastructure
-import fs from 'fs';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketPolicyCommand,
-} from '@aws-sdk/client-s3';
-import {
-  DynamoDBClient,
-  DescribeTableCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  IAMClient,
-  GetRoleCommand,
-  ListAttachedRolePoliciesCommand,
-  ListRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
 import {
   CloudTrailClient,
   GetTrailCommand,
   GetTrailStatusCommand,
 } from '@aws-sdk/client-cloudtrail';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
+  DescribeTableCommand,
+  DynamoDBClient,
+} from '@aws-sdk/client-dynamodb';
+import {
   DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
+  GetDetectorCommand,
   GuardDutyClient,
   ListDetectorsCommand,
-  GetDetectorCommand,
 } from '@aws-sdk/client-guardduty';
-import { 
-  Macie2Client,
+import {
+  GetRoleCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+  ListRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
+import {
+  GetKeyRotationStatusCommand,
+  KMSClient
+} from '@aws-sdk/client-kms';
+import {
   GetMacieSessionCommand,
+  Macie2Client,
 } from '@aws-sdk/client-macie2';
 import {
-  KMSClient,
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand,
-} from '@aws-sdk/client-kms';
+  GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
@@ -52,14 +51,14 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synthtrainr640';
 
 // AWS Clients
-const s3Client = new S3Client({ region: 'us-east-1' });
-const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-const iamClient = new IAMClient({ region: 'us-east-1' });
-const cloudTrailClient = new CloudTrailClient({ region: 'us-east-1' });
-const ec2Client = new EC2Client({ region: 'us-east-1' });
-const guardDutyClient = new GuardDutyClient({ region: 'us-east-1' });
-const macieClient = new Macie2Client({ region: 'us-east-1' });
-const kmsClient = new KMSClient({ region: 'us-east-1' });
+const s3Client = new S3Client({ region: 'ap-northeast-1' });
+const dynamoClient = new DynamoDBClient({ region: 'ap-northeast-1' });
+const iamClient = new IAMClient({ region: 'ap-northeast-1' });
+const cloudTrailClient = new CloudTrailClient({ region: 'ap-northeast-1' });
+const ec2Client = new EC2Client({ region: 'ap-northeast-1' });
+const guardDutyClient = new GuardDutyClient({ region: 'ap-northeast-1' });
+const macieClient = new Macie2Client({ region: 'ap-northeast-1' });
+const kmsClient = new KMSClient({ region: 'ap-northeast-1' });
 
 describe('Security Infrastructure Integration Tests', () => {
   const bucketName = outputs.S3BucketName;
