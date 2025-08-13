@@ -1,21 +1,21 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import axios, { AxiosError } from 'axios';
-import {
-  LambdaClient,
-  InvokeCommand,
-  GetFunctionCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import {
   APIGatewayClient,
   GetRestApiCommand,
   GetStageCommand,
 } from '@aws-sdk/client-api-gateway';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
+import axios, { AxiosError } from 'axios';
+import fs from 'fs';
 
 // Load outputs from deployment
 const outputs = JSON.parse(
@@ -187,8 +187,17 @@ describe('Serverless Infrastructure Integration Tests', () => {
         MaxRecords: 100,
       });
 
-      const alarms = await cloudWatchClient.send(describeAlarmsCommand);
+      let alarms;
+      try {
+        alarms = await cloudWatchClient.send(describeAlarmsCommand);
+        console.log('Successfully retrieved CloudWatch alarms');
+      } catch (error) {
+        console.error('Failed to retrieve CloudWatch alarms:', error);
+        throw error;
+      }
+      
       const alarmNames = alarms.MetricAlarms?.map(a => a.AlarmName) || [];
+      console.log('Raw alarm names from CloudWatch:', alarmNames);
 
       // Filter alarms related to our deployment using environment suffix
       const envSuffix = outputs.Environment;
@@ -196,7 +205,20 @@ describe('Serverless Infrastructure Integration Tests', () => {
         name?.includes(envSuffix)
       );
 
+      // Debug: Log what alarms we found
+      console.log(`Found ${alarmNames.length} total CloudWatch alarms`);
+      console.log(`Found ${deploymentAlarms.length} alarms for environment ${envSuffix}`);
+      console.log('Deployment alarms:', deploymentAlarms);
+      
+      // If no alarms found for this environment, this might indicate a deployment issue
+      if (deploymentAlarms.length === 0) {
+        console.log('WARNING: No CloudWatch alarms found for environment', envSuffix);
+        console.log('This might indicate that the monitoring stack failed to deploy or create alarms');
+        console.log('Available alarm names:', alarmNames);
+      }
+
       // Check for Lambda alarms - looking for alarms with the environment suffix
+      // We expect alarms from both the monitoring stack and lambda stack
       const processingErrorAlarms = deploymentAlarms.filter(
         name =>
           name?.includes('processing-function') && name?.includes('errors')
@@ -205,10 +227,21 @@ describe('Serverless Infrastructure Integration Tests', () => {
         name => name?.includes('streaming-function') && name?.includes('errors')
       );
 
+      console.log(`Processing error alarms: ${processingErrorAlarms.length}`, processingErrorAlarms);
+      console.log(`Streaming error alarms: ${streamingErrorAlarms.length}`, streamingErrorAlarms);
+
+      // We should have at least one processing function error alarm
+      // (either from monitoring stack: 'processing-function-high-errors-pr1068' 
+      //  or from lambda stack: 'processing-function-errors-pr1068')
       expect(processingErrorAlarms.length).toBeGreaterThan(0);
+      
+      // We should have at least one streaming function error alarm
+      // (either from monitoring stack: 'streaming-function-high-errors-pr1068' 
+      //  or from lambda stack: 'streaming-function-errors-pr1068')
       expect(streamingErrorAlarms.length).toBeGreaterThan(0);
 
       // Check for API Gateway alarms
+      // These should come from the monitoring stack
       const apiErrorAlarm = deploymentAlarms.find(name =>
         name?.includes('api-gateway-high-errors')
       );
@@ -216,7 +249,13 @@ describe('Serverless Infrastructure Integration Tests', () => {
         name?.includes('api-gateway-high-latency')
       );
 
+      console.log(`API error alarm: ${apiErrorAlarm}`);
+      console.log(`API latency alarm: ${apiLatencyAlarm}`);
+
+      // We should have the API Gateway error alarm
       expect(apiErrorAlarm).toBeDefined();
+      
+      // We should have the API Gateway latency alarm
       expect(apiLatencyAlarm).toBeDefined();
     });
 
