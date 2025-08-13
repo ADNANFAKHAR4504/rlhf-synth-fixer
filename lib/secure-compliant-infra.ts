@@ -744,11 +744,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
               Statement: [
                 {
                   Effect: 'Allow',
-                  Action: [
-                    's3:PutObject',
-                    's3:GetBucketAcl',
-                    's3:ListBucket',
-                  ],
+                  Action: ['s3:PutObject', 's3:GetBucketAcl', 's3:ListBucket'],
                   Resource: [bucketArn, `${bucketArn}/*`],
                 },
                 {
@@ -776,7 +772,8 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           trafficType: 'ALL',
           logDestinationType: 's3',
           logDestination: pulumi.interpolate`${vpcFlowLogsBucket.arn}/vpc-flow-logs/`,
-          logFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}',
+          logFormat:
+            '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}',
           tags: {
             ...commonTags,
             Name: `${projectName}-${environment}-vpc-flow-logs-${region}`,
