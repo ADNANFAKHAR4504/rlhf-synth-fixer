@@ -9,14 +9,8 @@ const TF_PATH = process.env.TF_MAIN_PATH
   ? path.resolve(process.env.TF_MAIN_PATH)
   : path.resolve(__dirname, "../lib/main.tf");
 
-// Also check vars.tf for variable definitions
-const VARS_PATH = process.env.TF_VARS_PATH
-  ? path.resolve(process.env.TF_VARS_PATH)
-  : path.resolve(__dirname, "../lib/vars.tf");
-
 describe("Terraform Modular Infrastructure (static checks)", () => {
   let hcl: string;
-  let varsHcl: string;
 
   beforeAll(() => {
     const exists = fs.existsSync(TF_PATH);
@@ -24,19 +18,10 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
       throw new Error(`Terraform file not found at ${TF_PATH}`);
     }
     hcl = fs.readFileSync(TF_PATH, "utf8");
-
-    // Read vars.tf if it exists
-    if (fs.existsSync(VARS_PATH)) {
-      varsHcl = fs.readFileSync(VARS_PATH, "utf8");
-    } else {
-      varsHcl = "";
-    }
   });
 
   test("has aws_region variable with correct default", () => {
-    // Check both main.tf and vars.tf for the variable
-    const combinedHcl = hcl + "\n" + varsHcl;
-    expect(combinedHcl).toMatch(
+    expect(hcl).toMatch(
       new RegExp(
         String.raw`variable\s+"aws_region"\s*{[\s\S]*?description\s*=\s*"AWS provider region"[\s\S]*?type\s*=\s*string[\s\S]*?default\s*=\s*"us-east-1"[\s\S]*?}`,
         "m"
@@ -301,9 +286,8 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
   });
 
   test("validates that aws_region variable is defined but unused", () => {
-    // Variable should exist in either main.tf or vars.tf
-    const combinedHcl = hcl + "\n" + varsHcl;
-    expect(combinedHcl).toMatch(/variable\s+"aws_region"/);
+    // Variable should exist
+    expect(hcl).toMatch(/variable\s+"aws_region"/);
     
     // But should not be referenced in any module (potential dead code)
     expect(hcl).not.toMatch(/var\.aws_region/);
@@ -335,3 +319,6 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
     });
   });
 });
+
+
+
