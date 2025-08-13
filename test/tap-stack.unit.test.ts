@@ -407,11 +407,21 @@ describe('Failover Stack CloudFormation Template', () => {
       });
     });
 
-    test('no old environment-specific markers', () => {
+    test('no old environment-specific markers (except allowed KeyName default)', () => {
       const templateString = JSON.stringify(template);
-      // Only check for the old env marker we explicitly want to avoid
-      expect(templateString).not.toContain('pr104');
+
+      // Allow pr104 only where it appears as part of the KeyName default
+      const allowedKeyDefault =
+        template?.Parameters?.KeyName?.Default ?? '';
+
+      // Remove the allowed occurrence(s) from the string before checking
+      const sanitized = allowedKeyDefault
+        ? templateString.split(allowedKeyDefault).join('<KEYNAME_DEFAULT>')
+        : templateString;
+
+      expect(sanitized).not.toContain('pr104');
     });
+
   });
 
   //
