@@ -98,7 +98,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
     test('should have proper resource dependencies', () => {
       // Check that resources reference each other properly
-      expect(templateContent).toContain('!Ref VPC');
+      expect(templateContent).toContain('!Ref ExistingVpcId');
       expect(templateContent).toContain('!Ref ApplicationBucket');
       expect(templateContent).toContain('!Ref KMSKey');
       expect(templateContent).toContain('!Ref ALBSecurityGroup');
@@ -169,7 +169,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
 
     test('should have proper output integration', () => {
       // Check that outputs reference the correct resources
-      expect(templateContent).toContain('Value: !Ref VPC');
+      expect(templateContent).toContain('Value: !Ref ExistingVpcId');
       expect(templateContent).toContain('Value: !GetAtt ApplicationLoadBalancer.DNSName');
       expect(templateContent).toContain('Value: !GetAtt Database.Endpoint.Address');
       expect(templateContent).toContain('Value: !Ref ApplicationBucket');
