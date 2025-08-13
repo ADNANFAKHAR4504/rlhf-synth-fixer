@@ -350,19 +350,6 @@ export class TapStack extends cdk.Stack {
           },
         ],
       },
-      {
-        Name: 'VPC Endpoint Network Activity Events',
-        FieldSelectors: [
-          {
-            Field: 'eventCategory',
-            Equals: ['NetworkActivityEvents'],
-          },
-          {
-            Field: 'resources.type',
-            Equals: ['AWS::EC2::VPCEndpoint'],
-          },
-        ],
-      },
     ]);
 
     // IAM Roles for different user types with least privilege
