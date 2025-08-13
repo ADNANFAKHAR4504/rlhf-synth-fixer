@@ -11,49 +11,61 @@ interface IngressRule {
 }
 
 describe("Terraform Security Group Integration Test", () => {
-  const tfDir = path.resolve(__dirname, "../lib"); // Adjust if your TF dir is different
+  // ✅ Point this to the folder with your .tf files
+  const tfDir = path.resolve(__dirname, "../lib");
   const planFile = "tfplan.json";
 
   beforeAll(() => {
-    // Ensure terraform directory exists
     if (!fs.existsSync(tfDir)) {
       throw new Error(`Terraform directory not found: ${tfDir}`);
     }
 
-    // Run terraform init
-    const initResult = spawnSync("terraform", ["init", "-input=false"], {
-      cwd: tfDir,
-      encoding: "utf-8",
-    });
+    // ✅ Run `terraform init` with backend disabled so S3 is not used in tests
+    const initResult = spawnSync(
+      "terraform",
+      ["init", "-input=false", "-backend=false"],
+      { cwd: tfDir, encoding: "utf-8" }
+    );
     if (initResult.status !== 0) {
-      throw new Error(`Terraform init failed:\n${initResult.stdout}\n${initResult.stderr}`);
+      throw new Error(
+        `Terraform init failed:\n${initResult.stdout}\n${initResult.stderr}`
+      );
     }
 
-    // Run terraform plan and output to JSON
-    const planOut = spawnSync("terraform", ["plan", "-input=false", "-out=tfplan"], {
-      cwd: tfDir,
-      encoding: "utf-8",
-    });
+    // ✅ Plan without needing remote backend
+    const planOut = spawnSync(
+      "terraform",
+      ["plan", "-input=false", "-out=tfplan"],
+      { cwd: tfDir, encoding: "utf-8" }
+    );
     if (planOut.status !== 0) {
-      throw new Error(`Terraform plan failed:\n${planOut.stdout}\n${planOut.stderr}`);
+      throw new Error(
+        `Terraform plan failed:\n${planOut.stdout}\n${planOut.stderr}`
+      );
     }
 
-    const showOut = spawnSync("terraform", ["show", "-json", "tfplan"], {
-      cwd: tfDir,
-      encoding: "utf-8",
-    });
+    const showOut = spawnSync(
+      "terraform",
+      ["show", "-json", "tfplan"],
+      { cwd: tfDir, encoding: "utf-8" }
+    );
     if (showOut.status !== 0) {
-      throw new Error(`Terraform show failed:\n${showOut.stdout}\n${showOut.stderr}`);
+      throw new Error(
+        `Terraform show failed:\n${showOut.stdout}\n${showOut.stderr}`
+      );
     }
 
     fs.writeFileSync(path.join(tfDir, planFile), showOut.stdout);
   });
 
   afterAll(() => {
-    // Cleanup generated plan file
     const planPath = path.join(tfDir, planFile);
     if (fs.existsSync(planPath)) {
       fs.unlinkSync(planPath);
+    }
+    const tfPlan = path.join(tfDir, "tfplan");
+    if (fs.existsSync(tfPlan)) {
+      fs.unlinkSync(tfPlan);
     }
   });
 
@@ -61,8 +73,11 @@ describe("Terraform Security Group Integration Test", () => {
     const planPath = path.join(tfDir, planFile);
     const jsonData = JSON.parse(fs.readFileSync(planPath, "utf-8"));
 
-    const resources = jsonData?.planned_values?.root_module?.resources || [];
-    const sgResource = resources.find((r: any) => r.type === "aws_security_group");
+    const resources =
+      jsonData?.planned_values?.root_module?.resources || [];
+    const sgResource = resources.find(
+      (r: any) => r.type === "aws_security_group"
+    );
     expect(sgResource).toBeDefined();
 
     const ingressRules: IngressRule[] =
@@ -75,12 +90,9 @@ describe("Terraform Security Group Integration Test", () => {
           cidr_v6: rule.ipv6_cidr_blocks?.[0] ?? undefined,
         };
 
-        // If both CIDR types exist, prefer IPv4
         if (r.cidr_v4 && r.cidr_v6) {
           r.cidr_v6 = undefined;
         }
-
-        // If no CIDR set but generic "cidrs" exists, pick first
         if (!r.cidr_v4 && !r.cidr_v6 && Array.isArray(rule.cidr_blocks) && rule.cidr_blocks.length > 0) {
           const first = rule.cidr_blocks[0];
           if (first.includes(":")) {
@@ -89,13 +101,11 @@ describe("Terraform Security Group Integration Test", () => {
             r.cidr_v4 = first;
           }
         }
-
         return r;
       }) || [];
 
-    // Validate rules
     ingressRules.forEach((rule) => {
-      expect(["tcp", "6", "-1"]).toContain(rule.protocol); // Accepts TCP and possible -1 for all
+      expect(["tcp", "6", "-1"]).toContain(rule.protocol);
       expect([80, 443]).toContain(rule.from_port);
       expect([80, 443]).toContain(rule.to_port);
       expect(rule.cidr_v4 || rule.cidr_v6).toBeDefined();
