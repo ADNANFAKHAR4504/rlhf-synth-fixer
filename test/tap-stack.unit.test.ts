@@ -20,12 +20,6 @@ describe('CloudFormation Template Unit Tests', () => {
 
     expect(template.Parameters.ApplicationName.Type).toBe('String');
     expect(template.Parameters.ApplicationName.Default).toBe('webapp');
-
-    expect(template.Parameters.KMSKeyId.Type).toBe('String');
-    expect(template.Parameters.KMSKeyId.Default).toBe('alias/aws/ssm');
-
-    expect(template.Parameters.LogRetentionDays.Type).toBe('Number');
-    expect(template.Parameters.LogRetentionDays.AllowedValues).toContain(30);
   });
 
   // 2. Validate Mappings presence and keys
@@ -46,14 +40,6 @@ describe('CloudFormation Template Unit Tests', () => {
 
     expect(cond.IsProductionEnvironment).toEqual({
       'Fn::Equals': [{ Ref: 'Environment' }, 'production'],
-    });
-
-    expect(cond.IsDevelopmentEnvironment).toEqual({
-      'Fn::Equals': [{ Ref: 'Environment' }, 'development'],
-    });
-
-    expect(cond.IsTestingEnvironment).toEqual({
-      'Fn::Equals': [{ Ref: 'Environment' }, 'testing'],
     });
   });
 
@@ -149,12 +135,11 @@ describe('CloudFormation Template Unit Tests', () => {
 
   test('SSM Parameters use correct KeyId and value formatting', () => {
     const dbParam = template.Resources.DatabaseConnectionParameter;
-    expect(dbParam.Properties.Type).toBe('SecureString');
-    expect(dbParam.Properties.KeyId).toEqual({ Ref: 'KMSKeyId' });
+    expect(dbParam.Properties.Type).toBe('String');
     expect(dbParam.Properties.Name['Fn::Sub']).toMatch(/\/\$\{ApplicationName\}\/\$\{Environment\}\/database\/connection-string/);
 
     const apiParam = template.Resources.APIConfigParameter;
-    expect(apiParam.Properties.Type).toBe('SecureString');
+    expect(apiParam.Properties.Type).toBe('String');
     expect(apiParam.Properties.Value['Fn::Sub']).toBeDefined();
 
     const sharedConfigParam = template.Resources.SharedConfigParameter;

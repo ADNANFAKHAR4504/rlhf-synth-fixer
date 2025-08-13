@@ -16,35 +16,6 @@
             "Type": "String",
             "Default": "webapp",
             "Description": "Name of the web application"
-        },
-        "KMSKeyId": {
-            "Type": "String",
-            "Default": "alias/aws/ssm",
-            "Description": "KMS Key ID for SSM Parameter encryption"
-        },
-        "LogRetentionDays": {
-            "Type": "Number",
-            "Default": 30,
-            "AllowedValues": [
-                1,
-                3,
-                5,
-                7,
-                14,
-                30,
-                60,
-                90,
-                120,
-                150,
-                180,
-                365,
-                400,
-                545,
-                731,
-                1827,
-                3653
-            ],
-            "Description": "CloudWatch log retention period in days"
         }
     },
     "Mappings": {
@@ -73,22 +44,6 @@
                     "Ref": "Environment"
                 },
                 "production"
-            ]
-        },
-        "IsDevelopmentEnvironment": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "development"
-            ]
-        },
-        "IsTestingEnvironment": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "testing"
             ]
         }
     },
@@ -600,12 +555,9 @@
                 "Name": {
                     "Fn::Sub": "/${ApplicationName}/${Environment}/database/connection-string"
                 },
-                "Type": "SecureString",
+                "Type": "String",
                 "Value": {
                     "Fn::Sub": "dynamodb://table=${ApplicationName}-${Environment}-data;region=${AWS::Region}"
-                },
-                "KeyId": {
-                    "Ref": "KMSKeyId"
                 },
                 "Description": {
                     "Fn::Sub": "Database connection string for ${Environment} environment"
@@ -626,7 +578,7 @@
                 "Name": {
                     "Fn::Sub": "/${ApplicationName}/${Environment}/api/config"
                 },
-                "Type": "SecureString",
+                "Type": "String",
                 "Value": {
                     "Fn::Sub": [
                         "{\n  \"timeout\": 30,\n  \"retries\": 3,\n  \"environment\": \"${Environment}\",\n  \"log_level\": \"${LogLevel}\"\n}\n",
@@ -640,9 +592,6 @@
                             }
                         }
                     ]
-                },
-                "KeyId": {
-                    "Ref": "KMSKeyId"
                 },
                 "Description": {
                     "Fn::Sub": "API configuration for ${Environment} environment"
@@ -715,12 +664,9 @@
                 "Name": {
                     "Fn::Sub": "/${ApplicationName}/${Environment}/secrets/app-key"
                 },
-                "Type": "SecureString",
+                "Type": "String",
                 "Value": {
                     "Fn::Sub": "secret-key-for-${Environment}-${AWS::AccountId}"
-                },
-                "KeyId": {
-                    "Ref": "KMSKeyId"
                 },
                 "Description": {
                     "Fn::Sub": "Application secrets for ${Environment} environment"
