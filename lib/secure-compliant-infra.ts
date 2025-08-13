@@ -428,7 +428,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             Name: `${projectName}-${environment}-public-rt-${region}`,
           },
         },
-        { provider }
+        { provider, parent: this }
       );
 
       // Associate public subnets with route table (created but not exported)
@@ -440,7 +440,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
               subnetId: subnet.id,
               routeTableId: publicRouteTable.id,
             },
-            { provider }
+            { provider, parent: this }
           )
       );
 
@@ -487,7 +487,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             Name: `${projectName}-${environment}-ec2-sg-${region}`,
           },
         },
-        { provider }
+        { provider, parent: this }
       );
 
       // Security Group for RDS
@@ -511,7 +511,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             Name: `${projectName}-${environment}-rds-sg-${region}`,
           },
         },
-        { provider }
+        { provider, parent: this }
       );
 
       // IAM Role for EC2 instances (least privilege)
@@ -533,7 +533,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           }),
           tags: commonTags,
         },
-        { provider }
+        { provider, parent: this }
       );
 
       // IAM Policy for EC2 role (minimal permissions) - created but not exported
@@ -558,7 +558,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             ],
           }),
         },
-        { provider }
+        { provider, parent: this }
       );
 
       // IAM Instance Profile
@@ -568,7 +568,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           name: `${projectName}-${environment}-ec2-profile-${region}`,
           role: ec2Role.name,
         },
-        { provider }
+        { provider, parent: this }
       );
 
       // Get latest Amazon Linux 2 AMI
@@ -643,7 +643,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             Name: `${projectName}-${environment}-rds-subnet-group-${region}`,
           },
         },
-        { provider }
+        { provider, parent: this }
       );
 
       // Get KMS key for this region
@@ -651,13 +651,30 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
 
       // Generate a random password using crypto
       const generateRandomPassword = () => {
-        const chars =
-          'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+        // RDS password constraints: 
+        // - Must be 8-128 characters
+        // - Only printable ASCII characters besides '/', '@', '"', ' ' may be used
+        // - Must contain at least one uppercase, one lowercase, one digit, and one special character
+        const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        const digits = '0123456789';
+        const special = '!#$%^&*()_+-=[]{}|;:,.?';
+        
+        // Ensure at least one character from each category
         let password = '';
-        for (let i = 0; i < 32; i++) {
-          password += chars.charAt(Math.floor(Math.random() * chars.length));
+        password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
+        password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+        password += digits.charAt(Math.floor(Math.random() * digits.length));
+        password += special.charAt(Math.floor(Math.random() * special.length));
+        
+        // Fill the rest with random characters from all categories
+        const allChars = uppercase + lowercase + digits + special;
+        for (let i = 4; i < 32; i++) {
+          password += allChars.charAt(Math.floor(Math.random() * allChars.length));
         }
-        return password;
+        
+        // Shuffle the password to avoid predictable patterns
+        return password.split('').sort(() => Math.random() - 0.5).join('');
       };
 
       const rdsPassword = generateRandomPassword();
@@ -688,7 +705,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             Name: `${projectName}-${environment}-rds-${region}`,
           },
         },
-        { provider }
+        { provider, parent: this }
       );
 
       return {
