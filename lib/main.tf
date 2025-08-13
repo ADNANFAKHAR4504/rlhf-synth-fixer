@@ -21,22 +21,22 @@ data "aws_region" "current" {}
 locals {
   name_prefix = "secure-ecs-app"
   environment = "production"
-  
+
   common_tags = {
-    Environment   = "Production"
-    Project      = "SecureECSApp"
-    ManagedBy    = "Terraform"
-    Owner        = "Infrastructure-Team"
-    CostCenter   = "Engineering"
+    Environment = "Production"
+    Project     = "SecureECSApp"
+    ManagedBy   = "Terraform"
+    Owner       = "Infrastructure-Team"
+    CostCenter  = "Engineering"
   }
 
   # Network configuration
   vpc_cidr = "10.0.0.0/16"
   azs      = slice(data.aws_availability_zones.available.names, 0, 2)
-  
+
   public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnets = ["10.0.10.0/24", "10.0.20.0/24"]
-  
+
   # Database configuration
   db_port = 3306
 }
@@ -85,6 +85,29 @@ resource "aws_kms_key" "main" {
           "kms:GenerateDataKey"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs Service"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = [
+              "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ecs/${local.name_prefix}",
+              "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/rds/instance/${local.name_prefix}/error"
+            ]
+          }
+        }
       }
     ]
   })
@@ -156,7 +179,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count = length(local.public_subnets)
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
@@ -654,11 +677,11 @@ resource "aws_ecs_task_definition" "app" {
     {
       name  = "app"
       image = "nginx:latest"
-      
+
       portMappings = [
         {
           containerPort = 80
-          hostPort      = 8080
+          hostPort      = 80
           protocol      = "tcp"
         }
       ]
@@ -667,7 +690,7 @@ resource "aws_ecs_task_definition" "app" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.ecs.name
-          awslogs-region        = data.aws_region.current.name
+          awslogs-region        = data.aws_region.current.id
           awslogs-stream-prefix = "ecs"
         }
       }
@@ -736,7 +759,7 @@ resource "aws_appautoscaling_policy" "ecs_policy_up" {
 
   step_scaling_policy_configuration {
     adjustment_type         = "ChangeInCapacity"
-    cooldown               = 300
+    cooldown                = 300
     metric_aggregation_type = "Average"
 
     step_adjustment {
@@ -756,7 +779,7 @@ resource "aws_appautoscaling_policy" "ecs_policy_down" {
 
   step_scaling_policy_configuration {
     adjustment_type         = "ChangeInCapacity"
-    cooldown               = 300
+    cooldown                = 300
     metric_aggregation_type = "Average"
 
     step_adjustment {
@@ -834,12 +857,12 @@ resource "aws_db_instance" "main" {
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = "db.t3.micro"
-  
+
   allocated_storage     = 20
   max_allocated_storage = 100
   storage_type          = "gp2"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "appdb"
   username = "admin"
@@ -848,13 +871,13 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az                = true
+  publicly_accessible     = false
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   skip_final_snapshot = true
   deletion_protection = false
