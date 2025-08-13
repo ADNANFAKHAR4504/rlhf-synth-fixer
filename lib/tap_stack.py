@@ -110,7 +110,7 @@ class TapStack(pulumi.ComponentResource):
     # ==========================================
     # 3. Application Bucket with Logging
     # ==========================================
-    self.app_bucket = aws.s3.Bucket(
+    self.app_bucket = aws.s3.BucketV2(
         f"app-bucket-{self.environment_suffix}",
         bucket=f"tap-app-{self.environment_suffix}",
         tags=self.tags,
@@ -124,7 +124,7 @@ class TapStack(pulumi.ComponentResource):
         ),
         opts=ResourceOptions(parent=self.app_bucket)
     )
-    aws.s3.BucketLogging(
+    aws.s3.BucketLoggingV2(
         f"app-bucket-logging-{self.environment_suffix}",
         bucket=self.app_bucket.id,
         target_bucket=self.logging_bucket.id,
