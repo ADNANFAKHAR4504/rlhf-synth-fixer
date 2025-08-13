@@ -57,7 +57,7 @@ const loadStackOutputs = () => {
 
 // Initialize AWS clients
 const initializeClients = () => {
-  const region = process.env.AWS_REGION || 'us-east-1';
+  const region = process.env.AWS_REGION || 'us-west-2';
 
   return {
     ec2: new EC2Client({ region }),
@@ -945,7 +945,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
     it('should have proper logging configuration', async () => {
       // Check if CloudWatch Logs groups exist for the application
       const { CloudWatchLogsClient, DescribeLogGroupsCommand } = await import('@aws-sdk/client-cloudwatch-logs');
-      const logsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-east-1' });
+      const logsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-west-2' });
       
       try {
         const response = await logsClient.send(
@@ -1046,7 +1046,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
   describe('Integration Test Summary', () => {
     it('should validate deployment region compliance', async () => {
       // Verify all resources are deployed in the expected region
-      const expectedRegion = process.env.AWS_REGION || 'us-east-1';
+      const expectedRegion = process.env.AWS_REGION || 'us-west-2';
       
       // Check VPC region
       const vpcId = outputs.vpcId;
@@ -1157,7 +1157,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
   afterAll(async () => {
     // Cleanup any test-specific resources if needed
     console.log('Integration tests completed successfully');
-    console.log(`Tested infrastructure in region: ${process.env.AWS_REGION || 'us-east-1'}`);
+    console.log(`Tested infrastructure in region: ${process.env.AWS_REGION || 'us-west-2'}`);
     console.log(`VPC ID: ${outputs.vpcId}`);
     console.log(`ALB DNS: ${outputs.albDnsName}`);
     console.log(`RDS Endpoint: ${outputs.rdsEndpoint}`);
