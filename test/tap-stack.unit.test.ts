@@ -404,4 +404,26 @@ describe('TapStack Unit Tests', () => {
       });
     });
   });
+  test('should use ENVIRONMENT_SUFFIX from environment when context is missing', () => {
+    process.env.ENVIRONMENT_SUFFIX = 'envSuffix';
+    const appNoContext = new cdk.App(); // no context
+    const stackNoContext = new TapStack(appNoContext, 'StackNoContext');
+    const tmpl = Template.fromStack(stackNoContext);
+
+    tmpl.hasOutput('EnvironmentSuffix', {
+      Value: 'envSuffix'
+    });
+
+    delete process.env.ENVIRONMENT_SUFFIX; // cleanup
+  });
+  test('should use default environmentSuffix when neither context nor env var is set', () => {
+    delete process.env.ENVIRONMENT_SUFFIX;
+    const appNoContextNoEnv = new cdk.App();
+    const stackDefault = new TapStack(appNoContextNoEnv, 'StackDefault');
+    const tmpl = Template.fromStack(stackDefault);
+
+    tmpl.hasOutput('EnvironmentSuffix', {
+      Value: 'dev'
+    });
+  });
 });
