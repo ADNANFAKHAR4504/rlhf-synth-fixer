@@ -303,14 +303,6 @@ resource "aws_security_group" "ecs_service" {
     security_groups = [aws_security_group.alb.id]
   }
 
-  ingress {
-    description     = "Application port from ALB"
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
   egress {
     description = "All outbound traffic"
     from_port   = 0
@@ -588,7 +580,7 @@ resource "aws_lb" "main" {
 # ALB Target Group
 resource "aws_lb_target_group" "app" {
   name        = "${local.name_prefix}-tg"
-  port        = 8080
+  port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"

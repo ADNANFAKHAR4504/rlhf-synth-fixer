@@ -7,7 +7,6 @@ Design and implement a **secure, scalable, production-grade AWS environment** in
 1. **Networking**:
 
    * Create a VPC with at least **2 public** and **2 private** subnets, distributed across multiple Availability Zones for high availability.
-   * Use Terraform modules for VPC creation.
 
 2. **Security & Access Control**:
 
