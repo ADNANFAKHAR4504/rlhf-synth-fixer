@@ -24,6 +24,7 @@ export class TapStack extends cdk.Stack {
 
     // Use stack name for uniqueness
     const stackName = cdk.Stack.of(this).stackName;
+    const uniqueAliasName = `${stackName}-live`;
 
     // Log Group for Lambda
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
@@ -84,7 +85,7 @@ export class TapStack extends cdk.Stack {
 
     // Lambda Alias for Provisioned Concurrency
     const lambdaAlias = new lambda.Alias(this, 'LambdaAlias', {
-      aliasName: 'live',
+      aliasName: uniqueAliasName,
       version: lambdaFunction.currentVersion,
       description:
         `Live alias for production traffic with provisioned concurrency (${stackName})`,
@@ -114,7 +115,7 @@ export class TapStack extends cdk.Stack {
       'LambdaScalableTarget',
       {
         serviceNamespace: applicationautoscaling.ServiceNamespace.LAMBDA,
-        resourceId: `function:${lambdaFunction.functionName}:${lambdaAlias.aliasName}`,
+        resourceId: `function:${lambdaFunction.functionName}:${uniqueAliasName}`,
         scalableDimension: 'lambda:function:ProvisionedConcurrency',
         minCapacity: 1,
         maxCapacity: 10,
