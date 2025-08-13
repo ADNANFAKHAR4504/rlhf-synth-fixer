@@ -6,7 +6,24 @@
 # - AMI ID provided in var.ec2_ami_id (default is latest Amazon Linux 2)
 # - RDS password stored in AWS Secrets Manager or provided securely (NEVER in code)
 #############################################
+terraform {
+  required_version = ">= 1.4.0"
 
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # For local integration testing, switch to backend "local" in your test scripts
+  # For real deployments, pass S3 backend config via `terraform init`
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.aws_region
+}
 #########################
 # Locals
 #########################
@@ -182,9 +199,9 @@ resource "aws_iam_role" "ec2_role" {
   tags = local.common_tags
 }
 
-resource "aws_iam_policy_attachment" "ec2_s3_access" {
-  name       = "${var.project}-${var.environment}-ec2-s3-access"
-  roles      = [aws_iam_role.ec2_role.name]
+# Attach a managed AWS policy (avoids inline policy issues)
+resource "aws_iam_role_policy_attachment" "ec2_s3_access" {
+  role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 }
 
@@ -192,7 +209,6 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.project}-${var.environment}-instance-profile"
   role = aws_iam_role.ec2_role.name
 }
-
 #########################
 # Security Groups
 #########################
