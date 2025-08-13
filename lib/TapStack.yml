@@ -15,6 +15,7 @@ Parameters:
   # AWS Secrets Manager secret name for database password (required for production)
   DBSecretName:
     Type: String
+    Default: production/postgresql/password
     Description: AWS Secrets Manager secret name for database password
     AllowedPattern: '^[a-zA-Z0-9/_+=.@-]+$'
     ConstraintDescription: Must be a valid secret name
