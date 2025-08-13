@@ -15,7 +15,6 @@ import json
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformOutput
 from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -30,18 +29,9 @@ from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.flow_log import FlowLog
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfiguration,
-    S3BucketServerSideEncryptionConfigurationRule,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault,
-)
 from cdktf_cdktf_provider_aws.data_aws_kms_key import DataAwsKmsKey
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
-
-# Random provider for unique names
-from cdktf_cdktf_provider_random.provider import RandomProvider
-from cdktf_cdktf_provider_random.id import Id as RandomId
 
 
 class SecureAwsInfraStack(TerraformStack):
@@ -49,18 +39,11 @@ class SecureAwsInfraStack(TerraformStack):
         super().__init__(scope, construct_id)
 
         # Configuration
-        region = os.getenv("AWS_REGION", "us-east-1")
+        region = os.getenv("AWS_REGION", "us-west-2")
         allowed_cidrs = [cidr.strip() for cidr in os.getenv("ALLOWED_CIDRS", "203.0.113.0/24").split(",")]
 
         # Providers
         AwsProvider(self, "aws", region=region)
-        RandomProvider(self, "random")
-
-        # Unique suffix
-        bucket_suffix = RandomId(self, "bucket_suffix", byte_length=4)
-
-        # Data sources
-        azs = DataAwsAvailabilityZones(self, "available", state="available")
 
         # KMS (AWS-managed)
         s3_kms = DataAwsKmsKey(self, "kms_s3", key_id="alias/aws/s3")
@@ -76,6 +59,9 @@ class SecureAwsInfraStack(TerraformStack):
             tags={"Name": "secure-vpc", "Environment": "Production"},
         )
 
+        # Ensure two AZs for DB subnet group coverage
+        azs_for_stack = [f"{region}a", f"{region}b"]
+
         public_subnets = []
         private_subnets = []
         for i in range(2):
@@ -84,7 +70,7 @@ class SecureAwsInfraStack(TerraformStack):
                 f"public_{i}",
                 vpc_id=vpc.id,
                 cidr_block=f"10.0.{i+1}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=azs_for_stack[i],
                 map_public_ip_on_launch=True,
                 tags={"Name": f"public-{i+1}", "Type": "Public", "Environment": "Production"},
             )
@@ -93,7 +79,7 @@ class SecureAwsInfraStack(TerraformStack):
                 f"private_{i}",
                 vpc_id=vpc.id,
                 cidr_block=f"10.0.{i+11}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=azs_for_stack[i],
                 tags={"Name": f"private-{i+1}", "Type": "Private", "Environment": "Production"},
             )
             public_subnets.append(public)
@@ -162,8 +148,7 @@ class SecureAwsInfraStack(TerraformStack):
         FlowLog(
             self,
             "vpc_flow",
-            resource_id=vpc.id,
-            resource_type="VPC",
+            vpc_id=vpc.id,
             traffic_type="ALL",
             log_destination_type="cloud-watch-logs",
             log_destination=flow_lg.arn,
@@ -215,11 +200,11 @@ class SecureAwsInfraStack(TerraformStack):
             description="All outbound",
         )
 
-        # S3 bucket with PAB + KMS SSE
+        # S3 bucket with PAB + KMS SSE (via override for portability)
         bucket = S3Bucket(
             self,
             "app_bucket",
-            bucket=f"secure-app-bucket-{region}-{bucket_suffix.hex}",
+            bucket=f"secure-app-bucket{construct_id.lower()}",
             tags={"Environment": "Production", "Name": "secure-app-bucket"},
         )
         S3BucketPublicAccessBlock(
@@ -231,20 +216,19 @@ class SecureAwsInfraStack(TerraformStack):
             ignore_public_acls=True,
             restrict_public_buckets=True,
         )
-        S3BucketServerSideEncryptionConfiguration(
-            self,
-            "app_bucket_sse",
-            bucket=bucket.id,
-            rule=[
-                S3BucketServerSideEncryptionConfigurationRule(
-                    apply_server_side_encryption_by_default=
-                    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
-                        sse_algorithm="aws:kms",
-                        kms_master_key_id=s3_kms.arn,
-                    ),
-                    bucket_key_enabled=True,
-                )
-            ],
+        bucket.add_override(
+            "server_side_encryption_configuration",
+            {
+                "rule": [
+                    {
+                        "apply_server_side_encryption_by_default": {
+                            "sse_algorithm": "aws:kms",
+                            "kms_master_key_id": s3_kms.arn,
+                        },
+                        "bucket_key_enabled": True,
+                    }
+                ]
+            },
         )
 
         # DB subnet group and RDS instance (encrypted, private)
@@ -281,7 +265,6 @@ class SecureAwsInfraStack(TerraformStack):
             "db",
             identifier="secure-postgres-db",
             engine="postgres",
-            engine_version="15.4",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_type="gp2",
@@ -312,9 +295,9 @@ app.synth()
 
 ### Explanation
 
-- VPC and Subnets: Creates a VPC and two AZ-spread public/private subnets using `DataAwsAvailabilityZones` tokens directly (no Terraform-style string interpolation), avoiding invalid literals.
+- VPC and Subnets: Creates a VPC and two AZ-spread public/private subnets using explicit AZ names based on `AWS_REGION` (e.g., `us-west-2a` and `us-west-2b`) to satisfy RDS coverage.
 - Flow Logs: Provisions a CloudWatch Log Group and a least-privileged IAM role/policy limited to `logs:CreateLogStream` and `logs:PutLogEvents` on `log-group-arn:*`, then enables `FlowLog` for the VPC.
 - Security Groups: `web_sg` allows only ports 80/443 from `ALLOWED_CIDRS`; all inbound else denied by default. Egress open. `db_sg` allows 5432 only from `web_sg`.
-- S3: Bucket blocks all public access and enables SSE-KMS using the AWS-managed key `alias/aws/s3` via a data source. Name uniqueness ensured with the Random provider.
-- RDS: PostgreSQL instance in private subnets, encrypted at rest with AWS-managed key `alias/aws/rds`. Uses `manage_master_user_password=True` to avoid hard-coded secrets.
+- S3: Bucket blocks all public access and enables SSE-KMS using the AWS-managed key `alias/aws/s3` via a data source. SSE is applied via an override for portability with different provider versions. The bucket name is deterministic.
+- RDS: PostgreSQL instance in private subnets, encrypted at rest with AWS-managed key `alias/aws/rds`. The engine version is left to AWS to choose a supported default. Uses `manage_master_user_password=True` to avoid hard-coded secrets.
 - Outputs: Exposes VPC id, bucket name, DB endpoint, and SG id for verification.
