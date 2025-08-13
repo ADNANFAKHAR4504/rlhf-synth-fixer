@@ -39,8 +39,21 @@ export class TapStack extends cdk.Stack {
     // Create SNS topic for security notifications
     this.securityTopic = this.createSecurityTopic();
 
+    // Create CloudWatch Log Groups with KMS encryption
+    const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
+      logGroupName: `/aws/vpc/flowlogs/${this.commonTags.Project}-${this.commonTags.Environment}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      encryptionKey: this.kmsKey,
+    });
+
+    const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
+      logGroupName: `/aws/cloudtrail/${this.commonTags.Project}-${this.commonTags.Environment}`,
+      retention: logs.RetentionDays.ONE_YEAR,
+      encryptionKey: this.kmsKey,
+    });
+
     // Create VPC with security best practices
-    const vpc = this.createVpc(props.vpcCidr || '10.0.0.0/16');
+    const vpc = this.createVpc(props.vpcCidr || '10.0.0.0/16', flowLogGroup);
 
     // Create IAM roles with least privilege
     const roles = this.createIamRoles();
@@ -50,7 +63,7 @@ export class TapStack extends cdk.Stack {
 
     // Enable CloudTrail for API logging
     if (props.enableCloudTrail !== false) {
-      this.createCloudTrail();
+      this.createCloudTrail(cloudTrailLogGroup);
     }
 
     // Apply tags to all resources in the stack
@@ -114,7 +127,7 @@ export class TapStack extends cdk.Stack {
     return topic;
   }
 
-  private createVpc(cidrBlock: string): ec2.Vpc {
+  private createVpc(cidrBlock: string, flowLogGroup: logs.LogGroup): ec2.Vpc {
     const vpc = new ec2.Vpc(this, 'TapStackVpc', {
       ipAddresses: ec2.IpAddresses.cidr(cidrBlock),
       maxAzs: 3,
@@ -145,13 +158,6 @@ export class TapStack extends cdk.Stack {
           service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
         },
       },
-    });
-
-    // Create CloudWatch Log Group for VPC Flow Logs
-    const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      logGroupName: `/aws/vpc/flowlogs/${this.commonTags.Project}-${this.commonTags.Environment}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      encryptionKey: this.kmsKey,
     });
 
     // Create VPC Flow Logs for security monitoring
@@ -328,14 +334,9 @@ export class TapStack extends cdk.Stack {
     return buckets;
   }
 
-  private createCloudTrail(): cloudtrail.Trail {
-    // Create CloudWatch Log Group for CloudTrail
-    const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
-      logGroupName: `/aws/cloudtrail/${this.commonTags.Project}-${this.commonTags.Environment}`,
-      retention: logs.RetentionDays.ONE_YEAR,
-      encryptionKey: this.kmsKey,
-    });
-
+  private createCloudTrail(
+    cloudTrailLogGroup: logs.LogGroup
+  ): cloudtrail.Trail {
     // Create S3 bucket for CloudTrail logs
     const cloudTrailBucket = new s3.Bucket(this, 'CloudTrailBucket', {
       bucketName: `${this.commonTags.Project.toLowerCase()}-${this.commonTags.Environment.toLowerCase()}-cloudtrail-logs`,
