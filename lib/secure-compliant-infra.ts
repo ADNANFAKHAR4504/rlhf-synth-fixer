@@ -277,18 +277,8 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         isMultiRegionTrail: true,
         enableLogging: true,
         kmsKeyId: kmsKeys.find(k => k.region === 'us-east-2')?.key.arn,
-        eventSelectors: [
-          {
-            readWriteType: 'All',
-            includeManagementEvents: true,
-            dataResources: [
-              {
-                type: 'AWS::S3::Object',
-                values: ['arn:aws:s3:::*/*'],
-              },
-            ],
-          },
-        ],
+        // Remove event selectors to use default management events only
+        // eventSelectors can be added later with specific bucket ARNs if needed
         tags: commonTags,
       },
       {
