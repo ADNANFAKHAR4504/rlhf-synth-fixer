@@ -86,8 +86,12 @@ function getLanguageChoices(platform: string) {
 
   if (platform === 'pulumi') {
     return [
+      { name: 'TypeScript', value: 'ts' },
       { name: 'Python', value: 'py' }, // Pulumi Python
     ];
+  }
+  if (platform === 'tf') {
+    return [{ name: 'Terraform', value: 'hcl' }];
   }
 
   return [
@@ -117,6 +121,7 @@ async function main(): Promise<void> {
         { name: 'CDK', value: 'cdk' },
         { name: 'CDK Terraform', value: 'cdktf' },
         { name: 'CloudFormation', value: 'cfn' },
+        { name: 'Terraform', value: 'tf' },
         { name: 'Pulumi', value: 'pulumi' },
       ],
     });
@@ -161,13 +166,13 @@ async function main(): Promise<void> {
         { name: '3', value: '3' },
         { name: '4', value: '4' },
         { name: '5', value: '5' },
+        { name: '6', value: '6' },
         { name: 'synth', value: 'synth' },
       ],
     });
 
     // Generate template folder name
     const templateName = `${platform}-${language}`;
-
     // Check if template exists
     const templatesDir = path.join(__dirname, '..', 'templates');
     const templatePath = path.join(templatesDir, templateName);
