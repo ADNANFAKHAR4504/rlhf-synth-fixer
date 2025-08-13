@@ -36,19 +36,19 @@ export class MonitoringConstruct extends Construct {
 
     // Create log groups for application logs
     const applicationLogGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
-      logGroupName: `/aws/ec2/multiregionapp/${config.region}/application`,
+      logGroupName: `/aws/ec2/multiregionapp/${config.region}/application-${Date.now()}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion during stack deletion
     });
 
     const httpdAccessLogGroup = new logs.LogGroup(this, 'HttpdAccessLogGroup', {
-      logGroupName: `/aws/ec2/multiregionapp/${config.region}/httpd/access`,
+      logGroupName: `/aws/ec2/multiregionapp/${config.region}/httpd/access-${Date.now()}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion during stack deletion
     });
 
     const httpdErrorLogGroup = new logs.LogGroup(this, 'HttpdErrorLogGroup', {
-      logGroupName: `/aws/ec2/multiregionapp/${config.region}/httpd/error`,
+      logGroupName: `/aws/ec2/multiregionapp/${config.region}/httpd/error-${Date.now()}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion during stack deletion
     });

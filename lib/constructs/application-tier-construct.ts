@@ -139,28 +139,13 @@ export class ApplicationTierConstruct extends Construct {
             },
           },
         },
-        logs: {
-          logs_collected: {
-            files: {
-              collect_list: [
-                {
-                  file_path: '/var/log/httpd/access_log',
-                  log_group_name: `/aws/ec2/multiregionapp/${config.region}/httpd/access`,
-                  log_stream_name: '{instance_id}',
-                },
-                {
-                  file_path: '/var/log/httpd/error_log',
-                  log_group_name: `/aws/ec2/multiregionapp/${config.region}/httpd/error`,
-                  log_stream_name: '{instance_id}',
-                },
-              ],
-            },
-          },
-        },
+        // Removed logs configuration to avoid conflicts with CloudFormation-managed log groups
+        // Log groups are created by the MonitoringConstruct instead
       }),
       'EOF',
 
-      // Start CloudWatch agent
+      // Start CloudWatch agent with retry mechanism
+      'sleep 10',
       '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
     );
 
