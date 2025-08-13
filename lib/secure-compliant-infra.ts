@@ -37,20 +37,17 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
   ) {
     super('tap:infra:SecureCompliantInfra', name, args, opts);
 
-    // Configuration variables with defaults
     const projectName = args.projectName || 'webapp';
     const environment = args.environment || 'prod';
     const allowedSshCidr = args.allowedSshCidr || '203.0.113.0/24';
     const vpcCidr = args.vpcCidr || '10.0.0.0/16';
     const regions = args.regions || ['us-west-1', 'ap-south-1'];
 
-    // Common tags for all resources
     const commonTags = {
       Project: projectName,
       Environment: environment,
     };
 
-    // Create providers for each region
     const providers = regions.map(region => ({
       region,
       provider: new aws.Provider(
@@ -60,7 +57,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       ),
     }));
 
-    // KMS Key for encryption (per region)
     const kmsKeys = providers.map(({ region, provider }) => ({
       region,
       key: new aws.kms.Key(
@@ -100,7 +96,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       ),
     }));
 
-    // KMS Key Aliases (created but not exported)
     kmsKeys.map(({ region, key }) => ({
       region,
       alias: new aws.kms.Alias(
@@ -116,7 +111,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       ),
     }));
 
-    // S3 bucket for CloudTrail logs (single bucket in ap-south-1)
     const cloudtrailBucket = new aws.s3.Bucket(
       `${projectName}-${environment}-cloudtrail-logs`,
       {
@@ -130,7 +124,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // Enable S3 bucket encryption for CloudTrail bucket
     new aws.s3.BucketServerSideEncryptionConfiguration(
       `${projectName}-${environment}-cloudtrail-encryption`,
       {
@@ -150,7 +143,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // Block public access for CloudTrail bucket
     new aws.s3.BucketPublicAccessBlock(
       `${projectName}-${environment}-cloudtrail-public-block`,
       {
@@ -166,7 +158,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // S3 bucket for access logs
     const accessLogsBucket = new aws.s3.Bucket(
       `${projectName}-${environment}-access-logs`,
       {
@@ -179,7 +170,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // Enable S3 bucket encryption for access logs bucket
     new aws.s3.BucketServerSideEncryptionConfiguration(
       `${projectName}-${environment}-access-logs-encryption`,
       {
@@ -199,7 +189,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // Block public access for access logs bucket
     new aws.s3.BucketPublicAccessBlock(
       `${projectName}-${environment}-access-logs-public-block`,
       {
@@ -215,7 +204,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // Enable access logging on CloudTrail bucket (created but not exported)
     new aws.s3.BucketLogging(
       `${projectName}-${environment}-cloudtrail-logging`,
       {
@@ -229,7 +217,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // CloudTrail bucket policy
     const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(
       `${projectName}-${environment}-cloudtrail-policy`,
       {
@@ -267,7 +254,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // CloudTrail
     const cloudtrail = new aws.cloudtrail.Trail(
       `${projectName}-${environment}-cloudtrail`,
       {
@@ -277,8 +263,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         isMultiRegionTrail: true,
         enableLogging: true,
         kmsKeyId: kmsKeys.find(k => k.region === 'ap-south-1')?.key.arn,
-        // Remove event selectors to use default management events only
-        // eventSelectors can be added later with specific bucket ARNs if needed
         tags: commonTags,
       },
       {
@@ -288,7 +272,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // WAF Web ACL for SQL injection protection
     const webAcl = new aws.wafv2.WebAcl(
       `${projectName}-${environment}-waf`,
       {
@@ -342,9 +325,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
-    // Create infrastructure for each region
     const regionalInfra = providers.map(({ region, provider }) => {
-      // VPC
       const vpc = new aws.ec2.Vpc(
         `${projectName}-${environment}-vpc-${region}`,
         {
@@ -359,7 +340,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // Internet Gateway
       const igw = new aws.ec2.InternetGateway(
         `${projectName}-${environment}-igw-${region}`,
         {
@@ -372,10 +352,8 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // Get availability zones for this region
       const azs = pulumi.output(aws.getAvailabilityZones({}, { provider }));
 
-      // Public Subnets
       const publicSubnets = [0, 1].map(
         i =>
           new aws.ec2.Subnet(
@@ -394,7 +372,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           )
       );
 
-      // Private Subnets
       const privateSubnets = [0, 1].map(
         i =>
           new aws.ec2.Subnet(
@@ -412,7 +389,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           )
       );
 
-      // Route Table for public subnets
       const publicRouteTable = new aws.ec2.RouteTable(
         `${projectName}-${environment}-public-rt-${region}`,
         {
@@ -431,7 +407,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // Associate public subnets with route table (created but not exported)
       publicSubnets.map(
         (subnet, i) =>
           new aws.ec2.RouteTableAssociation(
@@ -444,7 +419,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           )
       );
 
-      // Security Group for EC2 instances (restricted SSH)
       const ec2SecurityGroup = new aws.ec2.SecurityGroup(
         `${projectName}-${environment}-ec2-sg-${region}`,
         {
@@ -490,7 +464,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // Security Group for RDS
       const rdsSecurityGroup = new aws.ec2.SecurityGroup(
         `${projectName}-${environment}-rds-sg-${region}`,
         {
@@ -514,7 +487,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // IAM Role for EC2 instances (least privilege)
       const ec2Role = new aws.iam.Role(
         `${projectName}-${environment}-ec2-role-${region}`,
         {
@@ -536,7 +508,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // IAM Policy for EC2 role (minimal permissions) - created but not exported
       new aws.iam.RolePolicy(
         `${projectName}-${environment}-ec2-policy-${region}`,
         {
@@ -561,7 +532,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // IAM Instance Profile
       const ec2InstanceProfile = new aws.iam.InstanceProfile(
         `${projectName}-${environment}-ec2-profile-${region}`,
         {
@@ -571,7 +541,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // Get latest Amazon Linux 2 AMI
       const ami = pulumi.output(
         aws.ec2.getAmi(
           {
@@ -588,7 +557,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         )
       );
 
-      // Create SSH Key Pair for EC2 access (as required by PROMPT.md)
       const keyPair = new aws.ec2.KeyPair(
         `${projectName}-${environment}-key-${region}`,
         {
@@ -603,7 +571,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // EC2 Instances with SSH access (as required by PROMPT.md)
       const ec2Instances = publicSubnets.map(
         (subnet, i) =>
           new aws.ec2.Instance(
@@ -615,13 +582,11 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
               vpcSecurityGroupIds: [ec2SecurityGroup.id],
               subnetId: subnet.id,
               iamInstanceProfile: ec2InstanceProfile.name,
-              // Enable IMDSv2 for enhanced security
               metadataOptions: {
                 httpEndpoint: 'enabled',
                 httpTokens: 'required',
                 httpPutResponseHopLimit: 1,
               },
-              // Enable detailed monitoring
               monitoring: true,
               tags: {
                 ...commonTags,
@@ -632,7 +597,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           )
       );
 
-      // RDS Subnet Group
       const rdsSubnetGroup = new aws.rds.SubnetGroup(
         `${projectName}-${environment}-rds-subnet-group-${region}`,
         {
@@ -646,21 +610,14 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
-      // Get KMS key for this region
       const regionKmsKey = kmsKeys.find(k => k.region === region)?.key;
 
-      // Generate a random password using crypto
       const generateRandomPassword = () => {
-        // RDS password constraints:
-        // - Must be 8-128 characters
-        // - Only printable ASCII characters besides '/', '@', '"', ' ' may be used
-        // - Must contain at least one uppercase, one lowercase, one digit, and one special character
         const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const lowercase = 'abcdefghijklmnopqrstuvwxyz';
         const digits = '0123456789';
         const special = '!#$%^&*()_+-=[]{}|;:,.?';
 
-        // Ensure at least one character from each category
         let password = '';
         password += uppercase.charAt(
           Math.floor(Math.random() * uppercase.length)
@@ -671,7 +628,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         password += digits.charAt(Math.floor(Math.random() * digits.length));
         password += special.charAt(Math.floor(Math.random() * special.length));
 
-        // Fill the rest with random characters from all categories
         const allChars = uppercase + lowercase + digits + special;
         for (let i = 4; i < 32; i++) {
           password += allChars.charAt(
@@ -679,7 +635,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           );
         }
 
-        // Shuffle the password to avoid predictable patterns
         return password
           .split('')
           .sort(() => Math.random() - 0.5)
@@ -688,7 +643,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
 
       const rdsPassword = generateRandomPassword();
 
-      // RDS Instance with encryption and random password
       const rdsInstance = new aws.rds.Instance(
         `${projectName}-${environment}-rds-${region}`,
         {
@@ -717,6 +671,120 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         { provider, parent: this }
       );
 
+      const vpcFlowLogsBucket = new aws.s3.Bucket(
+        `${projectName}-${environment}-vpc-flow-logs-${region}`,
+        {
+          bucket: `${environment}-${projectName}-vpc-flow-logs-${region}`,
+          forceDestroy: true,
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-vpc-flow-logs-${region}`,
+          },
+        },
+        { provider, parent: this }
+      );
+
+      new aws.s3.BucketServerSideEncryptionConfiguration(
+        `${projectName}-${environment}-vpc-flow-logs-encryption-${region}`,
+        {
+          bucket: vpcFlowLogsBucket.id,
+          rules: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'AES256',
+              },
+              bucketKeyEnabled: true,
+            },
+          ],
+        },
+        { provider, parent: this }
+      );
+
+      new aws.s3.BucketPublicAccessBlock(
+        `${projectName}-${environment}-vpc-flow-logs-public-block-${region}`,
+        {
+          bucket: vpcFlowLogsBucket.id,
+          blockPublicAcls: true,
+          blockPublicPolicy: true,
+          ignorePublicAcls: true,
+          restrictPublicBuckets: true,
+        },
+        { provider, parent: this }
+      );
+
+      const vpcFlowLogsRole = new aws.iam.Role(
+        `${projectName}-${environment}-vpc-flow-logs-role-${region}`,
+        {
+          name: `${projectName}-${environment}-vpc-flow-logs-role-${region}`,
+          assumeRolePolicy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Action: 'sts:AssumeRole',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'vpc-flow-logs.amazonaws.com',
+                },
+              },
+            ],
+          }),
+          tags: commonTags,
+        },
+        { provider, parent: this }
+      );
+
+      new aws.iam.RolePolicy(
+        `${projectName}-${environment}-vpc-flow-logs-policy-${region}`,
+        {
+          name: `${projectName}-${environment}-vpc-flow-logs-policy-${region}`,
+          role: vpcFlowLogsRole.id,
+          policy: pulumi.all([vpcFlowLogsBucket.arn]).apply(([bucketArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    's3:PutObject',
+                    's3:GetBucketAcl',
+                    's3:ListBucket',
+                  ],
+                  Resource: [bucketArn, `${bucketArn}/*`],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                    'logs:DescribeLogGroups',
+                    'logs:DescribeLogStreams',
+                  ],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
+        },
+        { provider, parent: this }
+      );
+
+      new aws.ec2.FlowLog(
+        `${projectName}-${environment}-vpc-flow-logs-${region}`,
+        {
+          vpcId: vpc.id,
+          trafficType: 'ALL',
+          logDestinationType: 's3',
+          logDestination: pulumi.interpolate`${vpcFlowLogsBucket.arn}/vpc-flow-logs/`,
+          logFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}',
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-vpc-flow-logs-${region}`,
+          },
+        },
+        { provider, parent: this }
+      );
+
       return {
         region,
         vpc,
@@ -729,7 +797,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       };
     });
 
-    // Assign outputs to class properties
     this.vpcIds = regionalInfra.map(infra => ({
       region: infra.region,
       vpcId: infra.vpc.id,
@@ -749,13 +816,11 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
     this.webAclArn = webAcl.arn;
     this.cloudtrailBucketName = cloudtrailBucket.bucket;
 
-    // Assign KMS key ARNs
     this.kmsKeyArns = kmsKeys.map(({ region, key }) => ({
       region,
       keyArn: key.arn,
     }));
 
-    // Register outputs
     this.registerOutputs({
       vpcIds: this.vpcIds,
       ec2InstanceIds: this.ec2InstanceIds,

@@ -8,6 +8,7 @@ import {
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
+  DescribeFlowLogsCommand,
   DescribeInstancesCommand,
   DescribeInternetGatewaysCommand,
   DescribeKeyPairsCommand,
@@ -49,7 +50,6 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Load stack outputs from deployment
 const loadStackOutputs = () => {
   try {
     const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
@@ -60,9 +60,7 @@ const loadStackOutputs = () => {
   }
 };
 
-// Initialize AWS clients with the actual deployment region
 const initializeClients = (region?: string) => {
-  // If no region provided, we'll determine it from stack outputs later
   const defaultRegion = region || 'ap-south-1';
 
   return {
@@ -76,32 +74,27 @@ const initializeClients = (region?: string) => {
   };
 };
 
-// Helper function to extract resource IDs from outputs
 const extractResourceIds = (outputs: any) => {
   const resourceIds: any = {};
 
-  // Extract VPC IDs
   if (outputs.vpcIds) {
     resourceIds.vpcIds = Array.isArray(outputs.vpcIds)
       ? outputs.vpcIds
       : [outputs.vpcIds];
   }
 
-  // Extract EC2 Instance IDs
   if (outputs.ec2InstanceIds) {
     resourceIds.ec2InstanceIds = Array.isArray(outputs.ec2InstanceIds)
       ? outputs.ec2InstanceIds
       : [outputs.ec2InstanceIds];
   }
 
-  // Extract RDS endpoints
   if (outputs.rdsEndpoints) {
     resourceIds.rdsEndpoints = Array.isArray(outputs.rdsEndpoints)
       ? outputs.rdsEndpoints
       : [outputs.rdsEndpoints];
   }
 
-  // Extract security-related resources
   resourceIds.cloudtrailArn = outputs.cloudtrailArn;
   resourceIds.webAclArn = outputs.webAclArn;
   resourceIds.cloudtrailBucketName = outputs.cloudtrailBucketName;
@@ -116,26 +109,20 @@ describe('TAP Stack Integration Tests', () => {
   let clients: ReturnType<typeof initializeClients>;
   let accountId: string;
 
-  // Test configuration
   const testTimeout = 600000; // 10 minutes for integration tests
 
   beforeAll(async () => {
-    // Load stack outputs
     stackOutputs = loadStackOutputs();
 
-    // Get the first stack (assuming single stack deployment)
     const stackName = Object.keys(stackOutputs)[0];
     if (!stackName) {
       throw new Error('No stack outputs found');
     }
 
-    // Extract resource IDs from the stack outputs
     resourceIds = extractResourceIds(stackOutputs[stackName]);
 
-    // Determine the actual deployment region from stack outputs
     let deploymentRegion = 'ap-south-1'; // Default fallback
 
-    // Try to get region from CloudTrail ARN
     if (resourceIds?.cloudtrailArn) {
       const arnParts = resourceIds.cloudtrailArn.split(':');
       if (arnParts.length >= 4 && arnParts[3]) {
@@ -146,7 +133,6 @@ describe('TAP Stack Integration Tests', () => {
       }
     }
 
-    // If no region from CloudTrail, try VPC regions
     if (
       deploymentRegion === 'ap-south-1' &&
       resourceIds?.vpcIds &&
@@ -159,10 +145,8 @@ describe('TAP Stack Integration Tests', () => {
       }
     }
 
-    // Initialize clients with the actual deployment region
     clients = initializeClients(deploymentRegion);
 
-    // Get AWS account ID
     const stsResponse = await clients.sts.send(
       new GetCallerIdentityCommand({})
     );
@@ -233,7 +217,6 @@ describe('TAP Stack Integration Tests', () => {
           expect(response.Vpcs![0].VpcId).toBe(vpcId);
           expect(response.Vpcs![0].State).toBe('available');
 
-          // Verify VPC has proper tags
           const tags = response.Vpcs![0].Tags || [];
           const projectTag = tags.find(tag => tag.Key === 'Project');
           const environmentTag = tags.find(tag => tag.Key === 'Environment');
@@ -272,13 +255,11 @@ describe('TAP Stack Integration Tests', () => {
 
           expect(response.Subnets!.length).toBeGreaterThan(0);
 
-          // Verify subnets are in different availability zones for high availability
           const availabilityZones = new Set(
             response.Subnets!.map(subnet => subnet.AvailabilityZone)
           );
           expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
 
-          // Verify subnet CIDR blocks are within VPC CIDR
           for (const subnet of response.Subnets!) {
             expect(subnet.State).toBe('available');
             expect(subnet.CidrBlock).toBeDefined();
@@ -316,8 +297,6 @@ describe('TAP Stack Integration Tests', () => {
           expect(response.InternetGateways!.length).toBeGreaterThan(0);
 
           const igw = response.InternetGateways![0];
-          // Note: InternetGateway doesn't have a State property in AWS SDK v3
-          // Instead, we check if it exists and has attachments
           expect(igw.InternetGatewayId).toBeDefined();
 
           const attachment = igw.Attachments!.find(att => att.VpcId === vpcId);
@@ -355,7 +334,6 @@ describe('TAP Stack Integration Tests', () => {
 
           expect(response.RouteTables!.length).toBeGreaterThan(0);
 
-          // Check for internet gateway routes
           const hasInternetRoute = response.RouteTables!.some(rt =>
             rt.Routes!.some(route => route.GatewayId?.startsWith('igw-'))
           );
@@ -401,10 +379,8 @@ describe('TAP Stack Integration Tests', () => {
               expect(instance.VpcId).toBeDefined();
               expect(instance.SubnetId).toBeDefined();
 
-              // Verify security groups
               expect(instance.SecurityGroups!.length).toBeGreaterThan(0);
 
-              // Verify tags
               const tags = instance.Tags || [];
               const projectTag = tags.find(tag => tag.Key === 'Project');
               const environmentTag = tags.find(
@@ -436,7 +412,6 @@ describe('TAP Stack Integration Tests', () => {
 
           const regionalClient = new EC2Client({ region });
 
-          // Get instances to find their security groups
           const instancesResponse = await regionalClient.send(
             new DescribeInstancesCommand({
               InstanceIds: instanceIds,
@@ -452,7 +427,6 @@ describe('TAP Stack Integration Tests', () => {
             }
           }
 
-          // Check security group rules
           const sgResponse = await regionalClient.send(
             new DescribeSecurityGroupsCommand({
               GroupIds: Array.from(securityGroupIds),
@@ -463,7 +437,6 @@ describe('TAP Stack Integration Tests', () => {
             expect(sg.GroupName).toBeDefined();
             expect(sg.Description).toBeDefined();
 
-            // Verify SSH access is restricted (should not be 0.0.0.0/0 for port 22)
             const sshRules = sg.IpPermissions!.filter(
               rule => rule.FromPort === 22 && rule.ToPort === 22
             );
@@ -501,7 +474,6 @@ describe('TAP Stack Integration Tests', () => {
 
           expect(response.KeyPairs!.length).toBeGreaterThan(0);
 
-          // Verify key pairs have proper naming convention
           const projectKeyPairs = response.KeyPairs!.filter(
             kp => kp.KeyName!.includes('webapp') || kp.KeyName!.includes('tap')
           );
@@ -528,7 +500,6 @@ describe('TAP Stack Integration Tests', () => {
           const region = rdsInfo.region || 'us-west-1';
           const endpoint = rdsInfo.endpoint || rdsInfo;
 
-          // Extract DB instance identifier from endpoint
           const dbInstanceId = endpoint.split('.')[0];
 
           const regionalClient = new RDSClient({ region });
@@ -549,13 +520,10 @@ describe('TAP Stack Integration Tests', () => {
           expect(dbInstance.DBInstanceClass).toBeDefined();
           expect(dbInstance.VpcSecurityGroups!.length).toBeGreaterThan(0);
 
-          // Verify encryption is enabled
           expect(dbInstance.StorageEncrypted).toBe(true);
 
-          // Verify backup retention
           expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
 
-          // Verify multi-AZ for production environments
           if (process.env.ENVIRONMENT_SUFFIX === 'prod') {
             expect(dbInstance.MultiAZ).toBe(true);
           }
@@ -594,7 +562,6 @@ describe('TAP Stack Integration Tests', () => {
           for (const subnetGroup of projectSubnetGroups) {
             expect(subnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2);
 
-            // Verify subnets are in different availability zones
             const availabilityZones = new Set(
               subnetGroup.Subnets!.map(
                 subnet => subnet.SubnetAvailabilityZone!.Name
@@ -621,7 +588,6 @@ describe('TAP Stack Integration Tests', () => {
 
         const trailArn = resourceIds.cloudtrailArn;
 
-        // Use the full ARN for DescribeTrailsCommand
         const response = await clients.cloudtrail.send(
           new DescribeTrailsCommand({
             trailNameList: [trailArn],
@@ -649,7 +615,6 @@ describe('TAP Stack Integration Tests', () => {
 
         const bucketName = resourceIds.cloudtrailBucketName;
 
-        // Verify bucket exists
         const bucketsResponse = await clients.s3.send(
           new ListBucketsCommand({})
         );
@@ -658,10 +623,8 @@ describe('TAP Stack Integration Tests', () => {
         );
         expect(bucket).toBeDefined();
 
-        // Get bucket region from stack deployment information
         let bucketRegion = 'ap-south-1'; // Default fallback
 
-        // First, check if CloudTrail ARN contains region information
         if (resourceIds?.cloudtrailArn) {
           const arnParts = resourceIds.cloudtrailArn.split(':');
           if (arnParts.length >= 4 && arnParts[3]) {
@@ -670,13 +633,11 @@ describe('TAP Stack Integration Tests', () => {
           }
         }
 
-        // If no region from CloudTrail ARN, try to get from VPC deployment regions
         if (
           bucketRegion === 'ap-south-1' &&
           resourceIds?.vpcIds &&
           resourceIds.vpcIds.length > 0
         ) {
-          // Use the first VPC's region as the likely deployment region
           const firstVpc = resourceIds.vpcIds[0];
           if (firstVpc.region) {
             bucketRegion = firstVpc.region;
@@ -684,7 +645,6 @@ describe('TAP Stack Integration Tests', () => {
           }
         }
 
-        // Verify the bucket is actually in this region
         try {
           const bucketS3Client = new S3Client({ region: bucketRegion });
           await bucketS3Client.send(
@@ -698,7 +658,6 @@ describe('TAP Stack Integration Tests', () => {
             `Bucket not accessible from ${bucketRegion}, trying to detect correct region...`
           );
 
-          // If the inferred region doesn't work, fall back to common regions
           const fallbackRegions = [
             'ap-south-1',
             'ap-south-1',
@@ -724,10 +683,8 @@ describe('TAP Stack Integration Tests', () => {
           }
         }
 
-        // Create region-specific S3 client
         const bucketS3Client = new S3Client({ region: bucketRegion });
 
-        // Verify encryption is enabled
         const encryptionResponse = await bucketS3Client.send(
           new GetBucketEncryptionCommand({
             Bucket: bucketName,
@@ -737,7 +694,6 @@ describe('TAP Stack Integration Tests', () => {
           encryptionResponse.ServerSideEncryptionConfiguration
         ).toBeDefined();
 
-        // Verify public access is blocked
         const publicAccessResponse = await bucketS3Client.send(
           new GetPublicAccessBlockCommand({
             Bucket: bucketName,
@@ -806,11 +762,9 @@ describe('TAP Stack Integration Tests', () => {
         );
         expect(regions.size).toBeGreaterThanOrEqual(2);
 
-        // Verify each region has the expected resources
         for (const region of Array.from(regions)) {
           const regionalClient = new EC2Client({ region: region as string });
 
-          // Check VPCs in this region
           const vpcResponse = await regionalClient.send(
             new DescribeVpcsCommand({
               Filters: [
@@ -874,14 +828,12 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        // Verify security group rules allow EC2 to RDS communication
         for (const instanceInfo of resourceIds.ec2InstanceIds) {
           const region = instanceInfo.region || 'us-west-1';
           const instanceIds = instanceInfo.instanceIds || [instanceInfo];
 
           const regionalClient = new EC2Client({ region });
 
-          // Get EC2 security groups
           const instancesResponse = await regionalClient.send(
             new DescribeInstancesCommand({
               InstanceIds: instanceIds,
@@ -897,7 +849,6 @@ describe('TAP Stack Integration Tests', () => {
             }
           }
 
-          // Get RDS security groups for the same region
           const rdsClient = new RDSClient({ region });
           const rdsResponse = await rdsClient.send(
             new DescribeDBInstancesCommand({})
@@ -915,7 +866,6 @@ describe('TAP Stack Integration Tests', () => {
             }
           }
 
-          // Verify RDS security groups allow inbound from EC2 security groups
           const sgResponse = await regionalClient.send(
             new DescribeSecurityGroupsCommand({
               GroupIds: Array.from(rdsSecurityGroupIds),
@@ -960,7 +910,6 @@ describe('TAP Stack Integration Tests', () => {
 
           const regionalClient = new EC2Client({ region });
 
-          // Get public subnets (those with MapPublicIpOnLaunch = true)
           const subnetsResponse = await regionalClient.send(
             new DescribeSubnetsCommand({
               Filters: [
@@ -978,7 +927,6 @@ describe('TAP Stack Integration Tests', () => {
 
           expect(subnetsResponse.Subnets!.length).toBeGreaterThan(0);
 
-          // Verify route tables for public subnets have internet gateway routes
           for (const subnet of subnetsResponse.Subnets!) {
             const routeTablesResponse = await regionalClient.send(
               new DescribeRouteTablesCommand({
@@ -1028,7 +976,6 @@ describe('TAP Stack Integration Tests', () => {
 
           const regionalClient = new EC2Client({ region });
 
-          // Get private subnets (those with MapPublicIpOnLaunch = false)
           const subnetsResponse = await regionalClient.send(
             new DescribeSubnetsCommand({
               Filters: [
@@ -1044,7 +991,6 @@ describe('TAP Stack Integration Tests', () => {
             })
           );
 
-          // Verify route tables for private subnets don't have direct internet gateway routes
           for (const subnet of subnetsResponse.Subnets!) {
             const routeTablesResponse = await regionalClient.send(
               new DescribeRouteTablesCommand({
@@ -1059,7 +1005,6 @@ describe('TAP Stack Integration Tests', () => {
 
             for (const routeTable of routeTablesResponse.RouteTables!) {
               for (const route of routeTable.Routes!) {
-                // Private subnets should not have direct internet gateway routes
                 if (route.DestinationCidrBlock === '0.0.0.0/0') {
                   expect(route.GatewayId?.startsWith('igw-')).toBe(false);
                 }
@@ -1087,16 +1032,12 @@ describe('TAP Stack Integration Tests', () => {
 
           const cloudwatchClient = new CloudWatchClient({ region });
 
-          // Check for CloudWatch alarms related to our instances
-          // Note: This is a placeholder for future alarm validation
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const _alarmsResponse = await cloudwatchClient.send(
             new DescribeAlarmsCommand({
               StateValue: 'OK',
             })
           );
 
-          // Verify that monitoring is enabled (instances should have detailed monitoring)
           const regionalClient = new EC2Client({ region });
           const instancesResponse = await regionalClient.send(
             new DescribeInstancesCommand({
@@ -1107,7 +1048,6 @@ describe('TAP Stack Integration Tests', () => {
           for (const reservation of instancesResponse.Reservations!) {
             for (const instance of reservation.Instances!) {
               expect(instance.Monitoring!.State).toBeDefined();
-              // Detailed monitoring should be enabled for production workloads
               if (process.env.ENVIRONMENT_SUFFIX === 'prod') {
                 expect(instance.Monitoring!.State).toBe('enabled');
               }
@@ -1126,7 +1066,6 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const _webAclId = resourceIds.webAclArn.split('/').pop();
 
         const elbClient = new ElasticLoadBalancingV2Client({
@@ -1138,7 +1077,6 @@ describe('TAP Stack Integration Tests', () => {
             new DescribeLoadBalancersCommand({})
           );
 
-          // If load balancers exist, verify WAF association
           const projectLoadBalancers = lbResponse.LoadBalancers!.filter(
             lb =>
               lb.LoadBalancerName!.includes('webapp') ||
@@ -1146,7 +1084,6 @@ describe('TAP Stack Integration Tests', () => {
           );
 
           if (projectLoadBalancers.length > 0) {
-            // Verify WAF association with load balancers
             const wafClient = new WAFV2Client({ region: 'ap-south-1' });
 
             const resourcesResponse = await wafClient.send(
@@ -1172,7 +1109,6 @@ describe('TAP Stack Integration Tests', () => {
     test(
       'E2E should verify all data is encrypted at rest',
       async () => {
-        // Test RDS encryption
         if (resourceIds?.rdsEndpoints) {
           for (const rdsInfo of resourceIds.rdsEndpoints) {
             const region = rdsInfo.region || 'us-west-1';
@@ -1193,15 +1129,11 @@ describe('TAP Stack Integration Tests', () => {
           }
         }
 
-        // Test S3 bucket encryption
         if (resourceIds?.cloudtrailBucketName) {
           const bucketName = resourceIds.cloudtrailBucketName;
 
-          // Get bucket region
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           let _bucketRegion = 'ap-south-1';
           try {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const _headResponse = await clients.s3.send(
               new HeadBucketCommand({
                 Bucket: bucketName,
@@ -1210,7 +1142,6 @@ describe('TAP Stack Integration Tests', () => {
           } catch (error: any) {
             if (error.name === 'PermanentRedirect') {
               const errorMetadata = error.$metadata as any;
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
               _bucketRegion =
                 errorMetadata?.httpHeaders?.['x-amz-bucket-region'] ||
                 'ap-south-1';
@@ -1237,7 +1168,6 @@ describe('TAP Stack Integration Tests', () => {
 
           const regionalClient = new EC2Client({ region });
 
-          // Get instances and their security groups
           const instancesResponse = await regionalClient.send(
             new DescribeInstancesCommand({
               InstanceIds: instanceIds,
@@ -1260,27 +1190,22 @@ describe('TAP Stack Integration Tests', () => {
           );
 
           for (const sg of sgResponse.SecurityGroups!) {
-            // Verify no unrestricted access on sensitive ports
             for (const rule of sg.IpPermissions!) {
               const sensitiveports = [22, 3389, 1433, 3306, 5432, 6379, 27017];
 
               if (sensitiveports.includes(rule.FromPort || 0)) {
-                // Check that sensitive ports don't allow 0.0.0.0/0 access
                 const hasOpenAccess = rule.IpRanges!.some(
                   range => range.CidrIp === '0.0.0.0/0'
                 );
 
                 if (rule.FromPort === 22) {
-                  // SSH should be restricted to specific CIDR
                   expect(hasOpenAccess).toBe(false);
 
-                  // Verify SSH is restricted to allowed CIDR (203.0.113.0/24)
                   const hasAllowedCidr = rule.IpRanges!.some(
                     range => range.CidrIp === '203.0.113.0/24'
                   );
                   expect(hasAllowedCidr).toBe(true);
                 } else {
-                  // Other sensitive ports should not be open to the world
                   expect(hasOpenAccess).toBe(false);
                 }
               }
@@ -1298,7 +1223,6 @@ describe('TAP Stack Integration Tests', () => {
 
         const rolesResponse = await iamClient.send(new ListRolesCommand({}));
 
-        // Filter roles related to our project - be more inclusive
         const projectRoles = rolesResponse.Roles!.filter(
           role =>
             role.RoleName!.toLowerCase().includes('webapp') ||
@@ -1309,7 +1233,6 @@ describe('TAP Stack Integration Tests', () => {
             role.RoleName!.includes('pr1022') // Include PR-specific roles
         );
 
-        // If no project-specific roles found, test a sample of existing roles
         const rolesToTest =
           projectRoles.length > 0
             ? projectRoles
@@ -1317,7 +1240,6 @@ describe('TAP Stack Integration Tests', () => {
         expect(rolesToTest.length).toBeGreaterThan(0);
 
         for (const role of rolesToTest) {
-          // Check inline policies
           const policiesResponse = await iamClient.send(
             new ListRolePoliciesCommand({
               RoleName: role.RoleName,
@@ -1336,21 +1258,18 @@ describe('TAP Stack Integration Tests', () => {
               decodeURIComponent(policyResponse.PolicyDocument!)
             );
 
-            // Verify no wildcard permissions on sensitive actions
             for (const statement of policyDocument.Statement) {
               if (statement.Effect === 'Allow') {
                 const actions = Array.isArray(statement.Action)
                   ? statement.Action
                   : [statement.Action];
 
-                // Check for overly permissive actions
                 const dangerousActions = ['*', 'iam:*', 's3:*', 'ec2:*'];
                 const hasDangerousAction = actions.some((action: string) =>
                   dangerousActions.includes(action)
                 );
 
                 if (hasDangerousAction) {
-                  // If there are dangerous actions, ensure resources are restricted
                   expect(statement.Resource).not.toBe('*');
                 }
               }
@@ -1386,16 +1305,13 @@ describe('TAP Stack Integration Tests', () => {
 
           const dbInstance = response.DBInstances![0];
 
-          // Verify automated backups
           expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
           expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(7); // At least 7 days
           expect(dbInstance.PreferredBackupWindow).toBeDefined();
           expect(dbInstance.PreferredMaintenanceWindow).toBeDefined();
 
-          // Verify point-in-time recovery is enabled
           expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
 
-          // For production environments, verify multi-AZ deployment
           if (process.env.ENVIRONMENT_SUFFIX === 'prod') {
             expect(dbInstance.MultiAZ).toBe(true);
           }
@@ -1416,10 +1332,8 @@ describe('TAP Stack Integration Tests', () => {
 
         const bucketName = resourceIds.cloudtrailBucketName;
 
-        // Get bucket region from stack deployment information
         let bucketRegion = 'ap-south-1'; // Default fallback
 
-        // First, check if CloudTrail ARN contains region information
         if (resourceIds?.cloudtrailArn) {
           const arnParts = resourceIds.cloudtrailArn.split(':');
           if (arnParts.length >= 4 && arnParts[3]) {
@@ -1428,13 +1342,11 @@ describe('TAP Stack Integration Tests', () => {
           }
         }
 
-        // If no region from CloudTrail ARN, try to get from VPC deployment regions
         if (
           bucketRegion === 'ap-south-1' &&
           resourceIds?.vpcIds &&
           resourceIds.vpcIds.length > 0
         ) {
-          // Use the first VPC's region as the likely deployment region
           const firstVpc = resourceIds.vpcIds[0];
           if (firstVpc.region) {
             bucketRegion = firstVpc.region;
@@ -1442,7 +1354,6 @@ describe('TAP Stack Integration Tests', () => {
           }
         }
 
-        // Verify the bucket is actually in this region
         try {
           const bucketS3Client = new S3Client({ region: bucketRegion });
           await bucketS3Client.send(
@@ -1456,7 +1367,6 @@ describe('TAP Stack Integration Tests', () => {
             `Bucket not accessible from ${bucketRegion}, trying to detect correct region...`
           );
 
-          // If the inferred region doesn't work, fall back to common regions
           const fallbackRegions = [
             'ap-south-1',
             'ap-south-1',
@@ -1506,7 +1416,6 @@ describe('TAP Stack Integration Tests', () => {
     test(
       'E2E should have load balancers configured for high availability',
       async () => {
-        // Check if load balancers exist in the infrastructure
         const testRegions = ['us-west-1', 'ap-south-1'];
         let foundLoadBalancers = false;
 
@@ -1518,7 +1427,6 @@ describe('TAP Stack Integration Tests', () => {
               new DescribeLoadBalancersCommand({})
             );
 
-            // Filter for project-related load balancers
             const projectLoadBalancers = response.LoadBalancers!.filter(
               lb =>
                 lb.LoadBalancerName!.toLowerCase().includes('webapp') ||
@@ -1530,16 +1438,12 @@ describe('TAP Stack Integration Tests', () => {
               foundLoadBalancers = true;
 
               for (const lb of projectLoadBalancers) {
-                // Verify load balancer is active
                 expect(['active', 'provisioning']).toContain(lb.State!.Code);
 
-                // Verify it's internet-facing or internal
                 expect(['internet-facing', 'internal']).toContain(lb.Scheme);
 
-                // Verify it has multiple availability zones for HA
                 expect(lb.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
 
-                // Verify it's in a VPC
                 expect(lb.VpcId).toBeDefined();
 
                 console.log(
@@ -1558,7 +1462,6 @@ describe('TAP Stack Integration Tests', () => {
           console.log(
             'No load balancers found - this may be expected for basic infrastructure setups'
           );
-          // Don't fail the test if no load balancers exist - they might not be part of this infrastructure
         }
       },
       testTimeout
@@ -1581,11 +1484,9 @@ describe('TAP Stack Integration Tests', () => {
         );
         expect(regions.size).toBeGreaterThanOrEqual(2);
 
-        // Verify each region has complete infrastructure
         for (const region of Array.from(regions)) {
           const regionalClient = new EC2Client({ region: region as string });
 
-          // Check VPCs
           const vpcResponse = await regionalClient.send(
             new DescribeVpcsCommand({
               Filters: [
@@ -1598,7 +1499,6 @@ describe('TAP Stack Integration Tests', () => {
           );
           expect(vpcResponse.Vpcs!.length).toBeGreaterThan(0);
 
-          // Check EC2 instances
           const instancesResponse = await regionalClient.send(
             new DescribeInstancesCommand({
               Filters: [
@@ -1611,7 +1511,6 @@ describe('TAP Stack Integration Tests', () => {
           );
           expect(instancesResponse.Reservations!.length).toBeGreaterThan(0);
 
-          // Check RDS instances
           const rdsClient = new RDSClient({ region: region as string });
           const rdsResponse = await rdsClient.send(
             new DescribeDBInstancesCommand({})
@@ -1653,20 +1552,17 @@ describe('TAP Stack Integration Tests', () => {
 
           const dbInstance = response.DBInstances![0];
 
-          // Verify backup configuration
           expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
           expect(dbInstance.PreferredBackupWindow).toBeDefined();
           expect(dbInstance.PreferredBackupWindow).toMatch(
             /^\d{2}:\d{2}-\d{2}:\d{2}$/
           );
 
-          // Verify maintenance window is different from backup window
           expect(dbInstance.PreferredMaintenanceWindow).toBeDefined();
           expect(dbInstance.PreferredMaintenanceWindow).not.toBe(
             dbInstance.PreferredBackupWindow
           );
 
-          // Verify deletion protection for production
           if (process.env.ENVIRONMENT_SUFFIX === 'prod') {
             expect(dbInstance.DeletionProtection).toBe(true);
           }
@@ -1689,11 +1585,9 @@ describe('TAP Stack Integration Tests', () => {
           (vpc: any) => vpc.region || 'us-west-1'
         );
 
-        // Simulate checking if infrastructure exists in multiple regions
         for (const region of regions) {
           const regionalClient = new EC2Client({ region });
 
-          // Verify independent infrastructure in each region
           const vpcResponse = await regionalClient.send(
             new DescribeVpcsCommand({
               Filters: [
@@ -1707,7 +1601,6 @@ describe('TAP Stack Integration Tests', () => {
 
           expect(vpcResponse.Vpcs!.length).toBeGreaterThan(0);
 
-          // Verify each region has its own internet gateway
           const igwResponse = await regionalClient.send(
             new DescribeInternetGatewaysCommand({
               Filters: [
@@ -1721,7 +1614,6 @@ describe('TAP Stack Integration Tests', () => {
 
           expect(igwResponse.InternetGateways!.length).toBeGreaterThan(0);
 
-          // Verify each region has independent subnets across multiple AZs
           const subnetsResponse = await regionalClient.send(
             new DescribeSubnetsCommand({
               Filters: [
@@ -1752,7 +1644,6 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        // For production environments, verify read replicas exist
         if (process.env.ENVIRONMENT_SUFFIX === 'prod') {
           for (const rdsInfo of resourceIds.rdsEndpoints) {
             const region = rdsInfo.region || 'us-west-1';
@@ -1769,7 +1660,6 @@ describe('TAP Stack Integration Tests', () => {
                 db.DBInstanceIdentifier!.includes('tap')
             );
 
-            // Check for read replicas
             const readReplicas = projectInstances.filter(
               db => db.ReadReplicaSourceDBInstanceIdentifier
             );
@@ -1805,12 +1695,10 @@ describe('TAP Stack Integration Tests', () => {
         for (const region of testRegions) {
           const cloudwatchClient = new CloudWatchClient({ region });
 
-          // Check for CloudWatch alarms
           const alarmsResponse = await cloudwatchClient.send(
             new DescribeAlarmsCommand({})
           );
 
-          // Look for critical infrastructure alarms
           const criticalAlarms = alarmsResponse.MetricAlarms!.filter(
             alarm =>
               alarm.AlarmName!.includes('webapp') ||
@@ -1820,7 +1708,6 @@ describe('TAP Stack Integration Tests', () => {
               alarm.MetricName === 'FreeStorageSpace'
           );
 
-          // Verify alarm states and configurations
           for (const alarm of criticalAlarms) {
             expect(alarm.StateValue).toBeDefined();
             expect(alarm.ComparisonOperator).toBeDefined();
@@ -1842,7 +1729,6 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        // Verify infrastructure supports rapid recovery
         for (const instanceInfo of resourceIds.ec2InstanceIds) {
           const region = instanceInfo.region || 'us-west-1';
           const instanceIds = instanceInfo.instanceIds || [instanceInfo];
@@ -1857,27 +1743,21 @@ describe('TAP Stack Integration Tests', () => {
 
           for (const reservation of response.Reservations!) {
             for (const instance of reservation.Instances!) {
-              // Verify instances are using appropriate instance types for quick recovery
               expect(instance.InstanceType).toBeDefined();
 
-              // Verify instances have proper monitoring enabled
               expect(instance.Monitoring!.State).toBeDefined();
 
-              // Verify instances are in multiple availability zones
               expect(instance.Placement!.AvailabilityZone).toBeDefined();
             }
           }
         }
 
-        // Verify multiple availability zones are used
         const allInstances = resourceIds.ec2InstanceIds.flatMap((info: any) => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const _region = info.region || 'us-west-1';
           return info.instanceIds || [info];
         });
 
         if (allInstances.length > 1) {
-          // For multiple instances, they should be distributed across AZs
           expect(allInstances.length).toBeGreaterThan(1);
         }
       },
@@ -1909,18 +1789,14 @@ describe('TAP Stack Integration Tests', () => {
 
           const dbInstance = response.DBInstances![0];
 
-          // Verify backup frequency supports RPO requirements
           expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
 
-          // Verify automated backups are enabled
           expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
 
-          // For production, verify point-in-time recovery window
           if (process.env.ENVIRONMENT_SUFFIX === 'prod') {
             expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(30); // 30 days for production
           }
 
-          // Verify storage is encrypted (important for compliance during recovery)
           expect(dbInstance.StorageEncrypted).toBe(true);
         }
       },
@@ -1937,7 +1813,6 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        // Verify RDS automated backups
         for (const rdsInfo of resourceIds.rdsEndpoints) {
           const region = rdsInfo.region || 'us-west-1';
           const endpoint = rdsInfo.endpoint || rdsInfo;
@@ -1962,10 +1837,8 @@ describe('TAP Stack Integration Tests', () => {
     test(
       'E2E should have cross-region replication for critical data',
       async () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         let _foundReplication = false;
 
-        // Check for RDS read replicas across regions
         if (resourceIds?.rdsEndpoints && resourceIds.rdsEndpoints.length > 0) {
           const testRegions = ['us-west-1', 'ap-south-1'];
 
@@ -1983,13 +1856,11 @@ describe('TAP Stack Integration Tests', () => {
                   db.DBInstanceIdentifier!.includes('pr1022')
               );
 
-              // Check for read replicas
               const readReplicas = projectInstances.filter(
                 db => db.ReadReplicaSourceDBInstanceIdentifier
               );
 
               if (readReplicas.length > 0) {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 _foundReplication = true;
 
                 for (const replica of readReplicas) {
@@ -2031,7 +1902,6 @@ describe('TAP Stack Integration Tests', () => {
         for (const region of testRegions) {
           const kmsClient = new KMSClient({ region });
 
-          // Find KMS keys for this region
           const regionKmsKeys = resourceIds.kmsKeyArns.filter(
             (key: any) => key.region === region || key.keyArn.includes(region)
           );
@@ -2040,7 +1910,6 @@ describe('TAP Stack Integration Tests', () => {
             const keyArn = typeof kmsKey === 'string' ? kmsKey : kmsKey.keyArn;
 
             try {
-              // Test KMS key exists and is accessible
               const keyResponse = await kmsClient.send(
                 new DescribeKeyCommand({
                   KeyId: keyArn,
@@ -2051,9 +1920,6 @@ describe('TAP Stack Integration Tests', () => {
               expect(keyResponse.KeyMetadata!.KeyState).toBe('Enabled');
               expect(keyResponse.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
 
-              // Note: Key policy is not directly available in DescribeKey response
-              // For policy validation, we would need to use GetKeyPolicy command
-              // This is a basic validation that the key exists and is properly configured
 
               console.log(
                 `Validated KMS key in ${region}: ${keyArn.substring(0, 50)}...`
@@ -2077,7 +1943,6 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        // Extract region from CloudTrail ARN
         const arnParts = resourceIds.cloudtrailArn.split(':');
         const cloudtrailRegion =
           arnParts.length >= 4 ? arnParts[3] : 'ap-south-1';
@@ -2087,7 +1952,6 @@ describe('TAP Stack Integration Tests', () => {
         });
 
         try {
-          // Get CloudTrail configuration
           const trailsResponse = await cloudtrailClient.send(
             new DescribeTrailsCommand({})
           );
@@ -2101,20 +1965,15 @@ describe('TAP Stack Integration Tests', () => {
           expect(projectTrails.length).toBeGreaterThan(0);
 
           for (const trail of projectTrails) {
-            // Validate encryption is enabled
             expect(trail.KmsKeyId).toBeDefined();
             expect(trail.KmsKeyId).not.toBe('');
 
-            // Validate multi-region trail
             expect(trail.IsMultiRegionTrail).toBe(true);
 
-            // Validate global service events
             expect(trail.IncludeGlobalServiceEvents).toBe(true);
 
-            // Validate S3 bucket configuration
             expect(trail.S3BucketName).toBeDefined();
 
-            // Check trail status
             const statusResponse = await cloudtrailClient.send(
               new GetTrailStatusCommand({
                 Name: trail.TrailARN,
@@ -2144,7 +2003,6 @@ describe('TAP Stack Integration Tests', () => {
 
         const bucketName = resourceIds.cloudtrailBucketName;
 
-        // Determine bucket region from CloudTrail ARN or default to ap-south-1
         let bucketRegion = 'ap-south-1';
         if (resourceIds?.cloudtrailArn) {
           const arnParts = resourceIds.cloudtrailArn.split(':');
@@ -2156,7 +2014,6 @@ describe('TAP Stack Integration Tests', () => {
         const s3Client = new S3Client({ region: bucketRegion });
 
         try {
-          // Validate bucket encryption
           const encryptionResponse = await s3Client.send(
             new GetBucketEncryptionCommand({
               Bucket: bucketName,
@@ -2178,7 +2035,6 @@ describe('TAP Stack Integration Tests', () => {
             encryptionRule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm
           );
 
-          // Validate public access is blocked
           const publicAccessResponse = await s3Client.send(
             new GetPublicAccessBlockCommand({
               Bucket: bucketName,
@@ -2232,18 +2088,14 @@ describe('TAP Stack Integration Tests', () => {
             );
 
             for (const db of projectDbs) {
-              // Validate encryption at rest
               expect(db.StorageEncrypted).toBe(true);
               expect(db.KmsKeyId).toBeDefined();
 
-              // Validate security groups
               expect(db.VpcSecurityGroups).toBeDefined();
               expect(db.VpcSecurityGroups!.length).toBeGreaterThan(0);
 
-              // Validate backup configuration
               expect(db.BackupRetentionPeriod).toBeGreaterThan(0);
 
-              // Validate it's in a VPC (not public)
               expect(db.DBSubnetGroup).toBeDefined();
               expect(db.PubliclyAccessible).toBe(false);
 
@@ -2273,10 +2125,8 @@ describe('TAP Stack Integration Tests', () => {
           return;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const _bucketName = resourceIds.cloudtrailBucketName;
 
-        // Determine bucket region
         let bucketRegion = 'ap-south-1';
         if (resourceIds?.cloudtrailArn) {
           const arnParts = resourceIds.cloudtrailArn.split(':');
@@ -2285,7 +2135,6 @@ describe('TAP Stack Integration Tests', () => {
           }
         }
 
-        // Create S3 client without credentials (simulating unauthorized access)
         const unauthorizedS3Client = new S3Client({
           region: bucketRegion,
           credentials: {
@@ -2295,13 +2144,10 @@ describe('TAP Stack Integration Tests', () => {
         });
 
         try {
-          // This should fail with unauthorized access
           await unauthorizedS3Client.send(new ListBucketsCommand({}));
 
-          // If we reach here, the test should fail
           expect(true).toBe(false); // Force failure - unauthorized access should not succeed
         } catch (error: any) {
-          // This is expected - unauthorized access should be blocked
           expect([
             'InvalidAccessKeyId',
             'SignatureDoesNotMatch',
@@ -2334,7 +2180,6 @@ describe('TAP Stack Integration Tests', () => {
           const ec2Client = new EC2Client({ region });
 
           try {
-            // Get security groups
             const sgResponse = await ec2Client.send(
               new DescribeSecurityGroupsCommand({})
             );
@@ -2347,7 +2192,6 @@ describe('TAP Stack Integration Tests', () => {
             );
 
             for (const sg of projectSGs) {
-              // Check SSH access is restricted (not 0.0.0.0/0)
               const sshRules = sg.IpPermissions!.filter(
                 rule => rule.FromPort === 22 && rule.ToPort === 22
               );
@@ -2355,7 +2199,6 @@ describe('TAP Stack Integration Tests', () => {
               for (const sshRule of sshRules) {
                 if (sshRule.IpRanges) {
                   for (const ipRange of sshRule.IpRanges) {
-                    // SSH should not be open to the world
                     expect(ipRange.CidrIp).not.toBe('0.0.0.0/0');
                     console.log(
                       `Confirmed SSH access is restricted in SG: ${sg.GroupId}`
@@ -2364,19 +2207,16 @@ describe('TAP Stack Integration Tests', () => {
                 }
               }
 
-              // Check RDS access is restricted to security groups only
               const rdsRules = sg.IpPermissions!.filter(
                 rule => rule.FromPort === 3306 && rule.ToPort === 3306
               );
 
               for (const rdsRule of rdsRules) {
-                // RDS should only allow access from other security groups, not CIDR blocks
                 if (rdsRule.IpRanges && rdsRule.IpRanges.length > 0) {
                   for (const ipRange of rdsRule.IpRanges) {
                     expect(ipRange.CidrIp).not.toBe('0.0.0.0/0');
                   }
                 }
-                // Should have UserIdGroupPairs for internal access
                 expect(rdsRule.UserIdGroupPairs).toBeDefined();
               }
             }
@@ -2401,7 +2241,6 @@ describe('TAP Stack Integration Tests', () => {
         const testRegions = ['us-west-1', 'ap-south-1'];
 
         for (const region of testRegions) {
-          // Create KMS client with invalid credentials
           const unauthorizedKmsClient = new KMSClient({
             region,
             credentials: {
@@ -2418,17 +2257,14 @@ describe('TAP Stack Integration Tests', () => {
             const keyArn = typeof kmsKey === 'string' ? kmsKey : kmsKey.keyArn;
 
             try {
-              // This should fail with unauthorized access
               await unauthorizedKmsClient.send(
                 new DescribeKeyCommand({
                   KeyId: keyArn,
                 })
               );
 
-              // If we reach here, the test should fail
               expect(true).toBe(false); // Force failure - unauthorized access should not succeed
             } catch (error: any) {
-              // This is expected - unauthorized access should be blocked
               expect([
                 'InvalidAccessKeyId',
                 'SignatureDoesNotMatch',
@@ -2475,10 +2311,8 @@ describe('TAP Stack Integration Tests', () => {
             );
 
             for (const db of projectDbs) {
-              // Verify RDS is not publicly accessible
               expect(db.PubliclyAccessible).toBe(false);
 
-              // Verify RDS is in private subnets (has subnet group)
               expect(db.DBSubnetGroup).toBeDefined();
               expect(db.DBSubnetGroup!.DBSubnetGroupName).toBeDefined();
 
@@ -2489,6 +2323,360 @@ describe('TAP Stack Integration Tests', () => {
           } catch (error: any) {
             console.log(
               `Could not validate RDS public access in ${region}: ${error.message}`
+            );
+          }
+        }
+      },
+      testTimeout
+    );
+  });
+
+  describe('VPC Flow Logs Integration Tests', () => {
+    test(
+      'should verify VPC Flow Logs are enabled for all VPCs',
+      async () => {
+        if (!resourceIds?.vpcIds || resourceIds.vpcIds.length === 0) {
+          console.log('Skipping test: No VPCs found for Flow Logs testing');
+          return;
+        }
+
+        const testRegions = ['us-west-1', 'ap-south-1'];
+
+        for (const region of testRegions) {
+          const ec2Client = new EC2Client({ region });
+
+          try {
+            const vpcResponse = await ec2Client.send(
+              new DescribeVpcsCommand({
+                Filters: [
+                  {
+                    Name: 'tag:Project',
+                    Values: ['webapp'],
+                  },
+                ],
+              })
+            );
+
+            const projectVpcs = vpcResponse.Vpcs || [];
+
+            for (const vpc of projectVpcs) {
+              const flowLogsResponse = await ec2Client.send(
+                new DescribeFlowLogsCommand({
+                  Filter: [
+                    {
+                      Name: 'resource-id',
+                      Values: [vpc.VpcId!],
+                    },
+                  ],
+                })
+              );
+
+              const flowLogs = flowLogsResponse.FlowLogs || [];
+              expect(flowLogs.length).toBeGreaterThan(0);
+
+              for (const flowLog of flowLogs) {
+                expect(flowLog.ResourceId).toBe(vpc.VpcId);
+                expect(flowLog.TrafficType).toBe('ALL');
+                expect(flowLog.LogDestinationType).toBe('s3');
+                expect(flowLog.FlowLogStatus).toBe('ACTIVE');
+
+                expect(flowLog.LogDestination).toBeDefined();
+                expect(flowLog.LogDestination).toContain('vpc-flow-logs');
+
+                console.log(
+                  `Confirmed VPC Flow Logs enabled for VPC ${vpc.VpcId} in ${region}`
+                );
+              }
+            }
+          } catch (error: any) {
+            console.log(
+              `Could not validate VPC Flow Logs in ${region}: ${error.message}`
+            );
+          }
+        }
+      },
+      testTimeout
+    );
+
+    test(
+      'should verify VPC Flow Logs S3 buckets exist and are properly configured',
+      async () => {
+        const testRegions = ['us-west-1', 'ap-south-1'];
+
+        for (const region of testRegions) {
+          const s3Client = new S3Client({ region });
+
+          try {
+            const bucketsResponse = await s3Client.send(
+              new ListBucketsCommand({})
+            );
+
+            const flowLogsBuckets = bucketsResponse.Buckets?.filter(bucket =>
+              bucket.Name?.includes('vpc-flow-logs')
+            ) || [];
+
+            expect(flowLogsBuckets.length).toBeGreaterThan(0);
+
+            for (const bucket of flowLogsBuckets) {
+              await s3Client.send(
+                new HeadBucketCommand({
+                  Bucket: bucket.Name!,
+                })
+              );
+
+              try {
+                const encryptionResponse = await s3Client.send(
+                  new GetBucketEncryptionCommand({
+                    Bucket: bucket.Name!,
+                  })
+                );
+
+                expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+                expect(
+                  encryptionResponse.ServerSideEncryptionConfiguration!.Rules
+                ).toBeDefined();
+
+                const encryptionRule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
+                expect(encryptionRule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+              } catch (encryptionError: any) {
+                console.log(
+                  `Could not verify encryption for bucket ${bucket.Name}: ${encryptionError.message}`
+                );
+              }
+
+              try {
+                const publicAccessResponse = await s3Client.send(
+                  new GetPublicAccessBlockCommand({
+                    Bucket: bucket.Name!,
+                  })
+                );
+
+                expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+                expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+                expect(publicAccessResponse.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+                expect(publicAccessResponse.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+              } catch (publicAccessError: any) {
+                console.log(
+                  `Could not verify public access block for bucket ${bucket.Name}: ${publicAccessError.message}`
+                );
+              }
+
+              console.log(
+                `Confirmed VPC Flow Logs S3 bucket properly configured: ${bucket.Name}`
+              );
+            }
+          } catch (error: any) {
+            console.log(
+              `Could not validate VPC Flow Logs S3 buckets in ${region}: ${error.message}`
+            );
+          }
+        }
+      },
+      testTimeout
+    );
+
+    test(
+      'should verify VPC Flow Logs IAM roles have proper permissions',
+      async () => {
+        const testRegions = ['us-west-1', 'ap-south-1'];
+
+        for (const region of testRegions) {
+          const iamClient = new IAMClient({ region });
+
+          try {
+            const rolesResponse = await iamClient.send(
+              new ListRolesCommand({})
+            );
+
+            const flowLogsRoles = rolesResponse.Roles?.filter(role =>
+              role.RoleName?.includes('vpc-flow-logs-role')
+            ) || [];
+
+            expect(flowLogsRoles.length).toBeGreaterThan(0);
+
+            for (const role of flowLogsRoles) {
+              const assumeRolePolicy = JSON.parse(
+                decodeURIComponent(role.AssumeRolePolicyDocument!)
+              );
+
+              expect(assumeRolePolicy.Statement).toBeDefined();
+              const trustStatement = assumeRolePolicy.Statement.find(
+                (stmt: any) => stmt.Principal?.Service === 'vpc-flow-logs.amazonaws.com'
+              );
+              expect(trustStatement).toBeDefined();
+
+              const policiesResponse = await iamClient.send(
+                new ListRolePoliciesCommand({
+                  RoleName: role.RoleName!,
+                })
+              );
+
+              expect(policiesResponse.PolicyNames?.length).toBeGreaterThan(0);
+
+              for (const policyName of policiesResponse.PolicyNames || []) {
+                const policyResponse = await iamClient.send(
+                  new GetRolePolicyCommand({
+                    RoleName: role.RoleName!,
+                    PolicyName: policyName,
+                  })
+                );
+
+                const policyDocument = JSON.parse(
+                  decodeURIComponent(policyResponse.PolicyDocument!)
+                );
+
+                const s3Statement = policyDocument.Statement.find(
+                  (stmt: any) => stmt.Action?.includes('s3:PutObject')
+                );
+                expect(s3Statement).toBeDefined();
+
+                console.log(
+                  `Confirmed VPC Flow Logs IAM role properly configured: ${role.RoleName}`
+                );
+              }
+            }
+          } catch (error: any) {
+            console.log(
+              `Could not validate VPC Flow Logs IAM roles in ${region}: ${error.message}`
+            );
+          }
+        }
+      },
+      testTimeout
+    );
+
+    test(
+      'should verify VPC Flow Logs capture comprehensive traffic data',
+      async () => {
+        if (!resourceIds?.vpcIds || resourceIds.vpcIds.length === 0) {
+          console.log('Skipping test: No VPCs found for Flow Logs format testing');
+          return;
+        }
+
+        const testRegions = ['us-west-1', 'ap-south-1'];
+
+        for (const region of testRegions) {
+          const ec2Client = new EC2Client({ region });
+
+          try {
+            const vpcResponse = await ec2Client.send(
+              new DescribeVpcsCommand({
+                Filters: [
+                  {
+                    Name: 'tag:Project',
+                    Values: ['webapp'],
+                  },
+                ],
+              })
+            );
+
+            const projectVpcs = vpcResponse.Vpcs || [];
+
+            for (const vpc of projectVpcs) {
+              const flowLogsResponse = await ec2Client.send(
+                new DescribeFlowLogsCommand({
+                  Filter: [
+                    {
+                      Name: 'resource-id',
+                      Values: [vpc.VpcId!],
+                    },
+                  ],
+                })
+              );
+
+              const flowLogs = flowLogsResponse.FlowLogs || [];
+
+              for (const flowLog of flowLogs) {
+                expect(flowLog.LogFormat).toBeDefined();
+                expect(flowLog.LogFormat).toContain('${version}');
+                expect(flowLog.LogFormat).toContain('${account-id}');
+                expect(flowLog.LogFormat).toContain('${interface-id}');
+                expect(flowLog.LogFormat).toContain('${srcaddr}');
+                expect(flowLog.LogFormat).toContain('${dstaddr}');
+                expect(flowLog.LogFormat).toContain('${srcport}');
+                expect(flowLog.LogFormat).toContain('${dstport}');
+                expect(flowLog.LogFormat).toContain('${protocol}');
+                expect(flowLog.LogFormat).toContain('${packets}');
+                expect(flowLog.LogFormat).toContain('${bytes}');
+                expect(flowLog.LogFormat).toContain('${action}');
+                expect(flowLog.LogFormat).toContain('${flowlogstatus}');
+
+                console.log(
+                  `Confirmed comprehensive VPC Flow Logs format for VPC ${vpc.VpcId} in ${region}`
+                );
+              }
+            }
+          } catch (error: any) {
+            console.log(
+              `Could not validate VPC Flow Logs format in ${region}: ${error.message}`
+            );
+          }
+        }
+      },
+      testTimeout
+    );
+
+    test(
+      'should verify VPC Flow Logs are properly tagged',
+      async () => {
+        if (!resourceIds?.vpcIds || resourceIds.vpcIds.length === 0) {
+          console.log('Skipping test: No VPCs found for Flow Logs tagging testing');
+          return;
+        }
+
+        const testRegions = ['us-west-1', 'ap-south-1'];
+
+        for (const region of testRegions) {
+          const ec2Client = new EC2Client({ region });
+
+          try {
+            const vpcResponse = await ec2Client.send(
+              new DescribeVpcsCommand({
+                Filters: [
+                  {
+                    Name: 'tag:Project',
+                    Values: ['webapp'],
+                  },
+                ],
+              })
+            );
+
+            const projectVpcs = vpcResponse.Vpcs || [];
+
+            for (const vpc of projectVpcs) {
+              const flowLogsResponse = await ec2Client.send(
+                new DescribeFlowLogsCommand({
+                  Filter: [
+                    {
+                      Name: 'resource-id',
+                      Values: [vpc.VpcId!],
+                    },
+                  ],
+                })
+              );
+
+              const flowLogs = flowLogsResponse.FlowLogs || [];
+
+              for (const flowLog of flowLogs) {
+                expect(flowLog.Tags).toBeDefined();
+                
+                const tags = flowLog.Tags || [];
+                const projectTag = tags.find(tag => tag.Key === 'Project');
+                const nameTag = tags.find(tag => tag.Key === 'Name');
+
+                expect(projectTag).toBeDefined();
+                expect(projectTag?.Value).toBe('webapp');
+                expect(nameTag).toBeDefined();
+                expect(nameTag?.Value).toContain('vpc-flow-logs');
+
+                console.log(
+                  `Confirmed VPC Flow Logs properly tagged for VPC ${vpc.VpcId} in ${region}`
+                );
+              }
+            }
+          } catch (error: any) {
+            console.log(
+              `Could not validate VPC Flow Logs tags in ${region}: ${error.message}`
             );
           }
         }

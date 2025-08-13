@@ -421,20 +421,354 @@ new TapStack('pulumi-infra', {
 
 **Usage**: Set the environment using `pulumi config set env pr1032` before deployment.
 
-## Summary
-
-All issues have been successfully resolved:
-- ✅ TypeScript compilation passes (`npm run build`)
-- ✅ Linting passes (`npm run lint`)
-- ✅ Availability zone region mismatch fixed
-- ✅ Deprecated S3 resource replaced with current version
-- ✅ S3 bucket naming simplified to use clean environment-project pattern
-- ✅ EC2 key pair dependency removed (SSH access can be added later if needed)
-- ✅ AWS region configuration mismatch resolved (us-east-1 → ap-south-1)
-- ✅ Infrastructure refactored into proper class-based architecture
-- ✅ Environment configuration now passed from TapStack to SecureCompliantInfra
-- ✅ Resource hierarchy properly managed with parent relationships
-- ✅ Infrastructure code maintains all original functionality
-- ✅ Test files updated to match actual interface definitions
-
 The infrastructure code now follows the project's coding standards, uses proper architectural patterns, and should deploy successfully across `us-west-1` and `ap-south-1` regions with clean resource names and proper configuration management that matches the AWS environment setup.
+
+## Major Architectural and Security Failures
+
+### 1. **CRITICAL: No Component Resource Architecture**
+**Issue**: The MODEL_RESPONSE.md used a flat, procedural approach instead of the required ComponentResource class architecture.
+
+**Problem**: 
+- No class structure - just standalone variables and exports
+- Cannot be instantiated with parameters
+- No proper resource hierarchy management
+- Violates Pulumi best practices for reusable infrastructure
+
+**Original Code**:
+```typescript
+// Configuration variables
+const config = new pulumi.Config();
+const projectName = config.get("projectName") || "webapp";
+// ... standalone variables and exports
+export const vpcIds = regionalInfra.map(infra => ({...}));
+```
+
+**Required Code**:
+```typescript
+export class SecureCompliantInfra extends pulumi.ComponentResource {
+  constructor(name: string, args: SecureCompliantInfraArgs, opts?: pulumi.ComponentResourceOptions) {
+    super('tap:infra:SecureCompliantInfra', name, args, opts);
+    // ... proper class-based architecture
+  }
+}
+```
+
+**Impact**: Complete architectural mismatch - code would not integrate with the existing TapStack class.
+
+### 2. **CRITICAL: Missing Parent Resource Management**
+**Issue**: All resources created without proper parent relationships, violating Pulumi resource hierarchy.
+
+**Problem**:
+- Resources not properly parented to the component
+- No resource lifecycle management
+- Difficult to track and manage resource dependencies
+
+**Original Code**:
+```typescript
+const vpc = new aws.ec2.Vpc(`${projectName}-${environment}-vpc-${region}`, {
+  // ... config
+}, { provider });
+```
+
+**Required Code**:
+```typescript
+const vpc = new aws.ec2.Vpc(`${projectName}-${environment}-vpc-${region}`, {
+  // ... config
+}, { provider, parent: this });
+```
+
+**Impact**: Resource management and cleanup issues, no proper component encapsulation.
+
+### 3. **BREAKING: Incorrect Availability Zones API Usage**
+**Issue**: Used non-existent `provider` parameter and wrong property name in `getAvailabilityZones()`.
+
+**Problem**:
+- `{ provider }` is not a valid parameter for `getAvailabilityZones()`
+- Tried to access `.zones[i]` instead of `.names[i]`
+- Would cause TypeScript compilation errors
+
+**Original Code**:
+```typescript
+availabilityZone: pulumi.output(aws.getAvailabilityZones({ provider })).zones[i],
+```
+
+**Correct Code**:
+```typescript
+const azs = pulumi.output(aws.getAvailabilityZones({}, { provider }));
+availabilityZone: azs.names[i],
+```
+
+**Impact**: Code would not compile and deployment would fail.
+
+### 4. **SECURITY: Missing KMS Key Policies**
+**Issue**: KMS keys created without proper policies, making them unusable for CloudTrail encryption.
+
+**Problem**:
+- No key policy defined
+- CloudTrail service cannot use the key for encryption
+- Keys would be created but non-functional
+
+**Original Code**:
+```typescript
+key: new aws.kms.Key(`${projectName}-${environment}-kms-${region}`, {
+  description: `KMS key for ${projectName} ${environment} in ${region}`,
+  tags: commonTags,
+}, { provider })
+```
+
+**Required Code**:
+```typescript
+key: new aws.kms.Key(`${projectName}-${environment}-kms-${region}`, {
+  description: `KMS key for ${projectName} ${environment} in ${region}`,
+  policy: pulumi.output(aws.getCallerIdentity({})).apply(identity =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'Enable IAM User Permissions',
+          Effect: 'Allow',
+          Principal: { AWS: `arn:aws:iam::${identity.accountId}:root` },
+          Action: 'kms:*',
+          Resource: '*',
+        },
+        {
+          Sid: 'Allow CloudTrail to encrypt logs',
+          Effect: 'Allow',
+          Principal: { Service: 'cloudtrail.amazonaws.com' },
+          Action: ['kms:GenerateDataKey*', 'kms:DescribeKey', 'kms:Encrypt', 'kms:ReEncrypt*', 'kms:Decrypt'],
+          Resource: '*',
+        },
+      ],
+    })
+  ),
+  tags: commonTags,
+}, { provider, parent: this })
+```
+
+**Impact**: CloudTrail encryption would fail, security requirement not met.
+### 5. **SECURITY: Missing S3 Bucket Security Configurations**
+**Issue**: S3 buckets created without essential security configurations like encryption and public access blocking.
+
+**Problem**:
+- No server-side encryption configured
+- No public access blocking
+- Buckets vulnerable to unauthorized access
+- Does not meet security compliance requirements
+
+**Original Code**:
+```typescript
+const cloudtrailBucket = new aws.s3.Bucket(`${projectName}-${environment}-cloudtrail-logs`, {
+  bucket: `${projectName}-${environment}-cloudtrail-logs-${Date.now()}`,
+  tags: commonTags,
+}, { provider: providers.find(p => p.region === "ap-south-1")?.provider });
+```
+
+**Required Code**:
+```typescript
+const cloudtrailBucket = new aws.s3.Bucket(/* ... */);
+
+new aws.s3.BucketServerSideEncryptionConfiguration(
+  `${projectName}-${environment}-cloudtrail-encryption`,
+  {
+    bucket: cloudtrailBucket.id,
+    rules: [{ applyServerSideEncryptionByDefault: { sseAlgorithm: 'AES256' } }],
+  },
+  { provider, parent: this }
+);
+
+new aws.s3.BucketPublicAccessBlock(
+  `${projectName}-${environment}-cloudtrail-public-block`,
+  {
+    bucket: cloudtrailBucket.id,
+    blockPublicAcls: true,
+    blockPublicPolicy: true,
+    ignorePublicAcls: true,
+    restrictPublicBuckets: true,
+  },
+  { provider, parent: this }
+);
+```
+
+**Impact**: Security vulnerabilities, non-compliant infrastructure.
+
+### 6. **CRITICAL: Missing VPC Flow Logs Implementation**
+**Issue**: No VPC Flow Logs implementation for network traffic monitoring and security compliance.
+
+**Problem**:
+- No network traffic logging
+- Missing security monitoring capability
+- Does not meet compliance requirements for network visibility
+- No S3 buckets for flow log storage
+- No IAM roles for flow log service
+
+**Missing Components**:
+- VPC Flow Logs resources
+- S3 buckets for flow log storage
+- IAM roles and policies for VPC Flow Logs service
+- Proper log format configuration
+
+**Impact**: Major security gap - no network traffic monitoring or audit trail.
+
+### 7. **BREAKING: Deprecated S3 Resource Usage**
+**Issue**: Used deprecated `aws.s3.BucketLoggingV2` instead of current `aws.s3.BucketLogging`.
+
+**Problem**:
+- Deprecated resource will be removed in future versions
+- May cause deployment warnings or failures
+- Not following current best practices
+
+**Original Code**:
+```typescript
+const cloudtrailBucketLogging = new aws.s3.BucketLoggingV2(
+  `${projectName}-${environment}-cloudtrail-logging`,
+  // ...
+);
+```
+
+**Correct Code**:
+```typescript
+new aws.s3.BucketLogging(
+  `${projectName}-${environment}-cloudtrail-logging`,
+  // ...
+);
+```
+
+**Impact**: Potential deployment failures, deprecated API usage.
+
+### 8. **SECURITY: Missing EC2 Security Enhancements**
+**Issue**: EC2 instances created without modern security configurations.
+
+**Problem**:
+- No IMDSv2 enforcement (metadata service security)
+- No detailed monitoring enabled
+- Missing security hardening configurations
+
+**Original Code**:
+```typescript
+new aws.ec2.Instance(`${projectName}-${environment}-ec2-${region}-${i}`, {
+  ami: ami.id,
+  instanceType: "t3.micro",
+  keyName: `${projectName}-${environment}-key-${region}`,
+  // ... missing security configurations
+});
+```
+
+**Required Code**:
+```typescript
+new aws.ec2.Instance(`${projectName}-${environment}-ec2-${region}-${i}`, {
+  ami: ami.id,
+  instanceType: "t3.micro",
+  keyName: keyPair.keyName,
+  metadataOptions: {
+    httpEndpoint: 'enabled',
+    httpTokens: 'required',
+    httpPutResponseHopLimit: 1,
+  },
+  monitoring: true,
+  // ...
+});
+```
+
+**Impact**: Security vulnerabilities, non-compliant EC2 configurations.
+### 9. **BREAKING: Missing Key Pair Creation**
+**Issue**: EC2 instances reference key pairs that don't exist, causing deployment failures.
+
+**Problem**:
+- Hardcoded key pair names that don't exist in AWS
+- No key pair creation logic
+- EC2 instance creation would fail
+
+**Original Code**:
+```typescript
+keyName: `${projectName}-${environment}-key-${region}`, // Assumes key pair exists
+```
+
+**Required Code**:
+```typescript
+const keyPair = new aws.ec2.KeyPair(
+  `${projectName}-${environment}-key-${region}`,
+  {
+    keyName: `${projectName}-${environment}-key-${region}`,
+    publicKey: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7...',
+    tags: commonTags,
+  },
+  { provider, parent: this }
+);
+
+// Then use: keyName: keyPair.keyName
+```
+
+**Impact**: EC2 deployment failures due to missing key pairs.
+
+### 10. **SECURITY: Insecure RDS Password Management**
+**Issue**: RDS password hardcoded as plain text in the code.
+
+**Problem**:
+- Password visible in source code
+- No password generation or secure management
+- Security vulnerability
+
+**Original Code**:
+```typescript
+password: "changeme123!", // In production, use AWS Secrets Manager
+```
+
+**Required Code**:
+```typescript
+const generateRandomPassword = () => {
+  // Secure random password generation logic
+  // Returns cryptographically secure password
+};
+
+const rdsPassword = generateRandomPassword();
+// Use: password: rdsPassword
+```
+
+**Impact**: Major security vulnerability with hardcoded credentials.
+
+### 11. **BREAKING: Missing RDS Security Configuration**
+**Issue**: RDS instance missing critical security settings.
+
+**Problem**:
+- No `publiclyAccessible: false` setting
+- Could allow public internet access to database
+- Security compliance violation
+
+**Original Code**:
+```typescript
+const rdsInstance = new aws.rds.Instance(/* ... */, {
+  // ... missing publiclyAccessible: false
+});
+```
+
+**Required Code**:
+```typescript
+const rdsInstance = new aws.rds.Instance(/* ... */, {
+  // ... other config
+  publiclyAccessible: false,
+  // ...
+});
+```
+
+**Impact**: Potential database exposure to public internet.
+
+### 12. **CRITICAL: Wrong S3 Bucket Naming with Date.now()**
+**Issue**: Used `Date.now()` in bucket names, causing unpredictable and problematic naming.
+
+**Problem**:
+- Bucket names change on every deployment
+- Creates new buckets instead of updating existing ones
+- Resource drift and management issues
+- Violates infrastructure as code principles
+
+**Original Code**:
+```typescript
+bucket: `${projectName}-${environment}-cloudtrail-logs-${Date.now()}`,
+```
+
+**Correct Code**:
+```typescript
+bucket: `${environment}-${projectName}-cloudtrail-logs`,
+```
+
+**Impact**: Infrastructure drift, resource management chaos.

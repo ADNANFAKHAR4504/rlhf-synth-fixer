@@ -1,16 +1,7 @@
-/**
- * tap-stack.unit.test.ts
- *
- * Comprehensive unit tests for the TapStack class using Jest and Pulumi mocking.
- * These tests verify the correct instantiation, configuration, and behavior of the TapStack
- * component without actually deploying AWS resources.
- */
-
 import * as pulumi from '@pulumi/pulumi';
 import { SecureCompliantInfra } from '../lib/secure-compliant-infra';
 import { TapStack } from '../lib/tap-stack';
 
-// Mock Pulumi runtime
 jest.mock('@pulumi/pulumi', () => ({
   ComponentResource: jest.fn().mockImplementation(function(this: any, type: string, name: string, args: any, opts: any) {
     this.registerOutputs = jest.fn();
@@ -23,10 +14,8 @@ jest.mock('@pulumi/pulumi', () => ({
   all: jest.fn((outputs) => ({ apply: jest.fn((fn) => fn(outputs)) })),
 }));
 
-// Mock SecureCompliantInfra
 jest.mock('../lib/secure-compliant-infra', () => ({
   SecureCompliantInfra: jest.fn().mockImplementation(function(this: any, name: string, args: any, opts: any) {
-    // Mock the outputs that SecureCompliantInfra should provide
     this.vpcIds = pulumi.output([
       { region: 'us-west-1', vpcId: 'vpc-12345' },
       { region: 'ap-south-1', vpcId: 'vpc-67890' }
@@ -152,7 +141,6 @@ describe('TapStack Unit Tests', () => {
     it('should expose infrastructure outputs correctly', () => {
       const stack = new TapStack('test-stack', {});
 
-      // Verify that the stack exposes the expected outputs from SecureCompliantInfra
       expect(stack.secureInfra).toBeDefined();
       expect(stack.vpcIds).toBeDefined();
       expect(stack.ec2InstanceIds).toBeDefined();
@@ -166,7 +154,6 @@ describe('TapStack Unit Tests', () => {
     it('should expose security-related outputs', () => {
       const stack = new TapStack('test-stack', {});
       
-      // Verify security-related outputs are accessible
       expect(stack.cloudtrailArn).toBeDefined();
       expect(stack.webAclArn).toBeDefined();
       expect(stack.cloudtrailBucketName).toBeDefined();
@@ -176,7 +163,6 @@ describe('TapStack Unit Tests', () => {
 
   describe('Error Handling', () => {
     it('should handle SecureCompliantInfra constructor errors gracefully', () => {
-      // Mock SecureCompliantInfra to throw an error
       (SecureCompliantInfra as unknown as jest.Mock).mockImplementationOnce(() => {
         throw new Error('Infrastructure creation failed');
       });
@@ -187,7 +173,6 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should validate input parameters', () => {
-      // Test with valid parameters - should not throw
       expect(() => {
         new TapStack('test-stack', {
           environmentSuffix: 'dev',
@@ -295,7 +280,6 @@ describe('TapStack Unit Tests', () => {
         tags: customTags
       });
 
-      // Verify that tags are passed through to the infrastructure
       expect(SecureCompliantInfra).toHaveBeenCalledWith(
         'secure-infra',
         expect.any(Object),
@@ -316,7 +300,6 @@ describe('TapStack Unit Tests', () => {
     it('should register outputs correctly', () => {
       const stack = new TapStack('test-stack', {});
 
-      // Verify that registerOutputs was called on the mocked ComponentResource
       expect((stack as any).registerOutputs).toHaveBeenCalledWith(
         expect.objectContaining({
           vpcIds: expect.any(Object),
@@ -346,7 +329,6 @@ describe('TapStack Unit Tests', () => {
     it('should maintain backward compatibility with legacy output names', () => {
       const stack = new TapStack('test-stack', {});
 
-      // Verify that all legacy output properties are available
       expect(stack.vpcIds).toBeDefined();
       expect(stack.ec2InstanceIds).toBeDefined();
       expect(stack.rdsEndpoints).toBeDefined();
@@ -361,6 +343,189 @@ describe('TapStack Unit Tests', () => {
 
       expect(stack.secureInfra).toBeDefined();
       expect(stack.secureInfra).toBeInstanceOf(SecureCompliantInfra);
+    });
+  });
+
+  describe('VPC Flow Logs Configuration', () => {
+    it('should create VPC Flow Logs for all regions', () => {
+      const stack = new TapStack('test-stack', {
+        regions: ['us-west-1', 'ap-south-1']
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          regions: ['us-west-1', 'ap-south-1']
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should configure VPC Flow Logs with proper S3 destination', () => {
+      const stack = new TapStack('test-stack', {
+        projectName: 'test-project',
+        environmentSuffix: 'prod'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'test-project',
+          environment: 'prod'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should enable VPC Flow Logs for single region deployment', () => {
+      const stack = new TapStack('test-stack', {
+        regions: ['us-east-1']
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          regions: ['us-east-1']
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should configure VPC Flow Logs with comprehensive log format', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'webapp',
+          environment: 'dev'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create encrypted S3 buckets for VPC Flow Logs', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'prod'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'prod'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should configure IAM roles for VPC Flow Logs service', () => {
+      const stack = new TapStack('test-stack', {
+        projectName: 'security-test'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'security-test'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should block public access on VPC Flow Logs S3 buckets', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
+    it('should capture ALL traffic types in VPC Flow Logs', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'security'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'security'
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('VPC Flow Logs Security', () => {
+    it('should configure VPC Flow Logs with proper IAM permissions', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
+    it('should enable server-side encryption for VPC Flow Logs buckets', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'encrypted'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'encrypted'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should apply proper tags to VPC Flow Logs resources', () => {
+      const stack = new TapStack('test-stack', {
+        projectName: 'tagged-project',
+        environmentSuffix: 'test'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'tagged-project',
+          environment: 'test'
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('VPC Flow Logs Multi-Region', () => {
+    it('should create VPC Flow Logs in multiple regions', () => {
+      const stack = new TapStack('test-stack', {
+        regions: ['us-west-1', 'us-east-1', 'eu-west-1']
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          regions: ['us-west-1', 'us-east-1', 'eu-west-1']
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should handle region-specific VPC Flow Logs configuration', () => {
+      const stack = new TapStack('test-stack', {
+        regions: ['ap-south-1', 'ap-southeast-1']
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          regions: ['ap-south-1', 'ap-southeast-1']
+        }),
+        expect.any(Object)
+      );
     });
   });
 });

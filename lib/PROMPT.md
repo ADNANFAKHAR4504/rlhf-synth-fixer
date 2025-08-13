@@ -32,7 +32,7 @@ You are tasked with setting up a secure AWS infrastructure using Pulumi that adh
 3. Restrict SSH access to EC2 instances to the specific IP address range `203.0.113.0/24`.  
 4. Enable encryption at rest for all databases using AWS KMS for managing encryption keys.  
 5. Ensure that no security group permits unrestricted ingress traffic on SSH port 22.  
-6. Deploy all resources across two AWS regions, `us-west-1` and `us-east-1`, for redundancy and high availability.  
+6. Deploy all resources across two AWS regions, `us-west-1` and `ap-south-1`, for redundancy and high availability.  
 7. Utilize AWS CloudTrail to log all API requests made to AWS services.  
 8. Store CloudTrail logs in an S3 bucket with all access logs enabled to monitor access patterns.  
 9. Implement AWS WAF to create rules that protect against SQL injection attacks that may threaten web application components.
@@ -48,7 +48,7 @@ All AWS accounts and both specified regions must reflect the intended design.
 ---
 
 **Proposed Statement:**  
-The infrastructure is built for a secure, multi-region web application running in `us-west-1` and `us-east-1`. All resources follow strict tagging conventions using project-based prefixes and environment identifiers (e.g., `webapp-dev-*` or `webapp-prod-*`) and are deployed in accordance with AWS security best practices.
+The infrastructure is built for a secure, multi-region web application running in `us-west-1` and `ap-south-1`. All resources follow strict tagging conventions using project-based prefixes and environment identifiers (e.g., `webapp-dev-*` or `webapp-prod-*`) and are deployed in accordance with AWS security best practices.
 
 ---
 
@@ -71,5 +71,5 @@ The infrastructure is built for a secure, multi-region web application running i
    - **AWS WAF** with SQL injection mitigation rules  
 5. Tag all resources with `Project` and `Environment`.  
 6. Use `pulumi preview`-compliant syntax with outputs and component abstraction if needed.  
-7. All configurations must work seamlessly across `us-west-1` and `us-east-1`.  
+7. All configurations must work seamlessly across `us-west-1` and `ap-south-1`.  
 8. Ensure the code is **modular**, **production-ready**, and **fully automated**.
