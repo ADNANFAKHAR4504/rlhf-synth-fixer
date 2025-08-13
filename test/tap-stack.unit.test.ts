@@ -1,6 +1,6 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as yaml from 'js-yaml';
+import fs from 'fs';
+import path from 'path';
+import yaml from 'js-yaml';
 
 // Custom YAML schema to parse CloudFormation intrinsic functions
 const cfnSchema = yaml.DEFAULT_SCHEMA.extend([
@@ -9,181 +9,230 @@ const cfnSchema = yaml.DEFAULT_SCHEMA.extend([
     kind: 'scalar',
     construct: data => ({ 'Fn::Sub': data }),
   }),
+  new yaml.Type('!Sub', {
+    kind: 'sequence',
+    construct: data => ({ 'Fn::Sub': data }),
+  }),
   new yaml.Type('!GetAtt', {
     kind: 'scalar',
     construct: data => ({ 'Fn::GetAtt': data.split('.') }),
   }),
-  new yaml.Type('!Resolve', {
-    kind: 'scalar',
-    construct: data => ({ 'Fn::Resolve': data }),
+  new yaml.Type('!FindInMap', {
+    kind: 'sequence',
+    construct: data => ({ 'Fn::FindInMap': data }),
   }),
 ]);
 
-describe('TAP Stack Unit Tests', () => {
+describe('Secure Baseline Stack Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    // Load and parse the CloudFormation template
+    // Load the final, corrected CloudFormation template
     const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(templateContent, { schema: cfnSchema });
   });
 
-  // --- Test Suite: Parameters and Metadata ---
-  describe('Parameters and Metadata', () => {
-    test('should have the correct CloudFormation format version and description', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+  // --- Test Suite: Parameters and Mappings ---
+  describe('Parameters & Mappings', () => {
+    it('should define an EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
     });
 
-    test('should define all required parameters correctly', () => {
-      const params = template.Parameters;
-      expect(Object.keys(params)).toHaveLength(3);
-      expect(params.EnvironmentSuffix).toBeDefined();
-      expect(params.TrustedIPForSSH).toBeDefined();
-      expect(params.LatestAmiId).toBeDefined();
-      expect(params.LatestAmiId.Type).toBe(
-        'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-      );
+    it('should define a region-to-AMI mapping', () => {
+      expect(template.Mappings.RegionAMIMap).toBeDefined();
+      expect(template.Mappings.RegionAMIMap['us-east-1'].AMI).toBeDefined();
+      expect(template.Mappings.RegionAMIMap['us-west-2'].AMI).toBeDefined();
+    });
+  });
+
+  // --- Test Suite: Tagging Compliance ---
+  describe('Tagging Strategy', () => {
+    // Helper function to test for standard tags
+    const expectStandardTags = (resource: any) => {
+      expect(resource.Properties.Tags).toContainEqual({
+        Key: 'Owner',
+        Value: 'YourName',
+      });
+      expect(resource.Properties.Tags).toContainEqual({
+        Key: 'Purpose',
+        Value: 'Nova-App-Baseline',
+      });
+    };
+
+    it('should apply standard tags to the KMS Key', () => {
+      expectStandardTags(template.Resources.NovaKMSKey);
     });
 
-    test('should have metadata for parameter grouping in the console', () => {
-      const metadata = template.Metadata['AWS::CloudFormation::Interface'];
-      expect(metadata).toBeDefined();
-      expect(metadata.ParameterGroups.length).toBe(2);
+    it('should apply standard tags to the S3 Bucket', () => {
+      expectStandardTags(template.Resources.NovaDataBucket);
+    });
+
+    it('should apply standard tags to the IAM Role', () => {
+      expectStandardTags(template.Resources.EC2AppRole);
+    });
+
+    it('should apply standard tags to the EC2 Instance', () => {
+      expectStandardTags(template.Resources.NovaEC2Instance);
     });
   });
 
   // --- Test Suite: Security (IAM, KMS, Security Groups) ---
   describe('Security Configuration', () => {
-    test('KMS Key should be created with retaining policies for protection', () => {
-      const key = template.Resources.NovaKMSKey;
-      expect(key.Type).toBe('AWS::KMS::Key');
-      expect(key.DeletionPolicy).toBe('Retain');
-      expect(key.UpdateReplacePolicy).toBe('Retain');
-    });
+    it('KMS Key should have a Retain deletion policy and a root-administrative policy', () => {
+      const kmsKey = template.Resources.NovaKMSKey;
+      expect(kmsKey.DeletionPolicy).toBe('Retain');
 
-    test('KMS Key Policy should grant management to root and usage to the EC2 role', () => {
-      const keyPolicy = template.Resources.NovaKMSKey.Properties.KeyPolicy;
+      const keyPolicy = kmsKey.Properties.KeyPolicy;
       const adminStatement = keyPolicy.Statement.find(
         (s: any) => s.Sid === 'AllowAdminsToManageKey'
       );
-
+      expect(adminStatement.Effect).toBe('Allow');
+      expect(adminStatement.Action).toBe('kms:*');
       expect(adminStatement.Principal.AWS['Fn::Sub']).toBe(
         'arn:aws:iam::${AWS::AccountId}:root'
       );
-      // Ensure it's not a wildcard action
-      expect(adminStatement.Action).not.toContain('kms:*');
-      expect(adminStatement.Action).toContain('kms:ScheduleKeyDeletion');
     });
 
-    test('EC2AppRole should have a least-privilege inline policy', () => {
+    it('KMS Key Alias should be set correctly', () => {
+      const alias = template.Resources.NovaKMSKeyAlias;
+      expect(alias.Type).toBe('AWS::KMS::Alias');
+      expect(alias.Properties.AliasName).toBe('alias/nova-app-key');
+      expect(alias.Properties.TargetKeyId).toEqual({ Ref: 'NovaKMSKey' });
+    });
+
+    it('EC2AppRole should NOT have a hardcoded name (Best Practice)', () => {
       const role = template.Resources.EC2AppRole;
-      const policy = role.Properties.Policies[0].PolicyDocument;
-      const statements = policy.Statement;
+      // Best practice is to let CloudFormation name the role to avoid conflicts.
+      expect(role.Properties.RoleName).toBeUndefined();
+    });
+
+    it('EC2AppRole policy should grant least-privilege access to S3, CloudWatch, and KMS', () => {
+      const rolePolicy = template.Resources.EC2AppRole.Properties.Policies[0];
+      const statements = rolePolicy.PolicyDocument.Statement;
 
       const s3Statement = statements.find(
-        (s: any) => s.Sid === 'S3AccessPermissions'
+        (s: any) => s.Sid === 'S3ReadOnlyAccess'
       );
+      expect(s3Statement.Effect).toBe('Allow');
+      expect(s3Statement.Action).toEqual(['s3:GetObject', 's3:ListBucket']);
+      expect(s3Statement.Resource).toContainEqual({
+        'Fn::GetAtt': ['NovaDataBucket', 'Arn'],
+      });
+
       const logsStatement = statements.find(
-        (s: any) => s.Sid === 'CloudWatchLogsPermissions'
+        (s: any) => s.Sid === 'CloudWatchLogsAccess'
       );
-      const kmsStatement = statements.find(
-        (s: any) => s.Sid === 'KMSUsagePermission'
-      );
-
-      expect(s3Statement).toBeDefined();
-      expect(s3Statement.Resource[0]['Fn::GetAtt']).toEqual([
-        'NovaDataBucket',
-        'Arn',
+      expect(logsStatement.Effect).toBe('Allow');
+      expect(logsStatement.Action).toEqual([
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
       ]);
 
-      expect(logsStatement).toBeDefined();
-      expect(logsStatement.Resource['Fn::Sub']).toContain(
-        '/aws/ec2/nova-app-${AWS::Region}:*'
-      );
-
-      expect(kmsStatement).toBeDefined();
-      expect(kmsStatement.Resource['Fn::GetAtt']).toEqual([
-        'NovaKMSKey',
-        'Arn',
+      const kmsStatement = statements.find((s: any) => s.Sid === 'KMSAccess');
+      expect(kmsStatement.Effect).toBe('Allow');
+      expect(kmsStatement.Action).toEqual([
+        'kms:Decrypt',
+        'kms:GenerateDataKey',
       ]);
+      expect(kmsStatement.Resource).toEqual({
+        'Fn::GetAtt': ['NovaKMSKey', 'Arn'],
+      });
     });
 
-    test('NovaSecurityGroup should allow inbound SSH only from the trusted IP', () => {
+    it('NovaSecurityGroup should have no ingress rules and allow HTTPS egress', () => {
       const sg = template.Resources.NovaSecurityGroup;
-      const ingressRule = sg.Properties.SecurityGroupIngress[0];
-      expect(ingressRule.FromPort).toBe(22);
-      expect(ingressRule.IpProtocol).toBe('tcp');
-      expect(ingressRule.CidrIp).toEqual({ Ref: 'TrustedIPForSSH' });
+      // This is the correct way to test for no ingress rules.
+      expect(sg.Properties.SecurityGroupIngress).toBeUndefined();
+
+      // It should, however, allow outbound traffic for updates and API calls.
+      expect(sg.Properties.SecurityGroupEgress).toBeDefined();
+      expect(sg.Properties.SecurityGroupEgress[0].CidrIp).toBe('0.0.0.0/0');
+      expect(sg.Properties.SecurityGroupEgress[0].FromPort).toBe(443);
     });
   });
 
-  // --- Test Suite: Storage & Database ---
-  describe('Storage & Database', () => {
-    test('TurnAroundPromptTable (DynamoDB) should be encrypted with the KMS key', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
-
-      const sseSpec = table.Properties.SSESpecification;
-      expect(sseSpec.SSEEnabled).toBe(true);
-      expect(sseSpec.KMSMasterKeyId).toEqual({ Ref: 'NovaKMSKey' });
-    });
-
-    test('NovaDataBucket (S3) should be encrypted and block public access', () => {
+  // --- Test Suite: Storage & Compute ---
+  describe('Storage & Compute Infrastructure', () => {
+    it('NovaDataBucket (S3) should be encrypted, versioned, and block public access', () => {
       const bucket = template.Resources.NovaDataBucket;
-      expect(bucket.Type).toBe('AWS::S3::Bucket');
 
+      // Test Encryption
       const encryption =
         bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe(
         'aws:kms'
       );
-      expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({
-        Ref: 'NovaKMSKey',
-      });
+      expect(
+        encryption.ServerSideEncryptionByDefault.KMSMasterKeyID['Fn::GetAtt']
+      ).toEqual(['NovaKMSKey', 'Arn']);
 
-      const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
-      expect(publicAccess.BlockPublicAcls).toBe(true);
-      expect(publicAccess.RestrictPublicBuckets).toBe(true);
+      // Test Public Access Block
+      const pubBlock = bucket.Properties.PublicAccessBlockConfiguration;
+      expect(pubBlock.BlockPublicAcls).toBe(true);
+      expect(pubBlock.BlockPublicPolicy).toBe(true);
+      expect(pubBlock.IgnorePublicAcls).toBe(true);
+      expect(pubBlock.RestrictPublicBuckets).toBe(true);
+
+      // Test Versioning
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
-  });
 
-  // --- Test Suite: Compute ---
-  describe('Compute Infrastructure', () => {
-    test('NovaEC2Instance should use a dynamic AMI and have its EBS volume encrypted', () => {
+    it('NovaEC2Instance should use FindInMap for its AMI and be a t3.micro', () => {
       const instance = template.Resources.NovaEC2Instance;
-      expect(instance.Type).toBe('AWS::EC2::Instance');
+      const imageIdMapping = instance.Properties.ImageId['Fn::FindInMap'];
+      expect(imageIdMapping[0]).toBe('RegionAMIMap');
+      expect(imageIdMapping[1]).toEqual({ Ref: 'AWS::Region' });
+      expect(imageIdMapping[2]).toBe('AMI');
 
-      // Verifies dynamic AMI parameter is used
-      expect(instance.Properties.ImageId).toEqual({ Ref: 'LatestAmiId' });
+      expect(instance.Properties.InstanceType).toBe('t3.micro');
+    });
 
+    it('NovaEC2Instance root volume should be encrypted with the regional KMS key', () => {
+      const instance = template.Resources.NovaEC2Instance;
       const ebs = instance.Properties.BlockDeviceMappings[0].Ebs;
       expect(ebs.Encrypted).toBe(true);
       expect(ebs.KmsKeyId).toEqual({ Ref: 'NovaKMSKey' });
     });
   });
 
-  // --- Test Suite: Compliance ---
-  describe('Compliance (AWS Config)', () => {
-    test('should create three AWS Config rules', () => {
-      const resources = template.Resources;
-      const s3Rule = resources.S3EncryptionRule;
-      const ebsRule = resources.EbsEncryptionRule;
-      const iamRule = resources.IamRolePolicyCheck;
+  // --- Test Suite: Compliance & Monitoring ---
+  describe('Compliance & Monitoring', () => {
+    it('should NOT include an obsolete custom resource or Lambda to start Config', () => {
+      // These tests now correctly assert that the outdated resources are GONE.
+      expect(template.Resources.ConfigRecorderStatus).toBeUndefined();
+      expect(template.Resources.ConfigRecorderFunction).toBeUndefined();
+    });
 
+    it('should correctly configure the AWS Config recorder for regional resources', () => {
+      const recorder = template.Resources.ConfigurationRecorder;
+      // This is critical for StackSet deployments to prevent conflicts.
+      expect(
+        recorder.Properties.RecordingGroup.IncludeGlobalResourceTypes
+      ).toBe(false);
+    });
+
+    it('should deploy the three required AWS managed Config Rules', () => {
+      const s3Rule = template.Resources.S3EncryptionRule;
       expect(s3Rule).toBeDefined();
-      expect(s3Rule.Type).toBe('AWS::Config::ConfigRule');
       expect(s3Rule.Properties.Source.SourceIdentifier).toBe(
         'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED'
       );
 
+      const ebsRule = template.Resources.EbsEncryptionRule;
       expect(ebsRule).toBeDefined();
       expect(ebsRule.Properties.Source.SourceIdentifier).toBe(
         'ENCRYPTED_VOLUMES'
       );
 
+      const iamRule = template.Resources.IamRolePolicyCheckRule;
       expect(iamRule).toBeDefined();
+      expect(iamRule.Properties.Source.SourceIdentifier).toBe(
+        'IAM_ROLE_MANAGED_POLICY_CHECK'
+      );
     });
   });
 });

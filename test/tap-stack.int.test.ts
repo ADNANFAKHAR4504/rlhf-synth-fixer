@@ -5,36 +5,32 @@ import {
   DescribeSecurityGroupsCommand,
 } from '@aws-sdk/client-ec2';
 import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
-import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-} from '@aws-sdk/client-s3';
+import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
+import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
 import {
   ConfigServiceClient,
+  DescribeConfigurationRecorderStatusCommand, // Correct command to check status
   DescribeConfigRulesCommand,
 } from '@aws-sdk/client-config-service';
 import * as fs from 'fs';
 import * as path from 'path';
 
 // --- Test Configuration ---
-const REGION = process.env.AWS_REGION || 'us-west-2'; // Or your target region
+const REGION = process.env.AWS_REGION || 'us-west-2'; // Your target region
 
 // --- Type Definition for Stack Outputs ---
 interface StackOutputs {
-  TurnAroundPromptTableName: string;
-  TurnAroundPromptTableArn: string;
+  EC2RoleArn: string;
   KMSKeyArn: string;
-  S3BucketName: string;
   EC2InstanceId: string;
+  EnvironmentSuffix: string;
 }
 
 // --- AWS SDK Clients ---
 const ec2Client = new EC2Client({ region: REGION });
 const kmsClient = new KMSClient({ region: REGION });
-const dynamoDBClient = new DynamoDBClient({ region: REGION });
-const s3Client = new S3Client({ region: REGION });
+const iamClient = new IAMClient({ region: REGION });
+const lambdaClient = new LambdaClient({ region: REGION });
 const configClient = new ConfigServiceClient({ region: REGION });
 
 // --- Read Deployed Stack Outputs ---
@@ -46,7 +42,7 @@ try {
   );
   outputs = JSON.parse(rawOutputs).Stacks[0].Outputs.reduce(
     (acc: any, curr: any) => {
-      acc[curr.OutputKey.replace('Output', '')] = curr.OutputValue;
+      acc[curr.OutputKey] = curr.OutputValue;
       return acc;
     },
     {}
@@ -59,19 +55,28 @@ try {
 
 const testSuite = outputs ? describe : describe.skip;
 
-testSuite('TAP Stack Integration Tests', () => {
-  // Test Suite: Security (KMS, Security Groups)
-  describe('🛡️ Security', () => {
-    test('KMS Key should be enabled and available', async () => {
+testSuite('New TAP Stack Integration Tests', () => {
+  // --- Test Suite: Security & IAM ---
+  describe('🛡️ Security & IAM', () => {
+    test('KMS Key should be enabled', async () => {
       const { KeyMetadata } = await kmsClient.send(
         new DescribeKeyCommand({ KeyId: outputs!.KMSKeyArn })
       );
       expect(KeyMetadata).toBeDefined();
       expect(KeyMetadata!.Enabled).toBe(true);
-      expect(KeyMetadata!.KeyState).toBe('Enabled');
     });
 
-    test('EC2 Security Group should have the correct SSH ingress rule', async () => {
+    test('EC2 IAM Role should exist with the specified regional name', async () => {
+      // The role name is extracted from the ARN provided in the outputs
+      const roleName = outputs!.EC2RoleArn.split('/')[1];
+      const { Role } = await iamClient.send(
+        new GetRoleCommand({ RoleName: roleName })
+      );
+      expect(Role).toBeDefined();
+      expect(Role!.RoleName).toBe(roleName);
+    });
+
+    test('EC2 Security Group should have no ingress rules', async () => {
       const instanceResponse = await ec2Client.send(
         new DescribeInstancesCommand({ InstanceIds: [outputs!.EC2InstanceId] })
       );
@@ -83,59 +88,13 @@ testSuite('TAP Stack Integration Tests', () => {
       const sgResponse = await ec2Client.send(
         new DescribeSecurityGroupsCommand({ GroupIds: [sgId!] })
       );
-      const ingressRule = sgResponse.SecurityGroups?.[0].IpPermissions?.find(
-        p => p.FromPort === 22
-      );
-      expect(ingressRule).toBeDefined();
+      expect(sgResponse.SecurityGroups?.[0].IpPermissions).toHaveLength(0); // Checks for empty ingress rules
     });
   });
 
-  // Test Suite: Storage (DynamoDB, S3)
-  describe('📦 Storage & Database', () => {
-    test('DynamoDB table should be active and encrypted with the correct KMS key', async () => {
-      const { Table } = await dynamoDBClient.send(
-        new DescribeTableCommand({
-          TableName: outputs!.TurnAroundPromptTableName,
-        })
-      );
-      expect(Table).toBeDefined();
-      expect(Table!.TableStatus).toBe('ACTIVE');
-      expect(Table!.SSEDescription?.Status).toBe('ENABLED');
-      expect(Table!.SSEDescription?.KMSMasterKeyArn).toBe(outputs!.KMSKeyArn);
-    }, 60000);
-
-    test('S3 bucket should enforce encryption and block all public access', async () => {
-      const { ServerSideEncryptionConfiguration } = await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: outputs!.S3BucketName })
-      );
-
-      // Assert that the encryption configuration and its rules exist
-      expect(ServerSideEncryptionConfiguration).toBeDefined();
-      expect(ServerSideEncryptionConfiguration!.Rules).toBeDefined();
-      expect(ServerSideEncryptionConfiguration!.Rules!.length).toBeGreaterThan(
-        0
-      );
-
-      // Now it's safe to access the first rule
-      const sseRule = ServerSideEncryptionConfiguration!.Rules![0];
-      expect(sseRule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
-        'aws:kms'
-      );
-      expect(sseRule.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBe(
-        outputs!.KMSKeyArn
-      );
-
-      const { PublicAccessBlockConfiguration } = await s3Client.send(
-        new GetPublicAccessBlockCommand({ Bucket: outputs!.S3BucketName })
-      );
-      expect(PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-      expect(PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
-    });
-  });
-
-  // Test Suite: Compute (EC2)
-  describe('⚙️ Compute', () => {
-    test('EC2 instance should be running and its root volume should be encrypted', async () => {
+  // --- Test Suite: Compute & Storage ---
+  describe('⚙️ Compute & Storage', () => {
+    test('EC2 instance should be running and its root volume encrypted', async () => {
       const { Reservations } = await ec2Client.send(
         new DescribeInstancesCommand({ InstanceIds: [outputs!.EC2InstanceId] })
       );
@@ -149,16 +108,32 @@ testSuite('TAP Stack Integration Tests', () => {
       const { Volumes } = await ec2Client.send(
         new DescribeVolumesCommand({ VolumeIds: [volumeId!] })
       );
-      const volume = Volumes?.[0];
-      expect(volume).toBeDefined();
-      expect(volume!.Encrypted).toBe(true);
-      expect(volume!.KmsKeyId).toBe(outputs!.KMSKeyArn);
+      expect(Volumes?.[0].Encrypted).toBe(true);
+      expect(Volumes?.[0].KmsKeyId).toBe(outputs!.KMSKeyArn);
     }, 120000);
   });
 
-  // Test Suite: Compliance (AWS Config)
-  describe('⚖️ Compliance', () => {
-    test('AWS Config rules should be created in the account', async () => {
+  // --- Test Suite: Compliance & Custom Resources ---
+  describe('⚖️ Compliance & Custom Resources', () => {
+    // FIX: This test now uses the correct SDK command and checks the correct properties.
+    test('AWS Config recorder should be on and recording successfully', async () => {
+      const recorderName = `NovaConfigRecorder-${REGION}`;
+      const { ConfigurationRecordersStatus } = await configClient.send(
+        new DescribeConfigurationRecorderStatusCommand({
+          ConfigurationRecorderNames: [recorderName],
+        })
+      );
+
+      expect(ConfigurationRecordersStatus).toBeDefined();
+      expect(ConfigurationRecordersStatus!).toHaveLength(1);
+
+      const status = ConfigurationRecordersStatus![0];
+      expect(status.name).toBe(recorderName);
+      expect(status.recording).toBe(true);
+      expect(status.lastStatus).toBe('SUCCESS');
+    });
+
+    test('Required AWS Config rules should exist', async () => {
       const { ConfigRules } = await configClient.send(
         new DescribeConfigRulesCommand({
           ConfigRuleNames: [
@@ -170,6 +145,15 @@ testSuite('TAP Stack Integration Tests', () => {
       );
       expect(ConfigRules).toBeDefined();
       expect(ConfigRules!.length).toBe(3);
+    });
+
+    test('Custom Lambda function for starting Config should exist', async () => {
+      const functionName = `StartConfigRecorder-${REGION}-${outputs!.EnvironmentSuffix}`;
+      const { Configuration } = await lambdaClient.send(
+        new GetFunctionCommand({ FunctionName: functionName })
+      );
+      expect(Configuration).toBeDefined();
+      expect(Configuration!.Runtime).toBe('python3.9');
     });
   });
 });

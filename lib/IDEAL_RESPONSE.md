@@ -1,6 +1,6 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'A comprehensive, multi-region stack for the Task Assignment Platform, including secure compute, storage, and database resources.'
+Description: 'A comprehensive, multi-region secure baseline for the Nova application, designed for AWS CloudFormation StackSets. Deploys to us-east-1 and us-west-2.'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -9,129 +9,112 @@ Metadata:
           default: 'Application Environment Configuration'
         Parameters:
           - EnvironmentSuffix
-          - LatestAmiId
-      - Label:
-          default: 'Network Configuration'
-        Parameters:
-          - TrustedIPForSSH
 
 Parameters:
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod).'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters.'
-  TrustedIPForSSH:
-    Type: String
-    Description: 'The trusted IP address (CIDR format, e.g., 192.168.1.1/32) for SSH access to the EC2 instance.'
-    Default: '0.0.0.0/0' # Note: For production, this should be locked down to a specific IP.
-  LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
-    Description: 'The SSM Parameter for the latest Amazon Linux 2 AMI ID.'
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    ConstraintDescription: 'Must be one of: dev, staging, or prod.'
+
+Mappings:
+  RegionAMIMap:
+    us-east-1:
+      AMI: 'ami-0c55b159cbfafe1f0' # Amazon Linux 2 AMI in us-east-1
+    us-west-2:
+      AMI: 'ami-0892d3c7ee95c038d' # Amazon Linux 2 AMI in us-west-2
 
 Resources:
-  # --- Database Resources ---
-  TurnAroundPromptTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+  # ============================================
+  # Networking Stack (VPC, Subnet, etc.)
+  # ============================================
+  VPC:
+    Type: AWS::EC2::VPC
     Properties:
-      TableName: !Sub 'TurnAroundPromptTable-${EnvironmentSuffix}'
-      AttributeDefinitions:
-        - AttributeName: 'id'
-          AttributeType: 'S'
-      KeySchema:
-        - AttributeName: 'id'
-          KeyType: 'HASH'
-      BillingMode: PAY_PER_REQUEST
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-        KMSMasterKeyId: !Ref NovaKMSKey
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
       Tags:
+        - Key: Name
+          Value: !Sub 'Nova-VPC-${AWS::Region}'
         - Key: Owner
           Value: YourName
         - Key: Purpose
-          Value: Nova-App-Database
+          Value: Nova-App-Baseline
 
-  # --- Security & IAM Resources ---
-  EC2AppRole:
-    Type: AWS::IAM::Role
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: ec2.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: NovaAppLeastPrivilegePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Sid: S3AccessPermissions
-                Effect: Allow
-                Action: [s3:GetObject, s3:ListBucket]
-                Resource:
-                  - !GetAtt NovaDataBucket.Arn
-                  - !Sub '${NovaDataBucket.Arn}/*'
-              - Sid: CloudWatchLogsPermissions
-                Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:DescribeLogStreams
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/nova-app-${AWS::Region}:*'
-              - Sid: KMSUsagePermission
-                Effect: Allow
-                Action:
-                  - kms:Encrypt
-                  - kms:Decrypt
-                  - kms:ReEncrypt*
-                  - kms:GenerateDataKey*
-                  - kms:DescribeKey
-                Resource: !GetAtt NovaKMSKey.Arn
       Tags:
         - Key: Owner
           Value: YourName
         - Key: Purpose
           Value: Nova-App-Baseline
 
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      Roles:
-        - !Ref EC2AppRole
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Owner
+          Value: YourName
+        - Key: Purpose
+          Value: Nova-App-Baseline
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Owner
+          Value: YourName
+        - Key: Purpose
+          Value: Nova-App-Baseline
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  # ============================================
+  # KMS, IAM, and S3 Resources
+  # ============================================
   NovaKMSKey:
-    Type: AWS::KMS::Key
+    Type: 'AWS::KMS::Key'
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Description: 'KMS key for Nova application encryption'
+      Description: !Sub 'KMS key for Nova application encryption in ${AWS::Region}'
+      EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: AllowAdminsToManageKey
+          - Sid: 'AllowAdminsToManageKey'
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - kms:Create*
-              - kms:Describe*
-              - kms:Enable*
-              - kms:List*
-              - kms:Put*
-              - kms:Update*
-              - kms:Revoke*
-              - kms:Disable*
-              - kms:Get*
-              - kms:Delete*
-              - kms:ScheduleKeyDeletion
-              - kms:CancelKeyDeletion
+            Action: 'kms:*'
             Resource: '*'
       Tags:
         - Key: Owner
@@ -140,43 +123,91 @@ Resources:
           Value: Nova-App-Baseline
 
   NovaKMSKeyAlias:
-    Type: AWS::KMS::Alias
+    Type: 'AWS::KMS::Alias'
     Properties:
-      AliasName: alias/nova-app-key
+      AliasName: 'alias/nova-app-key'
       TargetKeyId: !Ref NovaKMSKey
 
-  # --- Storage & Compute Resources ---
-  NovaDataBucket:
-    Type: AWS::S3::Bucket
+  EC2AppRole:
+    Type: 'AWS::IAM::Role'
     Properties:
-      BucketName: !Sub 'nova-data-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref NovaKMSKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: 'ec2.amazonaws.com' }
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'NovaAppLeastPrivilegePolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: 'S3ReadOnlyAccess'
+                Effect: Allow
+                Action: ['s3:GetObject', 's3:ListBucket']
+                Resource:
+                  - !GetAtt NovaDataBucket.Arn
+                  - !Sub '${NovaDataBucket.Arn}/*'
+              - Sid: 'CloudWatchLogsAccess'
+                Effect: Allow
+                Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/nova-app*:*'
+              # FIX: Permissions for the role to use the KMS key are now defined here.
+              # This breaks the circular dependency.
+              - Sid: 'KMSAccess'
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt NovaKMSKey.Arn
       Tags:
         - Key: Owner
           Value: YourName
         - Key: Purpose
           Value: Nova-App-Baseline
 
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+        - !Ref EC2AppRole
+
+  NovaDataBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub 'nova-data-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !GetAtt NovaKMSKey.Arn
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Owner
+          Value: YourName
+        - Key: Purpose
+          Value: Nova-App-Baseline
+
+  # ============================================
+  # Compute and Security Group Resources
+  # ============================================
   NovaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+    Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'Security group for Nova application EC2 instances'
-      SecurityGroupIngress:
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
         - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref TrustedIPForSSH
-          Description: 'Allow SSH from trusted IP'
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Owner
           Value: YourName
@@ -184,11 +215,12 @@ Resources:
           Value: Nova-App-Baseline
 
   NovaEC2Instance:
-    Type: AWS::EC2::Instance
+    Type: 'AWS::EC2::Instance'
     Properties:
-      ImageId: !Ref LatestAmiId
-      InstanceType: t3.micro
+      InstanceType: 't3.micro'
+      ImageId: !FindInMap [RegionAMIMap, !Ref 'AWS::Region', AMI]
       IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !GetAtt NovaSecurityGroup.GroupId
       BlockDeviceMappings:
@@ -203,7 +235,7 @@ Resources:
           #!/bin/bash -xe
           yum update -y
           yum install -y amazon-cloudwatch-agent
-          cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json << 'EOF'
+          cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json << EOF
           {
             "logs": {
               "logs_collected": {
@@ -211,7 +243,7 @@ Resources:
                   "collect_list": [
                     {
                       "file_path": "/var/log/messages",
-                      "log_group_name": "/aws/ec2/nova-app-${AWS::Region}",
+                      "log_group_name": "/aws/ec2/nova-app-${EnvironmentSuffix}",
                       "log_stream_name": "{instance_id}"
                     }
                   ]
@@ -227,46 +259,58 @@ Resources:
         - Key: Purpose
           Value: Nova-App-Baseline
 
-  # --- AWS Config Resources ---
+  # ============================================
+  # AWS Config Compliance Resources
+  # ============================================
   ConfigRole:
-    Type: AWS::IAM::Role
+    Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: sts:AssumeRole
+            Principal: { Service: 'config.amazonaws.com' }
+            Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+        - 'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
+      Tags:
+        - Key: Owner
+          Value: YourName
+        - Key: Purpose
+          Value: Nova-App-Baseline
 
   ConfigBucket:
-    Type: AWS::S3::Bucket
+    Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Sub 'config-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
+      Tags:
+        - Key: Owner
+          Value: YourName
+        - Key: Purpose
+          Value: Nova-App-Baseline
 
   ConfigBucketPolicy:
-    Type: AWS::S3::BucketPolicy
+    Type: 'AWS::S3::BucketPolicy'
     Properties:
       Bucket: !Ref ConfigBucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: AWSConfigBucketPermissionsCheck
+          - Sid: 'AWSConfigBucketPermissionsCheck'
             Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: s3:GetBucketAcl
+            Principal: { Service: 'config.amazonaws.com' }
+            Action: 's3:GetBucketAcl'
             Resource: !GetAtt ConfigBucket.Arn
-          - Sid: AWSConfigBucketDelivery
+          - Sid: 'AWSConfigBucketDelivery'
             Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: s3:PutObject
+            Principal: { Service: 'config.amazonaws.com' }
+            Action: 's3:PutObject'
             Resource: !Sub '${ConfigBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*'
             Condition:
               StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' }
 
   ConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
+    Type: 'AWS::Config::ConfigurationRecorder'
     Properties:
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
@@ -274,64 +318,60 @@ Resources:
         IncludeGlobalResourceTypes: false
 
   DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
+    Type: 'AWS::Config::DeliveryChannel'
     Properties:
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
+        DeliveryFrequency: 'TwentyFour_Hours'
       S3BucketName: !Ref ConfigBucket
 
   S3EncryptionRule:
-    Type: AWS::Config::ConfigRule
+    Type: 'AWS::Config::ConfigRule'
     Properties:
       Source:
         Owner: AWS
-        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+        SourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED'
     DependsOn: ConfigurationRecorder
 
   EbsEncryptionRule:
-    Type: AWS::Config::ConfigRule
+    Type: 'AWS::Config::ConfigRule'
     Properties:
       Source:
         Owner: AWS
-        SourceIdentifier: ENCRYPTED_VOLUMES
+        SourceIdentifier: 'ENCRYPTED_VOLUMES'
     DependsOn: ConfigurationRecorder
 
-  IamRolePolicyCheck:
-    Type: AWS::Config::ConfigRule
+  IamRolePolicyCheckRule:
+    Type: 'AWS::Config::ConfigRule'
     Properties:
       Source:
         Owner: AWS
-        SourceIdentifier: IAM_ROLE_MANAGED_POLICY_CHECK
-      InputParameters:
-        managedPolicyArns: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+        SourceIdentifier: 'IAM_ROLE_MANAGED_POLICY_CHECK'
     DependsOn: ConfigurationRecorder
 
 Outputs:
-  TurnAroundPromptTableName:
-    Description: 'Name of the DynamoDB table'
-    Value: !Ref TurnAroundPromptTable
+  VpcId:
+    Description: 'ID of the newly created VPC'
+    Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-
-  TurnAroundPromptTableArn:
-    Description: 'ARN of the DynamoDB table'
-    Value: !GetAtt TurnAroundPromptTable.Arn
+      Name: !Sub '${AWS::StackName}-VpcId'
+  PublicSubnetId:
+    Description: 'ID of the public subnet'
+    Value: !Ref PublicSubnet
     Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
-
-  EnvironmentSuffixOutput:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
-
+      Name: !Sub '${AWS::StackName}-PublicSubnetId'
   KMSKeyArn:
     Description: 'ARN of the regional KMS Key'
     Value: !GetAtt NovaKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
   S3BucketName:
-    Description: 'Name of the regional S3 Bucket'
+    Description: 'Name of the regional S3 Bucket for Nova data'
     Value: !Ref NovaDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
   EC2InstanceId:
     Description: 'ID of the regional EC2 Instance'
     Value: !Ref NovaEC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2InstanceId'
 ```
