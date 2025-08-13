@@ -121,9 +121,9 @@ class WebApplicationStack(Stack):
       machine_image=ec2.AmazonLinuxImage(
         generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
       ),
-      desired_capacity=0,
-      min_capacity=0,
-      max_capacity=0,
+      desired_capacity=1,
+      min_capacity=1,
+      max_capacity=3,
       role=role,
       security_group=web_sg
     )
