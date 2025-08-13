@@ -218,9 +218,11 @@ class TapStack(TerraformStack):
                 tags={**common_tags, "Name": f"nat-{i+1}"},
             )
             nat_gateways.append(nat)
-        # NATs should only exist when we create subnets ourselves
+        # NATs should only exist when we create subnets ourselves; ensure subnet refs are indexed
         self.add_override("resource.aws_nat_gateway.nat-1.count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
+        self.add_override("resource.aws_nat_gateway.nat-1.subnet_id", "${length(var.existing_public_subnet_ids) == 0 ? aws_subnet.public-1[0].id : var.existing_public_subnet_ids[0]}")
         self.add_override("resource.aws_nat_gateway.nat-2.count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
+        self.add_override("resource.aws_nat_gateway.nat-2.subnet_id", "${length(var.existing_public_subnet_ids) == 0 ? aws_subnet.public-2[0].id : var.existing_public_subnet_ids[1]}")
 
         public_rt = RouteTable(self, "public-rt", vpc_id=vpc_id, tags={**common_tags, "Name": "public-rt"})
         public_rt.add_override("count", "${length(var.existing_public_subnet_ids) == 0 ? 1 : 0}")
@@ -231,8 +233,15 @@ class TapStack(TerraformStack):
             destination_cidr_block="0.0.0.0/0",
             gateway_id=igw.id,
         )
+        # Index RT and IGW when counted
+        self.add_override("resource.aws_route.public-default.route_table_id", "${aws_route_table.public-rt[0].id}")
+        self.add_override("resource.aws_route.public-default.gateway_id", "${aws_internet_gateway.igw[0].id}")
         for i, s in enumerate(public_subnets):
             RouteTableAssociation(self, f"pub-assoc-{i+1}", subnet_id=s.id, route_table_id=public_rt.id)
+        self.add_override("resource.aws_route_table_association.pub-assoc-1.route_table_id", "${aws_route_table.public-rt[0].id}")
+        self.add_override("resource.aws_route_table_association.pub-assoc-1.subnet_id", "${length(var.existing_public_subnet_ids) == 0 ? aws_subnet.public-1[0].id : var.existing_public_subnet_ids[0]}")
+        self.add_override("resource.aws_route_table_association.pub-assoc-2.route_table_id", "${aws_route_table.public-rt[0].id}")
+        self.add_override("resource.aws_route_table_association.pub-assoc-2.subnet_id", "${length(var.existing_public_subnet_ids) == 0 ? aws_subnet.public-2[0].id : var.existing_public_subnet_ids[1]}")
 
         for i, (s, nat) in enumerate(zip(private_subnets, nat_gateways)):
             rt = RouteTable(
@@ -250,6 +259,12 @@ class TapStack(TerraformStack):
                 nat_gateway_id=nat.id,
             )
             RouteTableAssociation(self, f"priv-assoc-{i+1}", subnet_id=s.id, route_table_id=rt.id)
+        self.add_override("resource.aws_route.private-default-1.route_table_id", "${aws_route_table.private-rt-1[0].id}")
+        self.add_override("resource.aws_route.private-default-2.route_table_id", "${aws_route_table.private-rt-2[0].id}")
+        self.add_override("resource.aws_route_table_association.priv-assoc-1.route_table_id", "${aws_route_table.private-rt-1[0].id}")
+        self.add_override("resource.aws_route_table_association.priv-assoc-1.subnet_id", "${length(var.existing_private_subnet_ids) == 0 ? aws_subnet.private-1[0].id : var.existing_private_subnet_ids[0]}")
+        self.add_override("resource.aws_route_table_association.priv-assoc-2.route_table_id", "${aws_route_table.private-rt-2[0].id}")
+        self.add_override("resource.aws_route_table_association.priv-assoc-2.subnet_id", "${length(var.existing_private_subnet_ids) == 0 ? aws_subnet.private-2[0].id : var.existing_private_subnet_ids[1]}")
         # Associations/Routes created only when we created RTs
         self.add_override("resource.aws_route_table_association.priv-assoc-1.count", "${length(var.existing_private_subnet_ids) == 0 ? 1 : 0}")
         self.add_override("resource.aws_route_table_association.priv-assoc-2.count", "${length(var.existing_private_subnet_ids) == 0 ? 1 : 0}")
@@ -402,6 +417,11 @@ class TapStack(TerraformStack):
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
         )
         ecs_exec_role.add_override("count", "${var.existing_execution_role_name == \"\" ? 1 : 0}")
+        # If adopting an existing exec role ARN, skip attachment creation
+        self.add_override(
+            "resource.aws_iam_role_policy_attachment.ecs-exec-policy.count",
+            "${var.existing_execution_role_arn != \"\" ? 0 : (var.existing_execution_role_name == \"\" ? 1 : 0)}",
+        )
 
         ecs_task_role = IamRole(
             self,
@@ -445,6 +465,10 @@ class TapStack(TerraformStack):
             self, "ecs-task-secrets-policy", role=ecs_task_role.name, policy_arn=secrets_policy.arn
         )
         ecs_task_role.add_override("count", "${var.existing_task_role_name == \"\" ? 1 : 0}")
+        self.add_override(
+            "resource.aws_iam_role_policy_attachment.ecs-task-secrets-policy.count",
+            "${var.existing_task_role_arn != \"\" ? 0 : (var.existing_task_role_name == \"\" ? 1 : 0)}",
+        )
 
         # Secrets Manager (values from sensitive vars)
         db_secret = SecretsmanagerSecret(
@@ -546,7 +570,7 @@ class TapStack(TerraformStack):
         )
         alb.add_override("count", "${var.existing_alb_arn == \"\" ? 1 : 0}")
         # Adopt-or-create inputs
-        self.add_override("resource.aws_lb.alb.security_groups", ["${local.alb_sg_id}"])
+        self.add_override("resource.aws_lb.alb.security_groups", "${[local.alb_sg_id]}")
         self.add_override("resource.aws_lb.alb.subnets", "${local.public_subnet_ids}")
         tg = LbTargetGroup(
             self,
@@ -656,7 +680,7 @@ class TapStack(TerraformStack):
         )
         # Adopt-or-create for ECS service nets and TG
         self.add_override("resource.aws_ecs_service.service.network_configuration.subnets", "${local.private_subnet_ids}")
-        self.add_override("resource.aws_ecs_service.service.network_configuration.security_groups", ["${local.fargate_sg_id}"])
+        self.add_override("resource.aws_ecs_service.service.network_configuration.security_groups", "${[local.fargate_sg_id]}")
         self.add_override("resource.aws_ecs_service.service.load_balancer.0.target_group_arn", "${local.tg_arn}")
 
         # Monitoring: SNS + Alarms
