@@ -373,7 +373,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Developer-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Developer-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
+        assumedBy: new iam.AccountRootPrincipal(),
         description:
           'Role for developers with limited access to development resources',
         maxSessionDuration: cdk.Duration.hours(4), // Limit session duration
@@ -414,7 +414,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Admin-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Admin-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
+        assumedBy: new iam.AccountRootPrincipal(),
         description: 'Role for administrators with elevated access',
         maxSessionDuration: cdk.Duration.hours(2), // Shorter session for admins
       }
@@ -453,7 +453,7 @@ export class TapStack extends cdk.Stack {
       `SecureCorp-Auditor-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Auditor-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
+        assumedBy: new iam.AccountRootPrincipal(),
         description: 'Role for auditors with read-only access',
         maxSessionDuration: cdk.Duration.hours(8), // Longer for auditing tasks
       }
