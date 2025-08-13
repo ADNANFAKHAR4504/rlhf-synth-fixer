@@ -83,7 +83,7 @@ export class TapStack extends cdk.Stack {
       ],
       enableDnsHostnames: true,
       enableDnsSupport: true,
-      natGateways: 1,
+      natGateways: 0,
     });
 
     // Security Groups with least privilege
