@@ -6,27 +6,6 @@ variable "aws_region" {
   type        = string
   default     = "us-east-1"
 }
-# variable "bucket_region" {
-#   description = "Region for the S3 bucket"
-#   type        = string
-#   default     = "us-west-2"
-# }
-
-# variable "bucket_name" {
-#   description = "Name of the S3 bucket"
-#   type        = string
-#   default     = "devs3-bucket"
-# }
-
-# variable "bucket_tags" {
-#   description = "Tags to apply to the S3 bucket"
-#   type        = map(string)
-#   default = {
-#     Project     = "ExampleProject"
-#     Environment = "dev"
-#     ManagedBy   = "terraform"
-#   }
-# }
 
 
 module "env_module" {
