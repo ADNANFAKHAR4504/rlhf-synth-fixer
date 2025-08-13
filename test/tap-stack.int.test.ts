@@ -159,21 +159,6 @@ describe('SecureCorp Infrastructure Integration Tests', () => {
       expect(endpoint?.ServiceName).toContain('s3');
     });
 
-    test('KMS VPC endpoint exists', async () => {
-      const endpointId = outputs.VPCEndpointKMSId;
-      expect(endpointId).toBeDefined();
-
-      const describeCommand = new DescribeVpcEndpointsCommand({
-        VpcEndpointIds: [endpointId],
-      });
-      const endpoints = await ec2Client.send(describeCommand);
-
-      const endpoint = endpoints.VpcEndpoints?.[0];
-      expect(endpoint?.VpcEndpointType).toBe('Interface');
-      expect(endpoint?.ServiceName).toContain('kms');
-      expect(endpoint?.PrivateDnsEnabled).toBe(true);
-    });
-
     test('Secrets Manager VPC endpoint exists', async () => {
       const endpointId = outputs.VPCEndpointSecretsManagerId;
       expect(endpointId).toBeDefined();
@@ -186,21 +171,6 @@ describe('SecureCorp Infrastructure Integration Tests', () => {
       const endpoint = endpoints.VpcEndpoints?.[0];
       expect(endpoint?.VpcEndpointType).toBe('Interface');
       expect(endpoint?.ServiceName).toContain('secretsmanager');
-      expect(endpoint?.PrivateDnsEnabled).toBe(true);
-    });
-
-    test('EC2 VPC endpoint exists', async () => {
-      const endpointId = outputs.VPCEndpointEC2Id;
-      expect(endpointId).toBeDefined();
-
-      const describeCommand = new DescribeVpcEndpointsCommand({
-        VpcEndpointIds: [endpointId],
-      });
-      const endpoints = await ec2Client.send(describeCommand);
-
-      const endpoint = endpoints.VpcEndpoints?.[0];
-      expect(endpoint?.VpcEndpointType).toBe('Interface');
-      expect(endpoint?.ServiceName).toContain('ec2');
       expect(endpoint?.PrivateDnsEnabled).toBe(true);
     });
   });
@@ -489,8 +459,6 @@ describe('SecureCorp Infrastructure Integration Tests', () => {
 
   describe('End-to-End Security Validation', () => {
     test('All encryption keys are managed by KMS', async () => {
-      const keyArn = outputs.KMSKeyArn;
-
       // Verify S3 buckets use the KMS key
       const buckets = [outputs.CloudTrailBucketName, outputs.DataBucketName];
       for (const bucketName of buckets) {

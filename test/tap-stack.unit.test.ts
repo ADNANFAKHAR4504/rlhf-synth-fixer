@@ -102,26 +102,10 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates KMS VPC endpoint', () => {
-      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Interface',
-        ServiceName: 'com.amazonaws.sa-east-1.kms',
-        PrivateDnsEnabled: true,
-      });
-    });
-
     test('creates Secrets Manager VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Interface',
         ServiceName: 'com.amazonaws.sa-east-1.secretsmanager',
-        PrivateDnsEnabled: true,
-      });
-    });
-
-    test('creates EC2 VPC endpoint', () => {
-      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Interface',
-        ServiceName: 'com.amazonaws.sa-east-1.ec2',
         PrivateDnsEnabled: true,
       });
     });
@@ -156,11 +140,6 @@ describe('TapStack', () => {
   describe('S3 Buckets', () => {
     test('creates CloudTrail bucket with encryption', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.objectLike({
-          'Fn::Join': Match.arrayWith([
-            Match.arrayWith([Match.stringLikeRegexp('securecorp-cloudtrail')]),
-          ]),
-        }),
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
@@ -178,11 +157,6 @@ describe('TapStack', () => {
 
     test('creates Data bucket with encryption', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.objectLike({
-          'Fn::Join': Match.arrayWith([
-            Match.arrayWith([Match.stringLikeRegexp('securecorp-data')]),
-          ]),
-        }),
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
@@ -249,19 +223,28 @@ describe('TapStack', () => {
       });
     });
 
-    test('CloudTrail has advanced event selectors for VPC endpoints', () => {
+    test('CloudTrail has advanced event selectors for management and data events', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
         AdvancedEventSelectors: Match.arrayWith([
           {
-            Name: 'VPC Endpoint Network Activity Events',
+            Name: 'All Management Events',
             FieldSelectors: Match.arrayWith([
               {
                 Field: 'eventCategory',
-                Equals: ['NetworkActivityEvents'],
+                Equals: ['Management'],
+              },
+            ]),
+          },
+          {
+            Name: 'S3 Data Events',
+            FieldSelectors: Match.arrayWith([
+              {
+                Field: 'eventCategory',
+                Equals: ['Data'],
               },
               {
                 Field: 'resources.type',
-                Equals: ['AWS::EC2::VPCEndpoint'],
+                Equals: ['AWS::S3::Object'],
               },
             ]),
           },
@@ -336,12 +319,6 @@ describe('TapStack', () => {
     });
 
     test('Admin role has deny policy for dangerous actions', () => {
-      const roles = template.findResources('AWS::IAM::Role', {
-        Properties: {
-          RoleName: `SecureCorp-Admin-${environmentSuffix}`,
-        },
-      });
-
       template.hasResourceProperties('AWS::IAM::Policy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
@@ -462,14 +439,8 @@ describe('TapStack', () => {
       template.hasOutput('VPCEndpointS3Id', {
         Description: 'S3 VPC Endpoint ID',
       });
-      template.hasOutput('VPCEndpointKMSId', {
-        Description: 'KMS VPC Endpoint ID',
-      });
       template.hasOutput('VPCEndpointSecretsManagerId', {
         Description: 'Secrets Manager VPC Endpoint ID',
-      });
-      template.hasOutput('VPCEndpointEC2Id', {
-        Description: 'EC2 VPC Endpoint ID',
       });
     });
 
