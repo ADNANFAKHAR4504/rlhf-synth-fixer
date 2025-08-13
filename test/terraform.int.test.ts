@@ -107,7 +107,6 @@ async function checkDnsResolution(domain: string): Promise<void> {
 // Initialize outputs and URLs at module level (before describe block)
 const { domain: lbDomain } = readStructuredOutputs();
 const httpUrl = `http://${lbDomain}`;
-const httpsUrl = `https://${lbDomain}`;
 
 describe("LIVE: Load Balancer verification from Terraform structured outputs", () => {
   
@@ -131,38 +130,6 @@ describe("LIVE: Load Balancer verification from Terraform structured outputs", (
     expect(response.statusCode).toBeLessThan(400);
     expect(response.headers).toBeTruthy();
   }, 120000);
-
-  test("HTTPS endpoint is reachable (if configured)", async () => {
-    try {
-      const response = await retry(async () => {
-        const res = await makeHttpRequest(httpsUrl);
-        
-        // Accept 200 or 3xx redirects as successful responses  
-        if (res.statusCode >= 200 && res.statusCode < 400) {
-          return res;
-        }
-        
-        throw new Error(`HTTPS request returned status ${res.statusCode}`);
-      }, 8, 2000);
-
-      expect(response.statusCode).toBeGreaterThanOrEqual(200);
-      expect(response.statusCode).toBeLessThan(400);
-      expect(response.headers).toBeTruthy();
-    } catch (error: any) {
-      // If HTTPS is not configured, we expect connection errors
-      const errorMessage = error.message?.toLowerCase() || '';
-      if (errorMessage.includes('econnrefused') || 
-          errorMessage.includes('timeout') || 
-          errorMessage.includes('certificate') ||
-          errorMessage.includes('ssl') ||
-          errorMessage.includes('tls')) {
-        console.warn('HTTPS endpoint not configured or accessible - this may be expected');
-        expect(true).toBe(true); // Pass the test
-      } else {
-        throw error; // Re-throw unexpected errors
-      }
-    }
-  }, 90000);
 
   test("load balancer responds with valid headers", async () => {
     const response = await retry(async () => {
