@@ -60,13 +60,16 @@
       "us-west-2": {
         "AMI": "ami-0841edc20334f9287"
       },
+      "us-west-1": {
+        "AMI": "ami-053f733690f39ba44"
+      },
       "ap-south-1": {
         "AMI": "ami-0059e0da390478151"
       },
       "eu-west-2": {
         "AMI": "ami-0a7812c0557366d50"
       },
-       "eu-west-1": {
+      "eu-west-1": {
         "AMI": "ami-053f733690f39ba44"
       }
     },
