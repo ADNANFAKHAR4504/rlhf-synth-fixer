@@ -1,5 +1,5 @@
 # AWS region for deployment
-aws_region = "us-east-1"
+aws_region = "us-west-2"
 
 # VPC ID where the security group will be created
 vpc_id = "vpc-abc12345"  # Replace with your actual VPC ID
