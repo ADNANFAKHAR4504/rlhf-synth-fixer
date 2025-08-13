@@ -10,8 +10,9 @@ The stack created by this module uses environment suffixes to distinguish betwee
 different deployment environments (development, staging, production, etc.).
 """
 import os
-import pulumi
-from pulumi import Config, ResourceOptions
+
+from pulumi import Config
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
@@ -24,6 +25,14 @@ STACK_NAME = f"TapStack{environment_suffix}"
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
+# GitHub configuration for CI/CD pipeline
+github_owner = config.get("githubOwner") or os.getenv(
+    'GITHUB_OWNER', 'example-owner')
+github_repo = config.get("githubRepo") or os.getenv(
+    'GITHUB_REPO', 'example-repo')
+github_branch = config.get("githubBranch") or os.getenv(
+    'GITHUB_BRANCH', 'main')
+
 # Create a resource options object with default tags
 default_tags = {
     'Environment': environment_suffix,
@@ -33,5 +42,11 @@ default_tags = {
 
 stack = TapStack(
     name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
+    args=TapStackArgs(
+        environment_suffix=environment_suffix,
+        tags=default_tags,
+        github_owner=github_owner,
+        github_repo=github_repo,
+        github_branch=github_branch,
+    ),
 )

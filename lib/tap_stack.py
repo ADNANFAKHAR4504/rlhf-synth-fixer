@@ -38,15 +38,24 @@ class TapStackArgs:
   Attributes:
       environment_suffix (Optional[str]): Deployment environment suffix, e.g. "dev", "prod".
       tags (Optional[Dict[str, str]]): Dictionary of tags applied to all resources.
+      github_owner (Optional[str]): GitHub repository owner for CI/CD pipeline.
+      github_repo (Optional[str]): GitHub repository name for CI/CD pipeline.
+      github_branch (Optional[str]): GitHub branch for CI/CD pipeline.
   """
 
   def __init__(
       self,
       environment_suffix: Optional[str] = None,
       tags: Optional[Dict[str, str]] = None,
+      github_owner: Optional[str] = None,
+      github_repo: Optional[str] = None,
+      github_branch: Optional[str] = None,
   ):
     self.environment_suffix = environment_suffix or "prod"
     self.tags = tags or {"Environment": "Production"}
+    self.github_owner = github_owner or "example-owner"
+    self.github_repo = github_repo or "example-repo"
+    self.github_branch = github_branch or "main"
 
 
 class SecureVPC:  # pylint: disable=too-many-instance-attributes
@@ -1016,17 +1025,13 @@ class TapStack(pulumi.ComponentResource):
     alb, target_group, _ = create_alb(
         vpc_module.public_subnets, alb_sg, tags, provider)
 
-    config = pulumi.Config()
-    github_owner = config.require("githubOwner")
-    github_repo = config.require("githubRepo")
-    github_branch = config.get("githubBranch") or "main"
     github_token_param = f"/{prefix}/{args.environment_suffix}/githubToken"
 
     pipeline = create_codepipeline(
         role_name=f"{prefix}-codepipeline-role",
-        repo_owner=github_owner,
-        repo_name=github_repo,
-        repo_branch=github_branch,
+        repo_owner=args.github_owner,
+        repo_name=args.github_repo,
+        repo_branch=args.github_branch,
         github_oauth_token_param=github_token_param,
         kms_key=kms_key,
         tags=tags,

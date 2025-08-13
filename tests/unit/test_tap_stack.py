@@ -289,13 +289,15 @@ class TestTapStack(unittest.TestCase):
     """Helper method to create test stack with default mocks."""
     args = TapStackArgs(
         environment_suffix=kwargs.get("env_suffix", "prod"),
-        tags=kwargs.get("tags", {"Environment": "Production"})
+        tags=kwargs.get("tags", {"Environment": "Production"}),
+        github_owner=kwargs.get("github_owner", "test-owner"),
+        github_repo=kwargs.get("github_repo", "test-repo"),
+        github_branch=kwargs.get("github_branch", "main")
     )
     return TapStack("test-stack", args)
 
   # Mock pulumi.export to avoid stack context error
   @patch("lib.tap_stack.pulumi.export")
-  @patch("lib.tap_stack.pulumi.Config")
   @patch("lib.tap_stack.aws.ec2.SecurityGroup",
          return_value=MagicMock())  # For lambda_sg
   @patch("lib.tap_stack.aws.get_region")
@@ -327,20 +329,10 @@ class TestTapStack(unittest.TestCase):
     with patch("lib.tap_stack.aws.get_region") as mock_region:
       mock_region.return_value.name = "us-west-2"
 
-      with patch("lib.tap_stack.pulumi.Config") as mock_config:
-        mock_config_instance = MagicMock()
-        mock_config_instance.get.return_value = None
-        mock_config_instance.require.side_effect = lambda key: {
-            "githubOwner": "test-owner",
-            "githubRepo": "test-repo"
-        }[key]
-        mock_config.return_value = mock_config_instance
-
-        stack = self._create_test_stack()
-        self.assertIsInstance(stack, TapStack)
+      stack = self._create_test_stack()
+      self.assertIsInstance(stack, TapStack)
 
   @patch("lib.tap_stack.pulumi.export")
-  @patch("lib.tap_stack.pulumi.Config")
   @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock())
   @patch("lib.tap_stack.aws.get_region")
   @patch("lib.tap_stack.create_monitoring_lambda",
@@ -371,24 +363,14 @@ class TestTapStack(unittest.TestCase):
     with patch("lib.tap_stack.aws.get_region") as mock_region:
       mock_region.return_value.name = "us-west-2"
 
-      with patch("lib.tap_stack.pulumi.Config") as mock_config:
-        mock_config_instance = MagicMock()
-        mock_config_instance.get.return_value = None
-        mock_config_instance.require.side_effect = lambda key: {
-            "githubOwner": "test-owner",
-            "githubRepo": "test-repo"
-        }[key]
-        mock_config.return_value = mock_config_instance
-
-        # Test with custom tags to cover the args.tags branch
-        stack = self._create_test_stack(
-            env_suffix="dev",
-            tags={"Custom": "Tag", "Environment": "Dev"}
-        )
-        self.assertIsInstance(stack, TapStack)
+      # Test with custom tags to cover the args.tags branch
+      stack = self._create_test_stack(
+          env_suffix="dev",
+          tags={"Custom": "Tag", "Environment": "Dev"}
+      )
+      self.assertIsInstance(stack, TapStack)
 
   @patch("lib.tap_stack.pulumi.export")
-  @patch("lib.tap_stack.pulumi.Config")
   @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock())
   @patch("lib.tap_stack.aws.get_region")
   @patch("lib.tap_stack.create_monitoring_lambda",
@@ -419,20 +401,9 @@ class TestTapStack(unittest.TestCase):
     with patch("lib.tap_stack.aws.get_region") as mock_region:
       mock_region.return_value.name = "us-west-2"
 
-      with patch("lib.tap_stack.pulumi.Config") as mock_config:
-        mock_config_instance = MagicMock()
-        # Return None for branch
-        mock_config_instance.get.side_effect = (
-            lambda key: None if key == "githubBranch" else None
-        )
-        mock_config_instance.require.side_effect = lambda key: {
-            "githubOwner": "test-owner",
-            "githubRepo": "test-repo"
-        }[key]
-        mock_config.return_value = mock_config_instance
-
-        stack = self._create_test_stack()
-        self.assertIsInstance(stack, TapStack)
+      # Test with None branch to test default value
+      stack = self._create_test_stack(github_branch=None)
+      self.assertIsInstance(stack, TapStack)
 
 
 if __name__ == '__main__':
