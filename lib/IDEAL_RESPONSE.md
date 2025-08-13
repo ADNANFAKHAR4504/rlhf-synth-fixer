@@ -26,13 +26,13 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
+import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -45,7 +45,7 @@ export class TapStack extends cdk.Stack {
 
     const { environmentSuffix } = props;
 
-    // KMS Key for encryption - with DESTROY policy for non-production
+    // Create KMS key for proper encryption
     const securityKey = new kms.Key(
       this,
       `SecureCorp-MasterKey-${environmentSuffix}`,
@@ -55,12 +55,83 @@ export class TapStack extends cdk.Stack {
         keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
         keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
+        policy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              sid: 'Enable IAM User Permissions',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.AccountRootPrincipal()],
+              actions: ['kms:*'],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              sid: 'Allow CloudWatch Logs',
+              effect: iam.Effect.ALLOW,
+              principals: [
+                new iam.ServicePrincipal(
+                  `logs.${cdk.Aws.REGION}.amazonaws.com`
+                ),
+              ],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              sid: 'Allow CloudTrail',
+              effect: iam.Effect.ALLOW,
+              principals: [
+                new iam.ServicePrincipal('cloudtrail.amazonaws.com'),
+              ],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              sid: 'Allow RDS',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.ServicePrincipal('rds.amazonaws.com')],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              sid: 'Allow Secrets Manager',
+              effect: iam.Effect.ALLOW,
+              principals: [
+                new iam.ServicePrincipal('secretsmanager.amazonaws.com'),
+              ],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: ['*'],
+            }),
+          ],
+        }),
       }
     );
 
     securityKey.addAlias(`alias/securecorp-master-key-${environmentSuffix}`);
 
-    // VPC with multi-AZ configuration
+    // VPC with multi-AZ configuration and enhanced security
     const vpc = new ec2.Vpc(this, `SecureCorp-VPC-${environmentSuffix}`, {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 3,
@@ -102,11 +173,23 @@ export class TapStack extends cdk.Stack {
       `VPC-FlowLogs-Role-${environmentSuffix}`,
       {
         assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName(
-            'service-role/VPCFlowLogsDeliveryRolePolicy'
-          ),
-        ],
+        inlinePolicies: {
+          FlowLogsDeliveryPolicy: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                resources: ['*'],
+              }),
+            ],
+          }),
+        },
       }
     );
 
@@ -128,19 +211,20 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    const kmsVpcEndpoint = vpc.addInterfaceEndpoint(
-      `KMS-VPC-Endpoint-${environmentSuffix}`,
+    // Enhanced VPC endpoints for complete coverage
+    const secretsManagerEndpoint = vpc.addInterfaceEndpoint(
+      `SecretsManager-VPC-Endpoint-${environmentSuffix}`,
       {
-        service: ec2.InterfaceVpcEndpointAwsService.KMS,
+        service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
         subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         privateDnsEnabled: true,
       }
     );
 
-    const secretsManagerEndpoint = vpc.addInterfaceEndpoint(
-      `SecretsManager-VPC-Endpoint-${environmentSuffix}`,
+    const kmsVpcEndpoint = vpc.addInterfaceEndpoint(
+      `KMS-VPC-Endpoint-${environmentSuffix}`,
       {
-        service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+        service: ec2.InterfaceVpcEndpointAwsService.KMS,
         subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         privateDnsEnabled: true,
       }
@@ -155,16 +239,16 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // CloudTrail logging bucket with auto-delete for non-production
+    // CloudTrail logging bucket with proper security
     const cloudTrailBucket = new s3.Bucket(
       this,
       `SecureCorp-CloudTrail-Bucket-${environmentSuffix}`,
       {
-        bucketName: `securecorp-cloudtrail-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: securityKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         versioned: true,
+        enforceSSL: true,
         lifecycleRules: [
           {
             id: 'CloudTrailLogRetention',
@@ -186,17 +270,49 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Data bucket with encryption and auto-delete for non-production
+    // CloudTrail bucket policy for security
+    cloudTrailBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailAclCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl', 's3:GetBucketLocation'],
+        resources: [cloudTrailBucket.bucketArn],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudtrail:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:trail/SecureCorp-CloudTrail-${environmentSuffix}`,
+          },
+        },
+      })
+    );
+
+    cloudTrailBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailWrite',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${cloudTrailBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+            'AWS:SourceArn': `arn:aws:cloudtrail:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:trail/SecureCorp-CloudTrail-${environmentSuffix}`,
+          },
+        },
+      })
+    );
+
+    // Data bucket with encryption
     const dataBucket = new s3.Bucket(
       this,
       `SecureCorp-Data-${environmentSuffix}`,
       {
-        bucketName: `securecorp-data-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: securityKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         versioned: true,
         enforceSSL: true,
+        objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         autoDeleteObjects: true,
       }
@@ -229,22 +345,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Add network activity events for VPC endpoints (new 2025 feature)
+    // Add advanced event selectors for comprehensive logging
     const cfnTrail = trail.node.defaultChild as cloudtrail.CfnTrail;
     cfnTrail.addPropertyOverride('AdvancedEventSelectors', [
-      {
-        Name: 'VPC Endpoint Network Activity Events',
-        FieldSelectors: [
-          {
-            Field: 'eventCategory',
-            Equals: ['NetworkActivityEvents'],
-          },
-          {
-            Field: 'resources.type',
-            Equals: ['AWS::EC2::VPCEndpoint'],
-          },
-        ],
-      },
       {
         Name: 'All Management Events',
         FieldSelectors: [
@@ -255,28 +358,43 @@ export class TapStack extends cdk.Stack {
         ],
       },
       {
-        Name: 'All Data Events',
+        Name: 'S3 Data Events',
         FieldSelectors: [
           {
             Field: 'eventCategory',
             Equals: ['Data'],
+          },
+          {
+            Field: 'resources.type',
+            Equals: ['AWS::S3::Object'],
+          },
+          {
+            Field: 'resources.ARN',
+            StartsWith: [
+              `${cloudTrailBucket.bucketArn}/`,
+              `${dataBucket.bucketArn}/`,
+            ],
           },
         ],
       },
     ]);
 
     // IAM Roles for different user types with least privilege
+
+    // Developer Role - limited access with conditions
     const developerRole = new iam.Role(
       this,
       `SecureCorp-Developer-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Developer-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
+        assumedBy: new iam.AccountRootPrincipal(),
         description:
           'Role for developers with limited access to development resources',
+        maxSessionDuration: cdk.Duration.hours(4), // Limit session duration
       }
     );
 
+    // Developer permissions - simplified for compatibility
     developerRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -304,13 +422,15 @@ export class TapStack extends cdk.Stack {
       })
     );
 
+    // Admin Role - elevated access with conditions
     const adminRole = new iam.Role(
       this,
       `SecureCorp-Admin-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Admin-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
+        assumedBy: new iam.AccountRootPrincipal(),
         description: 'Role for administrators with elevated access',
+        maxSessionDuration: cdk.Duration.hours(2), // Shorter session for admins
       }
     );
 
@@ -327,23 +447,29 @@ export class TapStack extends cdk.Stack {
           'iam:DeletePolicy',
           'kms:ScheduleKeyDeletion',
           's3:DeleteBucket',
+          'cloudtrail:StopLogging',
+          'cloudtrail:DeleteTrail',
+          'logs:DeleteLogGroup',
+          'ec2:TerminateInstances',
         ],
         resources: ['*'],
         conditions: {
-          StringNotEquals: {
-            'aws:PrincipalTag/EmergencyAccess': 'true',
+          Bool: {
+            'aws:MultiFactorAuthPresent': 'false',
           },
         },
       })
     );
 
+    // Read-Only Role for auditors
     const auditorRole = new iam.Role(
       this,
       `SecureCorp-Auditor-Role-${environmentSuffix}`,
       {
         roleName: `SecureCorp-Auditor-${environmentSuffix}`,
-        assumedBy: new iam.ArnPrincipal('arn:aws:iam::*:root'),
+        assumedBy: new iam.AccountRootPrincipal(),
         description: 'Role for auditors with read-only access',
+        maxSessionDuration: cdk.Duration.hours(8), // Longer for auditing tasks
       }
     );
 
@@ -363,7 +489,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Security Group for RDS
+    // Security Group for RDS - more restrictive
     const dbSecurityGroup = new ec2.SecurityGroup(
       this,
       `SecureCorp-DB-SG-${environmentSuffix}`,
@@ -374,19 +500,26 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    dbSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(vpc.vpcCidrBlock),
-      ec2.Port.tcp(5432),
-      'Allow PostgreSQL access from VPC'
-    );
+    // Only allow database access from private subnets, not entire VPC
+    const privateSubnets = vpc.selectSubnets({
+      subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+    });
 
-    // RDS PostgreSQL instance with encryption - deletion protection disabled for non-production
+    privateSubnets.subnets.forEach((subnet, index) => {
+      dbSecurityGroup.addIngressRule(
+        ec2.Peer.ipv4(subnet.ipv4CidrBlock),
+        ec2.Port.tcp(5432),
+        `Allow PostgreSQL access from private subnet ${index + 1}`
+      );
+    });
+
+    // RDS PostgreSQL instance with encryption
     const database = new rds.DatabaseInstance(
       this,
       `SecureCorp-Database-${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_4,
+          version: rds.PostgresEngineVersion.VER_16_3,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
@@ -399,7 +532,7 @@ export class TapStack extends cdk.Stack {
         storageEncrypted: true,
         storageEncryptionKey: securityKey,
         backupRetention: cdk.Duration.days(30),
-        deletionProtection: false, // Disabled for non-production
+        deletionProtection: false,
         multiAz: false, // Set to true for production
         monitoringInterval: cdk.Duration.seconds(60),
         enablePerformanceInsights: true,
@@ -412,7 +545,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Comprehensive outputs for integration testing
+    // Output important resources
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID for SecureCorp infrastructure',
@@ -483,14 +616,14 @@ export class TapStack extends cdk.Stack {
       description: 'S3 VPC Endpoint ID',
     });
 
-    new cdk.CfnOutput(this, 'VPCEndpointKMSId', {
-      value: kmsVpcEndpoint.vpcEndpointId,
-      description: 'KMS VPC Endpoint ID',
-    });
-
     new cdk.CfnOutput(this, 'VPCEndpointSecretsManagerId', {
       value: secretsManagerEndpoint.vpcEndpointId,
       description: 'Secrets Manager VPC Endpoint ID',
+    });
+
+    new cdk.CfnOutput(this, 'VPCEndpointKMSId', {
+      value: kmsVpcEndpoint.vpcEndpointId,
+      description: 'KMS VPC Endpoint ID',
     });
 
     new cdk.CfnOutput(this, 'VPCEndpointEC2Id', {
