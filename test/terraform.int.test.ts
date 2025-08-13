@@ -11,7 +11,7 @@ interface IngressRule {
 }
 
 describe("Terraform Security Group Integration Test", () => {
-  const tfDir = path.resolve(__dirname, "../terraform"); // Adjust if your TF dir is different
+  const tfDir = path.resolve(__dirname, "../lib"); // Adjust if your TF dir is different
   const planFile = "tfplan.json";
 
   beforeAll(() => {
