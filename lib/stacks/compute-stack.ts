@@ -11,6 +11,8 @@ export interface ComputeStackProps extends cdk.StackProps {
   vpc: ec2.IVpc;
   dataKey: kms.IKey;
   appBucket: s3.IBucket;
+  appSecurityGroup?: ec2.ISecurityGroup;
+  appInstanceRole?: iam.IRole;
 }
 
 export class ComputeStack extends cdk.Stack {
