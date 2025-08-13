@@ -296,6 +296,27 @@ new aws.secretsmanager.SecretVersion('database-secret-version', {
   }),
 });
 
+// IAM Role for RDS Enhanced Monitoring
+const rdsMonitoringRole = new aws.iam.Role('rds-monitoring-role', {
+  name: `${resourcePrefix}-rds-monitoring-role`,
+  assumeRolePolicy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Action: 'sts:AssumeRole',
+        Effect: 'Allow',
+        Principal: {
+          Service: 'monitoring.rds.amazonaws.com',
+        },
+      },
+    ],
+  }),
+  managedPolicyArns: [
+    'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+  ],
+  tags: commonTags,
+});
+
 // RDS MySQL Instance with security enhancements
 const rdsInstance = new aws.rds.Instance('mysql-instance', {
   identifier: `${resourcePrefix}-mysql`,
@@ -319,6 +340,7 @@ const rdsInstance = new aws.rds.Instance('mysql-instance', {
   maintenanceWindow: 'sun:04:00-sun:05:00', // Maintenance window
   multiAz: false, // Set to true for production high availability
   monitoringInterval: 60, // Enhanced monitoring
+  monitoringRoleArn: rdsMonitoringRole.arn, // Required for enhanced monitoring
   deletionProtection: false, // Set to true for production
   tags: {
     Name: `${resourcePrefix}-mysql`,
@@ -500,7 +522,7 @@ const s3Bucket = new aws.s3.Bucket('app-bucket', {
 });
 
 // S3 Bucket Versioning
-const s3BucketVersioning = new aws.s3.BucketVersioningV2(
+const s3BucketVersioning = new aws.s3.BucketVersioning(
   'app-bucket-versioning',
   {
     bucket: s3Bucket.id,
@@ -523,7 +545,7 @@ const s3BucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 );
 
 // S3 Bucket Server-Side Encryption
-const s3BucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(
+const s3BucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(
   'app-bucket-encryption',
   {
     bucket: s3Bucket.id,

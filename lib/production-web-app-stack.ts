@@ -459,6 +459,31 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // IAM Role for RDS Enhanced Monitoring
+    const rdsMonitoringRole = new aws.iam.Role(
+      'rds-monitoring-role',
+      {
+        name: `${resourcePrefix}-rds-monitoring-role`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'monitoring.rds.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+        ],
+        tags: commonTags,
+      },
+      { parent: this }
+    );
+
     // RDS MySQL Instance with security enhancements
     this.database = new aws.rds.Instance(
       'mysql-instance',
@@ -484,6 +509,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         maintenanceWindow: 'sun:04:00-sun:05:00', // Maintenance window
         multiAz: false, // Set to true for production high availability
         monitoringInterval: 60, // Enhanced monitoring
+        monitoringRoleArn: rdsMonitoringRole.arn, // Required for enhanced monitoring
         deletionProtection: false, // Set to true for production
         tags: {
           Name: `${resourcePrefix}-mysql`,
@@ -702,20 +728,7 @@ systemctl enable amazon-cloudwatch-agent
       { parent: this }
     );
 
-    // S3 Bucket Public Access Block
-    new aws.s3.BucketPublicAccessBlock(
-      'app-bucket-pab',
-      {
-        bucket: this.bucket.id,
-        blockPublicAcls: true,
-        blockPublicPolicy: true,
-        ignorePublicAcls: true,
-        restrictPublicBuckets: true,
-      },
-      { parent: this }
-    );
-
-    // S3 Bucket Server-Side Encryption
+    // S3 Bucket Server Side Encryption
     new aws.s3.BucketServerSideEncryptionConfigurationV2(
       'app-bucket-encryption',
       {
@@ -728,6 +741,19 @@ systemctl enable amazon-cloudwatch-agent
             bucketKeyEnabled: true,
           },
         ],
+      },
+      { parent: this }
+    );
+
+    // S3 Bucket Public Access Block
+    new aws.s3.BucketPublicAccessBlock(
+      'app-bucket-pab',
+      {
+        bucket: this.bucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
       },
       { parent: this }
     );
