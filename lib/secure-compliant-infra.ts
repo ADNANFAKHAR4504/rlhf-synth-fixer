@@ -103,12 +103,84 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       }
     );
 
+    // Enable S3 bucket encryption for CloudTrail bucket
+    new aws.s3.BucketServerSideEncryptionConfiguration(
+      `${projectName}-${environment}-cloudtrail-encryption`,
+      {
+        bucket: cloudtrailBucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
+    );
+
+    // Block public access for CloudTrail bucket
+    new aws.s3.BucketPublicAccessBlock(
+      `${projectName}-${environment}-cloudtrail-public-block`,
+      {
+        bucket: cloudtrailBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
+    );
+
     // S3 bucket for access logs
     const accessLogsBucket = new aws.s3.Bucket(
       `${projectName}-${environment}-access-logs`,
       {
         bucket: `${environment}-${projectName}-access-logs`,
         tags: commonTags,
+      },
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
+    );
+
+    // Enable S3 bucket encryption for access logs bucket
+    new aws.s3.BucketServerSideEncryptionConfiguration(
+      `${projectName}-${environment}-access-logs-encryption`,
+      {
+        bucket: accessLogsBucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      {
+        provider: providers.find(p => p.region === 'us-east-2')?.provider,
+        parent: this,
+      }
+    );
+
+    // Block public access for access logs bucket
+    new aws.s3.BucketPublicAccessBlock(
+      `${projectName}-${environment}-access-logs-public-block`,
+      {
+        bucket: accessLogsBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
       },
       {
         provider: providers.find(p => p.region === 'us-east-2')?.provider,
@@ -177,6 +249,19 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         includeGlobalServiceEvents: true,
         isMultiRegionTrail: true,
         enableLogging: true,
+        kmsKeyId: kmsKeys.find(k => k.region === 'us-east-2')?.key.arn,
+        eventSelectors: [
+          {
+            readWriteType: 'All',
+            includeManagementEvents: true,
+            dataResources: [
+              {
+                type: 'AWS::S3::Object',
+                values: ['arn:aws:s3:::*/*'],
+              },
+            ],
+          },
+        ],
         tags: commonTags,
       },
       {
@@ -486,7 +571,21 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         )
       );
 
-      // EC2 Instances (without key pairs for simplicity)
+      // Create SSH Key Pair for EC2 access (as required by PROMPT.md)
+      const keyPair = new aws.ec2.KeyPair(
+        `${projectName}-${environment}-key-${region}`,
+        {
+          keyName: `${projectName}-${environment}-key-${region}`,
+          publicKey: `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... ${projectName}-${environment}-${region}`, // Replace with actual public key
+          tags: {
+            ...commonTags,
+            Name: `${projectName}-${environment}-key-${region}`,
+          },
+        },
+        { provider, parent: this }
+      );
+
+      // EC2 Instances with SSH access (as required by PROMPT.md)
       const ec2Instances = publicSubnets.map(
         (subnet, i) =>
           new aws.ec2.Instance(
@@ -494,10 +593,18 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             {
               ami: ami.id,
               instanceType: 't3.micro',
-              // keyName: removed to avoid key pair dependency
+              keyName: keyPair.keyName,
               vpcSecurityGroupIds: [ec2SecurityGroup.id],
               subnetId: subnet.id,
               iamInstanceProfile: ec2InstanceProfile.name,
+              // Enable IMDSv2 for enhanced security
+              metadataOptions: {
+                httpEndpoint: 'enabled',
+                httpTokens: 'required',
+                httpPutResponseHopLimit: 1,
+              },
+              // Enable detailed monitoring
+              monitoring: true,
               tags: {
                 ...commonTags,
                 Name: `${projectName}-${environment}-ec2-${region}-${i}`,
