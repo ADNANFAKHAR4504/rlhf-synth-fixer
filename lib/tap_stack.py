@@ -46,7 +46,8 @@ except Exception:  # pragma: no cover
   boto3 = None  # type: ignore
 
 try:
-  from cdktf_cdktf_provider_aws.data_aws_db_subnet_group import DataAwsDbSubnetGroup  # type: ignore
+  from cdktf_cdktf_provider_aws.data_aws_db_subnet_group import \
+      DataAwsDbSubnetGroup  # type: ignore
 except Exception:  # pragma: no cover
   DataAwsDbSubnetGroup = None  # type: ignore
 
