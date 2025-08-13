@@ -13,18 +13,12 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
 
-  Environment:
-    Type: String
-    Default: 'dev'
-    AllowedValues: ['dev', 'staging', 'prod']
-    Description: 'Environment name (e.g., dev, prod)'
-
-  # NEW: Added EnvironmentSuffix parameter for resource naming consistency
+  # UPDATED: Single environment parameter for resource naming and stage
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
-    AllowedPattern: '^[a-zA-Z0-9-]+$'
-    Description: 'Suffix for resource names, typically the same as Environment'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment suffix for resource names and API stage'
 
   LogRetentionDays:
     Type: Number
@@ -51,7 +45,6 @@ Parameters:
       ]
     Description: 'CloudWatch Logs retention period in days'
 
-  # MODIFIED: Changed default to 'true' to satisfy test requirements
   EnableAccessLogging:
     Type: String
     Default: 'true'
@@ -86,7 +79,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Public subnet for NAT Gateway and Load Balancer
   PublicSubnet1:
@@ -100,7 +93,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-1'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Private subnet for application resources
   PrivateSubnet1:
@@ -113,7 +106,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-1'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Second private subnet for high availability
   PrivateSubnet2:
@@ -126,7 +119,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-2'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Internet Gateway for public internet access
   InternetGateway:
@@ -136,7 +129,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Attach Internet Gateway to VPC
   InternetGatewayAttachment:
@@ -155,7 +148,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-eip'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # NAT Gateway for private subnet internet access
   NatGateway:
@@ -167,7 +160,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-gateway'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Route table for public subnet
   PublicRouteTable:
@@ -178,7 +171,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Default route for public subnet to Internet Gateway
   DefaultPublicRoute:
@@ -205,7 +198,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Default route for private subnet to NAT Gateway
   DefaultPrivateRoute:
@@ -250,7 +243,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-api-gateway-sg'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # ---------------------------------------------------------------------------
   # S3 BUCKETS WITH ENCRYPTION AND SECURITY
@@ -294,7 +287,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-data'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # S3 bucket policy for additional security
   ApplicationDataBucketPolicy:
@@ -354,7 +347,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-api-logs'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # ---------------------------------------------------------------------------
   # VPC ENDPOINTS FOR SECURE ACCESS
@@ -440,7 +433,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-apigateway-role'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # IAM Role for Lambda function (if needed for API Gateway integration)
   LambdaExecutionRole:
@@ -484,7 +477,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda-role'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # ---------------------------------------------------------------------------
   # AWS WAF WEB ACL
@@ -565,7 +558,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-acl'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # WAF Logging Configuration
   WAFLoggingConfiguration:
@@ -599,7 +592,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-api'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # API Gateway Resource
   APIResource:
@@ -686,14 +679,14 @@ Resources:
       RestApiId: !Ref RestAPI
       Description: 'Production deployment with security features'
 
-  # API Gateway Stage with logging enabled
+  # API Gateway Stage with logging enabled - UPDATED to use EnvironmentSuffix
   APIStage:
     Type: AWS::ApiGateway::Stage
     DependsOn: APIGatewayAccount
     Properties:
       RestApiId: !Ref RestAPI
       DeploymentId: !Ref APIDeployment
-      StageName: !Ref Environment
+      StageName: !Ref EnvironmentSuffix # UPDATED: Now uses EnvironmentSuffix
       AccessLogSetting: !If
         - EnableLogging
         - DestinationArn: !GetAtt APIGatewayLogGroup.Arn
@@ -711,7 +704,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-api-stage'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Associate WAF Web ACL with API Gateway
   WebACLAssociation:
@@ -744,10 +737,10 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet'
 
-  # API Gateway Information
+  # API Gateway Information - UPDATED to use EnvironmentSuffix
   APIGatewayURL:
     Description: 'API Gateway endpoint URL'
-    Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
     Export:
       Name: !Sub '${ProjectName}-${EnvironmentSuffix}-api-url'
 
@@ -759,11 +752,11 @@ Outputs:
 
   SecureEndpoint:
     Description: 'Secure API endpoint'
-    Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/secure'
+    Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/secure'
 
   HealthEndpoint:
     Description: 'Health check endpoint'
-    Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/health'
+    Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/health'
 
   # S3 Bucket Information
   ApplicationDataBucketName:
