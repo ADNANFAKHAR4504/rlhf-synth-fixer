@@ -327,9 +327,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
   describe('IAM Resources', () => {
     it('should have created EC2 IAM role with correct policies', async () => {
-      const roleName = `${
-        outputs.projectName || 'production-web-app'
-      }-ec2-role`;
+      const roleName = outputs.ec2RoleName;
+      expect(roleName).toBeDefined();
 
       const roleResponse = await clients.iam.send(
         new GetRoleCommand({
@@ -346,9 +345,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
       const policyResponse = await clients.iam.send(
         new GetRolePolicyCommand({
           RoleName: roleName,
-          PolicyName: `${
-            outputs.projectName || 'production-web-app'
-          }-ec2-policy`,
+          PolicyName: outputs.ec2PolicyName,
         })
       );
 
@@ -359,9 +356,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should have created instance profile', async () => {
-      const profileName = `${
-        outputs.projectName || 'production-web-app'
-      }-ec2-instance-profile`;
+      const profileName = outputs.ec2InstanceProfileName;
+      expect(profileName).toBeDefined();
 
       const response = await clients.iam.send(
         new GetInstanceProfileCommand({
@@ -376,9 +372,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
   describe('KMS Resources', () => {
     it('should have created KMS key for RDS encryption', async () => {
-      const aliasName = `alias/${
-        outputs.projectName || 'production-web-app'
-      }-rds-key`;
+      const aliasName = outputs.rdsKmsKeyAlias;
+      expect(aliasName).toBeDefined();
 
       const response = await clients.kms.send(new ListAliasesCommand({}));
 
@@ -403,9 +398,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
   describe('RDS Database', () => {
     it('should have created RDS MySQL instance', async () => {
-      const dbIdentifier = `${
-        outputs.projectName || 'production-web-app'
-      }-mysql`;
+      const dbIdentifier = outputs.rdsInstanceId;
+      expect(dbIdentifier).toBeDefined();
 
       const response = await clients.rds.send(
         new DescribeDBInstancesCommand({
@@ -424,9 +418,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should have created RDS subnet group', async () => {
-      const subnetGroupName = `${
-        outputs.projectName || 'production-web-app'
-      }-rds-subnet-group`;
+      const subnetGroupName = `${outputs.resourcePrefix}-rds-subnet-group`;
+      expect(subnetGroupName).toBeDefined();
 
       const response = await clients.rds.send(
         new DescribeDBSubnetGroupsCommand({
@@ -441,9 +434,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should wait for RDS instance to be available', async () => {
-      const dbIdentifier = `${
-        outputs.projectName || 'production-web-app'
-      }-mysql`;
+      const dbIdentifier = outputs.rdsInstanceId;
+      expect(dbIdentifier).toBeDefined();
 
       await waitForCondition(async () => {
         const response = await clients.rds.send(
@@ -462,7 +454,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
   describe('Load Balancer', () => {
     it('should have created Application Load Balancer', async () => {
-      const albName = `${outputs.projectName || 'production-web-app'}-alb`;
+      const albName = outputs.albName;
+      expect(albName).toBeDefined();
 
       const response = await clients.elbv2.send(
         new DescribeLoadBalancersCommand({
@@ -479,7 +472,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should have created target group with health checks', async () => {
-      const tgName = `${outputs.projectName || 'production-web-app'}-tg`;
+      const tgName = `${outputs.resourcePrefix}-tg`;
+      expect(tgName).toBeDefined();
 
       const response = await clients.elbv2.send(
         new DescribeTargetGroupsCommand({
@@ -497,7 +491,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should have created listener', async () => {
-      const albName = `${outputs.projectName || 'production-web-app'}-alb`;
+      const albName = outputs.albName;
+      expect(albName).toBeDefined();
 
       const albResponse = await clients.elbv2.send(
         new DescribeLoadBalancersCommand({
@@ -531,7 +526,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
   describe('Auto Scaling Group', () => {
     it('should have created Auto Scaling Group', async () => {
-      const asgName = `${outputs.projectName || 'production-web-app'}-asg`;
+      const asgName = outputs.autoScalingGroupName;
+      expect(asgName).toBeDefined();
 
       const response = await clients.autoscaling.send(
         new DescribeAutoScalingGroupsCommand({
@@ -551,9 +547,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should have created launch template with proper configuration', async () => {
-      const ltName = `${
-        outputs.projectName || 'production-web-app'
-      }-launch-template`;
+      const ltName = `${outputs.resourcePrefix}-launch-template`;
+      expect(ltName).toBeDefined();
 
       const response = await clients.ec2.send(
         new DescribeLaunchTemplatesCommand({
@@ -598,7 +593,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
     it('should wait for instances to be running', async () => {
       await waitForCondition(async () => {
-        const asgName = `${outputs.projectName || 'production-web-app'}-asg`;
+        const asgName = outputs.autoScalingGroupName;
+        expect(asgName).toBeDefined();
 
         const asgResponse = await clients.autoscaling.send(
           new DescribeAutoScalingGroupsCommand({
@@ -664,7 +660,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
   describe('End-to-End Connectivity', () => {
     it('should have healthy targets in target group', async () => {
-      const tgName = `${outputs.projectName || 'production-web-app'}-tg`;
+      const tgName = `${outputs.resourcePrefix}-tg`;
+      expect(tgName).toBeDefined();
 
       const tgResponse = await clients.elbv2.send(
         new DescribeTargetGroupsCommand({
@@ -708,7 +705,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
     it('should have proper network connectivity between components', async () => {
       // Verify that EC2 instances can reach RDS
-      const asgName = `${outputs.projectName || 'production-web-app'}-asg`;
+      const asgName = outputs.autoScalingGroupName; expect(asgName).toBeDefined();
 
       const asgResponse = await clients.autoscaling.send(
         new DescribeAutoScalingGroupsCommand({
@@ -895,7 +892,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should have Auto Scaling Group configured for high availability', async () => {
-      const asgName = `${outputs.projectName || 'production-web-app'}-asg`;
+      const asgName = outputs.autoScalingGroupName; expect(asgName).toBeDefined();
 
       const response = await clients.autoscaling.send(
         new DescribeAutoScalingGroupsCommand({
@@ -915,7 +912,8 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should have load balancer health checks configured', async () => {
-      const tgName = `${outputs.projectName || 'production-web-app'}-tg`;
+      const tgName = `${outputs.resourcePrefix}-tg`;
+      expect(tgName).toBeDefined();
 
       const response = await clients.elbv2.send(
         new DescribeTargetGroupsCommand({
@@ -971,7 +969,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
     });
 
     it('should have proper scaling configuration', async () => {
-      const asgName = `${outputs.projectName || 'production-web-app'}-asg`;
+      const asgName = outputs.autoScalingGroupName; expect(asgName).toBeDefined();
 
       // Check for scaling policies
       const { DescribePoliciesCommand } = await import(
