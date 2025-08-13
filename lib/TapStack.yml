@@ -459,8 +459,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureAppS3Bucket}/*'
-              - !Ref SecureAppS3Bucket
+              - !Sub 'arn:aws:s3:::${SecureAppS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureAppS3Bucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'

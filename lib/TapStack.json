@@ -897,10 +897,10 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${SecureAppS3Bucket}/*"
+                                    "Fn::Sub": "arn:aws:s3:::${SecureAppS3Bucket}/*"
                                 },
                                 {
-                                    "Ref": "SecureAppS3Bucket"
+                                    "Fn::Sub": "arn:aws:s3:::${SecureAppS3Bucket}"
                                 }
                             ],
                             "Condition": {
