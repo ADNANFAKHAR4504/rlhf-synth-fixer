@@ -1,40 +1,39 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketPolicyCommand,
-  GetBucketVersioningCommand,
-} from '@aws-sdk/client-s3';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand,
-} from '@aws-sdk/client-kms';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
   ConfigServiceClient,
+  DescribeConfigRulesCommand,
   DescribeConfigurationRecordersCommand,
   DescribeDeliveryChannelsCommand,
-  DescribeConfigRulesCommand,
 } from '@aws-sdk/client-config-service';
 import {
-  ElasticLoadBalancingV2Client,
+  DescribeListenersCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  LambdaClient,
-  GetFunctionCommand,
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+  KMSClient,
+} from '@aws-sdk/client-kms';
+import {
   GetFunctionConfigurationCommand,
+  LambdaClient
 } from '@aws-sdk/client-lambda';
 import {
-  WAFV2Client,
+  GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
   GetWebACLCommand,
   ListResourcesForWebACLCommand,
+  WAFV2Client,
 } from '@aws-sdk/client-wafv2';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import fs from 'fs';
 
 // Load outputs from CDK deployment (cfn-outputs/flat-outputs.json)
 let outputs: any = {};
@@ -119,7 +118,7 @@ describe('Secure Web Application Integration Tests', () => {
           );
 
           const lambdaTargetGroup = targetGroups.TargetGroups?.find(
-            tg => tg.TargetType === 'lambda' && tg.Name?.includes(environmentSuffix)
+            tg => tg.TargetType === 'lambda' && tg.TargetGroupName?.includes(environmentSuffix)
           );
 
           expect(lambdaTargetGroup).toBeDefined();
