@@ -45,6 +45,11 @@ try:
 except Exception:  # pragma: no cover
   boto3 = None  # type: ignore
 
+try:
+  from cdktf_cdktf_provider_aws.data_aws_db_subnet_group import DataAwsDbSubnetGroup  # type: ignore
+except Exception:  # pragma: no cover
+  DataAwsDbSubnetGroup = None  # type: ignore
+
 
 class TapStack(TerraformStack):
   def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
@@ -101,6 +106,29 @@ class TapStack(TerraformStack):
     # Ensure we cover at least two distinct AZs for RDS subnet group requirements
     azs_for_stack = [f"{region}a", f"{region}b"]
 
+    # Choose non-conflicting CIDRs if reusing an existing VPC
+    public_cidrs = [f"10.0.{i+1}.0/24" for i in range(2)]
+    private_cidrs = [f"10.0.{i+11}.0/24" for i in range(2)]
+    if not vpc_created and boto3 is not None:
+      try:
+        ec2 = boto3.client("ec2", region_name=region)
+        resp = ec2.describe_subnets(Filters=[{"Name": "vpc-id", "Values": [vpc_id_value]}])
+        used = {s.get("CidrBlock") for s in resp.get("Subnets", [])}
+        chosen = []
+        def next_free():
+          for j in range(1, 250):
+            candidate = f"10.0.{j}.0/24"
+            if candidate not in used and candidate not in chosen:
+              chosen.append(candidate)
+              return candidate
+          return None
+        c1, c2, c3, c4 = next_free(), next_free(), next_free(), next_free()
+        if all([c1, c2, c3, c4]):
+          public_cidrs = [c1, c2]
+          private_cidrs = [c3, c4]
+      except Exception:
+        pass
+
     public_subnets = []
     private_subnets = []
     for i in range(2):
@@ -108,7 +136,7 @@ class TapStack(TerraformStack):
         self,
         f"public_{i}",
         vpc_id=vpc_id_value,
-        cidr_block=f"10.0.{i+1}.0/24",
+        cidr_block=public_cidrs[i],
         availability_zone=azs_for_stack[i],
         map_public_ip_on_launch=True,
         tags={"Name": f"public-{i+1}", "Type": "Public", "Environment": "Production"},
@@ -117,7 +145,7 @@ class TapStack(TerraformStack):
         self,
         f"private_{i}",
         vpc_id=vpc_id_value,
-        cidr_block=f"10.0.{i+11}.0/24",
+        cidr_block=private_cidrs[i],
         availability_zone=azs_for_stack[i],
         tags={"Name": f"private-{i+1}", "Type": "Private", "Environment": "Production"},
       )
@@ -317,9 +345,9 @@ class TapStack(TerraformStack):
       self.bucket = S3Bucket(
         self,
         "tap_bucket",
-          bucket=f"secure-app-bucket{construct_id.lower()}",
-          tags={"Environment": "Production", "Name": "secure-app-bucket"},
-        )
+            bucket=f"secure-app-bucket{construct_id.lower()}",
+            tags={"Environment": "Production", "Name": "secure-app-bucket"},
+          )
       S3BucketPublicAccessBlock(
         self,
         "app_bucket_pab",
@@ -346,8 +374,14 @@ class TapStack(TerraformStack):
       )
       bucket_name_for_output = self.bucket.bucket
 
-    # Reuse-or-create: DB subnet group (validate VPC match)
+    # Reuse-or-create: DB subnet group (terraform data source, then validate VPC match)
     existing_db_subnet_group_name = os.getenv("EXISTING_DB_SUBNET_GROUP_NAME")
+    if not existing_db_subnet_group_name and DataAwsDbSubnetGroup is not None:
+      try:
+        ds_dbsg = DataAwsDbSubnetGroup(self, "existing_db_subnets", name="db-subnets")
+        existing_db_subnet_group_name = ds_dbsg.name
+      except Exception:
+        pass
     if existing_db_subnet_group_name and boto3 is not None:
       try:
         rds = boto3.client("rds", region_name=region)
@@ -373,7 +407,7 @@ class TapStack(TerraformStack):
       db_subnets = DbSubnetGroup(
         self,
         "db_subnets",
-        name="db-subnets",
+        name=f"db-subnets-{construct_id.lower()}",
         subnet_ids=[s.id for s in private_subnets],
         tags={"Environment": "Production"},
       )
