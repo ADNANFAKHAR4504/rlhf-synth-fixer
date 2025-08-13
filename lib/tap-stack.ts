@@ -64,6 +64,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly ec2InstanceProfileName: pulumi.Output<string>;
   public readonly ec2PolicyName: pulumi.Output<string>;
   public readonly rdsInstanceId: pulumi.Output<string>;
+  public readonly rdsKmsKeyId: pulumi.Output<string>;
+  public readonly rdsKmsKeyAlias: pulumi.Output<string>;
   public readonly projectName: string;
   public readonly environment: string;
   public readonly resourcePrefix: string;
@@ -124,6 +126,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.ec2InstanceProfileName = this.webAppStack.ec2InstanceProfile.name;
     this.ec2PolicyName = this.webAppStack.ec2S3Policy.name;
     this.rdsInstanceId = this.webAppStack.database.id;
+    this.rdsKmsKeyId = this.webAppStack.rdsKmsKey.keyId;
+    this.rdsKmsKeyAlias = this.webAppStack.rdsKmsAlias.name;
     this.projectName = 'tap';
     this.environment = environmentSuffix;
     this.resourcePrefix = `tap-${environmentSuffix}`;
@@ -147,6 +151,8 @@ export class TapStack extends pulumi.ComponentResource {
       ec2InstanceProfileName: this.ec2InstanceProfileName,
       ec2PolicyName: this.ec2PolicyName,
       rdsInstanceId: this.rdsInstanceId,
+      rdsKmsKeyId: this.rdsKmsKeyId,
+      rdsKmsKeyAlias: this.rdsKmsKeyAlias,
       projectName: this.projectName,
       environment: this.environment,
       resourcePrefix: this.resourcePrefix,

@@ -74,6 +74,8 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
   public readonly ec2Role: aws.iam.Role;
   public readonly ec2InstanceProfile: aws.iam.InstanceProfile;
   public readonly ec2S3Policy: aws.iam.RolePolicy;
+  public readonly rdsKmsKey: aws.kms.Key;
+  public readonly rdsKmsAlias: aws.kms.Alias;
   public readonly awsProvider: aws.Provider;
 
   // Configuration properties
@@ -427,7 +429,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     );
 
     // KMS Key for RDS encryption with key rotation
-    const rdsKmsKey = new aws.kms.Key(
+    this.rdsKmsKey = new aws.kms.Key(
       'rds-kms-key',
       {
         description: 'KMS key for RDS encryption',
@@ -440,11 +442,11 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
       providerOpts
     );
 
-    new aws.kms.Alias(
+    this.rdsKmsAlias = new aws.kms.Alias(
       'rds-kms-alias',
       {
         name: `alias/${this.resourcePrefix}-rds-key`,
-        targetKeyId: rdsKmsKey.keyId,
+        targetKeyId: this.rdsKmsKey.keyId,
       },
       providerOpts
     );
@@ -527,7 +529,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
         maxAllocatedStorage: 100, // Enable storage autoscaling
         storageType: 'gp2',
         storageEncrypted: true,
-        kmsKeyId: rdsKmsKey.arn,
+        kmsKeyId: this.rdsKmsKey.arn,
         dbName: 'production',
         username: 'admin',
         password: 'TempPassword123!', // Use secret rotation in production
@@ -876,6 +878,10 @@ systemctl enable amazon-cloudwatch-agent
       ec2RoleName: this.ec2Role.name,
       ec2InstanceProfileName: this.ec2InstanceProfile.name,
       ec2PolicyName: this.ec2S3Policy.name,
+
+      // KMS
+      rdsKmsKeyId: this.rdsKmsKey.keyId,
+      rdsKmsKeyAlias: this.rdsKmsAlias.name,
 
       // Configuration
       projectName: this.projectName,

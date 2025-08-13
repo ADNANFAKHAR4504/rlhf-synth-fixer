@@ -1,10 +1,13 @@
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
+  DescribePoliciesCommand,
 } from '@aws-sdk/client-auto-scaling';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
   DescribeInternetGatewaysCommand,
   DescribeLaunchTemplatesCommand,
+  DescribeLaunchTemplateVersionsCommand,
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
@@ -16,6 +19,7 @@ import {
   DescribeListenersCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
@@ -35,6 +39,8 @@ import {
   RDSClient,
 } from '@aws-sdk/client-rds';
 import {
+  GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
   HeadBucketCommand,
@@ -71,6 +77,7 @@ const initializeClients = () => {
     iam: new IAMClient({ region }),
     kms: new KMSClient({ region }),
     sts: new STSClient({ region }),
+    cloudwatchlogs: new CloudWatchLogsClient({ region }),
   };
 };
 
@@ -176,7 +183,11 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
       expect(response.InternetGateways).toHaveLength(1);
       const igw = response.InternetGateways![0];
-      expect(igw.State).toBe('available');
+      
+      // IGW should exist and be attached to the VPC
+      expect(igw.InternetGatewayId).toBeDefined();
+      expect(igw.Attachments).toHaveLength(1);
+      expect(igw.Attachments![0].VpcId).toBe(vpcId);
       expect(igw.Attachments![0].State).toBe('attached');
     });
 
@@ -561,9 +572,6 @@ describe('ProductionWebAppStack Integration Tests', () => {
       expect(lt.LaunchTemplateName).toBe(ltName);
 
       // Get launch template version details
-      const { DescribeLaunchTemplateVersionsCommand } = await import(
-        '@aws-sdk/client-ec2'
-      );
       const versionResponse = await clients.ec2.send(
         new DescribeLaunchTemplateVersionsCommand({
           LaunchTemplateId: lt.LaunchTemplateId,
@@ -673,9 +681,6 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
       // Wait for targets to be healthy
       await waitForCondition(async () => {
-        const { DescribeTargetHealthCommand } = await import(
-          '@aws-sdk/client-elastic-load-balancing-v2'
-        );
         const healthResponse = await clients.elbv2.send(
           new DescribeTargetHealthCommand({
             TargetGroupArn: tgArn,
@@ -717,9 +722,9 @@ describe('ProductionWebAppStack Integration Tests', () => {
       expect(instances.length).toBeGreaterThanOrEqual(2);
 
       // Verify instances are in private subnets
-      const privateSubnetIds = outputs.privateSubnetIds.split(',');
+      const privateSubnetIds = JSON.parse(outputs.privateSubnetIds);
       instances.forEach((instance: any) => {
-        expect(privateSubnetIds).toContain(instance.AvailabilityZone);
+        expect(privateSubnetIds).toContain(instance.SubnetId);
       });
     });
 
@@ -831,7 +836,6 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
       // Check bucket policy (if exists)
       try {
-        const { GetBucketPolicyCommand } = await import('@aws-sdk/client-s3');
         const policyResponse = await clients.s3.send(
           new GetBucketPolicyCommand({
             Bucket: bucketName,
@@ -851,9 +855,6 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
       // Check server-side encryption
       try {
-        const { GetBucketEncryptionCommand } = await import(
-          '@aws-sdk/client-s3'
-        );
         const encryptionResponse = await clients.s3.send(
           new GetBucketEncryptionCommand({
             Bucket: bucketName,
@@ -948,9 +949,6 @@ describe('ProductionWebAppStack Integration Tests', () => {
       const lt = response.LaunchTemplates![0];
 
       // Get launch template version details
-      const { DescribeLaunchTemplateVersionsCommand } = await import(
-        '@aws-sdk/client-ec2'
-      );
       const versionResponse = await clients.ec2.send(
         new DescribeLaunchTemplateVersionsCommand({
           LaunchTemplateId: lt.LaunchTemplateId,
@@ -972,9 +970,6 @@ describe('ProductionWebAppStack Integration Tests', () => {
       const asgName = outputs.autoScalingGroupName; expect(asgName).toBeDefined();
 
       // Check for scaling policies
-      const { DescribePoliciesCommand } = await import(
-        '@aws-sdk/client-auto-scaling'
-      );
       const policiesResponse = await clients.autoscaling.send(
         new DescribePoliciesCommand({
           AutoScalingGroupName: asgName,
@@ -1013,9 +1008,6 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
       const lt = response.LaunchTemplates![0];
 
-      const { DescribeLaunchTemplateVersionsCommand } = await import(
-        '@aws-sdk/client-ec2'
-      );
       const versionResponse = await clients.ec2.send(
         new DescribeLaunchTemplateVersionsCommand({
           LaunchTemplateId: lt.LaunchTemplateId,
@@ -1032,12 +1024,7 @@ describe('ProductionWebAppStack Integration Tests', () => {
 
     it('should have proper logging configuration', async () => {
       // Check if CloudWatch Logs groups exist for the application
-      const { CloudWatchLogsClient, DescribeLogGroupsCommand } = await import(
-        '@aws-sdk/client-cloudwatch-logs'
-      );
-      const logsClient = new CloudWatchLogsClient({
-        region: process.env.AWS_REGION || 'us-east-1',
-      });
+      const logsClient = clients.cloudwatchlogs;
 
       try {
         const response = await logsClient.send(
