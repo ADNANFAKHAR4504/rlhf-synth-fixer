@@ -294,7 +294,7 @@ export class TapStack extends cdk.Stack {
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: true,
       performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
-      cloudwatchLogsExports: ['error', 'general', 'slow-query'],
+      cloudwatchLogsExports: ['error', 'general'],
       parameters: {
         innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}',
       },
