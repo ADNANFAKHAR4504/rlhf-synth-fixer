@@ -1545,7 +1545,7 @@
               },
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${S3LogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                "Fn::Sub": "${S3LogsBucket.Arn}/*"
               }
             },
             {
@@ -2416,9 +2416,7 @@
           },
           {
             "Key": "access_logs.s3.prefix",
-            "Value": {
-              "Fn::Sub": "AWSLogs/${AWS::AccountId}/elasticloadbalancing"
-            }
+            "Value": "alb-logs"
           }
         ],
         "Tags": [
