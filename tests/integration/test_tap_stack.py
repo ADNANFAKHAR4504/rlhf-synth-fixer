@@ -27,7 +27,7 @@ class TestTapStackDirect(unittest.TestCase):
     # Adjust these patterns to match your actual resource naming
     cls.expected_bucket_name = f"{cls.environment}-app-data-main".lower()
     cls.expected_log_bucket_name = f"{cls.environment}-app-data-access-logs"
-    cls.expected_dynamodb_table_name = f"app-table-table"
+    cls.expected_dynamodb_table_name = f"{cls.environment}-app-table"
     cls.expected_iam_role_name = f"{cls.environment}-app-service-role"
 
     # Initialize AWS clients
