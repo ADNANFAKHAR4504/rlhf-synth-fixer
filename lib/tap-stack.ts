@@ -1,0 +1,88 @@
+// tap-stack.ts
+
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { S3Backend, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
+
+// Import individual stacks
+import { Ec2Stack } from './ec2-stack';
+import { KmsStack } from './kms-stack';
+import { LambdaStack } from './lambda-stack';
+import { RdsStack } from './rds-stack';
+import { S3Stack } from './s3-stack';
+import { VpcStack } from './vpc-stack';
+
+interface TapStackProps {
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags;
+}
+
+// Use AWS_REGION from environment if set
+const AWS_REGION_OVERRIDE = process.env.AWS_REGION || '';
+
+export class TapStack extends TerraformStack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+    const awsRegion = AWS_REGION_OVERRIDE
+      ? AWS_REGION_OVERRIDE
+      : props?.awsRegion || 'us-east-1';
+    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+
+    // Configure AWS Provider
+    new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: defaultTags,
+    });
+
+    // Configure S3 Backend for state management
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${environmentSuffix}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
+
+    // Add override for locking state files
+    this.addOverride('terraform.backend.s3.use_lockfile', true);
+
+    // Instantiate individual resource stacks
+    const vpcStack = new VpcStack(this, 'prodVpcStack', {
+      environmentSuffix,
+    });
+
+    const s3Stack = new S3Stack(this, 'prodS3Stack', {
+      environmentSuffix,
+      vpcId: vpcStack.vpcId,
+    });
+
+    new LambdaStack(this, 'prodLambdaStack', {
+      environmentSuffix,
+      vpcId: vpcStack.vpcId,
+    });
+
+    new RdsStack(this, 'prodRdsStack', {
+      environmentSuffix,
+      vpcId: vpcStack.vpcId,
+      kmsKeyId: s3Stack.kmsKeyId,
+    });
+
+    new Ec2Stack(this, 'prodEc2Stack', {
+      environmentSuffix,
+      vpcId: vpcStack.vpcId,
+    });
+
+    new KmsStack(this, 'prodKmsStack', {
+      environmentSuffix,
+    });
+  }
+}
