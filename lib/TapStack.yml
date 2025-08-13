@@ -479,7 +479,7 @@ Resources:
   UnauthorizedAPICallsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-unauthorized-api-calls'
+      AlarmName: !Sub '${Environment}-${EnvironmentSuffix}-unauthorized-api-calls'
       AlarmDescription: 'Alarm for unauthorized API calls'
       MetricName: ErrorCount
       Namespace: CloudTrailMetrics
