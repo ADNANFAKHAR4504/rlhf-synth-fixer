@@ -221,28 +221,10 @@ def _check_route_table_for_public_route(rt_id):
 
 
 def get_vpc_with_fallback():
-  """Get VPC with intelligent fallback strategy to handle VPC limits."""
+  """Create completely new VPC instead of reusing existing ones."""
   try:
-    # First, try to find existing VPC with our project tag
-    found_vpc_id = find_existing_vpc()
-    
-    if found_vpc_id:
-      pulumi.log.info(f"Reusing existing VPC: {found_vpc_id}")
-      return (
-        aws.ec2.Vpc.get(
-          get_resource_name("vpc"), 
-          found_vpc_id, 
-          opts=pulumi.ResourceOptions(
-            provider=aws_provider,
-            protect=True,  # Protect reused VPC from deletion
-            retain_on_delete=True  # Don't delete when stack is destroyed
-          )
-        ),
-        found_vpc_id
-      )
-    
-    # Try to create new VPC
-    pulumi.log.info("Creating new VPC...")
+    # Always create new VPC instead of reusing
+    pulumi.log.info("Creating completely new VPC for independent deployment...")
     new_vpc = aws.ec2.Vpc(
       get_resource_name("vpc"),
       cidr_block="10.0.0.0/16",
@@ -254,7 +236,8 @@ def get_vpc_with_fallback():
         "Name": get_resource_name("vpc"),
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
-        "ManagedBy": "Pulumi-IaC"
+        "ManagedBy": "Pulumi-IaC",
+        "DeploymentType": "Independent"
       },
       opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
     )
@@ -262,7 +245,7 @@ def get_vpc_with_fallback():
     
   except (pulumi.InvokeError, ValueError, AttributeError) as e:
     pulumi.log.warn(f"VPC creation failed, trying default VPC: {e}")
-    # Fallback to default VPC
+    # Fallback to default VPC only if new VPC creation fails
     try:
       default_vpc = aws.ec2.get_vpc(
         default=True, 
@@ -302,42 +285,29 @@ amazon_linux_ami = aws.ec2.get_ami(
   opts=pulumi.InvokeOptions(provider=aws_provider)
 )
 
-def create_internet_gateway(current_vpc, current_vpc_id=None):
-  """Create or reuse Internet Gateway with error handling."""
+def create_internet_gateway(current_vpc):
+  """Create new Internet Gateway instead of reusing existing ones."""
   try:
-    # If we have an existing VPC ID, check for existing IGW
-    if current_vpc_id:
-      existing_igw_id = find_existing_igw(current_vpc_id)
-      if existing_igw_id:
-        pulumi.log.info(f"Reusing existing Internet Gateway: {existing_igw_id}")
-        return aws.ec2.InternetGateway.get(
-          get_resource_name("igw"),
-          existing_igw_id,
-          opts=pulumi.ResourceOptions(
-            provider=aws_provider,
-            retain_on_delete=True  # Don't delete existing IGW when stack is destroyed
-          )
-        )
-    
-    # Create new Internet Gateway if none exists
-    pulumi.log.info("Creating new Internet Gateway...")
+    # Always create new Internet Gateway for independent deployment
+    pulumi.log.info("Creating completely new Internet Gateway...")
     return aws.ec2.InternetGateway(
       get_resource_name("igw"),
       vpc_id=current_vpc.id,
       tags={
         "Name": get_resource_name("igw"),
         "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME
+        "Project": PROJECT_NAME,
+        "DeploymentType": "Independent"
       },
       opts=pulumi.ResourceOptions(provider=aws_provider)
     )
     
   except (pulumi.InvokeError, AttributeError) as e:
-    pulumi.log.error(f"Internet Gateway creation/discovery failed: {e}")
-    raise ValueError(f"Could not create or find Internet Gateway: {e}") from e
+    pulumi.log.error(f"Internet Gateway creation failed: {e}")
+    raise ValueError(f"Could not create Internet Gateway: {e}") from e
 
-# Create or reuse Internet Gateway
-internet_gateway = create_internet_gateway(vpc, existing_vpc_id)
+# Create new Internet Gateway for independent deployment
+internet_gateway = create_internet_gateway(vpc)
 
 def find_existing_subnets(vpc_id: str, target_azs: list):
   """Find existing subnets in the VPC that can be reused."""
@@ -379,49 +349,29 @@ def find_existing_subnets(vpc_id: str, target_azs: list):
     return []
 
 
-# Get or create subnets with conflict avoidance
-if existing_vpc_id:
-  existing_subnets = find_existing_subnets(existing_vpc_id, availability_zones)
-  available_cidrs = find_available_subnet_cidrs(existing_vpc_id)
-else:
-  existing_subnets = []
-  available_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]  # Default for new VPCs
+# Create completely new subnets for independent deployment
+pulumi.log.info("Creating completely new subnets for independent deployment...")
 
 public_subnets = []
 for i, az in enumerate(availability_zones):
-  # First, try to reuse existing suitable subnet
-  if i < len(existing_subnets):
-    subnet_info = existing_subnets[i]
-    pulumi.log.info(f"Reusing existing subnet {subnet_info['id']} in AZ {az}")
-    subnet = aws.ec2.Subnet.get(
-      get_resource_name(f"public-subnet-{i+1}"),
-      subnet_info['id'],
-      opts=pulumi.ResourceOptions(
-        provider=aws_provider,
-        retain_on_delete=True  # Don't delete existing subnets when stack is destroyed
-      )
-    )
-  else:
-    # Create new subnet with available CIDR
-    if (i - len(existing_subnets)) < len(available_cidrs):
-      cidr_block = available_cidrs[i - len(existing_subnets)]
-    else:
-      cidr_block = f"10.0.{i+100}.0/24"
-    
-    subnet = aws.ec2.Subnet(
-      get_resource_name(f"public-subnet-{i+1}"),
-      vpc_id=vpc.id,
-      cidr_block=cidr_block,
-      availability_zone=az,
-      map_public_ip_on_launch=True,
-      tags={
-        "Name": get_resource_name(f"public-subnet-{i+1}"),
-        "Environment": ENVIRONMENT,
-        "Project": PROJECT_NAME,
-        "Type": "Public"
-      },
-      opts=pulumi.ResourceOptions(provider=aws_provider)
-    )
+  # Always create new subnet with fresh CIDR
+  cidr_block = f"10.0.{i+1}.0/24"  # Simple, clean CIDR allocation
+  
+  subnet = aws.ec2.Subnet(
+    get_resource_name(f"public-subnet-{i+1}"),
+    vpc_id=vpc.id,
+    cidr_block=cidr_block,
+    availability_zone=az,
+    map_public_ip_on_launch=True,
+    tags={
+      "Name": get_resource_name(f"public-subnet-{i+1}"),
+      "Environment": ENVIRONMENT,
+      "Project": PROJECT_NAME,
+      "Type": "Public",
+      "DeploymentType": "Independent"
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+  )
   
   public_subnets.append(subnet)
 
@@ -456,21 +406,18 @@ ipv4_route = aws.ec2.Route(
 #     opts=pulumi.ResourceOptions(provider=aws_provider)
 # )
 
-# Only create route table associations for new subnets
-# Existing subnets already have proper routing configured
+# Create route table associations for all new subnets
 for i, subnet in enumerate(public_subnets):
-  # Check if this is a newly created subnet (not in existing_subnets list)
-  if i >= len(existing_subnets):  # This is a new subnet
-    aws.ec2.RouteTableAssociation(
-      get_resource_name(f"public-rta-{i + 1}"),
-      subnet_id=subnet.id,
-      route_table_id=public_route_table.id,
-      opts=pulumi.ResourceOptions(
-        provider=aws_provider,
-        protect=False,
-        depends_on=[subnet, public_route_table]
-      )
+  aws.ec2.RouteTableAssociation(
+    get_resource_name(f"public-rta-{i + 1}"),
+    subnet_id=subnet.id,
+    route_table_id=public_route_table.id,
+    opts=pulumi.ResourceOptions(
+      provider=aws_provider,
+      protect=False,
+      depends_on=[subnet, public_route_table]
     )
+  )
 
 alb_security_group = aws.ec2.SecurityGroup(
   get_resource_name("alb-sg"),
@@ -862,22 +809,23 @@ print("   • IAM roles with minimal permissions")
 print("   • CloudWatch monitoring and dashboards")
 print("   • Automated health checks and alarms")
 print("=" * 50)
-print("🔧 VPC Limit Optimization:")
-print("   • Automatic VPC reuse for existing project VPCs")
-print("   • Automatic Internet Gateway discovery and reuse")
-print("   • Automatic subnet discovery and reuse")
-print("   • Smart route table management for existing infrastructure")
-print("   • Smart CIDR conflict avoidance for new subnets")
-print("   • Conditional IPv6 support based on existing VPC capabilities")
-print("   • Intelligent route table association handling")
-print("   • Fallback to default VPC if creation fails")
+print("🆕 Independent Deployment Strategy:")
+print("   • Complete new VPC creation for every deployment")
+print("   • New Internet Gateway creation (no reuse)")
+print("   • Fresh subnet creation with clean CIDR allocation")
+print("   • Independent route table management")
+print("   • No dependencies on existing infrastructure")
+print("   • Clean resource isolation for each deployment")
+print("   • Simplified delete operations")
+print("   • Fallback to default VPC only if new creation fails")
 print("   • Comprehensive error handling and logging")
 print("   • Resource tagging for better management")
 print("=" * 50)
 
 # Add simple validation feedback
 pulumi.export("vpc_optimization", {
-  "reuse_enabled": True,
+  "reuse_enabled": False,  # Changed to False for independent deployment
+  "independent_deployment": True,
   "fallback_enabled": True,
   "error_handling": True,
   "deployment_time": str(int(time.time()))
