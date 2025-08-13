@@ -198,7 +198,7 @@ class TapStack(pulumi.ComponentResource):
     # --------------------------------------------------------
     # Pulumi Encrypted Secret using KMS
     # --------------------------------------------------------
-    secret_value = config.require_secret("app_secret") 
+    secret_value = config.get_secret("app_secret") or "default-secret-value"
 
     ciphertext = aws.kms.Ciphertext(
       f"app-secret-ciphertext-{env}",
@@ -241,8 +241,9 @@ class TapStack(pulumi.ComponentResource):
 
   @staticmethod
   def rotation_policy(user_creation_time: datetime) -> str:
+      expiry_date = (user_creation_time + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    policy = {
+      policy = {
           "Version": "2012-10-17",
           "Statement": [
               {
@@ -263,13 +264,13 @@ class TapStack(pulumi.ComponentResource):
                   "Resource": "*",
                   "Condition": {
                       "DateGreaterThan": {
-                          "aws:CurrentTime": "${aws:UserCreationTime + 90d}"
+                          "aws:CurrentTime": expiry_date
                       }
                   }
               }
           ]
       }
-    return json.dumps(policy, indent=2)
+      return json.dumps(policy, indent=2)
 
 
   @staticmethod
@@ -297,15 +298,7 @@ class TapStack(pulumi.ComponentResource):
             "kms:GenerateDataKey*",
             "kms:DescribeKey"
           ],
-          "Resource": "*",
-          "Condition": {
-                    "StringEquals": {
-                        "kms:ViaService": [
-                            f"s3.{account_id}.amazonaws.com",
-                            f"ec2.{account_id}.amazonaws.com"
-                        ]
-                    }
-                }
+          "Resource": "*"
         }
       ]
     }, indent=2)
