@@ -1,9 +1,18 @@
+###########################################################
 # main.tf
 # Single-file Terraform stack: HTTP/HTTPS-only Security Group
 # ---------------------------------------------------------
-# Usage:
-# terraform plan -var='vpc_id=<vpc-id>' \
-#               -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
+# Usage example:
+# terraform init
+# terraform plan -var='vpc_id=vpc-12345678' -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
+# terraform apply -var='vpc_id=vpc-12345678' -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
+# Verify:
+# aws ec2 describe-security-groups --group-ids <security_group_id>
+###########################################################
+
+terraform {
+  required_version = ">= 1.4.0"
+}
 
 ########################
 # Variables
@@ -63,6 +72,21 @@ variable "tags" {
   default = {
     Owner       = "devops"
     Environment = "dev"
+  }
+}
+
+########################
+# Validation
+########################
+locals {
+  cidr_validation_error = length(var.allowed_ipv4_cidrs) == 0 && length(var.allowed_ipv6_cidrs) == 0
+}
+
+resource "null_resource" "cidr_check" {
+  count = local.cidr_validation_error ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "echo 'Error: allowed_ipv4_cidrs and allowed_ipv6_cidrs cannot both be empty — at least one CIDR is required' && exit 1"
   }
 }
 
@@ -141,7 +165,7 @@ resource "aws_security_group" "app_sg" {
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
+      cidr_blocks = ["0.0.0.0/0"] # adjust for stricter control if needed
     }
   }
 }
