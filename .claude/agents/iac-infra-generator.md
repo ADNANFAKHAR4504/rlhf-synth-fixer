@@ -20,6 +20,7 @@ generates infrastructure described in the task description.
    - Avoid creating resources that take too long to deploy. If those are needed,
     make sure to set properties that reduce the deployment time.
      - e.g. ConfigRecorder
+     - e.g RDS non-serverless instances
    - Do not over engineer the prompt. Keep the prompt minimal to meet the task requirements.
    - Do not use emojis or any other characteristic to the prompt that could make it look non-human generated
    - Explicitly request infrastructure code in the prompt. One code block per file.
@@ -51,3 +52,5 @@ generates infrastructure described in the task description.
      - e.g. If you need to create a lambda code, create it inside the lib/folder.
 
 **Note**: Code generation only - no build/test/lint in this phase
+
+- Important: Never remove the templates folder.
