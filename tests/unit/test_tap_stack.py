@@ -16,22 +16,22 @@ from lib.tap_stack import TapStack, TapStackArgs
 
 # Dummy resource to mimic Pulumi AWS resources
 class DummyResource(pulumi.CustomResource):
-    def __init__(self, name="dummy", **kwargs):
-        super().__init__("test:DummyResource", name, {}, opts=pulumi.ResourceOptions())
-        # Common attributes accessed in tap_stack.py
-        self._resource_id = f"{name}_id"
-        self.arn = f"arn:aws:test::{name}"
-        self.name = f"{name}_name"
-        self.bucket = f"{name}-bucket"
+  def __init__(self, name="dummy", **kwargs):
+    super().__init__("test:DummyResource", name, {}, opts=pulumi.ResourceOptions())
+    # Common attributes accessed in tap_stack.py
+    self._resource_id = f"{name}_id"
+    self.arn = f"arn:aws:test::{name}"
+    self.name = f"{name}_name"
+    self.bucket = f"{name}-bucket"
 
 
 # Pulumi mocks
 class MyMocks(Mocks):
-    def new_resource(self, args):
-        return f"{args.name}_id", args.inputs
+  def new_resource(self, args):
+    return f"{args.name}_id", args.inputs
 
-    def call(self, args):
-        return {}, None
+  def call(self, args):
+    return {}, None
 
 
 pulumi.runtime.set_mocks(MyMocks())
@@ -39,63 +39,106 @@ pulumi.runtime.set_mocks(MyMocks())
 
 class TestTapStackTask2(unittest.TestCase):
 
-    @patch("lib.tap_stack.aws.ec2.Vpc", return_value=DummyResource("vpc"))
-    @patch("lib.tap_stack.aws.ec2.Subnet", return_value=DummyResource("subnet"))
-    @patch("lib.tap_stack.aws.iam.Policy", return_value=DummyResource("policy"))
-    @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("bucket"))
-    @patch("lib.tap_stack.aws.s3.BucketOwnershipControls", return_value=DummyResource("bucketown"))
-    @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfiguration", return_value=DummyResource("bucketenc"))
-    @patch("lib.tap_stack.aws.s3.BucketLogging", return_value=DummyResource("bucketlog"))
-    @patch("lib.tap_stack.aws.kms.Key", return_value=DummyResource("kms"))
-    @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
-    @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
-    @patch("lib.tap_stack.aws.rds.Instance", return_value=DummyResource("db"))
-    @patch("lib.tap_stack.aws.iam.Role", return_value=DummyResource("role"))
-    @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=DummyResource("attachment"))
-    def test_stack_initialization_with_defaults(self, *_mocks):
-        """Verify stack initializes with default args."""
-        args = TapStackArgs()
-        TapStack("testStack", args)
+  @patch("lib.tap_stack.aws.ec2.Vpc", return_value=DummyResource("vpc"))
+  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=DummyResource("subnet"))
+  @patch("lib.tap_stack.aws.iam.Policy", return_value=DummyResource("policy"))
+  @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("bucket"))
+  @patch("lib.tap_stack.aws.s3.BucketOwnershipControls", return_value=DummyResource("bucketown"))
+  @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfiguration", return_value=DummyResource("bucketenc"))
+  @patch("lib.tap_stack.aws.s3.BucketLogging", return_value=DummyResource("bucketlog"))
+  @patch("lib.tap_stack.aws.kms.Key", return_value=DummyResource("kms"))
+  @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
+  @patch("lib.tap_stack.aws.rds.Instance", return_value=DummyResource("db"))
+  @patch("lib.tap_stack.aws.iam.Role", return_value=DummyResource("role"))
+  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=DummyResource("attachment"))
+  def test_stack_initialization_with_defaults(self, *_mocks):
+    """Verify stack initializes with default args."""
+    args = TapStackArgs()
+    TapStack("testStack", args)
 
-        self.assertEqual(args.environment_suffix, "dev")
-        self.assertIsInstance(args.tags, dict)
+    self.assertEqual(args.environment_suffix, "dev")
+    self.assertIsInstance(args.tags, dict)
 
-    @patch("lib.tap_stack.aws.ec2.Vpc", return_value=DummyResource("vpc"))
-    @patch("lib.tap_stack.aws.ec2.Subnet", return_value=DummyResource("subnet"))
-    @patch("lib.tap_stack.aws.iam.Policy", return_value=DummyResource("policy"))
-    @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("bucket"))
-    @patch("lib.tap_stack.aws.kms.Key", return_value=DummyResource("kms"))
-    @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
-    @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
-    @patch("lib.tap_stack.aws.rds.Instance", return_value=DummyResource("db"))
-    @patch("lib.tap_stack.aws.iam.Role", return_value=DummyResource("role"))
-    @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=DummyResource("attachment"))
-    def test_stack_initialization_with_custom_args(self, *_mocks):
-        """Verify stack initializes with custom args."""
-        tags = {"Project": "UnitTest"}
-        args = TapStackArgs(environment_suffix="prod", tags=tags)
-        TapStack("customStack", args)
+  @patch("lib.tap_stack.aws.ec2.Vpc", return_value=DummyResource("vpc"))
+  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=DummyResource("subnet"))
+  @patch("lib.tap_stack.aws.iam.Policy", return_value=DummyResource("policy"))
+  @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("bucket"))
+  @patch("lib.tap_stack.aws.kms.Key", return_value=DummyResource("kms"))
+  @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
+  @patch("lib.tap_stack.aws.rds.Instance", return_value=DummyResource("db"))
+  @patch("lib.tap_stack.aws.iam.Role", return_value=DummyResource("role"))
+  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=DummyResource("attachment"))
+  def test_stack_initialization_with_custom_args(self, *_mocks):
+    """Verify stack initializes with custom args."""
+    tags = {"Project": "UnitTest"}
+    args = TapStackArgs(environment_suffix="prod", tags=tags)
+    TapStack("customStack", args)
 
-        self.assertEqual(args.environment_suffix, "prod")
-        self.assertEqual(args.tags, tags)
+    self.assertEqual(args.environment_suffix, "prod")
+    self.assertEqual(args.tags, tags)
 
-    @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("logbucket"))
-    @patch("lib.tap_stack.aws.s3.BucketOwnershipControls", return_value=DummyResource("bucketown"))
-    @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfiguration", return_value=DummyResource("bucketenc"))
-    def test_logging_bucket_configuration(self, mock_bucket_enc, mock_bucket_own, mock_bucket):
-        """Verify logging bucket configuration calls are made."""
-        args = TapStackArgs()
-        TapStack("loggingBucketTest", args)
+  @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("logbucket"))
+  @patch("lib.tap_stack.aws.s3.BucketOwnershipControls", return_value=DummyResource("bucketown"))
+  @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfiguration", return_value=DummyResource("bucketenc"))
+  def test_logging_bucket_configuration(self, mock_bucket_enc, mock_bucket_own, mock_bucket):
+    """Verify logging bucket configuration calls are made."""
+    args = TapStackArgs()
+    TapStack("loggingBucketTest", args)
 
-        mock_bucket.assert_any_call(
-            f"logging-bucket-{args.environment_suffix}",
-            bucket=f"tap-logging-{args.environment_suffix}",
-            tags=args.tags,
-            opts=ANY
-        )
-        mock_bucket_own.assert_called()
-        mock_bucket_enc.assert_called()
+    mock_bucket.assert_any_call(
+        f"logging-bucket-{args.environment_suffix}",
+        bucket=f"tap-logging-{args.environment_suffix}",
+        tags=args.tags,
+        opts=ANY
+    )
+    mock_bucket_own.assert_called()
+    mock_bucket_enc.assert_called()
+
+  @patch("lib.tap_stack.aws.kms.Key", return_value=DummyResource("kmskey"))
+  def test_kms_key_creation(self, mock_kms_key):
+    """Verify KMS key is created with rotation enabled."""
+    args = TapStackArgs()
+    TapStack("kmsTest", args)
+
+    mock_kms_key.assert_any_call(
+        f"kms-key-{args.environment_suffix}",
+        description="KMS key for encrypting sensitive data",
+        deletion_window_in_days=10,
+        enable_key_rotation=True,
+        opts=ANY
+    )
+
+  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=DummyResource("privsubnet"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
+  @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
+  @patch("lib.tap_stack.aws.rds.Instance", return_value=DummyResource("db"))
+  def test_db_private_networking(self, mock_db_instance, mock_db_subnet_group, mock_db_sg, mock_subnet):
+    """Verify DB is placed in private subnets with security group."""
+    args = TapStackArgs()
+    TapStack("dbNetworkingTest", args)
+
+    mock_db_subnet_group.assert_called()
+    mock_db_sg.assert_called()
+    mock_db_instance.assert_any_call(
+        ANY,
+        allocated_storage=20,
+        engine="postgres",
+        instance_class="db.t3.micro",
+        db_name="appdb",
+        username="dbadmin",
+        password="Passw0rd123!",
+        skip_final_snapshot=True,
+        db_subnet_group_name=ANY,
+        vpc_security_group_ids=ANY,
+        publicly_accessible=False,
+        storage_encrypted=True,
+        kms_key_id=ANY,
+        tags=args.tags,
+        opts=ANY
+    )
 
 
 if __name__ == "__main__":
-    unittest.main()
+  unittest.main()
