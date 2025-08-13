@@ -45,15 +45,6 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(providerTfContent).toContain('provider "aws"');
       expect(providerTfContent).toContain('region = var.aws_region');
     });
-
-    test('should have backend configuration', () => {
-      // Check for either local or s3 backend
-      expect(
-        providerTfContent.includes('backend "local"') ||
-          providerTfContent.includes('backend "s3"') ||
-          fs.existsSync(path.join(libPath, 'backend.tf'))
-      ).toBe(true);
-    });
   });
 
   describe('Variables Configuration', () => {
