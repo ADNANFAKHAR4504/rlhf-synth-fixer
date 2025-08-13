@@ -92,6 +92,65 @@
         "MaxSize": 10,
         "DesiredCapacity": 3
       }
+    },
+    "ELBAccountMap": {
+      "us-east-1": {
+        "AccountId": "127311923021"
+      },
+      "us-east-2": {
+        "AccountId": "033677994240"
+      },
+      "us-west-1": {
+        "AccountId": "027434742980"
+      },
+      "us-west-2": {
+        "AccountId": "797873946194"
+      },
+      "ca-central-1": {
+        "AccountId": "985666609251"
+      },
+      "eu-central-1": {
+        "AccountId": "054676820928"
+      },
+      "eu-west-1": {
+        "AccountId": "156460612806"
+      },
+      "eu-west-2": {
+        "AccountId": "652711504416"
+      },
+      "eu-west-3": {
+        "AccountId": "009996457667"
+      },
+      "eu-north-1": {
+        "AccountId": "897822967062"
+      },
+      "ap-northeast-1": {
+        "AccountId": "582318560864"
+      },
+      "ap-northeast-2": {
+        "AccountId": "600734575887"
+      },
+      "ap-northeast-3": {
+        "AccountId": "383597477331"
+      },
+      "ap-southeast-1": {
+        "AccountId": "114774131450"
+      },
+      "ap-southeast-2": {
+        "AccountId": "783225319266"
+      },
+      "ap-south-1": {
+        "AccountId": "718504428378"
+      },
+      "sa-east-1": {
+        "AccountId": "507241528517"
+      },
+      "us-gov-west-1": {
+        "AccountId": "048591011584"
+      },
+      "us-gov-east-1": {
+        "AccountId": "190560391635"
+      }
     }
   },
   "Conditions": {
@@ -1474,23 +1533,50 @@
               "Sid": "AllowELBAccessLogs",
               "Effect": "Allow",
               "Principal": {
-                "Service": "elasticloadbalancing.amazonaws.com"
-              },
-              "Action": [
-                "s3:PutObject",
-                "s3:GetBucketAcl"
-              ],
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "S3LogsBucket",
-                    "Arn"
+                "AWS": {
+                  "Fn::FindInMap": [
+                    "ELBAccountMap",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "AccountId"
                   ]
-                },
-                {
-                  "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"
                 }
-              ]
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"
+              }
+            },
+            {
+              "Sid": "AllowELBAccessLogsDelivery",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Sid": "AllowELBAccessLogsGetBucketAcl",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "S3LogsBucket",
+                  "Arn"
+                ]
+              }
             }
           ]
         }
