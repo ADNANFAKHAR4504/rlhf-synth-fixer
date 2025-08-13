@@ -67,7 +67,7 @@ resource "aws_nat_gateway" "main" {
 
   depends_on = [
     aws_internet_gateway.main,
-    aws_aws_subnet.public,
+    aws_subnet.public,
     aws_eip.nat
     ]
 }
