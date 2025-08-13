@@ -700,13 +700,20 @@ alb = aws.lb.LoadBalancer(
   security_groups=[alb_security_group.id],
   subnets=[subnet.id for subnet in public_subnets],
   enable_deletion_protection=False,
+  enable_cross_zone_load_balancing=True,
+  idle_timeout=60,
+  ip_address_type="ipv4",  # Force IPv4 for compatibility
   tags={
     "Name": get_resource_name("web-alb"),
     "Environment": ENVIRONMENT,
     "Project": PROJECT_NAME,
     "Type": "Application Load Balancer"
   },
-  opts=pulumi.ResourceOptions(provider=aws_provider)
+  opts=pulumi.ResourceOptions(
+    provider=aws_provider,
+    depends_on=[alb_security_group] + public_subnets,
+    protect=False
+  )
 )
 
 http_listener = aws.lb.Listener(
