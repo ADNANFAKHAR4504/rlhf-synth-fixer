@@ -61,11 +61,13 @@ class TestSecureVPC(unittest.TestCase):
   @patch("lib.tap_stack.aws.ec2.RouteTable",
          return_value=MagicMock(id="rt-123"))
   @patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock())
+  @patch("lib.tap_stack.aws.ec2.RouteTableAssociation",
+         return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.NetworkAcl",
          return_value=MagicMock(id="nacl-123"))
   @patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock())
+  @patch("lib.tap_stack.aws.ec2.NetworkAclAssociation",
+         return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role",
          return_value=MagicMock(arn="arn:role", id="role-123"))
   @patch("lib.tap_stack.aws.iam.RolePolicy", return_value=MagicMock())
@@ -162,8 +164,10 @@ class TestHelpers(unittest.TestCase):
     rds = create_rds(subnets, db_sg, kms_key, tags, "/app/dbpass")
     self.assertEqual(rds.endpoint, "db-endpoint")
 
-  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role"))
+  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
+         return_value=MagicMock())
+  @patch("lib.tap_stack.aws.iam.Role",
+         return_value=MagicMock(arn="arn:role"))
   @patch("lib.tap_stack.aws.eks.Cluster")
   def test_create_eks_cluster(self, mock_cluster_class, *_):
     """Validate create_eks_cluster provisions an EKS cluster with IAM role attached."""
@@ -179,7 +183,8 @@ class TestHelpers(unittest.TestCase):
     cluster = create_eks_cluster(vpc, subnets, sg, tags)
     self.assertEqual(cluster.name, "cluster")
 
-  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=MagicMock())
+  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
+         return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock())
   @patch("lib.tap_stack.aws.eks.NodeGroup")
   def test_create_eks_node_group(self, mock_ng_class, *_):
@@ -216,15 +221,17 @@ class TestHelpers(unittest.TestCase):
   @patch("lib.tap_stack.aws.ssm.get_parameter",
          return_value=MagicMock(value="ghtoken"))
   @patch("lib.tap_stack.aws.codepipeline.Pipeline")
-  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=MagicMock())
+  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
+         return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role",
          return_value=MagicMock(arn="arn", name="role"))
   @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.s3.Bucket",
          return_value=MagicMock(bucket="bucketname"))
-  def test_create_codepipeline(self, mock_bucket, mock_encryption, mock_role,
-                               mock_attachment, mock_pipeline_class, mock_ssm):
+  def test_create_codepipeline(
+          self, _bucket, _encryption, _role, _attachment,
+          mock_pipeline_class, _ssm):
     """Ensure create_codepipeline provisions a pipeline with GitHub source integration."""
     mock_pipeline_instance = MagicMock()
     mock_pipeline_instance.name = "pipeline"
@@ -240,10 +247,12 @@ class TestHelpers(unittest.TestCase):
     self.assertEqual(cp.name, "pipeline")
 
   @patch("lib.tap_stack.aws.lambda_.Permission", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.cloudwatch.EventTarget", return_value=MagicMock())
+  @patch("lib.tap_stack.aws.cloudwatch.EventTarget",
+         return_value=MagicMock())
   @patch("lib.tap_stack.aws.cloudwatch.EventRule",
          return_value=MagicMock(name="rule"))
-  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=MagicMock())
+  @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
+         return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn"))
   @patch("lib.tap_stack.aws.cloudwatch.LogGroup", return_value=MagicMock())
   @patch("lib.tap_stack.aws.lambda_.Function")
@@ -265,6 +274,15 @@ class TestHelpers(unittest.TestCase):
 class TestTapStack(unittest.TestCase):
   """End-to-end orchestration test for TapStack ensuring major components are called."""
 
+  # pylint: disable=too-many-arguments
+  def _create_test_stack(self, **kwargs):
+    """Helper method to create test stack with default mocks."""
+    args = TapStackArgs(
+        environment_suffix=kwargs.get("env_suffix", "prod"),
+        tags=kwargs.get("tags", {"Environment": "Production"})
+    )
+    return TapStack("test-stack", args)
+
   # Mock pulumi.export to avoid stack context error
   @patch("lib.tap_stack.pulumi.export")
   @patch("lib.tap_stack.pulumi.Config")
@@ -276,7 +294,8 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.create_codepipeline",
          return_value=MagicMock(name="pipeline"))
   @patch("lib.tap_stack.create_alb",
-         return_value=(MagicMock(dns_name="alb"), MagicMock(arn="tg"), MagicMock()))
+         return_value=(MagicMock(dns_name="alb"),
+                       MagicMock(arn="tg"), MagicMock()))
   @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock())
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
@@ -291,43 +310,36 @@ class TestTapStack(unittest.TestCase):
          return_value=MagicMock(vpc=MagicMock(id="vpc"),
                                 public_subnets=[MagicMock(id="psub")],
                                 private_subnets=[MagicMock(id="prsub")],
-                                availability_zones=["us-west-2a", "us-west-2b"]))
-  def test_tapstack_init_happy_path(self, mock_vpc, mock_kms, mock_sgs,
-                                    mock_rds, mock_eks, mock_ng, mock_alb, mock_cp,
-                                    mock_lambda, mock_region, mock_lambda_sg, mock_config, mock_export):
+                                availability_zones=["us-west-2a",
+                                                    "us-west-2b"]))
+  def test_tapstack_init_happy_path(self, *_):
     """Construct TapStack and verify instantiation does not raise and calls major component fns."""
-    # Fix the region mock to return a string instead of a Mock object
-    mock_region.return_value.name = "us-west-2"
+    with patch("lib.tap_stack.aws.get_region") as mock_region:
+      mock_region.return_value.name = "us-west-2"
 
-    # Mock the Pulumi Config to avoid real config calls
-    mock_config_instance = MagicMock()
-    mock_config_instance.get.return_value = None  # No configured region
-    mock_config_instance.require.side_effect = lambda key: {
-        "githubOwner": "test-owner",
-        "githubRepo": "test-repo"
-    }[key]
-    mock_config.return_value = mock_config_instance
+      with patch("lib.tap_stack.pulumi.Config") as mock_config:
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = None
+        mock_config_instance.require.side_effect = lambda key: {
+            "githubOwner": "test-owner",
+            "githubRepo": "test-repo"
+        }[key]
+        mock_config.return_value = mock_config_instance
 
-    # Mock pulumi.export to be a no-op
-    mock_export.return_value = None
-
-    args = TapStackArgs(
-        environment_suffix="prod", tags={
-            "Environment": "Production"})
-    stack = TapStack("test-stack", args)
-    self.assertIsInstance(stack, TapStack)
+        stack = self._create_test_stack()
+        self.assertIsInstance(stack, TapStack)
 
   @patch("lib.tap_stack.pulumi.export")
   @patch("lib.tap_stack.pulumi.Config")
   @patch("lib.tap_stack.aws.get_region")
   def test_tapstack_region_validation_configured_wrong_region(
-          self, mock_region, mock_config, mock_export):
+          self, mock_region, mock_config, _export):
     """Test TapStack raises error when configured region is not us-west-2."""
     mock_region.return_value.name = "us-east-1"
 
     # Mock config to return wrong region
     mock_config_instance = MagicMock()
-    mock_config_instance.get.return_value = "us-east-1"  # Wrong configured region
+    mock_config_instance.get.return_value = "us-east-1"
     mock_config.return_value = mock_config_instance
 
     args = TapStackArgs()
@@ -337,14 +349,13 @@ class TestTapStack(unittest.TestCase):
 
     self.assertIn(
         "Deployment region must be us-west-2 but configured as us-east-1",
-        str(
-            context.exception))
+        str(context.exception))
 
   @patch("lib.tap_stack.pulumi.export")
   @patch("lib.tap_stack.pulumi.Config")
   @patch("lib.tap_stack.aws.get_region")
   def test_tapstack_region_validation_actual_wrong_region(
-          self, mock_region, mock_config, mock_export):
+          self, mock_region, mock_config, _export):
     """Test TapStack raises error when actual region is not us-west-2."""
     mock_region.return_value.name = "us-east-1"
 
@@ -360,8 +371,7 @@ class TestTapStack(unittest.TestCase):
 
     self.assertIn(
         "Deployment region must be us-west-2 but actually in us-east-1",
-        str(
-            context.exception))
+        str(context.exception))
 
   @patch("lib.tap_stack.pulumi.export")
   @patch("lib.tap_stack.pulumi.Config")
@@ -372,7 +382,8 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.create_codepipeline",
          return_value=MagicMock(name="pipeline"))
   @patch("lib.tap_stack.create_alb",
-         return_value=(MagicMock(dns_name="alb"), MagicMock(arn="tg"), MagicMock()))
+         return_value=(MagicMock(dns_name="alb"),
+                       MagicMock(arn="tg"), MagicMock()))
   @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock())
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
@@ -387,29 +398,28 @@ class TestTapStack(unittest.TestCase):
          return_value=MagicMock(vpc=MagicMock(id="vpc"),
                                 public_subnets=[MagicMock(id="psub")],
                                 private_subnets=[MagicMock(id="prsub")],
-                                availability_zones=["us-west-2a", "us-west-2b"]))
-  def test_tapstack_with_custom_tags(self, mock_vpc, mock_kms, mock_sgs,
-                                     mock_rds, mock_eks, mock_ng, mock_alb, mock_cp,
-                                     mock_lambda, mock_region, mock_lambda_sg, mock_config, mock_export):
+                                availability_zones=["us-west-2a",
+                                                    "us-west-2b"]))
+  def test_tapstack_with_custom_tags(self, *_):
     """Test TapStack with custom tags to cover the tag update branch."""
-    mock_region.return_value.name = "us-west-2"
+    with patch("lib.tap_stack.aws.get_region") as mock_region:
+      mock_region.return_value.name = "us-west-2"
 
-    mock_config_instance = MagicMock()
-    mock_config_instance.get.return_value = None
-    mock_config_instance.require.side_effect = lambda key: {
-        "githubOwner": "test-owner",
-        "githubRepo": "test-repo"
-    }[key]
-    mock_config.return_value = mock_config_instance
+      with patch("lib.tap_stack.pulumi.Config") as mock_config:
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = None
+        mock_config_instance.require.side_effect = lambda key: {
+            "githubOwner": "test-owner",
+            "githubRepo": "test-repo"
+        }[key]
+        mock_config.return_value = mock_config_instance
 
-    mock_export.return_value = None
-
-    # Test with custom tags to cover the args.tags branch
-    args = TapStackArgs(
-        environment_suffix="dev", tags={
-            "Custom": "Tag", "Environment": "Dev"})
-    stack = TapStack("test-stack", args)
-    self.assertIsInstance(stack, TapStack)
+        # Test with custom tags to cover the args.tags branch
+        stack = self._create_test_stack(
+            env_suffix="dev",
+            tags={"Custom": "Tag", "Environment": "Dev"}
+        )
+        self.assertIsInstance(stack, TapStack)
 
   @patch("lib.tap_stack.pulumi.export")
   @patch("lib.tap_stack.pulumi.Config")
@@ -420,7 +430,8 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.create_codepipeline",
          return_value=MagicMock(name="pipeline"))
   @patch("lib.tap_stack.create_alb",
-         return_value=(MagicMock(dns_name="alb"), MagicMock(arn="tg"), MagicMock()))
+         return_value=(MagicMock(dns_name="alb"),
+                       MagicMock(arn="tg"), MagicMock()))
   @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock())
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
@@ -435,27 +446,27 @@ class TestTapStack(unittest.TestCase):
          return_value=MagicMock(vpc=MagicMock(id="vpc"),
                                 public_subnets=[MagicMock(id="psub")],
                                 private_subnets=[MagicMock(id="prsub")],
-                                availability_zones=["us-west-2a", "us-west-2b"]))
-  def test_tapstack_with_github_branch_default(self, mock_vpc, mock_kms, mock_sgs,
-                                               mock_rds, mock_eks, mock_ng, mock_alb, mock_cp,
-                                               mock_lambda, mock_region, mock_lambda_sg, mock_config, mock_export):
+                                availability_zones=["us-west-2a",
+                                                    "us-west-2b"]))
+  def test_tapstack_with_github_branch_default(self, *_):
     """Test TapStack GitHub branch default value path."""
-    mock_region.return_value.name = "us-west-2"
+    with patch("lib.tap_stack.aws.get_region") as mock_region:
+      mock_region.return_value.name = "us-west-2"
 
-    mock_config_instance = MagicMock()
-    # Return None for branch
-    mock_config_instance.get.side_effect = lambda key: None if key == "githubBranch" else None
-    mock_config_instance.require.side_effect = lambda key: {
-        "githubOwner": "test-owner",
-        "githubRepo": "test-repo"
-    }[key]
-    mock_config.return_value = mock_config_instance
+      with patch("lib.tap_stack.pulumi.Config") as mock_config:
+        mock_config_instance = MagicMock()
+        # Return None for branch
+        mock_config_instance.get.side_effect = (
+            lambda key: None if key == "githubBranch" else None
+        )
+        mock_config_instance.require.side_effect = lambda key: {
+            "githubOwner": "test-owner",
+            "githubRepo": "test-repo"
+        }[key]
+        mock_config.return_value = mock_config_instance
 
-    mock_export.return_value = None
-
-    args = TapStackArgs()
-    stack = TapStack("test-stack", args)
-    self.assertIsInstance(stack, TapStack)
+        stack = self._create_test_stack()
+        self.assertIsInstance(stack, TapStack)
 
 
 if __name__ == '__main__':
