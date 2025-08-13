@@ -1,138 +1,149 @@
 import {
-  EC2Client,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  S3Client,
+  GetBucketLocationCommand,
   GetBucketVersioningCommand,
-  GetBucketTaggingCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
-import {
-  IAMClient,
-  GetRoleCommand,
-} from '@aws-sdk/client-iam';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+const awsRegion =
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-west-2';
+
 const ec2Client = new EC2Client({ region: awsRegion });
-const rdsClient = new RDSClient({ region: awsRegion });
 const s3Client = new S3Client({ region: awsRegion });
 const iamClient = new IAMClient({ region: awsRegion });
 
-describe('TAP Stack AWS Infrastructure Integration Tests', () => {
-  let bastionIp: string;
-  let rdsEndpoint: string;
+describe('TAP Stack AWS Infrastructure', () => {
+  let vpcId: string;
+  let publicSubnetId: string;
   let bucketName: string;
-  let roleName: string;
+  let iamRoleName: string;
   let securityGroupId: string;
+  let ec2InstanceId: string;
 
   beforeAll(() => {
     const suffix = process.env.ENVIRONMENT_SUFFIX;
-    if (!suffix) throw new Error('ENVIRONMENT_SUFFIX environment variable is not set.');
+    if (!suffix) {
+      throw new Error('ENVIRONMENT_SUFFIX environment variable is not set.');
+    }
 
-    const outputFilePath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    const outputFilePath = path.join(
+      __dirname,
+      '..',
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
     if (!fs.existsSync(outputFilePath)) {
       throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
     }
 
     const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
     const stackKey = Object.keys(outputs).find(k => k.includes(suffix));
-    if (!stackKey) throw new Error(`No output found for environment: ${suffix}`);
+    if (!stackKey) {
+      throw new Error(`No output found for environment: ${suffix}`);
+    }
 
     const stackOutputs = outputs[stackKey];
-
-    bastionIp = stackOutputs['bastion_public_ip'];
-    rdsEndpoint = stackOutputs['rds_instance_endpoint'];
-    bucketName = stackOutputs['s3_bucket_name'];
-    roleName = stackOutputs['iam_role_name'];
+    vpcId = stackOutputs['vpc_id'];
+    publicSubnetId = stackOutputs['public_subnet_id'];
+    bucketName = stackOutputs['bucket_name'];
+    iamRoleName = stackOutputs['iam_role_name'];
     securityGroupId = stackOutputs['security_group_id'];
+    ec2InstanceId = stackOutputs['ec2_instance_id'];
 
-    if (!bastionIp || !rdsEndpoint || !bucketName || !roleName || !securityGroupId) {
-      throw new Error('Missing one or more required outputs in stack.');
+    if (
+      !vpcId ||
+      !publicSubnetId ||
+      !bucketName ||
+      !iamRoleName ||
+      !securityGroupId ||
+      !ec2InstanceId
+    ) {
+      throw new Error('Missing one or more required stack outputs.');
     }
   });
 
-  // Bastion Host EC2
-  describe('Bastion Host EC2 Instance', () => {
-    test('should be running with correct tags', async () => {
-      const { Reservations } = await ec2Client.send(
-        new DescribeInstancesCommand({
-          Filters: [{ Name: 'ip-address', Values: [bastionIp] }],
-        })
+  // VPC Test
+  describe('VPC Configuration', () => {
+    test(`VPC "${vpcId}" should exist in AWS`, async () => {
+      const { Vpcs } = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [vpcId] })
       );
-
-      const instance = Reservations?.[0]?.Instances?.[0];
-      expect(instance).toBeDefined();
-      expect(instance?.State?.Name).toBe('running');
-      expect(instance?.Tags).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            Key: 'Name',
-            Value: expect.stringContaining('-bastion-host'),
-          }),
-        ])
-      );
+      expect(Vpcs?.length).toBe(1);
+      expect(Vpcs?.[0].VpcId).toBe(vpcId);
+      expect(Vpcs?.[0].State).toBe('available');
     }, 20000);
   });
 
-  // RDS
-  describe('RDS PostgreSQL Instance', () => {
-    test('should exist and be available', async () => {
-      const { DBInstances } = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const db = DBInstances?.find(d => d.Endpoint?.Address === rdsEndpoint);
-      expect(db).toBeDefined();
-      expect(db?.Engine).toBe('postgres');
-      expect(db?.DBInstanceStatus).toBe('available');
+  // Subnet Test
+  describe('Subnet Configuration', () => {
+    test(`Public subnet "${publicSubnetId}" should exist and map public IPs`, async () => {
+      const { Subnets } = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: [publicSubnetId] })
+      );
+      expect(Subnets?.length).toBe(1);
+      expect(Subnets?.[0].VpcId).toBe(vpcId);
+      expect(Subnets?.[0].MapPublicIpOnLaunch).toBe(true);
     }, 20000);
   });
 
-  // S3
+  // S3 Bucket Test
   describe('S3 Bucket', () => {
-    test('should have versioning enabled', async () => {
-      const { Status } = await s3Client.send(new GetBucketVersioningCommand({ Bucket: bucketName }));
-      expect(Status).toBe('Enabled');
-    }, 10000);
-
-    test('should have correct tags', async () => {
-      const { TagSet } = await s3Client.send(new GetBucketTaggingCommand({ Bucket: bucketName }));
-      expect(TagSet).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            Key: 'Environment',
-            Value: expect.any(String),
-          }),
-        ])
+    test(`Bucket "${bucketName}" should exist in correct region`, async () => {
+      const { LocationConstraint } = await s3Client.send(
+        new GetBucketLocationCommand({ Bucket: bucketName })
       );
-    }, 10000);
+      const expectedRegion = LocationConstraint || 'us-east-1';
+      expect(expectedRegion).toBe(awsRegion);
+    }, 20000);
+
+    test(`Bucket "${bucketName}" should have versioning enabled`, async () => {
+      const { Status } = await s3Client.send(
+        new GetBucketVersioningCommand({ Bucket: bucketName })
+      );
+      expect(Status).toBe('Enabled');
+    }, 20000);
   });
 
-  // IAM
+  // IAM Role Test
   describe('IAM Role', () => {
-    test('should exist with correct name', async () => {
-      const { Role } = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-      expect(Role?.RoleName).toBe(roleName);
-      expect(Role?.AssumeRolePolicyDocument).toBeDefined();
-    }, 10000);
+    test(`IAM Role "${iamRoleName}" should exist`, async () => {
+      const { Role } = await iamClient.send(
+        new GetRoleCommand({ RoleName: iamRoleName })
+      );
+      expect(Role?.RoleName).toBe(iamRoleName);
+    }, 20000);
   });
 
-  // Security Group
+  // Security Group Test
   describe('Security Group', () => {
-    test('should exist with SSH access', async () => {
+    test(`Security Group "${securityGroupId}" should exist in the VPC`, async () => {
       const { SecurityGroups } = await ec2Client.send(
         new DescribeSecurityGroupsCommand({ GroupIds: [securityGroupId] })
       );
-      const sg = SecurityGroups?.[0];
-      expect(sg).toBeDefined();
-      const hasSSH = sg?.IpPermissions?.some(
-        perm => perm.FromPort === 22 && perm.ToPort === 22
+      expect(SecurityGroups?.length).toBe(1);
+      expect(SecurityGroups?.[0].VpcId).toBe(vpcId);
+    }, 20000);
+  });
+
+  // EC2 Instance Test
+  describe('EC2 Instance', () => {
+    test(`EC2 Instance "${ec2InstanceId}" should exist and be running`, async () => {
+      const { Reservations } = await ec2Client.send(
+        new DescribeInstancesCommand({ InstanceIds: [ec2InstanceId] })
       );
-      expect(hasSSH).toBe(true);
-    }, 10000);
+      expect(Reservations?.length).toBeGreaterThan(0);
+      const instance = Reservations?.[0].Instances?.[0];
+      expect(instance?.InstanceId).toBe(ec2InstanceId);
+      expect(instance?.State?.Name).toBe('running');
+    }, 30000);
   });
 });
