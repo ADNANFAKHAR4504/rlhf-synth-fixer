@@ -22,9 +22,12 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('owner', commonTags.owner);
     cdk.Tags.of(this).add('environment', commonTags.environment);
 
+    // Use stack name for uniqueness
+    const stackName = cdk.Stack.of(this).stackName;
+
     // Log Group for Lambda
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: '/aws/lambda/lambda-nova-team-development',
+      logGroupName: `/aws/lambda/${stackName}-lambda-nova-team-development`,
       retention: logs.RetentionDays.THREE_MONTHS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -61,7 +64,7 @@ export class TapStack extends cdk.Stack {
 
     // Lambda Function
     const lambdaFunction = new lambda.Function(this, 'ProcessingLambda', {
-      functionName: 'lambda-nova-team-development',
+      functionName: `${stackName}-lambda-nova-team-development`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
@@ -84,7 +87,7 @@ export class TapStack extends cdk.Stack {
       aliasName: 'live',
       version: lambdaFunction.currentVersion,
       description:
-        'Live alias for production traffic with provisioned concurrency',
+        `Live alias for production traffic with provisioned concurrency (${stackName})`,
       provisionedConcurrentExecutions: 5, // Set to a safe value within account limits
     });
     // Explicitly tag Lambda alias
@@ -129,12 +132,11 @@ export class TapStack extends cdk.Stack {
         scalingTarget: scalableTarget,
         targetValue: 70.0,
         predefinedMetric:
-          applicationautoscaling.PredefinedMetric
-            .LAMBDA_PROVISIONED_CONCURRENCY_UTILIZATION,
+          applicationautoscaling.PredefinedMetric.LAMBDA_PROVISIONED_CONCURRENCY_UTILIZATION,
         scaleOutCooldown: cdk.Duration.seconds(300),
         scaleInCooldown: cdk.Duration.seconds(300),
         disableScaleIn: false,
-        policyName: 'lambda-scaling-policy-nova-team-development',
+        policyName: `${stackName}-lambda-scaling-policy-nova-team-development`,
       }
     );
 
@@ -200,17 +202,17 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'LambdaFunctionName', {
       value: lambdaFunction.functionName,
       description: 'Lambda function name',
-      exportName: 'nova-team-development-lambda-name',
+      exportName: `${stackName}-nova-team-development-lambda-name`,
     });
     new cdk.CfnOutput(this, 'LambdaAliasName', {
       value: lambdaAlias.aliasName,
       description: 'Lambda alias name for provisioned concurrency',
-      exportName: 'nova-team-development-lambda-alias',
+      exportName: `${stackName}-nova-team-development-lambda-alias`,
     });
     new cdk.CfnOutput(this, 'LogGroupName', {
       value: lambdaLogGroup.logGroupName,
       description: 'CloudWatch Log Group name for Lambda function',
-      exportName: 'nova-team-development-log-group',
+      exportName: `${stackName}-nova-team-development-log-group`,
     });
   }
 }
