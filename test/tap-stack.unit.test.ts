@@ -11,36 +11,16 @@ describe('TapStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    
-    // Mock VPC context to avoid lookup issues in unit tests
-    app.node.setContext('availability-zones:account=123456789012:region=us-east-1', ['us-east-1a', 'us-east-1b']);
-    app.node.setContext('vpc-provider:account=123456789012:region=us-east-1:filter.isDefault=true', {
-      vpcId: 'vpc-12345',
-      vpcCidrBlock: '10.0.0.0/16',
-      availabilityZones: ['us-east-1a', 'us-east-1b'],
-      subnetGroups: [
-        {
-          name: 'Public',
-          type: 'Public',
-          subnets: [
-            { subnetId: 'subnet-public1', cidr: '10.0.1.0/24', availabilityZone: 'us-east-1a', routeTableId: 'rtb-public' },
-            { subnetId: 'subnet-public2', cidr: '10.0.2.0/24', availabilityZone: 'us-east-1b', routeTableId: 'rtb-public' }
-          ]
-        },
-        {
-          name: 'Private',
-          type: 'Private',
-          subnets: [
-            { subnetId: 'subnet-private1', cidr: '10.0.11.0/24', availabilityZone: 'us-east-1a', routeTableId: 'rtb-private1' },
-            { subnetId: 'subnet-private2', cidr: '10.0.12.0/24', availabilityZone: 'us-east-1b', routeTableId: 'rtb-private2' }
-          ]
-        }
-      ]
-    });
 
-    stack = new TapStack(app, 'TestTapStack', { 
+    // Mock availability zones for VPC creation
+    app.node.setContext(
+      'availability-zones:account=123456789012:region=us-east-1',
+      ['us-east-1a', 'us-east-1b']
+    );
+
+    stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
-      env: { account: '123456789012', region: 'us-east-1' }
+      env: { account: '123456789012', region: 'us-east-1' },
     });
     template = Template.fromStack(stack);
   });
@@ -62,13 +42,45 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
         Description: 'KMS key for encrypting all data at rest',
       });
-      
+
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: capture,
       });
-      
+
       const bucketName = capture.asString();
       expect(bucketName).toContain(environmentSuffix);
+    });
+
+    test('should handle default environment suffix when not provided', () => {
+      const appNoSuffix = new cdk.App();
+      appNoSuffix.node.setContext(
+        'availability-zones:account=123456789012:region=us-east-1',
+        ['us-east-1a', 'us-east-1b']
+      );
+
+      const stackNoSuffix = new TapStack(appNoSuffix, 'TestTapStackDefault', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const templateNoSuffix = Template.fromStack(stackNoSuffix);
+
+      // Should still create resources with default suffix
+      templateNoSuffix.hasResourceProperties('AWS::KMS::Key', {
+        Description: 'KMS key for encrypting all data at rest',
+      });
+    });
+
+    test('should create VPC with proper configuration', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+      });
+
+      // Should have public and private subnets
+      template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
+
+      // Should have NAT gateway
+      template.resourceCountIs('AWS::EC2::NatGateway', 1);
     });
   });
 
@@ -139,6 +151,45 @@ describe('TapStack', () => {
               Sid: 'DenyInsecureConnections',
             }),
           ]),
+        },
+      });
+    });
+
+    test('should enforce KMS key policy on S3 bucket', () => {
+      template.hasResourceProperties('AWS::S3::BucketPolicy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Deny',
+              Principal: {
+                AWS: '*',
+              },
+              Action: 's3:PutObject',
+              Condition: {
+                StringNotEquals: Match.objectLike({
+                  's3:x-amz-server-side-encryption-aws-kms-key-id':
+                    Match.anyValue(),
+                }),
+              },
+              Sid: 'DenyWrongKMSKey',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should create S3 bucket with lifecycle configuration', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        LifecycleConfiguration: {
+          Rules: [
+            {
+              Id: 'DeleteOldVersions',
+              Status: 'Enabled',
+              NoncurrentVersionExpiration: {
+                NoncurrentDays: 90,
+              },
+            },
+          ],
         },
       });
     });
@@ -228,7 +279,7 @@ describe('TapStack', () => {
     test('should create Lambda IAM role with least privilege policies', () => {
       // Check that we have both Config role and Lambda role
       template.resourceCountIs('AWS::IAM::Role', 2);
-      
+
       // Verify Lambda role has inline policies for logging and VPC access
       template.hasResourceProperties('AWS::IAM::Role', {
         Policies: Match.arrayWith([
@@ -254,20 +305,26 @@ describe('TapStack', () => {
 
   describe('ALB and WAF Protection', () => {
     test('should create Application Load Balancer', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Scheme: 'internet-facing',
-        Type: 'application',
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Scheme: 'internet-facing',
+          Type: 'application',
+        }
+      );
     });
 
     test('should create target group for Lambda', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        TargetType: 'lambda',
-        HealthCheckEnabled: true,
-        Matcher: {
-          HttpCode: '200',
-        },
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::TargetGroup',
+        {
+          TargetType: 'lambda',
+          HealthCheckEnabled: true,
+          Matcher: {
+            HttpCode: '200',
+          },
+        }
+      );
     });
 
     test('should create WAF Web ACL with SQL injection protection', () => {
@@ -378,6 +435,53 @@ describe('TapStack', () => {
 
       template.hasOutput(`S3BucketName${environmentSuffix}`, {
         Description: 'Config S3 Bucket Name',
+      });
+    });
+
+    test('should export outputs with proper naming', () => {
+      template.hasOutput(`LoadBalancerDNS${environmentSuffix}`, {
+        Export: {
+          Name: `LoadBalancerDNS${environmentSuffix}`,
+        },
+      });
+
+      template.hasOutput(`KMSKeyId${environmentSuffix}`, {
+        Export: {
+          Name: `KMSKeyId${environmentSuffix}`,
+        },
+      });
+    });
+  });
+
+  describe('Resource Dependencies', () => {
+    test('should have proper dependencies for Config resources', () => {
+      // Config rule should depend on recorder and delivery channel
+      const configRuleResources = template.findResources(
+        'AWS::Config::ConfigRule'
+      );
+      const configRuleKeys = Object.keys(configRuleResources);
+      expect(configRuleKeys.length).toBeGreaterThan(0);
+
+      const configRule = configRuleResources[configRuleKeys[0]];
+      expect(configRule.DependsOn).toBeDefined();
+      expect(Array.isArray(configRule.DependsOn)).toBe(true);
+      expect(configRule.DependsOn.length).toBe(2); // recorder and delivery channel
+    });
+
+    test('should grant proper permissions to AWS Config role', () => {
+      // Config role should have managed policy and S3/KMS permissions
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'config.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
       });
     });
   });

@@ -1,20 +1,36 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import { S3Client, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { KMSClient, DescribeKeyCommand, GetKeyRotationStatusCommand } from '@aws-sdk/client-kms';
-import { ConfigServiceClient, DescribeConfigurationRecordersCommand, DescribeDeliveryChannelsCommand, DescribeConfigRulesCommand } from '@aws-sdk/client-config-service';
+import {
+  S3Client,
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+} from '@aws-sdk/client-s3';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+} from '@aws-sdk/client-kms';
+import {
+  ConfigServiceClient,
+  DescribeConfigurationRecordersCommand,
+  DescribeDeliveryChannelsCommand,
+  DescribeConfigRulesCommand,
+} from '@aws-sdk/client-config-service';
 
 // Mock outputs for testing (real outputs will come from cfn-outputs/flat-outputs.json)
 let outputs: any = {};
 
 try {
-  outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+  outputs = JSON.parse(
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  );
 } catch (error) {
   // Mock outputs for when cfn-outputs/flat-outputs.json doesn't exist yet
   outputs = {
     LoadBalancerDNS: 'test-alb-123456789.us-east-1.elb.amazonaws.com',
     KMSKeyId: '12345678-1234-1234-1234-123456789012',
-    WebACLArn: 'arn:aws:wafv2:us-east-1:123456789012:regional/webacl/test/12345678-1234-1234-1234-123456789012',
+    WebACLArn:
+      'arn:aws:wafv2:us-east-1:123456789012:regional/webacl/test/12345678-1234-1234-1234-123456789012',
     S3BucketName: 'aws-config-test-123456789012-us-east-1',
   };
 }
@@ -42,11 +58,11 @@ describe('Secure Web Application Integration Tests', () => {
     test('should have accessible load balancer DNS', async () => {
       expect(outputs.LoadBalancerDNS).toBeDefined();
       expect(outputs.LoadBalancerDNS).toMatch(/elb\.amazonaws\.com$/);
-      
+
       // Test that the load balancer is reachable (basic connectivity)
       const https = require('https');
       const url = `https://${outputs.LoadBalancerDNS}`;
-      
+
       // Note: This test checks that DNS resolves, actual HTTP testing would require
       // the infrastructure to be deployed and accessible
       expect(outputs.LoadBalancerDNS).toContain('.elb.amazonaws.com');
@@ -63,7 +79,7 @@ describe('Secure Web Application Integration Tests', () => {
   describe('S3 Bucket Security Integration', () => {
     test('should have encrypted S3 bucket with proper policies', async () => {
       expect(outputs.S3BucketName).toBeDefined();
-      
+
       // In real deployment, verify bucket encryption
       try {
         const bucketEncryption = await s3Client.send(
@@ -72,7 +88,9 @@ describe('Secure Web Application Integration Tests', () => {
           })
         );
 
-        expect(bucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
+        expect(
+          bucketEncryption.ServerSideEncryptionConfiguration
+        ).toBeDefined();
         expect(
           bucketEncryption.ServerSideEncryptionConfiguration?.Rules?.[0]
             ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
@@ -107,7 +125,7 @@ describe('Secure Web Application Integration Tests', () => {
   describe('KMS Key Integration', () => {
     test('should have KMS key with rotation enabled', async () => {
       expect(outputs.KMSKeyId).toBeDefined();
-      
+
       try {
         const keyMetadata = await kmsClient.send(
           new DescribeKeyCommand({
@@ -136,7 +154,7 @@ describe('Secure Web Application Integration Tests', () => {
     test('should have WAF Web ACL with required rule sets', async () => {
       expect(outputs.WebACLArn).toBeDefined();
       expect(outputs.WebACLArn).toContain('arn:aws:wafv2');
-      
+
       // In a real deployment, this would use WAFv2Client to verify the web ACL
       // For now, we just verify the ARN format and existence
       const webAclParts = outputs.WebACLArn.split('/');
@@ -186,7 +204,9 @@ describe('Secure Web Application Integration Tests', () => {
       try {
         const rules = await configClient.send(
           new DescribeConfigRulesCommand({
-            ConfigRuleNames: [`restricted-incoming-traffic-${environmentSuffix}`],
+            ConfigRuleNames: [
+              `restricted-incoming-traffic-${environmentSuffix}`,
+            ],
           })
         );
 
@@ -213,7 +233,11 @@ describe('Secure Web Application Integration Tests', () => {
 
       // Verify naming follows environment suffix pattern
       Object.keys(outputs).forEach(key => {
-        if (key.includes('Arn') || key.includes('DNS') || key.includes('Name')) {
+        if (
+          key.includes('Arn') ||
+          key.includes('DNS') ||
+          key.includes('Name')
+        ) {
           expect(outputs[key]).toBeTruthy();
         }
       });
