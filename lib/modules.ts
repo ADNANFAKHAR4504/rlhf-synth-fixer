@@ -119,7 +119,7 @@ export function createHighAvailabilityVpc(
     const az = Fn.element(azs.names, i);
     const pubSubnet = new Subnet(stack, `${id}-pub-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: '10.0.0.0/16',
+      cidrBlock: '10.0.0.0/26',
       availabilityZone: az,
       mapPublicIpOnLaunch: true,
       tags: { Name: `${opts.namePrefix}-public-${i}` },
@@ -127,7 +127,7 @@ export function createHighAvailabilityVpc(
 
     const privSubnet = new Subnet(stack, `${id}-priv-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: '10.0.0.0/16',
+      cidrBlock: '10.0.0.0/26',
       availabilityZone: az,
       mapPublicIpOnLaunch: false,
       tags: { Name: `${opts.namePrefix}-private-${i}` },
@@ -190,7 +190,7 @@ export function createEc2S3StateRole(
   opts: { roleNamePrefix: string; bucketArn: string; bucketName: string }
 ): IamRole {
   const role = new IamRole(stack, `${id}-ec2-role`, {
-    name: `${opts.roleNamePrefix}-ec2-s3-state-role`,
+    name: `${opts.roleNamePrefix}-ec2-s3-state-roles`,
     assumeRolePolicy: JSON.stringify({
       Version: '2012-10-17',
       Statement: [
