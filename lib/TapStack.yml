@@ -472,34 +472,37 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
       SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
 
-  # ---------------- AWS Config ----------------
+# ---------- AWS Config ----------
   ConfigTopic:
     Type: AWS::SNS::Topic
     Properties:
-      KmsMasterKeyId: !Ref EncryptionKey
+      # KMS optional; remove KmsMasterKeyId if you don't want SNS encryption
+      TopicName: !Sub "${AWS::StackName}-config-topic"
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: default
+      # Let AWS assign the name "default" (more reliable)
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-      RecordingMode:
-        RecordingFrequency: CONTINUOUS  # valid per CFN spec
+      # omit RecordingMode for compatibility
 
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
-    DependsOn: [ConfigurationRecorder, ConfigBucketPolicy]
+    DependsOn:
+      - ConfigurationRecorder      # ensure recorder exists first
+      - ConfigBucketPolicy         # ensure bucket is writable
     Properties:
-      Name: default
+      # Use the default name implicitly; CFN doesn't require Name
       S3BucketName: !Ref ConfigBucket
       S3KeyPrefix: config
       SnsTopicARN: !Ref ConfigTopic
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours  # valid enum
+        DeliveryFrequency: TwentyFour_Hours
 
+  # Create rules only after channel + recorder exist
   S3BucketLoggingEnabledRule:
     Type: AWS::Config::ConfigRule
     DependsOn: [ConfigurationRecorder, DeliveryChannel]
