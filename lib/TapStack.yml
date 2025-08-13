@@ -494,26 +494,30 @@ Resources:
           OptionName: 'Subnets'
           Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
         - Namespace: 'aws:ec2:vpc'
+          OptionName: 'ELBSubnets'
+          Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+        - Namespace: 'aws:ec2:vpc'
           OptionName: 'AssociatePublicIpAddress'
           Value: 'false'
 
-        # Load Balancer Configuration - DECOUPLED
+        # Load Balancer Configuration - Use Shared ALB
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'LoadBalancerType'
-          Value: 'none'
+          Value: 'application'
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'ServiceRole'
           Value: !Ref BeanstalkServiceRole
+        - Namespace: 'aws:elasticbeanstalk:environment'
+          OptionName: 'LoadBalancerIsShared'
+          Value: 'true'
 
-        # Link to external Target Group
-        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
-          OptionName: 'TargetGroupARNs'
-          Value: !Ref WebAppTargetGroup
-
-        # Process health check (optional - can be removed if not needed)
-        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
-          OptionName: 'HealthCheckPath'
-          Value: '/'
+        # Use the existing ALB
+        - Namespace: 'aws:elbv2:loadbalancer'
+          OptionName: 'SharedLoadBalancer'
+          Value: !Ref WebAppALB
+        - Namespace: 'aws:elbv2:loadbalancer'
+          OptionName: 'SecurityGroups'
+          Value: !Ref LoadBalancerSecurityGroup
 
         # Auto Scaling Configuration
         - Namespace: 'aws:autoscaling:asg'
@@ -542,6 +546,15 @@ Resources:
         - Namespace: 'aws:elasticbeanstalk:healthreporting:system'
           OptionName: 'SystemType'
           Value: 'enhanced'
+        - Namespace: 'aws:elbv2:listener:default'
+          OptionName: 'Protocol'
+          Value: 'HTTP'
+        - Namespace: 'aws:elbv2:listener:443'
+          OptionName: 'Protocol'
+          Value: 'HTTPS'
+        - Namespace: 'aws:elbv2:listener:443'
+          OptionName: 'SSLCertificateArns'
+          Value: !Ref CertificateArn
 
         # CloudWatch Logs
         - Namespace: 'aws:elasticbeanstalk:cloudwatch:logs'

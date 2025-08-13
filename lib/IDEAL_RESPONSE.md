@@ -14,7 +14,7 @@ Parameters:
   DomainName:
     Type: String
     Description: The custom domain name for your application (e.g., myapp.example.com).
-    Default: app.meerio.com # Corrected Default
+    Default: app.eu-north-1.meerio.com
 
   HostedZoneName:
     Type: String
@@ -24,7 +24,7 @@ Parameters:
   CertificateArn:
     Type: String
     Description: The ARN of the ACM SSL certificate for your domain.
-    Default: arn:aws:acm:us-west-2:718240086340:certificate/c43e41ee-5b6c-4d2c-80e9-82c1db57289e
+    Default: arn:aws:acm:eu-north-1:718240086340:certificate/b309bb0d-0e43-4663-9307-e6f60c1df388
 
   DBUsername:
     Type: String
@@ -483,7 +483,7 @@ Resources:
         - Namespace: 'aws:autoscaling:launchconfiguration'
           OptionName: 'InstanceType'
           Value: 't3.small'
-        - Namespace: 'aws:autoscaling:launchconfiguration' # Add AppSecurityGroup to instances
+        - Namespace: 'aws:autoscaling:launchconfiguration'
           OptionName: 'SecurityGroups'
           Value: !Ref AppSecurityGroup
 
@@ -495,19 +495,30 @@ Resources:
           OptionName: 'Subnets'
           Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
         - Namespace: 'aws:ec2:vpc'
+          OptionName: 'ELBSubnets'
+          Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+        - Namespace: 'aws:ec2:vpc'
           OptionName: 'AssociatePublicIpAddress'
           Value: 'false'
 
-        # Load Balancer Configuration - NOW DECOUPLED
+        # Load Balancer Configuration - Use Shared ALB
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'LoadBalancerType'
-          Value: 'none' # Tell Beanstalk not to create a load balancer
+          Value: 'application'
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'ServiceRole'
           Value: !Ref BeanstalkServiceRole
-        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
-          OptionName: 'TargetGroupARNs'
-          Value: !Ref WebAppTargetGroup # Link to the external Target Group
+        - Namespace: 'aws:elasticbeanstalk:environment'
+          OptionName: 'LoadBalancerIsShared'
+          Value: 'true'
+
+        # Use the existing ALB
+        - Namespace: 'aws:elbv2:loadbalancer'
+          OptionName: 'SharedLoadBalancer'
+          Value: !Ref WebAppALB
+        - Namespace: 'aws:elbv2:loadbalancer'
+          OptionName: 'SecurityGroups'
+          Value: !Ref LoadBalancerSecurityGroup
 
         # Auto Scaling Configuration
         - Namespace: 'aws:autoscaling:asg'
@@ -536,9 +547,15 @@ Resources:
         - Namespace: 'aws:elasticbeanstalk:healthreporting:system'
           OptionName: 'SystemType'
           Value: 'enhanced'
-        - Namespace: 'aws:elasticbeanstalk:application:healthcheck' # Correct namespace for health check
-          OptionName: 'HealthCheckPath'
-          Value: '/'
+        - Namespace: 'aws:elbv2:listener:default'
+          OptionName: 'Protocol'
+          Value: 'HTTP'
+        - Namespace: 'aws:elbv2:listener:443'
+          OptionName: 'Protocol'
+          Value: 'HTTPS'
+        - Namespace: 'aws:elbv2:listener:443'
+          OptionName: 'SSLCertificateArns'
+          Value: !Ref CertificateArn
 
         # CloudWatch Logs
         - Namespace: 'aws:elasticbeanstalk:cloudwatch:logs'

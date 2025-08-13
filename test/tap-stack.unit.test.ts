@@ -216,18 +216,7 @@ describe('Node.js Production Stack Unit Tests', () => {
           o.Namespace === 'aws:elasticbeanstalk:environment' &&
           o.OptionName === 'LoadBalancerType'
       );
-      expect(lbType.Value).toBe('none');
-    });
-
-    test('Beanstalk should be linked to the external target group', () => {
-      const optionSettings =
-        template.Resources.BeanstalkEnvironment.Properties.OptionSettings;
-      const tgLink = optionSettings.find(
-        (o: any) =>
-          o.Namespace === 'aws:elasticbeanstalk:environment:process:default' &&
-          o.OptionName === 'TargetGroupARNs'
-      );
-      expect(tgLink.Value).toEqual({ Ref: 'WebAppTargetGroup' });
+      expect(lbType.Value).toBe('application');
     });
 
     test('Beanstalk should have enhanced health check configuration', () => {
