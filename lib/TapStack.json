@@ -375,10 +375,10 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Fn::Sub": "${PrimaryDataBucket}/*"
+                  "Fn::Sub": "arn:aws:s3:::${PrimaryDataBucket}/*"
                 },
                 {
-                  "Fn::Sub": "${PrimaryDataBucket}"
+                  "Fn::Sub": "arn:aws:s3:::${PrimaryDataBucket}"
                 }
               ],
               "Condition": {
@@ -393,7 +393,7 @@
               "Principal": "*",
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${PrimaryDataBucket}/*"
+                "Fn::Sub": "arn:aws:s3:::${PrimaryDataBucket}/*"
               },
               "Condition": {
                 "StringNotEquals": {
@@ -408,10 +408,10 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Fn::Sub": "${PrimaryDataBucket}/*"
+                  "Fn::Sub": "arn:aws:s3:::${PrimaryDataBucket}/*"
                 },
                 {
-                  "Fn::Sub": "${PrimaryDataBucket}"
+                  "Fn::Sub": "arn:aws:s3:::${PrimaryDataBucket}"
                 }
               ],
               "Condition": {
@@ -440,10 +440,10 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Fn::Sub": "${SecondaryDataBucket}/*"
+                  "Fn::Sub": "arn:aws:s3:::${SecondaryDataBucket}/*"
                 },
                 {
-                  "Fn::Sub": "${SecondaryDataBucket}"
+                  "Fn::Sub": "arn:aws:s3:::${SecondaryDataBucket}"
                 }
               ],
               "Condition": {
@@ -458,7 +458,7 @@
               "Principal": "*",
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${SecondaryDataBucket}/*"
+                "Fn::Sub": "arn:aws:s3:::${SecondaryDataBucket}/*"
               },
               "Condition": {
                 "StringNotEquals": {
@@ -473,10 +473,10 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Fn::Sub": "${SecondaryDataBucket}/*"
+                  "Fn::Sub": "arn:aws:s3:::${SecondaryDataBucket}/*"
                 },
                 {
-                  "Fn::Sub": "${SecondaryDataBucket}"
+                  "Fn::Sub": "arn:aws:s3:::${SecondaryDataBucket}"
                 }
               ],
               "Condition": {

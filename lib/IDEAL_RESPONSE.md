@@ -38,7 +38,7 @@ Resources:
             Resource: "*"
             Condition:
               StringEquals:
-                "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
+                "kms:ViaService": "s3.us-west-2.amazonaws.com"
       KeySpec: SYMMETRIC_DEFAULT
       KeyUsage: ENCRYPT_DECRYPT
       Tags:
@@ -69,10 +69,16 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                "aws:RequestedRegion": "us-west-2"
           - Effect: Allow
             Principal:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                "aws:RequestedRegion": "us-west-2"
       Path: "/"
       Policies:
         - PolicyName: !Sub "S3AccessPolicy-${EnvironmentSuffix}"
@@ -93,6 +99,9 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:s3:::${PrimaryDataBucket}"
                   - !Sub "arn:aws:s3:::${SecondaryDataBucket}"
+                Condition:
+                  StringEquals:
+                    "aws:RequestedRegion": "us-west-2"
 
               # Explicit Allow - S3 Object Operations (only for our bucket objects)
               - Sid: AllowS3ObjectAccess
@@ -109,6 +118,9 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:s3:::${PrimaryDataBucket}/*"
                   - !Sub "arn:aws:s3:::${SecondaryDataBucket}/*"
+                Condition:
+                  StringEquals:
+                    "aws:RequestedRegion": "us-west-2"
 
               # Explicit Allow - KMS Operations for S3 encryption
               - Sid: AllowKMSForS3
@@ -121,7 +133,7 @@ Resources:
                 Resource: !GetAtt S3EncryptionKey.Arn
                 Condition:
                   StringEquals:
-                    "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
+                    "kms:ViaService": "s3.us-west-2.amazonaws.com"
 
               # Explicit Deny - All other AWS services except S3 and KMS
               - Sid: DenyAllOtherServices
@@ -133,6 +145,15 @@ Resources:
                   - kms:ReEncrypt*
                   - kms:DescribeKey
                 Resource: "*"
+
+              # Explicit Deny - Operations outside us-west-2
+              - Sid: DenyOperationsOutsideRegion
+                Effect: Deny
+                Action: "*"
+                Resource: "*"
+                Condition:
+                  StringNotEquals:
+                    "aws:RequestedRegion": "us-west-2"
       Tags:
         - Key: Name
           Value: !Sub "SecureDataS3AccessRole-${EnvironmentSuffix}"
@@ -233,6 +254,16 @@ Resources:
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": "aws:kms"
+          - Sid: DenyOperationsOutsideRegion
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::${PrimaryDataBucket}/*"
+              - !Sub "arn:aws:s3:::${PrimaryDataBucket}"
+            Condition:
+              StringNotEquals:
+                "aws:RequestedRegion": "us-west-2"
 
   SecondaryBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -259,6 +290,16 @@ Resources:
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": "aws:kms"
+          - Sid: DenyOperationsOutsideRegion
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::${SecondaryDataBucket}/*"
+              - !Sub "arn:aws:s3:::${SecondaryDataBucket}"
+            Condition:
+              StringNotEquals:
+                "aws:RequestedRegion": "us-west-2"
 
 Outputs:
   StackRegion:
@@ -305,7 +346,7 @@ Outputs:
 
   PrimaryBucketArn:
     Description: "Primary S3 Bucket ARN"
-    Value: !GetAtt PrimaryDataBucket.Arn
+    Value: !Sub "arn:aws:s3:::${PrimaryDataBucket}"
     Export:
       Name: !Sub "${AWS::StackName}-PrimaryBucketArn"
 
@@ -317,7 +358,7 @@ Outputs:
 
   SecondaryBucketArn:
     Description: "Secondary S3 Bucket ARN"
-    Value: !GetAtt SecondaryDataBucket.Arn
+    Value: !Sub "arn:aws:s3:::${SecondaryDataBucket}"
     Export:
       Name: !Sub "${AWS::StackName}-SecondaryBucketArn"
 
@@ -329,5 +370,6 @@ Outputs:
       - KMS Encryption: Enabled for all S3 buckets
       - Public Access: Blocked on all S3 buckets
       - IAM: Least Privilege Access applied with explicit deny policies
+      - Region Enforcement: All operations restricted to us-west-2
       - Security: HTTPS-only access enforced on all buckets
 ```
