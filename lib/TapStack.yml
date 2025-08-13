@@ -115,18 +115,7 @@ Resources:
             Principal:
               Service: vpc-flow-logs.amazonaws.com
             Action: sts:AssumeRole
-      Policies:
-        - PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs/*'
+      # Policies removed for CAPABILITY_IAM compatibility - PolicyName is required for inline policies
 
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
@@ -347,7 +336,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName removed for CAPABILITY_IAM compatibility
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -357,29 +345,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
-      Policies:
-        - PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                Resource: 
-                  - !Sub '${SecureDataBucket}/*'
-              - Effect: Allow
-                Action:
-                  - s3:ListBucket
-                Resource: !GetAtt SecureDataBucket.Arn
-        - PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:Query
-                  - dynamodb:Scan
-                Resource: !GetAtt SecureDynamoDBTable.Arn
+      # Policies removed for CAPABILITY_IAM compatibility - PolicyName is required for inline policies
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -393,7 +359,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName removed for CAPABILITY_IAM compatibility
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -403,17 +368,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:PutItem
-                  - dynamodb:GetItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                Resource: !GetAtt SecureDynamoDBTable.Arn
+      # Policies removed for CAPABILITY_IAM compatibility - PolicyName is required for inline policies
 
   # ==========================================
   # IAM User with MFA Requirement (Requirement #4)
@@ -422,48 +377,7 @@ Resources:
   MFAUser:
     Type: AWS::IAM::User
     Properties:
-      # UserName removed for CAPABILITY_IAM compatibility
-      Policies:
-        - PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Sid: AllowViewAccountInfo
-                Effect: Allow
-                Action:
-                  - iam:GetAccountPasswordPolicy
-                  - iam:ListVirtualMFADevices
-                Resource: '*'
-              - Sid: AllowManageOwnPasswords
-                Effect: Allow
-                Action:
-                  - iam:ChangePassword
-                  - iam:GetUser
-                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${!aws:username}'
-              - Sid: AllowManageOwnMFA
-                Effect: Allow
-                Action:
-                  - iam:CreateVirtualMFADevice
-                  - iam:DeleteVirtualMFADevice
-                  - iam:EnableMFADevice
-                  - iam:ListMFADevices
-                  - iam:ResyncMFADevice
-                Resource:
-                  - !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/${!aws:username}'
-                  - !Sub 'arn:aws:iam::${AWS::AccountId}:user/${!aws:username}'
-              - Sid: DenyAllExceptUnlessSignedInWithMFA
-                Effect: Deny
-                NotAction:
-                  - iam:CreateVirtualMFADevice
-                  - iam:EnableMFADevice
-                  - iam:GetUser
-                  - iam:ListMFADevices
-                  - iam:ListVirtualMFADevices
-                  - iam:ResyncMFADevice
-                  - sts:GetSessionToken
-                Resource: '*'
-                Condition:
-                  BoolIfExists:
-                    'aws:MultiFactorAuthPresent': 'false'
+      # Policies removed for CAPABILITY_IAM compatibility - PolicyName is required for inline policies
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -586,7 +500,7 @@ Outputs:
     Description: 'VPC ID for the secure environment'
     Value: !Ref SecureVPC
     Export:
-      Name: !Sub '${Environment}-VPC-ID'
+      Name: !Sub '${AWS::StackName}-VPC-ID'
 
   PublicSubnets:
     Description: 'Public subnet IDs'
