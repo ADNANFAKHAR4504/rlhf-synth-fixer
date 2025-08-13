@@ -59,7 +59,7 @@ describe('TapStack CloudFormation Template', () => {
       const key = template.Resources.S3EncryptionKey;
       const policy = key.Properties.KeyPolicy;
       expect(policy.Version).toBe('2012-10-17');
-      expect(policy.Statement).toHaveLength(4); // Admin, S3 Service, EC2 Role, Lambda Role
+      expect(policy.Statement).toHaveLength(2); // Admin, S3 Service (role permissions moved to IAM policies)
     });
 
     test('should have KMS key alias', () => {
@@ -149,7 +149,12 @@ describe('TapStack CloudFormation Template', () => {
       const policies = role.Properties.Policies;
       expect(policies).toHaveLength(2); // S3 policy and logs policy
       
-      const s3Policy = policies.find((p: any) => p.PolicyName.includes('s3-policy'));
+      // Find S3 policy by checking PolicyName structure
+      const s3Policy = policies.find((p: any) => {
+        const policyName = p.PolicyName;
+        return (typeof policyName === 'object' && policyName['Fn::Sub'] && policyName['Fn::Sub'].includes('s3-policy')) ||
+               (typeof policyName === 'string' && policyName.includes('s3-policy'));
+      });
       expect(s3Policy).toBeDefined();
       
       const s3Statements = s3Policy.PolicyDocument.Statement;
@@ -186,11 +191,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(vpc.Properties.EnableDnsSupport).toBe(true);
     });
 
-    test('PublicSubnet should be in us-west-2a', () => {
+    test('PublicSubnet should use dynamic AZ selection', () => {
       const subnet = template.Resources.PublicSubnet;
       expect(subnet).toBeDefined();
       expect(subnet.Type).toBe('AWS::EC2::Subnet');
-      expect(subnet.Properties.AvailabilityZone).toBe('us-west-2a');
+      expect(subnet.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [0, { 'Fn::GetAZs': '' }] });
       expect(subnet.Properties.CidrBlock).toBe('10.0.1.0/24');
     });
 
