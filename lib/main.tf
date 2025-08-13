@@ -50,9 +50,9 @@ variable "github_repo" {
 }
 
 variable "circleci_org_id" {
-  description = "CircleCI organization ID for OIDC"
+  description = "CircleCI organization ID for OIDC (will be made unique with environment suffix)"
   type        = string
-  default     = "your-circleci-org-id"
+  default     = "circleci-org"
 }
 
 variable "environment_suffix" {
@@ -188,10 +188,10 @@ resource "aws_dynamodb_table" "terraform_locks" {
 
 # OIDC Provider for CircleCI
 resource "aws_iam_openid_connect_provider" "circleci" {
-  url = "https://oidc.circleci.com/org/${var.circleci_org_id}"
+  url = "https://oidc.circleci.com/org/${var.circleci_org_id}-${local.environment_suffix}"
 
   client_id_list = [
-    var.circleci_org_id
+    "${var.circleci_org_id}-${local.environment_suffix}"
   ]
 
   # CircleCI OIDC thumbprint (as of 2024)
@@ -220,7 +220,7 @@ resource "aws_iam_role" "circleci_role" {
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "oidc.circleci.com/org-id" = var.circleci_org_id
+            "oidc.circleci.com/org-id" = "${var.circleci_org_id}-${local.environment_suffix}"
           }
           StringLike = {
             "oidc.circleci.com/project-id" = "*"
