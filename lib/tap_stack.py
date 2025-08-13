@@ -54,8 +54,11 @@ class TapStack(TerraformStack):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
 
+        # Resolve region from environment (fallback us-east-1)
+        aws_region = os.getenv("AWS_REGION", "us-east-2")
+
         # Provider and local backend (no Terraform Cloud token required)
-        AwsProvider(self, "aws", region="us-east-1")
+        AwsProvider(self, "aws", region=aws_region)
         LocalBackend(self)
 
         # Optional database creation (default: disabled to keep tests/resource usage light)
@@ -114,7 +117,7 @@ class TapStack(TerraformStack):
 
         igw = InternetGateway(self, "igw", vpc_id=vpc.id, tags={**common_tags, "Name": "production-igw"})
 
-        azs = ["us-east-1a", "us-east-1b"]
+        azs = [f"{aws_region}a", f"{aws_region}b"]
         public_subnets: List[Subnet] = []
         private_subnets: List[Subnet] = []
         for i, az in enumerate(azs):
@@ -331,7 +334,7 @@ class TapStack(TerraformStack):
                                 "secretsmanager:GetSecretValue",
                                 "secretsmanager:DescribeSecret",
                             ],
-                            "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:production/*",
+                            "Resource": f"arn:aws:secretsmanager:{aws_region}:*:secret:production/*",
                         }
                     ],
                 }
@@ -496,7 +499,7 @@ class TapStack(TerraformStack):
                             "logDriver": "awslogs",
                             "options": {
                                 "awslogs-group": log_group.name,
-                                "awslogs-region": "us-east-1",
+                                "awslogs-region": aws_region,
                                 "awslogs-stream-prefix": "ecs",
                             },
                         },
@@ -590,7 +593,7 @@ class TapStack(TerraformStack):
                 "TargetGroup": "/".join(tg_resource.split("/")[1:]),
             }
 
-        CloudwatchMetricAlarm(
+        alb_unhealthy_alarm = CloudwatchMetricAlarm(
             self,
             "alb-unhealthy",
             alarm_name="production-alb-unhealthy-targets",
@@ -603,9 +606,17 @@ class TapStack(TerraformStack):
             threshold=0,
             alarm_description="ALB has unhealthy targets",
             alarm_actions=[alerts.arn],
-            dimensions=alb_dimensions(alb.arn, tg.arn),
+            dimensions={"LoadBalancer": "", "TargetGroup": ""},
             tags=common_tags,
         )
+
+        # Fix ALB metric dimensions using Terraform expressions
+        self.add_override(
+            "resource.aws_cloudwatch_metric_alarm.alb-unhealthy.dimensions.LoadBalancer",
+            '${replace(aws_lb.alb.arn_suffix, "loadbalancer/", "")}')
+        self.add_override(
+            "resource.aws_cloudwatch_metric_alarm.alb-unhealthy.dimensions.TargetGroup",
+            "${aws_lb_target_group.tg.arn_suffix}")
 
         if enable_database and rds is not None:
             CloudwatchMetricAlarm(
