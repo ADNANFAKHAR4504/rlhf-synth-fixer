@@ -160,7 +160,7 @@ class TapStack(pulumi.ComponentResource):
       bucket=self.logging_bucket_name,
       versioning=aws.s3.BucketVersioningArgs(enabled=True),
       tags=self._apply_tags({"Purpose": "AccessLogging"}),
-      opts=ResourceOptions(parent=self, protect=True),
+      opts=ResourceOptions(parent=self, protect=False),
     )
 
     # Block all public access on logging bucket
@@ -474,7 +474,7 @@ class TapStack(pulumi.ComponentResource):
       bucket=bucket_name,
       versioning=aws.s3.BucketVersioningArgs(enabled=True),
       tags=self._apply_tags({"Purpose": "CloudTrailLogs"}),
-      opts=ResourceOptions(parent=self, protect=True),
+      opts=ResourceOptions(parent=self, protect=False),
     )
 
     # Block public access on CloudTrail bucket
@@ -564,7 +564,7 @@ class TapStack(pulumi.ComponentResource):
     cloudtrail = aws.cloudtrail.Trail(
       f"main-cloudtrail-{self.env}",
       **cloudtrail_args,
-      opts=ResourceOptions(parent=self, protect=True, depends_on=[cloudtrail_bucket_policy]),
+      opts=ResourceOptions(parent=self, protect=False, depends_on=[cloudtrail_bucket_policy]),
     )
 
     self.created_resources["cloudtrail"] = cloudtrail.name
