@@ -201,12 +201,44 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create delivery channel with KMS encryption', () => {
-      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
-        S3KmsKeyArn: {
-          'Fn::GetAtt': Match.anyValue(),
-        },
-      });
+    test('should conditionally create delivery channel with KMS encryption', () => {
+      // By default, delivery channel should NOT be created (CREATE_CONFIG_DELIVERY_CHANNEL not set to 'true')
+      template.resourceCountIs('AWS::Config::DeliveryChannel', 0);
+    });
+
+    test('should create delivery channel when explicitly enabled', () => {
+      // Set environment variable to enable delivery channel creation
+      const originalEnv = process.env.CREATE_CONFIG_DELIVERY_CHANNEL;
+      process.env.CREATE_CONFIG_DELIVERY_CHANNEL = 'true';
+
+      try {
+        // Create a new stack with delivery channel enabled
+        const testApp = new cdk.App();
+        testApp.node.setContext(
+          'availability-zones:account=123456789012:region=us-east-1',
+          ['us-east-1a', 'us-east-1b']
+        );
+        
+        const testStack = new TapStack(testApp, 'TestTapStackWithDelivery', {
+          environmentSuffix,
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        
+        const testTemplate = Template.fromStack(testStack);
+        
+        testTemplate.hasResourceProperties('AWS::Config::DeliveryChannel', {
+          S3KmsKeyArn: {
+            'Fn::GetAtt': Match.anyValue(),
+          },
+        });
+      } finally {
+        // Restore original environment variable
+        if (originalEnv !== undefined) {
+          process.env.CREATE_CONFIG_DELIVERY_CHANNEL = originalEnv;
+        } else {
+          delete process.env.CREATE_CONFIG_DELIVERY_CHANNEL;
+        }
+      }
     });
 
     test('should create config rule for security group compliance', () => {
@@ -451,7 +483,7 @@ describe('TapStack', () => {
 
   describe('Resource Dependencies', () => {
     test('should have proper dependencies for Config resources', () => {
-      // Config rule should depend on recorder and delivery channel
+      // Config rule should depend on recorder (and optionally delivery channel)
       const configRuleResources = template.findResources(
         'AWS::Config::ConfigRule'
       );
@@ -461,7 +493,8 @@ describe('TapStack', () => {
       const configRule = configRuleResources[configRuleKeys[0]];
       expect(configRule.DependsOn).toBeDefined();
       expect(Array.isArray(configRule.DependsOn)).toBe(true);
-      expect(configRule.DependsOn.length).toBe(2); // recorder and delivery channel
+      // Should have at least 1 dependency (recorder), and optionally delivery channel
+      expect(configRule.DependsOn.length).toBeGreaterThanOrEqual(1);
     });
 
     test('should grant proper permissions to AWS Config role', () => {

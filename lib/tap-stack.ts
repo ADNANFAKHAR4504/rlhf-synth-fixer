@@ -192,15 +192,24 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    const configDeliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      `ConfigDeliveryChannel${environmentSuffix}`,
-      {
-        name: `SecureWebAppDeliveryChannel${environmentSuffix}`,
-        s3BucketName: configBucket.bucketName,
-        s3KmsKeyArn: kmsKey.keyArn,
-      }
-    );
+    // AWS Config Delivery Channel - only create if explicitly requested
+    // AWS Config service allows only 1 delivery channel per region per account
+    // For PR environments, skip delivery channel creation to avoid conflicts
+    const createDeliveryChannel =
+      process.env.CREATE_CONFIG_DELIVERY_CHANNEL === 'true';
+
+    let configDeliveryChannel: config.CfnDeliveryChannel | undefined;
+    if (createDeliveryChannel) {
+      configDeliveryChannel = new config.CfnDeliveryChannel(
+        this,
+        `ConfigDeliveryChannel${environmentSuffix}`,
+        {
+          name: `SecureWebAppDeliveryChannel${environmentSuffix}`,
+          s3BucketName: configBucket.bucketName,
+          s3KmsKeyArn: kmsKey.keyArn,
+        }
+      );
+    }
 
     // AWS Config Rule for Security Group compliance
     const configRule = new config.CfnConfigRule(
@@ -216,7 +225,9 @@ export class TapStack extends cdk.Stack {
     );
 
     configRule.addDependency(configRecorder);
-    configRule.addDependency(configDeliveryChannel);
+    if (configDeliveryChannel) {
+      configRule.addDependency(configDeliveryChannel);
+    }
 
     // CloudWatch Log Group for Lambda with KMS encryption
     const lambdaLogGroup = new logs.LogGroup(
