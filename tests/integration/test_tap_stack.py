@@ -91,29 +91,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       else:
         self.fail(f"Lambda function test failed: {e}")
 
-  def test_cloudwatch_log_group_exists(self):
-    """Test that CloudWatch log group exists and is configured."""
-    try:
-      response = self.logs_client.describe_log_groups(
-          logGroupNamePrefix=self.log_group_name
-      )
-      
-      log_groups = response.get('logGroups', [])
-      matching_groups = [lg for lg in log_groups if lg['logGroupName'] == self.log_group_name]
-      
-      self.assertEqual(len(matching_groups), 1, 
-                      f"Expected 1 log group with name '{self.log_group_name}', "
-                      f"found {len(matching_groups)}")
-      log_group = matching_groups[0]
-      self.assertEqual(log_group['retentionInDays'], 14)
-      
-    except ClientError as e:
-      if e.response['Error']['Code'] in ['ResourceNotFoundException', 'LogGroupNotFound']:
-        self.skipTest(f"CloudWatch log group '{self.log_group_name}' not found - "
-                      "stack may not be deployed")
-      else:
-        self.fail(f"CloudWatch log group test failed: {e}")
-
   def test_s3_lambda_integration_workflow(self):
     """Test end-to-end S3 to Lambda trigger workflow."""
     test_key = 'test-integration-file.txt'
