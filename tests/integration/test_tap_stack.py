@@ -28,9 +28,17 @@ class TestTapStackIntegration(unittest.TestCase):
 
   def setUp(self):
     """Set up AWS credentials from environment for live testing"""
-    self.aws_region = os.getenv("AWS_REGION", "us-west-1")
+    # Search order: env region first, then common fallbacks (adjust if you
+    # deploy elsewhere)
+    primary_region = os.getenv("AWS_REGION", "us-west-1")
+    fallback_regions = [r for r in [primary_region, "us-west-2", "us-east-1"]]
+    # Deduplicate while preserving order
+    seen = set()
+    self.search_regions = [
+        r for r in fallback_regions if not (
+            r in seen or seen.add(r))]
 
-    # Current values from flat-outputs.json
+    # Values from flat-outputs.json (may be missing)
     self.api_gateway_url = flat_outputs.get("api_gateway_url")
     self.lambda_function_name = flat_outputs.get("lambda_function_name")
     self.dynamodb_table_name = flat_outputs.get("dynamodb_table_name")
@@ -44,54 +52,72 @@ class TestTapStackIntegration(unittest.TestCase):
     missing = [k for k in required if not flat_outputs.get(k)]
 
     if missing:
-      # Live discovery via AWS by the canonical names used in tap_stack.py
-      session = boto3.session.Session(region_name=self.aws_region)
-      apigw = session.client("apigateway")
-      lam = session.client("lambda")
-      ddb = session.client("dynamodb")
-      ec2 = session.client("ec2")
-
+      # Try to auto-discover by canonical names used in tap_stack.py across
+      # candidate regions
       discovered = {}
+      for region in self.search_regions:
+        session = boto3.session.Session(region_name=region)
+        apigw = session.client("apigateway")
+        lam = session.client("lambda")
+        ddb = session.client("dynamodb")
+        ec2 = session.client("ec2")
 
-      # API Gateway REST API named "tap-serverless-api" with stage "prod"
-      if "api_gateway_url" in missing:
-        apis = apigw.get_rest_apis(limit=500).get("items", [])
-        api = next((a for a in apis if a.get("name")
-                   == "tap-serverless-api"), None)
-        if api and api.get("id"):
-          discovered["api_gateway_url"] = f"https://{
-              api['id']}.execute-api.{
-              self.aws_region}.amazonaws.com/prod"
+        # API Gateway REST API named "tap-serverless-api" with stage "prod"
+        if "api_gateway_url" in missing and "api_gateway_url" not in discovered:
+          try:
+            apis = apigw.get_rest_apis(limit=500).get("items", [])
+            api = next((a for a in apis if a.get("name")
+                       == "tap-serverless-api"), None)
+            if api and api.get("id"):
+              discovered["api_gateway_url"] = (
+                  f"https://{api['id']}.execute-api.{region}.amazonaws.com/prod")
+          except Exception:
+            pass  # keep searching other regions
 
-      # Lambda function named "tap-serverless-function"
-      if "lambda_function_name" in missing:
-        try:
-          lam.get_function(FunctionName="tap-serverless-function")
-          discovered["lambda_function_name"] = "tap-serverless-function"
-        except lam.exceptions.ResourceNotFoundException:
-          for page in lam.get_paginator("list_functions").paginate():
-            if any(fn.get("FunctionName") ==
-                   "tap-serverless-function" for fn in page.get("Functions", [])):
-              discovered["lambda_function_name"] = "tap-serverless-function"
-              break
+        # Lambda function named "tap-serverless-function"
+        if "lambda_function_name" in missing and "lambda_function_name" not in discovered:
+          try:
+            lam.get_function(FunctionName="tap-serverless-function")
+            discovered["lambda_function_name"] = "tap-serverless-function"
+          except lam.exceptions.ResourceNotFoundException:
+            try:
+              for page in lam.get_paginator("list_functions").paginate():
+                if any(fn.get("FunctionName") == "tap-serverless-function"
+                       for fn in page.get("Functions", [])):
+                  discovered["lambda_function_name"] = "tap-serverless-function"
+                  break
+            except Exception:
+              pass
 
-      # DynamoDB table named "tap-serverless-table"
-      if "dynamodb_table_name" in missing:
-        try:
-          ddb.describe_table(TableName="tap-serverless-table")
-          discovered["dynamodb_table_name"] = "tap-serverless-table"
-        except ddb.exceptions.ResourceNotFoundException:
-          pass
+        # DynamoDB table named "tap-serverless-table"
+        if "dynamodb_table_name" in missing and "dynamodb_table_name" not in discovered:
+          try:
+            ddb.describe_table(TableName="tap-serverless-table")
+            discovered["dynamodb_table_name"] = "tap-serverless-table"
+          except ddb.exceptions.ResourceNotFoundException:
+            pass
+          except Exception:
+            pass
 
-      # VPC tagged Name = "tap-serverless-vpc"
-      if "vpc_id" in missing:
-        vpcs = ec2.describe_vpcs(
-            Filters=[{"Name": "tag:Name", "Values": ["tap-serverless-vpc"]}]
-        ).get("Vpcs", [])
-        if vpcs:
-          discovered["vpc_id"] = vpcs[0].get("VpcId")
+        # VPC tagged Name = "tap-serverless-vpc"
+        if "vpc_id" in missing and "vpc_id" not in discovered:
+          try:
+            vpcs = ec2.describe_vpcs(
+                Filters=[{"Name": "tag:Name", "Values": ["tap-serverless-vpc"]}]
+            ).get("Vpcs", [])
+            if vpcs:
+              discovered["vpc_id"] = vpcs[0].get("VpcId")
+          except Exception:
+            pass
 
-      # Merge and persist the recovered values
+        # If we’ve found all, stop searching more regions
+        if all(k in discovered for k in missing):
+          # Set the region that actually contains the resources for clients
+          # below
+          self.aws_region = region
+          break
+
+      # Merge and persist recovered values
       updated = dict(flat_outputs)
       updated.update({k: v for k, v in discovered.items() if v})
 
@@ -105,13 +131,18 @@ class TestTapStackIntegration(unittest.TestCase):
       with open(flat_outputs_path, "w", encoding="utf-8") as f:
         json.dump(updated, f)
 
-      # Update instance fields
+      # Update instance fields from discovered/updated values
       self.api_gateway_url = updated["api_gateway_url"]
       self.lambda_function_name = updated["lambda_function_name"]
       self.dynamodb_table_name = updated["dynamodb_table_name"]
       self.vpc_id = updated["vpc_id"]
 
-    # init clients
+    # If discovery didn’t set it (because file already had values), use env
+    # region
+    if not hasattr(self, "aws_region"):
+      self.aws_region = primary_region
+
+    # Init clients in the region we decided on
     self.lambda_client = boto3.client("lambda", region_name=self.aws_region)
     self.apigw_client = boto3.client("apigateway", region_name=self.aws_region)
     self.dynamodb_client = boto3.client(
