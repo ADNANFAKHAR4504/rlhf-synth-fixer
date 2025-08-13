@@ -42,7 +42,7 @@ describe('TapStack CloudFormation Template', () => {
       const externalAccountParam = template.Parameters.ExternalAccountId;
       expect(externalAccountParam.Type).toBe('String');
       expect(externalAccountParam.Description).toBe(
-        'AWS Account ID of the trusted external partner for cross-account access'
+        'AWS Account ID of the trusted external partner for cross-account access (default: 123456789012 for testing)'
       );
       expect(externalAccountParam.AllowedPattern).toBe('[0-9]{12}');
       expect(externalAccountParam.ConstraintDescription).toBe(

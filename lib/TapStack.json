@@ -4,7 +4,8 @@
     "Parameters": {
         "ExternalAccountId": {
             "Type": "String",
-            "Description": "AWS Account ID of the trusted external partner for cross-account access",
+            "Default": "123456789012",
+            "Description": "AWS Account ID of the trusted external partner for cross-account access (default: 123456789012 for testing)",
             "AllowedPattern": "[0-9]{12}",
             "ConstraintDescription": "Must be a valid 12-digit AWS Account ID"
         }
