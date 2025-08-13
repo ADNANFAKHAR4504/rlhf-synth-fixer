@@ -725,20 +725,6 @@ def create_codepipeline(
       opts=ResourceOptions(provider=provider)
   )
 
-  aws.iam.RolePolicyAttachment(
-      "codepipeline-access",
-      role=pipeline_role.name,
-      policy_arn="arn:aws:iam::aws:policy/service-role/AWSCodePipelineServiceRole",
-      opts=ResourceOptions(provider=provider)
-  )
-
-  aws.iam.RolePolicyAttachment(
-      "codebuild-access",
-      role=pipeline_role.name,
-      policy_arn="arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess",
-      opts=ResourceOptions(provider=provider)
-  )
-
   artifact_bucket = aws.s3.Bucket(
       "corp-codepipeline-artifact-bucket",
       acl="private",
@@ -756,36 +742,6 @@ def create_codepipeline(
               "kms_master_key_id": kms_key.arn,
           }
       }],
-      opts=ResourceOptions(provider=provider)
-  )
-
-  # Add S3 access for CodePipeline artifacts
-  s3_policy = pulumi.Output.all(
-      bucket_arn=artifact_bucket.arn,
-      bucket_arn_wildcard=pulumi.Output.concat(artifact_bucket.arn, "/*")
-  ).apply(lambda args: json.dumps({
-      "Version": "2012-10-17",
-      "Statement": [
-          {
-              "Effect": "Allow",
-              "Action": [
-                  "s3:GetBucketVersioning",
-                  "s3:GetObject",
-                  "s3:GetObjectVersion",
-                  "s3:PutObject"
-              ],
-              "Resource": [
-                  args["bucket_arn"],
-                  args["bucket_arn_wildcard"]
-              ]
-          }
-      ]
-  }))
-
-  aws.iam.RolePolicy(
-      "codepipeline-s3-policy",
-      role=pipeline_role.id,
-      policy=s3_policy,
       opts=ResourceOptions(provider=provider)
   )
 
@@ -860,6 +816,52 @@ def create_codepipeline(
           buildspec="version: 0.2\nphases:\n  build:\n    commands:\n      - echo Build completed on `date`"
       ),
       tags={**tags, "Name": "corp-codebuild-project"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Create custom inline policy for CodePipeline after all resources are
+  # defined
+  codepipeline_policy = pulumi.Output.all(
+      bucket_arn=artifact_bucket.arn,
+      codebuild_role_arn=codebuild_role.arn,
+      codebuild_project_arn=codebuild_project.arn
+  ).apply(lambda args: json.dumps({
+      "Version": "2012-10-17",
+      "Statement": [
+          {
+              "Effect": "Allow",
+              "Action": [
+                  "s3:GetObject",
+                  "s3:PutObject",
+                  "s3:GetBucketVersioning"
+              ],
+              "Resource": [f"{args['bucket_arn']}/*"]
+          },
+          {
+              "Effect": "Allow",
+              "Action": ["s3:ListBucket"],
+              "Resource": [args["bucket_arn"]]
+          },
+          {
+              "Effect": "Allow",
+              "Action": ["iam:PassRole"],
+              "Resource": [args["codebuild_role_arn"]]
+          },
+          {
+              "Effect": "Allow",
+              "Action": [
+                  "codebuild:StartBuild",
+                  "codebuild:BatchGetBuilds"
+              ],
+              "Resource": [args["codebuild_project_arn"]]
+          }
+      ]
+  }))
+
+  aws.iam.RolePolicy(
+      "codepipeline-custom-policy",
+      role=pipeline_role.id,
+      policy=codepipeline_policy,
       opts=ResourceOptions(provider=provider)
   )
 

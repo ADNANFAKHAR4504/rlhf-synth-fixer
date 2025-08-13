@@ -230,26 +230,34 @@ class TestHelpers(unittest.TestCase):
          return_value=MagicMock(value="ghtoken"))
   @patch("lib.tap_stack.pulumi.Output.concat",
          return_value="arn:aws:s3:::bucketname/*")
-  @patch("lib.tap_stack.aws.codebuild.Project", return_value=MagicMock())
+  @patch("lib.tap_stack.pulumi.Output.all")
+  @patch("lib.tap_stack.json.dumps", return_value="{}")
+  @patch("lib.tap_stack.aws.codebuild.Project", return_value=MagicMock(
+      arn="arn:aws:codebuild:us-west-2:123456789012:project/corp-codebuild-project"))
   @patch("lib.tap_stack.aws.codepipeline.Pipeline")
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.RolePolicy",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role",
-         return_value=MagicMock(arn="arn", name="role"))
+         return_value=MagicMock(arn="arn", name="role", id="role-id"))
   @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.s3.Bucket",
          return_value=MagicMock(bucket="bucketname", arn="arn:aws:s3:::bucketname", id="bucketid"))
   def test_create_codepipeline(
           self, _bucket, _encryption, _role, _role_policy, _attachment,
-          mock_pipeline_class, _codebuild, _concat, _ssm):
+          mock_pipeline_class, _codebuild, _json_dumps, _output_all, _concat, _ssm):
     """Ensure create_codepipeline provisions a pipeline with GitHub source integration."""
     mock_provider = MagicMock()
     mock_pipeline_instance = MagicMock()
     mock_pipeline_instance.name = "pipeline"
     mock_pipeline_class.return_value = mock_pipeline_instance
+
+    # Mock the Output.all().apply() pattern
+    mock_output = MagicMock()
+    mock_output.apply.return_value = "{\"Version\":\"2012-10-17\"}"
+    _output_all.return_value = mock_output
 
     kms_key = MagicMock(id="kid", arn="arn")
     tags = {"Environment": "Production"}
