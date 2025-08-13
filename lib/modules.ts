@@ -340,8 +340,8 @@ export class ComputeModule extends Construct {
         version: '$Latest',
       },
       targetGroupArns: [targetGroup.arn],
-      healthCheckType: 'ELB',
-      healthCheckGracePeriod: 600, // 10 minutes
+      healthCheckType: 'EC2',
+      healthCheckGracePeriod: 0, // 10 minutes
       tag: [
         {
           key: 'Name',
