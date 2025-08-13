@@ -7,7 +7,7 @@ import json
 import os
 from typing import List
 
-from cdktf import (NamedRemoteWorkspace, RemoteBackend, TerraformOutput,
+from cdktf import (LocalBackend, TerraformOutput,
                    TerraformStack, TerraformVariable)
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
@@ -52,14 +52,9 @@ class TapStack(TerraformStack):
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
 
-        # Provider and Terraform Cloud backend
+        # Provider and local backend (no Terraform Cloud token required)
         AwsProvider(self, "aws", region="us-east-1")
-        RemoteBackend(
-            self,
-            hostname="app.terraform.io",
-            organization=os.getenv("TF_CLOUD_ORG", "your-org"),
-            workspaces=NamedRemoteWorkspace(os.getenv("TF_WORKSPACE", "production")),
-        )
+        LocalBackend(self)
 
         # Optional database creation (default: disabled to keep tests/resource usage light)
         enable_database = os.getenv("ENABLE_DATABASE", "false").lower() == "true"

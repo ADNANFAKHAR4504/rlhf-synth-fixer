@@ -19,18 +19,15 @@ class TestTapStackSynthesis:
         synth_str = Testing.synth(stack)
         assert synth_str
 
-    def test_provider_and_backend_remote_configured(self):
+    def test_provider_and_backend_local_configured(self):
         app = App()
         stack = TapStack(app, "TapStackBackend")
         synth = json.loads(Testing.synth(stack))
         # Provider region
         assert synth.get("provider", {}).get("aws", [{}])[0]["region"] == "us-east-1"
-        # Remote backend settings
-        backend = synth.get("terraform", {}).get("backend", {}).get("remote", {})
-        assert backend.get("hostname") == "app.terraform.io"
-        assert backend.get("organization") == os.getenv("TF_CLOUD_ORG", "your-org")
-        workspaces = backend.get("workspaces", {})
-        assert workspaces.get("name") == os.getenv("TF_WORKSPACE", "production")
+        # Local backend settings
+        backend = synth.get("terraform", {}).get("backend", {})
+        assert "local" in backend
 
 
 class TestNetworking:
