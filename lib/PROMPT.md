@@ -13,6 +13,7 @@ IAM Configuration:
 
 Define IAM roles using AWS Managed Policies where applicable.
 
+
 MFA must be enabled for all IAM users.
 
 Ensure roles follow the principle of least privilege.
