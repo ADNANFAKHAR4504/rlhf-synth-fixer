@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as accessanalyzer from 'aws-cdk-lib/aws-accessanalyzer';
 import { Construct } from 'constructs';
 
@@ -82,8 +83,8 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // Configure server access logging for the main bucket
-    dataBucket.addToResourcePolicy(
+    // Configure server access logging for the logs bucket
+    logsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: 'AllowAccessLogging',
         effect: iam.Effect.ALLOW,
@@ -97,6 +98,13 @@ export class TapStack extends cdk.Stack {
         },
       })
     );
+
+    // Enable server access logging on the data bucket
+    const cfnDataBucket = dataBucket.node.defaultChild as s3.CfnBucket;
+    cfnDataBucket.loggingConfiguration = {
+      destinationBucketName: logsBucket.bucketName,
+      logFilePrefix: 'access-logs/',
+    };
 
     // Create IAM role with least privilege permissions for S3 access
     const s3AccessRole = new iam.Role(this, 'S3AccessRole', {
@@ -235,8 +243,8 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    const flowLogsGroup = new cdk.aws_logs.LogGroup(this, 'VPCFlowLogs', {
-      retention: cdk.aws_logs.RetentionDays.ONE_MONTH,
+    const flowLogsGroup = new logs.LogGroup(this, 'VPCFlowLogs', {
+      retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
