@@ -25,3 +25,9 @@ variable "key_pair_name" {
   type        = string
   default     = null # No key pair by default for automated deployments
 }
+
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming"
+  type        = string
+  default     = ""
+}

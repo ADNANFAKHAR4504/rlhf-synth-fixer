@@ -8,6 +8,7 @@ module "secure_environment" {
   allowed_cidr_blocks = var.allowed_cidr_blocks
   instance_type       = var.instance_type
   key_pair_name       = var.key_pair_name
+  environment_suffix  = var.environment_suffix
 }
 
 # Root level variables
@@ -34,9 +35,15 @@ variable "instance_type" {
 }
 
 variable "key_pair_name" {
-  description = "Name of the EC2 Key Pair for instance access"
+  description = "Name of the EC2 Key Pair for instance access (optional)"
   type        = string
-  default     = "secure-env-key" # Replace with your actual key pair name
+  default     = null # No key pair by default for automated deployments
+}
+
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming (auto-generated if not provided)"
+  type        = string
+  default     = ""
 }
 
 # Output values from the module

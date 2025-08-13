@@ -1,6 +1,16 @@
+# Random ID for unique resource naming
+resource "random_id" "resource_suffix" {
+  byte_length = 4
+
+  keepers = {
+    # Change the suffix when Terraform configuration changes
+    timestamp = timestamp()
+  }
+}
+
 # IAM role for cross-account access with least privilege
 resource "aws_iam_role" "cross_account_role" {
-  name = "SecureCrossAccountRole"
+  name = "SecureCrossAccountRole-${local.env_suffix}"
 
   # Trust policy allowing the specified account to assume this role
   assume_role_policy = jsonencode({
@@ -10,7 +20,7 @@ resource "aws_iam_role" "cross_account_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          "AWS" = "arn:aws:iam::${var.trusted_account_id}:root"
+          "AWS" : "arn:aws:iam::${var.trusted_account_id}:root"
         }
         Condition = {
           StringEquals = {
@@ -32,7 +42,7 @@ resource "aws_iam_role" "cross_account_role" {
 
 # Least privilege policy for the cross-account role
 resource "aws_iam_policy" "cross_account_policy" {
-  name        = "SecureCrossAccountPolicy"
+  name        = "SecureCrossAccountPolicy-${local.env_suffix}"
   description = "Least privilege policy for cross-account access"
 
   policy = jsonencode({
@@ -94,7 +104,7 @@ resource "aws_iam_role_policy_attachment" "cross_account_attachment" {
 
 # IAM role for EC2 instance
 resource "aws_iam_role" "ec2_role" {
-  name = "SecureEC2Role"
+  name = "SecureEC2Role-${local.env_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -117,7 +127,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # Instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "SecureEC2Profile"
+  name = "SecureEC2Profile-${local.env_suffix}"
   role = aws_iam_role.ec2_role.name
 
   tags = merge(local.common_tags, {

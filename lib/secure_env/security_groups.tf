@@ -1,6 +1,6 @@
 # Security Group with restricted HTTP/HTTPS access
 resource "aws_security_group" "secure_web_sg" {
-  name_prefix = "secure-web-sg-"
+  name_prefix = "secure-web-sg-${local.env_suffix}-"
   description = "Security group with restricted HTTP/HTTPS access"
   vpc_id      = data.aws_vpc.default.id
 
