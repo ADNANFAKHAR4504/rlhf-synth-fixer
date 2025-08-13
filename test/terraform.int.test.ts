@@ -21,6 +21,24 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
     outputs = JSON.parse(outputsContent);
+
+    // Parse JSON string arrays into actual arrays
+    const arrayFields = [
+      'public_subnet_ids',
+      'private_subnet_ids',
+      'nat_gateway_ids',
+      'elastic_ip_addresses',
+    ];
+
+    arrayFields.forEach(field => {
+      if (outputs[field] && typeof outputs[field] === 'string') {
+        try {
+          outputs[field] = JSON.parse(outputs[field]);
+        } catch (error) {
+          console.warn(`Failed to parse ${field} as JSON array:`, error);
+        }
+      }
+    });
   });
 
   describe('VPC and Networking', () => {
