@@ -111,7 +111,7 @@ class S3BucketComponent(ComponentResource):
 
     # Register outputs
     self.register_outputs({
-      "bucket_name": self.bucket.bucket,
+      "s3_bucket_name": self.bucket.bucket,
       "bucket_arn": self.bucket.arn,
       "kms_key_id": self.kms_key.key_id,
       "log_bucket_name": self.log_bucket.bucket

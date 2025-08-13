@@ -69,8 +69,8 @@ class DynamoDBTableComponent(ComponentResource):
 
     # Register outputs
     self.register_outputs({
-      "table_name": self.table.name,
-      "table_arn": self.table.arn
+      "dynamodb_table_name": self.table.name,
+      "dynamodb_table_arn": self.table.arn
     })
 
   @property

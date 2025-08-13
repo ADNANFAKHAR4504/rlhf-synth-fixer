@@ -124,8 +124,8 @@ class IAMRoleComponent(ComponentResource):
 
     # Register outputs
     outputs = {
-      "role_name": self.role.name,
-      "role_arn": self.role.arn
+      "iam_role_name": self.role.name,
+      "iam_role_arn": self.role.arn
     }
 
     if hasattr(self, 'instance_profile'):

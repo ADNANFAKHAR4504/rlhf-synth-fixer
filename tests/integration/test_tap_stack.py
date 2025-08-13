@@ -33,8 +33,7 @@ class TestTapStack(unittest.TestCase):
     stack = automation.create_or_select_stack(
       stack_name=cls.stack_name,
       project_name=cls.project_name,
-      program=pulumi_program,
-      opts=automation.LocalWorkspaceOptions(secrets_provider="plaintext")
+      program=pulumi_program
     )
 
     print("Previewing Pulumi stack...")
