@@ -50,16 +50,6 @@
       "MaxLength": 128,
       "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]+$",
       "ConstraintDescription": "Must be at least 8 characters long and contain alphanumeric and special characters"
-    },
-    "ExistingConfigRecorderName": {
-      "Type": "String",
-      "Default": "default",
-      "Description": "Name of the existing AWS Config Configuration Recorder to use instead of creating a new one"
-    },
-    "ExistingCloudTrailName": {
-      "Type": "String",
-      "Default": "default",
-      "Description": "Name of the existing AWS CloudTrail to use instead of creating a new one"
     }
   },
   "Mappings": {
@@ -159,6 +149,43 @@
                   }
                 }
               }
+            },
+            {
+              "Sid": "Allow CloudTrail",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:EncryptionContext:aws:cloudtrail:arn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-${EnvironmentSuffix}"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "Allow Config",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
             }
           ]
         },
@@ -1545,6 +1572,13 @@
                   "CloudTrailBucket",
                   "Arn"
                 ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-${EnvironmentSuffix}"
+                  }
+                }
               }
             },
             {
@@ -1559,7 +1593,10 @@
               },
               "Condition": {
                 "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-${EnvironmentSuffix}"
+                  }
                 }
               }
             }
@@ -1913,7 +1950,7 @@
         "Name": {
           "Fn::Sub": "${Environment}-config-recorder-${EnvironmentSuffix}"
         },
-        "RoleArn": {
+        "RoleARN": {
           "Fn::GetAtt": [
             "ConfigRecorderRole",
             "Arn"
