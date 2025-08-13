@@ -2,42 +2,29 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, CloudTrail, AWS Config, VPC Flow Logs, MFA, S3 SSE+logs, DNSSEC.
 
 Metadata:
-  Version: 1.0.1
-  Notes: >
-    Uses existing Route53 zone tap-us-east-1.turing229221.com (Z0457876OLTG958Q3IXN) and existing ISSUED ACM cert arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583.
-    Edit the two CIDRs below if needed (no parameters used).
-
-Rules:
-  EnforceUsEast1:
-    Assertions:
-      - Assert: !Equals [ !Ref "AWS::Region", "us-east-1" ]
-        AssertDescription: All resources must be deployed in us-east-1.
+  Version: 1.0.2
 
 Mappings:
   OrgCIDR:
     Allowed:
-      CIDR1: "203.0.113.0/24"     # EDIT to your office/VPN
-      CIDR2: "198.51.100.10/32"   # EDIT to your admin IP
-
+      CIDR1: "203.0.113.0/24"
+      CIDR2: "198.51.100.10/32"
   R53:
     Zone:
       Id: "Z0457876OLTG958Q3IXN"
       Name: "tap-us-east-1.turing229221.com."
       ApexFQDN: "tap-us-east-1.turing229221.com"
-
   ACM:
     Cert:
       Arn: "arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583"
 
 Resources:
 
-  #########################
-  # KMS Keys
-  #########################
+  # ---------------- KMS ----------------
   EncryptionKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: KMS for S3, EBS, CW Logs, CloudTrail
+      Description: KMS for S3, EBS, CloudWatch Logs, CloudTrail
       EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
@@ -67,6 +54,7 @@ Resources:
             Principal: { Service: s3.amazonaws.com }
             Action: [ "kms:Decrypt","kms:DescribeKey","kms:Encrypt","kms:GenerateDataKey*","kms:ReEncrypt*" ]
             Resource: "*"
+
   EncryptionKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
@@ -94,9 +82,7 @@ Resources:
             Action: [ "kms:DescribeKey","kms:GetPublicKey","kms:Sign" ]
             Resource: "*"
 
-  #########################
-  # Networking
-  #########################
+  # ---------------- Networking ----------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -160,9 +146,7 @@ Resources:
       SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRT
 
-  #########################
-  # Security Groups (restricted)
-  #########################
+  # ---------------- Security Groups ----------------
   ALBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -188,13 +172,10 @@ Resources:
         - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-instance-sg" }]
 
-  #########################
-  # S3 (SSE-KMS)
-  #########################
+  # ---------------- S3 (SSE-KMS + access logging) ----------------
   AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-access-logs-${AWS::AccountId}"
       OwnershipControls: { Rules: [ { ObjectOwnership: BucketOwnerPreferred } ] }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -222,12 +203,11 @@ Resources:
             Resource: !Sub "${AccessLogsBucket.Arn}/*"
             Condition:
               StringEquals:
-                aws:SourceAccount: !Ref AWS::AccountId
+                s3:x-amz-acl: bucket-owner-full-control
 
   ApplicationBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-app-${AWS::AccountId}"
       LoggingConfiguration:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: "application/"
@@ -246,7 +226,6 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-cloudtrail-${AWS::AccountId}"
       LoggingConfiguration:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: "cloudtrail/"
@@ -290,7 +269,6 @@ Resources:
   ConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-config-${AWS::AccountId}"
       LoggingConfiguration:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: "config/"
@@ -337,9 +315,7 @@ Resources:
                 s3:x-amz-acl: bucket-owner-full-control
                 aws:SourceAccount: !Ref AWS::AccountId
 
-  #########################
-  # CloudWatch Logs (KMS)
-  #########################
+  # ---------------- CloudWatch Logs ----------------
   AppLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -361,9 +337,7 @@ Resources:
       RetentionInDays: 30
       KmsKeyId: !GetAtt EncryptionKey.Arn
 
-  #########################
-  # IAM (least privilege) + MFA policy
-  #########################
+  # ---------------- IAM (least privilege) + MFA ----------------
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -502,9 +476,7 @@ Resources:
     Properties:
       ManagedPolicyArns: [ !Ref MFAEnforcementPolicy ]
 
-  #########################
-  # EC2 (AL2), EBS encrypted
-  #########################
+  # ---------------- EC2 (AL2), EBS encrypted ----------------
   AppInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -522,7 +494,7 @@ Resources:
             KmsKeyId: !Ref EncryptionKey
             DeleteOnTermination: true
       UserData:
-        Fn::Base64:  |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           amazon-linux-extras install -y nginx1
@@ -530,9 +502,7 @@ Resources:
           systemctl enable nginx && systemctl start nginx
       Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-app" }]
 
-  #########################
-  # ALB (HTTPS-only using existing ACM cert)
-  #########################
+  # ---------------- ALB (HTTPS-only) ----------------
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -578,9 +548,7 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
       SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
 
-  #########################
-  # CloudTrail (multi-region; IsLogging required)
-  #########################
+  # ---------------- CloudTrail ----------------
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
@@ -606,9 +574,7 @@ Resources:
                 - !Sub "${CloudTrailBucket.Arn}/*"
                 - !Sub "${AccessLogsBucket.Arn}/*"
 
-  #########################
-  # AWS Config (singleton—fails if already present)
-  #########################
+  # ---------------- AWS Config ----------------
   ConfigTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -634,7 +600,6 @@ Resources:
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: Daily
 
-  # Managed rules
   S3BucketLoggingEnabledRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
@@ -677,9 +642,7 @@ Resources:
       ConfigRuleName: incoming-ssh-disabled
       Source: { Owner: AWS, SourceIdentifier: INCOMING_SSH_DISABLED }
 
-  #########################
-  # VPC Flow Logs
-  #########################
+  # ---------------- VPC Flow Logs ----------------
   VPCFlowLogs:
     Type: AWS::EC2::FlowLog
     Properties:
@@ -690,9 +653,7 @@ Resources:
       LogGroupName: !Ref VPCFlowLogGroup
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
 
-  #########################
-  # Route53: Use existing public hosted zone + DNSSEC
-  #########################
+  # ---------------- Route 53 DNSSEC + Records ----------------
   KeySigningKey:
     Type: AWS::Route53::KeySigningKey
     Properties:
@@ -729,7 +690,7 @@ Outputs:
     Description: ALB DNS name
     Value: !GetAtt ALB.DNSName
   PublicFQDN:
-    Description: Public apex pointing to ALB (matches ACM cert)
+    Description: Public apex pointing to ALB
     Value: !FindInMap [R53, Zone, ApexFQDN]
   Route53HostedZoneId:
     Description: Existing public hosted zone used
