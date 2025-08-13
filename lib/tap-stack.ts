@@ -75,11 +75,23 @@ export class TapStack extends cdk.Stack {
       `VPC-FlowLogs-Role-${environmentSuffix}`,
       {
         assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName(
-            'service-role/VPCFlowLogsDeliveryRolePolicy'
-          ),
-        ],
+        inlinePolicies: {
+          FlowLogsDeliveryPolicy: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                resources: ['*'],
+              }),
+            ],
+          }),
+        },
       }
     );
 
