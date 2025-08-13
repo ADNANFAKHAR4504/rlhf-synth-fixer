@@ -33,6 +33,7 @@ Mappings:
 
 Conditions:
   IsProductionEnvironment: !Equals [!Ref Environment, 'production']
+  IsStandardStorageClass: !Equals [!FindInMap [EnvironmentConfig, !Ref Environment, S3StorageClass], 'STANDARD']
 
 Resources:
   # =====================================================
@@ -53,13 +54,16 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: TransitionToIA
-            Status: Enabled
-            Transitions:
-              - StorageClass: !FindInMap [EnvironmentConfig, !Ref Environment, S3StorageClass]
-                TransitionInDays: 30
+      # Lifecycle only added if storage class is not STANDARD
+      LifecycleConfiguration: !If
+        - IsStandardStorageClass
+        - !Ref AWS::NoValue
+        - Rules:
+            - Id: TransitionToIA
+              Status: Enabled
+              Transitions:
+                - StorageClass: !FindInMap [EnvironmentConfig, !Ref Environment, S3StorageClass]
+                  TransitionInDays: 30
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -87,6 +91,7 @@ Resources:
           Value: SharedConfiguration
         - Key: Application
           Value: !Ref ApplicationName
+
 
   # =====================================================
   # DYNAMODB TABLES
