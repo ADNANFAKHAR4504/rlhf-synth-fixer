@@ -10,9 +10,9 @@ import pulumi_aws as aws
 config = pulumi.Config()
 
 ENVIRONMENT = config.get("environment") or "dev"
-AWS_REGION = "us-west-2"
+AWS_REGION = "us-east-2"  # Changed to Ohio region for fresh start
 INSTANCE_TYPE = "t3.micro"
-PROJECT_NAME = "dswa-v6"
+PROJECT_NAME = "dswa-v7"  # New project name to avoid all conflicts
 
 DEPLOYMENT_ID = str(int(time.time()))[-4:]
 
