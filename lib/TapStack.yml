@@ -836,23 +836,27 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Ref CloudTrailS3Bucket
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-cloudtrail'
           - Sid: 'AWSCloudTrailWrite'
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket}/AWSLogs/${AWS::AccountId}/*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-cloudtrail'
           - Sid: 'DenyInsecureTransport'
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Ref CloudTrailS3Bucket
-              - !Sub '${CloudTrailS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
+              - !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/*'
             Condition:
               Bool:
                 'aws:SecureTransport': false
