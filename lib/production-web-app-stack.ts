@@ -111,9 +111,12 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     };
 
     // Get availability zones for the specified region using the provider
-    const availabilityZones = aws.getAvailabilityZones({
-      state: 'available',
-    }, { provider: this.awsProvider });
+    const availabilityZones = aws.getAvailabilityZones(
+      {
+        state: 'available',
+      },
+      { provider: this.awsProvider }
+    );
 
     // VPC
     this.vpc = new aws.ec2.Vpc(
@@ -541,16 +544,19 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
       {
         name: `${resourcePrefix}-launch-template`,
         imageId: aws.ec2
-          .getAmi({
-            mostRecent: true,
-            owners: ['amazon'],
-            filters: [
-              {
-                name: 'name',
-                values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-              },
-            ],
-          }, { provider: this.awsProvider })
+          .getAmi(
+            {
+              mostRecent: true,
+              owners: ['amazon'],
+              filters: [
+                {
+                  name: 'name',
+                  values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+                },
+              ],
+            },
+            { provider: this.awsProvider }
+          )
           .then(ami => ami.id),
         instanceType: 't3.micro',
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
@@ -721,9 +727,7 @@ systemctl enable amazon-cloudwatch-agent
     this.bucket = new aws.s3.Bucket(
       'app-bucket',
       {
-        bucket: `${resourcePrefix}-bucket-${Math.random()
-          .toString(36)
-          .substring(2, 15)}`,
+        bucket: `${resourcePrefix}-bucket`,
         tags: {
           Name: `${resourcePrefix}-bucket`,
           ...commonTags,
