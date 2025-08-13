@@ -84,7 +84,7 @@ export function createHighAvailabilityVpc(
   id: string,
   opts: { cidr?: string; azCount?: number; namePrefix: string }
 ): VpcOutputs {
-  const cidr = opts.cidr ?? '10.0.0.0/16';
+  const cidr = opts.cidr ?? '10.217.10.0/23';
   const azCount = opts.azCount ?? 2;
 
   // discover AZs
@@ -119,7 +119,7 @@ export function createHighAvailabilityVpc(
     const az = Fn.element(azs.names, i);
     const pubSubnet = new Subnet(stack, `${id}-pub-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: '10.217.10.0/26',
+      cidrBlock: '10.217.10.0/27',
       availabilityZone: az,
       mapPublicIpOnLaunch: true,
       tags: { Name: `${opts.namePrefix}-public-${i}` },
@@ -127,7 +127,7 @@ export function createHighAvailabilityVpc(
 
     const privSubnet = new Subnet(stack, `${id}-priv-subnet-${i}`, {
       vpcId: vpc.id,
-      cidrBlock: '10.217.10.128/24',
+      cidrBlock: '10.217.10.128/26',
       availabilityZone: az,
       mapPublicIpOnLaunch: false,
       tags: { Name: `${opts.namePrefix}-private-${i}` },
