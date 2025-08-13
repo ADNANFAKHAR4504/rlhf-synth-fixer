@@ -446,10 +446,12 @@ resource "random_password" "db_password" {
 
 data "aws_secretsmanager_secret" "db_password" {
   name = "${var.project}-${var.environment}-db-password"
+  depends_on = [aws_secretsmanager_secret.db_password]
 }
 
 data "aws_secretsmanager_secret_version" "db_password" {
   secret_id = data.aws_secretsmanager_secret.db_password.id
+  depends_on = [aws_secretsmanager_secret_version.db_password_value]
 }
 
 resource "aws_db_instance" "mysql" {
