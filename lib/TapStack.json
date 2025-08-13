@@ -1476,10 +1476,21 @@
               "Principal": {
                 "Service": "elasticloadbalancing.amazonaws.com"
               },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"
-              }
+              "Action": [
+                "s3:PutObject",
+                "s3:GetBucketAcl"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "S3LogsBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"
+                }
+              ]
             }
           ]
         }
@@ -2263,6 +2274,9 @@
     },
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "DependsOn": [
+        "S3LogsBucketPolicy"
+      ],
       "Properties": {
         "Name": {
           "Fn::Sub": "${Environment}-ALB-${EnvironmentSuffix}"
