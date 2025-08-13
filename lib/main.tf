@@ -432,6 +432,7 @@ resource "aws_secretsmanager_secret" "db_password" {
   description = "RDS master password for ${var.project} ${var.environment}"
 }
 
+
 resource "aws_secretsmanager_secret_version" "db_password_value" {
   secret_id     = aws_secretsmanager_secret.db_password.id
   secret_string = random_password.db_password.result
@@ -443,6 +444,13 @@ resource "random_password" "db_password" {
   override_special = "_%@"
 }
 
+data "aws_secretsmanager_secret" "db_password" {
+  name = "${var.project}-${var.environment}-db-password"
+}
+
+data "aws_secretsmanager_secret_version" "db_password" {
+  secret_id = data.aws_secretsmanager_secret.db_password.id
+}
 
 resource "aws_db_instance" "mysql" {
   depends_on = [
@@ -485,7 +493,7 @@ output "autoscaling_group_name" {
 
 output "app_security_group_id" {
   description = "ID of the application Security Group"
-  value       = try(aws_security_group.app_sg.id, "pending-sg-id")
+  value       = try(aws_security_group.ec2_sg.id, "pending-sg-id")
 }
 
 output "alb_security_group_id" {
