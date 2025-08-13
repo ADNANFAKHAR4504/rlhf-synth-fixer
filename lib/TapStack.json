@@ -150,6 +150,33 @@
       },
       "us-gov-east-1": {
         "AccountId": "190560391635"
+      },
+      "ap-south-2": {
+        "AccountId": "718504428378"
+      },
+      "ap-southeast-3": {
+        "AccountId": "589379963580"
+      },
+      "eu-south-1": {
+        "AccountId": "635631232127"
+      },
+      "af-south-1": {
+        "AccountId": "098369216593"
+      },
+      "me-south-1": {
+        "AccountId": "076674570225"
+      },
+      "ap-east-1": {
+        "AccountId": "754344448648"
+      },
+      "eu-central-2": {
+        "AccountId": "054676820928"
+      },
+      "ap-southeast-4": {
+        "AccountId": "589379963580"
+      },
+      "il-central-1": {
+        "AccountId": "516062556100"
       }
     }
   },
@@ -1533,12 +1560,38 @@
               "Sid": "ELBAccessLogsPolicy",
               "Effect": "Allow",
               "Principal": {
-                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
+                "AWS": {
+                  "Fn::Sub": [
+                    "arn:aws:iam::${ELBAccountId}:root",
+                    {
+                      "ELBAccountId": {
+                        "Fn::FindInMap": [
+                          "ELBAccountMap",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "AccountId"
+                        ]
+                      }
+                    }
+                  ]
+                }
               },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "${S3LogsBucket.Arn}/AWSLogs/*"
-              }
+              "Action": [
+                "s3:PutObject",
+                "s3:GetBucketAcl"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "S3LogsBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${S3LogsBucket.Arn}/*"
+                }
+              ]
             }
           ]
         }
