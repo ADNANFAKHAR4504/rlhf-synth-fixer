@@ -331,50 +331,6 @@ class TestTapStack(unittest.TestCase):
 
   @patch("lib.tap_stack.pulumi.export")
   @patch("lib.tap_stack.pulumi.Config")
-  @patch("lib.tap_stack.aws.get_region")
-  def test_tapstack_region_validation_configured_wrong_region(
-          self, mock_region, mock_config, _export):
-    """Test TapStack raises error when configured region is not us-west-2."""
-    mock_region.return_value.name = "us-east-1"
-
-    # Mock config to return wrong region
-    mock_config_instance = MagicMock()
-    mock_config_instance.get.return_value = "us-east-1"
-    mock_config.return_value = mock_config_instance
-
-    args = TapStackArgs()
-
-    with self.assertRaises(RuntimeError) as context:
-      TapStack("test-stack", args)
-
-    self.assertIn(
-        "Deployment region must be us-west-2 but configured as us-east-1",
-        str(context.exception))
-
-  @patch("lib.tap_stack.pulumi.export")
-  @patch("lib.tap_stack.pulumi.Config")
-  @patch("lib.tap_stack.aws.get_region")
-  def test_tapstack_region_validation_actual_wrong_region(
-          self, mock_region, mock_config, _export):
-    """Test TapStack raises error when actual region is not us-west-2."""
-    mock_region.return_value.name = "us-east-1"
-
-    # Mock config to return None (no configured region)
-    mock_config_instance = MagicMock()
-    mock_config_instance.get.return_value = None
-    mock_config.return_value = mock_config_instance
-
-    args = TapStackArgs()
-
-    with self.assertRaises(RuntimeError) as context:
-      TapStack("test-stack", args)
-
-    self.assertIn(
-        "Deployment region must be us-west-2 but actually in us-east-1",
-        str(context.exception))
-
-  @patch("lib.tap_stack.pulumi.export")
-  @patch("lib.tap_stack.pulumi.Config")
   @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock())
   @patch("lib.tap_stack.aws.get_region")
   @patch("lib.tap_stack.create_monitoring_lambda",

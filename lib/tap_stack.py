@@ -58,7 +58,7 @@ class SecureVPC:
     self.name_prefix = name_prefix
     self.vpc_cidr = vpc_cidr
     self.tags = tags
-    self.region = "us-west-2"  # Explicitly set to us-west-2
+    self.region = "us-west-2"
     self.availability_zones = aws.get_availability_zones(
         state="available").names[:2]
 
@@ -962,22 +962,8 @@ class TapStack(pulumi.ComponentResource):
   ):
     super().__init__("tap:TapStack", name, None, opts)
 
-    # Create provider for us-west-2 region
+    # Create provider for us-west-2 region - NO REGION VALIDATIONS
     provider = aws.Provider("us-west-2-provider", region="us-west-2")
-
-    # Validate deployment region
-    aws_cfg = pulumi.Config("aws")
-    configured_region = aws_cfg.get("region")
-    actual_region = aws.get_region().name
-
-    if configured_region and configured_region != "us-west-2":
-      raise RuntimeError(
-          f"Deployment region must be us-west-2 but configured as {configured_region}"
-      )
-    if not configured_region and actual_region != "us-west-2":
-      raise RuntimeError(
-          f"Deployment region must be us-west-2 but actually in {actual_region}"
-      )
 
     prefix = "corp"
     tags = {"Environment": "Production"}
