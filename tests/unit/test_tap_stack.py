@@ -1,177 +1,101 @@
-<<<<<<< HEAD
 """
-test_tap_stack.py
+Unit tests for Task 2 TapStack infrastructure.
 
-Unit tests for the TapStack Pulumi component using moto for AWS mocking
-and Pulumi's testing utilities.
+Verifies stack initialization, configuration, and resource creation
+without deploying actual AWS infrastructure.
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
-import pulumi
-from pulumi import ResourceOptions
+from unittest.mock import ANY, patch
 
-# Import the classes we're testing
+import pulumi
+from pulumi.runtime import Mocks, set_mocks
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 
-"""
-Here you define the classes for Unit tests for the TapStack Pulumi component and Pulumi's testing utilities.
+# Dummy resource to mimic Pulumi AWS resources
+class DummyResource(pulumi.CustomResource):
+    def __init__(self, name="dummy", **kwargs):
+        super().__init__("test:DummyResource", name, {}, opts=pulumi.ResourceOptions())
+        # Common attributes accessed in tap_stack.py
+        self._resource_id = f"{name}_id"
+        self.arn = f"arn:aws:test::{name}"
+        self.name = f"{name}_name"
+        self.bucket = f"{name}-bucket"
 
-Write your end-to-end unit testing below. Examples is given, do not use this as
 
-it may not fit the stack you're deploying.
-"""
+# Pulumi mocks
+class MyMocks(Mocks):
+    def new_resource(self, args):
+        return f"{args.name}_id", args.inputs
 
-# class TestTapStackArgs(unittest.TestCase):
-#   """Test cases for TapStackArgs configuration class."""
+    def call(self, args):
+        return {}, None
 
-#   def test_tap_stack_args_default_values(self):
-#     """Test TapStackArgs with default values."""
-#     args = TapStackArgs()
-    
-#     self.assertEqual(args.environment_suffix, 'dev')
-#     self.assertIsNone(args.tags)
-=======
-import unittest
-import os
-from aws_cdk import App
-from aws_cdk.assertions import Template
-from lib.tap_stack import TapStack, TapStackProps
 
-class TestTapStack(unittest.TestCase):
-    def setUp(self):
-        self.app = App()
-        props = TapStackProps(environment_suffix="test")
-        
-        # Set environment variable to disable encryption during testing
-        os.environ['CDK_TESTING'] = 'true'
-        
-        self.stack = TapStack(self.app, "TestStack", props=props)
-        self.template = Template.from_stack(self.stack)
+pulumi.runtime.set_mocks(MyMocks())
 
-    def tearDown(self):
-        # Clean up environment variable
-        if 'CDK_TESTING' in os.environ:
-            del os.environ['CDK_TESTING']
 
-    def test_template_synthesizes(self):
-        # Just confirm the template object exists
-        self.assertIsNotNone(self.template)
+class TestTapStackTask2(unittest.TestCase):
 
-    def test_s3_buckets_created(self):
-        # You have two buckets: logging and app buckets
-        self.template.resource_count_is("AWS::S3::Bucket", 2)
-        
-        # In testing mode, buckets might use default encryption
-        # Check that buckets exist with proper configuration
-        buckets = self.template.find_resources("AWS::S3::Bucket")
-        self.assertEqual(len(buckets), 2)
+    @patch("lib.tap_stack.aws.ec2.Vpc", return_value=DummyResource("vpc"))
+    @patch("lib.tap_stack.aws.ec2.Subnet", return_value=DummyResource("subnet"))
+    @patch("lib.tap_stack.aws.iam.Policy", return_value=DummyResource("policy"))
+    @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("bucket"))
+    @patch("lib.tap_stack.aws.s3.BucketOwnershipControls", return_value=DummyResource("bucketown"))
+    @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfiguration", return_value=DummyResource("bucketenc"))
+    @patch("lib.tap_stack.aws.s3.BucketLogging", return_value=DummyResource("bucketlog"))
+    @patch("lib.tap_stack.aws.kms.Key", return_value=DummyResource("kms"))
+    @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
+    @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
+    @patch("lib.tap_stack.aws.rds.Instance", return_value=DummyResource("db"))
+    @patch("lib.tap_stack.aws.iam.Role", return_value=DummyResource("role"))
+    @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=DummyResource("attachment"))
+    def test_stack_initialization_with_defaults(self, *_mocks):
+        """Verify stack initializes with default args."""
+        args = TapStackArgs()
+        TapStack("testStack", args)
 
-    def test_iam_managed_policy_created(self):
-        self.template.resource_count_is("AWS::IAM::ManagedPolicy", 1)
+        self.assertEqual(args.environment_suffix, "dev")
+        self.assertIsInstance(args.tags, dict)
 
-    def test_vpc_created(self):
-        self.template.resource_count_is("AWS::EC2::VPC", 1)
-        
-        # Verify VPC has correct CIDR
-        self.template.has_resource_properties("AWS::EC2::VPC", {
-            "CidrBlock": "10.0.0.0/16",
-            "EnableDnsHostnames": True,
-            "EnableDnsSupport": True
-        })
+    @patch("lib.tap_stack.aws.ec2.Vpc", return_value=DummyResource("vpc"))
+    @patch("lib.tap_stack.aws.ec2.Subnet", return_value=DummyResource("subnet"))
+    @patch("lib.tap_stack.aws.iam.Policy", return_value=DummyResource("policy"))
+    @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("bucket"))
+    @patch("lib.tap_stack.aws.kms.Key", return_value=DummyResource("kms"))
+    @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
+    @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
+    @patch("lib.tap_stack.aws.rds.Instance", return_value=DummyResource("db"))
+    @patch("lib.tap_stack.aws.iam.Role", return_value=DummyResource("role"))
+    @patch("lib.tap_stack.aws.iam.RolePolicyAttachment", return_value=DummyResource("attachment"))
+    def test_stack_initialization_with_custom_args(self, *_mocks):
+        """Verify stack initializes with custom args."""
+        tags = {"Project": "UnitTest"}
+        args = TapStackArgs(environment_suffix="prod", tags=tags)
+        TapStack("customStack", args)
 
-    def test_subnets_created(self):
-        # Should have 6 subnets total (3 types × 2 AZs)
-        self.template.resource_count_is("AWS::EC2::Subnet", 6)
+        self.assertEqual(args.environment_suffix, "prod")
+        self.assertEqual(args.tags, tags)
 
-    def test_rds_instance_created(self):
-        self.template.resource_count_is("AWS::RDS::DBInstance", 1)
-        
-        # Verify RDS instance configuration
-        self.template.has_resource_properties("AWS::RDS::DBInstance", {
-            "Engine": "postgres",
-            "PubliclyAccessible": False,
-            "DeletionProtection": True,
-            "DBName": "tapdb"
-        })
+    @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("logbucket"))
+    @patch("lib.tap_stack.aws.s3.BucketOwnershipControls", return_value=DummyResource("bucketown"))
+    @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfiguration", return_value=DummyResource("bucketenc"))
+    def test_logging_bucket_configuration(self, mock_bucket_enc, mock_bucket_own, mock_bucket):
+        """Verify logging bucket configuration calls are made."""
+        args = TapStackArgs()
+        TapStack("loggingBucketTest", args)
 
-    def test_rds_subnet_group_created(self):
-        self.template.resource_count_is("AWS::RDS::DBSubnetGroup", 1)
+        mock_bucket.assert_any_call(
+            f"logging-bucket-{args.environment_suffix}",
+            bucket=f"tap-logging-{args.environment_suffix}",
+            tags=args.tags,
+            opts=ANY
+        )
+        mock_bucket_own.assert_called()
+        mock_bucket_enc.assert_called()
 
-    def test_alb_created(self):
-        self.template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
-        
-        # Verify ALB configuration
-        self.template.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
-            "Scheme": "internet-facing",
-            "Type": "application"
-        })
-
-    def test_target_group_created(self):
-        self.template.resource_count_is("AWS::ElasticLoadBalancingV2::TargetGroup", 1)
-        
-        self.template.has_resource_properties("AWS::ElasticLoadBalancingV2::TargetGroup", {
-            "Port": 80,
-            "Protocol": "HTTP",
-            "HealthCheckPath": "/health"
-        })
-
-    def test_cloudfront_distribution_created(self):
-        self.template.resource_count_is("AWS::CloudFront::Distribution", 1)
-        
-        # Verify CloudFront behavior
-        self.template.has_resource_properties("AWS::CloudFront::Distribution", {
-            "DistributionConfig": {
-                "DefaultCacheBehavior": {
-                    "ViewerProtocolPolicy": "redirect-to-https"
-                },
-                "PriceClass": "PriceClass_100"
-            }
-        })
-
-    def test_cloudtrail_created(self):
-        self.template.resource_count_is("AWS::CloudTrail::Trail", 1)
-        
-        # Verify CloudTrail configuration
-        self.template.has_resource_properties("AWS::CloudTrail::Trail", {
-            "IsMultiRegionTrail": False,
-            "EnableLogFileValidation": True,
-            "IncludeGlobalServiceEvents": False
-        })
-
-    def test_security_groups_created(self):
-        # Should have security groups for DB, ALB, and App
-        self.template.resource_count_is("AWS::EC2::SecurityGroup", 3)
-
-    def test_auto_scaling_group_created(self):
-        self.template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
-        
-        # Verify ASG configuration
-        self.template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
-            "MinSize": "1",
-            "MaxSize": "3",
-            "DesiredCapacity": "2"
-        })
-
-    def test_launch_template_created(self):
-        self.template.resource_count_is("AWS::EC2::LaunchTemplate", 1)
-
-    def test_iam_roles_created(self):
-        # Should have roles for EC2 and Flow Logs
-        self.template.resource_count_is("AWS::IAM::Role", 2)
-
-    def test_outputs_exist(self):
-        # Test that stack outputs are created
-        outputs = self.template.find_outputs("*")
-        
-        # Should have outputs for ALB DNS, CloudFront domain, etc.
-        expected_outputs = ["ALBDNS", "CloudFrontDomain", "DatabaseEndpoint", 
-                          "AppBucketName", "LoggingBucketName", "KMSKeyId"]
-        
-        for expected_output in expected_outputs:
-            self.assertIn(expected_output, outputs)
 
 if __name__ == "__main__":
     unittest.main()
->>>>>>> 636828faa67585f502529de3c1e3fff7f9fd8580
