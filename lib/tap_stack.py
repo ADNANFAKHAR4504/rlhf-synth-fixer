@@ -568,6 +568,11 @@ systemctl restart nginx
 ec2_instances: List[aws.ec2.Instance] = []
 
 for i, subnet in enumerate(public_subnets):
+    # Check if subnet has IPv6 CIDR block for conditional IPv6 configuration
+    subnet_has_ipv6 = pulumi.Output.all(subnet.ipv6_cidr_block).apply(
+        lambda args: args[0] is not None and args[0] != ""
+    )
+    
     instance = aws.ec2.Instance(
         get_resource_name(f"web-server-{i + 1}"),
         ami=amazon_linux_ami.id,
@@ -576,7 +581,7 @@ for i, subnet in enumerate(public_subnets):
         vpc_security_group_ids=[ec2_security_group.id],
         iam_instance_profile=ec2_instance_profile.name,
         user_data=user_data_script,
-        ipv6_address_count=1,
+        ipv6_address_count=subnet_has_ipv6.apply(lambda has_ipv6: 1 if has_ipv6 else 0),
         monitoring=True,
         tags={
             "Name": get_resource_name(f"web-server-{i + 1}"),
@@ -727,7 +732,10 @@ pulumi.export("public_subnet_ids", [subnet.id for subnet in public_subnets])
 pulumi.export("availability_zones", [subnet.availability_zone for subnet in public_subnets])
 pulumi.export("ec2_instance_ids", [instance.id for instance in ec2_instances])
 pulumi.export("ec2_public_ips", [instance.public_ip for instance in ec2_instances])
-pulumi.export("ec2_ipv6_addresses", [instance.ipv6_addresses for instance in ec2_instances])
+pulumi.export("ec2_ipv6_addresses", [
+    instance.ipv6_addresses.apply(lambda addrs: addrs if addrs else []) 
+    for instance in ec2_instances
+])
 pulumi.export("alb_arn", alb.arn)
 pulumi.export("alb_dns_name", alb.dns_name)
 pulumi.export("alb_zone_id", alb.zone_id)
@@ -745,7 +753,7 @@ pulumi.export("deployment_summary", {
     "region": AWS_REGION,
     "instance_type": INSTANCE_TYPE,
     "project_name": PROJECT_NAME,
-    "dual_stack_enabled": True,
+    "dual_stack_enabled": vpc.ipv6_cidr_block.apply(lambda cidr: cidr is not None and cidr != ""),
     "high_availability": True,
     "monitoring_enabled": True,
     "security_hardened": True
@@ -757,7 +765,10 @@ pulumi.export("deployment_instructions", {
     "step_4": "Monitor the infrastructure using the CloudWatch dashboard",
     "verification": {
         "web_access": "Open the application_url in a web browser",
-        "ipv6_test": "Use 'curl -6' with the ALB DNS name to test IPv6 connectivity",
+        "ipv6_test": vpc.ipv6_cidr_block.apply(
+            lambda cidr: "Use 'curl -6' with the ALB DNS name to test IPv6 connectivity" 
+            if cidr else "IPv6 not available - existing VPC lacks IPv6 CIDR block"
+        ),
         "health_check": "Check target group health in AWS Console",
         "monitoring": "View metrics in the CloudWatch dashboard"
     }
@@ -785,6 +796,7 @@ print("   • Automatic VPC reuse for existing project VPCs")
 print("   • Automatic Internet Gateway discovery and reuse")
 print("   • Automatic subnet discovery and reuse")
 print("   • Smart CIDR conflict avoidance for new subnets")
+print("   • Conditional IPv6 support based on existing VPC capabilities")
 print("   • Fallback to default VPC if creation fails")
 print("   • Comprehensive error handling and logging")
 print("   • Resource tagging for better management")
