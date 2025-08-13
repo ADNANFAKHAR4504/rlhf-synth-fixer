@@ -52,17 +52,17 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS SDK clients
-const s3Client = new S3Client({ region: 'ca-central-1' });
-const ec2Client = new EC2Client({ region: 'ca-central-1' });
-const kmsClient = new KMSClient({ region: 'ca-central-1' });
-const cloudTrailClient = new CloudTrailClient({ region: 'ca-central-1' });
-const iamClient = new IAMClient({ region: 'ca-central-1' });
-const rdsClient = new RDSClient({ region: 'ca-central-1' });
+const s3Client = new S3Client({ region: 'ap-northeast-1' });
+const ec2Client = new EC2Client({ region: 'ap-northeast-1' });
+const kmsClient = new KMSClient({ region: 'ap-northeast-1' });
+const cloudTrailClient = new CloudTrailClient({ region: 'ap-northeast-1' });
+const iamClient = new IAMClient({ region: 'ap-northeast-1' });
+const rdsClient = new RDSClient({ region: 'ap-northeast-1' });
 const cloudWatchLogsClient = new CloudWatchLogsClient({
-  region: 'ca-central-1',
+  region: 'ap-northeast-1',
 });
 const secretsManagerClient = new SecretsManagerClient({
-  region: 'ca-central-1',
+  region: 'ap-northeast-1',
 });
 
 describe('SecureCorp Infrastructure Integration Tests', () => {
