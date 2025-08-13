@@ -1,0 +1,15 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291682",
+  "team": "6",
+  "startedAt": "2025-08-05T12:24:12.612Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
+}
