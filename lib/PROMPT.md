@@ -1,4 +1,4 @@
-Insert here the prompt that made the model fail.
+Below is the prompt that was used to generate the model
 ```
 Role: You are an expert AWS Cloud Engineer specializing in security and Infrastructure as Code (IaC). You are proficient in creating secure, scalable, and production-ready AWS environments using CloudFormation.
 
