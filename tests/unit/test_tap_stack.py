@@ -74,16 +74,16 @@ def test_cloudfront_distribution_created(stack_template):
     }
   })
 
-def test_s3_bucket_created_with_correct_removal_policy(template):
+def test_s3_bucket_created_with_correct_removal_policy(stack_template):
   # Verifies the S3 bucket for static assets exists and is configured for auto-deletion.
-  template.has_resource_properties("AWS::S3::Bucket", {
+  stack_template.has_resource_properties("AWS::S3::Bucket", {
       "BucketEncryption": pytest.anything(),
       "PublicAccessBlockConfiguration": pytest.anything()
   })
 
   # The DeletionPolicy is a top-level attribute, not a property.
   # We must find the resource and check its attributes directly.
-  s3_bucket_resources = template.find_resources("AWS::S3::Bucket")
+  s3_bucket_resources = stack_template.find_resources("AWS::S3::Bucket")
   
   # Assert that there is exactly one S3 bucket resource
   assert len(s3_bucket_resources) == 1, "Expected exactly one S3 bucket resource"
