@@ -24,21 +24,25 @@ locals {
 variable "environment" {
   description = "Environment name"
   type        = string
+  default     = "Production"
 }
 
 variable "owner" {
   description = "Resource owner"
   type        = string
+  default     = "Turing"
 }
 
 variable "project" {
   description = "Project name"
   type        = string
+  default     = "HCL"
 }
 
 variable "aws_region" {
   description = "AWS region"
   type        = string
+  default     = "us-west-2"
 }
 
 variable "allowed_cidrs" {
@@ -56,18 +60,20 @@ variable "ec2_instance_type" {
 variable "ec2_ami_id" {
   description = "AMI ID for EC2 instances"
   type        = string
+  default     = "ami-0c55b159cbfafe1f0"
 }
 
 variable "db_username" {
   description = "RDS master username"
   type        = string
-  default     = "admin"
+  default     = "dbapp"
 }
 
 variable "db_password" {
   description = "RDS master password"
   type        = string
   sensitive   = true
+  default     = "dbapppass"
 }
 
 #########################
