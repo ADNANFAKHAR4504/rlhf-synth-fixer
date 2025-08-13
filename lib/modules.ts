@@ -114,7 +114,7 @@ export class Ec2InstanceModule extends Construct {
           protocol: 'tcp',
           fromPort: 22,
           toPort: 22,
-          cidrBlocks: ['YOUR_IP_HERE/32'],
+          cidrBlocks: ['206.84.231.196 /32'],
           description: 'Allow SSH',
         },
       ],
