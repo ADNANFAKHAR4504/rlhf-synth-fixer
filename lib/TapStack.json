@@ -997,9 +997,6 @@
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-EC2-Role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1070,9 +1067,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-EC2-Profile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2InstanceRole"
@@ -1490,9 +1484,6 @@
                 "AutoScalingGroupName": {
                     "Ref": "AutoScalingGroup"
                 },
-                "PolicyName": {
-                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-scale-up"
-                },
                 "PolicyType": "TargetTrackingScaling",
                 "TargetTrackingConfiguration": {
                     "PredefinedMetricSpecification": {
@@ -1507,9 +1498,6 @@
             "Properties": {
                 "AutoScalingGroupName": {
                     "Ref": "AutoScalingGroup"
-                },
-                "PolicyName": {
-                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-scale-down"
                 },
                 "PolicyType": "TargetTrackingScaling",
                 "TargetTrackingConfiguration": {

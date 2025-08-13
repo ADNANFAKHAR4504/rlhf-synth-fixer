@@ -1,3 +1,8 @@
+# IDEAL_RESPONSE - Secure Web Application Infrastructure
+
+## Overview  
+This document outlines the key improvements and fixes made to transform the initial MODEL_RESPONSE into the IDEAL_RESPONSE CloudFormation template for the secure web application infrastructure.
+
 ```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Secure Web Application Infrastructure - Production Ready CloudFormation Template"
@@ -520,7 +525,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${EnvironmentSuffix}-EC2-Role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -556,7 +560,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${ProjectName}-${EnvironmentSuffix}-EC2-Profile"
       Roles:
         - !Ref EC2InstanceRole
 
@@ -782,7 +785,6 @@ Resources:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AutoScalingGroupName: !Ref AutoScalingGroup
-      PolicyName: !Sub "${ProjectName}-${EnvironmentSuffix}-scale-up"
       PolicyType: TargetTrackingScaling
       TargetTrackingConfiguration:
         PredefinedMetricSpecification:
@@ -793,7 +795,6 @@ Resources:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AutoScalingGroupName: !Ref AutoScalingGroup
-      PolicyName: !Sub "${ProjectName}-${EnvironmentSuffix}-scale-down"
       PolicyType: TargetTrackingScaling
       TargetTrackingConfiguration:
         PredefinedMetricSpecification:
