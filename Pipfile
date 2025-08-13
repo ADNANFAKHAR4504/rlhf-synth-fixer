@@ -23,12 +23,10 @@ pytest-env = "*"
 pylint = "*"
 pytest = "*"
 requests = "*"
-<<<<<<< HEAD
 pytest-cov = "*"
-=======
 cfn-lint = "*"
 cfn-flip = "*"
->>>>>>> 73ac46b3f9651ec393e68b0fa6c7958b4ed324ab
+
 
 [requires]
 python_version = "3.12.11"
