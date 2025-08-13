@@ -42,12 +42,13 @@ describe('TapStack', () => {
     stack = new TapStack(app, 'TestTapStackChildren');
     synthesized = Testing.synth(stack);
 
-    expect(synthesized).toContain('prodVpcStack');
-    expect(synthesized).toContain('prodS3Stack');
-    expect(synthesized).toContain('prodLambdaStack');
-    expect(synthesized).toContain('prodRdsStack');
-    expect(synthesized).toContain('prodEc2Stack');
-    expect(synthesized).toContain('prodKmsStack');
+    const output = JSON.parse(synthesized);
+    expect(output).toHaveProperty('prodVpcStack');
+    expect(output).toHaveProperty('prodS3Stack');
+    expect(output).toHaveProperty('prodLambdaStack');
+    expect(output).toHaveProperty('prodRdsStack');
+    expect(output).toHaveProperty('prodEc2Stack');
+    expect(output).toHaveProperty('prodKmsStack');
   });
 
   test('configures S3 backend with encryption and lockfile', () => {
@@ -63,6 +64,10 @@ describe('TapStack', () => {
     expect(synthesized).toContain('encrypt');
     // Lockfile override is not directly in synthesized output, but check the stack override
     expect(stack).toHaveProperty('overrides');
+
+    const output = JSON.parse(synthesized);
+    expect(output.terraform.backend.s3).toHaveProperty('encrypt', true);
+    expect(output.terraform.backend.s3).toHaveProperty('use_lockfile', true);
   });
 
   test('provider region matches props', () => {
@@ -75,17 +80,16 @@ describe('TapStack', () => {
   });
 
   test('uses AWS_REGION_OVERRIDE when set', () => {
-    // @ts-ignore
-    TapStack.prototype.AWS_REGION_OVERRIDE = 'eu-west-1';
+    process.env.AWS_REGION = 'eu-west-1';
     stack = new TapStack(app, 'TestTapStackOverride', {
       awsRegion: 'us-west-2',
     });
     synthesized = Testing.synth(stack);
 
     expect(synthesized).toContain('eu-west-1');
-    // Reset override for other tests
-    // @ts-ignore
-    TapStack.prototype.AWS_REGION_OVERRIDE = '';
+
+    // Clean up for other tests
+    delete process.env.AWS_REGION;
   });
 
   test('handles defaultTags prop', () => {
