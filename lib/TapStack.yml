@@ -620,7 +620,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       # FIX: Used a shorter, compliant naming scheme for global uniqueness.
-      BucketName: !Sub 'nm-sec-${EnvironmentSuffix}-ct-${AWS::AccountId}'
+      BucketName: !Sub 'nm-sec-${EnvironmentSuffix}-data-v2-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
