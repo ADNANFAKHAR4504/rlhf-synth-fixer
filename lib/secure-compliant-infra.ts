@@ -651,7 +651,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
 
       // Generate a random password using crypto
       const generateRandomPassword = () => {
-        // RDS password constraints: 
+        // RDS password constraints:
         // - Must be 8-128 characters
         // - Only printable ASCII characters besides '/', '@', '"', ' ' may be used
         // - Must contain at least one uppercase, one lowercase, one digit, and one special character
@@ -659,22 +659,31 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         const lowercase = 'abcdefghijklmnopqrstuvwxyz';
         const digits = '0123456789';
         const special = '!#$%^&*()_+-=[]{}|;:,.?';
-        
+
         // Ensure at least one character from each category
         let password = '';
-        password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
-        password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+        password += uppercase.charAt(
+          Math.floor(Math.random() * uppercase.length)
+        );
+        password += lowercase.charAt(
+          Math.floor(Math.random() * lowercase.length)
+        );
         password += digits.charAt(Math.floor(Math.random() * digits.length));
         password += special.charAt(Math.floor(Math.random() * special.length));
-        
+
         // Fill the rest with random characters from all categories
         const allChars = uppercase + lowercase + digits + special;
         for (let i = 4; i < 32; i++) {
-          password += allChars.charAt(Math.floor(Math.random() * allChars.length));
+          password += allChars.charAt(
+            Math.floor(Math.random() * allChars.length)
+          );
         }
-        
+
         // Shuffle the password to avoid predictable patterns
-        return password.split('').sort(() => Math.random() - 0.5).join('');
+        return password
+          .split('')
+          .sort(() => Math.random() - 0.5)
+          .join('');
       };
 
       const rdsPassword = generateRandomPassword();
