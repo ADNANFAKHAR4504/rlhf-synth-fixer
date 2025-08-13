@@ -296,13 +296,12 @@ export class ComputeModule extends Construct {
 
     // FIXED: Simple user data script without complex quoting issues
     const userDataScript = [
-      '#!/bin/bash',
-      'yum update -y',
-      'yum install -y httpd',
-      'systemctl start httpd',
-      'systemctl enable httpd',
-      'echo \"<h1>Deployed via CDKTF</h1>\" > /var/www/html/index.html',
-      'echo \"Instance: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)\" >> /var/www/html/index.html',
+      `#!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo '<h1>Deployed via CDKTF</h1>' > /var/www/html/index.html`,
     ].join('\n');
 
     const launchTemplate = new aws.launchTemplate.LaunchTemplate(
