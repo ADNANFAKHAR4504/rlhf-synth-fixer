@@ -1467,18 +1467,6 @@
         "BucketName": {
           "Fn::Sub": "v1-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {
-                  "Ref": "KMSKey"
-                }
-              }
-            }
-          ]
-        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -1535,29 +1523,7 @@
           "Version": "2012-10-17",
           "Statement": [
             {
-              "Sid": "DenyInsecureConnections",
-              "Effect": "Deny",
-              "Principal": "*",
-              "Action": "s3:*",
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "S3LogsBucket",
-                    "Arn"
-                  ]
-                },
-                {
-                  "Fn::Sub": "${S3LogsBucket.Arn}/*"
-                }
-              ],
-              "Condition": {
-                "Bool": {
-                  "aws:SecureTransport": "false"
-                }
-              }
-            },
-            {
-              "Sid": "ELBAccessLogsPolicy",
+              "Sid": "AWSLogDeliveryWrite",
               "Effect": "Allow",
               "Principal": {
                 "AWS": {
@@ -1579,11 +1545,11 @@
               },
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${S3LogsBucket.Arn}/*"
+                "Fn::Sub": "${S3LogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
               }
             },
             {
-              "Sid": "ELBAccessLogsBucketAcl",
+              "Sid": "AWSLogDeliveryAclCheck",
               "Effect": "Allow",
               "Principal": {
                 "AWS": {
@@ -1609,6 +1575,28 @@
                   "S3LogsBucket",
                   "Arn"
                 ]
+              }
+            },
+            {
+              "Sid": "DenyInsecureConnections",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "S3LogsBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${S3LogsBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
               }
             }
           ]
@@ -2428,7 +2416,9 @@
           },
           {
             "Key": "access_logs.s3.prefix",
-            "Value": "alb-logs"
+            "Value": {
+              "Fn::Sub": "AWSLogs/${AWS::AccountId}/elasticloadbalancing"
+            }
           }
         ],
         "Tags": [
