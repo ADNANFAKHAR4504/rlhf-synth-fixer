@@ -31,7 +31,6 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     test('should have all required parameters', () => {
       expect(template.Parameters.ProjectName).toBeDefined();
-      expect(template.Parameters.Environment).toBeDefined();
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.LogRetentionDays).toBeDefined();
     });
@@ -41,14 +40,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('cfn-secure-project');
       expect(param.AllowedPattern).toBe('^[a-z0-9-]+$');
-    });
-
-    test('Environment parameter should have correct properties', () => {
-      const param = template.Parameters.Environment;
-      expect(param.Type).toBe('String');
-      expect(param.AllowedValues).toContain('dev');
-      expect(param.AllowedValues).toContain('staging');
-      expect(param.AllowedValues).toContain('prod');
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {

@@ -9,21 +9,10 @@
       "AllowedPattern": "^[a-z0-9-]+$",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
     },
-    "Environment": {
-      "Type": "String",
-      "Default": "dev",
-      "AllowedValues": [
-        "dev",
-        "staging",
-        "prod"
-      ],
-      "Description": "Environment name (e.g., dev, prod)"
-    },
     "EnvironmentSuffix": {
       "Type": "String",
       "Default": "dev",
-      "AllowedPattern": "^[a-zA-Z0-9-]+$",
-      "Description": "Suffix for resource names, typically the same as Environment"
+      "Description": "Environment suffix for resource names and API stage"
     },
     "LogRetentionDays": {
       "Type": "Number",
@@ -86,7 +75,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -118,7 +107,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -149,7 +138,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -180,7 +169,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -199,7 +188,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -231,7 +220,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -259,7 +248,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -281,7 +270,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -327,7 +316,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -402,7 +391,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -470,7 +459,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -586,7 +575,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -707,7 +696,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -794,7 +783,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -901,7 +890,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -956,7 +945,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -1086,7 +1075,7 @@
           "Ref": "APIDeployment"
         },
         "StageName": {
-          "Ref": "Environment"
+          "Ref": "EnvironmentSuffix"
         },
         "AccessLogSetting": {
           "Fn::If": [
@@ -1138,7 +1127,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           }
         ]
@@ -1196,7 +1185,7 @@
     "APIGatewayURL": {
       "Description": "API Gateway endpoint URL",
       "Value": {
-        "Fn::Sub": "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+        "Fn::Sub": "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
       },
       "Export": {
         "Name": {
@@ -1218,13 +1207,13 @@
     "SecureEndpoint": {
       "Description": "Secure API endpoint",
       "Value": {
-        "Fn::Sub": "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/secure"
+        "Fn::Sub": "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/secure"
       }
     },
     "HealthEndpoint": {
       "Description": "Health check endpoint",
       "Value": {
-        "Fn::Sub": "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/health"
+        "Fn::Sub": "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/health"
       }
     },
     "ApplicationDataBucketName": {
