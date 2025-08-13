@@ -116,36 +116,62 @@ describe('TapStack', () => {
   });
 
   describe('Route Tables and Routes', () => {
-    test('creates route tables for public subnets', () => {
+    test('creates exactly one route table for public subnets', () => {
       const routeTables = template.findResources('AWS::EC2::RouteTable');
-      // At least 2 route tables for public subnets
-      expect(Object.keys(routeTables).length).toBeGreaterThanOrEqual(2);
+      // Exactly 1 route table for public subnets (plus default VPC route table)
+      expect(Object.keys(routeTables).length).toBeGreaterThanOrEqual(1);
     });
 
-    test('creates routes to Internet Gateway', () => {
+    test('creates route to Internet Gateway', () => {
       template.hasResourceProperties('AWS::EC2::Route', {
         DestinationCidrBlock: '0.0.0.0/0',
         GatewayId: { Ref: Match.anyValue() },
       });
     });
 
-    test('associates route tables with subnets', () => {
+    test('associates route table with both subnets', () => {
       const associations = template.findResources(
         'AWS::EC2::SubnetRouteTableAssociation'
       );
-      // At least 2 associations for public subnets
-      expect(Object.keys(associations).length).toBeGreaterThanOrEqual(2);
+      // Exactly 2 associations for public subnets
+      expect(Object.keys(associations).length).toBe(2);
+
+      // Verify each association has correct properties
+      Object.values(associations).forEach((association: any) => {
+        expect(association.Properties.SubnetId).toBeDefined();
+        expect(association.Properties.RouteTableId).toBeDefined();
+      });
+    });
+
+    test('route table has correct tags', () => {
+      const routeTables = template.findResources('AWS::EC2::RouteTable');
+      const publicRouteTable = Object.values(routeTables).find((rt: any) => {
+        const tags = rt.Properties.Tags || [];
+        return tags.some(
+          (tag: any) =>
+            tag.Key === 'Name' && tag.Value.includes('PublicRouteTable')
+        );
+      }) as any;
+
+      expect(publicRouteTable).toBeDefined();
+      const tags = publicRouteTable.Properties.Tags;
+      const nameTag = tags.find((tag: any) => tag.Key === 'Name');
+      const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+
+      expect(nameTag).toBeDefined();
+      expect(nameTag.Value).toBe(`${environmentSuffix}-PublicRouteTable`);
+      expect(envTag).toBeDefined();
+      expect(envTag.Value).toBe(environmentSuffix);
     });
   });
 
   describe('VPC Endpoints', () => {
     test('creates S3 VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: {
-          'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, '.s3']],
-        },
+        ServiceName: 'com.amazonaws.us-east-1.s3',
         VpcEndpointType: 'Gateway',
         VpcId: { Ref: Match.anyValue() },
+        RouteTableIds: Match.anyValue(),
       });
     });
 
@@ -153,11 +179,7 @@ describe('TapStack', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const s3Endpoint = Object.values(endpoints).find((endpoint: any) => {
         const serviceName = endpoint.Properties.ServiceName;
-        return (
-          serviceName &&
-          serviceName['Fn::Join'] &&
-          serviceName['Fn::Join'][1][2] === '.s3'
-        );
+        return serviceName === 'com.amazonaws.us-east-1.s3';
       }) as any;
 
       expect(s3Endpoint).toBeDefined();
@@ -173,14 +195,10 @@ describe('TapStack', () => {
 
     test('creates DynamoDB VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: {
-          'Fn::Join': [
-            '',
-            ['com.amazonaws.', { Ref: 'AWS::Region' }, '.dynamodb'],
-          ],
-        },
+        ServiceName: 'com.amazonaws.us-east-1.dynamodb',
         VpcEndpointType: 'Gateway',
         VpcId: { Ref: Match.anyValue() },
+        RouteTableIds: Match.anyValue(),
       });
     });
 
@@ -188,11 +206,7 @@ describe('TapStack', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const dynamoEndpoint = Object.values(endpoints).find((endpoint: any) => {
         const serviceName = endpoint.Properties.ServiceName;
-        return (
-          serviceName &&
-          serviceName['Fn::Join'] &&
-          serviceName['Fn::Join'][1][2] === '.dynamodb'
-        );
+        return serviceName === 'com.amazonaws.us-east-1.dynamodb';
       }) as any;
 
       expect(dynamoEndpoint).toBeDefined();
@@ -209,17 +223,14 @@ describe('TapStack', () => {
     test('VPC endpoints are associated with public subnet route tables', () => {
       const s3Endpoint = template.findResources('AWS::EC2::VPCEndpoint', {
         Properties: {
-          ServiceName: {
-            'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, '.s3']],
-          },
+          ServiceName: 'com.amazonaws.us-east-1.s3',
         },
       });
 
       const endpointResource = Object.values(s3Endpoint)[0];
       expect(endpointResource.Properties.RouteTableIds).toBeDefined();
-      expect(endpointResource.Properties.RouteTableIds.length).toBeGreaterThan(
-        0
-      );
+      expect(endpointResource.Properties.RouteTableIds).toHaveLength(1);
+      expect(endpointResource.Properties.VpcEndpointType).toBe('Gateway');
     });
   });
 

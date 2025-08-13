@@ -50,90 +50,131 @@ export class TapStack extends cdk.Stack {
     );
 
     // Create public subnet 1 in us-east-1a with CIDR 10.0.1.0/24
-    const publicSubnet1 = new ec2.PublicSubnet(this, 'PublicSubnet1', {
+    const publicSubnet1 = new ec2.CfnSubnet(this, 'PublicSubnet1', {
       availabilityZone: 'us-east-1a',
       vpcId: vpc.vpcId,
       cidrBlock: '10.0.1.0/24',
       mapPublicIpOnLaunch: true,
+      tags: [
+        {
+          key: 'Name',
+          value: `${environmentSuffix}-PublicSubnet-1`,
+        },
+        {
+          key: 'Environment',
+          value: environmentSuffix,
+        },
+      ],
     });
 
     // Create public subnet 2 in us-east-1b with CIDR 10.0.2.0/24
-    const publicSubnet2 = new ec2.PublicSubnet(this, 'PublicSubnet2', {
+    const publicSubnet2 = new ec2.CfnSubnet(this, 'PublicSubnet2', {
       availabilityZone: 'us-east-1b',
       vpcId: vpc.vpcId,
       cidrBlock: '10.0.2.0/24',
       mapPublicIpOnLaunch: true,
+      tags: [
+        {
+          key: 'Name',
+          value: `${environmentSuffix}-PublicSubnet-2`,
+        },
+        {
+          key: 'Environment',
+          value: environmentSuffix,
+        },
+      ],
     });
 
-    // Configure route tables for public subnets
-    publicSubnet1.addRoute('DefaultRoute', {
-      routerId: internetGateway.ref,
-      routerType: ec2.RouterType.GATEWAY,
+    // Create route table for public subnets
+    const publicRouteTable = new ec2.CfnRouteTable(this, 'PublicRouteTable', {
+      vpcId: vpc.vpcId,
+      tags: [
+        {
+          key: 'Name',
+          value: `${environmentSuffix}-PublicRouteTable`,
+        },
+        {
+          key: 'Environment',
+          value: environmentSuffix,
+        },
+      ],
+    });
+
+    // Add default route to internet gateway
+    const defaultRoute = new ec2.CfnRoute(this, 'DefaultRoute', {
+      routeTableId: publicRouteTable.ref,
       destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: internetGateway.ref,
     });
 
-    publicSubnet2.addRoute('DefaultRoute', {
-      routerId: internetGateway.ref,
-      routerType: ec2.RouterType.GATEWAY,
-      destinationCidrBlock: '0.0.0.0/0',
-    });
+    // Associate route table with subnet 1
+    const routeTableAssociation1 = new ec2.CfnSubnetRouteTableAssociation(
+      this,
+      'RouteTableAssociation1',
+      {
+        subnetId: publicSubnet1.ref,
+        routeTableId: publicRouteTable.ref,
+      }
+    );
 
-    // Add dependency on IGW attachment
-    publicSubnet1.node.addDependency(igwAttachment);
-    publicSubnet2.node.addDependency(igwAttachment);
+    // Associate route table with subnet 2
+    const routeTableAssociation2 = new ec2.CfnSubnetRouteTableAssociation(
+      this,
+      'RouteTableAssociation2',
+      {
+        subnetId: publicSubnet2.ref,
+        routeTableId: publicRouteTable.ref,
+      }
+    );
 
-    const publicSubnets = [publicSubnet1, publicSubnet2];
+    // Add dependencies
+    defaultRoute.addDependsOn(igwAttachment);
+    routeTableAssociation1.addDependsOn(publicSubnet1);
+    routeTableAssociation2.addDependsOn(publicSubnet2);
 
     // Add tags to VPC
     cdk.Tags.of(vpc).add('Name', `${environmentSuffix}-VPC-Main`);
     cdk.Tags.of(vpc).add('Environment', environmentSuffix);
 
-    // Tag the public subnets with proper naming
-    publicSubnets.forEach((subnet, index) => {
-      cdk.Tags.of(subnet).add(
-        'Name',
-        `${environmentSuffix}-PublicSubnet-${index + 1}`
-      );
-      cdk.Tags.of(subnet).add('Environment', environmentSuffix);
-    });
-
     // Create VPC endpoints for enhanced private connectivity (future VPC Lattice preparation)
-    const s3VpcEndpoint = new ec2.GatewayVpcEndpoint(this, 'S3Endpoint', {
-      service: ec2.GatewayVpcEndpointAwsService.S3,
-      vpc: vpc,
-      subnets: [
+    const s3VpcEndpoint = new ec2.CfnVPCEndpoint(this, 'S3Endpoint', {
+      serviceName: `com.amazonaws.us-east-1.s3`,
+      vpcId: vpc.vpcId,
+      vpcEndpointType: 'Gateway',
+      routeTableIds: [publicRouteTable.ref],
+      tags: [
         {
-          subnets: publicSubnets,
+          key: 'Name',
+          value: `${environmentSuffix}-S3-VPCEndpoint`,
+        },
+        {
+          key: 'Environment',
+          value: environmentSuffix,
         },
       ],
     });
 
-    cdk.Tags.of(s3VpcEndpoint).add(
-      'Name',
-      `${environmentSuffix}-S3-VPCEndpoint`
-    );
-    cdk.Tags.of(s3VpcEndpoint).add('Environment', environmentSuffix);
-
     // Create DynamoDB VPC endpoint for enhanced connectivity
-    const dynamoDBVpcEndpoint = new ec2.GatewayVpcEndpoint(
+    const dynamoDBVpcEndpoint = new ec2.CfnVPCEndpoint(
       this,
       'DynamoDBEndpoint',
       {
-        service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-        vpc: vpc,
-        subnets: [
+        serviceName: `com.amazonaws.us-east-1.dynamodb`,
+        vpcId: vpc.vpcId,
+        vpcEndpointType: 'Gateway',
+        routeTableIds: [publicRouteTable.ref],
+        tags: [
           {
-            subnets: publicSubnets,
+            key: 'Name',
+            value: `${environmentSuffix}-DynamoDB-VPCEndpoint`,
+          },
+          {
+            key: 'Environment',
+            value: environmentSuffix,
           },
         ],
       }
     );
-
-    cdk.Tags.of(dynamoDBVpcEndpoint).add(
-      'Name',
-      `${environmentSuffix}-DynamoDB-VPCEndpoint`
-    );
-    cdk.Tags.of(dynamoDBVpcEndpoint).add('Environment', environmentSuffix);
 
     // Output important resources
     new cdk.CfnOutput(this, 'VpcId', {
@@ -148,15 +189,15 @@ export class TapStack extends cdk.Stack {
       exportName: `${environmentSuffix}-VPC-CIDR`,
     });
 
-    publicSubnets.forEach((subnet, index) => {
+    [publicSubnet1, publicSubnet2].forEach((subnet, index) => {
       new cdk.CfnOutput(this, `PublicSubnet${index + 1}Id`, {
-        value: subnet.subnetId,
+        value: subnet.ref,
         description: `Public Subnet ${index + 1} ID`,
         exportName: `${environmentSuffix}-PublicSubnet-${index + 1}-ID`,
       });
 
       new cdk.CfnOutput(this, `PublicSubnet${index + 1}Az`, {
-        value: subnet.availabilityZone,
+        value: subnet.availabilityZone!,
         description: `Public Subnet ${index + 1} Availability Zone`,
         exportName: `${environmentSuffix}-PublicSubnet-${index + 1}-AZ`,
       });
@@ -170,13 +211,13 @@ export class TapStack extends cdk.Stack {
 
     // Add VPC endpoint outputs
     new cdk.CfnOutput(this, 'S3VpcEndpointId', {
-      value: s3VpcEndpoint.vpcEndpointId,
+      value: s3VpcEndpoint.ref,
       description: 'S3 VPC Endpoint ID',
       exportName: `${environmentSuffix}-S3-VPCEndpoint-ID`,
     });
 
     new cdk.CfnOutput(this, 'DynamoDBVpcEndpointId', {
-      value: dynamoDBVpcEndpoint.vpcEndpointId,
+      value: dynamoDBVpcEndpoint.ref,
       description: 'DynamoDB VPC Endpoint ID',
       exportName: `${environmentSuffix}-DynamoDB-VPCEndpoint-ID`,
     });
