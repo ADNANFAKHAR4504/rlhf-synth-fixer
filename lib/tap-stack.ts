@@ -262,7 +262,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         routeTableId: dbRouteTable.id,
       });
 
-      // FIX: Appended uniqueSuffix to Security Group names
       const appSg = new SecurityGroup(this, `AppSG-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
@@ -331,7 +330,8 @@ export class MultiRegionSecurityStack extends TerraformStack {
       const dbPassword = new Password(this, `DBPassword-${config.region}`, {
         length: 16,
         special: true,
-        overrideSpecial: '_%@/',
+        // FIX: Removed characters forbidden by RDS ('/', '@', '"')
+        overrideSpecial: '_-.',
       });
 
       const dbSecret = new SecretsmanagerSecret(
@@ -354,7 +354,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         }
       );
 
-      // FIX: Appended uniqueSuffix to DB Subnet Group name
       const dbSubnetGroup = new DbSubnetGroup(
         this,
         `DbSubnetGroup-${config.region}`,
@@ -366,7 +365,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         }
       );
 
-      // FIX: Appended uniqueSuffix to DB Instance identifier
       new DbInstance(this, `DB-${config.region}`, {
         provider: regionProvider,
         identifier: `app-db-${config.region}-${uniqueSuffix}`,
