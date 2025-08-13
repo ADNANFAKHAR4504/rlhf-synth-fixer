@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import ANY, patch
 
 import pulumi
-from pulumi.runtime import Mocks, set_mocks
+from pulumi.runtime import Mocks
 
 from lib.tap_stack import TapStack, TapStackArgs
 
@@ -44,8 +44,8 @@ class TestTapStackTask2(unittest.TestCase):
   @patch("lib.tap_stack.aws.iam.Policy", return_value=DummyResource("policy"))
   @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("bucket"))
   @patch("lib.tap_stack.aws.s3.BucketOwnershipControls", return_value=DummyResource("bucketown"))
-  @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfiguration", return_value=DummyResource("bucketenc"))
-  @patch("lib.tap_stack.aws.s3.BucketLogging", return_value=DummyResource("bucketlog"))
+  @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2", return_value=DummyResource("bucketenc"))
+  @patch("lib.tap_stack.aws.s3.BucketLoggingV2", return_value=DummyResource("bucketlog"))
   @patch("lib.tap_stack.aws.kms.Key", return_value=DummyResource("kms"))
   @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
   @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
@@ -81,7 +81,7 @@ class TestTapStackTask2(unittest.TestCase):
 
   @patch("lib.tap_stack.aws.s3.Bucket", return_value=DummyResource("logbucket"))
   @patch("lib.tap_stack.aws.s3.BucketOwnershipControls", return_value=DummyResource("bucketown"))
-  @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfiguration", return_value=DummyResource("bucketenc"))
+  @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2", return_value=DummyResource("bucketenc"))
   def test_logging_bucket_configuration(self, mock_bucket_enc, mock_bucket_own, mock_bucket):
     """Verify logging bucket configuration calls are made."""
     args = TapStackArgs()
@@ -89,7 +89,7 @@ class TestTapStackTask2(unittest.TestCase):
 
     mock_bucket.assert_any_call(
         f"logging-bucket-{args.environment_suffix}",
-        bucket=f"tap-logging-{args.environment_suffix}",
+        bucket=f"tap-logging-{args.environment_suffix}-{pulumi.get_stack().lower()}",
         tags=args.tags,
         opts=ANY
     )
