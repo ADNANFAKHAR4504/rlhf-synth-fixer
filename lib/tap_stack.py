@@ -66,6 +66,9 @@ class TapStack(TerraformStack):
       tags={"Name": "secure-vpc", "Environment": "Production"},
     )
 
+    # Ensure we cover at least two distinct AZs for RDS subnet group requirements
+    azs_for_stack = [f"{region}a", f"{region}b"]
+
     public_subnets = []
     private_subnets = []
     for i in range(2):
@@ -74,6 +77,7 @@ class TapStack(TerraformStack):
         f"public_{i}",
         vpc_id=vpc.id,
         cidr_block=f"10.0.{i+1}.0/24",
+        availability_zone=azs_for_stack[i],
         map_public_ip_on_launch=True,
         tags={"Name": f"public-{i+1}", "Type": "Public", "Environment": "Production"},
       )
@@ -82,6 +86,7 @@ class TapStack(TerraformStack):
         f"private_{i}",
         vpc_id=vpc.id,
         cidr_block=f"10.0.{i+11}.0/24",
+        availability_zone=azs_for_stack[i],
         tags={"Name": f"private-{i+1}", "Type": "Private", "Environment": "Production"},
       )
       public_subnets.append(public)
