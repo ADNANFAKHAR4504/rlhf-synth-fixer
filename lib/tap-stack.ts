@@ -138,7 +138,7 @@ export class TapStack extends cdk.Stack {
 
     // Create VPC endpoints for enhanced private connectivity (future VPC Lattice preparation)
     const s3VpcEndpoint = new ec2.CfnVPCEndpoint(this, 'S3Endpoint', {
-      serviceName: `com.amazonaws.us-east-1.s3`,
+      serviceName: 'com.amazonaws.us-east-1.s3',
       vpcId: vpc.vpcId,
       vpcEndpointType: 'Gateway',
       routeTableIds: [publicRouteTable.ref],
@@ -159,7 +159,7 @@ export class TapStack extends cdk.Stack {
       this,
       'DynamoDBEndpoint',
       {
-        serviceName: `com.amazonaws.us-east-1.dynamodb`,
+        serviceName: 'com.amazonaws.us-east-1.dynamodb',
         vpcId: vpc.vpcId,
         vpcEndpointType: 'Gateway',
         routeTableIds: [publicRouteTable.ref],
