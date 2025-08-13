@@ -219,7 +219,7 @@ resource "aws_iam_role" "circleci_role" {
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
-          StringMatch = {
+          StringEquals = {
             "oidc.circleci.com/org-id" = var.circleci_org_id
           }
           StringLike = {
