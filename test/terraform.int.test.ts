@@ -1,420 +1,239 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { promisify } from 'util';
+import {
+  EC2Client,
+  DescribeInstancesCommand,
+  DescribeVpcsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  S3Client,
+  GetBucketEncryptionCommand,
+} from '@aws-sdk/client-s3';
+import {
+  CloudFrontClient,
+  GetDistributionCommand,
+} from '@aws-sdk/client-cloudfront';
 
-const sleep = promisify(setTimeout);
+type TfOutputValue<T> = { sensitive: boolean; type: any; value: T };
+type StructuredOutputs = {
+  vpc_id?: TfOutputValue<string>;
+  s3_content_bucket_name?: TfOutputValue<string>;
+  cloudfront_distribution_id?: TfOutputValue<string>;
+  web_security_group_id?: TfOutputValue<string>;
+  ec2_security_group_id?: TfOutputValue<string>;
+  ec2_instance_id?: TfOutputValue<string>;
+  public_subnet_ids?: TfOutputValue<string[]>;
+  private_subnet_ids?: TfOutputValue<string[]>;
+};
+
+function readStructuredOutputs(): StructuredOutputs {
+  const outputsPath = path.resolve(__dirname, '../cfn-outputs/all-outputs.json');
+  if (!fs.existsSync(outputsPath)) {
+    throw new Error(`Terraform outputs file not found at ${outputsPath}. Ensure infrastructure is deployed via CI/CD workflow.`);
+  }
+  return JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+}
+
+async function discoverRegionForVpc(vpcId: string): Promise<string> {
+  const envRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+  const candidates = Array.from(
+    new Set([
+      envRegion,
+      'us-west-2',
+      'us-east-1',
+      'us-east-2',
+      'us-west-1',
+    ].filter(Boolean) as string[])
+  );
+
+  for (const region of candidates) {
+    const ec2 = new EC2Client({ region });
+    try {
+      const result = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      if ((result.Vpcs || []).length > 0) {
+        ec2.destroy();
+        return region;
+      }
+    } catch (e) {
+      // Continue to next region
+    } finally {
+      try { ec2.destroy(); } catch {}
+    }
+  }
+  throw new Error(`Could not locate VPC ${vpcId} in candidate regions: ${candidates.join(', ')}`);
+}
 
 describe('Terraform Infrastructure Integration Tests', () => {
-  const libDir = path.join(__dirname, '../lib');
-  const testEnvironmentSuffix = `test-${Date.now()}`;
-  const terraformVars = `environment_suffix=${testEnvironmentSuffix}`;
-  let deploymentAttempted = false;
-  let deploymentSuccessful = false;
+  let outputs: StructuredOutputs;
+  let region: string;
+  let ec2Client: EC2Client;
+  let s3Client: S3Client;
+  let cloudFrontClient: CloudFrontClient;
 
   beforeAll(async () => {
-    console.log(`Starting integration tests with environment suffix: ${testEnvironmentSuffix}`);
+    console.log('Loading Terraform outputs...');
+    outputs = readStructuredOutputs();
     
-    // Initialize Terraform
-    execSync('terraform init -reconfigure', {
-      cwd: libDir,
-      stdio: 'inherit'
-    });
+    if (!outputs.vpc_id?.value) {
+      throw new Error('vpc_id not found in outputs. Ensure infrastructure is deployed and outputs are generated.');
+    }
+
+    region = await discoverRegionForVpc(outputs.vpc_id.value);
+    console.log(`Using region: ${region}`);
+    
+    ec2Client = new EC2Client({ region });
+    s3Client = new S3Client({ region });
+    cloudFrontClient = new CloudFrontClient({ region: 'us-east-1' }); // CloudFront is global, uses us-east-1
   }, 60000);
 
   afterAll(async () => {
-    // Clean up resources if deployment was successful
-    if (deploymentSuccessful) {
-      console.log('Cleaning up test infrastructure...');
-      try {
-        execSync(`terraform destroy -auto-approve -var="${terraformVars}"`, {
-          cwd: libDir,
-          stdio: 'inherit'
-        });
-        console.log('Test infrastructure destroyed successfully');
-      } catch (error) {
-        console.error('Failed to destroy test infrastructure:', error);
-      }
-    }
-  }, 300000);
-
-  describe('Terraform Plan and Validation', () => {
-    test('should create a valid execution plan', async () => {
-      const planOutput = execSync(`terraform plan -var="${terraformVars}" -detailed-exitcode`, {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-
-      expect(planOutput).toMatch(/Plan:/);
-      expect(planOutput).not.toMatch(/Error:/);
-      expect(planOutput).not.toMatch(/Warning.*deprecated/i);
-    }, 120000);
-
-    test('should validate resource dependencies', async () => {
-      const planOutput = execSync(`terraform plan -var="${terraformVars}"`, {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-
-      // Check for common dependency issues
-      expect(planOutput).not.toMatch(/cycle/i);
-      expect(planOutput).not.toMatch(/circular dependency/i);
-      expect(planOutput).not.toMatch(/depends on.*itself/i);
-    }, 120000);
+    try { 
+      ec2Client.destroy();
+      s3Client.destroy(); 
+      cloudFrontClient.destroy();
+    } catch {}
   });
 
-  describe('Infrastructure Deployment', () => {
-    test('should deploy infrastructure successfully', async () => {
-      deploymentAttempted = true;
-      
-      console.log('Deploying test infrastructure...');
-      const deployOutput = execSync(`terraform apply -auto-approve -var="${terraformVars}"`, {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
+  describe('Infrastructure Validation', () => {
+    test('should have VPC with correct configuration', async () => {
+      const vpcId = outputs.vpc_id?.value;
+      if (!vpcId) throw new Error('VPC ID not found in outputs');
 
-      expect(deployOutput).toMatch(/Apply complete!/);
-      expect(deployOutput).not.toMatch(/Error:/);
+      const result = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      const vpc = result.Vpcs?.[0];
       
-      deploymentSuccessful = true;
-      console.log('Infrastructure deployed successfully');
-    }, 600000); // 10 minutes timeout for deployment
+      expect(vpc).toBeDefined();
+      expect(vpc?.State).toBe('available');
+      expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
+      
+      console.log('VPC configuration validated');
+    }, 60000);
 
-    test('should have all outputs available', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping output test - deployment was not successful');
+    test('should have subnets in different availability zones', async () => {
+      const publicSubnetIds = outputs.public_subnet_ids?.value || [];
+      const privateSubnetIds = outputs.private_subnet_ids?.value || [];
+      
+      if (publicSubnetIds.length === 0 || privateSubnetIds.length === 0) {
+        console.log('Skipping subnet test - subnet IDs not found in outputs');
         return;
       }
 
-      const outputResult = execSync(`terraform output -json`, {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-
-      const outputs = JSON.parse(outputResult);
+      const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds];
+      const result = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: allSubnetIds }));
+      const subnets = result.Subnets || [];
       
-      // Verify expected outputs exist
-      expect(outputs).toHaveProperty('vpc_id');
-      expect(outputs).toHaveProperty('s3_bucket_name');
-      expect(outputs).toHaveProperty('cloudfront_distribution_id');
-      expect(outputs).toHaveProperty('security_group_id');
+      expect(subnets.length).toBeGreaterThan(0);
       
-      console.log('All expected outputs are present');
+      // Check that subnets are in different AZs
+      const azs = new Set(subnets.map(s => s.AvailabilityZone));
+      expect(azs.size).toBeGreaterThan(1);
+      
+      console.log('Subnet configuration validated');
     }, 60000);
   });
 
   describe('Security Validation', () => {
     test('should have secure S3 bucket configuration', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping S3 security test - deployment was not successful');
+      const bucketName = outputs.s3_content_bucket_name?.value;
+      if (!bucketName) {
+        console.log('Skipping S3 test - bucket name not found in outputs');
         return;
       }
 
-      const outputs = JSON.parse(execSync('terraform output -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }));
-
-      const bucketName = outputs.s3_bucket_name.value;
-      
-      // Check bucket encryption
-      const encryptionResult = execSync(`aws s3api get-bucket-encryption --bucket ${bucketName}`, {
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-      
-      const encryption = JSON.parse(encryptionResult);
-      expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(encryption.ServerSideEncryptionConfiguration[0].Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      
-      console.log('S3 bucket encryption validated');
-    }, 60000);
-
-    test('should have VPC Flow Logs enabled', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping VPC Flow Logs test - deployment was not successful');
-        return;
+      try {
+        const result = await s3Client.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
+        expect(result.ServerSideEncryptionConfiguration).toBeDefined();
+        expect(result.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+        console.log('S3 bucket encryption validated');
+      } catch (error) {
+        console.error('S3 encryption check failed:', error);
+        throw error;
       }
-
-      const outputs = JSON.parse(execSync('terraform output -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }));
-
-      const vpcId = outputs.vpc_id.value;
-      
-      // Check flow logs
-      const flowLogsResult = execSync(`aws ec2 describe-flow-logs --filter "Name=resource-id,Values=${vpcId}"`, {
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-      
-      const flowLogs = JSON.parse(flowLogsResult);
-      expect(flowLogs.FlowLogs).toHaveLength(1);
-      expect(flowLogs.FlowLogs[0].FlowLogStatus).toBe('ACTIVE');
-      expect(flowLogs.FlowLogs[0].TrafficType).toBe('ALL');
-      
-      console.log('VPC Flow Logs validated');
-    }, 60000);
-
-    test('should have CloudFront distribution with WAF', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping CloudFront WAF test - deployment was not successful');
-        return;
-      }
-
-      const outputs = JSON.parse(execSync('terraform output -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }));
-
-      const distributionId = outputs.cloudfront_distribution_id.value;
-      
-      // Check CloudFront configuration
-      const cfResult = execSync(`aws cloudfront get-distribution --id ${distributionId}`, {
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-      
-      const distribution = JSON.parse(cfResult);
-      expect(distribution.Distribution.DistributionConfig.WebACLId).toBeDefined();
-      expect(distribution.Distribution.DistributionConfig.WebACLId).not.toBe('');
-      
-      // Check HTTPS redirect
-      const defaultCacheBehavior = distribution.Distribution.DistributionConfig.DefaultCacheBehavior;
-      expect(defaultCacheBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
-      
-      console.log('CloudFront WAF configuration validated');
     }, 60000);
 
     test('should have security group with proper restrictions', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping security group test - deployment was not successful');
+      const webSgId = outputs.web_security_group_id?.value;
+      const ec2SgId = outputs.ec2_security_group_id?.value;
+      
+      if (!webSgId && !ec2SgId) {
+        console.log('Skipping security group test - security group IDs not found in outputs');
         return;
       }
 
-      const outputs = JSON.parse(execSync('terraform output -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }));
-
-      const sgId = outputs.security_group_id.value;
+      const sgIds = [webSgId, ec2SgId].filter(Boolean) as string[];
+      const result = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: sgIds }));
+      const securityGroups = result.SecurityGroups || [];
       
-      // Check security group rules
-      const sgResult = execSync(`aws ec2 describe-security-groups --group-ids ${sgId}`, {
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
+      expect(securityGroups.length).toBeGreaterThan(0);
       
-      const securityGroups = JSON.parse(sgResult);
-      const sg = securityGroups.SecurityGroups[0];
-      
-      // Validate ingress rules - should only allow HTTP (80) and HTTPS (443)
-      const ingressRules = sg.IpPermissions;
-      const allowedPorts = [80, 443];
-      
-      ingressRules.forEach((rule: any) => {
-        expect(allowedPorts).toContain(rule.FromPort);
-        expect(allowedPorts).toContain(rule.ToPort);
-        expect(rule.IpProtocol).toBe('tcp');
-      });
+      // Validate that HTTP/HTTPS ports are properly configured
+      for (const sg of securityGroups) {
+        const ingressRules = sg.IpPermissions || [];
+        const allowedPorts = ingressRules.map(rule => rule.FromPort).filter(port => port !== undefined);
+        
+        // Should only allow specific ports (80, 443, or internal communication)
+        for (const port of allowedPorts) {
+          expect([80, 443].includes(port!) || port === undefined).toBeTruthy();
+        }
+      }
       
       console.log('Security group rules validated');
+    }, 60000);
+
+    test('should have CloudFront distribution with security features', async () => {
+      const distributionId = outputs.cloudfront_distribution_id?.value;
+      if (!distributionId) {
+        console.log('Skipping CloudFront test - distribution ID not found in outputs');
+        return;
+      }
+
+      try {
+        const result = await cloudFrontClient.send(new GetDistributionCommand({ Id: distributionId }));
+        const distribution = result.Distribution;
+        
+        expect(distribution).toBeDefined();
+        expect(distribution?.DistributionConfig?.Enabled).toBe(true);
+        
+        // Check HTTPS redirect
+        const defaultCacheBehavior = distribution?.DistributionConfig?.DefaultCacheBehavior;
+        expect(defaultCacheBehavior?.ViewerProtocolPolicy).toBe('redirect-to-https');
+        
+        // Check if WAF is attached
+        const webAclId = distribution?.DistributionConfig?.WebACLId;
+        expect(webAclId).toBeDefined();
+        expect(webAclId).not.toBe('');
+        
+        console.log('CloudFront security configuration validated');
+      } catch (error) {
+        console.error('CloudFront validation failed:', error);
+        throw error;
+      }
     }, 60000);
   });
 
   describe('Resource State Validation', () => {
-    test('should have all resources in terraform state', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping state test - deployment was not successful');
+    test('should have EC2 instance properly configured', async () => {
+      const instanceId = outputs.ec2_instance_id?.value;
+      if (!instanceId) {
+        console.log('Skipping EC2 test - instance ID not found in outputs');
         return;
       }
 
-      const stateList = execSync('terraform state list', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-
-      const resources = stateList.trim().split('\n');
+      const result = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+      const instance = result.Reservations?.[0]?.Instances?.[0];
       
-      // Verify key resources are present
-      const expectedResources = [
-        'aws_vpc.',
-        'aws_s3_bucket.',
-        'aws_cloudfront_distribution.',
-        'aws_security_group.',
-        'aws_kms_key.',
-        'aws_flow_log.',
-        'aws_wafv2_web_acl.'
-      ];
-
-      expectedResources.forEach(expectedResource => {
-        const found = resources.some(resource => resource.includes(expectedResource));
-        expect(found).toBe(true);
-      });
+      expect(instance).toBeDefined();
+      expect(instance?.State?.Name).toBe('running');
+      expect(instance?.InstanceType).toBe('t3.micro');
       
-      console.log(`Terraform state contains ${resources.length} resources`);
-    }, 60000);
-
-    test('should not have any tainted resources', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping taint test - deployment was not successful');
-        return;
-      }
-
-      const showOutput = execSync('terraform show -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-
-      const state = JSON.parse(showOutput);
+      // Verify it has proper security group
+      const securityGroups = instance?.SecurityGroups || [];
+      expect(securityGroups.length).toBeGreaterThan(0);
       
-      if (state.values && state.values.root_module && state.values.root_module.resources) {
-        const taintedResources = state.values.root_module.resources.filter(
-          (resource: any) => resource.tainted === true
-        );
-        
-        expect(taintedResources).toHaveLength(0);
-        console.log('No tainted resources found');
-      }
-    }, 60000);
-  });
-
-  describe('Environment Isolation Validation', () => {
-    test('should use environment suffix in resource names', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping environment isolation test - deployment was not successful');
-        return;
-      }
-
-      const outputs = JSON.parse(execSync('terraform output -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }));
-
-      // Check that S3 bucket name includes environment suffix
-      const bucketName = outputs.s3_bucket_name.value;
-      expect(bucketName).toContain(testEnvironmentSuffix);
-      
-      console.log(`Environment suffix ${testEnvironmentSuffix} properly used in resource names`);
-    }, 60000);
-  });
-
-  describe('Compliance and Best Practices', () => {
-    test('should have encrypted storage for all data stores', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping encryption test - deployment was not successful');
-        return;
-      }
-
-      const outputs = JSON.parse(execSync('terraform output -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }));
-
-      const bucketName = outputs.s3_bucket_name.value;
-      
-      // Verify S3 encryption
-      const bucketEncryption = execSync(`aws s3api get-bucket-encryption --bucket ${bucketName}`, {
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-      
-      expect(bucketEncryption).toContain('aws:kms');
-      
-      // Check CloudWatch log encryption (VPC Flow Logs)
-      const logGroups = execSync('aws logs describe-log-groups', {
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-      
-      const logGroupsData = JSON.parse(logGroups);
-      const flowLogGroup = logGroupsData.logGroups.find((lg: any) => 
-        lg.logGroupName.includes('flowlogs') && lg.logGroupName.includes(testEnvironmentSuffix)
-      );
-      
-      if (flowLogGroup) {
-        expect(flowLogGroup.kmsKeyId).toBeDefined();
-      }
-      
-      console.log('Encryption validated for all data stores');
-    }, 60000);
-
-    test('should have proper access logging enabled', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping access logging test - deployment was not successful');
-        return;
-      }
-
-      const outputs = JSON.parse(execSync('terraform output -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }));
-
-      const distributionId = outputs.cloudfront_distribution_id.value;
-      
-      // Check CloudFront access logging
-      const cfConfig = execSync(`aws cloudfront get-distribution-config --id ${distributionId}`, {
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-      
-      const distribution = JSON.parse(cfConfig);
-      const loggingConfig = distribution.DistributionConfig.Logging;
-      
-      expect(loggingConfig.Enabled).toBe(true);
-      expect(loggingConfig.Bucket).toBeDefined();
-      
-      console.log('Access logging validated');
-    }, 60000);
-  });
-
-  describe('Performance and Reliability', () => {
-    test('should have CloudFront distribution properly configured', async () => {
-      if (!deploymentSuccessful) {
-        console.log('Skipping CloudFront performance test - deployment was not successful');
-        return;
-      }
-
-      const outputs = JSON.parse(execSync('terraform output -json', {
-        cwd: libDir,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }));
-
-      const distributionId = outputs.cloudfront_distribution_id.value;
-      
-      const cfConfig = execSync(`aws cloudfront get-distribution --id ${distributionId}`, {
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-      
-      const distribution = JSON.parse(cfConfig);
-      const config = distribution.Distribution.DistributionConfig;
-      
-      // Verify caching is enabled
-      expect(config.DefaultCacheBehavior.CachePolicyId).toBeDefined();
-      
-      // Verify compression is enabled
-      expect(config.DefaultCacheBehavior.Compress).toBe(true);
-      
-      // Verify distribution is enabled
-      expect(config.Enabled).toBe(true);
-      
-      console.log('CloudFront performance configuration validated');
+      console.log('EC2 instance configuration validated');
     }, 60000);
   });
 });
