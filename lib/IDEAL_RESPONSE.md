@@ -18,6 +18,7 @@ Metadata:
       - Label:
           default: "Network Configuration"
         Parameters:
+          - VpcCidr
           - PublicSubnetCidrs
           - PrivateSubnetCidrs
       - Label:
@@ -37,7 +38,6 @@ Metadata:
           default: "Security Configuration"
         Parameters:
           - KeyPairName
-          - ExistingVpcId
 
 Parameters:
   EnvironmentSuffix:
@@ -125,11 +125,12 @@ Parameters:
     AllowedPattern: "^$|^[a-zA-Z0-9-]+$"
     ConstraintDescription: "Must be empty or a valid key pair name"
 
-  ExistingVpcId:
+  VpcCidr:
     Type: String
-    Description: "ID of an existing VPC to use for the infrastructure"
-    AllowedPattern: "^vpc-[a-f0-9]+$"
-    ConstraintDescription: "Must be a valid VPC ID starting with 'vpc-'"
+    Default: "10.0.0.0/16"
+    Description: "CIDR block for the VPC"
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    ConstraintDescription: "Must be a valid CIDR block"
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
@@ -175,13 +176,42 @@ Resources:
       TargetKeyId: !Ref KMSKey
 
   # VPC and Networking
-  # Using existing VPC - no VPC creation needed
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-VPC"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-IGW"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Select [0, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
@@ -196,7 +226,7 @@ Resources:
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Select [1, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
@@ -212,7 +242,7 @@ Resources:
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Select [0, !Ref PrivateSubnetCidrs]
       Tags:
@@ -226,7 +256,7 @@ Resources:
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Select [1, !Ref PrivateSubnetCidrs]
       Tags:
@@ -241,7 +271,7 @@ Resources:
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Public-RouteTable"
@@ -250,8 +280,13 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Note: Public route will need to be configured manually in the existing VPC
-  # or the existing VPC should already have an Internet Gateway attached
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -268,6 +303,7 @@ Resources:
   # NAT Gateway for private subnets
   NATGatewayEIP:
     Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
     Properties:
       Domain: vpc
       Tags:
@@ -294,7 +330,7 @@ Resources:
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Private-RouteTable"
@@ -327,7 +363,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub "Security group for ${ProjectName} ALB"
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -349,7 +385,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub "Security group for ${ProjectName} web servers"
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -375,7 +411,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub "Security group for ${ProjectName} database"
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
@@ -638,7 +674,7 @@ Resources:
       Port: 80
       Protocol: HTTP
       TargetType: instance
-      VpcId: !Ref ExistingVpcId
+      VpcId: !Ref VPC
       HealthCheckPath: /health
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
@@ -669,7 +705,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub "${ProjectName}-${EnvironmentSuffix}-lt"
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI in us-east-1
+        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI in ap-southeast-1
         InstanceType: !Ref InstanceType
         KeyName: !If
           - HasKeyPair
@@ -801,7 +837,7 @@ Resources:
 Outputs:
   VPCId:
     Description: "VPC ID"
-    Value: !Ref ExistingVpcId
+    Value: !Ref VPC
     Export:
       Name: !Sub "${AWS::StackName}-VPCId"
 
