@@ -25,7 +25,9 @@ from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
     IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
 from cdktf_cdktf_provider_aws.lb import Lb
-from cdktf_cdktf_provider_aws.lb_listener import LbListener
+from cdktf_cdktf_provider_aws.lb_listener import (
+    LbListener, LbListenerDefaultAction, LbListenerDefaultActionForward,
+    LbListenerDefaultActionForwardTargetGroup)
 from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup
 from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -60,12 +62,42 @@ class TapStack(TerraformStack):
         enable_database = os.getenv("ENABLE_DATABASE", "false").lower() == "true"
 
         # Sensitive variables (supplied via TFC workspace variables or env)
-        db_username = TerraformVariable(self, "db_username", type="string", sensitive=True)
-        db_password = TerraformVariable(self, "db_password", type="string", sensitive=True)
-        jwt_secret = TerraformVariable(self, "jwt_secret", type="string", sensitive=True)
-        api_key = TerraformVariable(self, "api_key", type="string", sensitive=True)
-        encryption_key = TerraformVariable(self, "encryption_key", type="string", sensitive=True)
-        alert_email = TerraformVariable(self, "alert_email", type="string")
+        db_username = TerraformVariable(
+            self,
+            "db_username",
+            type="string",
+            sensitive=True,
+            default=os.getenv("TF_VAR_db_username", os.getenv("DB_USERNAME", "postgres")),
+        )
+        db_password = TerraformVariable(
+            self,
+            "db_password",
+            type="string",
+            sensitive=True,
+            default=os.getenv("TF_VAR_db_password", os.getenv("DB_PASSWORD", "Password123!")),
+        )
+        jwt_secret = TerraformVariable(
+            self,
+            "jwt_secret",
+            type="string",
+            sensitive=True,
+            default=os.getenv("TF_VAR_jwt_secret", os.getenv("JWT_SECRET", "dev-jwt-secret")),
+        )
+        api_key = TerraformVariable(
+            self,
+            "api_key",
+            type="string",
+            sensitive=True,
+            default=os.getenv("TF_VAR_api_key", os.getenv("API_KEY", "dev-api-key")),
+        )
+        encryption_key = TerraformVariable(
+            self,
+            "encryption_key",
+            type="string",
+            sensitive=True,
+            default=os.getenv("TF_VAR_encryption_key", os.getenv("ENCRYPTION_KEY", "dev-encryption-key")),
+        )
+        alert_email = TerraformVariable(self, "alert_email", type="string", default="alerts@example.com")
 
         # Common tags
         common_tags = {"Environment": "Production"}
@@ -431,7 +463,16 @@ class TapStack(TerraformStack):
             load_balancer_arn=alb.arn,
             port=80,
             protocol="HTTP",
-            default_action=[{"type": "forward", "target_group_arn": tg.arn}],
+            default_action=[
+                LbListenerDefaultAction(
+                    type="forward",
+                    forward=LbListenerDefaultActionForward(
+                        target_group=[
+                            LbListenerDefaultActionForwardTargetGroup(arn=tg.arn)
+                        ]
+                    ),
+                )
+            ],
         )
 
         task_def = EcsTaskDefinition(
