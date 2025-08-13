@@ -164,7 +164,7 @@ describe('TapStack', () => {
         DeletionProtection: true,
         BackupRetentionPeriod: 7,
         DeleteAutomatedBackups: false,
-        EnablePerformanceInsights: true
+        EnablePerformanceInsights: false
       });
     });
 

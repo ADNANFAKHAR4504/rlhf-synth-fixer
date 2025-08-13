@@ -89,7 +89,7 @@ export const REGION_CONFIGS: { [region: string]: StackConfig } = {
       backupRetention: 7,
       deletionProtection: true,
       storageEncrypted: true,
-      performanceInsights: true,
+      performanceInsights: false,
     },
     autoScaling: {
       instanceType: 't3.micro',
@@ -146,7 +146,7 @@ export const REGION_CONFIGS: { [region: string]: StackConfig } = {
       backupRetention: 7,
       deletionProtection: true,
       storageEncrypted: true,
-      performanceInsights: true,
+      performanceInsights: false,
     },
     autoScaling: {
       instanceType: 't3.micro',

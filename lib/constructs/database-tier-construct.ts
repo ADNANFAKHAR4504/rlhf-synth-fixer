@@ -72,7 +72,9 @@ export class DatabaseTierConstruct extends Construct {
       // Monitoring and logging
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: config.database.performanceInsights,
-      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+      ...(config.database.performanceInsights && {
+        performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+      }),
 
       // Maintenance window (during low-traffic hours)
       preferredMaintenanceWindow: 'sun:03:00-sun:04:00',

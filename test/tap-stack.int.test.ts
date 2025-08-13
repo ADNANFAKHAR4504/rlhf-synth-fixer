@@ -300,7 +300,7 @@ describe('TapStack Integration Tests', () => {
         expect(rds.Properties.DeletionProtection).toBe(true);
         expect(rds.Properties.BackupRetentionPeriod).toBe(7);
         expect(rds.Properties.DeleteAutomatedBackups).toBe(false);
-        expect(rds.Properties.EnablePerformanceInsights).toBe(true);
+        expect(rds.Properties.EnablePerformanceInsights).toBe(false);
         expect(rds.Properties.DBSubnetGroupName).toBeDefined();
         expect(rds.Properties.VPCSecurityGroups).toBeDefined();
         // MasterUserSecret is optional, so we don't require it
