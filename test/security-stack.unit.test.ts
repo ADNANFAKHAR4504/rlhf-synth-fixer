@@ -291,6 +291,7 @@ describe('SecurityStack Unit Tests', () => {
 
       expect(SecureS3Bucket).toHaveBeenCalledWith('primary-storage', 
         expect.objectContaining({
+          bucketName: 'tap-primary-storage-test',
           lifecycleRules: expect.arrayContaining([
             expect.objectContaining({
               id: 'transition-to-ia',
@@ -302,14 +303,21 @@ describe('SecurityStack Unit Tests', () => {
               ]),
             }),
           ]),
-          tags: { Purpose: 'Primary data storage' },
+          tags: { 
+            Purpose: 'Primary data storage',
+            Environment: 'test',
+          },
         }),
         expect.any(Object)
       );
 
       expect(SecureS3Bucket).toHaveBeenCalledWith('audit-logs',
         expect.objectContaining({
-          tags: { Purpose: 'Audit and compliance logs' },
+          bucketName: 'tap-audit-logs-test',
+          tags: { 
+            Purpose: 'Audit and compliance logs',
+            Environment: 'test',
+          },
         }),
         expect.any(Object)
       );
@@ -344,10 +352,14 @@ describe('SecurityStack Unit Tests', () => {
 
       expect(SecureCloudTrail).toHaveBeenCalledWith('security-audit',
         expect.objectContaining({
+          trailName: 'tap-security-audit-trail-dev',
           includeGlobalServiceEvents: true,
           isMultiRegionTrail: true,
           enableLogFileValidation: true,
-          tags: { Purpose: 'Security audit and compliance' },
+          tags: { 
+            Purpose: 'Security audit and compliance',
+            Environment: 'dev',
+          },
         }),
         expect.any(Object)
       );
@@ -379,6 +391,7 @@ describe('SecurityStack Unit Tests', () => {
 
       expect(EnhancedSecureS3Bucket).toHaveBeenCalledWith('primary-storage', 
         expect.objectContaining({
+          bucketName: 'tap-primary-storage-prod',
           allowedIpRanges: ['172.16.0.0/12'],
           enableAccessLogging: true,
           enableNotifications: true,
@@ -389,17 +402,24 @@ describe('SecurityStack Unit Tests', () => {
               status: 'Enabled',
             }),
           ]),
-          tags: { Purpose: 'Primary data storage with enhanced security' },
+          tags: { 
+            Purpose: 'Primary data storage with enhanced security',
+            Environment: 'prod',
+          },
         }),
         expect.any(Object)
       );
 
       expect(EnhancedSecureS3Bucket).toHaveBeenCalledWith('audit-logs',
         expect.objectContaining({
+          bucketName: 'tap-audit-logs-prod',
           allowedIpRanges: ['172.16.0.0/12'],
           enableAccessLogging: true,
           enableObjectLock: true,
-          tags: { Purpose: 'Audit and compliance logs with enhanced security' },
+          tags: { 
+            Purpose: 'Audit and compliance logs with enhanced security',
+            Environment: 'prod',
+          },
         }),
         expect.any(Object)
       );
@@ -434,11 +454,15 @@ describe('SecurityStack Unit Tests', () => {
 
       expect(EnhancedCloudTrail).toHaveBeenCalledWith('security-audit',
         expect.objectContaining({
+          trailName: 'tap-security-audit-trail-dev',
           includeGlobalServiceEvents: true,
           isMultiRegionTrail: true,
           enableLogFileValidation: true,
           enableInsightSelectors: true,
-          tags: { Purpose: 'Enhanced security audit and compliance with anomaly detection' },
+          tags: { 
+            Purpose: 'Enhanced security audit and compliance with anomaly detection',
+            Environment: 'dev',
+          },
         }),
         expect.any(Object)
       );
@@ -450,13 +474,19 @@ describe('SecurityStack Unit Tests', () => {
       new SecurityStack('test-security-stack');
 
       expect(KMSKey).toHaveBeenCalledTimes(2);
-      expect(KMSKey).toHaveBeenCalledWith('s3-encryption', {
-        description: 'KMS key for S3 bucket encryption with enhanced security',
-        tags: { Purpose: 'S3 Encryption' },
+      expect(KMSKey).toHaveBeenCalledWith('s3-encryption-dev', {
+        description: 'KMS key for S3 bucket encryption - dev environment',
+        tags: { 
+          Purpose: 'S3 Encryption',
+          Environment: 'dev',
+        },
       }, expect.any(Object));
-      expect(KMSKey).toHaveBeenCalledWith('cloudtrail-encryption', {
-        description: 'KMS key for CloudTrail log encryption with enhanced security',
-        tags: { Purpose: 'CloudTrail Encryption' },
+      expect(KMSKey).toHaveBeenCalledWith('cloudtrail-encryption-dev', {
+        description: 'KMS key for CloudTrail log encryption - dev environment',
+        tags: { 
+          Purpose: 'CloudTrail Encryption',
+          Environment: 'dev',
+        },
       }, expect.any(Object));
     });
   });
@@ -469,6 +499,7 @@ describe('SecurityStack Unit Tests', () => {
 
       expect(EnhancedSecureS3Bucket).toHaveBeenCalledWith('primary-storage', 
         expect.objectContaining({
+          bucketName: 'tap-primary-storage-dev',
           allowedIpRanges: ['203.0.113.0/24'],
           enableAccessLogging: true,
           enableNotifications: true,
@@ -481,6 +512,7 @@ describe('SecurityStack Unit Tests', () => {
           ]),
           tags: {
             Purpose: 'Primary data storage with enhanced security',
+            Environment: 'dev',
           },
         }),
         expect.any(Object)
@@ -488,11 +520,13 @@ describe('SecurityStack Unit Tests', () => {
 
       expect(EnhancedSecureS3Bucket).toHaveBeenCalledWith('audit-logs',
         expect.objectContaining({
+          bucketName: 'tap-audit-logs-dev',
           allowedIpRanges: ['203.0.113.0/24'],
           enableAccessLogging: true,
           enableObjectLock: true,
           tags: {
             Purpose: 'Audit and compliance logs with enhanced security',
+            Environment: 'dev',
           },
         }),
         expect.any(Object)
@@ -546,12 +580,14 @@ describe('SecurityStack Unit Tests', () => {
 
       expect(EnhancedCloudTrail).toHaveBeenCalledWith('security-audit',
         expect.objectContaining({
+          trailName: 'tap-security-audit-trail-dev',
           includeGlobalServiceEvents: true,
           isMultiRegionTrail: true,
           enableLogFileValidation: true,
           enableInsightSelectors: true,
           tags: {
             Purpose: 'Enhanced security audit and compliance with anomaly detection',
+            Environment: 'dev',
           },
         }),
         expect.any(Object)
@@ -565,11 +601,13 @@ describe('SecurityStack Unit Tests', () => {
 
       expect(SecureCloudTrail).toHaveBeenCalledWith('security-audit',
         expect.objectContaining({
+          trailName: 'tap-security-audit-trail-dev',
           includeGlobalServiceEvents: true,
           isMultiRegionTrail: true,
           enableLogFileValidation: true,
           tags: {
             Purpose: 'Security audit and compliance',
+            Environment: 'dev',
           },
         }),
         expect.any(Object)
@@ -779,16 +817,22 @@ describe('SecurityStack Unit Tests', () => {
         tags: { Project: 'TestProject' },
       });
 
-      expect(KMSKey).toHaveBeenCalledWith('s3-encryption',
+      expect(KMSKey).toHaveBeenCalledWith('s3-encryption-dev',
         expect.objectContaining({
-          tags: { Purpose: 'S3 Encryption' },
+          tags: { 
+            Purpose: 'S3 Encryption',
+            Environment: 'dev',
+          },
         }),
         expect.any(Object)
       );
 
-      expect(KMSKey).toHaveBeenCalledWith('cloudtrail-encryption',
+      expect(KMSKey).toHaveBeenCalledWith('cloudtrail-encryption-dev',
         expect.objectContaining({
-          tags: { Purpose: 'CloudTrail Encryption' },
+          tags: { 
+            Purpose: 'CloudTrail Encryption',
+            Environment: 'dev',
+          },
         }),
         expect.any(Object)
       );
@@ -835,8 +879,8 @@ describe('SecurityStack Unit Tests', () => {
     it('should use consistent naming patterns', () => {
       new SecurityStack('test-security-stack');
 
-      expect(KMSKey).toHaveBeenCalledWith('s3-encryption', expect.any(Object), expect.any(Object));
-      expect(KMSKey).toHaveBeenCalledWith('cloudtrail-encryption', expect.any(Object), expect.any(Object));
+      expect(KMSKey).toHaveBeenCalledWith('s3-encryption-dev', expect.any(Object), expect.any(Object));
+      expect(KMSKey).toHaveBeenCalledWith('cloudtrail-encryption-dev', expect.any(Object), expect.any(Object));
       expect(SecureIAMRole).toHaveBeenCalledWith('data-access', expect.any(Object), expect.any(Object));
       expect(SecureIAMRole).toHaveBeenCalledWith('audit-access', expect.any(Object), expect.any(Object));
     });

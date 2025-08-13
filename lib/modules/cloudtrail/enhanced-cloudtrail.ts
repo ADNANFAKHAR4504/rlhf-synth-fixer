@@ -31,7 +31,7 @@ export class EnhancedCloudTrail extends pulumi.ComponentResource {
     this.logGroup = new aws.cloudwatch.LogGroup(
       `${name}-log-group`,
       {
-        name: `/aws/cloudtrail/${name}`,
+        name: `/aws/cloudtrail/${args.trailName || name}`,
         retentionInDays: 2557, // 7 years for compliance (valid value)
         kmsKeyId: args.kmsKeyId,
         tags: { ...commonTags, ...args.tags },
@@ -43,7 +43,7 @@ export class EnhancedCloudTrail extends pulumi.ComponentResource {
     this.logStream = new aws.cloudwatch.LogStream(
       `${name}-log-stream`,
       {
-        name: `${name}-stream`,
+        name: `${args.trailName || name}-stream`,
         logGroupName: this.logGroup.name,
       },
       { parent: this }
@@ -53,6 +53,7 @@ export class EnhancedCloudTrail extends pulumi.ComponentResource {
     const cloudTrailRole = new aws.iam.Role(
       `${name}-cloudtrail-role`,
       {
+        name: `${args.trailName || name}-cloudtrail-role`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -201,12 +202,12 @@ export class EnhancedCloudTrail extends pulumi.ComponentResource {
     this.metricFilter = new aws.cloudwatch.LogMetricFilter(
       `${name}-security-events`,
       {
-        name: `${name}-security-events-filter`,
+        name: `${args.trailName || name}-security-events-filter`,
         logGroupName: this.logGroup.name,
         pattern:
           '[version, account, time, region, source, name="ConsoleLogin" || name="AssumeRole" || name="CreateRole" || name="DeleteRole" || name="AttachRolePolicy" || name="DetachRolePolicy"]',
         metricTransformation: {
-          name: `${name}-SecurityEvents`,
+          name: `${args.trailName || name}-SecurityEvents`,
           namespace: 'Security/CloudTrail',
           value: '1',
           defaultValue: '0',
@@ -219,9 +220,9 @@ export class EnhancedCloudTrail extends pulumi.ComponentResource {
     this.alarm = new aws.cloudwatch.MetricAlarm(
       `${name}-security-alarm`,
       {
-        name: `${name}-suspicious-activity`,
+        name: `${args.trailName || name}-suspicious-activity`,
         alarmDescription: 'Alarm for suspicious security-related activities',
-        metricName: `${name}-SecurityEvents`,
+        metricName: `${args.trailName || name}-SecurityEvents`,
         namespace: 'Security/CloudTrail',
         statistic: 'Sum',
         period: 300, // 5 minutes

@@ -88,20 +88,25 @@ export class SecurityStack extends pulumi.ComponentResource {
 
     // Create KMS keys for encryption
     const s3KmsKey = new KMSKey(
-      's3-encryption',
+      `s3-encryption-${environmentSuffix}`,
       {
-        description: 'KMS key for S3 bucket encryption with enhanced security',
-        tags: { Purpose: 'S3 Encryption' },
+        description: `KMS key for S3 bucket encryption - ${environmentSuffix} environment`,
+        tags: {
+          Purpose: 'S3 Encryption',
+          Environment: environmentSuffix,
+        },
       },
       { parent: this, provider }
     );
 
     const cloudTrailKmsKey = new KMSKey(
-      'cloudtrail-encryption',
+      `cloudtrail-encryption-${environmentSuffix}`,
       {
-        description:
-          'KMS key for CloudTrail log encryption with enhanced security',
-        tags: { Purpose: 'CloudTrail Encryption' },
+        description: `KMS key for CloudTrail log encryption - ${environmentSuffix} environment`,
+        tags: {
+          Purpose: 'CloudTrail Encryption',
+          Environment: environmentSuffix,
+        },
       },
       { parent: this, provider }
     );
@@ -114,6 +119,7 @@ export class SecurityStack extends pulumi.ComponentResource {
       primaryBucket = new EnhancedSecureS3Bucket(
         'primary-storage',
         {
+          bucketName: `tap-primary-storage-${environmentSuffix}`,
           kmsKeyId: s3KmsKey.key.keyId,
           allowedIpRanges,
           enableAccessLogging: true,
@@ -141,6 +147,7 @@ export class SecurityStack extends pulumi.ComponentResource {
           ],
           tags: {
             Purpose: 'Primary data storage with enhanced security',
+            Environment: environmentSuffix,
           },
         },
         { parent: this, provider }
@@ -149,12 +156,14 @@ export class SecurityStack extends pulumi.ComponentResource {
       auditBucket = new EnhancedSecureS3Bucket(
         'audit-logs',
         {
+          bucketName: `tap-audit-logs-${environmentSuffix}`,
           kmsKeyId: cloudTrailKmsKey.key.keyId,
           allowedIpRanges,
           enableAccessLogging: true,
           enableObjectLock: true,
           tags: {
             Purpose: 'Audit and compliance logs with enhanced security',
+            Environment: environmentSuffix,
           },
         },
         { parent: this, provider }
@@ -163,6 +172,7 @@ export class SecurityStack extends pulumi.ComponentResource {
       primaryBucket = new SecureS3Bucket(
         'primary-storage',
         {
+          bucketName: `tap-primary-storage-${environmentSuffix}`,
           kmsKeyId: s3KmsKey.key.keyId,
           lifecycleRules: [
             {
@@ -186,6 +196,7 @@ export class SecurityStack extends pulumi.ComponentResource {
           ],
           tags: {
             Purpose: 'Primary data storage',
+            Environment: environmentSuffix,
           },
         },
         { parent: this, provider }
@@ -194,9 +205,11 @@ export class SecurityStack extends pulumi.ComponentResource {
       auditBucket = new SecureS3Bucket(
         'audit-logs',
         {
+          bucketName: `tap-audit-logs-${environmentSuffix}`,
           kmsKeyId: cloudTrailKmsKey.key.keyId,
           tags: {
             Purpose: 'Audit and compliance logs',
+            Environment: environmentSuffix,
           },
         },
         { parent: this, provider }
@@ -230,6 +243,7 @@ export class SecurityStack extends pulumi.ComponentResource {
             },
           ],
         }),
+        roleName: `tap-data-access-role-${environmentSuffix}`,
         policies: enableEnhancedSecurity
           ? [
               createTimeBasedS3AccessPolicy(primaryBucket.bucket.arn),
@@ -244,6 +258,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         tags: {
           Purpose:
             'Data access with enhanced MFA enforcement and time restrictions',
+          Environment: environmentSuffix,
         },
       },
       { parent: this, provider }
@@ -275,6 +290,7 @@ export class SecurityStack extends pulumi.ComponentResource {
             },
           ],
         }),
+        roleName: `tap-audit-access-role-${environmentSuffix}`,
         policies: enableEnhancedSecurity
           ? [
               createRestrictedAuditPolicy(
@@ -312,6 +328,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         requireMFA: true,
         tags: {
           Purpose: 'Audit log access with IP and time restrictions',
+          Environment: environmentSuffix,
         },
       },
       { parent: this, provider }
@@ -324,6 +341,7 @@ export class SecurityStack extends pulumi.ComponentResource {
       cloudTrail = new EnhancedCloudTrail(
         'security-audit',
         {
+          trailName: `tap-security-audit-trail-${environmentSuffix}`,
           s3BucketName: auditBucket.bucket.id,
           kmsKeyId: cloudTrailKmsKey.key.keyId,
           includeGlobalServiceEvents: true,
@@ -333,6 +351,7 @@ export class SecurityStack extends pulumi.ComponentResource {
           tags: {
             Purpose:
               'Enhanced security audit and compliance with anomaly detection',
+            Environment: environmentSuffix,
           },
         },
         { parent: this, provider }
@@ -341,6 +360,7 @@ export class SecurityStack extends pulumi.ComponentResource {
       cloudTrail = new SecureCloudTrail(
         'security-audit',
         {
+          trailName: `tap-security-audit-trail-${environmentSuffix}`,
           s3BucketName: auditBucket.bucket.id,
           kmsKeyId: cloudTrailKmsKey.key.keyId,
           includeGlobalServiceEvents: true,
@@ -348,6 +368,7 @@ export class SecurityStack extends pulumi.ComponentResource {
           enableLogFileValidation: true,
           tags: {
             Purpose: 'Security audit and compliance',
+            Environment: environmentSuffix,
           },
         },
         { parent: this, provider }

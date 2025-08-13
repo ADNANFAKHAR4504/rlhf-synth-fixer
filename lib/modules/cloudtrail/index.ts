@@ -28,7 +28,7 @@ export class SecureCloudTrail extends pulumi.ComponentResource {
     this.logGroup = new aws.cloudwatch.LogGroup(
       `${name}-log-group`,
       {
-        name: `/aws/cloudtrail/${name}`,
+        name: `/aws/cloudtrail/${args.trailName || name}`,
         retentionInDays: 365,
         kmsKeyId: args.kmsKeyId,
         tags: { ...commonTags, ...args.tags },
@@ -40,7 +40,7 @@ export class SecureCloudTrail extends pulumi.ComponentResource {
     this.logStream = new aws.cloudwatch.LogStream(
       `${name}-log-stream`,
       {
-        name: `${name}-stream`,
+        name: `${args.trailName || name}-stream`,
         logGroupName: this.logGroup.name,
       },
       { parent: this }
@@ -50,6 +50,7 @@ export class SecureCloudTrail extends pulumi.ComponentResource {
     const cloudTrailRole = new aws.iam.Role(
       `${name}-cloudtrail-role`,
       {
+        name: `${args.trailName || name}-cloudtrail-role`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
