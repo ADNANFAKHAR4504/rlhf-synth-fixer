@@ -210,6 +210,7 @@
         "NotificationEmail": {
             "Type": "String",
             "Description": "Email address for security notifications and alerts",
+            "Default": "admin@example.com",
             "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
             "ConstraintDescription": "Must be a valid email address"
         },
@@ -218,8 +219,8 @@
             "Description": "Enable VPC Flow Logs for network monitoring",
             "Default": "true",
             "AllowedValues": [
-                true,
-                false
+                "true",
+                "false"
             ]
         },
         "EnableNATGateway": {
@@ -227,8 +228,8 @@
             "Description": "Enable NAT Gateway for private subnet internet access",
             "Default": "true",
             "AllowedValues": [
-                true,
-                false
+                "true",
+                "false"
             ]
         }
     },
@@ -265,26 +266,6 @@
                     "Ref": "EnableVPCFlowLogs"
                 },
                 "true"
-            ]
-        },
-        "IsHighAvailabilityEnvironment": {
-            "Fn::Or": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "Environment"
-                        },
-                        "prod"
-                    ]
-                },
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "Environment"
-                        },
-                        "staging"
-                    ]
-                }
             ]
         }
     },
@@ -1038,7 +1019,6 @@
                     "Fn::Sub": "Master encryption key for ${ProjectName}-${Environment} resources"
                 },
                 "EnableKeyRotation": true,
-                "KeyRotationStatus": "Enabled",
                 "KeySpec": "SYMMETRIC_DEFAULT",
                 "KeyUsage": "ENCRYPT_DECRYPT",
                 "MultiRegion": false,
@@ -1309,6 +1289,80 @@
                         "Value": {
                             "Fn::Sub": "${ProjectName}-${Environment}-lambda-sg"
                         }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ManagementSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-management-sg"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "GroupDescription": "Management access from allowed IP ranges",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Fn::Select": [
+                                0,
+                                {
+                                    "Ref": "AllowedIPRanges"
+                                }
+                            ]
+                        },
+                        "Description": "SSH access from first allowed IP range"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3389,
+                        "ToPort": 3389,
+                        "CidrIp": {
+                            "Fn::Select": [
+                                0,
+                                {
+                                    "Ref": "AllowedIPRanges"
+                                }
+                            ]
+                        },
+                        "Description": "RDP access from first allowed IP range"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-management-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     }
                 ]
             }
@@ -1480,7 +1534,6 @@
                         }
                     ]
                 },
-                "MfaDelete": "Enabled",
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "IgnorePublicAcls": true,
@@ -1770,6 +1823,7 @@
                 },
                 "IncludeGlobalServiceEvents": true,
                 "IsMultiRegionTrail": true,
+                "IsLogging": true,
                 "EnableLogFileValidation": true,
                 "KMSKeyId": {
                     "Ref": "KMSKey"
@@ -1801,13 +1855,14 @@
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${ProjectName}-${Environment}-rds"
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0",
+                "EngineVersion": "8.0.39",
                 "MasterUsername": "admin",
                 "MasterUserPassword": {
                     "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}"
@@ -1870,6 +1925,7 @@
                 ],
                 "SSESpecification": {
                     "SSEEnabled": true,
+                    "SSEType": "KMS",
                     "KMSMasterKeyId": {
                         "Ref": "KMSKey"
                     }
@@ -1939,7 +1995,6 @@
                 },
                 "Timeout": 300,
                 "MemorySize": 512,
-                "ReservedConcurrencyLimit": 10,
                 "VpcConfig": {
                     "SecurityGroupIds": [
                         {
@@ -1966,7 +2021,7 @@
                         }
                     }
                 },
-                "DeadLetterQueue": {
+                "DeadLetterConfig": {
                     "TargetArn": {
                         "Fn::GetAtt": [
                             "LambdaDeadLetterQueue",
@@ -2366,6 +2421,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-Project-Name"
+                }
+            }
+        },
+        "SecondaryRegion": {
+            "Description": "Secondary AWS Region for disaster recovery",
+            "Value": {
+                "Ref": "SecondaryRegion"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Secondary-Region"
                 }
             }
         }

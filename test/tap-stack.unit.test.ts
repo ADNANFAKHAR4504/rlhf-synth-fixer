@@ -137,16 +137,6 @@ describe('TapStack CloudFormation Template', () => {
         'Fn::Equals': [{ Ref: 'EnableVPCFlowLogs' }, 'true'],
       });
     });
-
-    test('should have IsHighAvailabilityEnvironment condition', () => {
-      expect(template.Conditions.IsHighAvailabilityEnvironment).toBeDefined();
-      expect(template.Conditions.IsHighAvailabilityEnvironment).toEqual({
-        'Fn::Or': [
-          { 'Fn::Equals': [{ Ref: 'Environment' }, 'prod'] },
-          { 'Fn::Equals': [{ Ref: 'Environment' }, 'staging'] },
-        ],
-      });
-    });
   });
 
   describe('VPC and Network Resources', () => {
@@ -345,6 +335,30 @@ describe('TapStack CloudFormation Template', () => {
       expect(egressRules[0].ToPort).toBe(443);
       expect(egressRules[0].CidrIp).toBe('0.0.0.0/0');
     });
+
+    test('should have management security group using allowed IP ranges', () => {
+      const mgmtSG = template.Resources.ManagementSecurityGroup;
+      expect(mgmtSG.Type).toBe('AWS::EC2::SecurityGroup');
+
+      const ingressRules = mgmtSG.Properties.SecurityGroupIngress;
+      expect(ingressRules).toHaveLength(2);
+
+      // SSH rule
+      expect(ingressRules[0].IpProtocol).toBe('tcp');
+      expect(ingressRules[0].FromPort).toBe(22);
+      expect(ingressRules[0].ToPort).toBe(22);
+      expect(ingressRules[0].CidrIp).toEqual({
+        'Fn::Select': [0, { Ref: 'AllowedIPRanges' }],
+      });
+
+      // RDP rule
+      expect(ingressRules[1].IpProtocol).toBe('tcp');
+      expect(ingressRules[1].FromPort).toBe(3389);
+      expect(ingressRules[1].ToPort).toBe(3389);
+      expect(ingressRules[1].CidrIp).toEqual({
+        'Fn::Select': [0, { Ref: 'AllowedIPRanges' }],
+      });
+    });
   });
 
   describe('KMS Resources', () => {
@@ -354,7 +368,6 @@ describe('TapStack CloudFormation Template', () => {
 
       // Check security features
       expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
-      expect(kmsKey.Properties.KeyRotationStatus).toBe('Enabled');
       expect(kmsKey.Properties.KeySpec).toBe('SYMMETRIC_DEFAULT');
       expect(kmsKey.Properties.KeyUsage).toBe('ENCRYPT_DECRYPT');
       expect(kmsKey.Properties.MultiRegion).toBe(false);
@@ -451,7 +464,8 @@ describe('TapStack CloudFormation Template', () => {
       const bucket = template.Resources.CloudTrailS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Condition).toBe('IsPrimaryRegion');
-      expect(bucket.Properties.MfaDelete).toBe('Enabled');
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
     });
   });
 
@@ -589,7 +603,6 @@ describe('TapStack CloudFormation Template', () => {
       });
       expect(lambda.Properties.Timeout).toBe(300);
       expect(lambda.Properties.MemorySize).toBe(512);
-      expect(lambda.Properties.ReservedConcurrencyLimit).toBe(10);
 
       const vpcConfig = lambda.Properties.VpcConfig;
       expect(vpcConfig.SecurityGroupIds).toEqual([
@@ -608,7 +621,7 @@ describe('TapStack CloudFormation Template', () => {
         Ref: 'Environment',
       });
       expect(lambda.Properties.Code.ZipFile).toContain('lambda_handler');
-      expect(lambda.Properties.DeadLetterQueue.TargetArn).toEqual({
+      expect(lambda.Properties.DeadLetterConfig.TargetArn).toEqual({
         'Fn::GetAtt': ['LambdaDeadLetterQueue', 'Arn'],
       });
     });
@@ -710,6 +723,7 @@ describe('TapStack CloudFormation Template', () => {
       'VPCFlowLogsGroup',
       'Environment',
       'ProjectName',
+      'SecondaryRegion',
     ];
 
     test('should have all required outputs', () => {
@@ -839,7 +853,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct resource count', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(40); // Significantly more resources now
+      expect(resourceCount).toBeGreaterThan(45); // Even more resources now with ManagementSG
     });
 
     test('should have correct parameter count', () => {
@@ -849,7 +863,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct output count', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(25); // Updated output count
+      expect(outputCount).toBe(26); // Updated output count with SecondaryRegion
     });
   });
 
