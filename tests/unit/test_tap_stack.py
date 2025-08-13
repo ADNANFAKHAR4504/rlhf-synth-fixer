@@ -28,19 +28,73 @@ class MockComponentResource:
 class MockResourceOptions:
   """Mock Pulumi ResourceOptions."""
   
-  def __init__(self, parent=None, depends_on=None):
+  def __init__(self, parent=None, depends_on=None, replace_on_changes=None, **kwargs):
     self.parent = parent
     self.depends_on = depends_on
+    self.replace_on_changes = replace_on_changes
+    for key, value in kwargs.items():
+      setattr(self, key, value)
 
 
 # Mock the pulumi module
 mock_pulumi = Mock()
 mock_pulumi.ComponentResource = MockComponentResource
 mock_pulumi.ResourceOptions = MockResourceOptions
+mock_pulumi.Output = Mock()
+mock_pulumi.export = Mock()
+
+# Mock AWS availability zones function
+mock_az_result = Mock()
+mock_az_result.names = ['us-east-1a', 'us-east-1b', 'us-east-1c']
+
+# Mock all AWS resources
+mock_aws = Mock()
+mock_aws.get_availability_zones = Mock(return_value=mock_az_result)
+mock_aws.ec2 = Mock()
+mock_aws.autoscaling = Mock()
+
+# Mock EC2 resources with proper return values
+def create_mock_resource(resource_type):
+  """Create a mock AWS resource with id and other common attributes."""
+  mock_resource = Mock()
+  mock_resource.id = f'{resource_type}-mock-id'
+  mock_resource.ipv6_cidr_block = Mock()
+  mock_resource.ipv6_cidr_block.apply = Mock(return_value='mock-ipv6-cidr')
+  mock_resource.ipv6_addresses = ['2001:db8::1']
+  mock_resource.public_ip = '1.2.3.4'
+  mock_resource.name = f'{resource_type}-mock-name'
+  return mock_resource
+
+mock_aws.ec2.Vpc = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('vpc'))
+mock_aws.ec2.InternetGateway = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('igw'))
+mock_aws.ec2.Subnet = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('subnet'))
+mock_aws.ec2.RouteTable = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('rt'))
+mock_aws.ec2.RouteTableAssociation = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('rta'))
+mock_aws.ec2.Eip = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('eip'))
+mock_aws.ec2.NatGateway = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('nat'))
+mock_aws.ec2.EgressOnlyInternetGateway = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('eigw'))
+mock_aws.ec2.SecurityGroup = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('sg'))
+mock_aws.ec2.LaunchTemplate = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('lt'))
+mock_aws.ec2.Instance = Mock(
+  side_effect=lambda *args, **kwargs: create_mock_resource('i'))
+mock_aws.ec2.get_ami = Mock(return_value=Mock(id='ami-12345'))
+
+# Mock AutoScaling resources
+mock_aws.autoscaling.Group = Mock()
 
 # Replace sys.modules before importing our classes
 sys.modules['pulumi'] = mock_pulumi
-sys.modules['pulumi_aws'] = Mock()
+sys.modules['pulumi_aws'] = mock_aws
 
 # Now import the actual classes after mocking
 from lib.tap_stack import TapStack, TapStackArgs  # pylint: disable=wrong-import-position
