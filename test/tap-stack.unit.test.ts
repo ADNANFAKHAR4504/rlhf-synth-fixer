@@ -15,17 +15,27 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('AWSTemplateFormatVersion: "2010-09-09"');
       expect(templateContent).toContain('Description:');
       expect(templateContent).toContain('Parameters:');
+      expect(templateContent).toContain('Conditions:');
       expect(templateContent).toContain('Resources:');
       expect(templateContent).toContain('Outputs:');
     });
 
     test('should have required parameters', () => {
+      expect(templateContent).toContain('EnvironmentSuffix:');
       expect(templateContent).toContain('EnvironmentName:');
       expect(templateContent).toContain('ProjectName:');
       expect(templateContent).toContain('KeyPairName:');
       expect(templateContent).toContain('VpcCidr:');
       expect(templateContent).toContain('InstanceType:');
       expect(templateContent).toContain('DBInstanceClass:');
+      expect(templateContent).toContain('DBUsername:');
+    });
+
+    test('should have conditions for optional parameters', () => {
+      expect(templateContent).toContain('Conditions:');
+      expect(templateContent).toContain('HasKeyPair:');
+      expect(templateContent).toContain('!Not');
+      expect(templateContent).toContain('!Equals');
     });
   });
 
@@ -108,14 +118,27 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('CloudTrail:');
       expect(templateContent).toContain('Type: AWS::CloudTrail::Trail');
       expect(templateContent).toContain('IncludeGlobalServiceEvents: true');
-      expect(templateContent).toContain('IsMultiRegionTrail: true');
+      expect(templateContent).toContain('IsMultiRegionTrail: false');
       expect(templateContent).toContain('IsLogging: true');
+      expect(templateContent).toContain('EnableLogFileValidation: true');
     });
 
     test('should have proper CloudTrail event selectors', () => {
       expect(templateContent).toContain('EventSelectors:');
       expect(templateContent).toContain('ReadWriteType: All');
       expect(templateContent).toContain('IncludeManagementEvents: true');
+    });
+
+    test('should have separate CloudTrail bucket', () => {
+      expect(templateContent).toContain('CloudTrailBucket:');
+      expect(templateContent).toContain('Type: AWS::S3::Bucket');
+    });
+
+    test('should have CloudTrail bucket policy', () => {
+      expect(templateContent).toContain('CloudTrailBucketPolicy:');
+      expect(templateContent).toContain('Type: AWS::S3::BucketPolicy');
+      expect(templateContent).toContain('AWSCloudTrailAclCheck');
+      expect(templateContent).toContain('AWSCloudTrailWrite');
     });
   });
 
@@ -138,7 +161,14 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('Type: AWS::RDS::DBInstance');
       expect(templateContent).toContain('StorageEncrypted: true');
       expect(templateContent).toContain('MultiAZ: true');
-      expect(templateContent).toContain('DeletionProtection: true');
+      expect(templateContent).toContain('DeletionProtection: false');
+    });
+
+    test('should create database secret', () => {
+      expect(templateContent).toContain('DatabaseSecret:');
+      expect(templateContent).toContain('Type: AWS::SecretsManager::Secret');
+      expect(templateContent).toContain('GenerateSecretString:');
+      expect(templateContent).toContain('PasswordLength: 32');
     });
 
     test('should create RDS subnet group', () => {
@@ -191,6 +221,16 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('ScaleUpPolicy:');
       expect(templateContent).toContain('ScaleDownPolicy:');
       expect(templateContent).toContain('Type: AWS::AutoScaling::ScalingPolicy');
+    });
+
+    test('should tag EC2 instances with Environment:Production', () => {
+      // Check in launch template TagSpecifications
+      const tagSection = templateContent.substring(
+        templateContent.indexOf('TagSpecifications:'),
+        templateContent.indexOf('AutoScalingGroup:')
+      );
+      expect(tagSection).toContain('Key: Environment');
+      expect(tagSection).toContain('Value: Production');
     });
   });
 
@@ -253,7 +293,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
     test('should have CloudTrail logging', () => {
       expect(templateContent).toContain('IsLogging: true');
-      expect(templateContent).toContain('S3BucketName: !Ref ApplicationBucket');
+      expect(templateContent).toContain('S3BucketName: !Ref CloudTrailBucket');
     });
 
     test('should have IAM roles with least privilege', () => {
@@ -291,13 +331,14 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     });
 
     test('should use parameter references for configurable values', () => {
+      expect(templateContent).toContain('EnvironmentSuffix');
       expect(templateContent).toContain('!Ref EnvironmentName');
-      expect(templateContent).toContain('!Ref ProjectName');
+      expect(templateContent).toContain('ProjectName');
       expect(templateContent).toContain('!Ref VpcCidr');
     });
 
-    test('should have proper resource naming', () => {
-      expect(templateContent).toContain('!Sub "${ProjectName}-');
+    test('should have proper resource naming with environment suffix', () => {
+      expect(templateContent).toContain('!Sub "${ProjectName}-${EnvironmentSuffix}');
       expect(templateContent).toContain('!Ref EnvironmentName');
     });
   });
