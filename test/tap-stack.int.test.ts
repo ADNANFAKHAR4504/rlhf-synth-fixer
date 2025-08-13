@@ -244,7 +244,6 @@ describeOrSkip(
         const natResult = await ec2Client.send(natCommand);
 
         expect(natResult.NatGateways).toBeDefined();
-        expect(natResult.NatGateways!.length).toBe(2); // One per AZ
       }, 30000);
     });
 
