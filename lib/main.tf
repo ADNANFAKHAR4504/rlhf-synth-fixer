@@ -2,17 +2,8 @@
 # Single-file Terraform stack: HTTP/HTTPS-only Security Group
 # ---------------------------------------------------------
 # Usage:
-# 1. Ensure provider.tf exists and aws_region variable is referenced there.
-# 2. Run:
-#    terraform init
-#    terraform plan -var='vpc_id=<your-vpc-id>' \
-#                  -var='allowed_ipv4_cidrs=["203.0.113.0/24"]' \
-#                  -var='allowed_ipv6_cidrs=["2001:db8::/64"]'
-#    terraform apply -var='vpc_id=<your-vpc-id>' \
-#                  -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
-# 3. Verify:
-#    aws ec2 describe-security-groups --group-ids <security_group_id>
-###########################################################
+# terraform plan -var='vpc_id=<vpc-id>' \
+#               -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
 
 ########################
 # Variables
@@ -32,7 +23,7 @@ variable "vpc_id" {
   type        = string
   validation {
     condition     = can(regex("^vpc-[0-9a-f]{8,17}$", var.vpc_id))
-    error_message = "Invalid VPC ID format. It should be in the form 'vpc-xxxxxxxx' or 'vpc-xxxxxxxxxxxxxxxxx' where x is a hexadecimal digit."
+    error_message = "Invalid VPC ID format. Use 'vpc-xxxxxxxx' or 'vpc-xxxxxxxxxxxxxxxxx'."
   }
 }
 
@@ -69,27 +60,9 @@ variable "security_group_description" {
 variable "tags" {
   description = "Map of tags to apply to resources"
   type        = map(string)
-  default     = {
+  default = {
     Owner       = "devops"
     Environment = "dev"
-  }
-}
-
-########################
-# Validation
-########################
-locals {
-  cidr_validation_warning = (
-    length(var.allowed_ipv4_cidrs) == 0 && length(var.allowed_ipv6_cidrs) == 0
-  ) ? true : false
-}
-
-# Warn if no CIDRs are provided, but allow the plan to proceed
-resource "null_resource" "cidr_warning" {
-  count = local.cidr_validation_warning ? 1 : 0
-
-  provisioner "local-exec" {
-    command = "echo 'Warning: allowed_ipv4_cidrs and allowed_ipv6_cidrs are both empty. No ingress rules will be created.'"
   }
 }
 
@@ -102,7 +75,7 @@ resource "aws_security_group" "app_sg" {
   vpc_id      = var.vpc_id
   tags        = var.tags
 
-  # IPv4 ingress rules
+  # IPv4 ingress
   dynamic "ingress" {
     for_each = var.allowed_ipv4_cidrs
     content {
@@ -125,14 +98,14 @@ resource "aws_security_group" "app_sg" {
     }
   }
 
-  # IPv6 ingress rules
+  # IPv6 ingress
   dynamic "ingress" {
     for_each = var.allowed_ipv6_cidrs
     content {
-      description = "Allow HTTP from IPv6 ${ingress.value}"
-      from_port   = 80
-      to_port     = 80
-      protocol    = "tcp"
+      description    = "Allow HTTP from IPv6 ${ingress.value}"
+      from_port      = 80
+      to_port        = 80
+      protocol       = "tcp"
       ipv6_cidr_blocks = [ingress.value]
     }
   }
@@ -140,15 +113,15 @@ resource "aws_security_group" "app_sg" {
   dynamic "ingress" {
     for_each = var.allowed_ipv6_cidrs
     content {
-      description = "Allow HTTPS from IPv6 ${ingress.value}"
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
+      description    = "Allow HTTPS from IPv6 ${ingress.value}"
+      from_port      = 443
+      to_port        = 443
+      protocol       = "tcp"
       ipv6_cidr_blocks = [ingress.value]
     }
   }
 
-  # Egress rules
+  # Egress
   dynamic "egress" {
     for_each = var.allow_all_outbound ? [1] : []
     content {
@@ -164,11 +137,11 @@ resource "aws_security_group" "app_sg" {
   dynamic "egress" {
     for_each = var.allow_all_outbound ? [] : [1]
     content {
-      description = "Restricted outbound traffic placeholder (adjust as needed)"
+      description = "Restricted outbound traffic placeholder"
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]  # modify for stricter control
+      cidr_blocks = ["0.0.0.0/0"]
     }
   }
 }
@@ -177,22 +150,18 @@ resource "aws_security_group" "app_sg" {
 # Outputs
 ########################
 output "security_group_id" {
-  description = "ID of the security group"
-  value       = aws_security_group.app_sg.id
+  value = aws_security_group.app_sg.id
 }
 
 output "security_group_arn" {
-  description = "ARN of the security group"
-  value       = aws_security_group.app_sg.arn
+  value = aws_security_group.app_sg.arn
 }
 
 output "security_group_name" {
-  description = "Name of the security group"
-  value       = aws_security_group.app_sg.name
+  value = aws_security_group.app_sg.name
 }
 
 output "ingress_rules" {
-  description = "List of ingress rules"
   value = [
     for rule in aws_security_group.app_sg.ingress : {
       from_port = rule.from_port
