@@ -15,7 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const awsRegion =
-  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-west-2';
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 
 const ec2Client = new EC2Client({ region: awsRegion });
 const s3Client = new S3Client({ region: awsRegion });
