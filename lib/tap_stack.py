@@ -34,7 +34,6 @@ class TapStackArgs:
         'ManagedBy': 'Pulumi'
     }
 
-
 class TapStack(pulumi.ComponentResource):
   """
   The main Pulumi component that orchestrates the creation of all
