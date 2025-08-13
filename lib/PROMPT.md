@@ -1,4 +1,4 @@
-Provide the prompt that made the model failYou are an expert AWS Pulumi infrastructure architect specializing in multi-region, high-availability, and security-compliant deployments using infrastructure-as-code tools such as Pulumi.
+You are an expert AWS Pulumi infrastructure architect specializing in multi-region, high-availability, and security-compliant deployments using infrastructure-as-code tools such as Pulumi.
 
 Your task is to generate production-grade IaC code that provisions the following environment:
 
