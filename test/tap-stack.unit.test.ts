@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
@@ -33,10 +33,10 @@ describe('TapStack', () => {
       const vpcs = template.findResources('AWS::EC2::VPC');
       const vpcResource = Object.values(vpcs)[0] as any;
       const tags = vpcResource.Properties.Tags;
-      
+
       const nameTag = tags.find((tag: any) => tag.Key === 'Name');
       const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-      
+
       expect(nameTag).toBeDefined();
       expect(nameTag.Value).toBe(`${environmentSuffix}-VPC-Main`);
       expect(envTag).toBeDefined();
@@ -49,10 +49,10 @@ describe('TapStack', () => {
       const igws = template.findResources('AWS::EC2::InternetGateway');
       const igwResource = Object.values(igws)[0] as any;
       const tags = igwResource.Properties.Tags;
-      
+
       const nameTag = tags.find((tag: any) => tag.Key === 'Name');
       const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-      
+
       expect(nameTag).toBeDefined();
       expect(nameTag.Value).toBe(`${environmentSuffix}-IGW-Main`);
       expect(envTag).toBeDefined();
@@ -98,15 +98,17 @@ describe('TapStack', () => {
     test('public subnets have correct tags', () => {
       const subnets = template.findResources('AWS::EC2::Subnet');
       const subnetResources = Object.values(subnets);
-      
+
       // Check that both subnets have proper tags
       subnetResources.forEach((subnet: any, index) => {
         const tags = subnet.Properties.Tags;
         const nameTag = tags.find((tag: any) => tag.Key === 'Name');
         const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-        
+
         expect(nameTag).toBeDefined();
-        expect(nameTag.Value).toMatch(new RegExp(`${environmentSuffix}-PublicSubnet-[12]`));
+        expect(nameTag.Value).toMatch(
+          new RegExp(`${environmentSuffix}-PublicSubnet-[12]`)
+        );
         expect(envTag).toBeDefined();
         expect(envTag.Value).toBe(environmentSuffix);
       });
@@ -151,15 +153,18 @@ describe('TapStack', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const s3Endpoint = Object.values(endpoints).find((endpoint: any) => {
         const serviceName = endpoint.Properties.ServiceName;
-        return serviceName && serviceName['Fn::Join'] && 
-               serviceName['Fn::Join'][1][2] === '.s3';
+        return (
+          serviceName &&
+          serviceName['Fn::Join'] &&
+          serviceName['Fn::Join'][1][2] === '.s3'
+        );
       }) as any;
-      
+
       expect(s3Endpoint).toBeDefined();
       const tags = s3Endpoint.Properties.Tags;
       const nameTag = tags.find((tag: any) => tag.Key === 'Name');
       const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-      
+
       expect(nameTag).toBeDefined();
       expect(nameTag.Value).toBe(`${environmentSuffix}-S3-VPCEndpoint`);
       expect(envTag).toBeDefined();
@@ -183,15 +188,18 @@ describe('TapStack', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const dynamoEndpoint = Object.values(endpoints).find((endpoint: any) => {
         const serviceName = endpoint.Properties.ServiceName;
-        return serviceName && serviceName['Fn::Join'] && 
-               serviceName['Fn::Join'][1][2] === '.dynamodb';
+        return (
+          serviceName &&
+          serviceName['Fn::Join'] &&
+          serviceName['Fn::Join'][1][2] === '.dynamodb'
+        );
       }) as any;
-      
+
       expect(dynamoEndpoint).toBeDefined();
       const tags = dynamoEndpoint.Properties.Tags;
       const nameTag = tags.find((tag: any) => tag.Key === 'Name');
       const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-      
+
       expect(nameTag).toBeDefined();
       expect(nameTag.Value).toBe(`${environmentSuffix}-DynamoDB-VPCEndpoint`);
       expect(envTag).toBeDefined();
@@ -202,10 +210,7 @@ describe('TapStack', () => {
       const s3Endpoint = template.findResources('AWS::EC2::VPCEndpoint', {
         Properties: {
           ServiceName: {
-            'Fn::Join': [
-              '',
-              ['com.amazonaws.', { Ref: 'AWS::Region' }, '.s3'],
-            ],
+            'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, '.s3']],
           },
         },
       });
@@ -263,6 +268,20 @@ describe('TapStack', () => {
         Export: { Name: `${environmentSuffix}-IGW-ID` },
       });
     });
+
+    test('exports S3 VPC Endpoint ID', () => {
+      template.hasOutput('S3VpcEndpointId', {
+        Value: { Ref: Match.anyValue() },
+        Export: { Name: `${environmentSuffix}-S3-VPCEndpoint-ID` },
+      });
+    });
+
+    test('exports DynamoDB VPC Endpoint ID', () => {
+      template.hasOutput('DynamoDBVpcEndpointId', {
+        Value: { Ref: Match.anyValue() },
+        Export: { Name: `${environmentSuffix}-DynamoDB-VPCEndpoint-ID` },
+      });
+    });
   });
 
   describe('Naming Convention', () => {
@@ -293,26 +312,22 @@ describe('TapStack', () => {
     test('environment suffix is configurable', () => {
       const customSuffix = 'production';
       const customApp = new cdk.App();
-      const customStack = new TapStack(
-        customApp,
-        `TapStack${customSuffix}`,
-        {
-          env: {
-            account: '123456789012',
-            region: 'us-east-1',
-          },
-          environmentSuffix: customSuffix,
-        }
-      );
+      const customStack = new TapStack(customApp, `TapStack${customSuffix}`, {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix: customSuffix,
+      });
       const customTemplate = Template.fromStack(customStack);
 
       const vpcs = customTemplate.findResources('AWS::EC2::VPC');
       const vpcResource = Object.values(vpcs)[0] as any;
       const tags = vpcResource.Properties.Tags;
-      
+
       const nameTag = tags.find((tag: any) => tag.Key === 'Name');
       const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-      
+
       expect(nameTag).toBeDefined();
       expect(nameTag.Value).toBe(`${customSuffix}-VPC-Main`);
       expect(envTag).toBeDefined();

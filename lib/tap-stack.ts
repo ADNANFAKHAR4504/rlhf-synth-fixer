@@ -167,5 +167,18 @@ export class TapStack extends cdk.Stack {
       description: 'Internet Gateway ID',
       exportName: `${environmentSuffix}-IGW-ID`,
     });
+
+    // Add VPC endpoint outputs
+    new cdk.CfnOutput(this, 'S3VpcEndpointId', {
+      value: s3VpcEndpoint.vpcEndpointId,
+      description: 'S3 VPC Endpoint ID',
+      exportName: `${environmentSuffix}-S3-VPCEndpoint-ID`,
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDBVpcEndpointId', {
+      value: dynamoDBVpcEndpoint.vpcEndpointId,
+      description: 'DynamoDB VPC Endpoint ID',
+      exportName: `${environmentSuffix}-DynamoDB-VPCEndpoint-ID`,
+    });
   }
 }
