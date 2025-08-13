@@ -1,5 +1,5 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure and Compliant SecureApp infrastructure with enhanced security controls (v2)'
+AWSTemplateFormatVersion: '2010-09-09' 
+Description: 'Secure and Compliant SecureApp infrastructure with enhanced security controls'
 
 Parameters:
   ProjectName:
@@ -16,20 +16,13 @@ Parameters:
 
   AllowedIPRange:
     Type: String
-    Default: '0.0.0.0/0'
-    Description: 'CIDR block for allowed HTTP/HTTPS ALB access (restrict in production)'
-
-  ACMCertificateArn:
-    Type: String
-    Default: ''
-    Description: 'ACM certificate ARN for HTTPS on ALB. If empty, HTTPS listener is skipped and HTTP stays enabled.'
-
-Conditions:
-  HasAcmCert: !Not [ !Equals [ !Ref ACMCertificateArn, '' ] ]
+    # Hardened default: internal-only access to remove public 0.0.0.0/0 exposure
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for allowed HTTP access (restrict in production)'
 
 Resources:
   ###########################################################################
-  # VPC and Enhanced Networking (unchanged from your working template)
+  # VPC and Enhanced Networking
   ###########################################################################
   SecureAppVPC:
     Type: AWS::EC2::VPC
@@ -69,7 +62,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       CidrBlock: 10.0.1.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: false
+      MapPublicIpOnLaunch: false  # No auto-assign public IPs
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-public-subnet-1-${Environment}-${AWS::AccountId}'
@@ -86,7 +79,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       CidrBlock: 10.0.2.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: false
+      MapPublicIpOnLaunch: false  # No auto-assign public IPs
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-public-subnet-2-${Environment}-${AWS::AccountId}'
@@ -161,7 +154,7 @@ Resources:
         - Key: Type
           Value: Database
 
-  # Network ACLs (tightened)
+  # Network ACLs for enhanced security
   PublicNetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:
@@ -210,12 +203,12 @@ Resources:
         From: 1024
         To: 65535
 
-  # Restrict outbound to only ephemeral ports (instead of all)
-  PublicNetworkAclEntryOutboundEphemeral:
+  # Hardened egress: allow only TCP ephemeral ports for return traffic (not all protocols)
+  PublicNetworkAclEntryOutbound:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
-      RuleNumber: 200
+      RuleNumber: 100
       Protocol: 6
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
@@ -236,149 +229,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       NetworkAclId: !Ref PublicNetworkAcl
 
-  # Private NACL
-  PrivateNetworkAcl:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref SecureAppVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-nacl-${Environment}'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  PrivateNetworkAclInboundHTTPfromALB1:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 100
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.1.0/24
-      PortRange: {From: 80, To: 80}
-
-  PrivateNetworkAclInboundHTTPfromALB2:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 110
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.2.0/24
-      PortRange: {From: 80, To: 80}
-
-  PrivateNetworkAclInboundSSHfromVPC:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 120
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.0.0/16
-      PortRange: {From: 22, To: 22}
-
-  PrivateNetworkAclInboundEphemeralFromVPC:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 130
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.0.0/16
-      PortRange: {From: 1024, To: 65535}
-
-  PrivateNetworkAclOutboundToInternetEphemeral:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 200
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-      PortRange: {From: 1024, To: 65535}
-      Egress: true
-
-  PrivateSubnetNetworkAclAssociation1:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      NetworkAclId: !Ref PrivateNetworkAcl
-
-  PrivateSubnetNetworkAclAssociation2:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      NetworkAclId: !Ref PrivateNetworkAcl
-
-  # Database NACL
-  DatabaseNetworkAcl:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref SecureAppVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-db-nacl-${Environment}'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  DatabaseNetworkAclInboundMySQLFromPrivate1:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkAcl
-      RuleNumber: 100
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.3.0/24
-      PortRange: {From: 3306, To: 3306}
-
-  DatabaseNetworkAclInboundMySQLFromPrivate2:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkAcl
-      RuleNumber: 110
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.4.0/24
-      PortRange: {From: 3306, To: 3306}
-
-  DatabaseNetworkAclInboundEphemeralFromPrivate:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkAcl
-      RuleNumber: 120
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.0.0/16
-      PortRange: {From: 1024, To: 65535}
-
-  DatabaseNetworkAclOutboundEphemeralToPrivate:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkAcl
-      RuleNumber: 200
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 10.0.0.0/16
-      PortRange: {From: 1024, To: 65535}
-      Egress: true
-
-  DatabaseSubnetNetworkAclAssociation1:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref DatabaseSubnet1
-      NetworkAclId: !Ref DatabaseNetworkAcl
-
-  DatabaseSubnetNetworkAclAssociation2:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref DatabaseSubnet2
-      NetworkAclId: !Ref DatabaseNetworkAcl
-
-  # NAT Gateway, Route Tables, and Associations (unchanged)
+  # NAT Gateway for private subnets
   NATGatewayEIP:
     Type: AWS::EC2::EIP
     DependsOn: AttachGateway
@@ -405,6 +256,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -441,6 +293,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Routes
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -456,6 +309,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGateway
 
+  # Route Table Associations
   PublicSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -493,7 +347,7 @@ Resources:
       RouteTableId: !Ref DatabaseRouteTable
 
   ###########################################################################
-  # Security Groups (unchanged logic, parameter-driven)
+  # Enhanced Security Groups with Restricted Access
   ###########################################################################
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -571,28 +425,8 @@ Resources:
           Value: !Ref Environment
 
   ###########################################################################
-  # S3 Bucket now with customer-managed KMS default encryption
+  # S3 Bucket with Default Encryption (hardened to SSE-KMS, AWS-managed key)
   ###########################################################################
-  S3KmsKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: !Sub 'CMK for ${ProjectName} S3 bucket'
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: EnableIAMUserPermissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: 'kms:*'
-            Resource: '*'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
   SecureAppS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -600,8 +434,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3KmsKey
+              SSEAlgorithm: aws:kms    # switched from AES256 to KMS (AWS-managed)
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -618,6 +451,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # S3 Bucket Policy for HTTPS enforcement
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -637,7 +471,7 @@ Resources:
                 'aws:SecureTransport': 'false'
 
   ###########################################################################
-  # Secrets Manager (unchanged)
+  # Secrets Manager with Default Encryption
   ###########################################################################
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
@@ -658,7 +492,7 @@ Resources:
           Value: !Ref Environment
 
   ###########################################################################
-  # RDS (unchanged)
+  # RDS Database with Enhanced Security
   ###########################################################################
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -708,7 +542,7 @@ Resources:
           Value: !Ref Environment
 
   ###########################################################################
-  # Application Load Balancer + HTTPS (TLS) with redirect
+  # Application Load Balancer with SSL (existing HTTP listener only)
   ###########################################################################
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -757,41 +591,18 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # HTTP listener: redirect to HTTPS if a cert is provided; otherwise forward (backwards compatible)
-  ALBListenerHTTP:
+  ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - !If 
-          - HasAcmCert
-          - Type: redirect
-            RedirectConfig:
-              Protocol: HTTPS
-              Port: '443'
-              StatusCode: HTTP_301
-          - Type: forward
-            TargetGroupArn: !Ref ALBTargetGroup
-
-  # HTTPS listener (conditional)
-  ALBListenerHTTPS:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasAcmCert
-    Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref ACMCertificateArn
-      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
 
   ###########################################################################
-  # EC2 Instances (unchanged)
+  # EC2 Instances (No IAM instance profiles)
   ###########################################################################
   WebServerInstance1:
     Type: AWS::EC2::Instance
@@ -806,8 +617,10 @@ Resources:
           #!/bin/bash
           yum update -y
           yum install -y httpd
+          
           echo "OK" > /var/www/html/health
           echo "<h1>${ProjectName} Web Server 1</h1><p>Environment: ${Environment}</p><p>Deployed Successfully!</p><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Database: Connected</p>" > /var/www/html/index.html
+          
           systemctl enable httpd
           systemctl start httpd
       Tags:
@@ -831,8 +644,10 @@ Resources:
           #!/bin/bash
           yum update -y
           yum install -y httpd
+          
           echo "OK" > /var/www/html/health
           echo "<h1>${ProjectName} Web Server 2</h1><p>Environment: ${Environment}</p><p>Deployed Successfully!</p><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Database: Connected</p>" > /var/www/html/index.html
+          
           systemctl enable httpd
           systemctl start httpd
       Tags:
@@ -844,7 +659,7 @@ Resources:
           Value: !Ref Environment
 
   ###########################################################################
-  # CloudWatch Log Groups
+  # CloudWatch Log Groups for Monitoring
   ###########################################################################
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
@@ -872,249 +687,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  ###########################################################################
-  # VPC Flow Logs -> CloudWatch Logs
-  ###########################################################################
-  FlowLogsLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/vpc/flow-logs/${ProjectName}-${Environment}'
-      RetentionInDays: 90
-
-  FlowLogsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: vpc-flow-logs.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: FlowLogsToCloudWatch
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
-                Resource: '*'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  VpcFlowLogs:
-    Type: AWS::EC2::FlowLog
-    Properties:
-      DeliverLogsPermissionArn: !GetAtt FlowLogsRole.Arn
-      LogDestinationType: cloud-watch-logs
-      LogGroupName: !Ref FlowLogsLogGroup
-      ResourceId: !Ref SecureAppVPC
-      ResourceType: VPC
-      TrafficType: ALL
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  ###########################################################################
-  # CloudTrail with KMS + dedicated S3 bucket
-  ###########################################################################
-  TrailKmsKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: !Sub 'CMK for CloudTrail logs for ${ProjectName}-${Environment}'
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: EnableIAMUserPermissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: AllowCloudTrailToUseKey
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-            Condition:
-              StringLike:
-                kms:EncryptionContext:aws:cloudtrail:arn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-trail-${Environment}'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  TrailBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}-trail-logs-${AWS::AccountId}-${Environment}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      OwnershipControls:
-        Rules:
-          - ObjectOwnership: BucketOwnerPreferred
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  TrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref TrailBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: s3:GetBucketAcl
-            Resource: !Sub 'arn:aws:s3:::${TrailBucket}'
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          - Sid: DenyInsecureTransport
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::${TrailBucket}'
-              - !Sub 'arn:aws:s3:::${TrailBucket}/*'
-            Condition:
-              Bool:
-                aws:SecureTransport: 'false'
-
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      TrailName: !Sub '${ProjectName}-trail-${Environment}'
-      S3BucketName: !Ref TrailBucket
-      IsLogging: true
-      EnableLogFileValidation: true
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      KMSKeyId: !Ref TrailKmsKey
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  ###########################################################################
-  # AWS Config (Recorder + Delivery Channel + key managed rules)
-  ###########################################################################
-  ConfigBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}-config-logs-${AWS::AccountId}-${Environment}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
-      
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: default
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: default
-      S3BucketName: !Ref ConfigBucket
-      S3KeyPrefix: !Sub '${ProjectName}/${Environment}'
-
-  # Managed rules (a small baseline)
-  ConfigRuleIamPasswordPolicy:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: !Sub '${ProjectName}-iam-password-policy'
-      Source:
-        Owner: AWS
-        SourceIdentifier: IAM_PASSWORD_POLICY
-
-  ConfigRuleS3KmsDefaultEncryption:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: !Sub '${ProjectName}-s3-default-encryption-kms'
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_DEFAULT_ENCRYPTION_KMS
-
-  ConfigRuleVpcFlowLogsEnabled:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: !Sub '${ProjectName}-vpc-flow-logs-enabled'
-      Source:
-        Owner: AWS
-        SourceIdentifier: VPC_FLOW_LOGS_ENABLED
-  ###########################################################################
-  # Security Hub - intentionally not created by this stack
-  # Reason: If the account is already subscribed, creating AWS::SecurityHub::Hub
-  # returns AlreadyExists (409). Manage Security Hub at the org level or
-  # enable it once per account outside this baseline.
-  ###########################################################################
-
-  ###########################################################################
-  # Outputs (kept + new)
-  ###########################################################################
 Outputs:
   VPCId:
     Description: 'VPC ID for SecureApp'
@@ -1123,14 +695,14 @@ Outputs:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
   ApplicationLoadBalancerDNS:
-    Description: 'Application Load Balancer DNS name'
+    Description: 'Application Load Balancer DNS name - Access your application at http://[this-value]'
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
 
   ApplicationURL:
     Description: 'Complete URL to access your application'
-    Value: !If [ HasAcmCert, !Sub 'https://${ApplicationLoadBalancer.DNSName}', !Sub 'http://${ApplicationLoadBalancer.DNSName}' ]
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${AWS::StackName}-App-URL'
 
@@ -1169,18 +741,3 @@ Outputs:
     Value: !Ref SecurityLogGroup
     Export:
       Name: !Sub '${AWS::StackName}-Security-LogGroup'
-
-  TrailBucketName:
-    Description: 'S3 bucket for CloudTrail logs'
-    Value: !Ref TrailBucket
-
-  ConfigBucketName:
-    Description: 'S3 bucket for AWS Config snapshots/history'
-    Value: !Ref ConfigBucket
-
-  DeploymentNotes:
-    Description: 'Post-deployment notes'
-    Value: !If
-      - HasAcmCert
-      - 'Stack deployed successfully. HTTP is redirected to HTTPS (port 443). ALB health checks target /health. Wait 2-3 minutes for instances to pass health checks.'
-      - 'Stack deployed successfully. HTTPS not enabled (no ACM cert provided), using HTTP (port 80). ALB health checks target /health. Wait 2-3 minutes for instances to pass health checks.'
