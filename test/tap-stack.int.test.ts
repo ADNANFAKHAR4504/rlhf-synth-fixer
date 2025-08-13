@@ -340,9 +340,11 @@ describe('Infrastructure Integration Tests', () => {
       // For PR environments, CloudTrail is skipped to avoid trail limit
       // For comprehensive CloudTrail validation, see aws-resource-validation.int.test.ts
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      
+
       if (environmentSuffix.startsWith('pr')) {
-        console.log(`CloudTrail logging is disabled for PR environment: ${environmentSuffix}`);
+        console.log(
+          `CloudTrail logging is disabled for PR environment: ${environmentSuffix}`
+        );
         // For PR environments, we just verify the environment is defined
         expect(environmentSuffix).toBeDefined();
       } else {
