@@ -41,6 +41,12 @@ export interface ProductionWebAppStackArgs {
   environment?: string;
 
   /**
+   * AWS region for deployment
+   * @default 'us-west-2'
+   */
+  region?: string;
+
+  /**
    * Additional tags to apply to resources
    */
   tags?: pulumi.Input<{ [key: string]: string }>;
@@ -75,6 +81,7 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     const vpcCidr = args.vpcCidr || '10.0.0.0/16';
     const projectName = args.projectName || 'production-web-app';
     const environment = args.environment || 'prod';
+    const region = args.region || 'us-west-2'; // Default to us-west-2 as per PROMPT.md
 
     // Create resource name with environment suffix
     const resourcePrefix = `${projectName}-${environment}`;
@@ -83,10 +90,11 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
     const commonTags = {
       Environment: environment.charAt(0).toUpperCase() + environment.slice(1),
       Project: projectName,
+      Region: region,
       ...(args.tags || {}),
     };
 
-    // Get availability zones
+    // Get availability zones for the specified region
     const availabilityZones = aws.getAvailabilityZones({
       state: 'available',
     });

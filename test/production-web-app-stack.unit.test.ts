@@ -179,6 +179,14 @@ describe('ProductionWebAppStack Component Tests', () => {
       expect(stack).toBeDefined();
     });
 
+    it('should create stack with custom region', () => {
+      const stack = new ProductionWebAppStack('test-web-app', {
+        environment: 'test',
+        region: 'us-west-2',
+      });
+      expect(stack).toBeDefined();
+    });
+
     it('should create stack with custom tags', () => {
       const stack = new ProductionWebAppStack('test-web-app', {
         environment: 'test',

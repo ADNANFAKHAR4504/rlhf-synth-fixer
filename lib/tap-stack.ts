@@ -73,7 +73,11 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environment: environmentSuffix, // Pass environmentSuffix as environment
         projectName: 'tap', // Clean project name without environment suffix
-        tags: tags,
+        region: 'us-west-2', // Pass the region configuration
+        tags: {
+          ...tags,
+          DeploymentRegion: 'us-west-2', // Add region to tags for tracking
+        },
       },
       { parent: this }
     );

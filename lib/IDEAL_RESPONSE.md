@@ -7,6 +7,7 @@ const config = new pulumi.Config();
 const vpcCidr = config.get('vpcCidr') || '10.0.0.0/16';
 const projectName = config.get('projectName') || 'production-web-app';
 const environment = config.get('environment') || 'prod';
+const region = config.get('aws:region') || 'us-west-2'; // Default to us-west-2 as per PROMPT.md
 
 // Create resource name with environment suffix
 const resourcePrefix = `${projectName}-${environment}`;
@@ -15,6 +16,7 @@ const resourcePrefix = `${projectName}-${environment}`;
 const commonTags = {
   Environment: environment.charAt(0).toUpperCase() + environment.slice(1),
   Project: projectName,
+  Region: region,
 };
 
 // Get availability zones
