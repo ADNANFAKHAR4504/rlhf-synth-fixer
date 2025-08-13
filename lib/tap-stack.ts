@@ -14,7 +14,7 @@ export class TapStack extends cdk.Stack {
 
     // Common tags
     const commonTags = {
-      project: 'IaC-AWS-Nova-Model-Breaking',
+      project: 'IaC-AWS-Nova-Model-Breaking2',
       owner: 'nova-team',
       environment: 'development',
     };
