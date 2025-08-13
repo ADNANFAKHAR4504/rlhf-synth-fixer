@@ -20,6 +20,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Description).toContain('IaC - AWS Nova Model Breaking');
       expect(template.Description).toContain('Secure AWS Environment');
     });
+
+    test('should have required parameters with correct defaults', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Parameters.Environment).toBeDefined();
+      expect(template.Parameters.ProjectName).toBeDefined();
+      expect(template.Parameters.SSHCidrIp).toBeDefined();
+      expect(template.Parameters.SSHCidrIp.Default).toBe('203.0.113.0/24');
+    });
   });
 
   describe('Region Validation', () => {
@@ -115,7 +123,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(ingressRules[0].IpProtocol).toBe('tcp');
       expect(ingressRules[0].FromPort).toBe(22);
       expect(ingressRules[0].ToPort).toBe(22);
-      expect(ingressRules[0].CidrIp).toBe('203.0.113.0/24');
+      // CIDR is a parameter reference, not a hardcoded value
+      expect(ingressRules[0].CidrIp).toEqual({ 'Ref': 'SSHCidrIp' });
     });
 
     test('SSHSecurityGroup should have minimal egress rules', () => {
