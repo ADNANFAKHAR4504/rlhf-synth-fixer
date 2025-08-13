@@ -15,11 +15,6 @@ Parameters:
     Type: String
     Default: webapp
     Description: Name of the web application
-    
-  KMSKeyId:
-    Type: String
-    Default: alias/aws/ssm
-    Description: KMS Key ID for SSM Parameter encryption
 
 Mappings:
   EnvironmentConfig:
