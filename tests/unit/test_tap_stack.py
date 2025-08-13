@@ -25,23 +25,22 @@ class TestTapStack(unittest.TestCase):
 
     # ASSERT
     template.resource_count_is("AWS::S3::Bucket", 3)
-    # Check encryption and block public access for one bucket
     template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketEncryption": {
-            "ServerSideEncryptionConfiguration": [
-                {
-                    "ServerSideEncryptionByDefault": {
-                        "SSEAlgorithm": "aws:kms"
-                    }
-                }
-            ]
-        },
-        "PublicAccessBlockConfiguration": {
-            "BlockPublicAcls": True,
-            "BlockPublicPolicy": True,
-            "IgnorePublicAcls": True,
-            "RestrictPublicBuckets": True
-        }
+      "BucketEncryption": {
+        "ServerSideEncryptionConfiguration": [
+          {
+            "ServerSideEncryptionByDefault": {
+              "SSEAlgorithm": "aws:kms"
+            }
+          }
+        ]
+      },
+      "PublicAccessBlockConfiguration": {
+        "BlockPublicAcls": True,
+        "BlockPublicPolicy": True,
+        "IgnorePublicAcls": True,
+        "RestrictPublicBuckets": True
+      }
     })
 
   @mark.it("creates KMS keys for S3 and RDS")
@@ -72,10 +71,10 @@ class TestTapStack(unittest.TestCase):
     # ASSERT
     template.resource_count_is("AWS::RDS::DBInstance", 1)
     template.has_resource_properties("AWS::RDS::DBInstance", {
-        "Engine": "mysql",
-        "StorageEncrypted": True,
-        "BackupRetentionPeriod": 7,
-        "DeletionProtection": False
+      "Engine": "mysql",
+      "StorageEncrypted": True,
+      "BackupRetentionPeriod": 7,
+      "DeletionProtection": False
     })
 
   @mark.it("outputs key resource identifiers")
