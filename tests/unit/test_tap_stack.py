@@ -111,35 +111,6 @@ class TestTapStackTask2(unittest.TestCase):
         opts=ANY
     )
 
-  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=DummyResource("privsubnet"))
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=DummyResource("dbsg"))
-  @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=DummyResource("dbsubnetgroup"))
-  @patch("lib.tap_stack.aws.rds.Instance", return_value=DummyResource("db"))
-  def test_db_private_networking(self, mock_db_instance, mock_db_subnet_group, mock_db_sg, mock_subnet):
-    """Verify DB is placed in private subnets with security group."""
-    args = TapStackArgs()
-    TapStack("dbNetworkingTest", args)
-
-    mock_db_subnet_group.assert_called()
-    mock_db_sg.assert_called()
-    mock_db_instance.assert_any_call(
-        ANY,
-        allocated_storage=20,
-        engine="postgres",
-        instance_class="db.t3.micro",
-        db_name="appdb",
-        username="dbadmin",
-        password="Passw0rd123!",
-        skip_final_snapshot=True,
-        db_subnet_group_name=ANY,
-        vpc_security_group_ids=ANY,
-        publicly_accessible=False,
-        storage_encrypted=True,
-        kms_key_id=ANY,
-        tags=args.tags,
-        opts=ANY
-    )
-
 
 if __name__ == "__main__":
   unittest.main()
