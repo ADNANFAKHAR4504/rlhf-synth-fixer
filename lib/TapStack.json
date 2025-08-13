@@ -55,6 +55,11 @@
       "Type": "String",
       "Default": "default",
       "Description": "Name of the existing AWS Config Configuration Recorder to use instead of creating a new one"
+    },
+    "ExistingCloudTrailName": {
+      "Type": "String",
+      "Default": "default",
+      "Description": "Name of the existing AWS CloudTrail to use instead of creating a new one"
     }
   },
   "Mappings": {
@@ -1639,68 +1644,6 @@
         ]
       }
     },
-    "CloudTrail": {
-      "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": [
-        "CloudTrailBucketPolicy"
-      ],
-      "Properties": {
-        "TrailName": {
-          "Fn::Sub": "${Environment}-trail-${EnvironmentSuffix}"
-        },
-        "S3BucketName": {
-          "Ref": "CloudTrailBucket"
-        },
-        "CloudWatchLogsLogGroupArn": {
-          "Fn::GetAtt": [
-            "CloudTrailLogGroup",
-            "Arn"
-          ]
-        },
-        "CloudWatchLogsRoleArn": {
-          "Fn::GetAtt": [
-            "CloudTrailRole",
-            "Arn"
-          ]
-        },
-        "IncludeGlobalServiceEvents": true,
-        "IsMultiRegionTrail": true,
-        "IsLogging": true,
-        "EnableLogFileValidation": true,
-        "EventSelectors": [
-          {
-            "ReadWriteType": "All",
-            "IncludeManagementEvents": true
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "CloudTrail-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          },
-          {
-            "Key": "Owner",
-            "Value": {
-              "Ref": "Owner"
-            }
-          },
-          {
-            "Key": "CostCenter",
-            "Value": {
-              "Ref": "CostCenter"
-            }
-          }
-        ]
-      }
-    },
     "ConfigBucket": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy": "Delete",
@@ -2498,7 +2441,7 @@
     "CloudTrailName": {
       "Description": "CloudTrail Trail Name",
       "Value": {
-        "Ref": "CloudTrail"
+        "Ref": "ExistingCloudTrailName"
       },
       "Export": {
         "Name": {
