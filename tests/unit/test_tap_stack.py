@@ -77,8 +77,8 @@ def test_cloudfront_distribution_created(stack_template):
 def test_s3_bucket_created_with_correct_removal_policy(stack_template):
   # Verifies the S3 bucket for static assets exists and is configured for auto-deletion.
   stack_template.has_resource_properties("AWS::S3::Bucket", {
-      "BucketEncryption": pytest.anything(),
-      "PublicAccessBlockConfiguration": pytest.anything()
+      "BucketEncryption": Match.any_value(),
+      "PublicAccessBlockConfiguration": Match.any_value()
   })
 
   # The DeletionPolicy is a top-level attribute, not a property.
