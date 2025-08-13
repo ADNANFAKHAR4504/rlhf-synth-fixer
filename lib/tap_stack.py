@@ -494,13 +494,14 @@ class TapStack(pulumi.ComponentResource):
   ) -> Dict[str, object]:
     tags = {**self.common_tags, **self.tags, **extra_tags}
 
-    ami = aws.ec2.get_ami(
-        most_recent=True,
-        owners=["amazon"],
-        filters=[
-            aws.ec2.GetAmiFilterArgs(
-                name="name",
-                values=["amzn2-ami-hvm-*-x86_64-gp2"])],
+    import pulumi
+    import pulumi_aws as aws
+    from pulumi import ResourceOptions
+
+    # Corrected code to get the latest Amazon Linux 2023 AMI
+    ami_param = aws.ssm.get_parameter(
+        name="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+        region=self.common_tags.get("Region"),
     )
 
     user_data = """#!/bin/bash
@@ -512,7 +513,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
 
     lt = aws.ec2.LaunchTemplate(
         f"{name_prefix}-lt",
-        image_id=ami.id,
+        image_id=ami_param.value,
         instance_type="t3.micro",
         vpc_security_group_ids=[instance_sg],
         user_data=base64.b64encode(user_data.encode("utf-8")).decode("utf-8"),
