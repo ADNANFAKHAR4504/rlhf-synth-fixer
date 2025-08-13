@@ -461,31 +461,87 @@ def find_existing_subnets(vpc_id: str, target_azs: list):
     return []
 
 
-# Create completely new subnets for independent deployment
-pulumi.log.info("Creating completely new subnets for independent deployment...")
+# Smart subnet management: reuse existing or create new
+pulumi.log.info("Starting smart subnet management...")
 
-public_subnets = []
-for i, az in enumerate(availability_zones):
-  # Always create new subnet with fresh CIDR
-  cidr_block = f"10.0.{i+1}.0/24"  # Simple, clean CIDR allocation
-  
-  subnet = aws.ec2.Subnet(
-    get_resource_name(f"public-subnet-{i+1}"),
-    vpc_id=vpc.id,
-    cidr_block=cidr_block,
-    availability_zone=az,
-    map_public_ip_on_launch=True,
-    tags={
-      "Name": get_resource_name(f"public-subnet-{i+1}"),
-      "Environment": ENVIRONMENT,
-      "Project": PROJECT_NAME,
-      "Type": "Public",
-      "DeploymentType": "Independent"
-    },
-    opts=pulumi.ResourceOptions(provider=aws_provider)
-  )
-  
-  public_subnets.append(subnet)
+def get_or_create_subnets(vpc, existing_vpc_id, availability_zones):
+  """Smart subnet management: find existing suitable subnets or create new ones."""
+  try:
+    if existing_vpc_id:
+      # For existing VPC, try to find existing suitable subnets
+      pulumi.log.info("Looking for existing suitable subnets in reused VPC...")
+      existing_subnets = find_existing_subnets(existing_vpc_id, availability_zones)
+      
+      if len(existing_subnets) >= 2:
+        pulumi.log.info(f"Found {len(existing_subnets)} suitable existing subnets - reusing them")
+        return [
+          aws.ec2.Subnet.get(
+            f"{get_resource_name('public-subnet')}-{i+1}",
+            subnet['id'],
+            opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
+          ) for i, subnet in enumerate(existing_subnets[:2])
+        ]
+    
+    # Create new subnets for new VPC or if no suitable existing subnets found
+    pulumi.log.info("Creating new subnets with unique CIDR blocks...")
+    
+    # Get existing subnets to avoid CIDR conflicts
+    existing_subnet_cidrs = []
+    if existing_vpc_id:
+      try:
+        existing_subnet_info = aws.ec2.get_subnets(
+          filters=[aws.ec2.GetSubnetsFilterArgs(name="vpc-id", values=[existing_vpc_id])],
+          opts=pulumi.InvokeOptions(provider=aws_provider)
+        )
+        for subnet_id in existing_subnet_info.ids:
+          subnet_detail = aws.ec2.get_subnet(
+            id=subnet_id,
+            opts=pulumi.InvokeOptions(provider=aws_provider)
+          )
+          existing_subnet_cidrs.append(subnet_detail.cidr_block)
+        pulumi.log.info(f"Found existing CIDR blocks: {existing_subnet_cidrs}")
+      except Exception as e:
+        pulumi.log.warn(f"Could not get existing subnet CIDRs: {e}")
+    
+    public_subnets = []
+    for i, az in enumerate(availability_zones):
+      # Generate unique CIDR that doesn't conflict
+      base_cidr = i + 10  # Start from 10.0.10.0/24 to avoid common conflicts
+      while True:
+        cidr_block = f"10.0.{base_cidr}.0/24"
+        if cidr_block not in existing_subnet_cidrs:
+          break
+        base_cidr += 1
+        if base_cidr > 254:  # Safety check
+          cidr_block = f"10.0.{100 + i}.0/24"  # Fallback to high numbers
+          break
+      
+      pulumi.log.info(f"Creating subnet {i+1} with CIDR: {cidr_block} in AZ: {az}")
+      
+      subnet = aws.ec2.Subnet(
+        f"{get_resource_name('public-subnet')}-{i+1}",
+        vpc_id=vpc.id,
+        availability_zone=az,
+        cidr_block=cidr_block,
+        map_public_ip_on_launch=True,
+        tags={
+          "Name": f"{get_resource_name('public-subnet')}-{i+1}",
+          "Environment": ENVIRONMENT,
+          "Project": PROJECT_NAME,
+          "Type": "Public",
+          "AZ": az
+        },
+        opts=pulumi.ResourceOptions(provider=aws_provider)
+      )
+      public_subnets.append(subnet)
+    
+    return public_subnets
+    
+  except Exception as e:
+    pulumi.log.error(f"Subnet creation/lookup failed: {e}")
+    raise ValueError(f"Failed to get or create subnets: {e}") from e
+
+public_subnets = get_or_create_subnets(vpc, existing_vpc_id, availability_zones)
 
 # Smart route table management
 public_route_table = get_or_create_route_table(vpc, existing_vpc_id, internet_gateway)
@@ -499,18 +555,23 @@ public_route_table = get_or_create_route_table(vpc, existing_vpc_id, internet_ga
 #     opts=pulumi.ResourceOptions(provider=aws_provider)
 # )
 
-# Create route table associations for all new subnets
-for i, subnet in enumerate(public_subnets):
-  aws.ec2.RouteTableAssociation(
-    get_resource_name(f"public-rta-{i + 1}"),
-    subnet_id=subnet.id,
-    route_table_id=public_route_table.id,
-    opts=pulumi.ResourceOptions(
-      provider=aws_provider,
-      protect=False,
-      depends_on=[subnet, public_route_table]
+# Smart route table associations: only for new subnets
+if not existing_vpc_id:
+  # Only create associations if we created new subnets
+  pulumi.log.info("Creating route table associations for new subnets...")
+  for i, subnet in enumerate(public_subnets):
+    aws.ec2.RouteTableAssociation(
+      get_resource_name(f"public-rta-{i + 1}"),
+      subnet_id=subnet.id,
+      route_table_id=public_route_table.id,
+      opts=pulumi.ResourceOptions(
+        provider=aws_provider,
+        protect=False,
+        depends_on=[subnet, public_route_table]
+      )
     )
-  )
+else:
+  pulumi.log.info("Skipping route table associations for existing VPC (should already exist)")
 
 alb_security_group = aws.ec2.SecurityGroup(
   get_resource_name("alb-sg"),
@@ -904,8 +965,9 @@ print("   • Automated health checks and alarms")
 print("=" * 50)
 print("🧠 Smart Independent Deployment Strategy:")
 print("   • Intelligent quota management and resource optimization")
-print("   • Cleanup of unused resources before new deployment")
-print("   • Reuse existing project VPCs when quota limits hit")
+print("   • Smart reuse of existing suitable infrastructure")
+print("   • Dynamic CIDR allocation to avoid conflicts")
+print("   • Selective creation of only needed resources")
 print("   • Fallback to default VPC if all else fails")
 print("   • Clean resource lifecycle management")
 print("   • Automated dependency resolution")
