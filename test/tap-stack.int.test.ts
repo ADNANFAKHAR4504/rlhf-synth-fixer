@@ -49,7 +49,7 @@ const mockOutputs: StackOutputs = {
 
 // Helper function to load CDK outputs
 function loadCDKOutputs(): StackOutputs {
-  const outputsPath = '../lib/TapStack.json';
+  const outputsPath = 'cfn-outputs/flat-outputs.json';
 
   if (fs.existsSync(outputsPath)) {
     try {
@@ -57,7 +57,7 @@ function loadCDKOutputs(): StackOutputs {
       console.log('Loaded CDK outputs from TapStack.json');
       return outputs;
     } catch (error) {
-      console.warn('Failed to parse TapStack.json, using mock outputs:', error);
+      console.log('Failed to parse TapStack.json, using mock outputs:', error);
       return mockOutputs;
     }
   } else {
