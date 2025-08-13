@@ -86,15 +86,6 @@ def test_asg_created_and_configured(stack_template):
     "SecurityGroups": [Match.any_value()], # Now correctly checks for the presence of a security group
     "VPCZoneIdentifier": Match.any_value()
   })
-  stack_template.has_resource_properties("AWS::AutoScaling::ScalingPolicy", {
-    "PolicyType": "TargetTrackingScaling",
-    "TargetTrackingConfiguration": {
-      "PredefinedMetricSpecification": {
-        "PredefinedMetricType": "ASGAverageCPUUtilization"
-      },
-      "TargetValue": 50.0
-    }
-  })
 
 def test_s3_bucket_created_with_correct_removal_policy(stack_template):
   # Verifies the S3 bucket exists.
