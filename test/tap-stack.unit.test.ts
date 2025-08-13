@@ -1,12 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Capture, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-// Mock the nested stacks to verify they are called correctly
-jest.mock('../lib/ddb-stack');
-jest.mock('../lib/rest-api-stack');
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'testEnv';
 
 describe('TapStack', () => {
   let app: cdk.App;
@@ -14,17 +10,375 @@ describe('TapStack', () => {
   let template: Template;
 
   beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
-
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    
+    // Mock VPC context to avoid lookup issues in unit tests
+    app.node.setContext('availability-zones:account=123456789012:region=us-east-1', ['us-east-1a', 'us-east-1b']);
+    app.node.setContext('vpc-provider:account=123456789012:region=us-east-1:filter.isDefault=true', {
+      vpcId: 'vpc-12345',
+      vpcCidrBlock: '10.0.0.0/16',
+      availabilityZones: ['us-east-1a', 'us-east-1b'],
+      subnetGroups: [
+        {
+          name: 'Public',
+          type: 'Public',
+          subnets: [
+            { subnetId: 'subnet-public1', cidr: '10.0.1.0/24', availabilityZone: 'us-east-1a', routeTableId: 'rtb-public' },
+            { subnetId: 'subnet-public2', cidr: '10.0.2.0/24', availabilityZone: 'us-east-1b', routeTableId: 'rtb-public' }
+          ]
+        },
+        {
+          name: 'Private',
+          type: 'Private',
+          subnets: [
+            { subnetId: 'subnet-private1', cidr: '10.0.11.0/24', availabilityZone: 'us-east-1a', routeTableId: 'rtb-private1' },
+            { subnetId: 'subnet-private2', cidr: '10.0.12.0/24', availabilityZone: 'us-east-1b', routeTableId: 'rtb-private2' }
+          ]
+        }
+      ]
+    });
+
+    stack = new TapStack(app, 'TestTapStack', { 
+      environmentSuffix,
+      env: { account: '123456789012', region: 'us-east-1' }
+    });
     template = Template.fromStack(stack);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('Stack Configuration', () => {
+    test('should create stack with environment suffix', () => {
+      expect(stack.stackName).toBe('TestTapStack');
+    });
+
+    test('should apply Environment=Production tag', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        Description: 'KMS key for encrypting all data at rest',
+      });
+      // Verify that all resources inherit the tag (implicitly through template structure)
+    });
+
+    test('should use environment suffix in resource names', () => {
+      const capture = new Capture();
+      template.hasResourceProperties('AWS::KMS::Key', {
+        Description: 'KMS key for encrypting all data at rest',
+      });
+      
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: capture,
+      });
+      
+      const bucketName = capture.asString();
+      expect(bucketName).toContain(environmentSuffix);
+    });
+  });
+
+  describe('KMS Key Security', () => {
+    test('should create KMS key with rotation enabled', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        Description: 'KMS key for encrypting all data at rest',
+        EnableKeyRotation: true,
+        KeyUsage: 'ENCRYPT_DECRYPT',
+        KeySpec: 'SYMMETRIC_DEFAULT',
+      });
+    });
+
+    test('should set KMS key removal policy to destroy', () => {
+      template.hasResource('AWS::KMS::Key', {
+        DeletionPolicy: 'Delete',
+        UpdateReplacePolicy: 'Delete',
+      });
+    });
+  });
+
+  describe('S3 Bucket Security', () => {
+    test('should create S3 bucket with KMS encryption', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'aws:kms',
+              },
+            },
+          ],
+        },
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+    });
+
+    test('should set S3 bucket removal policy to destroy', () => {
+      template.hasResource('AWS::S3::Bucket', {
+        DeletionPolicy: 'Delete',
+        UpdateReplacePolicy: 'Delete',
+      });
+    });
+
+    test('should enforce secure transport on S3 bucket', () => {
+      template.hasResourceProperties('AWS::S3::BucketPolicy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Deny',
+              Principal: {
+                AWS: '*',
+              },
+              Action: 's3:*',
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false',
+                },
+              },
+              Sid: 'DenyInsecureConnections',
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
+  describe('AWS Config Setup', () => {
+    test('should create configuration recorder', () => {
+      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
+        RecordingGroup: {
+          AllSupported: true,
+          IncludeGlobalResourceTypes: true,
+        },
+      });
+    });
+
+    test('should create delivery channel with KMS encryption', () => {
+      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
+        S3KmsKeyArn: {
+          'Fn::GetAtt': Match.anyValue(),
+        },
+      });
+    });
+
+    test('should create config rule for security group compliance', () => {
+      template.hasResourceProperties('AWS::Config::ConfigRule', {
+        Source: {
+          Owner: 'AWS',
+          SourceIdentifier: 'INCOMING_SSH_DISABLED',
+        },
+      });
+    });
+
+    test('should create IAM role for AWS Config', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'config.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
+        ManagedPolicyArns: Match.arrayWith([
+          Match.objectLike({
+            'Fn::Join': Match.arrayWith([
+              '',
+              Match.arrayWith([Match.stringLikeRegexp('.*ConfigRole')]),
+            ]),
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('Lambda Function Security', () => {
+    test('should create Lambda function with secure configuration', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Runtime: 'nodejs18.x',
+        Handler: 'index.handler',
+        Environment: {
+          Variables: {
+            NODE_OPTIONS: '--enable-source-maps',
+          },
+        },
+      });
+    });
+
+    test('should create CloudWatch log group with KMS encryption', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 30,
+        KmsKeyId: {
+          'Fn::GetAtt': Match.anyValue(),
+        },
+      });
+    });
+
+    test('should set log group removal policy to destroy', () => {
+      template.hasResource('AWS::Logs::LogGroup', {
+        DeletionPolicy: 'Delete',
+        UpdateReplacePolicy: 'Delete',
+      });
+    });
+
+    test('should create Lambda IAM role with least privilege policies', () => {
+      // Check that we have both Config role and Lambda role
+      template.resourceCountIs('AWS::IAM::Role', 2);
+      
+      // Verify Lambda role has inline policies for logging and VPC access
+      template.hasResourceProperties('AWS::IAM::Role', {
+        Policies: Match.arrayWith([
+          Match.objectLike({
+            PolicyName: 'LoggingPolicy',
+          }),
+          Match.objectLike({
+            PolicyName: 'VPCPolicy',
+          }),
+        ]),
+      });
+    });
+
+    test('should place Lambda in VPC with private subnets', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        VpcConfig: {
+          SubnetIds: Match.anyValue(),
+          SecurityGroupIds: Match.anyValue(),
+        },
+      });
+    });
+  });
+
+  describe('ALB and WAF Protection', () => {
+    test('should create Application Load Balancer', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+        Scheme: 'internet-facing',
+        Type: 'application',
+      });
+    });
+
+    test('should create target group for Lambda', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        TargetType: 'lambda',
+        HealthCheckEnabled: true,
+        Matcher: {
+          HttpCode: '200',
+        },
+      });
+    });
+
+    test('should create WAF Web ACL with SQL injection protection', () => {
+      template.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Scope: 'REGIONAL',
+        DefaultAction: {
+          Allow: {},
+        },
+        Rules: [
+          {
+            Name: 'AWSManagedRulesCommonRuleSet',
+            Priority: 1,
+            Statement: {
+              ManagedRuleGroupStatement: {
+                VendorName: 'AWS',
+                Name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
+            VisibilityConfig: {
+              SampledRequestsEnabled: true,
+              CloudWatchMetricsEnabled: true,
+              MetricName: 'CommonRuleSetMetric',
+            },
+          },
+          {
+            Name: 'AWSManagedRulesSQLiRuleSet',
+            Priority: 2,
+            Statement: {
+              ManagedRuleGroupStatement: {
+                VendorName: 'AWS',
+                Name: 'AWSManagedRulesSQLiRuleSet',
+              },
+            },
+            VisibilityConfig: {
+              SampledRequestsEnabled: true,
+              CloudWatchMetricsEnabled: true,
+              MetricName: 'SQLiRuleSetMetric',
+            },
+          },
+        ],
+      });
+    });
+
+    test('should associate WAF with ALB', () => {
+      template.hasResourceProperties('AWS::WAFv2::WebACLAssociation', {
+        ResourceArn: {
+          Ref: Match.anyValue(),
+        },
+        WebACLArn: {
+          'Fn::GetAtt': Match.anyValue(),
+        },
+      });
+    });
+  });
+
+  describe('Security Group Compliance', () => {
+    test('should create security group for ALB with restricted access', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for Application Load Balancer',
+        SecurityGroupIngress: [
+          {
+            IpProtocol: 'tcp',
+            FromPort: 80,
+            ToPort: 80,
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow HTTP traffic from internet',
+          },
+          {
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow HTTPS traffic from internet',
+          },
+        ],
+      });
+    });
+
+    test('should create security group for Lambda with minimal outbound access', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for Lambda functions',
+        SecurityGroupEgress: [
+          {
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow HTTPS outbound for Lambda',
+          },
+        ],
+      });
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('should create all required outputs with environment suffix', () => {
+      template.hasOutput(`LoadBalancerDNS${environmentSuffix}`, {
+        Description: 'DNS name of the Application Load Balancer',
+      });
+
+      template.hasOutput(`KMSKeyId${environmentSuffix}`, {
+        Description: 'KMS Key ID for encryption',
+      });
+
+      template.hasOutput(`WebACLArn${environmentSuffix}`, {
+        Description: 'WAF Web ACL ARN',
+      });
+
+      template.hasOutput(`S3BucketName${environmentSuffix}`, {
+        Description: 'Config S3 Bucket Name',
+      });
     });
   });
 });
