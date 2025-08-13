@@ -60,3 +60,8 @@ module "ec2_module" {
 
   depends_on = [ module.lb_module ]
 }
+
+
+output "lb_domain" {
+  value = module.lb_module.alb_dns_name
+}
