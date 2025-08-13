@@ -187,17 +187,28 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'LambdaFunctionName', {
       value: lambdaFunction.functionName,
       description: 'Lambda function name',
-      exportName: `${stackName}-nova-team-development-lambda-name`,
+      exportName: `${stackName}-lambda-function-name`,
     });
     new cdk.CfnOutput(this, 'LambdaAliasName', {
       value: lambdaAlias.aliasName,
       description: 'Lambda alias name for provisioned concurrency',
-      exportName: `${stackName}-nova-team-development-lambda-alias`,
+      exportName: `${stackName}-lambda-alias-name`,
     });
     new cdk.CfnOutput(this, 'LogGroupName', {
       value: lambdaLogGroup.logGroupName,
       description: 'CloudWatch Log Group name for Lambda function',
-      exportName: `${stackName}-nova-team-development-log-group`,
+      exportName: `${stackName}-lambda-log-group`,
+    });
+    // Add outputs for integration tests
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: 'your-s3-bucket-name', // Replace with actual bucket name if created in this stack
+      description: 'S3 bucket name for processed data',
+      exportName: `${stackName}-s3-bucket-name`,
+    });
+    new cdk.CfnOutput(this, 'DLQUrl', {
+      value: 'your-dlq-url', // Replace with actual DLQ URL if created in this stack
+      description: 'SQS Dead Letter Queue URL',
+      exportName: `${stackName}-dlq-url`,
     });
   }
 }

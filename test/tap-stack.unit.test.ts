@@ -108,18 +108,18 @@ describe('TapStack', () => {
   test('Outputs Lambda function name', () => {
     const outputs = template.findOutputs('LambdaFunctionName');
     expect(outputs.LambdaFunctionName.Description).toBe('Lambda function name');
-    expect(outputs.LambdaFunctionName.Export.Name).toMatch(/TestTapStack-nova-team-development-lambda-name/);
+    expect(outputs.LambdaFunctionName.Export.Name).toMatch('TestTapStack-lambda-function-name');
   });
 
   test('Outputs Lambda alias name', () => {
     const outputs = template.findOutputs('LambdaAliasName');
     expect(outputs.LambdaAliasName.Description).toBe('Lambda alias name for provisioned concurrency');
-    expect(outputs.LambdaAliasName.Export.Name).toMatch(/TestTapStack-nova-team-development-lambda-alias/);
+    expect(outputs.LambdaAliasName.Export.Name).toBe('TestTapStack-lambda-alias-name');
   });
 
   test('Outputs Lambda log group name', () => {
     const outputs = template.findOutputs('LogGroupName');
     expect(outputs.LogGroupName.Description).toBe('CloudWatch Log Group name for Lambda function');
-    expect(outputs.LogGroupName.Export.Name).toMatch(/TestTapStack-nova-team-development-log-group/);
+    expect(outputs.LogGroupName.Export.Name).toBe('TestTapStack-lambda-log-group');
   });
 });
