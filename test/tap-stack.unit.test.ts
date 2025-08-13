@@ -645,6 +645,22 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
+    test('should have Lambda permission for S3 notifications', () => {
+      const permission = template.Resources.SecurityLambdaPermission;
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.FunctionName).toEqual({
+        Ref: 'SecurityLambdaFunction',
+      });
+      expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+      expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
+      expect(permission.Properties.SourceArn).toEqual({
+        'Fn::Sub': 'arn:aws:s3:::${SecureS3Bucket}',
+      });
+      expect(permission.Properties.SourceAccount).toEqual({
+        Ref: 'AWS::AccountId',
+      });
+    });
+
     test('should have SNS topic for notifications', () => {
       const topic = template.Resources.SecurityNotificationTopic;
       expect(topic.Type).toBe('AWS::SNS::Topic');

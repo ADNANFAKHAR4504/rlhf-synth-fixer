@@ -1194,6 +1194,15 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  SecurityLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecurityLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+      SourceAccount: !Ref AWS::AccountId
+
   LambdaDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:

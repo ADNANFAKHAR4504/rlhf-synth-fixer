@@ -2106,6 +2106,22 @@
                 ]
             }
         },
+        "SecurityLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "SecurityLambdaFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "s3.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
+                },
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                }
+            }
+        },
         "LambdaDeadLetterQueue": {
             "Type": "AWS::SQS::Queue",
             "Properties": {
