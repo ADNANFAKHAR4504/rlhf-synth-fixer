@@ -23,7 +23,7 @@ Parameters:
   CertificateArn:
     Type: String
     Description: The ARN of the ACM SSL certificate for your domain.
-    Default: arn:aws:acm:us-west-2:718240086340:certificate/c43e41ee-5b6c-4d2c-80e9-82c1db57289e
+    Default: arn:aws:acm:eu-central-1:718240086340:certificate/0591702e-4d22-4864-803b-7deabec4197c
 
   DBUsername:
     Type: String
