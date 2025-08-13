@@ -31,7 +31,7 @@ variable "ec2_instance_type" {
 variable "key_pair_name" {
   description = "Name of the EC2 Key Pair"
   type        = string
-  default     = "my-key-pair"
+  default     = "your-dev-key"
   sensitive   = true
 }
 
