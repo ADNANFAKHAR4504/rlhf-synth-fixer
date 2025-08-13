@@ -37,7 +37,11 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(envParam).toBeDefined();
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('production');
-      expect(envParam.AllowedValues).toEqual(['development', 'staging', 'production']);
+      expect(envParam.AllowedValues).toEqual([
+        'development',
+        'staging',
+        'production',
+      ]);
     });
 
     test('should have EnvironmentSuffix parameter', () => {
@@ -93,10 +97,13 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const webSG = template.Resources.WebSecurityGroup;
       expect(webSG).toBeDefined();
       expect(webSG.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingressRules = webSG.Properties.SecurityGroupIngress;
-      const sshFromAnywhere = ingressRules.find((rule: any) => 
-        rule.FromPort === 22 && rule.ToPort === 22 && rule.CidrIp === '0.0.0.0/0'
+      const sshFromAnywhere = ingressRules.find(
+        (rule: any) =>
+          rule.FromPort === 22 &&
+          rule.ToPort === 22 &&
+          rule.CidrIp === '0.0.0.0/0'
       );
       expect(sshFromAnywhere).toBeUndefined();
     });
@@ -105,10 +112,10 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const mgmtSG = template.Resources.ManagementSecurityGroup;
       expect(mgmtSG).toBeDefined();
       expect(mgmtSG.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingressRules = mgmtSG.Properties.SecurityGroupIngress;
-      const sshRule = ingressRules.find((rule: any) => 
-        rule.FromPort === 22 && rule.ToPort === 22
+      const sshRule = ingressRules.find(
+        (rule: any) => rule.FromPort === 22 && rule.ToPort === 22
       );
       expect(sshRule).toBeDefined();
       expect(sshRule.CidrIp).toBe('10.0.0.0/16');
@@ -118,7 +125,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const dbSG = template.Resources.DatabaseSecurityGroup;
       expect(dbSG).toBeDefined();
       expect(dbSG.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingressRules = dbSG.Properties.SecurityGroupIngress;
       expect(ingressRules).toBeDefined();
       expect(ingressRules[0].SourceSecurityGroupId).toBeDefined();
@@ -130,20 +137,26 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const bucket = template.Resources.SecureDataBucket;
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const encryption = bucket.Properties.BucketEncryption;
       expect(encryption).toBeDefined();
-      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(
+        encryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('AES256');
     });
 
     test('should have LoggingBucket with encryption', () => {
       const bucket = template.Resources.LoggingBucket;
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const encryption = bucket.Properties.BucketEncryption;
       expect(encryption).toBeDefined();
-      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(
+        encryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('AES256');
     });
 
     // CloudTrail bucket and policy are disabled in CI to avoid per-account trail limits
@@ -192,12 +205,12 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const role = template.Resources.EC2Role;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       // Check that role has managed policies instead of inline policies
       const managedPolicies = role.Properties.ManagedPolicyArns;
       expect(managedPolicies).toBeDefined();
       expect(managedPolicies.length).toBeGreaterThan(0);
-      
+
       // Verify no inline policies (removed for CAPABILITY_IAM compatibility)
       expect(role.Properties.Policies).toBeUndefined();
     });
@@ -206,12 +219,12 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const role = template.Resources.LambdaExecutionRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       // Check that role has managed policies instead of inline policies
       const managedPolicies = role.Properties.ManagedPolicyArns;
       expect(managedPolicies).toBeDefined();
       expect(managedPolicies.length).toBeGreaterThan(0);
-      
+
       // Verify no inline policies (removed for CAPABILITY_IAM compatibility)
       expect(role.Properties.Policies).toBeUndefined();
     });
@@ -228,10 +241,10 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const user = template.Resources.MFAUser;
       expect(user).toBeDefined();
       expect(user.Type).toBe('AWS::IAM::User');
-      
+
       // Verify no inline policies (removed for CAPABILITY_IAM compatibility)
       expect(user.Properties.Policies).toBeUndefined();
-      
+
       // User should still exist for MFA requirements, even without inline policies
       expect(user.Properties.Tags).toBeDefined();
     });
@@ -242,7 +255,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const table = template.Resources.SecureDynamoDBTable;
       expect(table).toBeDefined();
       expect(table.Type).toBe('AWS::DynamoDB::Table');
-      
+
       const pitr = table.Properties.PointInTimeRecoverySpecification;
       expect(pitr).toBeDefined();
       expect(pitr.PointInTimeRecoveryEnabled).toBe(true);
@@ -310,15 +323,16 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         'LoggingBucket',
         // 'CloudTrailBucket', // disabled in CI
         'SecureDynamoDBTable',
-        'ApplicationLoadBalancer'
+        'ApplicationLoadBalancer',
       ];
 
       resourcesWithSuffix.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        const nameProperty = resource.Properties.BucketName || 
-                            resource.Properties.TableName || 
-                            resource.Properties.Name;
-        
+        const nameProperty =
+          resource.Properties.BucketName ||
+          resource.Properties.TableName ||
+          resource.Properties.Name;
+
         if (nameProperty && nameProperty['Fn::Sub']) {
           expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
         }
@@ -337,7 +351,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         'SecureDataBucketName',
         'DynamoDBTableName',
         'LoadBalancerDNS',
-        'EC2RoleArn'
+        'EC2RoleArn',
         // 'CloudTrailArn' // disabled in CI
       ];
 

@@ -13,12 +13,12 @@ Parameters:
     Default: 'production'
     AllowedValues: ['development', 'staging', 'production']
     Description: 'Environment name for resource tagging'
-  
+
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix to differentiate resource names between deployments'
-  
+
   VPCCidr:
     Type: String
     Default: '10.0.0.0/16'
@@ -29,7 +29,7 @@ Resources:
   # ==========================================
   # VPC and Networking Infrastructure
   # ==========================================
-  
+
   SecureVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -46,7 +46,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      CidrBlock: !Sub 
+      CidrBlock: !Sub
         - '${VPCPrefix}.1.0/24'
         - VPCPrefix: !Select [0, !Split ['.0.0/16', !Ref VPCCidr]]
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -59,7 +59,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      CidrBlock: !Sub 
+      CidrBlock: !Sub
         - '${VPCPrefix}.2.0/24'
         - VPCPrefix: !Select [0, !Split ['.0.0/16', !Ref VPCCidr]]
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -72,7 +72,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      CidrBlock: !Sub 
+      CidrBlock: !Sub
         - '${VPCPrefix}.10.0/24'
         - VPCPrefix: !Select [0, !Split ['.0.0/16', !Ref VPCCidr]]
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -84,7 +84,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      CidrBlock: !Sub 
+      CidrBlock: !Sub
         - '${VPCPrefix}.11.0/24'
         - VPCPrefix: !Select [0, !Split ['.0.0/16', !Ref VPCCidr]]
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -108,7 +108,7 @@ Resources:
   # ==========================================
   # VPC Flow Logs (Requirement #6)
   # ==========================================
-  
+
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
@@ -155,7 +155,7 @@ Resources:
   # ==========================================
   # Security Groups (Requirement #7)
   # ==========================================
-  
+
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -213,7 +213,7 @@ Resources:
   # ==========================================
   # S3 Buckets with Encryption (Requirement #1)
   # ==========================================
-  
+
   SecureDataBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -257,7 +257,7 @@ Resources:
         Rules:
           - Id: DeleteOldLogs
             Status: Enabled
-            ExpirationInDays: 2555  # 7 years
+            ExpirationInDays: 2555 # 7 years
             Transitions:
               - TransitionInDays: 30
                 StorageClass: STANDARD_IA
@@ -276,7 +276,7 @@ Resources:
   # ==========================================
   # CloudTrail (Requirement #3)
   # ==========================================
-  
+
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -295,7 +295,7 @@ Resources:
         Rules:
           - Id: CloudTrailLogRetention
             Status: Enabled
-            ExpirationInDays: 2555  # 7 years
+            ExpirationInDays: 2555 # 7 years
             Transitions:
               - TransitionInDays: 30
                 StorageClass: STANDARD_IA
@@ -339,7 +339,7 @@ Resources:
           IncludeManagementEvents: true
           DataResources:
             - Type: 'AWS::S3::Object'
-              Values: 
+              Values:
                 - !Sub '${SecureDataBucket}/*'
       Tags:
         - Key: Name
@@ -348,7 +348,7 @@ Resources:
   # ==========================================
   # IAM Roles with Least Privilege (Requirement #2)
   # ==========================================
-  
+
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -371,7 +371,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
-                Resource: 
+                Resource:
                   - !Sub '${SecureDataBucket}/*'
               - Effect: Allow
                 Action:
@@ -426,7 +426,7 @@ Resources:
   # ==========================================
   # IAM User with MFA Requirement (Requirement #4)
   # ==========================================
-  
+
   MFAUser:
     Type: AWS::IAM::User
     Properties:
@@ -480,7 +480,7 @@ Resources:
   # ==========================================
   # DynamoDB with Point-in-Time Recovery (Requirement #5)
   # ==========================================
-  
+
   SecureDynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -507,7 +507,7 @@ Resources:
   # ==========================================
   # Application Load Balancer with HTTPS (Requirement #8)
   # ==========================================
-  
+
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -564,7 +564,7 @@ Resources:
   # ==========================================
   # CloudWatch Monitoring and Alarms
   # ==========================================
-  
+
   SecurityAlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -655,40 +655,48 @@ Outputs:
 ## Key Security Features Implemented
 
 ### 1. **S3 Bucket Encryption** ✅
+
 - All S3 buckets have `AES256` server-side encryption enabled by default
 - Public access is blocked on all buckets
 - Versioning enabled for data protection
 
 ### 2. **IAM Least Privilege** ✅
+
 - EC2 role has minimal permissions (read-only S3, limited DynamoDB)
 - Lambda role has specific DynamoDB permissions only
 - MFA user policy enforces MFA for all actions
 
 ### 3. **CloudTrail Logging** ✅
+
 - Multi-region trail capturing all account activity
 - Log file validation enabled
 - Data events tracked for S3 buckets
 
 ### 4. **MFA Enforcement** ✅
+
 - IAM user policy denies all actions unless MFA is present
 - Allows MFA device management without MFA requirement
 
 ### 5. **DynamoDB Point-in-Time Recovery** ✅
+
 - `PointInTimeRecoveryEnabled: true` on all tables
 - Server-side encryption enabled
 - DynamoDB Streams enabled for change tracking
 
 ### 6. **VPC Flow Logs** ✅
+
 - Captures ALL traffic (accepted, rejected, all)
 - Stored in CloudWatch Logs with 90-day retention
 - Dedicated IAM role with minimal permissions
 
 ### 7. **Security Group Restrictions** ✅
+
 - **No SSH access from `0.0.0.0/0`** - SSH only allowed from VPC CIDR
 - Web security group only allows HTTPS (443) and HTTP (80) for redirects
 - Database security group only accepts connections from web servers
 
 ### 8. **HTTPS Load Balancer** ✅
+
 - Application Load Balancer with HTTPS listener on port 443
 - HTTP listener redirects to HTTPS (301 redirect)
 - SSL certificate from AWS Certificate Manager
@@ -698,6 +706,7 @@ Outputs:
 1. **Save the template** as `lib/TapStack.yml`
 
 2. **Deploy using AWS CLI**:
+
 ```bash
 aws cloudformation create-stack \
   --stack-name secure-tap-stack \
@@ -709,6 +718,7 @@ aws cloudformation create-stack \
 ```
 
 3. **Validate the template**:
+
 ```bash
 aws cloudformation validate-template \
   --template-body file://lib/TapStack.yml
@@ -717,6 +727,7 @@ aws cloudformation validate-template \
 ## Regional Compatibility
 
 This template is designed to work in both **us-east-1** and **us-west-2** regions with:
+
 - Availability Zone selection using `!GetAZs`
 - Region-agnostic resource naming
 - Environment suffix support for multi-deployment scenarios
@@ -724,6 +735,7 @@ This template is designed to work in both **us-east-1** and **us-west-2** region
 ## Environment Isolation
 
 The template includes:
+
 - **EnvironmentSuffix parameter** for resource name differentiation
 - All resource names include the environment suffix to avoid conflicts
 - Proper resource tagging for environment identification

@@ -19,13 +19,13 @@ run('Secure AWS Infrastructure Integration Tests', () => {
       const requiredOutputs = [
         'VPCId',
         'PublicSubnets',
-        'PrivateSubnets', 
+        'PrivateSubnets',
         'WebSecurityGroupId',
         'DatabaseSecurityGroupId',
         'SecureDataBucketName',
         'DynamoDBTableName',
         'LoadBalancerDNS',
-        'EC2RoleArn'
+        'EC2RoleArn',
         // 'CloudTrailArn' // disabled in CI due to CloudTrail account trail limits
       ];
 
@@ -92,9 +92,9 @@ run('Secure AWS Infrastructure Integration Tests', () => {
     test('all resource names should include environment suffix', () => {
       const resourcesWithNames = [
         'SecureDataBucketName',
-        'DynamoDBTableName', 
+        'DynamoDBTableName',
         'LoadBalancerDNS',
-        'EC2RoleArn'
+        'EC2RoleArn',
         // 'CloudTrailArn' // disabled in CI
       ];
 
@@ -105,7 +105,7 @@ run('Secure AWS Infrastructure Integration Tests', () => {
 
     test('bucket names should follow AWS naming conventions', () => {
       const bucketName = outputs.SecureDataBucketName;
-      
+
       // AWS S3 bucket naming rules
       expect(bucketName.length).toBeGreaterThanOrEqual(3);
       expect(bucketName.length).toBeLessThanOrEqual(63);
@@ -121,11 +121,11 @@ run('Secure AWS Infrastructure Integration Tests', () => {
 
       // VPC validation
       expect(outputs.VPCId.startsWith('vpc-')).toBe(true);
-      
+
       // Load balancer DNS validation
       const albDns = outputs.LoadBalancerDNS;
       expect(albDns.includes('elb.amazonaws.com')).toBe(true);
-      
+
       // Security Group validation
       expect(outputs.WebSecurityGroupId.startsWith('sg-')).toBe(true);
       expect(outputs.DatabaseSecurityGroupId.startsWith('sg-')).toBe(true);
@@ -135,13 +135,15 @@ run('Secure AWS Infrastructure Integration Tests', () => {
       // Validate that resources reference each other correctly
       // This would typically involve checking that security groups reference the correct VPC,
       // subnets are in the correct VPC, etc.
-      
+
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.WebSecurityGroupId).toBeDefined();
       expect(outputs.DatabaseSecurityGroupId).toBeDefined();
-      
+
       // Both security groups should be associated with the same VPC (implied by the template)
-      expect(outputs.WebSecurityGroupId).not.toBe(outputs.DatabaseSecurityGroupId);
+      expect(outputs.WebSecurityGroupId).not.toBe(
+        outputs.DatabaseSecurityGroupId
+      );
     });
   });
 
@@ -158,7 +160,7 @@ run('Secure AWS Infrastructure Integration Tests', () => {
       // Public and private subnets should be in different AZs (indicated by having 2 each)
       const publicSubnets = outputs.PublicSubnets.split(',');
       const privateSubnets = outputs.PrivateSubnets.split(',');
-      
+
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
     });
@@ -166,7 +168,9 @@ run('Secure AWS Infrastructure Integration Tests', () => {
     test('should validate Load Balancer is application-type (from DNS pattern)', () => {
       // Application Load Balancer DNS follows specific pattern
       const albDns = outputs.LoadBalancerDNS;
-      expect(albDns).toMatch(/^[a-z0-9-]+-\d+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
+      expect(albDns).toMatch(
+        /^[a-z0-9-]+-\d+\.[a-z0-9-]+\.elb\.amazonaws\.com$/
+      );
     });
   });
 
@@ -176,12 +180,14 @@ run('Secure AWS Infrastructure Integration Tests', () => {
         outputs.SecureDataBucketName,
         outputs.DynamoDBTableName,
         outputs.LoadBalancerDNS,
-        outputs.EC2RoleArn
+        outputs.EC2RoleArn,
         // outputs.CloudTrailArn
       ];
 
       namedResources.forEach(resource => {
-        expect(resource.toLowerCase()).toContain(environmentSuffix.toLowerCase());
+        expect(resource.toLowerCase()).toContain(
+          environmentSuffix.toLowerCase()
+        );
       });
     });
 
@@ -189,7 +195,7 @@ run('Secure AWS Infrastructure Integration Tests', () => {
       // Resource names should be unique enough to avoid conflicts
       const resourceNames = [
         outputs.SecureDataBucketName,
-        outputs.DynamoDBTableName
+        outputs.DynamoDBTableName,
       ];
 
       resourceNames.forEach(name => {
@@ -202,13 +208,17 @@ run('Secure AWS Infrastructure Integration Tests', () => {
 
   describe('High Availability Validation', () => {
     test('should have resources distributed across multiple AZs', () => {
-      const publicSubnets = outputs.PublicSubnets.split(',').map((s: string) => s.trim());
-      const privateSubnets = outputs.PrivateSubnets.split(',').map((s: string) => s.trim());
-      
+      const publicSubnets = outputs.PublicSubnets.split(',').map((s: string) =>
+        s.trim()
+      );
+      const privateSubnets = outputs.PrivateSubnets.split(',').map(
+        (s: string) => s.trim()
+      );
+
       // Should have exactly 2 subnets of each type for HA
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
-      
+
       // All subnet IDs should be different
       const allSubnets = [...publicSubnets, ...privateSubnets];
       const uniqueSubnets = new Set(allSubnets);
