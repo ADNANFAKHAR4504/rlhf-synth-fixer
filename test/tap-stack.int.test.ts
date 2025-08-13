@@ -16,10 +16,13 @@ describe('CloudFormation Template Integration Tests', () => {
     expect(outputs).toHaveProperty('ApplicationLogGroupName');
     expect(outputs).toHaveProperty('SSMParameterPrefix');
     expect(outputs).toHaveProperty('InstanceProfileArn');
+    expect(outputs).toHaveProperty('SSMKMSKeyId');
+    expect(outputs).toHaveProperty('SSMKMSKeyAlias');
   });
 
   it('should have correct environment suffix in resource names', () => {
     expect(outputs.EnvironmentS3Bucket).toContain(environmentSuffix);
+    expect(outputs.SharedConfigBucket).toContain(environmentSuffix);
     expect(outputs.DynamoDBTableName).toContain(environmentSuffix);
     expect(outputs.ApplicationLogGroupName).toContain(environmentSuffix);
     expect(outputs.SSMParameterPrefix).toContain(environmentSuffix);
@@ -33,5 +36,38 @@ describe('CloudFormation Template Integration Tests', () => {
   it('should have valid S3 bucket names', () => {
     expect(outputs.EnvironmentS3Bucket).toMatch(/^[a-z0-9\-]+$/);
     expect(outputs.SharedConfigBucket).toMatch(/^[a-z0-9\-]+$/);
+  });
+
+  it('should have valid KMS Key ID and Alias', () => {
+    expect(outputs.SSMKMSKeyId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(outputs.SSMKMSKeyAlias).toMatch(/^alias\/.+$/);
+    expect(outputs.SSMKMSKeyAlias).toContain(environmentSuffix);
+  });
+
+  it('should have CloudWatch log groups with environment suffix', () => {
+    expect(outputs.ApplicationLogGroupName).toMatch(/^\/aws\/.+\/.+$/);
+    expect(outputs.ApplicationLogGroupName).toContain(environmentSuffix);
+  });
+
+  it('should have SSM parameter prefix with environment suffix', () => {
+    expect(outputs.SSMParameterPrefix).toMatch(/^\/webapp\/.+\/$/);
+    expect(outputs.SSMParameterPrefix).toContain(environmentSuffix);
+  });
+
+  it('should have DynamoDB table name with proper naming convention', () => {
+    expect(outputs.DynamoDBTableName).toMatch(/^webapp-.+-data$/);
+    expect(outputs.DynamoDBTableName).toContain(environmentSuffix);
+  });
+
+  it('should have shared config bucket created for all environments', () => {
+    // SharedConfigBucket should exist regardless of environment
+    expect(outputs.SharedConfigBucket).toBeDefined();
+    expect(outputs.SharedConfigBucket).toContain('shared-config');
+    expect(outputs.SharedConfigBucket).toContain(environmentSuffix);
+  });
+
+  it('should have role and instance profile names with environment suffix', () => {
+    expect(outputs.ApplicationExecutionRoleArn).toContain(environmentSuffix);
+    expect(outputs.InstanceProfileArn).toContain(environmentSuffix);
   });
 });
