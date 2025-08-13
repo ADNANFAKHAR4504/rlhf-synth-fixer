@@ -263,7 +263,9 @@ describe('TAP Stack Integration Tests', () => {
         expect(response.InternetGateways!.length).toBeGreaterThan(0);
         
         const igw = response.InternetGateways![0];
-        expect(igw.State).toBe('available');
+        // Note: InternetGateway doesn't have a State property in AWS SDK v3
+        // Instead, we check if it exists and has attachments
+        expect(igw.InternetGatewayId).toBeDefined();
         
         const attachment = igw.Attachments!.find(att => att.VpcId === vpcId);
         expect(attachment).toBeDefined();
@@ -500,9 +502,8 @@ describe('TAP Stack Integration Tests', () => {
       const trail = response.trailList![0];
       expect(trail.IsMultiRegionTrail).toBe(true);
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail.IsLogging).toBe(true);
       
-      // Verify trail status
+      // Verify trail status (IsLogging is only available in GetTrailStatusCommand response)
       const statusResponse = await clients.cloudtrail.send(new GetTrailStatusCommand({
         Name: trailName
       }));

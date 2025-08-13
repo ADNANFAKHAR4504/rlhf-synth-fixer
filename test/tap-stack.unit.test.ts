@@ -177,7 +177,7 @@ describe('TapStack Unit Tests', () => {
   describe('Error Handling', () => {
     it('should handle SecureCompliantInfra constructor errors gracefully', () => {
       // Mock SecureCompliantInfra to throw an error
-      (SecureCompliantInfra as jest.Mock).mockImplementationOnce(() => {
+      (SecureCompliantInfra as unknown as jest.Mock).mockImplementationOnce(() => {
         throw new Error('Infrastructure creation failed');
       });
 
@@ -316,8 +316,8 @@ describe('TapStack Unit Tests', () => {
     it('should register outputs correctly', () => {
       const stack = new TapStack('test-stack', {});
 
-      // Verify that registerOutputs was called
-      expect(stack.registerOutputs).toHaveBeenCalledWith(
+      // Verify that registerOutputs was called on the mocked ComponentResource
+      expect((stack as any).registerOutputs).toHaveBeenCalledWith(
         expect.objectContaining({
           vpcIds: expect.any(Object),
           ec2InstanceIds: expect.any(Object),
