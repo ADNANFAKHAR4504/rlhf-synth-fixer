@@ -1,52 +1,77 @@
-#############################################
-# main.tf — Single-file stack (variables, data, locals, resources, outputs)
-# NOTE: Your provider.tf already configures:
-#   - provider "aws" { region = var.aws_region }
-#   - backend "s3" with DynamoDB state locking
-# Do NOT add providers/backends here.
-#############################################
+############################################################
+# main.tf — Single-file AWS stack (no external modules)
+# - Variables, locals, data sources, resources, outputs
+# - Provider is defined separately in provider.tf and uses var.aws_region
+############################################################
 
-#############################################
-# Variables (provider.tf reads var.aws_region)
-#############################################
-variable "project" {
-  description = "Project or system name used for tagging and resource names."
+########################
+# Variables
+########################
+
+variable "aws_region" {
+  description = "AWS region used by provider.tf"
   type        = string
-  default     = "sample"
+  default     = "us-east-1"
+
+  validation {
+    condition     = length(trimspace(var.aws_region)) > 0
+    error_message = "aws_region must be a non-empty string."
+  }
+}
+
+variable "project" {
+  description = "Project name (used for namespacing)."
+  type        = string
+  default     = "sre-stack"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9-_]*$", var.project))
+    error_message = "project must start with an alphanumeric character and contain only letters, numbers, hyphen, or underscore."
+  }
 }
 
 variable "environment" {
   description = "Deployment environment."
   type        = string
   default     = "dev"
+
   validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
+    condition     = contains(["dev", "staging", "prod"], lower(var.environment))
     error_message = "environment must be one of: dev, staging, prod."
   }
 }
 
-variable "aws_region" {
-  description = "AWS region (referenced by provider.tf)."
-  type        = string
-  default     = "us-east-1"
-}
-
 variable "vpc_cidr" {
-  description = "CIDR block for the VPC."
+  description = "CIDR for the new VPC."
   type        = string
   default     = "10.0.0.0/16"
+
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = "vpc_cidr must be a valid CIDR."
+  }
 }
 
 variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets (2)."
+  description = "Two /24 CIDRs for public subnets (AZ1, AZ2)."
   type        = list(string)
   default     = ["10.0.1.0/24", "10.0.2.0/24"]
+
+  validation {
+    condition     = length(var.public_subnet_cidrs) == 2 && alltrue([for c in var.public_subnet_cidrs : can(cidrhost(c, 0))])
+    error_message = "public_subnet_cidrs must be a list of exactly two valid CIDRs."
+  }
 }
 
 variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets (2)."
+  description = "Two /24 CIDRs for private subnets (AZ1, AZ2)."
   type        = list(string)
   default     = ["10.0.101.0/24", "10.0.102.0/24"]
+
+  validation {
+    condition     = length(var.private_subnet_cidrs) == 2 && alltrue([for c in var.private_subnet_cidrs : can(cidrhost(c, 0))])
+    error_message = "private_subnet_cidrs must be a list of exactly two valid CIDRs."
+  }
 }
 
 variable "instance_type" {
@@ -56,402 +81,379 @@ variable "instance_type" {
 }
 
 variable "bucket_name" {
-  description = "Optional explicit S3 bucket name. If empty, one is derived."
+  description = "Optional override for the S3 bucket name. If empty, one will be generated."
   type        = string
   default     = ""
+
+  validation {
+    condition = length(trimspace(var.bucket_name)) == 0 || can(regex(
+      "^(?!\\d+\\.\\d+\\.\\d+\\.\\d+$)[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$",
+      lower(var.bucket_name)
+    ))
+    error_message = "bucket_name must be empty or 3–63 chars of lowercase letters, numbers, and hyphens; cannot resemble an IPv4 address; must not start/end with '-'."
+  }
 }
 
 variable "allowed_ssh_cidrs" {
-  description = "CIDR ranges that can SSH to the instance. If empty, no SSH ingress rule is created."
+  description = "CIDR blocks allowed to SSH to the instance. If empty, no SSH ingress rule is created."
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = alltrue([for c in var.allowed_ssh_cidrs : can(cidrhost(c, 0))])
+    error_message = "Every item in allowed_ssh_cidrs must be a valid CIDR."
+  }
 }
 
-# Optional: switch S3 default encryption to SSE-KMS by passing a key (ID or ARN).
-variable "kms_key_id" {
-  description = "Optional KMS Key ID/ARN for S3 default encryption. If empty, AES256 is used."
-  type        = string
-  default     = ""
-}
+########################
+# Data Sources
+########################
 
-#################
-# Data sources
-#################
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Amazon Linux 2023 AMI (x86_64)
 data "aws_ami" "al2023" {
-  most_recent = true
   owners      = ["amazon"]
+  most_recent = true
 
   filter {
     name   = "name"
     values = ["al2023-ami-*-x86_64"]
   }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
 }
 
-############
-# Locals
-############
+########################
+# Locals (naming, AZs, toggles, tags)
+########################
+
 locals {
-  name_prefix = lower("${var.project}-${var.environment}")
-  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
+  env      = lower(var.environment)
+  is_dev   = local.env == "dev"
+  is_nondev = !local.is_dev
 
-  # Feature toggles by environment
-  enable_nat                 = var.environment != "dev"
-  enable_detailed_monitoring = var.environment != "dev"
-  instance_in_public_subnet  = var.environment == "dev"
+  # Feature toggles
+  enable_nat                 = local.is_nondev
+  enable_detailed_monitoring = local.is_nondev
+  enable_bucket_versioning   = local.is_nondev
+  associate_public_ip        = local.is_dev
 
-  # Derived bucket name if none supplied (keep as ONE expression to avoid parser errors)
-  effective_bucket_name = length(trim(var.bucket_name)) > 0 ? lower(replace(var.bucket_name, "_", "-")) : lower(replace("${local.name_prefix}-app-bucket", "_", "-"))
+  azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
-  public_subnets = {
-    for idx, cidr in var.public_subnet_cidrs :
-    tostring(idx) => { cidr = cidr, az = local.azs[idx] }
-  }
+  name_prefix = lower(join("-", [var.project, local.env]))
 
-  private_subnets = {
-    for idx, cidr in var.private_subnet_cidrs :
-    tostring(idx) => { cidr = cidr, az = local.azs[idx] }
+  # Bucket name generation & sanitization
+  bucket_name_raw  = trimspace(var.bucket_name)
+  bucket_base_name = length(local.bucket_name_raw) > 0 ? local.bucket_name_raw : "${local.name_prefix}-app-bucket"
+  bucket_name_s1   = lower(regexreplace(local.bucket_base_name, "[^a-z0-9-]", "-"))
+  bucket_name_s2   = regexreplace(local.bucket_name_s1, "-{2,}", "-")
+  bucket_name_s3   = regexreplace(local.bucket_name_s2, "^-|-$", "")
+  effective_bucket_name = substr(local.bucket_name_s3, 0, 63)
+
+  common_tags = {
+    Project     = var.project
+    Environment = local.env
+    ManagedBy   = "terraform"
   }
 }
 
-########
-# VPC
-########
-resource "aws_vpc" "this" {
+########################
+# Networking
+########################
+
+resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
   enable_dns_support   = true
+  enable_dns_hostnames = true
 
-  tags = {
-    Name        = "${local.name_prefix}-vpc"
-    Project     = var.project
-    Environment = var.environment
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc"
+  })
 }
 
-resource "aws_internet_gateway" "this" {
-  vpc_id = aws_vpc.this.id
-  tags = {
-    Name        = "${local.name_prefix}-igw"
-    Project     = var.project
-    Environment = var.environment
-  }
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw"
+  })
 }
 
-#####################
-# Public subnets
-#####################
+# Public subnets (2)
 resource "aws_subnet" "public" {
-  for_each                = local.public_subnets
-  vpc_id                  = aws_vpc.this.id
+  for_each = {
+    "0" = { cidr = var.public_subnet_cidrs[0], az = local.azs[0] }
+    "1" = { cidr = var.public_subnet_cidrs[1], az = local.azs[1] }
+  }
+
+  vpc_id                  = aws_vpc.main.id
   cidr_block              = each.value.cidr
   availability_zone       = each.value.az
   map_public_ip_on_launch = true
 
-  tags = {
-    Name        = "${local.name_prefix}-public-${each.key}"
-    Project     = var.project
-    Environment = var.environment
-    Tier        = "public"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-${each.key}"
+    Tier = "public"
+  })
 }
 
+# Private subnets (2)
+resource "aws_subnet" "private" {
+  for_each = {
+    "0" = { cidr = var.private_subnet_cidrs[0], az = local.azs[0] }
+    "1" = { cidr = var.private_subnet_cidrs[1], az = local.azs[1] }
+  }
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = each.value.cidr
+  availability_zone = each.value.az
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-${each.key}"
+    Tier = "private"
+  })
+}
+
+# Public route table with default route to Internet Gateway
 resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.this.id
-  tags = {
-    Name        = "${local.name_prefix}-public-rt"
-    Project     = var.project
-    Environment = var.environment
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
   }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rt-public"
+  })
 }
 
-resource "aws_route" "public_default" {
-  route_table_id         = aws_route_table.public.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.this.id
-}
-
+# Associate public subnets to public RT
 resource "aws_route_table_association" "public" {
   for_each       = aws_subnet.public
   subnet_id      = each.value.id
   route_table_id = aws_route_table.public.id
 }
 
-#####################
-# Private subnets
-#####################
-resource "aws_subnet" "private" {
-  for_each          = local.private_subnets
-  vpc_id            = aws_vpc.this.id
-  cidr_block        = each.value.cidr
-  availability_zone = each.value.az
-
-  tags = {
-    Name        = "${local.name_prefix}-private-${each.key}"
-    Project     = var.project
-    Environment = var.environment
-    Tier        = "private"
-  }
-}
-
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.this.id
-  tags = {
-    Name        = "${local.name_prefix}-private-rt"
-    Project     = var.project
-    Environment = var.environment
-  }
-}
-
-# NAT (only for staging/prod)
+# NAT resources (staging/prod only)
 resource "aws_eip" "nat" {
   count  = local.enable_nat ? 1 : 0
   domain = "vpc"
 
-  tags = {
-    Name        = "${local.name_prefix}-nat-eip"
-    Project     = var.project
-    Environment = var.environment
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-eip"
+  })
 }
 
-resource "aws_nat_gateway" "this" {
+resource "aws_nat_gateway" "ngw" {
   count         = local.enable_nat ? 1 : 0
   allocation_id = aws_eip.nat[0].id
-  subnet_id     = aws_subnet.public["0"].id # place NAT in first public subnet
+  # First public subnet
+  subnet_id = element([for k in sort(keys(aws_subnet.public)) : aws_subnet.public[k].id], 0)
 
-  tags = {
-    Name        = "${local.name_prefix}-nat"
-    Project     = var.project
-    Environment = var.environment
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat"
+  })
 
-  depends_on = [aws_internet_gateway.this]
+  depends_on = [aws_internet_gateway.igw]
 }
 
-resource "aws_route" "private_default" {
-  count                  = local.enable_nat ? 1 : 0
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.this[0].id
+# Private route tables (one per private subnet). If NAT enabled, add 0.0.0.0/0 via NAT.
+resource "aws_route_table" "private" {
+  for_each = aws_subnet.private
+  vpc_id   = aws_vpc.main.id
+
+  dynamic "route" {
+    for_each = local.enable_nat ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.ngw[0].id
+    }
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rt-private-${each.key}"
+  })
 }
 
 resource "aws_route_table_association" "private" {
   for_each       = aws_subnet.private
   subnet_id      = each.value.id
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.private[each.key].id
 }
 
-###########################
-# Security Group for EC2
-###########################
-resource "aws_security_group" "app" {
-  name        = "${local.name_prefix}-app-sg"
-  description = "App security group"
-  vpc_id      = aws_vpc.this.id
+########################
+# Security Group
+########################
 
-  # Egress: allow all
+resource "aws_security_group" "instance" {
+  name        = "${local.name_prefix}-sg"
+  description = "Instance SG: SSH from allowed CIDRs (if any); all egress."
+  vpc_id      = aws_vpc.main.id
+
+  # SSH ingress only when allowed_ssh_cidrs is not empty
+  dynamic "ingress" {
+    for_each = var.allowed_ssh_cidrs
+    content {
+      description = "SSH access"
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = [ingress.value]
+    }
+  }
+
   egress {
-    description = "All egress"
+    description = "Allow all egress"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name        = "${local.name_prefix}-app-sg"
-    Project     = var.project
-    Environment = var.environment
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-sg"
+  })
 }
 
-# Optional SSH ingress — ONLY created when CIDRs are provided
-resource "aws_security_group_rule" "ssh_ingress" {
-  for_each          = toset(var.allowed_ssh_cidrs)
-  type              = "ingress"
-  description       = "SSH from allowed CIDRs"
-  from_port         = 22
-  to_port           = 22
-  protocol          = "tcp"
-  cidr_blocks       = [each.key]
-  security_group_id = aws_security_group.app.id
-}
-
-#####################
+########################
 # EC2 Instance
-#####################
-# dev: public subnet with public IP
-# staging/prod: private subnet, no public IP, detailed monitoring enabled
+########################
+
+# Choose subnet based on environment:
+# - dev   -> first PUBLIC subnet, public IP
+# - nondev-> first PRIVATE subnet, NO public IP (egress via NAT)
+locals {
+  public_subnet_ids  = [for k in sort(keys(aws_subnet.public))  : aws_subnet.public[k].id]
+  private_subnet_ids = [for k in sort(keys(aws_subnet.private)) : aws_subnet.private[k].id]
+  instance_subnet_id = local.is_dev ? element(local.public_subnet_ids, 0) : element(local.private_subnet_ids, 0)
+}
+
 resource "aws_instance" "app" {
   ami                         = data.aws_ami.al2023.id
   instance_type               = var.instance_type
-  subnet_id                   = local.instance_in_public_subnet ? aws_subnet.public["0"].id : aws_subnet.private["0"].id
-  associate_public_ip_address = local.instance_in_public_subnet
-  vpc_security_group_ids      = [aws_security_group.app.id]
+  subnet_id                   = local.instance_subnet_id
+  vpc_security_group_ids      = [aws_security_group.instance.id]
+  associate_public_ip_address = local.associate_public_ip
   monitoring                  = local.enable_detailed_monitoring
 
-  tags = {
-    Name        = "${local.name_prefix}-app-ec2"
-    Project     = var.project
-    Environment = var.environment
+  # Minimal root volume, encrypted by default in most regions (account setting)
+  root_block_device {
+    volume_size = 8
+    volume_type = "gp3"
   }
 
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2"
+  })
+
   depends_on = [
-    aws_route.public_default,
     aws_route_table_association.public,
     aws_route_table_association.private
   ]
 }
 
-#############
-# S3 Bucket
-#############
-resource "aws_s3_bucket" "this" {
-  bucket = local.effective_bucket_name
+########################
+# S3 Bucket (SSE-S3, block public; versioning only in staging/prod)
+########################
 
-  tags = {
-    Name        = local.effective_bucket_name
-    Project     = var.project
-    Environment = var.environment
-  }
+resource "aws_s3_bucket" "app" {
+  bucket = local.effective_bucket_name
+  tags = merge(local.common_tags, {
+    Name = local.effective_bucket_name
+  })
 }
 
-# Modern secure default: disable ACLs, bucket owner enforced
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
+resource "aws_s3_bucket_ownership_controls" "app" {
+  bucket = aws_s3_bucket.app.id
   rule {
     object_ownership = "BucketOwnerEnforced"
   }
 }
 
-# Block all public access
-resource "aws_s3_bucket_public_access_block" "this" {
-  bucket                  = aws_s3_bucket.this.id
+resource "aws_s3_bucket_public_access_block" "app" {
+  bucket = aws_s3_bucket.app.id
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-
-  depends_on = [aws_s3_bucket_ownership_controls.this]
 }
 
-# Default server-side encryption
-# Choose AES256 when kms_key_id is empty; otherwise apply SSE-KMS
-resource "aws_s3_bucket_server_side_encryption_configuration" "sse_aes256" {
-  count  = var.kms_key_id == "" ? 1 : 0
-  bucket = aws_s3_bucket.this.id
+resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
+  bucket = aws_s3_bucket.app.id
 
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
   }
-
-  depends_on = [aws_s3_bucket_public_access_block.this]
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "sse_kms" {
-  count  = var.kms_key_id != "" ? 1 : 0
-  bucket = aws_s3_bucket.this.id
+resource "aws_s3_bucket_versioning" "app" {
+  bucket = aws_s3_bucket.app.id
 
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = var.kms_key_id
-    }
-  }
-
-  depends_on = [aws_s3_bucket_public_access_block.this]
-}
-
-# Versioning: enable in staging/prod, suspend in dev
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
   versioning_configuration {
-    status = var.environment == "dev" ? "Suspended" : "Enabled"
+    status = local.enable_bucket_versioning ? "Enabled" : "Suspended"
   }
-
-  depends_on = [
-    aws_s3_bucket_public_access_block.this,
-    aws_s3_bucket_server_side_encryption_configuration.sse_aes256,
-    aws_s3_bucket_server_side_encryption_configuration.sse_kms
-  ]
 }
 
-# Optional hardening: clean up incomplete multipart uploads
-resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    id     = "abort-incomplete-mpu"
-    status = "Enabled"
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 7
-    }
-  }
-
-  depends_on = [aws_s3_bucket_versioning.this]
-}
-
-##########
+########################
 # Outputs
-##########
+########################
+
 output "vpc_id" {
-  value       = aws_vpc.this.id
   description = "VPC ID"
+  value       = aws_vpc.main.id
 }
 
 output "public_subnet_ids" {
-  value       = [for s in aws_subnet.public : s.id]
-  description = "Public subnet IDs"
+  description = "Public subnet IDs (ordered by AZ index)"
+  value       = local.public_subnet_ids
 }
 
 output "private_subnet_ids" {
-  value       = [for s in aws_subnet.private : s.id]
-  description = "Private subnet IDs"
+  description = "Private subnet IDs (ordered by AZ index)"
+  value       = local.private_subnet_ids
 }
 
 output "security_group_id" {
-  value       = aws_security_group.app.id
-  description = "App security group ID"
+  description = "Security Group ID for the instance"
+  value       = aws_security_group.instance.id
 }
 
 output "instance_id" {
-  value       = aws_instance.app.id
   description = "EC2 instance ID"
+  value       = aws_instance.app.id
 }
 
 output "instance_private_ip" {
+  description = "EC2 private IP address"
   value       = aws_instance.app.private_ip
-  description = "EC2 private IP"
 }
 
 output "instance_public_ip" {
-  value       = local.instance_in_public_subnet ? aws_instance.app.public_ip : null
-  description = "EC2 public IP (only in dev)"
+  description = "EC2 public IP address (only in dev)"
+  value       = local.is_dev ? aws_instance.app.public_ip : ""
 }
 
 output "s3_bucket_name" {
-  value       = aws_s3_bucket.this.bucket
   description = "S3 bucket name"
-}
-
-output "s3_bucket_arn" {
-  value       = aws_s3_bucket.this.arn
-  description = "S3 bucket ARN"
-}
-
-output "s3_versioning_status" {
-  value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
-  description = "S3 versioning status (Enabled/Suspended)"
+  value       = aws_s3_bucket.app.bucket
 }
 
 output "nat_gateway_id" {
-  value       = local.enable_nat ? aws_nat_gateway.this[0].id : null
-  description = "NAT Gateway ID (null in dev)"
+  description = "NAT Gateway ID (empty in dev)"
+  value       = try(aws_nat_gateway.ngw[0].id, "")
 }
