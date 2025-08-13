@@ -1,0 +1,467 @@
+import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
+import { KMSKey } from '../modules/kms';
+import { SecureS3Bucket } from '../modules/s3';
+import { EnhancedSecureS3Bucket } from '../modules/s3/enhanced-s3';
+import {
+  SecureIAMRole,
+  createMFAEnforcedPolicy,
+  createS3AccessPolicy,
+} from '../modules/iam';
+import { SecureCloudTrail } from '../modules/cloudtrail';
+import { EnhancedCloudTrail } from '../modules/cloudtrail/enhanced-cloudtrail';
+import {
+  SecurityPolicies,
+  createTimeBasedS3AccessPolicy,
+  createRestrictedAuditPolicy,
+} from '../modules/security-policies';
+import { commonTags } from '../config/tags';
+
+export interface SecurityStackArgs {
+  environmentSuffix?: string;
+  tags?: pulumi.Input<{ [key: string]: string }>;
+  allowedIpRanges?: string[];
+  enableEnhancedSecurity?: boolean;
+}
+
+export class SecurityStack extends pulumi.ComponentResource {
+  // S3 Buckets
+  public readonly primaryBucketName: pulumi.Output<string>;
+  public readonly primaryBucketArn: pulumi.Output<string>;
+  public readonly auditBucketName: pulumi.Output<string>;
+  public readonly auditBucketArn: pulumi.Output<string>;
+
+  // KMS Keys
+  public readonly s3KmsKeyId: pulumi.Output<string>;
+  public readonly s3KmsKeyArn: pulumi.Output<string>;
+  public readonly cloudTrailKmsKeyId: pulumi.Output<string>;
+  public readonly cloudTrailKmsKeyArn: pulumi.Output<string>;
+
+  // IAM Roles
+  public readonly dataAccessRoleArn: pulumi.Output<string>;
+  public readonly auditRoleArn: pulumi.Output<string>;
+
+  // CloudTrail
+  public readonly cloudTrailArn: pulumi.Output<string>;
+  public readonly cloudTrailLogGroupArn: pulumi.Output<string>;
+
+  // Security Policies
+  public readonly securityPolicyArn: pulumi.Output<string>;
+  public readonly mfaEnforcementPolicyArn: pulumi.Output<string>;
+  public readonly s3SecurityPolicyArn: pulumi.Output<string>;
+  public readonly cloudTrailProtectionPolicyArn: pulumi.Output<string>;
+  public readonly kmsProtectionPolicyArn: pulumi.Output<string>;
+
+  // Region confirmation
+  public readonly region: string;
+
+  constructor(
+    name: string,
+    args?: SecurityStackArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('tap:security:SecurityStack', name, args, opts);
+
+    const environmentSuffix = args?.environmentSuffix || 'dev';
+    const tags = args?.tags || {};
+    const allowedIpRanges = args?.allowedIpRanges || ['203.0.113.0/24'];
+    const enableEnhancedSecurity = args?.enableEnhancedSecurity ?? true;
+
+    // Configure AWS provider for us-east-1
+    const provider = new aws.Provider(
+      'aws-provider',
+      {
+        region: 'us-east-1',
+      },
+      { parent: this }
+    );
+
+    // Create enhanced security policies
+    const securityPolicies = new SecurityPolicies(
+      'security-policies',
+      {
+        environmentSuffix,
+        tags: commonTags,
+      },
+      { parent: this, provider }
+    );
+
+    // Create KMS keys for encryption
+    const s3KmsKey = new KMSKey(
+      's3-encryption',
+      {
+        description: 'KMS key for S3 bucket encryption with enhanced security',
+        tags: { Purpose: 'S3 Encryption' },
+      },
+      { parent: this, provider }
+    );
+
+    const cloudTrailKmsKey = new KMSKey(
+      'cloudtrail-encryption',
+      {
+        description:
+          'KMS key for CloudTrail log encryption with enhanced security',
+        tags: { Purpose: 'CloudTrail Encryption' },
+      },
+      { parent: this, provider }
+    );
+
+    // Create secure S3 buckets with enhanced security
+    let primaryBucket: SecureS3Bucket | EnhancedSecureS3Bucket;
+    let auditBucket: SecureS3Bucket | EnhancedSecureS3Bucket;
+
+    if (enableEnhancedSecurity) {
+      primaryBucket = new EnhancedSecureS3Bucket(
+        'primary-storage',
+        {
+          kmsKeyId: s3KmsKey.key.keyId,
+          allowedIpRanges,
+          enableAccessLogging: true,
+          enableNotifications: true,
+          enableObjectLock: true,
+          lifecycleRules: [
+            {
+              id: 'transition-to-ia',
+              status: 'Enabled',
+              transitions: [
+                {
+                  days: 30,
+                  storageClass: 'STANDARD_IA',
+                },
+                {
+                  days: 90,
+                  storageClass: 'GLACIER',
+                },
+                {
+                  days: 365,
+                  storageClass: 'DEEP_ARCHIVE',
+                },
+              ],
+            },
+          ],
+          tags: {
+            Purpose: 'Primary data storage with enhanced security',
+          },
+        },
+        { parent: this, provider }
+      );
+
+      auditBucket = new EnhancedSecureS3Bucket(
+        'audit-logs',
+        {
+          kmsKeyId: cloudTrailKmsKey.key.keyId,
+          allowedIpRanges,
+          enableAccessLogging: true,
+          enableObjectLock: true,
+          tags: {
+            Purpose: 'Audit and compliance logs with enhanced security',
+          },
+        },
+        { parent: this, provider }
+      );
+    } else {
+      primaryBucket = new SecureS3Bucket(
+        'primary-storage',
+        {
+          kmsKeyId: s3KmsKey.key.keyId,
+          lifecycleRules: [
+            {
+              id: 'transition-to-ia',
+              status: 'Enabled',
+              transitions: [
+                {
+                  days: 30,
+                  storageClass: 'STANDARD_IA',
+                },
+                {
+                  days: 90,
+                  storageClass: 'GLACIER',
+                },
+                {
+                  days: 365,
+                  storageClass: 'DEEP_ARCHIVE',
+                },
+              ],
+            },
+          ],
+          tags: {
+            Purpose: 'Primary data storage',
+          },
+        },
+        { parent: this, provider }
+      );
+
+      auditBucket = new SecureS3Bucket(
+        'audit-logs',
+        {
+          kmsKeyId: cloudTrailKmsKey.key.keyId,
+          tags: {
+            Purpose: 'Audit and compliance logs',
+          },
+        },
+        { parent: this, provider }
+      );
+    }
+
+    // Create IAM roles with enhanced least privilege and MFA enforcement
+    const dataAccessRole = new SecureIAMRole(
+      'data-access',
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                AWS: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then(id => id.accountId)}:root`,
+              },
+              Condition: {
+                Bool: {
+                  'aws:MultiFactorAuthPresent': 'true',
+                },
+                StringEquals: {
+                  'aws:RequestedRegion': 'us-east-1',
+                },
+                IpAddress: {
+                  'aws:SourceIp': allowedIpRanges,
+                },
+              },
+            },
+          ],
+        }),
+        policies: enableEnhancedSecurity
+          ? [
+              createTimeBasedS3AccessPolicy(primaryBucket.bucket.arn),
+              createMFAEnforcedPolicy(),
+            ]
+          : [
+              createS3AccessPolicy(primaryBucket.bucket.arn),
+              createMFAEnforcedPolicy(),
+            ],
+        managedPolicyArns: [],
+        requireMFA: true,
+        tags: {
+          Purpose:
+            'Data access with enhanced MFA enforcement and time restrictions',
+        },
+      },
+      { parent: this, provider }
+    );
+
+    const auditRole = new SecureIAMRole(
+      'audit-access',
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                AWS: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then(id => id.accountId)}:root`,
+              },
+              Condition: {
+                Bool: {
+                  'aws:MultiFactorAuthPresent': 'true',
+                },
+                StringEquals: {
+                  'aws:RequestedRegion': 'us-east-1',
+                },
+                IpAddress: {
+                  'aws:SourceIp': allowedIpRanges,
+                },
+              },
+            },
+          ],
+        }),
+        policies: enableEnhancedSecurity
+          ? [
+              createRestrictedAuditPolicy(
+                auditBucket.bucket.arn,
+                allowedIpRanges
+              ),
+            ]
+          : [
+              pulumi.interpolate`{
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:ListBucket"
+              ],
+              "Resource": [
+                "${auditBucket.bucket.arn}",
+                "${auditBucket.bucket.arn}/*"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "cloudtrail:LookupEvents",
+                "cloudtrail:GetTrailStatus"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }`,
+            ],
+        managedPolicyArns: ['arn:aws:iam::aws:policy/ReadOnlyAccess'],
+        requireMFA: true,
+        tags: {
+          Purpose: 'Audit log access with IP and time restrictions',
+        },
+      },
+      { parent: this, provider }
+    );
+
+    // Create CloudTrail for comprehensive logging
+    let cloudTrail: SecureCloudTrail | EnhancedCloudTrail;
+
+    if (enableEnhancedSecurity) {
+      cloudTrail = new EnhancedCloudTrail(
+        'security-audit',
+        {
+          s3BucketName: auditBucket.bucket.id,
+          kmsKeyId: cloudTrailKmsKey.key.keyId,
+          includeGlobalServiceEvents: true,
+          isMultiRegionTrail: true,
+          enableLogFileValidation: true,
+          enableInsightSelectors: true,
+          tags: {
+            Purpose:
+              'Enhanced security audit and compliance with anomaly detection',
+          },
+        },
+        { parent: this, provider }
+      );
+    } else {
+      cloudTrail = new SecureCloudTrail(
+        'security-audit',
+        {
+          s3BucketName: auditBucket.bucket.id,
+          kmsKeyId: cloudTrailKmsKey.key.keyId,
+          includeGlobalServiceEvents: true,
+          isMultiRegionTrail: true,
+          enableLogFileValidation: true,
+          tags: {
+            Purpose: 'Security audit and compliance',
+          },
+        },
+        { parent: this, provider }
+      );
+    }
+
+    // Create additional security policies with enhanced controls
+    const securityPolicy = new aws.iam.Policy(
+      'security-baseline',
+      {
+        name: `SecurityBaseline-${environmentSuffix}`,
+        description:
+          'Enhanced baseline security policy with comprehensive MFA requirements',
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'RequireMFAForAllSensitiveActions',
+              Effect: 'Deny',
+              Action: [
+                'iam:CreateRole',
+                'iam:DeleteRole',
+                'iam:AttachRolePolicy',
+                'iam:DetachRolePolicy',
+                'iam:PutRolePolicy',
+                'iam:DeleteRolePolicy',
+                's3:DeleteBucket',
+                's3:PutBucketPolicy',
+                'kms:ScheduleKeyDeletion',
+                'kms:DisableKey',
+                'cloudtrail:DeleteTrail',
+                'cloudtrail:StopLogging',
+              ],
+              Resource: '*',
+              Condition: {
+                BoolIfExists: {
+                  'aws:MultiFactorAuthPresent': 'false',
+                },
+              },
+            },
+            {
+              Sid: 'RestrictToUSEast1Only',
+              Effect: 'Deny',
+              Action: '*',
+              Resource: '*',
+              Condition: {
+                StringNotEquals: {
+                  'aws:RequestedRegion': 'us-east-1',
+                },
+              },
+            },
+            {
+              Sid: 'RequireEncryptedStorage',
+              Effect: 'Deny',
+              Action: [
+                's3:PutObject',
+                'ebs:CreateVolume',
+                'rds:CreateDBInstance',
+              ],
+              Resource: '*',
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false',
+                },
+              },
+            },
+          ],
+        }),
+        tags: { ...commonTags, ...tags },
+      },
+      { parent: this, provider }
+    );
+
+    // Assign outputs
+    this.primaryBucketName = primaryBucket.bucket.id;
+    this.primaryBucketArn = primaryBucket.bucket.arn;
+    this.auditBucketName = auditBucket.bucket.id;
+    this.auditBucketArn = auditBucket.bucket.arn;
+    this.s3KmsKeyId = s3KmsKey.key.keyId;
+    this.s3KmsKeyArn = s3KmsKey.key.arn;
+    this.cloudTrailKmsKeyId = cloudTrailKmsKey.key.keyId;
+    this.cloudTrailKmsKeyArn = cloudTrailKmsKey.key.arn;
+    this.dataAccessRoleArn = dataAccessRole.role.arn;
+    this.auditRoleArn = auditRole.role.arn;
+    this.cloudTrailArn = cloudTrail.trail.arn;
+    this.cloudTrailLogGroupArn = cloudTrail.logGroup.arn;
+    this.securityPolicyArn = securityPolicy.arn;
+    this.mfaEnforcementPolicyArn = securityPolicies.mfaEnforcementPolicy.arn;
+    this.s3SecurityPolicyArn = securityPolicies.s3DenyInsecurePolicy.arn;
+    this.cloudTrailProtectionPolicyArn =
+      securityPolicies.cloudTrailProtectionPolicy.arn;
+    this.kmsProtectionPolicyArn = securityPolicies.kmsKeyProtectionPolicy.arn;
+    this.region = 'us-east-1';
+
+    // Register the outputs of this component
+    this.registerOutputs({
+      primaryBucketName: this.primaryBucketName,
+      primaryBucketArn: this.primaryBucketArn,
+      auditBucketName: this.auditBucketName,
+      auditBucketArn: this.auditBucketArn,
+      s3KmsKeyId: this.s3KmsKeyId,
+      s3KmsKeyArn: this.s3KmsKeyArn,
+      cloudTrailKmsKeyId: this.cloudTrailKmsKeyId,
+      cloudTrailKmsKeyArn: this.cloudTrailKmsKeyArn,
+      dataAccessRoleArn: this.dataAccessRoleArn,
+      auditRoleArn: this.auditRoleArn,
+      cloudTrailArn: this.cloudTrailArn,
+      cloudTrailLogGroupArn: this.cloudTrailLogGroupArn,
+      securityPolicyArn: this.securityPolicyArn,
+      mfaEnforcementPolicyArn: this.mfaEnforcementPolicyArn,
+      s3SecurityPolicyArn: this.s3SecurityPolicyArn,
+      cloudTrailProtectionPolicyArn: this.cloudTrailProtectionPolicyArn,
+      kmsProtectionPolicyArn: this.kmsProtectionPolicyArn,
+      region: this.region,
+    });
+  }
+}
