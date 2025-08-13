@@ -200,7 +200,12 @@ export class TapStack extends cdk.Stack {
       'Allow HTTP for package updates'
     );
 
-    // VPC Flow Logs for monitoring
+    // VPC Flow Logs for monitoring - Create log group first to scope permissions
+    const flowLogsGroup = new logs.LogGroup(this, 'VPCFlowLogs', {
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const flowLogsRole = new iam.Role(this, 'FlowLogsRole', {
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
       inlinePolicies: {
@@ -215,16 +220,14 @@ export class TapStack extends cdk.Stack {
                 'logs:DescribeLogGroups',
                 'logs:DescribeLogStreams',
               ],
-              resources: [`arn:aws:logs:${this.region}:${this.account}:*`],
+              resources: [
+                flowLogsGroup.logGroupArn,
+                `${flowLogsGroup.logGroupArn}:*`,
+              ],
             }),
           ],
         }),
       },
-    });
-
-    const flowLogsGroup = new logs.LogGroup(this, 'VPCFlowLogs', {
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     new ec2.FlowLog(this, 'VPCFlowLog', {
