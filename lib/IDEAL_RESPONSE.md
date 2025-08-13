@@ -9,6 +9,16 @@ const projectName = config.get('projectName') || 'production-web-app';
 const environment = config.get('environment') || 'prod';
 const region = config.get('aws:region') || 'us-west-2'; // Default to us-west-2 as per PROMPT.md
 
+// Create AWS provider for the specified region
+const awsProvider = new aws.Provider('aws-provider', {
+  region: region,
+});
+
+// Provider options to be used by all resources
+const providerOpts = {
+  provider: awsProvider,
+};
+
 // Create resource name with environment suffix
 const resourcePrefix = `${projectName}-${environment}`;
 
@@ -19,30 +29,41 @@ const commonTags = {
   Region: region,
 };
 
-// Get availability zones
-const availabilityZones = aws.getAvailabilityZones({
-  state: 'available',
-});
+// Get availability zones for the specified region using the provider
+const availabilityZones = aws.getAvailabilityZones(
+  {
+    state: 'available',
+  },
+  { provider: awsProvider }
+);
 
 // VPC
-const vpc = new aws.ec2.Vpc('main-vpc', {
-  cidrBlock: vpcCidr,
-  enableDnsHostnames: true,
-  enableDnsSupport: true,
-  tags: {
-    Name: `${resourcePrefix}-vpc`,
-    ...commonTags,
+const vpc = new aws.ec2.Vpc(
+  'main-vpc',
+  {
+    cidrBlock: vpcCidr,
+    enableDnsHostnames: true,
+    enableDnsSupport: true,
+    tags: {
+      Name: `${resourcePrefix}-vpc`,
+      ...commonTags,
+    },
   },
-});
+  providerOpts
+);
 
 // Internet Gateway
-const internetGateway = new aws.ec2.InternetGateway('main-igw', {
-  vpcId: vpc.id,
-  tags: {
-    Name: `${resourcePrefix}-igw`,
-    ...commonTags,
+const internetGateway = new aws.ec2.InternetGateway(
+  'main-igw',
+  {
+    vpcId: vpc.id,
+    tags: {
+      Name: `${resourcePrefix}-igw`,
+      ...commonTags,
+    },
   },
-});
+  providerOpts
+);
 
 // Public and Private Subnets
 const publicSubnets = [];
@@ -50,30 +71,38 @@ const privateSubnets = [];
 
 for (let i = 0; i < 3; i++) {
   // Public Subnet
-  const publicSubnet = new aws.ec2.Subnet(`public-subnet-${i + 1}`, {
-    vpcId: vpc.id,
-    cidrBlock: `10.0.${i + 1}.0/24`,
-    availabilityZone: availabilityZones.then(azs => azs.names[i]),
-    mapPublicIpOnLaunch: true,
-    tags: {
-      Name: `${resourcePrefix}-public-subnet-${i + 1}`,
-      Type: 'Public',
-      ...commonTags,
+  const publicSubnet = new aws.ec2.Subnet(
+    `public-subnet-${i + 1}`,
+    {
+      vpcId: vpc.id,
+      cidrBlock: `10.0.${i + 1}.0/24`,
+      availabilityZone: availabilityZones.then(azs => azs.names[i]),
+      mapPublicIpOnLaunch: true,
+      tags: {
+        Name: `${resourcePrefix}-public-subnet-${i + 1}`,
+        Type: 'Public',
+        ...commonTags,
+      },
     },
-  });
+    providerOpts
+  );
   publicSubnets.push(publicSubnet);
 
   // Private Subnet
-  const privateSubnet = new aws.ec2.Subnet(`private-subnet-${i + 1}`, {
-    vpcId: vpc.id,
-    cidrBlock: `10.0.${i + 10}.0/24`,
-    availabilityZone: availabilityZones.then(azs => azs.names[i]),
-    tags: {
-      Name: `${resourcePrefix}-private-subnet-${i + 1}`,
-      Type: 'Private',
-      ...commonTags,
+  const privateSubnet = new aws.ec2.Subnet(
+    `private-subnet-${i + 1}`,
+    {
+      vpcId: vpc.id,
+      cidrBlock: `10.0.${i + 10}.0/24`,
+      availabilityZone: availabilityZones.then(azs => azs.names[i]),
+      tags: {
+        Name: `${resourcePrefix}-private-subnet-${i + 1}`,
+        Type: 'Private',
+        ...commonTags,
+      },
     },
-  });
+    providerOpts
+  );
   privateSubnets.push(privateSubnet);
 }
 
@@ -82,148 +111,192 @@ const natGateways = [];
 const elasticIps = [];
 
 for (let i = 0; i < 3; i++) {
-  const elasticIp = new aws.ec2.Eip(`nat-eip-${i + 1}`, {
-    domain: 'vpc',
-    tags: {
-      Name: `${resourcePrefix}-nat-eip-${i + 1}`,
-      ...commonTags,
+  const elasticIp = new aws.ec2.Eip(
+    `nat-eip-${i + 1}`,
+    {
+      domain: 'vpc',
+      tags: {
+        Name: `${resourcePrefix}-nat-eip-${i + 1}`,
+        ...commonTags,
+      },
     },
-  });
+    providerOpts
+  );
   elasticIps.push(elasticIp);
 
-  const natGateway = new aws.ec2.NatGateway(`nat-gateway-${i + 1}`, {
-    allocationId: elasticIp.id,
-    subnetId: publicSubnets[i].id,
-    tags: {
-      Name: `${resourcePrefix}-nat-gateway-${i + 1}`,
-      ...commonTags,
+  const natGateway = new aws.ec2.NatGateway(
+    `nat-gateway-${i + 1}`,
+    {
+      allocationId: elasticIp.id,
+      subnetId: publicSubnets[i].id,
+      tags: {
+        Name: `${resourcePrefix}-nat-gateway-${i + 1}`,
+        ...commonTags,
+      },
     },
-  });
+    providerOpts
+  );
   natGateways.push(natGateway);
 }
 
 // Public Route Table
-const publicRouteTable = new aws.ec2.RouteTable('public-rt', {
-  vpcId: vpc.id,
-  tags: {
-    Name: `${resourcePrefix}-public-rt`,
-    ...commonTags,
+const publicRouteTable = new aws.ec2.RouteTable(
+  'public-rt',
+  {
+    vpcId: vpc.id,
+    tags: {
+      Name: `${resourcePrefix}-public-rt`,
+      ...commonTags,
+    },
   },
-});
+  providerOpts
+);
 
-const publicRoute = new aws.ec2.Route('public-route', {
-  routeTableId: publicRouteTable.id,
-  destinationCidrBlock: '0.0.0.0/0',
-  gatewayId: internetGateway.id,
-});
+const publicRoute = new aws.ec2.Route(
+  'public-route',
+  {
+    routeTableId: publicRouteTable.id,
+    destinationCidrBlock: '0.0.0.0/0',
+    gatewayId: internetGateway.id,
+  },
+  providerOpts
+);
 
 // Associate public subnets with public route table
 publicSubnets.forEach((subnet, index) => {
-  new aws.ec2.RouteTableAssociation(`public-rta-${index + 1}`, {
-    subnetId: subnet.id,
-    routeTableId: publicRouteTable.id,
-  });
+  new aws.ec2.RouteTableAssociation(
+    `public-rta-${index + 1}`,
+    {
+      subnetId: subnet.id,
+      routeTableId: publicRouteTable.id,
+    },
+    providerOpts
+  );
 });
 
 // Private Route Tables
 privateSubnets.forEach((subnet, index) => {
-  const privateRouteTable = new aws.ec2.RouteTable(`private-rt-${index + 1}`, {
-    vpcId: vpc.id,
-    tags: {
-      Name: `${resourcePrefix}-private-rt-${index + 1}`,
-      ...commonTags,
+  const privateRouteTable = new aws.ec2.RouteTable(
+    `private-rt-${index + 1}`,
+    {
+      vpcId: vpc.id,
+      tags: {
+        Name: `${resourcePrefix}-private-rt-${index + 1}`,
+        ...commonTags,
+      },
     },
-  });
+    providerOpts
+  );
 
-  new aws.ec2.Route(`private-route-${index + 1}`, {
-    routeTableId: privateRouteTable.id,
-    destinationCidrBlock: '0.0.0.0/0',
-    natGatewayId: natGateways[index].id,
-  });
+  new aws.ec2.Route(
+    `private-route-${index + 1}`,
+    {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: natGateways[index].id,
+    },
+    providerOpts
+  );
 
-  new aws.ec2.RouteTableAssociation(`private-rta-${index + 1}`, {
-    subnetId: subnet.id,
-    routeTableId: privateRouteTable.id,
-  });
+  new aws.ec2.RouteTableAssociation(
+    `private-rta-${index + 1}`,
+    {
+      subnetId: subnet.id,
+      routeTableId: privateRouteTable.id,
+    },
+    providerOpts
+  );
 });
 
 // Security Groups
-const albSecurityGroup = new aws.ec2.SecurityGroup('alb-sg', {
-  name: `${resourcePrefix}-alb-sg`,
-  description: 'Security group for Application Load Balancer',
-  vpcId: vpc.id,
-  ingress: [
-    {
-      fromPort: 80,
-      toPort: 80,
-      protocol: 'tcp',
-      cidrBlocks: ['0.0.0.0/0'],
+const albSecurityGroup = new aws.ec2.SecurityGroup(
+  'alb-sg',
+  {
+    name: `${resourcePrefix}-alb-sg`,
+    description: 'Security group for Application Load Balancer',
+    vpcId: vpc.id,
+    ingress: [
+      {
+        fromPort: 80,
+        toPort: 80,
+        protocol: 'tcp',
+        cidrBlocks: ['0.0.0.0/0'],
+      },
+      {
+        fromPort: 443,
+        toPort: 443,
+        protocol: 'tcp',
+        cidrBlocks: ['0.0.0.0/0'],
+      },
+    ],
+    egress: [
+      {
+        fromPort: 0,
+        toPort: 0,
+        protocol: '-1',
+        cidrBlocks: ['0.0.0.0/0'],
+      },
+    ],
+    tags: {
+      Name: `${resourcePrefix}-alb-sg`,
+      ...commonTags,
     },
-    {
-      fromPort: 443,
-      toPort: 443,
-      protocol: 'tcp',
-      cidrBlocks: ['0.0.0.0/0'],
-    },
-  ],
-  egress: [
-    {
-      fromPort: 0,
-      toPort: 0,
-      protocol: '-1',
-      cidrBlocks: ['0.0.0.0/0'],
-    },
-  ],
-  tags: {
-    Name: `${resourcePrefix}-alb-sg`,
-    ...commonTags,
   },
-});
+  providerOpts
+);
 
-const ec2SecurityGroup = new aws.ec2.SecurityGroup('ec2-sg', {
-  name: `${resourcePrefix}-ec2-sg`,
-  description: 'Security group for EC2 instances - ALB access only',
-  vpcId: vpc.id,
-  ingress: [
-    // Remove SSH access - use AWS Systems Manager Session Manager instead
-    {
-      fromPort: 80,
-      toPort: 80,
-      protocol: 'tcp',
-      securityGroups: [albSecurityGroup.id],
+const ec2SecurityGroup = new aws.ec2.SecurityGroup(
+  'ec2-sg',
+  {
+    name: `${resourcePrefix}-ec2-sg`,
+    description: 'Security group for EC2 instances - ALB access only',
+    vpcId: vpc.id,
+    ingress: [
+      // Remove SSH access - use AWS Systems Manager Session Manager instead
+      {
+        fromPort: 80,
+        toPort: 80,
+        protocol: 'tcp',
+        securityGroups: [albSecurityGroup.id],
+      },
+    ],
+    egress: [
+      {
+        fromPort: 0,
+        toPort: 0,
+        protocol: '-1',
+        cidrBlocks: ['0.0.0.0/0'],
+      },
+    ],
+    tags: {
+      Name: `${resourcePrefix}-ec2-sg`,
+      ...commonTags,
     },
-  ],
-  egress: [
-    {
-      fromPort: 0,
-      toPort: 0,
-      protocol: '-1',
-      cidrBlocks: ['0.0.0.0/0'],
-    },
-  ],
-  tags: {
-    Name: `${resourcePrefix}-ec2-sg`,
-    ...commonTags,
   },
-});
+  providerOpts
+);
 
-const rdsSecurityGroup = new aws.ec2.SecurityGroup('rds-sg', {
-  name: `${resourcePrefix}-rds-sg`,
-  description: 'Security group for RDS MySQL instance',
-  vpcId: vpc.id,
-  ingress: [
-    {
-      fromPort: 3306,
-      toPort: 3306,
-      protocol: 'tcp',
-      securityGroups: [ec2SecurityGroup.id],
+const rdsSecurityGroup = new aws.ec2.SecurityGroup(
+  'rds-sg',
+  {
+    name: `${resourcePrefix}-rds-sg`,
+    description: 'Security group for RDS MySQL instance',
+    vpcId: vpc.id,
+    ingress: [
+      {
+        fromPort: 3306,
+        toPort: 3306,
+        protocol: 'tcp',
+        securityGroups: [ec2SecurityGroup.id],
+      },
+    ],
+    tags: {
+      Name: `${resourcePrefix}-rds-sg`,
+      ...commonTags,
     },
-  ],
-  tags: {
-    Name: `${resourcePrefix}-rds-sg`,
-    ...commonTags,
   },
-});
+  providerOpts
+);
 
 // IAM Role for EC2 with least privilege
 const ec2Role = new aws.iam.Role('ec2-role', {
@@ -512,9 +585,7 @@ const autoScalingGroup = new aws.autoscaling.Group('app-asg', {
 
 // S3 Bucket with enhanced security
 const s3Bucket = new aws.s3.Bucket('app-bucket', {
-  bucket: `${resourcePrefix}-bucket-${Math.random()
-    .toString(36)
-    .substring(2, 15)}`,
+  bucket: `${resourcePrefix}-bucket`,
   tags: {
     Name: `${resourcePrefix}-bucket`,
     ...commonTags,
@@ -522,7 +593,7 @@ const s3Bucket = new aws.s3.Bucket('app-bucket', {
 });
 
 // S3 Bucket Versioning
-const s3BucketVersioning = new aws.s3.BucketVersioning(
+const s3BucketVersioning = new aws.s3.BucketVersioningV2(
   'app-bucket-versioning',
   {
     bucket: s3Bucket.id,
@@ -545,7 +616,7 @@ const s3BucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 );
 
 // S3 Bucket Server-Side Encryption
-const s3BucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(
+const s3BucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(
   'app-bucket-encryption',
   {
     bucket: s3Bucket.id,
