@@ -9,7 +9,6 @@ import {
   Subnet,
   Vpc,
 } from "@aws-sdk/client-ec2";
-import { NodeHttpHandler } from "@aws-sdk/node-http-handler";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -62,11 +61,22 @@ const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-w
 const ec2 = new EC2Client({
   region: REGION,
   maxAttempts: 1, // no SDK retries
-  requestHandler: new NodeHttpHandler({
-    connectionTimeout: 1500,
-    requestTimeout: 2000,
-  }),
 });
+
+/** Send a command with an AbortController timeout (default 2000ms). */
+async function sendWithTimeout<T>(
+  cmd: Parameters<typeof ec2.send>[0],
+  ms = Number(process.env.TEST_HTTP_TIMEOUT_MS || 2000)
+): Promise<T> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms);
+  try {
+    // @ts-expect-error second arg exists at runtime; types are permissive in v3
+    return (await ec2.send(cmd, { abortSignal: ac.signal })) as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /* ============ Helpers ============ */
 
@@ -112,33 +122,32 @@ let sg: SecurityGroup | undefined;
 
 beforeAll(async () => {
   try {
-    // Quick existence probes in parallel; if any NotFound occurs, mark absent.
-    const [vpcResp, subnetResp, sgResp] = await Promise.allSettled([
-      ec2.send(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] })),
-      ec2.send(new DescribeSubnetsCommand({ SubnetIds: [OUT.subnetId] })),
-      ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [OUT.sgId] })),
+    const [vpcRes, subnetRes, sgRes] = await Promise.allSettled([
+      sendWithTimeout<{ Vpcs?: Vpc[] }>(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] })),
+      sendWithTimeout<{ Subnets?: Subnet[] }>(new DescribeSubnetsCommand({ SubnetIds: [OUT.subnetId] })),
+      sendWithTimeout<{ SecurityGroups?: SecurityGroup[] }>(
+        new DescribeSecurityGroupsCommand({ GroupIds: [OUT.sgId] })
+      ),
     ]);
 
-    if (vpcResp.status === "fulfilled") vpc = vpcResp.value.Vpcs?.[0];
-    if (subnetResp.status === "fulfilled") subnet = subnetResp.value.Subnets?.[0];
-    if (sgResp.status === "fulfilled") sg = sgResp.value.SecurityGroups?.[0];
+    if (vpcRes.status === "fulfilled") vpc = vpcRes.value.Vpcs?.[0];
+    if (subnetRes.status === "fulfilled") subnet = subnetRes.value.Subnets?.[0];
+    if (sgRes.status === "fulfilled") sg = sgRes.value.SecurityGroups?.[0];
 
     STACK_PRESENT = Boolean(vpc && subnet && sg);
 
     if (STACK_PRESENT) {
-      const rtResp = await ec2.send(
+      const rts = await sendWithTimeout<{ RouteTables?: RouteTable[] }>(
         new DescribeRouteTablesCommand({
           Filters: [{ Name: "association.subnet-id", Values: [OUT.subnetId] }],
         })
       );
-      rt = (rtResp.RouteTables || [])[0];
+      rt = (rts.RouteTables || [])[0];
     }
   } catch {
     STACK_PRESENT = false;
   }
 });
-
-/* ============ Jest timeout: keep at 30s from CLI; no per-test long waits ============ */
 
 /* ============ Always-on sanity tests (no AWS calls) ============ */
 
@@ -147,7 +156,7 @@ describe("Sanity: outputs structure & security invariants (no AWS calls)", () =>
     expect(OUT.ingressRules.length).toBeGreaterThan(0);
     const flat = flattenIngressFromOutputs(OUT.ingressRules);
     for (const r of flat) {
-      expect(["tcp"]).toContain(r.protocol);
+      expect(r.protocol).toBe("tcp");
       expect([80, 443]).toContain(r.from);
       expect([80, 443]).toContain(r.to);
       expect(r.cidr).not.toBe("0.0.0.0/0");
@@ -162,10 +171,10 @@ describe("Sanity: outputs structure & security invariants (no AWS calls)", () =>
 
 /* ============ Live tests (fast) — auto-skip if stack absent ============ */
 
-const live = (name: string, fn: jest.ProvidesCallback) =>
+type TestCb = () => any | Promise<any>;
+const live = (name: string, fn: TestCb) =>
   test(name, async () => {
     if (!STACK_PRESENT) {
-      // Skip quickly if resources don’t exist (e.g., stack destroyed, stale outputs)
       console.warn("SKIP live check:", name, "(stack resources not present)");
       return;
     }
