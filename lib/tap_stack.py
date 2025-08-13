@@ -49,13 +49,13 @@ from constructs import Construct
 
 
 class TapStack(TerraformStack):
-    """Single-file production stack for AWS Fargate + optional RDS in us-east-1."""
+    """Single-file production stack for AWS Fargate + optional RDS in us-west-1."""
 
     def __init__(self, scope: Construct, construct_id: str) -> None:
         super().__init__(scope, construct_id)
 
-        # Resolve region from environment (fallback us-east-1)
-        aws_region = os.getenv("AWS_REGION", "us-east-2")
+        # Resolve region from environment (fallback us-west-1)
+        aws_region = os.getenv("AWS_REGION", "us-west-2")
 
         # Provider and local backend (no Terraform Cloud token required)
         AwsProvider(self, "aws", region=aws_region)
