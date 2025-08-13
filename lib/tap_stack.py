@@ -49,6 +49,10 @@ def calculate_ipv6_cidr(vpc_cidr: str, subnet_index: int) -> str:
         return f"2001:db8:{subnet_index:x}::/64"
 
 
+# Initialize AWS provider first
+aws_provider = aws.Provider("aws-provider", region=AWS_REGION)
+
+
 def find_existing_vpc():
     """Try to find an existing VPC that can be reused."""
     try:
@@ -118,8 +122,6 @@ def get_vpc_with_fallback():
         except Exception as fallback_error:
             raise Exception(f"Both VPC creation and default VPC fallback failed: {e}")
 
-aws_provider = aws.Provider("aws-provider", region=AWS_REGION)
-
 # Get VPC with intelligent fallback
 vpc = get_vpc_with_fallback()
 
@@ -165,9 +167,6 @@ for i, az in enumerate(availability_zones):
     ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
         lambda cidr, subnet_idx=i: calculate_ipv6_cidr(cidr, subnet_idx)
     )
-                provider=aws_provider,
-                protect=False,
-    )
     
     subnet = aws.ec2.Subnet(
         get_resource_name(f"public-subnet-{i+1}"),
@@ -197,18 +196,6 @@ route_table = aws.ec2.RouteTable(
     },
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
-            "Environment": ENVIRONMENT,
-            "Type": "Public",
-            "DeploymentID": DEPLOYMENT_ID
-        },
-        opts=pulumi.ResourceOptions(
-            provider=aws_provider,
-            protect=False,
-            delete_before_replace=True,
-            depends_on=[vpc]
-        )
-    )
-    public_subnets.append(subnet)
 
 public_route_table = aws.ec2.RouteTable(
     get_resource_name("public-rt"),
