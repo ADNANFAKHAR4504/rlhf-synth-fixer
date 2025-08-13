@@ -564,12 +564,8 @@ def create_eks_cluster(
       policy_arn="arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
       opts=ResourceOptions(provider=provider)
   )
-  aws.iam.RolePolicyAttachment(
-      "corp-eks-service-policy-attachment",
-      role=eks_role.name,
-      policy_arn="arn:aws:iam::aws:policy/AmazonEKSServicePolicy",
-      opts=ResourceOptions(provider=provider)
-  )
+  # Note: AmazonEKSServicePolicy is deprecated and no longer required for
+  # EKS clusters
 
   cluster = aws.eks.Cluster(
       "corp-eks-cluster",
@@ -782,13 +778,13 @@ def create_codepipeline(
   pipeline = aws.codepipeline.Pipeline(
       "corp-codepipeline",
       role_arn=pipeline_role.arn,
-      artifact_store=aws.codepipeline.PipelineArtifactStoreArgs(
+      artifact_stores=[aws.codepipeline.PipelineArtifactStoreArgs(
           location=artifact_bucket.bucket,
           type="S3",
           encryption_key=aws.codepipeline.PipelineArtifactStoreEncryptionKeyArgs(
               id=kms_key.id, type="KMS"
           ),
-      ),
+      )],
       stages=[
           {
               "name": "Source",
