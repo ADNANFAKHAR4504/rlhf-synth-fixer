@@ -11,7 +11,7 @@ data "aws_subnets" "default" {
 resource "aws_instance" "secure_instance" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
-  key_name               = var.key_pair_name
+  key_name               = var.key_pair_name != null ? var.key_pair_name : null
   vpc_security_group_ids = [aws_security_group.secure_web_sg.id]
   subnet_id              = data.aws_subnets.default.ids[0]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
@@ -66,8 +66,8 @@ resource "aws_instance" "secure_instance" {
     Type = "EC2Instance"
   })
 
-  # Prevent accidental termination
-  disable_api_termination = true
+  # Allow termination for automated testing
+  disable_api_termination = false
 
   lifecycle {
     ignore_changes = [ami]

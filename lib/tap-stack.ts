@@ -15,9 +15,10 @@ export class TapStack {
   public readonly awsRegion: string;
   public readonly terraformFiles: Map<string, string> = new Map();
 
-  constructor(scope: any, id: string, props?: TapStackProps) {
+  constructor(scope: unknown, id: string, props?: TapStackProps) {
     this.environmentSuffix = props?.environmentSuffix || 'dev';
-    this.stateBucket = props?.stateBucket || `iac-rlhf-tfstate-${this.awsRegion}`;
+    this.stateBucket =
+      props?.stateBucket || `iac-rlhf-tfstate-${this.awsRegion}`;
     this.stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     this.awsRegion = props?.awsRegion || 'us-east-1';
 
@@ -27,14 +28,16 @@ export class TapStack {
 
   private loadTerraformFiles(): void {
     const secureEnvPath = path.join(__dirname, 'secure_env');
-    
+
     if (fs.existsSync(secureEnvPath)) {
       const files = fs.readdirSync(secureEnvPath);
-      files.filter(file => file.endsWith('.tf')).forEach(file => {
-        const filePath = path.join(secureEnvPath, file);
-        const content = fs.readFileSync(filePath, 'utf8');
-        this.terraformFiles.set(file, content);
-      });
+      files
+        .filter(file => file.endsWith('.tf'))
+        .forEach(file => {
+          const filePath = path.join(secureEnvPath, file);
+          const content = fs.readFileSync(filePath, 'utf8');
+          this.terraformFiles.set(file, content);
+        });
     }
 
     // Also load root terraform files
@@ -59,40 +62,41 @@ export class TapStack {
   }
 
   private isValidTerraformFile(content: string): boolean {
-    // Basic Terraform syntax validation
-    const requiredBlocks = ['resource', 'variable', 'output', 'data', 'provider', 'terraform', 'locals'];
-    const blockRegex = new RegExp(`^\\s*(${requiredBlocks.join('|')})\\s+`, 'gm');
-    
-    // Check for balanced braces
+    // Basic Terraform syntax validation - check for valid content and braces
     const openBraces = (content.match(/\{/g) || []).length;
     const closeBraces = (content.match(/\}/g) || []).length;
-    
+
     return openBraces === closeBraces;
   }
 
   public hasRequiredTags(): boolean {
     // Check if common_tags includes required tags
     const localsContent = this.terraformFiles.get('locals.tf') || '';
-    const hasEnvironmentTag = localsContent.includes('Environment') && 
-                             localsContent.includes('Production');
-    const hasOwnerTag = localsContent.includes('Owner') && 
-                       localsContent.includes('SecurityTeam');
-    
+    const hasEnvironmentTag =
+      localsContent.includes('Environment') &&
+      localsContent.includes('Production');
+    const hasOwnerTag =
+      localsContent.includes('Owner') && localsContent.includes('SecurityTeam');
+
     return hasEnvironmentTag && hasOwnerTag;
   }
 
   public hasSecurityGroup(): boolean {
-    const securityGroupsContent = this.terraformFiles.get('security_groups.tf') || '';
+    const securityGroupsContent =
+      this.terraformFiles.get('security_groups.tf') || '';
     return securityGroupsContent.includes('resource "aws_security_group"');
   }
 
   public hasRestrictedPorts(): boolean {
-    const securityGroupsContent = this.terraformFiles.get('security_groups.tf') || '';
-    const hasHttpPort = securityGroupsContent.includes('from_port   = 80') &&
-                       securityGroupsContent.includes('to_port     = 80');
-    const hasHttpsPort = securityGroupsContent.includes('from_port   = 443') &&
-                        securityGroupsContent.includes('to_port     = 443');
-    
+    const securityGroupsContent =
+      this.terraformFiles.get('security_groups.tf') || '';
+    const hasHttpPort =
+      securityGroupsContent.includes('from_port   = 80') &&
+      securityGroupsContent.includes('to_port     = 80');
+    const hasHttpsPort =
+      securityGroupsContent.includes('from_port   = 443') &&
+      securityGroupsContent.includes('to_port     = 443');
+
     return hasHttpPort && hasHttpsPort;
   }
 

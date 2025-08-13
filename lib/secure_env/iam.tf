@@ -10,7 +10,7 @@ resource "aws_iam_role" "cross_account_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.trusted_account_id}:root"
+          "AWS" = "arn:aws:iam::${var.trusted_account_id}:root"
         }
         Condition = {
           StringEquals = {

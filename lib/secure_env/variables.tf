@@ -21,7 +21,7 @@ variable "instance_type" {
 }
 
 variable "key_pair_name" {
-  description = "Name of the EC2 Key Pair for instance access"
+  description = "Name of the EC2 Key Pair for instance access (optional)"
   type        = string
-  default     = "secure-env-key" # Replace with your actual key pair name
+  default     = null # No key pair by default for automated deployments
 }
