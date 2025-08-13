@@ -59,6 +59,9 @@
       },
       "us-west-2": {
         "AMI": "ami-0841edc20334f9287"
+      },
+      "ap-south-1": {
+        "AMI": "ami-0059e0da390478151"
       }
     },
     "EnvironmentMap": {
@@ -1251,10 +1254,10 @@
         "Engine": "mysql",
         "EngineVersion": "8.0.39",
         "MasterUsername": {
-          "Ref": "DBMasterUsername"
+          "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:username}}"
         },
         "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}"
         },
         "AllocatedStorage": "20",
         "StorageType": "gp3",
