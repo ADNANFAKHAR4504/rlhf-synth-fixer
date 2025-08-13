@@ -42,6 +42,7 @@ Parameters:
     Type: String
     Description: Email address for CloudWatch alarm notifications
     AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+    Default: 'example@example.com'
     ConstraintDescription: Must be a valid email address
 
 # =============================================================================
