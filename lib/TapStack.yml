@@ -17,7 +17,6 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
-    AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment suffix for resource names and API stage'
 
   LogRetentionDays:
