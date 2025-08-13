@@ -63,6 +63,14 @@ class WebApplicationStack(Stack):
       ),
       description="Subnet group for the RDS database"
     )
+    
+    # Security Group for the Web Servers (ASG)
+    web_sg = ec2.SecurityGroup(
+        self, "WebSecurityGroup",
+        vpc=vpc,
+        allow_all_outbound=True,
+        description="Allows outbound traffic from web servers"
+    )
 
     ## Ignore as DB quota is reached limit
     db_instance = rds.DatabaseInstance(
@@ -116,7 +124,8 @@ class WebApplicationStack(Stack):
       desired_capacity=1,
       min_capacity=1,
       max_capacity=3,
-      role=role
+      role=role,
+      security_group=web_sg
     )
 
     listener.add_targets("ASGTarget", port=80, targets=[asg])
