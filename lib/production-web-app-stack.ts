@@ -585,6 +585,9 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
           httpTokens: 'required', // Enforce IMDSv2
           httpPutResponseHopLimit: 1,
         },
+        monitoring: {
+          enabled: true, // Enable detailed CloudWatch monitoring
+        },
         blockDeviceMappings: [
           {
             deviceName: '/dev/xvda',
