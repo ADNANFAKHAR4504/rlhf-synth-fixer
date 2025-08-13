@@ -295,6 +295,120 @@ describe('TapStack', () => {
     });
   });
 
+  describe('Environment-Specific CIDR Configuration', () => {
+    test('dev environment uses default CIDR ranges', () => {
+      const devApp = new cdk.App();
+      const devStack = new TapStack(devApp, 'TapStackDev', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix: 'dev',
+      });
+      const devTemplate = Template.fromStack(devStack);
+
+      // Verify VPC uses default CIDR
+      devTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '172.16.0.0/16',
+      });
+
+      // Verify subnets use default CIDRs
+      devTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.16.1.0/24',
+        AvailabilityZone: 'us-east-1a',
+      });
+
+      devTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.16.2.0/24',
+        AvailabilityZone: 'us-east-1b',
+      });
+    });
+
+    test('staging environment uses staging CIDR ranges', () => {
+      const stagingApp = new cdk.App();
+      const stagingStack = new TapStack(stagingApp, 'TapStackStaging', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix: 'staging',
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      // Verify VPC uses staging CIDR
+      stagingTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '172.17.0.0/16',
+      });
+
+      // Verify subnets use staging CIDRs
+      stagingTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.17.1.0/24',
+        AvailabilityZone: 'us-east-1a',
+      });
+
+      stagingTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.17.2.0/24',
+        AvailabilityZone: 'us-east-1b',
+      });
+    });
+
+    test('prod environment uses production CIDR ranges', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'TapStackProd', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix: 'prod',
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      // Verify VPC uses production CIDR
+      prodTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '172.18.0.0/16',
+      });
+
+      // Verify subnets use production CIDRs
+      prodTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.18.1.0/24',
+        AvailabilityZone: 'us-east-1a',
+      });
+
+      prodTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.18.2.0/24',
+        AvailabilityZone: 'us-east-1b',
+      });
+    });
+
+    test('unknown environment falls back to default CIDR ranges', () => {
+      const unknownApp = new cdk.App();
+      const unknownStack = new TapStack(unknownApp, 'TapStackUnknown', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix: 'unknown',
+      });
+      const unknownTemplate = Template.fromStack(unknownStack);
+
+      // Verify VPC uses default CIDR (fallback)
+      unknownTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '172.16.0.0/16',
+      });
+
+      // Verify subnets use default CIDRs (fallback)
+      unknownTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.16.1.0/24',
+        AvailabilityZone: 'us-east-1a',
+      });
+
+      unknownTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.16.2.0/24',
+        AvailabilityZone: 'us-east-1b',
+      });
+    });
+  });
+
   describe('Naming Convention', () => {
     test('all resources follow naming convention', () => {
       // Check VPC naming
@@ -343,6 +457,38 @@ describe('TapStack', () => {
       expect(nameTag.Value).toBe(`${customSuffix}-VPC-Main`);
       expect(envTag).toBeDefined();
       expect(envTag.Value).toBe(customSuffix);
+    });
+
+    test('production environment uses production CIDR ranges', () => {
+      const productionApp = new cdk.App();
+      const productionStack = new TapStack(
+        productionApp,
+        'TapStackProduction',
+        {
+          env: {
+            account: '123456789012',
+            region: 'us-east-1',
+          },
+          environmentSuffix: 'production',
+        }
+      );
+      const productionTemplate = Template.fromStack(productionStack);
+
+      // Verify VPC uses production CIDR (should fall back to default since 'production' !== 'prod')
+      productionTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '172.16.0.0/16',
+      });
+
+      // Verify subnets use default CIDRs (fallback)
+      productionTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.16.1.0/24',
+        AvailabilityZone: 'us-east-1a',
+      });
+
+      productionTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        CidrBlock: '172.16.2.0/24',
+        AvailabilityZone: 'us-east-1b',
+      });
     });
   });
 
