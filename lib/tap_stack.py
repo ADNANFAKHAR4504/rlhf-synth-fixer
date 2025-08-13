@@ -27,6 +27,8 @@ class TapStackArgs:
     ssh_allowed_cidrs: list of CIDR blocks allowed for SSH
     cloudtrail_kms_key_arn: optional KMS key ARN for CloudTrail
     cloudtrail_enable_data_events: enable S3/Lambda data events (default True)
+    cloudtrail_create: whether to create new CloudTrail (default False)
+    cloudtrail_name: specific CloudTrail name to import if provided
     nacl_subnet_ids: list of subnet IDs to enforce NACL rules
     lambda_kms_key_arn: optional KMS key ARN to encrypt Lambda env vars
     waf_rate_limit: WAFv2 rate limit
@@ -51,6 +53,8 @@ class TapStackArgs:
     ssh_allowed_cidrs: Optional[List[str]] = None,
     cloudtrail_kms_key_arn: Optional[pulumi.Input[str]] = None,
     cloudtrail_enable_data_events: Optional[bool] = True,
+    cloudtrail_create: Optional[bool] = False,
+    cloudtrail_name: Optional[str] = None,
     nacl_subnet_ids: Optional[List[str]] = None,
     lambda_kms_key_arn: Optional[pulumi.Input[str]] = None,
     waf_rate_limit: Optional[int] = 1000,
@@ -71,6 +75,8 @@ class TapStackArgs:
     self.ssh_allowed_cidrs = ssh_allowed_cidrs or ["10.0.0.0/8"]
     self.cloudtrail_kms_key_arn = cloudtrail_kms_key_arn
     self.cloudtrail_enable_data_events = bool(cloudtrail_enable_data_events)
+    self.cloudtrail_create = bool(cloudtrail_create)
+    self.cloudtrail_name = cloudtrail_name
     self.nacl_subnet_ids = nacl_subnet_ids or []
     self.lambda_kms_key_arn = lambda_kms_key_arn
     self.waf_rate_limit = waf_rate_limit or 1000
@@ -106,6 +112,8 @@ class TapStack(pulumi.ComponentResource):
     self.ssh_allowed_cidrs = args.ssh_allowed_cidrs
     self.cloudtrail_kms_key_arn = args.cloudtrail_kms_key_arn
     self.cloudtrail_enable_data_events = args.cloudtrail_enable_data_events
+    self.cloudtrail_create = args.cloudtrail_create
+    self.cloudtrail_name = args.cloudtrail_name
     self.nacl_subnet_ids = args.nacl_subnet_ids
     self.lambda_kms_key_arn = args.lambda_kms_key_arn
     self.waf_rate_limit = args.waf_rate_limit
@@ -463,33 +471,44 @@ class TapStack(pulumi.ComponentResource):
     """Configure CloudTrail auditing with enhanced security."""
     pulumi.log.info("Configuring CloudTrail auditing...")
     
-    # Check if any CloudTrail trails already exist to avoid MaximumNumberOfTrailsExceeded
-    try:
-      existing_trails = aws.cloudtrail.get_trails()
-      if existing_trails and existing_trails.trails and len(existing_trails.trails) > 0:
-        # If trails exist, import the first one instead of creating new
-        existing_trail = existing_trails.trails[0]
-        pulumi.log.info(f"Found existing CloudTrail trail: {existing_trail.name}, importing instead of creating new")
-        
-        # Import existing trail with ignore_changes to avoid conflicts
-        cloudtrail = aws.cloudtrail.Trail(
-          f"main-cloudtrail-{self.env}",
-          name=existing_trail.name,
-          opts=ResourceOptions(
-            parent=self, 
-            protect=False,
-            import_=existing_trail.trail_arn,
-            ignore_changes=["kms_key_id", "is_multi_region_trail", "tags", "s3_bucket_name", "event_selectors"]
-          ),
-        )
-        
-        self.created_resources["cloudtrail"] = cloudtrail.name
-        self.created_resources["cloudtrail_bucket"] = existing_trail.s3_bucket_name
-        pulumi.log.info("Successfully imported existing CloudTrail trail")
-        return
-        
-    except Exception as e:
-      pulumi.log.info(f"No existing trails found or error checking trails: {e}, proceeding to create new trail")
+    # Check config gate - by default cloudtrail.create=false to avoid creating new trails
+    if not self.cloudtrail_create:
+      pulumi.log.info("CloudTrail creation disabled by config (cloudtrail.create=false)")
+      
+      # If specific CloudTrail name is provided, try to import it
+      if self.cloudtrail_name:
+        try:
+          pulumi.log.info(f"Attempting to import existing CloudTrail: {self.cloudtrail_name}")
+          existing_trail = aws.cloudtrail.get_trail(name=self.cloudtrail_name)
+          
+          # Import existing trail with ignore_changes to avoid conflicts
+          cloudtrail = aws.cloudtrail.Trail(
+            f"main-cloudtrail-{self.env}",
+            name=existing_trail.name,
+            opts=ResourceOptions(
+              parent=self, 
+              protect=False,
+              import_=existing_trail.arn,
+              ignore_changes=["s3_bucket_name", "is_multi_region_trail", "kms_key_id", "tags", "event_selectors"]
+            ),
+          )
+          
+          self.created_resources["cloudtrail"] = cloudtrail.name
+          self.created_resources["cloudtrail_bucket"] = existing_trail.s3_bucket_name
+          pulumi.log.info(f"Successfully imported existing CloudTrail trail: {self.cloudtrail_name}")
+          return
+          
+        except Exception as e:
+          pulumi.log.warn(f"Failed to import CloudTrail {self.cloudtrail_name}: {e}")
+      
+      # No trail creation - skip to avoid MaximumNumberOfTrailsExceededException
+      pulumi.log.info("Skipping CloudTrail creation to avoid MaximumNumberOfTrailsExceededException")
+      self.created_resources["cloudtrail"] = None
+      self.created_resources["cloudtrail_bucket"] = None
+      return
+    
+    # Config allows creation - proceed with CloudTrail creation
+    pulumi.log.info("CloudTrail creation enabled by config (cloudtrail.create=true)")
     
     # Create CloudTrail bucket with enhanced security and stable unique name
     import random
@@ -859,7 +878,7 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["example_dynamodb_table"] = example_table.name
 
   def _enable_guardduty_all_regions(self):
-    """Enable GuardDuty across all configured regions with proper import logic."""
+    """Enable GuardDuty across all configured regions with proper import logic and retry."""
     pulumi.log.info("Configuring GuardDuty across regions...")
     guardduty_detectors: Dict[str, pulumi.Output[str]] = {}
     
@@ -868,39 +887,43 @@ class TapStack(pulumi.ComponentResource):
       provider_name = f"guardduty-{region}-{self.environment_suffix}"
       provider = aws.Provider(provider_name, region=region)
       
-      try:
-        # Check if GuardDuty detector already exists in this region
-        existing_detector = aws.guardduty.get_detector(opts=pulumi.InvokeOptions(provider=provider))
-        
-        if existing_detector and existing_detector.id:
-          # Import existing detector with minimal inputs and ignore mismatches
-          pulumi.log.info(f"Importing existing GuardDuty detector {existing_detector.id} in {region}")
-          detector = aws.guardduty.Detector(
-            f"guardduty-{region}-{self.env}",
-            enable=True,
-            opts=ResourceOptions(
-              provider=provider,
-              import_=existing_detector.id,
-              ignore_changes=["datasources", "finding_publishing_frequency", "tags"],
-              parent=self
-            ),
-          )
-          guardduty_detectors[region] = detector.id
-        else:
-          # Create new detector if none exists
-          pulumi.log.info(f"Creating new GuardDuty detector in {region} (none found)")
-          detector = aws.guardduty.Detector(
-            f"guardduty-{region}-{self.env}",
-            enable=True,
-            tags=self._apply_tags({"Purpose": "ThreatDetection", "Region": region}),
-            opts=ResourceOptions(provider=provider, parent=self),
-          )
-          guardduty_detectors[region] = detector.id
+      # Retry logic for detector lookup
+      detector_id = None
+      for attempt in range(3):  # Brief retry as requested
+        try:
+          # Check if GuardDuty detector already exists in this region
+          existing_detector = aws.guardduty.get_detector(opts=pulumi.InvokeOptions(provider=provider))
           
-      except Exception as e:
-        pulumi.log.warn(f"Error checking existing GuardDuty in {region}: {e}")
-        # Create new detector as fallback
-        pulumi.log.info(f"Creating new GuardDuty detector in {region} (fallback)")
+          if existing_detector and existing_detector.id:
+            detector_id = existing_detector.id
+            pulumi.log.info(f"Found existing GuardDuty detector {detector_id} in {region} (attempt {attempt + 1})")
+            break
+          else:
+            pulumi.log.info(f"No GuardDuty detector found in {region} (attempt {attempt + 1})")
+            break
+            
+        except Exception as e:
+          pulumi.log.warn(f"Error checking existing GuardDuty in {region} (attempt {attempt + 1}): {e}")
+          if attempt == 2:  # Final attempt
+            pulumi.log.info(f"Failed to check GuardDuty after 3 attempts in {region}, will create new detector")
+      
+      if detector_id:
+        # Import existing detector with minimal inputs and enhanced ignore_changes
+        pulumi.log.info(f"Importing existing GuardDuty detector {detector_id} in {region}")
+        detector = aws.guardduty.Detector(
+          f"guardduty-{region}-{self.env}",
+          enable=True,
+          opts=ResourceOptions(
+            provider=provider,
+            import_=detector_id,
+            ignore_changes=["tags", "datasources", "finding_publishing_frequency"],
+            parent=self
+          ),
+        )
+        guardduty_detectors[region] = detector.id
+      else:
+        # Create new detector only on explicit "empty result"
+        pulumi.log.info(f"Creating new GuardDuty detector in {region} (explicit empty result)")
         detector = aws.guardduty.Detector(
           f"guardduty-{region}-{self.env}",
           enable=True,
