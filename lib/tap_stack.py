@@ -137,7 +137,7 @@ class TapStack(pulumi.ComponentResource):
     })
 
   def _get_resource_name(self, service: str, suffix: str = "") -> str:
-    base_name = f"{self.env}-{service}-{self.region}"
+    base_name = f"{self.env}-{service}-{self.region}{self.environment_suffix}"
     return f"{base_name}-{suffix}" if suffix else base_name
 
   def _apply_tags(self, additional_tags: Optional[Dict[str, str]] = None) -> Dict[str, str]:
@@ -463,10 +463,15 @@ class TapStack(pulumi.ComponentResource):
     """Configure CloudTrail auditing with enhanced security."""
     pulumi.log.info("Configuring CloudTrail auditing...")
     
-    # Create CloudTrail bucket with enhanced security
+    # Create CloudTrail bucket with enhanced security and unique name
+    import random
+    import string
+    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    bucket_name = f"{self._get_resource_name('cloudtrail')}-{random_suffix}"
+    
     cloudtrail_bucket = aws.s3.Bucket(
       f"cloudtrail-{self.env}",
-      bucket=self._get_resource_name("cloudtrail"),
+      bucket=bucket_name,
       versioning=aws.s3.BucketVersioningArgs(enabled=True),
       tags=self._apply_tags({"Purpose": "CloudTrailLogs"}),
       opts=ResourceOptions(parent=self, protect=True),
@@ -536,7 +541,7 @@ class TapStack(pulumi.ComponentResource):
             ),
             aws.cloudtrail.TrailEventSelectorDataResourceArgs(
               type="AWS::Lambda::Function",
-              values=["arn:aws:lambda:*"],
+              values=[f"arn:aws:lambda:{self.region}:*:function:*"],
             ),
           ],
         )
@@ -662,7 +667,13 @@ class TapStack(pulumi.ComponentResource):
   def _encrypt_lambda_env(self):
     """Configure Lambda environment variable encryption."""
     pulumi.log.info("Configuring Lambda environment variable encryption...")
-    kms_key_arn = self.lambda_kms_key_arn or "alias/aws/lambda"
+    
+    # Get the full ARN of the AWS Lambda default KMS key
+    if not self.lambda_kms_key_arn:
+      lambda_kms_alias = aws.kms.get_alias(name="alias/aws/lambda")
+      kms_key_arn = lambda_kms_alias.target_key_arn
+    else:
+      kms_key_arn = self.lambda_kms_key_arn
     
     # Create Lambda execution role with least privilege
     lambda_role = aws.iam.Role(
@@ -820,17 +831,50 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["example_dynamodb_table"] = example_table.name
 
   def _enable_guardduty_all_regions(self):
-    """Enable GuardDuty across all configured regions."""
-    pulumi.log.info("Enabling GuardDuty across regions...")
+    """Enable GuardDuty across all configured regions by importing existing detectors."""
+    pulumi.log.info("Configuring GuardDuty across regions...")
     guardduty_detectors: Dict[str, pulumi.Output[str]] = {}
+    
     for region in self.guardduty_regions:
-      detector = aws.guardduty.Detector(
-        f"guardduty-{region}-{self.env}",
-        enable=True,
-        tags=self._apply_tags({"Purpose": "ThreatDetection", "Region": region}),
-        opts=ResourceOptions(provider=aws.Provider(f"aws-{region}", region=region)),
-      )
-      guardduty_detectors[region] = detector.id
+      try:
+        # First, try to get existing GuardDuty detector
+        provider = aws.Provider(f"aws-{region}", region=region)
+        existing_detectors = aws.guardduty.get_detector(opts=pulumi.InvokeOptions(provider=provider))
+        
+        if existing_detectors and existing_detectors.id:
+          # Import existing detector
+          detector = aws.guardduty.Detector(
+            f"guardduty-{region}-{self.env}",
+            enable=True,
+            tags=self._apply_tags({"Purpose": "ThreatDetection", "Region": region}),
+            opts=ResourceOptions(
+              provider=provider,
+              import_=existing_detectors.id,
+              parent=self
+            ),
+          )
+          guardduty_detectors[region] = detector.id
+        else:
+          # Create new detector if none exists
+          detector = aws.guardduty.Detector(
+            f"guardduty-{region}-{self.env}",
+            enable=True,
+            tags=self._apply_tags({"Purpose": "ThreatDetection", "Region": region}),
+            opts=ResourceOptions(provider=provider, parent=self),
+          )
+          guardduty_detectors[region] = detector.id
+      except Exception as e:
+        pulumi.log.warn(f"Could not configure GuardDuty in region {region}: {e}")
+        # Create new detector as fallback
+        provider = aws.Provider(f"aws-{region}", region=region)
+        detector = aws.guardduty.Detector(
+          f"guardduty-{region}-{self.env}",
+          enable=True,
+          tags=self._apply_tags({"Purpose": "ThreatDetection", "Region": region}),
+          opts=ResourceOptions(provider=provider, parent=self),
+        )
+        guardduty_detectors[region] = detector.id
+        
     self.created_resources["guardduty_detectors"] = guardduty_detectors
 
   def _enable_vpc_flow_logs(self):
