@@ -120,7 +120,6 @@ resource "aws_subnet" "private" {
 
 # NAT Gateway
 resource "aws_eip" "nat" {
-  vpc  = true
   tags = local.common_tags
 }
 
