@@ -736,7 +736,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'novamodel-sec-${EnvironmentSuffix}-db'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.42'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: 20
@@ -1132,10 +1132,13 @@ Resources:
   # Application Load Balancer
   # =====================================
 
+  # lib/TapStack.yml
+
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'novamodel-${EnvironmentSuffix}-alb-${AWS::StackName}'
+      # FIX: Shortened the name to be under the 32-character limit
+      Name: !Sub 'nm-alb-${EnvironmentSuffix}'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -1144,6 +1147,7 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       Tags:
+        # The Name tag can remain long and descriptive
         - Key: Name
           Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-alb'
         - Key: Project
