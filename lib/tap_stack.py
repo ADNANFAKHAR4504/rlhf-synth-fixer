@@ -759,27 +759,32 @@ def create_codepipeline(
   )
 
   # Add S3 access for CodePipeline artifacts
+  s3_policy = pulumi.Output.all(
+      bucket_arn=artifact_bucket.arn,
+      bucket_arn_wildcard=pulumi.Output.concat(artifact_bucket.arn, "/*")
+  ).apply(lambda args: json.dumps({
+      "Version": "2012-10-17",
+      "Statement": [
+          {
+              "Effect": "Allow",
+              "Action": [
+                  "s3:GetBucketVersioning",
+                  "s3:GetObject",
+                  "s3:GetObjectVersion",
+                  "s3:PutObject"
+              ],
+              "Resource": [
+                  args["bucket_arn"],
+                  args["bucket_arn_wildcard"]
+              ]
+          }
+      ]
+  }))
+
   aws.iam.RolePolicy(
       "codepipeline-s3-policy",
       role=pipeline_role.id,
-      policy=json.dumps({
-          "Version": "2012-10-17",
-          "Statement": [
-              {
-                  "Effect": "Allow",
-                  "Action": [
-                      "s3:GetBucketVersioning",
-                      "s3:GetObject",
-                      "s3:GetObjectVersion",
-                      "s3:PutObject"
-                  ],
-                  "Resource": [
-                      artifact_bucket.arn,
-                      pulumi.Output.concat(artifact_bucket.arn, "/*")
-                  ]
-              }
-          ]
-      }),
+      policy=s3_policy,
       opts=ResourceOptions(provider=provider)
   )
 
