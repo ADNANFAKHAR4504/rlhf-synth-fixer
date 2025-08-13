@@ -1,28 +1,19 @@
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
-  DescribeContinuousBackupsCommand,
-  DescribeTableCommand,
-  DynamoDBClient,
-  ScanCommand,
-} from '@aws-sdk/client-dynamodb';
-import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import {
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
-  HeadBucketCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { beforeAll, describe, expect, test } from '@jest/globals';
-import * as fs from 'fs';
-import fetch from 'node-fetch';
-import * as path from 'path';
+import AWS from 'aws-sdk';
+import fs from 'fs';
+import https from 'https';
 import { v4 as uuidv4 } from 'uuid';
+
+// Configure AWS SDK
+AWS.config.update({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+
+// Initialize AWS services
+const s3 = new AWS.S3();
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+const lambda = new AWS.Lambda();
+const cloudwatch = new AWS.CloudWatch();
+const sns = new AWS.SNS();
 
 // CDK Stack outputs interface
 interface StackOutputs {
@@ -55,21 +46,9 @@ const mockOutputs: StackOutputs = {
   AlarmTopicArn: 'arn:aws:sns:us-east-1:***:dev-serverless-app-alarms-pr1107',
 };
 
-// Initialize AWS clients
-const awsConfig = {
-  region: process.env.AWS_REGION || 'us-east-1',
-};
-
-const dynamoClient = new DynamoDBClient(awsConfig);
-const dynamoDocClient = DynamoDBDocumentClient.from(dynamoClient);
-const s3Client = new S3Client(awsConfig);
-const lambdaClient = new LambdaClient(awsConfig);
-const cloudwatchClient = new CloudWatchClient(awsConfig);
-const snsClient = new SNSClient(awsConfig);
-
 // Helper function to load CDK outputs
 function loadCDKOutputs(): StackOutputs {
-  const outputsPath = path.join(__dirname, '../lib/TapStack.json');
+  const outputsPath = '../lib/TapStack.json';
 
   if (fs.existsSync(outputsPath)) {
     try {
@@ -86,36 +65,41 @@ function loadCDKOutputs(): StackOutputs {
   }
 }
 
-// Helper function for HTTP requests
-async function makeHttpRequest(
-  url: string,
-  options: {
-    method?: string;
-    headers?: Record<string, string>;
-    body?: string;
-  } = {}
-): Promise<{
-  statusCode: number;
-  headers: any;
-  body: string;
-}> {
-  try {
-    const response = await fetch(url, {
+// Helper function to make HTTP requests
+function makeHttpRequest(url: string, options: any = {}): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const requestOptions = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || 443,
+      path: urlObj.pathname + urlObj.search,
       method: options.method || 'GET',
       headers: options.headers || {},
-      body: options.body,
+      ...options,
+    };
+
+    const req = https.request(requestOptions, res => {
+      let data = '';
+      res.on('data', chunk => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode,
+          headers: res.headers,
+          body: data,
+        });
+      });
     });
 
-    const body = await response.text();
+    req.on('error', reject);
 
-    return {
-      statusCode: response.status,
-      headers: Object.fromEntries(response.headers.entries()),
-      body: body,
-    };
-  } catch (error) {
-    throw new Error(`HTTP request failed: ${error}`);
-  }
+    if (options.body) {
+      req.write(options.body);
+    }
+
+    req.end();
+  });
 }
 
 describe('CDK Serverless Application Integration Tests', () => {
@@ -124,7 +108,7 @@ describe('CDK Serverless Application Integration Tests', () => {
 
   beforeAll(() => {
     outputs = loadCDKOutputs();
-    console.log('Using outputs:', {
+    console.log('Using CDK outputs:', {
       ApiGatewayUrl: outputs.ApiGatewayUrl,
       DynamoDBTableName: outputs.DynamoDBTableName,
       S3BucketName: outputs.S3BucketName,
@@ -146,7 +130,7 @@ describe('CDK Serverless Application Integration Tests', () => {
       expect(body.status).toBe('healthy');
       expect(body.environment).toBeDefined();
       expect(body.timestamp).toBeDefined();
-    }, 30000);
+    });
 
     test('should get root endpoint with available endpoints list', async () => {
       if (!outputs.ApiGatewayUrl) {
@@ -161,7 +145,7 @@ describe('CDK Serverless Application Integration Tests', () => {
       expect(body.message).toContain('Serverless application is running');
       expect(body.availableEndpoints).toBeDefined();
       expect(Array.isArray(body.availableEndpoints)).toBe(true);
-    }, 30000);
+    });
 
     test('should create an item via POST /items', async () => {
       if (!outputs.ApiGatewayUrl) {
@@ -188,7 +172,7 @@ describe('CDK Serverless Application Integration Tests', () => {
       const body = JSON.parse(response.body);
       expect(body.id).toBeDefined();
       expect(body.message).toBe('Item created successfully');
-    }, 30000);
+    });
 
     test('should retrieve an item via GET /items/{id}', async () => {
       if (!outputs.ApiGatewayUrl) {
@@ -225,7 +209,7 @@ describe('CDK Serverless Application Integration Tests', () => {
       const getBody = JSON.parse(getResponse.body);
       expect(getBody.id).toBe(itemId);
       expect(getBody.data.name).toBe('Test Retrieval Item');
-    }, 30000);
+    });
 
     test('should return 404 for non-existent item', async () => {
       if (!outputs.ApiGatewayUrl) {
@@ -241,7 +225,7 @@ describe('CDK Serverless Application Integration Tests', () => {
       expect(response.statusCode).toBe(404);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Item not found');
-    }, 30000);
+    });
   });
 
   describe('DynamoDB Tests', () => {
@@ -252,22 +236,22 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new ScanCommand({
+        const params = {
           TableName: outputs.DynamoDBTableName,
           Limit: 1,
-        });
+        };
 
-        const result = await dynamoClient.send(command);
+        const result = await dynamodb.scan(params).promise();
         expect(result).toBeDefined();
-        expect(result.$metadata.httpStatusCode).toBe(200);
+        expect(result.$response.error).toBeNull();
       } catch (error: any) {
         // If table doesn't exist, this is expected in test environment
-        if (error.name !== 'ResourceNotFoundException') {
+        if (error.code !== 'ResourceNotFoundException') {
           throw error;
         }
         console.log('Table not found, which is expected in test environment');
       }
-    }, 30000);
+    });
 
     test('should verify table has correct billing mode', async () => {
       if (!outputs.DynamoDBTableName) {
@@ -276,21 +260,23 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new DescribeTableCommand({
+        const dynamodbClient = new AWS.DynamoDB();
+        const params = {
           TableName: outputs.DynamoDBTableName,
-        });
+        };
 
-        const result = await dynamoClient.send(command);
+        const result = await dynamodbClient.describeTable(params).promise();
         expect(result.Table?.BillingModeSummary?.BillingMode).toBe(
           'PAY_PER_REQUEST'
         );
       } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
+        // If table doesn't exist, this is expected in test environment
+        if (error.code !== 'ResourceNotFoundException') {
           throw error;
         }
         console.log('Table not found, which is expected in test environment');
       }
-    }, 30000);
+    });
 
     test('should verify table has point-in-time recovery enabled', async () => {
       if (!outputs.DynamoDBTableName) {
@@ -299,22 +285,26 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new DescribeContinuousBackupsCommand({
+        const dynamodbClient = new AWS.DynamoDB();
+        const params = {
           TableName: outputs.DynamoDBTableName,
-        });
+        };
 
-        const result = await dynamoClient.send(command);
+        const result = await dynamodbClient
+          .describeContinuousBackups(params)
+          .promise();
         expect(
           result.ContinuousBackupsDescription?.PointInTimeRecoveryDescription
             ?.PointInTimeRecoveryStatus
         ).toBe('ENABLED');
       } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
+        // If table doesn't exist, this is expected in test environment
+        if (error.code !== 'ResourceNotFoundException') {
           throw error;
         }
         console.log('Table not found, which is expected in test environment');
       }
-    }, 30000);
+    });
   });
 
   describe('S3 Tests', () => {
@@ -325,20 +315,21 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new HeadBucketCommand({
+        const params = {
           Bucket: outputs.S3BucketName,
-        });
+        };
 
-        const result = await s3Client.send(command);
+        const result = await s3.headBucket(params).promise();
         expect(result).toBeDefined();
-        expect(result.$metadata.httpStatusCode).toBe(200);
+        expect(result.$response.error).toBeNull();
       } catch (error: any) {
-        if (error.name !== 'NotFound' && error.name !== 'NoSuchBucket') {
+        // If bucket doesn't exist, this is expected in test environment
+        if (error.code !== 'NotFound' && error.code !== 'NoSuchBucket') {
           throw error;
         }
         console.log('Bucket not found, which is expected in test environment');
       }
-    }, 30000);
+    });
 
     test('should verify bucket has encryption enabled', async () => {
       if (!outputs.S3BucketName) {
@@ -347,21 +338,22 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new GetBucketEncryptionCommand({
+        const params = {
           Bucket: outputs.S3BucketName,
-        });
+        };
 
-        const result = await s3Client.send(command);
+        const result = await s3.getBucketEncryption(params).promise();
         expect(result.ServerSideEncryptionConfiguration).toBeDefined();
         expect(result.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
         expect(
-          result.ServerSideEncryptionConfiguration?.Rules?.[0]
-            ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+          result.ServerSideEncryptionConfiguration?.Rules[0]
+            .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
         ).toBe('AES256');
       } catch (error: any) {
+        // If bucket doesn't exist, this is expected in test environment
         if (
-          error.name !== 'NoSuchBucket' &&
-          error.name !== 'ServerSideEncryptionConfigurationNotFoundError'
+          error.code !== 'NoSuchBucket' &&
+          error.code !== 'ServerSideEncryptionConfigurationNotFoundError'
         ) {
           throw error;
         }
@@ -369,7 +361,7 @@ describe('CDK Serverless Application Integration Tests', () => {
           'Bucket encryption check failed, which may be expected in test environment'
         );
       }
-    }, 30000);
+    });
 
     test('should verify bucket has public access blocked', async () => {
       if (!outputs.S3BucketName) {
@@ -378,11 +370,11 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new GetPublicAccessBlockCommand({
+        const params = {
           Bucket: outputs.S3BucketName,
-        });
+        };
 
-        const result = await s3Client.send(command);
+        const result = await s3.getPublicAccessBlock(params).promise();
         expect(result.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
           true
         );
@@ -396,12 +388,13 @@ describe('CDK Serverless Application Integration Tests', () => {
           result.PublicAccessBlockConfiguration?.RestrictPublicBuckets
         ).toBe(true);
       } catch (error: any) {
-        if (error.name !== 'NoSuchBucket') {
+        // If bucket doesn't exist, this is expected in test environment
+        if (error.code !== 'NoSuchBucket') {
           throw error;
         }
         console.log('Bucket not found, which is expected in test environment');
       }
-    }, 30000);
+    });
 
     test('should verify bucket has versioning enabled', async () => {
       if (!outputs.S3BucketName) {
@@ -410,19 +403,20 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new GetBucketVersioningCommand({
+        const params = {
           Bucket: outputs.S3BucketName,
-        });
+        };
 
-        const result = await s3Client.send(command);
+        const result = await s3.getBucketVersioning(params).promise();
         expect(result.Status).toBe('Enabled');
       } catch (error: any) {
-        if (error.name !== 'NoSuchBucket') {
+        // If bucket doesn't exist, this is expected in test environment
+        if (error.code !== 'NoSuchBucket') {
           throw error;
         }
         console.log('Bucket not found, which is expected in test environment');
       }
-    }, 30000);
+    });
   });
 
   describe('Lambda Tests', () => {
@@ -433,24 +427,25 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new GetFunctionCommand({
+        const params = {
           FunctionName: outputs.LambdaFunctionName,
-        });
+        };
 
-        const result = await lambdaClient.send(command);
+        const result = await lambda.getFunction(params).promise();
         expect(result.Configuration).toBeDefined();
         expect(result.Configuration?.FunctionName).toContain(
           outputs.LambdaFunctionName
         );
       } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
+        // If function doesn't exist, this is expected in test environment
+        if (error.code !== 'ResourceNotFoundException') {
           throw error;
         }
         console.log(
           'Lambda function not found, which is expected in test environment'
         );
       }
-    }, 30000);
+    });
 
     test('should verify Lambda function has correct runtime', async () => {
       if (!outputs.LambdaFunctionName) {
@@ -459,21 +454,22 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new GetFunctionCommand({
+        const params = {
           FunctionName: outputs.LambdaFunctionName,
-        });
+        };
 
-        const result = await lambdaClient.send(command);
+        const result = await lambda.getFunction(params).promise();
         expect(result.Configuration?.Runtime).toBe('python3.11');
       } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
+        // If function doesn't exist, this is expected in test environment
+        if (error.code !== 'ResourceNotFoundException') {
           throw error;
         }
         console.log(
           'Lambda function not found, which is expected in test environment'
         );
       }
-    }, 30000);
+    });
 
     test('should verify Lambda function has tracing enabled', async () => {
       if (!outputs.LambdaFunctionName) {
@@ -482,21 +478,22 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new GetFunctionCommand({
+        const params = {
           FunctionName: outputs.LambdaFunctionName,
-        });
+        };
 
-        const result = await lambdaClient.send(command);
+        const result = await lambda.getFunction(params).promise();
         expect(result.Configuration?.TracingConfig?.Mode).toBe('Active');
       } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
+        // If function doesn't exist, this is expected in test environment
+        if (error.code !== 'ResourceNotFoundException') {
           throw error;
         }
         console.log(
           'Lambda function not found, which is expected in test environment'
         );
       }
-    }, 30000);
+    });
 
     test('should verify Lambda function has environment variables', async () => {
       if (!outputs.LambdaFunctionName) {
@@ -505,25 +502,26 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new GetFunctionCommand({
+        const params = {
           FunctionName: outputs.LambdaFunctionName,
-        });
+        };
 
-        const result = await lambdaClient.send(command);
+        const result = await lambda.getFunction(params).promise();
         const envVars = result.Configuration?.Environment?.Variables;
         expect(envVars).toBeDefined();
         expect(envVars?.ENVIRONMENT).toBeDefined();
         expect(envVars?.DYNAMODB_TABLE).toBeDefined();
         expect(envVars?.S3_BUCKET).toBeDefined();
       } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
+        // If function doesn't exist, this is expected in test environment
+        if (error.code !== 'ResourceNotFoundException') {
           throw error;
         }
         console.log(
           'Lambda function not found, which is expected in test environment'
         );
       }
-    }, 30000);
+    });
   });
 
   describe('CloudWatch Alarms Tests', () => {
@@ -534,17 +532,17 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new DescribeAlarmsCommand({
-          AlarmNamePrefix: 'dev-',
-        });
+        const params = {
+          AlarmNamePrefix: `dev-`,
+        };
 
-        const result = await cloudwatchClient.send(command);
+        const result = await cloudwatch.describeAlarms(params).promise();
         expect(result.MetricAlarms).toBeDefined();
         expect(Array.isArray(result.MetricAlarms)).toBe(true);
 
         // Check for specific alarms
         const alarmNames =
-          result.MetricAlarms?.map(alarm => alarm.AlarmName) || [];
+          result.MetricAlarms?.map((alarm: any) => alarm.AlarmName) || [];
         const expectedAlarmTypes = [
           'lambda-error-rate',
           'lambda-duration',
@@ -555,13 +553,15 @@ describe('CDK Serverless Application Integration Tests', () => {
         ];
 
         expectedAlarmTypes.forEach(alarmType => {
-          const hasAlarm = alarmNames.some(name => name?.includes(alarmType));
+          const hasAlarm = alarmNames.some((name: any) =>
+            name?.includes(alarmType)
+          );
           expect(hasAlarm).toBe(true);
         });
       } catch (error) {
         console.log('CloudWatch alarms check failed:', error);
       }
-    }, 30000);
+    });
   });
 
   describe('End-to-End Workflow Tests', () => {
@@ -611,14 +611,14 @@ describe('CDK Serverless Application Integration Tests', () => {
       // Verify the item exists in DynamoDB (if we have access)
       if (outputs.DynamoDBTableName) {
         try {
-          const command = new GetCommand({
+          const params = {
             TableName: outputs.DynamoDBTableName,
             Key: {
               id: itemId,
             },
-          });
+          };
 
-          const dbResult = await dynamoDocClient.send(command);
+          const dbResult = await dynamodb.get(params).promise();
           expect(dbResult.Item).toBeDefined();
           expect(dbResult.Item?.id).toBe(itemId);
         } catch (error: any) {
@@ -626,7 +626,7 @@ describe('CDK Serverless Application Integration Tests', () => {
           console.log('Direct DynamoDB verification skipped:', error.message);
         }
       }
-    }, 30000);
+    });
 
     test('should handle concurrent requests properly', async () => {
       if (!outputs.ApiGatewayUrl) {
@@ -662,7 +662,7 @@ describe('CDK Serverless Application Integration Tests', () => {
         expect(body.id).toBeDefined();
         expect(body.message).toBe('Item created successfully');
       });
-    }, 30000);
+    });
   });
 
   describe('Error Handling Tests', () => {
@@ -684,7 +684,7 @@ describe('CDK Serverless Application Integration Tests', () => {
       expect(response.statusCode).toBe(500);
       const body = JSON.parse(response.body);
       expect(body.error).toBeDefined();
-    }, 30000);
+    });
 
     test('should handle missing required fields', async () => {
       if (!outputs.ApiGatewayUrl) {
@@ -702,7 +702,7 @@ describe('CDK Serverless Application Integration Tests', () => {
 
       // Should still create item even with empty data
       expect(response.statusCode).toBe(201);
-    }, 30000);
+    });
   });
 
   describe('SNS Topic Tests', () => {
@@ -713,21 +713,23 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const command = new GetTopicAttributesCommand({
-          TopicArn: outputs.AlarmTopicArn,
-        });
+        const topicArn = outputs.AlarmTopicArn;
+        const params = {
+          TopicArn: topicArn,
+        };
 
-        const result = await snsClient.send(command);
+        const result = await sns.getTopicAttributes(params).promise();
         expect(result.Attributes).toBeDefined();
-        expect(result.Attributes?.TopicArn).toBe(outputs.AlarmTopicArn);
+        expect(result.Attributes?.TopicArn).toBe(topicArn);
       } catch (error: any) {
-        if (error.name !== 'NotFound') {
+        // If topic doesn't exist, this is expected in test environment
+        if (error.code !== 'NotFound') {
           throw error;
         }
         console.log(
           'SNS topic not found, which is expected in test environment'
         );
       }
-    }, 30000);
+    });
   });
 });
