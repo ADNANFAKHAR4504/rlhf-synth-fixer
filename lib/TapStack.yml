@@ -667,7 +667,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${ProjectNameLower}-ctlogs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'ct-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
