@@ -277,7 +277,7 @@ Resources:
         Mode: Active
       Environment:
         Variables:
-          ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
+          ENVIRONMENT: !Ref EnvironmentSuffix
           DYNAMODB_TABLE: !Ref ApplicationTable
           S3_BUCKET: !Ref StaticContentBucket
           LOG_LEVEL: INFO

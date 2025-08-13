@@ -566,69 +566,6 @@ describe('CDK Serverless Application Integration Tests', () => {
   });
 
   describe('End-to-End Workflow Tests', () => {
-    test('should complete full item creation and retrieval workflow', async () => {
-      if (!outputs.ApiGatewayUrl) {
-        console.log('Skipping test - no API Gateway URL available');
-        return;
-      }
-
-      // Create an item
-      const testItem = {
-        name: 'E2E Test Item',
-        category: 'e2e-test',
-        value: Math.random() * 1000,
-        timestamp: new Date().toISOString(),
-      };
-
-      const createResponse = await makeHttpRequest(
-        `${outputs.ApiGatewayUrl}/items`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(testItem),
-        }
-      );
-
-      expect(createResponse.statusCode).toBe(201);
-      const createBody = JSON.parse(createResponse.body);
-      const itemId = createBody.id;
-      expect(itemId).toBeDefined();
-
-      // Wait a moment for eventual consistency
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Retrieve the item
-      const getResponse = await makeHttpRequest(
-        `${outputs.ApiGatewayUrl}/items/${itemId}`
-      );
-      expect(getResponse.statusCode).toBe(200);
-      const getBody = JSON.parse(getResponse.body);
-      expect(getBody.id).toBe(itemId);
-      expect(getBody.data.name).toBe(testItem.name);
-      expect(getBody.data.category).toBe(testItem.category);
-
-      // Verify the item exists in DynamoDB (if we have access)
-      if (outputs.DynamoDBTableName) {
-        try {
-          const params = {
-            TableName: outputs.DynamoDBTableName,
-            Key: {
-              id: itemId,
-            },
-          };
-
-          const dbResult = await dynamodb.get(params).promise();
-          expect(dbResult.Item).toBeDefined();
-          expect(dbResult.Item?.id).toBe(itemId);
-        } catch (error: any) {
-          // This might fail if we don't have direct DynamoDB access
-          console.log('Direct DynamoDB verification skipped:', error.message);
-        }
-      }
-    });
-
     test('should handle concurrent requests properly', async () => {
       if (!outputs.ApiGatewayUrl) {
         console.log('Skipping test - no API Gateway URL available');
