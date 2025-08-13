@@ -23,7 +23,6 @@ export class TapStack extends cdk.Stack {
       description: 'KMS key for secure web application encryption',
       enableKeyRotation: true,
       policy: new iam.PolicyDocument({
-  
         statements: [
           new iam.PolicyStatement({
             sid: 'Enable IAM User Permissions',

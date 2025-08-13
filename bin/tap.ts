@@ -25,4 +25,3 @@ new TapStack(app, stackName, {
     region: 'ap-northeast-1',
   },
 });
-
