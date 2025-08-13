@@ -300,15 +300,15 @@ class TapStack(TerraformStack):
       bucket_name_for_output = existing_bucket_name
     else:
       # Preserve attributes expected by existing tests
-    self.bucket_versioning = {"enabled": True}
-    self.bucket_encryption = {
-      "rule": {
-        "apply_server_side_encryption_by_default": {"sse_algorithm": "AES256"}
+      self.bucket_versioning = {"enabled": True}
+      self.bucket_encryption = {
+        "rule": {
+          "apply_server_side_encryption_by_default": {"sse_algorithm": "AES256"}
+        }
       }
-    }
-    self.bucket = S3Bucket(
-      self,
-      "tap_bucket",
+      self.bucket = S3Bucket(
+        self,
+        "tap_bucket",
         bucket=f"secure-app-bucket{construct_id.lower()}",
         tags={"Environment": "Production", "Name": "secure-app-bucket"},
       )
