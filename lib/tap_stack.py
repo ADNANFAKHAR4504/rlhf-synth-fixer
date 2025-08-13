@@ -827,20 +827,6 @@ class TapStack(pulumi.ComponentResource):
       detector = aws.guardduty.Detector(
         f"guardduty-{region}-{self.env}",
         enable=True,
-        finding_publishing_frequency="FIFTEEN_MINUTES",
-        datasources=aws.guardduty.DetectorDatasourcesArgs(
-          s3_logs=aws.guardduty.DetectorDatasourcesS3LogsArgs(enable=True),
-          kubernetes=aws.guardduty.DetectorDatasourcesKubernetesArgs(
-            audit_logs=aws.guardduty.DetectorDatasourcesKubernetesAuditLogsArgs(enable=True)
-          ),
-          malware_protection=aws.guardduty.DetectorDatasourcesMalwareProtectionArgs(
-            scan_ec2_instance_with_findings=aws.guardduty.DetectorDatasourcesMalwareProtectionScanEc2InstanceWithFindingsArgs(
-              ebs_volumes=aws.guardduty.DetectorDatasourcesMalwareProtectionScanEc2InstanceWithFindingsEbsVolumesArgs(
-                auto_enable=True
-              )
-            )
-          ),
-        ),
         tags=self._apply_tags({"Purpose": "ThreatDetection", "Region": region}),
         opts=ResourceOptions(provider=aws.Provider(f"aws-{region}", region=region)),
       )
