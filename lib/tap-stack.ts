@@ -34,6 +34,39 @@ export class TapStack extends cdk.Stack {
       keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
       keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      policy: new iam.PolicyDocument({
+        statements: [
+          // Allow root account permissions
+          new iam.PolicyStatement({
+            sid: 'Enable IAM User Permissions',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.AccountRootPrincipal()],
+            actions: ['kms:*'],
+            resources: ['*'],
+          }),
+          // Allow CloudWatch Logs service to use the key
+          new iam.PolicyStatement({
+            sid: 'Allow CloudWatch Logs access',
+            effect: iam.Effect.ALLOW,
+            principals: [
+              new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+            ],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+            conditions: {
+              ArnLike: {
+                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:*`,
+              },
+            },
+          }),
+        ],
+      }),
     });
 
     // Create a VPC instead of looking up default VPC to avoid synthesis issues
