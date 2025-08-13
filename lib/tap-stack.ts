@@ -25,6 +25,7 @@ export class TapStack extends cdk.Stack {
     // Database password parameter
     const dbPassword = new cdk.CfnParameter(this, 'DatabasePassword', {
       type: 'String',
+      default: 'ChangeMe1234',
       description: 'Password for RDS database',
       noEcho: true,
       minLength: 8,
