@@ -510,7 +510,7 @@ Resources:
   AppInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp3}}"
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp2}}"
       InstanceType: t3.micro
       IamInstanceProfile: !Ref EC2InstanceProfile
       SubnetId: !Ref PublicSubnetA
