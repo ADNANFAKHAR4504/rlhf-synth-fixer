@@ -1,20 +1,66 @@
-# provider.tf
-
 terraform {
-  required_version = ">= 1.4.0"
+  required_version = ">= 1.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = "~> 5.0"
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
+  backend "s3" {
+    # Configure this with your actual backend bucket
+    # Uncomment and configure after initial deployment
+    # bucket         = "s3-myproject-terraform-state"
+    # key            = "staging/terraform.tfstate"
+    # region         = "us-east-1"
+    # dynamodb_table = "dynamodb-myproject-terraform-locks"
+    # encrypt        = true
+  }
 }
 
-# Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
+
+  # Default tags applied to all resources
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "terraform"
+      Owner       = "devops-team"
+      CostCenter  = "engineering"
+      CreatedBy   = "terraform-pipeline"
+    }
+  }
+}
+
+# Data source to get current AWS account ID
+data "aws_caller_identity" "current" {}
+
+# Data source to get current AWS region
+data "aws_region" "current" {}
+
+# Local values for consistent naming
+locals {
+  account_id = data.aws_caller_identity.current.account_id
+  region     = data.aws_region.current.name
+
+  # Common naming prefix
+  name_prefix = "${var.project_name}-${var.environment}"
+
+  # Resource naming convention: <resource-type>-myproject-<identifier>
+  s3_artifacts_name   = "s3-${var.project_name}-artifacts"
+  s3_terraform_state  = "s3-${var.project_name}-terraform-state"
+  iam_circleci_role   = "iam-${var.project_name}-circleci-role"
+  iam_circleci_policy = "iam-${var.project_name}-circleci-policy"
+  logs_app_group      = "logs-${var.project_name}-${var.environment}"
+  dynamodb_tf_locks   = "dynamodb-${var.project_name}-terraform-locks"
+
+  # Common tags
+  common_tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
 }
