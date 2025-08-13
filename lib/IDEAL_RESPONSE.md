@@ -1,1 +1,1 @@
-Ideal Response yet to be formed
+Ideal Response yet to be
