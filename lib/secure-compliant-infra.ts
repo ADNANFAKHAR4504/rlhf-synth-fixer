@@ -67,6 +67,33 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         `${projectName}-${environment}-kms-${region}`,
         {
           description: `KMS key for ${projectName} ${environment} in ${region}`,
+          policy: pulumi.output(aws.getCallerIdentity({})).apply(identity =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'Enable IAM User Permissions',
+                  Effect: 'Allow',
+                  Principal: { AWS: `arn:aws:iam::${identity.accountId}:root` },
+                  Action: 'kms:*',
+                  Resource: '*',
+                },
+                {
+                  Sid: 'Allow CloudTrail to encrypt logs',
+                  Effect: 'Allow',
+                  Principal: { Service: 'cloudtrail.amazonaws.com' },
+                  Action: [
+                    'kms:GenerateDataKey*',
+                    'kms:DescribeKey',
+                    'kms:Encrypt',
+                    'kms:ReEncrypt*',
+                    'kms:Decrypt',
+                  ],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
           tags: commonTags,
         },
         { provider, parent: this }
