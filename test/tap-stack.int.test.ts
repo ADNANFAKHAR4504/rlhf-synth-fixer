@@ -49,11 +49,18 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
     });
 
     test('Lambda function processes test payload correctly', async () => {
-      // ...existing code...
       const command = new InvokeCommand({
         FunctionName: outputs.LambdaFunctionName,
-        InvocationType: 'DryRun',
+        InvocationType: 'RequestResponse', // Change from DryRun to RequestResponse
+        Payload: Buffer.from(
+          JSON.stringify({
+            body: JSON.stringify({
+              image_key: 'test-image.jpg',
+            }),
+          })
+        ),
       });
+
       const response = await lambdaClient.send(command);
       const rawPayload = response.Payload
         ? Buffer.from(response.Payload).toString()
@@ -76,23 +83,24 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
         parsedPayload = rawPayload;
       }
 
-      expect(response.StatusCode).toBe(204);
+      expect(response.StatusCode).toBe(200);
       expect(parsedPayload).toBeDefined();
 
-      // More flexible status code check
-      const statusCode =
-        parsedPayload.statusCode ||
-        parsedPayload.StatusCode ||
-        (parsedPayload.body && JSON.parse(parsedPayload.body).statusCode);
-
-      expect(statusCode).toBeDefined();
+      // Check the actual response structure
+      expect(
+        parsedPayload.statusCode || parsedPayload.StatusCode
+      ).toBeDefined();
     });
 
     test('Lambda function handles missing parameters correctly', async () => {
-      // ...existing code...
       const command = new InvokeCommand({
         FunctionName: outputs.LambdaFunctionName,
-        InvocationType: 'DryRun',
+        InvocationType: 'RequestResponse', // Change from DryRun to RequestResponse
+        Payload: Buffer.from(
+          JSON.stringify({
+            body: JSON.stringify({}), // Empty body to trigger missing parameter error
+          })
+        ),
       });
 
       const response = await lambdaClient.send(command);
@@ -114,16 +122,20 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
         parsedPayload = rawPayload;
       }
 
-      expect(response.StatusCode).toBe(204);
+      expect(response.StatusCode).toBe(200);
       expect(parsedPayload).toBeDefined();
 
-      // Get error message from various possible locations
-      const errorMessage =
-        (parsedPayload.body && typeof parsedPayload.body === 'string'
-          ? JSON.parse(parsedPayload.body).error
-          : parsedPayload.body?.error) || parsedPayload.error;
+      // Parse the body if it's a string
+      const body =
+        typeof parsedPayload.body === 'string'
+          ? JSON.parse(parsedPayload.body)
+          : parsedPayload.body;
 
-      expect(errorMessage).toMatch(/missing|invalid|required/i);
+      // Check for error message in various locations
+      const errorMessage = body?.error || parsedPayload.error;
+      expect(errorMessage).toBeDefined();
+      expect(typeof errorMessage).toBe('string');
+      expect(errorMessage.toLowerCase()).toMatch(/missing|invalid|required/i);
     });
   });
 
