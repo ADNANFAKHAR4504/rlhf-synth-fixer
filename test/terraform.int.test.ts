@@ -63,16 +63,24 @@ const ec2 = new EC2Client({
   maxAttempts: 1, // no SDK retries
 });
 
-/** Send a command with an AbortController timeout (default 2000ms). */
+/** Send a command with a hard timeout (default 2000ms). No extra deps. */
 async function sendWithTimeout<T>(
-  cmd: Parameters<typeof ec2.send>[0],
+  cmd: any,
   ms = Number(process.env.TEST_HTTP_TIMEOUT_MS || 2000)
 ): Promise<T> {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), ms);
+
+  // Some SDK versions accept { abortSignal }; some typings don’t. Use `any` safely.
+  const reqPromise = (ec2 as any).send(cmd, { abortSignal: ac.signal }) as Promise<T>;
+
+  // Hard timeout via race
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`request timeout after ${ms}ms`)), ms)
+  );
+
   try {
-    // @ts-expect-error second arg exists at runtime; types are permissive in v3
-    return (await ec2.send(cmd, { abortSignal: ac.signal })) as T;
+    return await Promise.race([reqPromise, timeoutPromise]);
   } finally {
     clearTimeout(timer);
   }
