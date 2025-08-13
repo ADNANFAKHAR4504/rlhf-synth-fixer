@@ -1644,6 +1644,80 @@
         ]
       }
     },
+    "CloudTrail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "DependsOn": [
+        "CloudTrailBucketPolicy"
+      ],
+      "Properties": {
+        "TrailName": {
+          "Fn::Sub": "${Environment}-cloudtrail-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "CloudTrailBucket"
+        },
+        "S3KeyPrefix": "AWSLogs",
+        "CloudWatchLogsLogGroupArn": {
+          "Fn::GetAtt": [
+            "CloudTrailLogGroup",
+            "Arn"
+          ]
+        },
+        "CloudWatchLogsRoleArn": {
+          "Fn::GetAtt": [
+            "CloudTrailRole",
+            "Arn"
+          ]
+        },
+        "IncludeGlobalServiceEvents": true,
+        "IsMultiRegionTrail": true,
+        "EnableLogFileValidation": true,
+        "IsLogging": true,
+        "KMSKeyId": {
+          "Ref": "KMSKey"
+        },
+        "EventSelectors": [
+          {
+            "ReadWriteType": "All",
+            "IncludeManagementEvents": true,
+            "DataResources": [
+              {
+                "Type": "AWS::S3::Object",
+                "Values": [
+                  "arn:aws:s3:::*/*"
+                ]
+              }
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-CloudTrail-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
     "ConfigBucket": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy": "Delete",
@@ -1833,8 +1907,27 @@
         ]
       }
     },
+    "ConfigRecorder": {
+      "Type": "AWS::Config::ConfigurationRecorder",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-config-recorder-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "ConfigRecorderRole",
+            "Arn"
+          ]
+        },
+        "RecordingGroup": {
+          "AllSupported": true,
+          "IncludeGlobalResourceTypes": true
+        }
+      }
+    },
     "ConfigDeliveryChannel": {
       "Type": "AWS::Config::DeliveryChannel",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "Name": {
           "Fn::Sub": "${Environment}-config-delivery-${EnvironmentSuffix}"
@@ -1849,6 +1942,7 @@
     },
     "ConfigRuleS3PublicRead": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-public-read-prohibited-${EnvironmentSuffix}"
@@ -1862,6 +1956,7 @@
     },
     "ConfigRuleS3PublicWrite": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-public-write-prohibited-${EnvironmentSuffix}"
@@ -1875,6 +1970,7 @@
     },
     "ConfigRuleRDSEncrypted": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "rds-storage-encrypted-${EnvironmentSuffix}"
@@ -1888,6 +1984,7 @@
     },
     "ConfigRuleUnrestrictedSSH": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "restricted-ssh-${EnvironmentSuffix}"
@@ -2441,7 +2538,7 @@
     "CloudTrailName": {
       "Description": "CloudTrail Trail Name",
       "Value": {
-        "Ref": "ExistingCloudTrailName"
+        "Ref": "CloudTrail"
       },
       "Export": {
         "Name": {
@@ -2452,7 +2549,7 @@
     "ConfigRecorderName": {
       "Description": "AWS Config Recorder Name",
       "Value": {
-        "Ref": "ExistingConfigRecorderName"
+        "Ref": "ConfigRecorder"
       },
       "Export": {
         "Name": {
