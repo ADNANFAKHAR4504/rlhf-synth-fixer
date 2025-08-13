@@ -200,7 +200,7 @@ describe('TapStack Unit Tests', () => {
         'tap-rds',
         {
           environmentSuffix: 'test',
-          privateSubnetIds: ['mock-private-subnet-1', 'mock-private-subnet-2'],
+          privateSubnetIds: expect.any(Object), // This will be a pulumi.all() result
           dbSecurityGroupId: 'mock-db-sg-id',
           rdsKmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/mock-rds-key',
           dbSecretArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:placeholder',
@@ -216,7 +216,7 @@ describe('TapStack Unit Tests', () => {
         'tap-ec2',
         {
           environmentSuffix: 'test',
-          privateSubnetIds: ['mock-private-subnet-1', 'mock-private-subnet-2'],
+          privateSubnetIds: expect.any(Object), // This will be a pulumi.all() result
           webSecurityGroupId: 'mock-web-sg-id',
           ec2InstanceProfileName: 'mock-ec2-profile',
           mainKmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/mock-main-key',

@@ -11,7 +11,7 @@ import { ResourceOptions } from '@pulumi/pulumi';
 export interface Ec2StackArgs {
   environmentSuffix?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
-  privateSubnetIds: pulumi.Input<string>[];
+  privateSubnetIds: pulumi.Input<string[]>;
   webSecurityGroupId: pulumi.Input<string>;
   ec2InstanceProfileName: pulumi.Input<string>;
   mainKmsKeyArn: pulumi.Input<string>;

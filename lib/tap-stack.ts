@@ -141,12 +141,15 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Convert array of outputs to single output array for RDS
+    const privateSubnetIdsArray = pulumi.all(vpcStack.privateSubnetIds);
+
     // 6. Create RDS instance with encryption
     const rdsStack = new RdsStack(
       'tap-rds',
       {
         environmentSuffix,
-        privateSubnetIds: vpcStack.privateSubnetIds,
+        privateSubnetIds: privateSubnetIdsArray,
         dbSecurityGroupId: securityGroupStack.dbSecurityGroupId,
         rdsKmsKeyArn: kmsStack.rdsKeyArn,
         dbSecretArn:
@@ -162,7 +165,7 @@ export class TapStack extends pulumi.ComponentResource {
       'tap-ec2',
       {
         environmentSuffix,
-        privateSubnetIds: vpcStack.privateSubnetIds,
+        privateSubnetIds: privateSubnetIdsArray,
         webSecurityGroupId: securityGroupStack.webSecurityGroupId,
         ec2InstanceProfileName: iamStack.ec2InstanceProfileName,
         mainKmsKeyArn: kmsStack.mainKeyArn,
