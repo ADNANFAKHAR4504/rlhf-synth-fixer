@@ -76,15 +76,33 @@ def test_db_subnet_group_created(stack_template):
   })
   
 def test_asg_created_and_configured(stack_template):
-  """Verifies the Auto Scaling Group has the correct configuration, including a security group."""
+  """Verifies the Auto Scaling Group and its Launch Configuration have the correct configuration."""
+  
+  # Check for the ASG itself
   stack_template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
   stack_template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
     "DesiredCapacity": "1",
     "MinSize": "1",
     "MaxSize": "3",
-    "LaunchConfigurationName": Match.any_value(),
-    "SecurityGroups": [Match.any_value()], # Now correctly checks for the presence of a security group
-    "VPCZoneIdentifier": Match.any_value()
+    "VPCZoneIdentifier": Match.any_value(),
+    "LaunchConfigurationName": Match.any_value()
+  })
+
+  # Check for the Launch Configuration and ensure it has a security group
+  stack_template.resource_count_is("AWS::AutoScaling::LaunchConfiguration", 1)
+  stack_template.has_resource_properties("AWS::AutoScaling::LaunchConfiguration", {
+      "SecurityGroups": [Match.any_value()]
+  })
+  
+  # Check for the scaling policy
+  stack_template.has_resource_properties("AWS::AutoScaling::ScalingPolicy", {
+    "PolicyType": "TargetTrackingScaling",
+    "TargetTrackingConfiguration": {
+      "PredefinedMetricSpecification": {
+        "PredefinedMetricType": "ASGAverageCPUUtilization"
+      },
+      "TargetValue": 50.0
+    }
   })
 
 def test_s3_bucket_created_with_correct_removal_policy(stack_template):

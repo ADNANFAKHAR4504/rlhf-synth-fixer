@@ -55,6 +55,12 @@ class WebApplicationStack(Stack):
       description="Allows access to the RDS database"
     )
 
+    db_sg.add_ingress_rule(
+      peer=web_sg,
+      connection=ec2.Port.tcp(3306),
+      description="Allow MySQL access from web servers"
+    )
+    
     db_subnet_group = rds.SubnetGroup(
       self, "DBSubnetGroup1",
       vpc=vpc,
@@ -66,10 +72,16 @@ class WebApplicationStack(Stack):
     
     # Security Group for the Web Servers (ASG)
     web_sg = ec2.SecurityGroup(
-        self, "WebSecurityGroup1",
-        vpc=vpc,
-        allow_all_outbound=True,
-        description="Allows outbound traffic from web servers"
+      self, "WebSecurityGroup1",
+      vpc=vpc,
+      allow_all_outbound=True,
+      description="Allows outbound traffic from web servers"
+    )
+    
+    web_sg.add_ingress_rule(
+      peer=ec2.Peer.ipv4(vpc.vpc_cidr_block),
+      connection=ec2.Port.tcp(80),
+      description="Allow HTTP traffic from within the VPC"
     )
 
     ## Ignore as DB quota is reached limit
