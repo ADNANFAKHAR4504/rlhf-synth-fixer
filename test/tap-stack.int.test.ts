@@ -85,7 +85,7 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
         parsedPayload = rawPayload;
       }
 
-      expect(response.StatusCode).toBeOneOf([200, 204]);
+      expect(response.StatusCode).toBe([200, 204]);
       expect(parsedPayload).toBeDefined();
 
       // Check for status code in different possible locations
@@ -133,7 +133,7 @@ describe('Serverless Image Processing Infrastructure - Integration Tests', () =>
         parsedPayload = rawPayload;
       }
 
-      expect(response.StatusCode).toBeOneOf([200, 204]);
+      expect(response.StatusCode).toBe([200, 204]);
       expect(parsedPayload).toBeDefined();
 
       // Check for error message in multiple possible locations
