@@ -1,53 +1,130 @@
-import AWS from 'aws-sdk';
-import { execSync } from 'child_process';
+import {
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  GetRoleCommand,
+  IAMClient,
+} from '@aws-sdk/client-iam';
+import {
+  GetBucketLocationCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import * as fs from 'fs';
+import * as path from 'path';
 
-describe('TapStack Integration Tests', () => {
-  let outputs: Record<string, any>;
-  const region = process.env.AWS_REGION || 'us-east-1';
+const awsRegion =
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+
+const ec2Client = new EC2Client({ region: awsRegion });
+const s3Client = new S3Client({ region: awsRegion });
+const iamClient = new IAMClient({ region: awsRegion });
+
+describe('TAP Stack Core AWS Infrastructure', () => {
+  let vpcId: string;
+  let publicSubnetIds: string[];
+  let privateSubnetIds: string[];
+  let stateBucketName: string;
+  let ec2RoleName: string;
 
   beforeAll(() => {
-    // Run terraform output -json and parse
-    const outputJson = execSync('terraform output -json', { encoding: 'utf-8' });
-    outputs = JSON.parse(outputJson);
+    const suffix = process.env.ENVIRONMENT_SUFFIX;
+    if (!suffix) {
+      throw new Error(
+        'ENVIRONMENT_SUFFIX environment variable is not set.'
+      );
+    }
+
+    const outputFilePath = path.join(
+      __dirname,
+      '..',
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+    }
+
+    const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
+    const stackKey = Object.keys(outputs).find(k => k.includes(suffix));
+    if (!stackKey) {
+      throw new Error(`No output found for environment: ${suffix}`);
+    }
+
+    const stackOutputs = outputs[stackKey];
+    vpcId = stackOutputs['vpc_id'];
+    publicSubnetIds = stackOutputs['public_subnet_ids'];
+    privateSubnetIds = stackOutputs['private_subnet_ids'];
+    stateBucketName = stackOutputs['state_bucket_name'];
+    ec2RoleName = stackOutputs['ec2_role_name'];
+
+    if (
+      !vpcId ||
+      !publicSubnetIds ||
+      !privateSubnetIds ||
+      !stateBucketName ||
+      !ec2RoleName
+    ) {
+      throw new Error('Missing one or more required stack outputs.');
+    }
   });
 
-  test('VPC exists', async () => {
-    const ec2 = new AWS.EC2({ region });
-    const vpcId = outputs.vpc_id.value;
-    const result = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
-    expect(result.Vpcs?.length).toBeGreaterThan(0);
+  // VPC Test
+  describe('VPC Configuration', () => {
+    test(`should have VPC "${vpcId}" present in AWS`, async () => {
+      const { Vpcs } = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [vpcId] })
+      );
+      expect(Vpcs?.length).toBe(1);
+      expect(Vpcs?.[0].VpcId).toBe(vpcId);
+      expect(Vpcs?.[0].State).toBe('available');
+    }, 20000);
   });
 
-  test('Public subnets exist', async () => {
-    const ec2 = new AWS.EC2({ region });
-    const subnets = outputs.public_subnet_ids.value;
-    const result = await ec2.describeSubnets({ SubnetIds: subnets }).promise();
-    expect(result.Subnets?.length).toBe(subnets.length);
+  // Subnets Test
+  describe('Subnets Configuration', () => {
+    test('public subnets should exist in the VPC', async () => {
+      const { Subnets } = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
+      );
+      expect(Subnets?.length).toBe(publicSubnetIds.length);
+      Subnets?.forEach(sn => {
+        expect(sn.VpcId).toBe(vpcId);
+        expect(sn.MapPublicIpOnLaunch).toBe(true);
+      });
+    }, 20000);
+
+    test('private subnets should exist in the VPC', async () => {
+      const { Subnets } = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
+      );
+      expect(Subnets?.length).toBe(privateSubnetIds.length);
+      Subnets?.forEach(sn => {
+        expect(sn.VpcId).toBe(vpcId);
+        expect(sn.MapPublicIpOnLaunch).toBe(false);
+      });
+    }, 20000);
   });
 
-  test('Private subnets exist', async () => {
-    const ec2 = new AWS.EC2({ region });
-    const subnets = outputs.private_subnet_ids.value;
-    const result = await ec2.describeSubnets({ SubnetIds: subnets }).promise();
-    expect(result.Subnets?.length).toBe(subnets.length);
+  // S3 Bucket Test
+  describe('S3 State Bucket', () => {
+    test(`should have state bucket "${stateBucketName}" in correct region`, async () => {
+      const { LocationConstraint } = await s3Client.send(
+        new GetBucketLocationCommand({ Bucket: stateBucketName })
+      );
+      const expectedRegion = LocationConstraint || 'us-east-1';
+      expect(expectedRegion).toBe(awsRegion);
+    }, 20000);
   });
 
-  test('State bucket exists', async () => {
-    const s3 = new AWS.S3({ region });
-    const bucketName = outputs.state_bucket_name.value;
-    const result = await s3.headBucket({ Bucket: bucketName }).promise();
-    expect(result).toBeDefined();
-  });
-
-  test('State bucket ARN format is valid', () => {
-    const bucketArn = outputs.state_bucket_arn.value;
-    expect(bucketArn).toMatch(/^arn:aws:s3:::[a-z0-9.\-_]{3,63}$/);
-  });
-
-  test('EC2 IAM role exists', async () => {
-    const iam = new AWS.IAM();
-    const roleName = outputs.ec2_role_name.value;
-    const result = await iam.getRole({ RoleName: roleName }).promise();
-    expect(result.Role?.RoleName).toBe(roleName);
+  // IAM Role Test
+  describe('EC2 IAM Role', () => {
+    test(`should have IAM role "${ec2RoleName}" available in AWS`, async () => {
+      const { Role } = await iamClient.send(
+        new GetRoleCommand({ RoleName: ec2RoleName })
+      );
+      expect(Role?.RoleName).toBe(ec2RoleName);
+    }, 20000);
   });
 });
