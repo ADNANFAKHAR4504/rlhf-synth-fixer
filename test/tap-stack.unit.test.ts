@@ -61,6 +61,7 @@ describe('TapStack CloudFormation Template', () => {
       'EnableVPCFlowLogs',
       'EnableNATGateway',
       'EnableGuardDuty',
+      'EnableCloudTrail',
     ];
 
     test('should have all required parameters', () => {
@@ -144,6 +145,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Conditions.EnableGuardDutyCondition).toEqual({
         'Fn::And': [
           { 'Fn::Equals': [{ Ref: 'EnableGuardDuty' }, 'true'] },
+          { Condition: 'IsPrimaryRegion' },
+        ],
+      });
+    });
+
+    test('should have EnableCloudTrailCondition condition', () => {
+      expect(template.Conditions.EnableCloudTrailCondition).toBeDefined();
+      expect(template.Conditions.EnableCloudTrailCondition).toEqual({
+        'Fn::And': [
+          { 'Fn::Equals': [{ Ref: 'EnableCloudTrail' }, 'true'] },
           { Condition: 'IsPrimaryRegion' },
         ],
       });
@@ -474,7 +485,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have CloudTrail S3 bucket with conditions', () => {
       const bucket = template.Resources.CloudTrailS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.Condition).toBe('IsPrimaryRegion');
+      expect(bucket.Condition).toBe('EnableCloudTrailCondition');
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(bucket.Properties.BucketEncryption).toBeDefined();
     });
@@ -680,10 +691,10 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('CloudTrail', () => {
-    test('should have CloudTrail with proper configuration', () => {
+    test('should have CloudTrail with conditional creation', () => {
       const trail = template.Resources.CloudTrail;
       expect(trail.Type).toBe('AWS::CloudTrail::Trail');
-      expect(trail.Condition).toBe('IsPrimaryRegion');
+      expect(trail.Condition).toBe('EnableCloudTrailCondition');
 
       expect(trail.Properties.S3BucketName).toEqual({
         Ref: 'CloudTrailS3Bucket',
@@ -778,9 +789,9 @@ describe('TapStack CloudFormation Template', () => {
     test('conditional outputs should handle conditions', () => {
       expect(template.Outputs.CloudTrailS3BucketName.Value).toEqual({
         'Fn::If': [
-          'IsPrimaryRegion',
+          'EnableCloudTrailCondition',
           { Ref: 'CloudTrailS3Bucket' },
-          'N/A - Not Primary Region',
+          'N/A - CloudTrail Disabled or Not Primary Region',
         ],
       });
       expect(template.Outputs.VPCFlowLogsGroup.Value).toEqual({
@@ -869,7 +880,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(18); // Updated parameter count with EnableGuardDuty
+      expect(parameterCount).toBe(19); // Updated parameter count with EnableCloudTrail
     });
 
     test('should have correct output count', () => {

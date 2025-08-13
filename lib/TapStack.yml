@@ -27,6 +27,7 @@ Metadata:
             NotificationEmail,
             AllowedIPRanges,
             EnableGuardDuty,
+            EnableCloudTrail,
           ]
     ParameterLabels:
       ProjectName:
@@ -65,6 +66,8 @@ Metadata:
         default: 'Allowed IP Ranges'
       EnableGuardDuty:
         default: 'Enable GuardDuty'
+      EnableCloudTrail:
+        default: 'Enable CloudTrail'
 
 Parameters:
   ProjectName:
@@ -193,6 +196,12 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
 
+  EnableCloudTrail:
+    Type: String
+    Description: 'Enable CloudTrail creation (set to false if trail limit reached or already exists)'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
   IsProductionEnvironment: !Equals [!Ref Environment, 'prod']
@@ -200,6 +209,8 @@ Conditions:
   EnableVPCFlowLogsCondition: !Equals [!Ref EnableVPCFlowLogs, 'true']
   EnableGuardDutyCondition:
     !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
+  EnableCloudTrailCondition:
+    !And [!Equals [!Ref EnableCloudTrail, 'true'], !Condition IsPrimaryRegion]
 
 Resources:
   ### VPC & Networking ###
@@ -807,7 +818,7 @@ Resources:
 
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
-    Condition: IsPrimaryRegion
+    Condition: EnableCloudTrailCondition
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-${CloudTrailBucketName}-${AWS::AccountId}'
       VersioningConfiguration:
@@ -825,7 +836,7 @@ Resources:
 
   CloudTrailS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: IsPrimaryRegion
+    Condition: EnableCloudTrailCondition
     Properties:
       Bucket: !Ref CloudTrailS3Bucket
       PolicyDocument:
@@ -960,7 +971,7 @@ Resources:
   ### CloudTrail ###
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    Condition: IsPrimaryRegion
+    Condition: EnableCloudTrailCondition
     Properties:
       TrailName: !Sub '${ProjectName}-${Environment}-cloudtrail'
       S3BucketName: !Ref CloudTrailS3Bucket
@@ -1301,7 +1312,11 @@ Outputs:
   CloudTrailS3BucketName:
     Description: 'CloudTrail S3 Bucket Name'
     Value:
-      !If [IsPrimaryRegion, !Ref CloudTrailS3Bucket, 'N/A - Not Primary Region']
+      !If [
+        EnableCloudTrailCondition,
+        !Ref CloudTrailS3Bucket,
+        'N/A - CloudTrail Disabled or Not Primary Region',
+      ]
 
   DynamoDBTableName:
     Description: 'DynamoDB Table Name'
@@ -1354,7 +1369,11 @@ Outputs:
   CloudTrailArn:
     Description: 'CloudTrail ARN'
     Value:
-      !If [IsPrimaryRegion, !GetAtt CloudTrail.Arn, 'N/A - Not Primary Region']
+      !If [
+        EnableCloudTrailCondition,
+        !GetAtt CloudTrail.Arn,
+        'N/A - CloudTrail Disabled or Not Primary Region',
+      ]
 
   WebACLArn:
     Description: 'WAF WebACL ARN'

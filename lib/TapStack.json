@@ -40,7 +40,8 @@
                         "CloudTrailBucketName",
                         "NotificationEmail",
                         "AllowedIPRanges",
-                        "EnableGuardDuty"
+                        "EnableGuardDuty",
+                        "EnableCloudTrail"
                     ]
                 }
             ],
@@ -98,6 +99,9 @@
                 },
                 "EnableGuardDuty": {
                     "default": "Enable GuardDuty"
+                },
+                "EnableCloudTrail": {
+                    "default": "Enable CloudTrail"
                 }
             }
         }
@@ -244,6 +248,15 @@
                 "true",
                 "false"
             ]
+        },
+        "EnableCloudTrail": {
+            "Type": "String",
+            "Description": "Enable CloudTrail creation (set to false if trail limit reached or already exists)",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
         }
     },
     "Conditions": {
@@ -287,6 +300,21 @@
                     "Fn::Equals": [
                         {
                             "Ref": "EnableGuardDuty"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Condition": "IsPrimaryRegion"
+                }
+            ]
+        },
+        "EnableCloudTrailCondition": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableCloudTrail"
                         },
                         "true"
                     ]
@@ -1542,7 +1570,7 @@
         },
         "CloudTrailS3Bucket": {
             "Type": "AWS::S3::Bucket",
-            "Condition": "IsPrimaryRegion",
+            "Condition": "EnableCloudTrailCondition",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-${CloudTrailBucketName}-${AWS::AccountId}"
@@ -1572,7 +1600,7 @@
         },
         "CloudTrailS3BucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
-            "Condition": "IsPrimaryRegion",
+            "Condition": "EnableCloudTrailCondition",
             "Properties": {
                 "Bucket": {
                     "Ref": "CloudTrailS3Bucket"
@@ -1855,7 +1883,7 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
-            "Condition": "IsPrimaryRegion",
+            "Condition": "EnableCloudTrailCondition",
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-cloudtrail"
@@ -2297,11 +2325,11 @@
             "Description": "CloudTrail S3 Bucket Name",
             "Value": {
                 "Fn::If": [
-                    "IsPrimaryRegion",
+                    "EnableCloudTrailCondition",
                     {
                         "Ref": "CloudTrailS3Bucket"
                     },
-                    "N/A - Not Primary Region"
+                    "N/A - CloudTrail Disabled or Not Primary Region"
                 ]
             }
         },
@@ -2396,14 +2424,14 @@
             "Description": "CloudTrail ARN",
             "Value": {
                 "Fn::If": [
-                    "IsPrimaryRegion",
+                    "EnableCloudTrailCondition",
                     {
                         "Fn::GetAtt": [
                             "CloudTrail",
                             "Arn"
                         ]
                     },
-                    "N/A - Not Primary Region"
+                    "N/A - CloudTrail Disabled or Not Primary Region"
                 ]
             }
         },
