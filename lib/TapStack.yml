@@ -854,7 +854,6 @@ Resources:
   MFAEnforcedRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-mfa-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -863,11 +862,17 @@ Resources:
             Action: sts:AssumeRole
             Condition: { Bool: { 'aws:MultiFactorAuthPresent': true } }
       ManagedPolicyArns: ['arn:aws:iam::aws:policy/ReadOnlyAccess']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-mfa-enforced-role'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-lambda-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -916,7 +921,7 @@ Resources:
                 Resource: !GetAtt KMSKey.Arn
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-lambda-role'
+          Value: !Sub '${ProjectName}-${Environment}-lambda-execution-role'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
