@@ -505,7 +505,7 @@ def create_rds(
       name=db_password_param_name,
       type="SecureString",
       value=db_password.result,
-      key_id=kms_key.id,
+      key_id=kms_key.arn,
       tags={**tags, "Name": "corp-db-password-param"},
       opts=ResourceOptions(provider=provider)
   )
@@ -521,7 +521,7 @@ def create_rds(
       multi_az=True,
       publicly_accessible=False,
       storage_encrypted=True,
-      kms_key_id=kms_key.id,
+      kms_key_id=kms_key.arn,
       username="adminuser",
       password=db_password.result,
       backup_retention_period=7,
@@ -768,7 +768,7 @@ def create_codepipeline(
       name=github_oauth_token_param,
       type="SecureString",
       value="placeholder-github-token-update-me",
-      key_id=kms_key.id,
+      key_id=kms_key.arn,
       tags={**tags, "Name": "corp-github-token-param"},
       opts=ResourceOptions(provider=provider)
   )
@@ -782,7 +782,7 @@ def create_codepipeline(
           location=artifact_bucket.bucket,
           type="S3",
           encryption_key=aws.codepipeline.PipelineArtifactStoreEncryptionKeyArgs(
-              id=kms_key.id, type="KMS"
+              id=kms_key.arn, type="KMS"
           ),
       )],
       stages=[
