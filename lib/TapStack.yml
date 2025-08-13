@@ -39,7 +39,7 @@ Resources:
   WebAppAssets:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-assets-${AWS::Region}-${AWS::AccountId}"
+      BucketName: !Sub "${AWS::StackName}-${AWS::Region}-${AWS::AccountId}-assets"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -124,7 +124,7 @@ Resources:
     Properties:
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.36'
+      EngineVersion: '8.0.37'
       AllocatedStorage: '20'
       StorageType: gp2
       # FIXED: Set MultiAZ to true to ensure high availability and meet compliance.
