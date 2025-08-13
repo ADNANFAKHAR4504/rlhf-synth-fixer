@@ -4,7 +4,7 @@ test_tap_stack_integration.py
 Integration tests for live deployed TapStack Pulumi infrastructure.
 Tests actual AWS resources created by the Pulumi stack.
 """
-
+import os
 import unittest
 
 import boto3
@@ -17,6 +17,8 @@ class TestTapStack(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     """Deploy the Pulumi stack before running tests."""
+
+    os.environ["PULUMI_CONFIG_PASSPHRASE"] = ""
 
     cls.stack_name = "TapStackTest"
     cls.project_name = "TapStack"
