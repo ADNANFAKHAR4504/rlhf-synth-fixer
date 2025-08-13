@@ -97,33 +97,26 @@ export class TapStack extends cdk.Stack {
       aliasName: uniqueAliasName,
       version: lambdaFunction.currentVersion,
       description: `Live alias for production traffic with provisioned concurrency (${stackName})`,
-      provisionedConcurrentExecutions: 5, // Set to a safe value within account limits
+      provisionedConcurrentExecutions: 100, // Increased for 1000+ RPS baseline
     });
     // Explicitly tag Lambda alias
     Object.entries(commonTags).forEach(([k, v]) =>
       cdk.Tags.of(lambdaAlias).add(k, v)
     );
 
-    // CORRECTED: Provisioned Concurrency Auto Scaling using the high-level helper method.
-    // This is the recommended approach. It's cleaner and less verbose.
+    // CORRECTED: Provisioned Concurrency Auto Scaling for 1000+ RPS
     const scaling = lambdaAlias.addAutoScaling({
-      minCapacity: 1,
-      maxCapacity: 10,
+      minCapacity: 100,
+      maxCapacity: 1200,
     });
 
-    // We then apply the target tracking policy directly to the scaling object.
+    // Target tracking for ~1000 RPS (provisioned concurrency utilization target ~0.8)
     scaling.scaleOnUtilization({
-      utilizationTarget: 0.7, // This is 70%
-      scaleInCooldown: cdk.Duration.seconds(300),
-      scaleOutCooldown: cdk.Duration.seconds(300),
+      utilizationTarget: 0.8, // 80% utilization for high throughput
+      scaleInCooldown: cdk.Duration.seconds(120),
+      scaleOutCooldown: cdk.Duration.seconds(120),
       policyName: `${stackName}-lambda-scaling-policy-nova-team-development`,
     });
-
-    // --- The following manual definitions have been REMOVED ---
-    // - new iam.Role(this, 'AutoScalingRole', ...
-    // - new applicationautoscaling.ScalableTarget(...
-    // - new applicationautoscaling.TargetTrackingScalingPolicy(...
-    // --- They are redundant because addAutoScaling() handles them ---
 
     // API Gateway HTTP API
     const httpApi = new apigateway.HttpApi(this, 'NovaHttpApi', {
@@ -214,4 +207,5 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
+
 ```
