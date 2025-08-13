@@ -5,11 +5,12 @@ import {
   HeadBucketCommand, 
   GetBucketVersioningCommand,
   GetBucketEncryptionCommand,
-  GetBucketPublicAccessBlockCommand 
+  GetPublicAccessBlockCommand 
 } from '@aws-sdk/client-s3';
 import { 
   DynamoDBClient, 
-  DescribeTableCommand 
+  DescribeTableCommand,
+  DescribeContinuousBackupsCommand 
 } from '@aws-sdk/client-dynamodb';
 import { 
   IAMClient, 
@@ -80,7 +81,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('artifacts bucket has public access blocked', async () => {
       const bucketName = outputs.artifacts_bucket_name;
-      const command = new GetBucketPublicAccessBlockCommand({ Bucket: bucketName });
+      const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
       
       expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
@@ -142,10 +143,10 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('terraform locks table has point-in-time recovery enabled', async () => {
       const tableName = outputs.terraform_locks_table_name;
-      const command = new DescribeTableCommand({ TableName: tableName });
+      const command = new DescribeContinuousBackupsCommand({ TableName: tableName });
       const response = await dynamoClient.send(command);
       
-      expect(response.Table?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
+      expect(response.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
     });
 
     test('terraform locks table does not have deletion protection', async () => {
