@@ -1,6 +1,7 @@
 // main.ts - CDKTF Serverless Web Application Infrastructure
 // IaC – AWS Nova Model Breaking - Single File Implementation
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import * as path from 'path';
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
 import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
 import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
@@ -343,7 +344,7 @@ export class TapStack extends TerraformStack {
         role: lambdaRole.arn,
         runtime: 'nodejs18.x',
         handler: 'lambda-handler.handler',
-        filename: 'lib/lambda-placeholder.zip',
+        filename: path.resolve(__dirname, 'lambda-placeholder.zip'),
         sourceCodeHash: 'placeholder-hash-user',
         timeout: 30,
         memorySize: 128,
@@ -364,7 +365,7 @@ export class TapStack extends TerraformStack {
         role: lambdaRole.arn,
         runtime: 'nodejs18.x',
         handler: 'lambda-handler.handler',
-        filename: 'lib/lambda-placeholder.zip',
+        filename: path.resolve(__dirname, 'lambda-placeholder.zip'),
         sourceCodeHash: 'placeholder-hash-session',
         timeout: 30,
         memorySize: 128,
@@ -385,7 +386,7 @@ export class TapStack extends TerraformStack {
         role: lambdaRole.arn,
         runtime: 'nodejs18.x',
         handler: 'lambda-handler.handler',
-        filename: 'lib/lambda-placeholder.zip',
+        filename: path.resolve(__dirname, 'lambda-placeholder.zip'),
         sourceCodeHash: 'placeholder-hash-health',
         timeout: 10,
         memorySize: 128,
