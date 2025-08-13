@@ -95,23 +95,22 @@ export class TapStack extends cdk.Stack {
       aliasName: uniqueAliasName,
       version: lambdaFunction.currentVersion,
       description: `Live alias for production traffic with provisioned concurrency (${stackName})`,
-      provisionedConcurrentExecutions: 5, // Set to a safe value within account limits
+      provisionedConcurrentExecutions: 100, // Increased for 1000+ RPS baseline
     });
     // Explicitly tag Lambda alias
     Object.entries(commonTags).forEach(([k, v]) =>
       cdk.Tags.of(lambdaAlias).add(k, v)
     );
 
-    // CORRECTED: Provisioned Concurrency Auto Scaling using the high-level helper method.
-    // Updated for 100+ RPS: higher min/max and utilization target
+    // CORRECTED: Provisioned Concurrency Auto Scaling for 1000+ RPS
     const scaling = lambdaAlias.addAutoScaling({
-      minCapacity: 10,
-      maxCapacity: 200,
+      minCapacity: 100,
+      maxCapacity: 1200,
     });
 
-    // We then apply the target tracking policy directly to the scaling object.
+    // Target tracking for ~1000 RPS (provisioned concurrency utilization target ~0.8)
     scaling.scaleOnUtilization({
-      utilizationTarget: 0.8, // 80% utilization for higher throughput
+      utilizationTarget: 0.8, // 80% utilization for high throughput
       scaleInCooldown: cdk.Duration.seconds(120),
       scaleOutCooldown: cdk.Duration.seconds(120),
       policyName: `${stackName}-lambda-scaling-policy-nova-team-development`,

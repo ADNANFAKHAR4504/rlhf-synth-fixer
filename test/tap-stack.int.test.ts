@@ -1,6 +1,8 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import * as Lambda from '@aws-sdk/client-lambda';
 import * as CloudWatchLogs from '@aws-sdk/client-cloudwatch-logs';
+import * as IAM from '@aws-sdk/client-iam';
+import * as ApplicationAutoScaling from '@aws-sdk/client-application-auto-scaling';
 import fs from 'fs';
 import fetch from 'node-fetch';
 
@@ -8,6 +10,8 @@ import fetch from 'node-fetch';
 const region = process.env.AWS_DEFAULT_REGION || 'us-west-2';
 const lambda = new Lambda.LambdaClient({ region });
 const cloudWatchLogs = new CloudWatchLogs.CloudWatchLogsClient({ region });
+const iam = new IAM.IAMClient({ region });
+const appAutoScaling = new ApplicationAutoScaling.ApplicationAutoScalingClient({ region });
 
 // Load outputs if file exists, otherwise use environment variables
 let outputs: any = {};
@@ -94,5 +98,66 @@ describe('TapStack Integration Tests', () => {
       body: JSON.stringify({ test: 'integration' }),
     });
     expect(response.status).toBeLessThan(500);
+  });
+
+  test('IAM role for Lambda exists and has correct trust policy', async () => {
+    // The role name is usually in the format: <stack>-<lambda>-role-<unique>
+    // Try to discover it from the Lambda function config
+    const fn = await lambda.send(
+      new Lambda.GetFunctionCommand({ FunctionName: LAMBDA_FUNCTION_NAME })
+    );
+    const roleArn = fn.Configuration?.Role;
+    expect(roleArn).toBeDefined();
+    const roleName = roleArn?.split('/').pop();
+    expect(roleName).toBeDefined();
+    const role = await iam.send(new IAM.GetRoleCommand({ RoleName: roleName! }));
+    expect(role.Role).toBeDefined();
+    if (!role.Role) throw new Error('IAM Role not found');
+    // Trust policy should allow lambda.amazonaws.com
+    const trust = JSON.parse(decodeURIComponent(role.Role.AssumeRolePolicyDocument!));
+    const principal = trust.Statement.find((s: any) => s.Principal?.Service === 'lambda.amazonaws.com');
+    expect(principal).toBeDefined();
+  });
+
+  test('Lambda has Application Auto Scaling scalable target and scaling policy', async () => {
+    // Lambda scalable target resourceId format: function:<function-name>:<alias>
+    const resourceId = `function:${LAMBDA_FUNCTION_NAME}:${LAMBDA_ALIAS_NAME}`;
+    // Check scalable target
+    const scalableTargets = await appAutoScaling.send(
+      new ApplicationAutoScaling.DescribeScalableTargetsCommand({
+        ServiceNamespace: 'lambda',
+        ResourceIds: [resourceId],
+        ScalableDimension: 'lambda:function:ProvisionedConcurrency',
+      })
+    );
+    expect(scalableTargets.ScalableTargets?.length).toBeGreaterThan(0);
+    // Check scaling policy
+    const scalingPolicies = await appAutoScaling.send(
+      new ApplicationAutoScaling.DescribeScalingPoliciesCommand({
+        ServiceNamespace: 'lambda',
+        ResourceId: resourceId,
+        ScalableDimension: 'lambda:function:ProvisionedConcurrency',
+      })
+    );
+    expect(scalingPolicies.ScalingPolicies?.length).toBeGreaterThan(0);
+  });
+
+  test('Lambda alias has provisioned concurrency set to 100', async () => {
+    const result = await lambda.send(
+      new Lambda.GetAliasCommand({
+        FunctionName: LAMBDA_FUNCTION_NAME,
+        Name: LAMBDA_ALIAS_NAME,
+      })
+    );
+    expect(result.Name).toBeDefined();
+    // Check provisioned concurrency config
+    const pcResult = await lambda.send(
+      new Lambda.GetProvisionedConcurrencyConfigCommand({
+        FunctionName: LAMBDA_FUNCTION_NAME,
+        Qualifier: LAMBDA_ALIAS_NAME,
+      })
+    );
+    expect(pcResult.RequestedProvisionedConcurrentExecutions).toBe(100);
+    expect(pcResult.Status).toBe('READY');
   });
 });

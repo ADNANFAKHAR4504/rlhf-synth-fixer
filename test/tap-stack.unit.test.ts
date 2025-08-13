@@ -66,7 +66,7 @@ describe('TapStack', () => {
         typeof props.Description === 'string' &&
         props.Description.includes('Live alias for production traffic') &&
         props.ProvisionedConcurrencyConfig &&
-        props.ProvisionedConcurrencyConfig.ProvisionedConcurrentExecutions === 5
+        props.ProvisionedConcurrencyConfig.ProvisionedConcurrentExecutions === 100
       );
     });
     expect(found).toBe(true);

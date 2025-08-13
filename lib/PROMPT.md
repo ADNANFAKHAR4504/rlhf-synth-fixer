@@ -4,11 +4,11 @@ You are an expert AWS Cloud Engineer specializing in serverless architectures an
 Objective: Generate a complete and deployable AWS CDK project in TypeScript that provisions a scalable, cost-efficient serverless architecture in the us-west-2 region. The solution must be robust enough to handle high-traffic web requests.
 
 Core Requirements & Specifications
-You are to define the infrastructure in a single CDK stack file. Adhere strictly to the following requirements:
+You are to define the infrastructure in a single CDK ts stack file. Adhere strictly to the following requirements:
 
 1. Project & Naming Convention:
 
-Project Name: IaC-AWS-Nova-Model-Breaking2
+Project Name: IaC-AWS-Nova-Model-Breaking u
 
 Team/Owner: nova-team
 
