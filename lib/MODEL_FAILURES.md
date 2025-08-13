@@ -1,4 +1,4 @@
-Insert here the model's failures# MODEL_FAILURES.md
+# MODEL_FAILURES.md
 
 ## 1. Missing Environment Module for Centralized Config Management
 **Fault:**  
