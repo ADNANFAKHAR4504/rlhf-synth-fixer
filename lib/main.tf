@@ -394,10 +394,11 @@ resource "aws_db_instance" "mysql" {
 # Outputs
 #########################
 output "alb_dns_name" {
-  value = aws_lb.app_alb.dns_name
+  description = "DNS name of the Application Load Balancer"
+  value       = try(aws_lb.app_alb.dns_name, "pending-dns-name")
 }
 
 output "rds_endpoint" {
-  value = aws_db_instance.mysql.endpoint
+  description = "Endpoint of the RDS MySQL instance"
+  value       = try(aws_db_instance.mysql.endpoint, "pending-endpoint")
 }
-
