@@ -281,78 +281,79 @@ Resources:
 
   # ==========================================
   # CloudTrail (Requirement #3)
-  # NOTE: Disabled in CI by commenting out due to per-account trail quota limits in shared test accounts.
-  # To re-enable, provision an account with available CloudTrail quota and uncomment this section.
-  # Alternatively, gate with a parameter and set it true only in permitted environments.
+  # Enabled via condition to avoid quota issues in CI. Set EnableCloudTrail=true to create.
   # ==========================================
   
-  # CloudTrailBucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub '${Environment}-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
-  #     BucketEncryption:
-  #       ServerSideEncryptionConfiguration:
-  #         - ServerSideEncryptionByDefault:
-  #             SSEAlgorithm: AES256
-  #           BucketKeyEnabled: true
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: true
-  #       BlockPublicPolicy: true
-  #       IgnorePublicAcls: true
-  #       RestrictPublicBuckets: true
-  #     LifecycleConfiguration:
-  #       Rules:
-  #         - Id: CloudTrailLogRetention
-  #           Status: Enabled
-  #           ExpirationInDays: 2555  # 7 years
-  #           Transitions:
-  #             - TransitionInDays: 30
-  #               StorageClass: STANDARD_IA
-  #             - TransitionInDays: 90
-  #               StorageClass: GLACIER
+  CloudTrailBucket:
+    Condition: CloudTrailEnabled
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: CloudTrailLogRetention
+            Status: Enabled
+            ExpirationInDays: 2555  # 7 years
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
 
-  # CloudTrailBucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref CloudTrailBucket
-  #     PolicyDocument:
-  #       Statement:
-  #         - Sid: AWSCloudTrailAclCheck
-  #           Effect: Allow
-  #           Principal:
-  #             Service: cloudtrail.amazonaws.com
-  #           Action: s3:GetBucketAcl
-  #           Resource: !GetAtt CloudTrailBucket.Arn
-  #         - Sid: AWSCloudTrailWrite
-  #           Effect: Allow
-  #           Principal:
-  #             Service: cloudtrail.amazonaws.com
-  #           Action: s3:PutObject
-  #           Resource: !Sub '${CloudTrailBucket.Arn}/*'
-  #           Condition:
-  #             StringEquals:
-  #               's3:x-amz-acl': 'bucket-owner-full-control'
+  CloudTrailBucketPolicy:
+    Condition: CloudTrailEnabled
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
 
-  # CloudTrail:
-  #   Type: AWS::CloudTrail::Trail
-  #   DependsOn: CloudTrailBucketPolicy
-  #   Properties:
-  #     TrailName: !Sub '${Environment}-${EnvironmentSuffix}-comprehensive-audit-trail'
-  #     S3BucketName: !Ref CloudTrailBucket
-  #     IncludeGlobalServiceEvents: true
-  #     IsLogging: true
-  #     IsMultiRegionTrail: true
-  #     EnableLogFileValidation: true
-  #     EventSelectors:
-  #       - ReadWriteType: All
-  #         IncludeManagementEvents: true
-  #         DataResources:
-  #           - Type: 'AWS::S3::Object'
-  #             Values:
-  #               - !Sub '${SecureDataBucket}/*'
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub '${Environment}-cloudtrail'
+  CloudTrail:
+    Condition: CloudTrailEnabled
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${Environment}-${EnvironmentSuffix}-comprehensive-audit-trail'
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values: 
+                - !Sub '${SecureDataBucket}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-cloudtrail'
 
   # ==========================================
   # IAM Roles with Least Privilege (Requirement #2)
@@ -573,8 +574,9 @@ Outputs:
     Export:
       Name: !Sub '${Environment}-EC2-Role-ARN'
 
-  # CloudTrailArn:
-  #   Description: 'CloudTrail ARN'
-  #   Value: !GetAtt CloudTrail.Arn
-  #   Export:
-  #     Name: !Sub '${Environment}-CloudTrail-ARN'
+  CloudTrailArn:
+    Condition: CloudTrailEnabled
+    Description: 'CloudTrail ARN'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${Environment}-CloudTrail-ARN'
