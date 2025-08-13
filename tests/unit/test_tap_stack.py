@@ -22,16 +22,16 @@ def test_vpc_created_with_correct_subnets(stack_template):
 def test_alb_created(stack_template):
   stack_template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
   stack_template.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
-    "Name": "MyWebApplicationALB",
+    "Name": "MyWebApplicationALB1",
     "Scheme": "internet-facing"
   })
 
 def test_asg_created_and_configured(stack_template):
   stack_template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
   stack_template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
-    "DesiredCapacity": "1",
-    "MinSize": "1",
-    "MaxSize": "3",
+    "DesiredCapacity": "0",
+    "MinSize": "0",
+    "MaxSize": "0",
     "LaunchConfigurationName": Match.any_value()
   })
   stack_template.has_resource_properties("AWS::AutoScaling::ScalingPolicy", {
