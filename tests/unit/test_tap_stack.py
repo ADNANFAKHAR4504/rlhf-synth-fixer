@@ -129,7 +129,7 @@ class TestTapStackTask2(unittest.TestCase):
         instance_class="db.t3.micro",
         db_name="appdb",
         username="dbadmin",
-        password=os.getenv("DB_PASSWORD","Passw0rd123!"),
+        password=pulumi.Output.secret("Passw0rd123!"),
         skip_final_snapshot=True,
         db_subnet_group_name=ANY,
         vpc_security_group_ids=ANY,

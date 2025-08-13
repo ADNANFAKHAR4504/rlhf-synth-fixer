@@ -188,7 +188,7 @@ class TapStack(pulumi.ComponentResource):
         instance_class="db.t3.micro",
         db_name="appdb",
         username="dbadmin",
-        password=os.getenv("DB_PASSWORD","Passw0rd123!"),
+        password=pulumi.Output.secret("Passw0rd123!"),
         skip_final_snapshot=True,
         db_subnet_group_name=self.db_subnet_group.name,
         vpc_security_group_ids=[self.db_security_group.id],
