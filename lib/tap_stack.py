@@ -397,41 +397,27 @@ for i, az in enumerate(availability_zones):
     
     public_subnets.append(subnet)
 
-# Route table with reuse capability
-existing_route_table_id = find_existing_route_tables(vpc_id)
+# Route table with simplified association logic
+public_route_table = aws.ec2.RouteTable(
+    get_resource_name("public-rt"),
+    vpc_id=vpc.id,
+    tags={
+        "Name": get_resource_name("public-rt"),
+        "Environment": ENVIRONMENT,
+        "Project": PROJECT_NAME,
+        "Type": "Public"
+    },
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+)
 
-if existing_route_table_id:
-    # Reuse existing route table
-    pulumi.log.info(f"Reusing existing route table: {existing_route_table_id}")
-    public_route_table = aws.ec2.RouteTable.get(
-        get_resource_name("public-rt"),
-        existing_route_table_id,
-        opts=pulumi.ResourceOptions(provider=aws_provider)
-    )
-else:
-    # Create new route table
-    pulumi.log.info("Creating new route table...")
-    public_route_table = aws.ec2.RouteTable(
-        get_resource_name("public-rt"),
-        vpc_id=vpc.id,
-        tags={
-            "Name": get_resource_name("public-rt"),
-            "Environment": ENVIRONMENT,
-            "Project": PROJECT_NAME,
-            "Type": "Public"
-        },
-        opts=pulumi.ResourceOptions(provider=aws_provider)
-    )
-
-# Only create route if using new route table
-if not existing_route_table_id:
-    ipv4_route = aws.ec2.Route(
-        get_resource_name("ipv4-route"),
-        route_table_id=public_route_table.id,
-        destination_cidr_block="0.0.0.0/0",
-        gateway_id=internet_gateway.id,
-        opts=pulumi.ResourceOptions(provider=aws_provider)
-    )
+# Create IPv4 route for new route table
+ipv4_route = aws.ec2.Route(
+    get_resource_name("ipv4-route"),
+    route_table_id=public_route_table.id,
+    destination_cidr_block="0.0.0.0/0",
+    gateway_id=internet_gateway.id,
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+)
 
 # Skip IPv6 route for compatibility with reused VPCs
 # ipv6_route = aws.ec2.Route(
@@ -442,10 +428,11 @@ if not existing_route_table_id:
 #     opts=pulumi.ResourceOptions(provider=aws_provider)
 # )
 
-# Only create route table associations if not using existing route table
-# (existing route tables may already have associations)
-if not existing_route_table_id:
-    for i, subnet in enumerate(public_subnets):
+# Only create route table associations for new subnets
+# Existing subnets already have proper routing configured
+for i, subnet in enumerate(public_subnets):
+    # Check if this is a newly created subnet (not in existing_subnets list)
+    if i >= len(existing_subnets):  # This is a new subnet
         aws.ec2.RouteTableAssociation(
             get_resource_name(f"public-rta-{i + 1}"),
             subnet_id=subnet.id,
@@ -844,7 +831,7 @@ print("🔧 VPC Limit Optimization:")
 print("   • Automatic VPC reuse for existing project VPCs")
 print("   • Automatic Internet Gateway discovery and reuse")
 print("   • Automatic subnet discovery and reuse")
-print("   • Automatic route table discovery and reuse")
+print("   • Smart route table management for existing infrastructure")
 print("   • Smart CIDR conflict avoidance for new subnets")
 print("   • Conditional IPv6 support based on existing VPC capabilities")
 print("   • Intelligent route table association handling")
