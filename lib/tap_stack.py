@@ -59,9 +59,8 @@ class TapStack(pulumi.ComponentResource):
     self.environment_suffix = args.environment_suffix
     self.tags = args.tags
     
-    # Use environment-based naming for VPCs (reusable per environment)
-    # Use unique timestamp for instances and other sub-resources
-    self.vpc_suffix = self.environment_suffix
+    # Use environment-based naming for network resources (reusable per environment)
+    # Use unique timestamp for compute resources (unique per deployment)
     self.unique_suffix = f"{self.environment_suffix}-{int(time.time())}"
 
     # Helper function to derive IPv6 subnet CIDR from VPC CIDR
@@ -77,211 +76,81 @@ class TapStack(pulumi.ComponentResource):
 
       return base_cidr.replace('::', f':{subnet_number:x}::/64')
 
-    # Look for existing VPC first, create only if needed
-    vpc_name = f"ipv6-vpc-{self.vpc_suffix}"
-    try:
-      # Try to find existing VPC
-      existing_vpcs = aws.ec2.get_vpcs(
-        filters=[
-          {"name": "tag:Name", "values": [vpc_name]},
-          {"name": "state", "values": ["available"]}
-        ]
-      )
-      
-      if existing_vpcs.ids and len(existing_vpcs.ids) > 0:
-        # Use existing VPC
-        vpc_id = existing_vpcs.ids[0]
-        self.vpc = aws.ec2.get_vpc(id=vpc_id, opts=ResourceOptions(parent=self))
-      else:
-        # Create new VPC if none exists
-        self.vpc = aws.ec2.Vpc(
-          vpc_name,
-          cidr_block="10.0.0.0/16",
-          enable_dns_support=True,
-          enable_dns_hostnames=True,
-          assign_generated_ipv6_cidr_block=True,
-          tags={
-            "Environment": "Production",
-            "Project": "IPv6StaticTest",
-            "ManagedBy": "Pulumi",
-            "Name": vpc_name
-          },
-          opts=ResourceOptions(parent=self))
-    except Exception:
-      # Fallback to creation if lookup fails
-      self.vpc = aws.ec2.Vpc(
-        vpc_name,
-        cidr_block="10.0.0.0/16",
-        enable_dns_support=True,
-        enable_dns_hostnames=True,
-        assign_generated_ipv6_cidr_block=True,
-        tags={
-          "Environment": "Production",
-          "Project": "IPv6StaticTest",
-          "ManagedBy": "Pulumi",
-          "Name": vpc_name
-        },
-        opts=ResourceOptions(parent=self))
+    # Create VPC with environment-based naming (Pulumi handles reuse automatically)
+    vpc_name = f"ipv6-vpc-{self.environment_suffix}"
+    self.vpc = aws.ec2.Vpc(
+      vpc_name,
+      cidr_block="10.0.0.0/16",
+      enable_dns_support=True,
+      enable_dns_hostnames=True,
+      assign_generated_ipv6_cidr_block=True,
+      tags={
+        "Environment": "Production",
+        "Project": "IPv6StaticTest",
+        "ManagedBy": "Pulumi",
+        "Name": vpc_name
+      },
+      opts=ResourceOptions(parent=self))
 
-    # Look for existing Internet Gateway or create new one
-    igw_name = f"igw-{self.vpc_suffix}"
-    try:
-      # Try to find existing IGW attached to our VPC
-      existing_igws = aws.ec2.get_internet_gateways(
-        filters=[
-          {"name": "tag:Name", "values": [igw_name]},
-          {"name": "attachment.vpc-id", "values": [self.vpc.id]}
-        ]
-      )
-      
-      if existing_igws.ids and len(existing_igws.ids) > 0:
-        # Use existing IGW
-        igw_id = existing_igws.ids[0]
-        self.igw = aws.ec2.get_internet_gateway(id=igw_id, opts=ResourceOptions(parent=self))
-      else:
-        # Create new IGW if none exists
-        self.igw = aws.ec2.InternetGateway(
-          igw_name,
-          vpc_id=self.vpc.id,
-          tags={
-            "Environment": "Production",
-            "Project": "IPv6StaticTest",
-            "ManagedBy": "Pulumi",
-            "Name": igw_name
-          },
-          opts=ResourceOptions(parent=self))
-    except Exception:
-      # Fallback to creation
-      self.igw = aws.ec2.InternetGateway(
-        igw_name,
-        vpc_id=self.vpc.id,
-        tags={
-          "Environment": "Production",
-          "Project": "IPv6StaticTest",
-          "ManagedBy": "Pulumi",
-          "Name": igw_name
-        },
-        opts=ResourceOptions(parent=self))
+    # Create Internet Gateway with environment-based naming
+    igw_name = f"igw-{self.environment_suffix}"
+    self.igw = aws.ec2.InternetGateway(
+      igw_name,
+      vpc_id=self.vpc.id,
+      tags={
+        "Environment": "Production",
+        "Project": "IPv6StaticTest",
+        "ManagedBy": "Pulumi",
+        "Name": igw_name
+      },
+      opts=ResourceOptions(parent=self))
 
-    # Look for existing public subnet or create new one
-    public_subnet_name = f"public-subnet-{self.vpc_suffix}"
-    try:
-      # Try to find existing public subnet
-      existing_subnets = aws.ec2.get_subnets(
-        filters=[
-          {"name": "tag:Name", "values": [public_subnet_name]},
-          {"name": "vpc-id", "values": [self.vpc.id]},
-          {"name": "cidr-block", "values": ["10.0.11.0/24"]}
-        ]
-      )
-      
-      if existing_subnets.ids and len(existing_subnets.ids) > 0:
-        # Use existing subnet
-        subnet_id = existing_subnets.ids[0]
-        self.public_subnet = aws.ec2.get_subnet(id=subnet_id, opts=ResourceOptions(parent=self))
-      else:
-        # Create new subnet if none exists
-        self.public_subnet = aws.ec2.Subnet(
-          public_subnet_name,
-          vpc_id=self.vpc.id,
-          cidr_block="10.0.11.0/24",
-          ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
-            lambda x: derive_ipv6_subnet_cidr(x, 1)),
-          availability_zone=aws.get_availability_zones().names[0],
-          assign_ipv6_address_on_creation=True,
-          map_public_ip_on_launch=True,
-          tags={
-            "Environment": "Production",
-            "Project": "IPv6StaticTest",
-            "ManagedBy": "Pulumi",
-            "Name": public_subnet_name
-          },
-          opts=pulumi.ResourceOptions(
-            replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"],
-            parent=self
-          ))
-    except Exception:
-      # Fallback to creation
-      self.public_subnet = aws.ec2.Subnet(
-        public_subnet_name,
-        vpc_id=self.vpc.id,
-        cidr_block="10.0.11.0/24",
-        ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
-          lambda x: derive_ipv6_subnet_cidr(x, 1)),
-        availability_zone=aws.get_availability_zones().names[0],
-        assign_ipv6_address_on_creation=True,
-        map_public_ip_on_launch=True,
-        tags={
-          "Environment": "Production",
-          "Project": "IPv6StaticTest",
-          "ManagedBy": "Pulumi",
-          "Name": public_subnet_name
-        },
-        opts=pulumi.ResourceOptions(
-          replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"],
-          parent=self
-        ))
+    # Create public subnet with environment-based naming
+    public_subnet_name = f"public-subnet-{self.environment_suffix}"
+    self.public_subnet = aws.ec2.Subnet(
+      public_subnet_name,
+      vpc_id=self.vpc.id,
+      cidr_block="10.0.11.0/24",
+      ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
+        lambda x: derive_ipv6_subnet_cidr(x, 1)),
+      availability_zone=aws.get_availability_zones().names[0],
+      assign_ipv6_address_on_creation=True,
+      map_public_ip_on_launch=True,
+      tags={
+        "Environment": "Production",
+        "Project": "IPv6StaticTest",
+        "ManagedBy": "Pulumi",
+        "Name": public_subnet_name
+      },
+      opts=pulumi.ResourceOptions(
+        replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"],
+        parent=self
+      ))
 
-    # Look for existing private subnet or create new one
-    private_subnet_name = f"private-subnet-{self.vpc_suffix}"
-    try:
-      # Try to find existing private subnet
-      existing_private_subnets = aws.ec2.get_subnets(
-        filters=[
-          {"name": "tag:Name", "values": [private_subnet_name]},
-          {"name": "vpc-id", "values": [self.vpc.id]},
-          {"name": "cidr-block", "values": ["10.0.12.0/24"]}
-        ]
-      )
-      
-      if existing_private_subnets.ids and len(existing_private_subnets.ids) > 0:
-        # Use existing subnet
-        subnet_id = existing_private_subnets.ids[0]
-        self.private_subnet = aws.ec2.get_subnet(id=subnet_id, opts=ResourceOptions(parent=self))
-      else:
-        # Create new subnet if none exists
-        self.private_subnet = aws.ec2.Subnet(
-          private_subnet_name,
-          vpc_id=self.vpc.id,
-          cidr_block="10.0.12.0/24",
-          ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
-            lambda x: derive_ipv6_subnet_cidr(x, 2)),
-          availability_zone=aws.get_availability_zones().names[1],
-          assign_ipv6_address_on_creation=True,
-          tags={
-            "Environment": "Production",
-            "Project": "IPv6StaticTest",
-            "ManagedBy": "Pulumi",
-            "Name": private_subnet_name
-          },
-          opts=pulumi.ResourceOptions(
-            replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"],
-            parent=self
-          ))
-    except Exception:
-      # Fallback to creation
-      self.private_subnet = aws.ec2.Subnet(
-        private_subnet_name,
-        vpc_id=self.vpc.id,
-        cidr_block="10.0.12.0/24",
-        ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
-          lambda x: derive_ipv6_subnet_cidr(x, 2)),
-        availability_zone=aws.get_availability_zones().names[1],
-        assign_ipv6_address_on_creation=True,
-        tags={
-          "Environment": "Production",
-          "Project": "IPv6StaticTest",
-          "ManagedBy": "Pulumi",
-          "Name": private_subnet_name
-        },
-        opts=pulumi.ResourceOptions(
-          replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"],
-          parent=self
-        ))
+    # Create private subnet with environment-based naming
+    private_subnet_name = f"private-subnet-{self.environment_suffix}"
+    self.private_subnet = aws.ec2.Subnet(
+      private_subnet_name,
+      vpc_id=self.vpc.id,
+      cidr_block="10.0.12.0/24",
+      ipv6_cidr_block=self.vpc.ipv6_cidr_block.apply(
+        lambda x: derive_ipv6_subnet_cidr(x, 2)),
+      availability_zone=aws.get_availability_zones().names[1],
+      assign_ipv6_address_on_creation=True,
+      tags={
+        "Environment": "Production",
+        "Project": "IPv6StaticTest",
+        "ManagedBy": "Pulumi",
+        "Name": private_subnet_name
+      },
+      opts=pulumi.ResourceOptions(
+        replace_on_changes=["ipv6_cidr_block", "assign_ipv6_address_on_creation"],
+        parent=self
+      ))
 
     # Create a route table for the public subnet
     self.public_rt = aws.ec2.RouteTable(
-      f"public-rt-{self.vpc_suffix}",
+      f"public-rt-{self.environment_suffix}",
       vpc_id=self.vpc.id,
       routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -302,14 +171,14 @@ class TapStack(pulumi.ComponentResource):
 
     # Associate the public route table with the public subnet
     self.public_rta = aws.ec2.RouteTableAssociation(
-      f"public-rta-{self.vpc_suffix}",
+      f"public-rta-{self.environment_suffix}",
       subnet_id=self.public_subnet.id,
       route_table_id=self.public_rt.id,
       opts=ResourceOptions(parent=self))
 
     # Create a NAT Gateway for the private subnet
     self.eip = aws.ec2.Eip(
-      f"nat-eip-{self.vpc_suffix}",
+      f"nat-eip-{self.environment_suffix}",
       vpc=True,
       tags={
         "Environment": "Production",
@@ -319,7 +188,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self))
 
     self.nat_gateway = aws.ec2.NatGateway(
-      f"nat-gateway-{self.vpc_suffix}",
+      f"nat-gateway-{self.environment_suffix}",
       allocation_id=self.eip.id,
       subnet_id=self.public_subnet.id,
       tags={
@@ -331,7 +200,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create an Egress-Only Internet Gateway for private subnet IPv6 access
     self.egress_igw = aws.ec2.EgressOnlyInternetGateway(
-      f"egress-igw-{self.vpc_suffix}",
+      f"egress-igw-{self.environment_suffix}",
       vpc_id=self.vpc.id,
       tags={
         "Environment": "Production",
@@ -342,7 +211,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Create a route table for the private subnet
     self.private_rt = aws.ec2.RouteTable(
-      f"private-rt-{self.vpc_suffix}",
+      f"private-rt-{self.environment_suffix}",
       vpc_id=self.vpc.id,
       routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -363,14 +232,14 @@ class TapStack(pulumi.ComponentResource):
 
     # Associate the private route table with the private subnet
     self.private_rta = aws.ec2.RouteTableAssociation(
-      f"private-rta-{self.vpc_suffix}",
+      f"private-rta-{self.environment_suffix}",
       subnet_id=self.private_subnet.id,
       route_table_id=self.private_rt.id,
       opts=ResourceOptions(parent=self))
 
     # Create a security group allowing SSH, HTTP, and HTTPS access
     self.security_group = aws.ec2.SecurityGroup(
-      f"sec-group-{self.vpc_suffix}",
+      f"sec-group-{self.environment_suffix}",
       vpc_id=self.vpc.id,
       ingress=[
         aws.ec2.SecurityGroupIngressArgs(
