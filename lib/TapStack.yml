@@ -456,7 +456,6 @@ Resources:
   MFAEnforcementPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub "${AWS::StackName}-MFA-Enforcement"
       Description: Deny non-MFA actions for IAM users (except MFA setup/self-management)
       PolicyDocument:
         Version: "2012-10-17"
@@ -501,7 +500,6 @@ Resources:
   AllUsersGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub "${AWS::StackName}-AllUsers"
       ManagedPolicyArns: [ !Ref MFAEnforcementPolicy ]
 
   #########################
