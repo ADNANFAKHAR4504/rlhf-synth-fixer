@@ -1,16 +1,16 @@
 output "api_gateway_url" {
   description = "URL of the API Gateway"
-  value       = "${aws_api_gateway_deployment.main.invoke_url}"
+  value       = "https://${aws_api_gateway_rest_api.main.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}"
 }
 
 output "health_check_endpoint" {
   description = "Health check endpoint"
-  value       = "${aws_api_gateway_deployment.main.invoke_url}/health"
+  value       = "https://${aws_api_gateway_rest_api.main.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}/health"
 }
 
 output "data_processor_endpoint" {
   description = "Data processor endpoint"
-  value       = "${aws_api_gateway_deployment.main.invoke_url}/process"
+  value       = "https://${aws_api_gateway_rest_api.main.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}/process"
 }
 
 output "rds_cluster_endpoint" {
