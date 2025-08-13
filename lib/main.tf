@@ -55,9 +55,21 @@ variable "circleci_org_id" {
   default     = "your-circleci-org-id"
 }
 
+variable "environment_suffix" {
+  description = "Unique suffix for resource naming to avoid conflicts (supports randomness)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = can(regex("^[a-z0-9]*$", var.environment_suffix))
+    error_message = "Environment suffix must contain only lowercase letters and numbers."
+  }
+}
+
 # S3 Bucket for Application Artifacts
 resource "aws_s3_bucket" "artifacts" {
-  bucket = local.s3_artifacts_name
+  bucket        = local.s3_artifacts_name
+  force_destroy = true # Enable force destroy for rollback
 
   tags = merge(local.common_tags, {
     Name      = local.s3_artifacts_name
@@ -101,6 +113,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts_lifecycle" {
     id     = "cleanup_old_versions"
     status = "Enabled"
 
+    filter {} # Required empty filter to apply to all objects
+
     noncurrent_version_expiration {
       noncurrent_days = 30
     }
@@ -113,7 +127,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts_lifecycle" {
 
 # S3 Bucket for Terraform State
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = local.s3_terraform_state
+  bucket        = local.s3_terraform_state
+  force_destroy = true # Enable force destroy for rollback
 
   tags = merge(local.common_tags, {
     Name    = local.s3_terraform_state
@@ -151,9 +166,10 @@ resource "aws_s3_bucket_public_access_block" "terraform_state_pab" {
 
 # DynamoDB table for Terraform state locking
 resource "aws_dynamodb_table" "terraform_locks" {
-  name         = local.dynamodb_tf_locks
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "LockID"
+  name                        = local.dynamodb_tf_locks
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "LockID"
+  deletion_protection_enabled = false # Allow deletion for rollback
 
   attribute {
     name = "LockID"
@@ -405,4 +421,14 @@ output "aws_account_id" {
 output "aws_region" {
   description = "Current AWS Region"
   value       = local.region
+}
+
+output "environment_suffix" {
+  description = "Environment suffix used for resource naming"
+  value       = local.environment_suffix
+}
+
+output "project_name" {
+  description = "Project name used for resource naming"
+  value       = var.project_name
 }
