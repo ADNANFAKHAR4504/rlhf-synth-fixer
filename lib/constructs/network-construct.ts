@@ -15,9 +15,17 @@ import {
   GatewayVpcEndpoint,
   GatewayVpcEndpointAwsService,
 } from 'aws-cdk-lib/aws-ec2';
+import {
+  ApplicationLoadBalancer,
+  ApplicationTargetGroup,
+  TargetType,
+  ListenerAction,
+  ApplicationProtocol,
+} from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { RemovalPolicy, Duration } from 'aws-cdk-lib';
 import { Key } from 'aws-cdk-lib/aws-kms';
+import { CfnWebACL, CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
 import { TaggingUtils } from '../utils/tagging';
 
 export interface NetworkConstructProps {
@@ -39,6 +47,8 @@ export class NetworkConstruct extends Construct {
   public appSecurityGroup: SecurityGroup;
   public databaseSecurityGroup: SecurityGroup;
   public lambdaSecurityGroup: SecurityGroup;
+  public alb: ApplicationLoadBalancer;
+  public webAcl: CfnWebACL;
 
   constructor(scope: Construct, id: string, props: NetworkConstructProps) {
     super(scope, id);
@@ -97,6 +107,12 @@ export class NetworkConstruct extends Construct {
     // Security Groups with least-privilege access
     this.createSecurityGroups(props);
 
+    // Create WAF Web ACL
+    this.createWebAcl(props);
+
+    // Create Application Load Balancer with WAF
+    this.createApplicationLoadBalancer(props);
+
     // Apply standard tags
     TaggingUtils.applyStandardTags(
       this.vpc,
@@ -146,6 +162,194 @@ export class NetworkConstruct extends Construct {
       vpc: this.vpc,
       service: GatewayVpcEndpointAwsService.DYNAMODB,
     });
+  }
+
+  /**
+   * Create WAF Web ACL for ALB protection
+   */
+  private createWebAcl(props: NetworkConstructProps): void {
+    this.webAcl = new CfnWebACL(this, 'WebACL', {
+      name: TaggingUtils.generateResourceName(
+        props.environment,
+        props.service,
+        'webacl'
+      ),
+      scope: 'REGIONAL',
+      defaultAction: {
+        allow: {},
+      },
+      rules: [
+        // AWS Managed Rules - Common Rule Set
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesCommonRuleSet',
+            },
+          },
+          overrideAction: {
+            none: {},
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'AWSManagedRulesCommonRuleSetMetric',
+          },
+        },
+        // AWS Managed Rules - Known Bad Inputs
+        {
+          name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 2,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
+          },
+          overrideAction: {
+            none: {},
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'AWSManagedRulesKnownBadInputsRuleSetMetric',
+          },
+        },
+        // AWS Managed Rules - SQL Injection
+        {
+          name: 'AWSManagedRulesSQLiRuleSet',
+          priority: 3,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesSQLiRuleSet',
+            },
+          },
+          overrideAction: {
+            none: {},
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'AWSManagedRulesSQLiRuleSetMetric',
+          },
+        },
+        // Rate limiting rule
+        {
+          name: 'RateLimitRule',
+          priority: 4,
+          statement: {
+            rateBasedStatement: {
+              limit: 2000,
+              aggregateKeyType: 'IP',
+            },
+          },
+          action: {
+            block: {},
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'RateLimitRuleMetric',
+          },
+        },
+      ],
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: TaggingUtils.generateResourceName(
+          props.environment,
+          props.service,
+          'webacl'
+        ),
+      },
+    });
+
+    // Apply tags to WAF
+    TaggingUtils.applyStandardTags(
+      this.webAcl,
+      props.environment,
+      props.service,
+      props.owner,
+      props.project,
+      { ResourceType: 'WAF-WebACL' }
+    );
+  }
+
+  /**
+   * Create Application Load Balancer with WAF integration
+   */
+  private createApplicationLoadBalancer(props: NetworkConstructProps): void {
+    this.alb = new ApplicationLoadBalancer(this, 'ApplicationLoadBalancer', {
+      vpc: this.vpc,
+      internetFacing: true,
+      securityGroup: this.webSecurityGroup,
+      vpcSubnets: {
+        subnetType: SubnetType.PUBLIC,
+      },
+      loadBalancerName: TaggingUtils.generateResourceName(
+        props.environment,
+        props.service,
+        'alb'
+      ),
+    });
+
+    // Create target group for application servers
+    const targetGroup = new ApplicationTargetGroup(this, 'AppTargetGroup', {
+      vpc: this.vpc,
+      port: 8080,
+      protocol: ApplicationProtocol.HTTP,
+      targetType: TargetType.INSTANCE,
+      healthCheck: {
+        path: '/health',
+        healthyHttpCodes: '200',
+        interval: Duration.seconds(30),
+        timeout: Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+      },
+      targets: [], // Will be populated when EC2 instances are created
+    });
+
+    // Create HTTPS listener (commented out for testing - requires certificate)
+    // this.alb.addListener('HttpsListener', {
+    //   port: 443,
+    //   protocol: ApplicationProtocol.HTTPS,
+    //   defaultAction: ListenerAction.forward([targetGroup]),
+    //   // Note: Certificate ARN would be provided as a parameter in production
+    //   // certificates: [certificate],
+    // });
+
+    // Create HTTP listener (redirect to HTTPS commented out for testing)
+    this.alb.addListener('HttpListener', {
+      port: 80,
+      protocol: ApplicationProtocol.HTTP,
+      defaultAction: ListenerAction.forward([targetGroup]),
+      // Note: In production, this would redirect to HTTPS
+      // defaultAction: ListenerAction.redirect({
+      //   protocol: 'HTTPS',
+      //   port: '443',
+      //   permanent: true,
+      // }),
+    });
+
+    // Associate WAF with ALB
+    new CfnWebACLAssociation(this, 'WebACLAssociation', {
+      resourceArn: this.alb.loadBalancerArn,
+      webAclArn: this.webAcl.attrArn,
+    });
+
+    // Apply tags to ALB
+    TaggingUtils.applyStandardTags(
+      this.alb,
+      props.environment,
+      props.service,
+      props.owner,
+      props.project,
+      { ResourceType: 'ALB' }
+    );
   }
 
   /**

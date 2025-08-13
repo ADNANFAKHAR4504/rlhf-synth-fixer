@@ -2,7 +2,13 @@ import { Construct } from 'constructs';
 import { Key, KeyUsage, KeySpec } from 'aws-cdk-lib/aws-kms';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { TaggingUtils } from '../utils/tagging';
-import { PolicyDocument, PolicyStatement, Effect, AccountRootPrincipal, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import {
+  PolicyDocument,
+  PolicyStatement,
+  Effect,
+  AccountRootPrincipal,
+  ServicePrincipal,
+} from 'aws-cdk-lib/aws-iam';
 
 export interface KmsConstructProps {
   environment: string;

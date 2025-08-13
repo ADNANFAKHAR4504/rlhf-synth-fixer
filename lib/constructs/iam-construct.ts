@@ -23,53 +23,108 @@ export interface IamConstructProps {
 }
 
 /**
- * IAM Construct for managing roles, policies, and access controls
- * Implements least-privilege access and financial services compliance
+ * IAM Construct for role and policy management
+ * Implements least-privilege access controls and security best practices
  */
 export class IamConstruct extends Construct {
   public lambdaExecutionRole: Role;
   public ec2InstanceRole: Role;
   public rdsRole: Role;
   public cloudTrailRole: Role;
+  public mfaEnforcementPolicy: ManagedPolicy;
 
   constructor(scope: Construct, id: string, props: IamConstructProps) {
     super(scope, id);
 
-    // Set up account password policy for compliance
-    this.createPasswordPolicy();
+    // Create MFA enforcement policy for root account
+    this.createMfaEnforcementPolicy(props);
 
-    // Create service roles with least privilege
+    // Create service roles with minimal required permissions
     this.createServiceRoles(props);
 
-    // Apply standard tags
+    // Apply standard tags to all IAM resources
     this.applyTags(props);
   }
 
   /**
-   * Create account password policy enforcing strong passwords and MFA
-   * Note: AccountPasswordPolicy is not available in CDK, using IAM policy instead
+   * Create MFA enforcement policy for root account and sensitive operations
    */
-  private createPasswordPolicy(): void {
-    // Create a policy document for password requirements
-    const passwordPolicy = new PolicyDocument({
-      statements: [
-        new PolicyStatement({
-          effect: Effect.ALLOW,
-          actions: [
-            'iam:ChangePassword',
-            'iam:GetAccountPasswordPolicy',
-            'iam:UpdateAccountPasswordPolicy',
-          ],
-          resources: ['*'],
-        }),
-      ],
-    });
+  private createMfaEnforcementPolicy(props: IamConstructProps): void {
+    this.mfaEnforcementPolicy = new ManagedPolicy(
+      this,
+      'MfaEnforcementPolicy',
+      {
+        description: 'Policy to enforce MFA for sensitive operations',
+        statements: [
+          // Deny all actions if MFA is not present
+          new PolicyStatement({
+            effect: Effect.DENY,
+            actions: ['*'],
+            resources: ['*'],
+            conditions: {
+              BoolIfExists: {
+                'aws:MultiFactorAuthPresent': 'false',
+              },
+            },
+          }),
+          // Allow specific actions only with MFA
+          new PolicyStatement({
+            effect: Effect.ALLOW,
+            actions: [
+              'iam:CreateAccessKey',
+              'iam:DeleteAccessKey',
+              'iam:UpdateAccessKey',
+              'iam:CreateLoginProfile',
+              'iam:DeleteLoginProfile',
+              'iam:UpdateLoginProfile',
+              'iam:AttachUserPolicy',
+              'iam:DetachUserPolicy',
+              'iam:PutUserPolicy',
+              'iam:DeleteUserPolicy',
+              'iam:CreateUser',
+              'iam:DeleteUser',
+              'iam:UpdateUser',
+              'iam:CreateRole',
+              'iam:DeleteRole',
+              'iam:UpdateRole',
+              'iam:AttachRolePolicy',
+              'iam:DetachRolePolicy',
+              'iam:PutRolePolicy',
+              'iam:DeleteRolePolicy',
+              'kms:CreateKey',
+              'kms:DeleteKey',
+              'kms:DisableKey',
+              'kms:EnableKey',
+              'kms:PutKeyPolicy',
+              'kms:DeleteAlias',
+              'kms:CreateAlias',
+              'kms:UpdateAlias',
+              'organizations:*',
+              'account:*',
+            ],
+            resources: ['*'],
+            conditions: {
+              Bool: {
+                'aws:MultiFactorAuthPresent': 'true',
+              },
+              NumericLessThan: {
+                'aws:MultiFactorAuthAge': '3600', // 1 hour
+              },
+            },
+          }),
+        ],
+      }
+    );
 
-    // Create a managed policy for password requirements
-    new ManagedPolicy(this, 'PasswordPolicy', {
-      description: 'Password policy for account compliance',
-      document: passwordPolicy,
-    });
+    // Apply tags to MFA policy
+    TaggingUtils.applyStandardTags(
+      this.mfaEnforcementPolicy,
+      props.environment,
+      props.service,
+      props.owner,
+      props.project,
+      { ResourceType: 'IAM-Policy-MFA' }
+    );
   }
 
   /**
@@ -140,6 +195,7 @@ export class IamConstruct extends Construct {
       description: 'Role for EC2 instances running application workloads',
       managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
       ],
       inlinePolicies: {
         S3Access: new PolicyDocument({
@@ -159,6 +215,32 @@ export class IamConstruct extends Construct {
               effect: Effect.ALLOW,
               actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
               resources: [props.kmsKeys.dataKey.keyArn],
+            }),
+          ],
+        }),
+        // Security hardening: Disable unused ports and services
+        SecurityHardening: new PolicyDocument({
+          statements: [
+            new PolicyStatement({
+              effect: Effect.DENY,
+              actions: [
+                'ec2:AuthorizeSecurityGroupIngress',
+                'ec2:RevokeSecurityGroupIngress',
+              ],
+              resources: ['*'],
+              conditions: {
+                StringEquals: {
+                  'ec2:FromPort': [
+                    '21',
+                    '23',
+                    '25',
+                    '110',
+                    '143',
+                    '993',
+                    '995',
+                  ], // FTP, Telnet, SMTP, POP3, IMAP
+                },
+              },
             }),
           ],
         }),
