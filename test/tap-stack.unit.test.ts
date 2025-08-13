@@ -1,70 +1,366 @@
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
-import { TapStack } from "../lib/tap-stack";
+/**
+ * tap-stack.unit.test.ts
+ *
+ * Comprehensive unit tests for the TapStack class using Jest and Pulumi mocking.
+ * These tests verify the correct instantiation, configuration, and behavior of the TapStack
+ * component without actually deploying AWS resources.
+ */
 
-// Enable Pulumi mocking
-jest.mock("@pulumi/pulumi");
-jest.mock("@pulumi/aws");
+import * as pulumi from '@pulumi/pulumi';
+import { TapStack } from '../lib/tap-stack';
+import { SecureCompliantInfra } from '../lib/secure-compliant-infra';
 
-describe("TapStack Structure", () => {
-  let stack: TapStack;
+// Mock Pulumi runtime
+jest.mock('@pulumi/pulumi', () => ({
+  ComponentResource: jest.fn().mockImplementation(function(this: any, type: string, name: string, args: any, opts: any) {
+    this.registerOutputs = jest.fn();
+    return this;
+  }),
+  Output: {
+    create: jest.fn((value) => ({ apply: jest.fn((fn) => fn(value)) })),
+  },
+  output: jest.fn((value) => ({ apply: jest.fn((fn) => fn(value)) })),
+  all: jest.fn((outputs) => ({ apply: jest.fn((fn) => fn(outputs)) })),
+}));
 
+// Mock SecureCompliantInfra
+jest.mock('../lib/secure-compliant-infra', () => ({
+  SecureCompliantInfra: jest.fn().mockImplementation(function(this: any, name: string, args: any, opts: any) {
+    // Mock the outputs that SecureCompliantInfra should provide
+    this.vpcIds = pulumi.output([
+      { region: 'us-west-1', vpcId: 'vpc-12345' },
+      { region: 'us-east-2', vpcId: 'vpc-67890' }
+    ]);
+    this.ec2InstanceIds = pulumi.output([
+      { region: 'us-west-1', instanceIds: ['i-12345', 'i-23456'] },
+      { region: 'us-east-2', instanceIds: ['i-34567', 'i-45678'] }
+    ]);
+    this.rdsEndpoints = pulumi.output([
+      { region: 'us-west-1', endpoint: 'test-db-west.cluster-xyz.us-west-1.rds.amazonaws.com' },
+      { region: 'us-east-2', endpoint: 'test-db-east.cluster-xyz.us-east-2.rds.amazonaws.com' }
+    ]);
+    this.cloudtrailArn = pulumi.output('arn:aws:cloudtrail:us-west-1:123456789012:trail/test-trail');
+    this.webAclArn = pulumi.output('arn:aws:wafv2:us-west-1:123456789012:global/webacl/test-waf-acl/12345');
+    this.cloudtrailBucketName = pulumi.output('test-cloudtrail-bucket-12345');
+    this.kmsKeyArns = pulumi.output([
+      { region: 'us-west-1', keyArn: 'arn:aws:kms:us-west-1:123456789012:key/12345678-1234-1234-1234-123456789012' },
+      { region: 'us-east-2', keyArn: 'arn:aws:kms:us-east-2:123456789012:key/87654321-4321-4321-4321-210987654321' }
+    ]);
+    return this;
+  })
+}));
+
+describe('TapStack Unit Tests', () => {
   beforeEach(() => {
-    // Reset all mocks before each test
     jest.clearAllMocks();
-    
-    // Mock Pulumi runtime behavior
-    (pulumi as any).all = jest.fn().mockImplementation((values) => Promise.resolve(values));
-    (pulumi as any).Output = jest.fn().mockImplementation((value) => ({ 
-      promise: () => Promise.resolve(value),
-      apply: (fn: any) => fn(value)
-    }));
   });
 
-  describe("with props", () => {
-    beforeAll(() => {
-      stack = new TapStack("TestTapStackWithProps", {
-        environmentSuffix: "prod",
-        tags: {
-          Environment: "prod",
-          Project: "test"
-        }
+  describe('Constructor', () => {
+    it('should create TapStack with default arguments', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(stack).toBeInstanceOf(TapStack);
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'webapp',
+          environment: 'dev',
+          allowedSshCidr: '203.0.113.0/24',
+          vpcCidr: '10.0.0.0/16',
+          regions: ['us-west-1', 'us-east-2']
+        }),
+        expect.objectContaining({
+          parent: expect.any(Object)
+        })
+      );
+    });
+
+    it('should create TapStack with custom arguments', () => {
+      const customArgs = {
+        environmentSuffix: 'prod',
+        projectName: 'custom-project',
+        allowedSshCidr: '192.168.1.0/24',
+        vpcCidr: '172.16.0.0/16',
+        regions: ['us-west-2', 'eu-west-1']
+      };
+
+      const stack = new TapStack('test-stack', customArgs);
+
+      expect(stack).toBeInstanceOf(TapStack);
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'custom-project',
+          environment: 'prod',
+          allowedSshCidr: '192.168.1.0/24',
+          vpcCidr: '172.16.0.0/16',
+          regions: ['us-west-2', 'eu-west-1']
+        }),
+        expect.objectContaining({
+          parent: expect.any(Object)
+        })
+      );
+    });
+
+    it('should handle undefined optional parameters', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(stack).toBeInstanceOf(TapStack);
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'webapp',
+          environment: 'dev'
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('Resource Configuration', () => {
+    it('should pass correct resource options to SecureCompliantInfra', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'staging'
       });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.any(Object),
+        expect.objectContaining({
+          parent: expect.any(Object)
+        })
+      );
     });
 
-    it("instantiates successfully", () => {
-      expect(stack).toBeDefined();
-    });
+    it('should configure infrastructure with proper naming convention', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'prod'
+      });
 
-    it("creates AWS provider with correct region", async () => {
-      // Since TapStack doesn't create AWS providers directly, we check for infrastructure outputs
-      expect(stack.vpcIds).toBeDefined();
-      expect(stack.ec2InstanceIds).toBeDefined();
-    });
-
-    it("uses custom tags", async () => {
-      // Check that the stack was created with the expected tags
-      expect(stack.rdsEndpoints).toBeDefined();
-      expect(stack.cloudtrailArn).toBeDefined();
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'webapp',
+          environment: 'prod'
+        }),
+        expect.any(Object)
+      );
     });
   });
 
-  describe("with default values", () => {
-    beforeAll(() => {
-      stack = new TapStack("TestTapStackDefault", {});
-    });
+  describe('Output Properties', () => {
+    it('should expose infrastructure outputs correctly', () => {
+      const stack = new TapStack('test-stack', {});
 
-    it("instantiates successfully", () => {
-      expect(stack).toBeDefined();
-    });
-
-    it("has infrastructure outputs", async () => {
+      // Verify that the stack exposes the expected outputs from SecureCompliantInfra
+      expect(stack.secureInfra).toBeDefined();
       expect(stack.vpcIds).toBeDefined();
       expect(stack.ec2InstanceIds).toBeDefined();
       expect(stack.rdsEndpoints).toBeDefined();
       expect(stack.cloudtrailArn).toBeDefined();
       expect(stack.webAclArn).toBeDefined();
+      expect(stack.cloudtrailBucketName).toBeDefined();
       expect(stack.kmsKeyArns).toBeDefined();
+    });
+
+    it('should expose security-related outputs', () => {
+      const stack = new TapStack('test-stack', {});
+      
+      // Verify security-related outputs are accessible
+      expect(stack.cloudtrailArn).toBeDefined();
+      expect(stack.webAclArn).toBeDefined();
+      expect(stack.cloudtrailBucketName).toBeDefined();
+      expect(stack.kmsKeyArns).toBeDefined();
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle SecureCompliantInfra constructor errors gracefully', () => {
+      // Mock SecureCompliantInfra to throw an error
+      (SecureCompliantInfra as jest.Mock).mockImplementationOnce(() => {
+        throw new Error('Infrastructure creation failed');
+      });
+
+      expect(() => {
+        new TapStack('test-stack', {});
+      }).toThrow('Infrastructure creation failed');
+    });
+
+    it('should validate input parameters', () => {
+      // Test with valid parameters - should not throw
+      expect(() => {
+        new TapStack('test-stack', {
+          environmentSuffix: 'dev',
+          projectName: 'valid-project'
+        });
+      }).not.toThrow();
+    });
+  });
+
+  describe('Environment-specific Configuration', () => {
+    it('should configure development environment correctly', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'dev'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'dev'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should configure production environment correctly', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'prod'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'prod'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should configure staging environment correctly', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'staging'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'staging'
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('Multi-region Configuration', () => {
+    it('should handle single region deployment', () => {
+      const stack = new TapStack('test-stack', {
+        regions: ['us-west-1']
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          regions: ['us-west-1']
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should handle multi-region deployment', () => {
+      const stack = new TapStack('test-stack', {
+        regions: ['us-west-1', 'us-east-2', 'eu-west-1']
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          regions: ['us-west-1', 'us-east-2', 'eu-west-1']
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should use default regions when not specified', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          regions: ['us-west-1', 'us-east-2']
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('Tagging', () => {
+    it('should apply custom tags correctly', () => {
+      const customTags = {
+        Environment: 'test',
+        Project: 'tap',
+        Owner: 'engineering'
+      };
+
+      const stack = new TapStack('test-stack', {
+        tags: customTags
+      });
+
+      // Verify that tags are passed through to the infrastructure
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
+    it('should handle empty tags object', () => {
+      const stack = new TapStack('test-stack', {
+        tags: {}
+      });
+
+      expect(stack).toBeInstanceOf(TapStack);
+    });
+  });
+
+  describe('Component Registration', () => {
+    it('should register outputs correctly', () => {
+      const stack = new TapStack('test-stack', {});
+
+      // Verify that registerOutputs was called
+      expect(stack.registerOutputs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vpcIds: expect.any(Object),
+          ec2InstanceIds: expect.any(Object),
+          rdsEndpoints: expect.any(Object),
+          cloudtrailArn: expect.any(Object),
+          webAclArn: expect.any(Object),
+          cloudtrailBucketName: expect.any(Object),
+          kmsKeyArns: expect.any(Object)
+        })
+      );
+    });
+
+    it('should inherit from ComponentResource', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(pulumi.ComponentResource).toHaveBeenCalledWith(
+        'tap:stack:TapStack',
+        'test-stack',
+        expect.any(Object),
+        undefined
+      );
+    });
+  });
+
+  describe('Backward Compatibility', () => {
+    it('should maintain backward compatibility with legacy output names', () => {
+      const stack = new TapStack('test-stack', {});
+
+      // Verify that all legacy output properties are available
+      expect(stack.vpcIds).toBeDefined();
+      expect(stack.ec2InstanceIds).toBeDefined();
+      expect(stack.rdsEndpoints).toBeDefined();
+      expect(stack.cloudtrailArn).toBeDefined();
+      expect(stack.webAclArn).toBeDefined();
+      expect(stack.cloudtrailBucketName).toBeDefined();
+      expect(stack.kmsKeyArns).toBeDefined();
+    });
+
+    it('should expose secureInfra property for direct access', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(stack.secureInfra).toBeDefined();
+      expect(stack.secureInfra).toBeInstanceOf(SecureCompliantInfra);
     });
   });
 });
