@@ -32,7 +32,7 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Configure AWS clients
-const region = 'us-east-1';
+const region = 'us-west-2';
 const ec2Client = new EC2Client({ region });
 const rdsClient = new RDSClient({ region });
 const s3Client = new S3Client({ region });
@@ -364,17 +364,17 @@ describe('Turn Around Prompt Infrastructure Integration Tests', () => {
     });
 
     test('Infrastructure is in correct region', async () => {
-      // All ARNs should contain us-east-1
-      expect(outputs.WAFWebAclArn).toContain('us-east-1');
-      expect(outputs.DatabaseEndpoint).toContain('us-east-1');
+      // All ARNs should contain us-west-2
+      expect(outputs.WAFWebAclArn).toContain('us-west-2');
+      expect(outputs.DatabaseEndpoint).toContain('us-west-2');
 
-      // VPC should be in us-east-1
+      // VPC should be in us-west-2
       const vpcCommand = new DescribeVpcsCommand({
         VpcIds: [outputs.VpcId],
       });
       const vpcResponse = await ec2Client.send(vpcCommand);
 
-      // The fact that we can query it with us-east-1 client confirms it's in the right region
+      // The fact that we can query it with us-west-2 client confirms it's in the right region
       expect(vpcResponse.Vpcs).toHaveLength(1);
     });
   });

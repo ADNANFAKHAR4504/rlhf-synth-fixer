@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { NetworkingConstruct } from './networking-construct';
-import { SecurityConstruct } from './security-construct';
 import { ComputeConstruct } from './compute-construct';
 import { DatabaseConstruct } from './database-construct';
-import { StorageConstruct } from './storage-construct';
 import { MonitoringConstruct } from './monitoring-construct';
+import { NetworkingConstruct } from './networking-construct';
+import { SecurityConstruct } from './security-construct';
+import { StorageConstruct } from './storage-construct';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -86,6 +86,43 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DashboardUrl', {
       value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${monitoring.dashboard.dashboardName}`,
       description: 'CloudWatch Dashboard URL',
+    });
+
+    // Additional outputs required by integration tests
+    new cdk.CfnOutput(this, 'EC2Instance1', {
+      value: compute.instances[0].instanceId,
+      description: 'First EC2 Instance ID',
+      exportName: `${this.stackName}-EC2Instance1`,
+    });
+
+    new cdk.CfnOutput(this, 'EC2Instance2', {
+      value: compute.instances[1].instanceId,
+      description: 'Second EC2 Instance ID',
+      exportName: `${this.stackName}-EC2Instance2`,
+    });
+
+    new cdk.CfnOutput(this, 'WebSecurityGroupId', {
+      value: security.webSecurityGroup.securityGroupId,
+      description: 'Web Security Group ID',
+      exportName: `${this.stackName}-WebSecurityGroupId`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
+      value: security.dbSecurityGroup.securityGroupId,
+      description: 'Database Security Group ID',
+      exportName: `${this.stackName}-DatabaseSecurityGroupId`,
+    });
+
+    new cdk.CfnOutput(this, 'SNSAlarmTopicArn', {
+      value: monitoring.alarmTopic.topicArn,
+      description: 'SNS Topic ARN for CloudWatch Alarms',
+      exportName: `${this.stackName}-SNSAlarmTopicArn`,
+    });
+
+    new cdk.CfnOutput(this, 'CloudWatchLogGroupName', {
+      value: monitoring.logGroup.logGroupName,
+      description: 'CloudWatch Log Group Name',
+      exportName: `${this.stackName}-CloudWatchLogGroupName`,
     });
   }
 }
