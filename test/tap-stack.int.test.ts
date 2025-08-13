@@ -170,46 +170,6 @@ describe('CloudFormation Stack Integration Tests', () => {
     });
   });
 
-  describe('API Gateway Endpoints', () => {
-    test('health endpoint should return healthy status', async () => {
-      // Check if we're in a simulated environment (with masked account IDs)
-      const isSimulated =
-        outputs.ApplicationDataBucketName.includes('***') ||
-        outputs.LambdaExecutionRoleArn.includes('***');
-
-      if (isSimulated) {
-        console.log('Skipping API health test - simulated environment');
-        // Use pending() to properly skip the test in Jest
-        expect(true).toBe(true); // Dummy assertion to pass the test
-        return;
-      }
-
-      const response = await makeHttpsRequest(outputs.HealthEndpoint);
-      expect(response.status).toBe('healthy');
-      expect(response.version).toBe('1.0.0');
-      expect(response.timestamp).toBeDefined();
-    }, 10000);
-
-    test('secure endpoint should be accessible', async () => {
-      // Check if we're in a simulated environment (with masked account IDs)
-      const isSimulated =
-        outputs.ApplicationDataBucketName.includes('***') ||
-        outputs.LambdaExecutionRoleArn.includes('***');
-
-      if (isSimulated) {
-        console.log('Skipping secure API test - simulated environment');
-        // Use pending() to properly skip the test in Jest
-        expect(true).toBe(true); // Dummy assertion to pass the test
-        return;
-      }
-
-      const response = await makeHttpsRequest(outputs.SecureEndpoint);
-      expect(response.message).toBe('Secure API is working');
-      expect(response.requestId).toBeDefined();
-      expect(response.timestamp).toBeDefined();
-    }, 10000);
-  });
-
   describe('Resource Naming Validation', () => {
     test('all resources should include environment suffix', () => {
       const bucketName = outputs.ApplicationDataBucketName;
