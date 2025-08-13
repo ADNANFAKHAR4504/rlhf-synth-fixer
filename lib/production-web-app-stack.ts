@@ -69,28 +69,19 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
   public readonly albDnsName: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly s3BucketName: pulumi.Output<string>;
-  
+
   // Additional resource references for testing
   public readonly ec2Role: aws.iam.Role;
   public readonly ec2InstanceProfile: aws.iam.InstanceProfile;
   public readonly ec2S3Policy: aws.iam.RolePolicy;
-  public readonly targetGroup: aws.lb.TargetGroup;
-  public readonly launchTemplate: aws.ec2.LaunchTemplate;
-  public readonly albSecurityGroup: aws.ec2.SecurityGroup;
-  public readonly ec2SecurityGroup: aws.ec2.SecurityGroup;
-  public readonly rdsSecurityGroup: aws.ec2.SecurityGroup;
-  public readonly rdsSubnetGroup: aws.rds.SubnetGroup;
-  public readonly rdsKmsKey: aws.kms.Key;
-  public readonly rdsKmsAlias: aws.kms.Alias;
-  public readonly databaseSecret: aws.secretsmanager.Secret;
   public readonly awsProvider: aws.Provider;
-  
+
   // Configuration properties
   private readonly projectName: string;
   private readonly environment: string;
   private readonly resourcePrefix: string;
 
-  constructor (
+  constructor(
     name: string,
     args: ProductionWebAppStackArgs = {},
     opts?: ResourceOptions
@@ -124,7 +115,8 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
 
     // Common tags
     const commonTags = {
-      Environment: this.environment.charAt(0).toUpperCase() + this.environment.slice(1),
+      Environment:
+        this.environment.charAt(0).toUpperCase() + this.environment.slice(1),
       Project: this.projectName,
       Region: region,
       ...(args.tags || {}),
@@ -735,7 +727,9 @@ systemctl enable amazon-cloudwatch-agent
           },
           {
             key: 'Environment',
-            value: this.environment.charAt(0).toUpperCase() + this.environment.slice(1),
+            value:
+              this.environment.charAt(0).toUpperCase() +
+              this.environment.slice(1),
             propagateAtLaunch: true,
           },
         ],
