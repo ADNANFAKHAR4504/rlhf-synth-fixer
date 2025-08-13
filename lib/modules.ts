@@ -267,7 +267,7 @@ export class ComputeModule extends Construct {
         enabled: true,
         path: '/dummy',
         protocol: 'HTTP',
-        healthyThreshold: 1,
+        healthyThreshold: 2,
         unhealthyThreshold: 10,
         timeout: 2,
         interval: 30,
