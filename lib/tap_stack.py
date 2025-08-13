@@ -125,6 +125,8 @@ class TapStack(TerraformStack):
         existing_cluster_name = TerraformVariable(self, "existing_cluster_name", type="string", default="")
         existing_execution_role_name = TerraformVariable(self, "existing_execution_role_name", type="string", default="")
         existing_task_role_name = TerraformVariable(self, "existing_task_role_name", type="string", default="")
+        existing_execution_role_arn = TerraformVariable(self, "existing_execution_role_arn", type="string", default="")
+        existing_task_role_arn = TerraformVariable(self, "existing_task_role_arn", type="string", default="")
         existing_db_subnet_group_name = TerraformVariable(self, "existing_db_subnet_group_name", type="string", default="")
 
         # Common tags
@@ -148,6 +150,26 @@ class TapStack(TerraformStack):
         )
         # Use the provided id, or discovered id, or the created one
         vpc_id = "${var.existing_vpc_id != \"\" ? var.existing_vpc_id : (length(data.aws_vpcs.existing_vpcs.ids) > 0 ? data.aws_vpcs.existing_vpcs.ids[0] : aws_vpc.vpc[0].id)}"
+
+        # Unified locals for adopt-or-create outputs and cross-resource references
+        self.add_override(
+            "locals",
+            {
+                "vpc_id": vpc_id,
+                "public_subnet_ids": "${length(var.existing_public_subnet_ids) > 0 ? var.existing_public_subnet_ids : [aws_subnet.public-1[0].id, aws_subnet.public-2[0].id]}",
+                "private_subnet_ids": "${length(var.existing_private_subnet_ids) > 0 ? var.existing_private_subnet_ids : [aws_subnet.private-1[0].id, aws_subnet.private-2[0].id]}",
+                "alb_sg_id": "${var.existing_alb_sg_id != \"\" ? var.existing_alb_sg_id : aws_security_group.alb-sg[0].id}",
+                "fargate_sg_id": "${var.existing_fargate_sg_id != \"\" ? var.existing_fargate_sg_id : aws_security_group.fargate-sg[0].id}",
+                "rds_sg_id": "${var.existing_rds_sg_id != \"\" ? var.existing_rds_sg_id : aws_security_group.rds-sg[0].id}",
+                "alb_arn": "${var.existing_alb_arn != \"\" ? var.existing_alb_arn : aws_lb.alb[0].arn}",
+                "tg_arn": "${var.existing_tg_arn != \"\" ? var.existing_tg_arn : aws_lb_target_group.tg[0].arn}",
+                "cluster_name": "${var.existing_cluster_name != \"\" ? var.existing_cluster_name : aws_ecs_cluster.ecs-cluster[0].name}",
+                "execution_role_arn": "${var.existing_execution_role_arn != \"\" ? var.existing_execution_role_arn : aws_iam_role.ecs-exec-role[0].arn}",
+                "task_role_arn": "${var.existing_task_role_arn != \"\" ? var.existing_task_role_arn : aws_iam_role.ecs-task-role[0].arn}",
+                "db_secret_arn": "${aws_secretsmanager_secret.db-secret[0].arn}",
+                "app_secret_arn": "${aws_secretsmanager_secret.app-secret[0].arn}",
+            },
+        )
 
         igw = InternetGateway(self, "igw", vpc_id=vpc_id, tags={**common_tags, "Name": "production-igw"})
         # Create IGW only when we created the VPC (cannot reliably adopt IGW)
@@ -501,6 +523,9 @@ class TapStack(TerraformStack):
             tags={**common_tags, "Name": "production-alb"},
         )
         alb.add_override("count", "${var.existing_alb_arn == \"\" ? 1 : 0}")
+        # Adopt-or-create inputs
+        self.add_override("resource.aws_lb.alb.security_groups", ["${local.alb_sg_id}"])
+        self.add_override("resource.aws_lb.alb.subnets", "${local.public_subnet_ids}")
         tg = LbTargetGroup(
             self,
             "tg",
@@ -541,8 +566,8 @@ class TapStack(TerraformStack):
             ],
         )
         # Use existing ALB/TG if provided
-        self.add_override("resource.aws_lb_listener.listener.load_balancer_arn", "${var.existing_alb_arn != \"\" ? var.existing_alb_arn : aws_lb.alb[0].arn}")
-        self.add_override("resource.aws_lb_listener.listener.default_action.0.forward.target_group.0.arn", "${var.existing_tg_arn != \"\" ? var.existing_tg_arn : aws_lb_target_group.tg[0].arn}")
+        self.add_override("resource.aws_lb_listener.listener.load_balancer_arn", "${local.alb_arn}")
+        self.add_override("resource.aws_lb_listener.listener.default_action.0.forward.target_group.0.arn", "${local.tg_arn}")
 
         task_def = EcsTaskDefinition(
             self,
@@ -552,8 +577,8 @@ class TapStack(TerraformStack):
             requires_compatibilities=["FARGATE"],
             cpu="256",
             memory="512",
-            execution_role_arn=ecs_exec_role.arn,
-            task_role_arn=ecs_task_role.arn,
+            execution_role_arn="${local.execution_role_arn}",
+            task_role_arn="${local.task_role_arn}",
             container_definitions=json.dumps(
                 [
                     {
@@ -574,9 +599,9 @@ class TapStack(TerraformStack):
                             {"name": "PORT", "value": "8080"},
                         ],
                         "secrets": [
-                            {"name": "DB_USERNAME", "valueFrom": db_secret.arn + ":username::"},
-                            {"name": "DB_PASSWORD", "valueFrom": db_secret.arn + ":password::"},
-                            {"name": "JWT_SECRET", "valueFrom": app_secret.arn + ":jwt_secret::"},
+                            {"name": "DB_USERNAME", "valueFrom": "${local.db_secret_arn}:username::"},
+                            {"name": "DB_PASSWORD", "valueFrom": "${local.db_secret_arn}:password::"},
+                            {"name": "JWT_SECRET", "valueFrom": "${local.app_secret_arn}:jwt_secret::"},
                         ],
                     }
                 ]
@@ -607,6 +632,10 @@ class TapStack(TerraformStack):
             enable_execute_command=True,
             tags={**common_tags, "Name": "production-app-service"},
         )
+        # Adopt-or-create for ECS service nets and TG
+        self.add_override("resource.aws_ecs_service.service.network_configuration.subnets", "${local.private_subnet_ids}")
+        self.add_override("resource.aws_ecs_service.service.network_configuration.security_groups", ["${local.fargate_sg_id}"])
+        self.add_override("resource.aws_ecs_service.service.load_balancer.0.target_group_arn", "${local.tg_arn}")
 
         # Monitoring: SNS + Alarms
         alerts = SnsTopic(self, "alerts", name="production-alerts", tags=common_tags)
@@ -631,7 +660,7 @@ class TapStack(TerraformStack):
             threshold=80,
             alarm_description="ECS service CPU utilization is too high",
             alarm_actions=[alerts.arn],
-            dimensions={"ServiceName": service.name, "ClusterName": cluster.name},
+            dimensions={"ServiceName": service.name, "ClusterName": "${local.cluster_name}"},
             tags=common_tags,
         )
         CloudwatchMetricAlarm(
@@ -647,7 +676,7 @@ class TapStack(TerraformStack):
             threshold=80,
             alarm_description="ECS service memory utilization is too high",
             alarm_actions=[alerts.arn],
-            dimensions={"ServiceName": service.name, "ClusterName": cluster.name},
+            dimensions={"ServiceName": service.name, "ClusterName": "${local.cluster_name}"},
             tags=common_tags,
         )
 
@@ -703,13 +732,13 @@ class TapStack(TerraformStack):
             )
 
         # Outputs for verification
-        TerraformOutput(self, "vpc_id", value=vpc.id)
-        TerraformOutput(self, "alb_dns_name", value=alb.dns_name)
-        TerraformOutput(self, "target_group_arn", value=tg.arn)
-        TerraformOutput(self, "ecs_cluster_name", value=cluster.name)
+        TerraformOutput(self, "vpc_id", value="${local.vpc_id}")
+        TerraformOutput(self, "alb_dns_name", value="${var.existing_alb_arn != \"\" ? \"\" : aws_lb.alb[0].dns_name}")
+        TerraformOutput(self, "target_group_arn", value="${local.tg_arn}")
+        TerraformOutput(self, "ecs_cluster_name", value="${local.cluster_name}")
         TerraformOutput(self, "ecs_service_name", value=service.name)
-        TerraformOutput(self, "db_secret_arn", value=db_secret.arn)
-        TerraformOutput(self, "app_secret_arn", value=app_secret.arn)
+        TerraformOutput(self, "db_secret_arn", value="${local.db_secret_arn}")
+        TerraformOutput(self, "app_secret_arn", value="${local.app_secret_arn}")
         if enable_database and rds is not None:
             TerraformOutput(self, "rds_identifier", value=rds.id)
             TerraformOutput(self, "rds_endpoint", value=rds.address)
