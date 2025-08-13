@@ -44,6 +44,7 @@
     "DBMasterPassword": {
       "Type": "String",
       "NoEcho": true,
+      "Default": "TempPassword123!",
       "Description": "RDS master password",
       "MinLength": 8,
       "MaxLength": 128,
