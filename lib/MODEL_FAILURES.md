@@ -1,81 +1,164 @@
-# Infrastructure Improvements Made to the MODEL_RESPONSE
+# Regenerate the CloudFormation template (model correction prompt)
 
-## Critical Infrastructure Issues Fixed
+You previously returned a CloudFormation YAML that does not meet the spec and unit tests. **Regenerate ONE complete YAML** (no prose, **no code fences**) that **exactly** follows these rules.
 
-### 1. Missing Environment Isolation (HIGH PRIORITY)
-**Problem:** The original template lacked environment-specific resource naming, which would cause conflicts when deploying multiple environments.
+---
 
-**Solution:** Added `EnvironmentSuffix` parameter and incorporated it into all resource names and tags to ensure proper isolation between different deployments.
+## Goal
 
-### 2. Hardcoded Configuration Values
-**Problem:** The template contained hardcoded default values for critical parameters like HostedZoneId and RecordName, making it inflexible and environment-specific.
+Automated failover between **primary** & **standby** EC2 instances using **Route 53** health checks and failover A records.
 
-**Solution:** 
-- Removed hardcoded defaults for HostedZoneId, RecordName, and KeyName
-- Added conditional logic to create a hosted zone if not provided
-- Made the template more flexible and reusable across environments
+---
 
-### 3. EIP Association Method
-**Problem:** The original template directly associated EIPs with instances using the InstanceId property, which is not the recommended approach for VPC environments.
+## Use existing Route 53 resources (no hosted zone creation)
 
-**Solution:** Implemented proper EIP associations using `AWS::EC2::EIPAssociation` resources, which is the best practice for VPC-based deployments.
+- **HostedZoneId** and **RecordName** are provided as parameters and used directly.
+- Do **not** create a hosted zone. Do **not** attempt to derive or modify the record name.
 
-### 4. UserData Script Issues
-**Problem:** The UserData scripts used `yum` instead of `dnf` for Amazon Linux 2023, and used unnecessary `!Sub` function when no variables were being substituted.
+---
 
-**Solution:** 
-- Updated to use `dnf` for Amazon Linux 2023 compatibility
-- Removed unnecessary `!Sub` function where no substitution was needed
-- Added error handling with `set -euxo pipefail`
+## Parameters (must exist exactly with these properties)
 
-### 5. Missing Security Group Name
-**Problem:** The Security Group lacked an explicit GroupName property, making it harder to identify in the AWS console.
+- `HostedZoneId` — `Type: String`, **Default:** `Z0457876OLTG958Q3IXN`, description like “Existing Route 53 Hosted Zone ID (required)”.
+- `RecordName` — `Type: String`, **Default:** `tap-us-east-1.turing229221.com.`, description like “FQDN for failover record (trailing dot ok)”.
+- `InstanceType` — `Type: String`, **Default:** `t3.micro`, `AllowedValues: [t3.micro, t3.small, t3.medium, t3.large]`.
+- `KeyName` — `Type: String`, **Default:** `cf-task-keypair-TapStackpr104`, description like “Existing EC2 Key Pair name (optional)”.
+- `AllowedSSHCidr` — `Type: String`, **Default:** `0.0.0.0/0`.
+- `HealthCheckPort` — `Type: Number`, **Default:** `80`, `MinValue: 1`, `MaxValue: 65535`.
+- `HealthCheckPath` — `Type: String`, **Default:** `/`.
+- `LatestAmiId` — `Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>`, **Default:** `/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64`.
 
-**Solution:** Added GroupName property with environment suffix for better identification.
+---
 
-### 6. Route 53 Health Check Configuration
-**Problem:** The health check configuration structure was incorrect, using deprecated properties.
+## Conditions
 
-**Solution:** Updated to use the proper `HealthCheckConfig` structure with nested properties.
+- Only:
+  ```yaml
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+  ```
 
-### 7. Missing Conditional Hosted Zone Creation
-**Problem:** The template required an existing hosted zone, limiting its flexibility for testing and development environments.
+---
 
-**Solution:** Added conditional logic to optionally create a hosted zone if not provided, making the template self-contained.
+## Networking resources
 
-### 8. Missing VPC and Additional Outputs
-**Problem:** The template was missing important outputs like VPCId and HostedZoneIdOutput that are useful for integration and cross-stack references.
+- `VPC` with:
+  - `CidrBlock: 10.0.0.0/16`
+  - `EnableDnsHostnames: true`
+  - `EnableDnsSupport: true`
+  - Tags: `Name: !Sub "${AWS::StackName}-VPC"`, `Project: "IaC - AWS Nova Model Breaking"`
+- Two public subnets:
+  - `PublicSubnet1`: `10.0.1.0/24`, `AvailabilityZone: !Select [0, !GetAZs ""]`, `MapPublicIpOnLaunch: true`
+  - `PublicSubnet2`: `10.0.2.0/24`, `AvailabilityZone: !Select [1, !GetAZs ""]`, `MapPublicIpOnLaunch: true`
+  - Each with Name/Project tags similar to above.
+- `InternetGateway`, `VPCGatewayAttachment`
+- `PublicRouteTable` + default `PublicRoute` to IGW
+- Route table associations for both subnets
 
-**Solution:** Added comprehensive outputs including VPCId and HostedZoneIdOutput with proper export names.
+---
 
-### 9. DNS Record Name Configuration
-**Problem:** The DNS record names were not flexible enough to handle different scenarios (provided vs. auto-generated).
+## Security Group
 
-**Solution:** Implemented conditional logic for DNS record names based on whether a RecordName is provided or a hosted zone is created.
+- Ingress:
+  - TCP 80 from `0.0.0.0/0`
+  - TCP 22 from `!Ref AllowedSSHCidr`
+- **Egress allow-all**:
+  ```yaml
+  SecurityGroupEgress:
+    - IpProtocol: -1
+      CidrIp: 0.0.0.0/0
+      Description: Allow all egress
+  ```
+- Tags include `Name: !Sub "${AWS::StackName}-SecurityGroup"` and `Project`.
 
-### 10. Resource Tagging Consistency
-**Problem:** Not all resources had consistent tagging with environment suffixes.
+> Do **not** set `GroupName` explicitly.
 
-**Solution:** Added comprehensive tagging to all resources with environment suffix for proper resource identification and cost tracking.
+---
 
-## Infrastructure Best Practices Applied
+## EC2 Instances
 
-1. **Idempotency:** All resources can be safely created, updated, or deleted without manual intervention
-2. **Environment Isolation:** Every resource includes environment suffix to prevent conflicts
-3. **Conditional Resources:** Smart use of CloudFormation conditions for flexible deployments
-4. **Proper Dependencies:** Explicit dependencies where needed (e.g., PublicRoute depends on AttachGateway)
-5. **Security Best Practices:** Security group with minimal required permissions
-6. **High Availability:** Resources distributed across multiple availability zones
-7. **Monitoring Ready:** Health checks properly configured for automated failover
-8. **Cost Optimization:** Use of t3.micro as default instance type
-9. **Maintainability:** Clear resource naming and comprehensive tagging
+- `PrimaryInstance` in `PublicSubnet1`
+- `StandbyInstance` in `PublicSubnet2`
+- Both:
+  - `ImageId: !Ref LatestAmiId`
+  - `InstanceType: !Ref InstanceType`
+  - `SecurityGroupIds: [!Ref SecurityGroup]`
+  - `KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]`
+  - **UserData** uses **`dnf`** (Amazon Linux 2023), starts/enables `httpd`, writes an HTML page:
+    - Primary: includes `<h1>Primary Instance</h1>`
+    - Standby: includes `<h1>Standby Instance</h1>`
+    - It’s OK if the page shows the literal `$(curl ...)` (single-quoted heredoc).
+  - Tags include `Name`, `Project`, and `Role` (`Primary`/`Standby`).
 
-## Testing Coverage
+---
 
-The improved template now includes:
-- Comprehensive unit tests validating all CloudFormation resources and their configurations
-- Integration tests that verify actual AWS resource creation and connectivity
-- Validation of failover functionality through Route 53 health checks
-- No hardcoded environment-specific values in the template
+## Elastic IPs (VPC-safe pattern)
 
-This production-ready template can now be deployed reliably across multiple environments with proper isolation and monitoring.
+- `PrimaryEIP` and `StandbyEIP`:
+  - `Domain: vpc`
+  - **Do not** set `InstanceId` on these EIP resources.
+  - Include Name/Project tags.
+- `PrimaryEIPAssociation` / `StandbyEIPAssociation`:
+  - `AllocationId: !GetAtt <EIP>.AllocationId`
+  - `InstanceId: !Ref <Instance>`
+
+---
+
+## Route 53
+
+- `PrimaryHealthCheck` must use **this schema** (no flat top-level Type/Port/etc):
+  ```yaml
+  HealthCheckConfig:
+    Type: HTTP
+    IPAddress: !Ref PrimaryEIP
+    Port: !Ref HealthCheckPort
+    ResourcePath: !Ref HealthCheckPath
+    RequestInterval: 30
+    FailureThreshold: 3
+  HealthCheckTags:
+    - Key: Name
+      Value: !Sub "${AWS::StackName}-PrimaryHealthCheck"
+    - Key: Project
+      Value: "IaC - AWS Nova Model Breaking"
+  ```
+- `PrimaryRecord` and `StandbyRecord` are `AWS::Route53::RecordSet`:
+  - `HostedZoneId: !Ref HostedZoneId`
+  - `Name: !Ref RecordName`
+  - `Type: A`
+  - `TTL: 60`
+  - `SetIdentifier: Primary` / `Standby`
+  - `Failover: PRIMARY` / `SECONDARY`
+  - `ResourceRecords: [!Ref PrimaryEIP]` / `[!Ref StandbyEIP]`
+  - **Primary** includes `HealthCheckId: !Ref PrimaryHealthCheck`
+
+---
+
+## Outputs (names must match exactly)
+
+- `PrimaryInstanceId` → `Value: !Ref PrimaryInstance`
+- `StandbyInstanceId` → `Value: !Ref StandbyInstance`
+- `PrimaryEIPOut` → `Value: !Ref PrimaryEIP`
+- `StandbyEIPOut` → `Value: !Ref StandbyEIP`
+- `DNSName` → `Value: !Ref RecordName`
+- `HealthCheckId` → `Value: !Ref PrimaryHealthCheck`
+- `HostedZoneIdOutput` → `Value: !Ref HostedZoneId`
+- `VPCId` → `Value: !Ref VPC`
+
+Each output must include:
+```yaml
+Export:
+  Name: !Sub "${AWS::StackName}-<OutputLogicalId>"
+```
+
+---
+
+## Linting & style
+
+- Use `!Sub` **only** when interpolating variables; otherwise plain strings.
+- Keep `Project: "IaC - AWS Nova Model Breaking"` tag consistent.
+- `AWSTemplateFormatVersion: "2010-09-09"` and the exact Description used above.
+
+---
+
+## Return format
+
+**Return only the final YAML** (no explanations, no surrounding code fences, no extra text).
