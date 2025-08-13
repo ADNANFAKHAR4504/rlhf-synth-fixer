@@ -1530,52 +1530,14 @@
               }
             },
             {
-              "Sid": "AllowELBAccessLogs",
+              "Sid": "ELBAccessLogsPolicy",
               "Effect": "Allow",
               "Principal": {
-                "AWS": {
-                  "Fn::FindInMap": [
-                    "ELBAccountMap",
-                    {
-                      "Ref": "AWS::Region"
-                    },
-                    "AccountId"
-                  ]
-                }
+                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
               },
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"
-              }
-            },
-            {
-              "Sid": "AllowELBAccessLogsDelivery",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "delivery.logs.amazonaws.com"
-              },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/*"
-              },
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
-                }
-              }
-            },
-            {
-              "Sid": "AllowELBAccessLogsGetBucketAcl",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "delivery.logs.amazonaws.com"
-              },
-              "Action": "s3:GetBucketAcl",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "S3LogsBucket",
-                  "Arn"
-                ]
+                "Fn::Sub": "${S3LogsBucket.Arn}/AWSLogs/*"
               }
             }
           ]
