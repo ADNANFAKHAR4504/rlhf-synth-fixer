@@ -21,8 +21,8 @@ All resources are tagged consistently and adhere to AWS best practices
 with the "corp-" prefix and deployment limited to us-west-2 region.
 """
 
-from typing import Optional, Dict, List
 import json
+from typing import Dict, List, Optional
 
 import pulumi
 import pulumi_aws as aws
@@ -261,7 +261,7 @@ class SecureVPC:
     )
     role = aws.iam.Role(
         f"{self.name_prefix}-flow-logs-role",
-        assume_policy=assume_policy,
+        assume_role_policy=assume_policy,
         tags={**self.tags, "Name": f"{self.name_prefix}-flow-logs-role"},
         opts=ResourceOptions(provider=self.provider)
     )
