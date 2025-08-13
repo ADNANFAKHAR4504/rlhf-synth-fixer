@@ -116,7 +116,7 @@ Resources:
               Service: vpc-flow-logs.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: VPCFlowLogDeliveryRolePolicy
+        # PolicyName removed for CAPABILITY_IAM compatibility
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -348,7 +348,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-${EnvironmentSuffix}-EC2-Role'
+      # RoleName removed for CAPABILITY_IAM compatibility
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -359,8 +359,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: S3ReadOnlyAccess
-          PolicyDocument:
+        - PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
@@ -373,8 +372,7 @@ Resources:
                 Action:
                   - s3:ListBucket
                 Resource: !GetAtt SecureDataBucket.Arn
-        - PolicyName: DynamoDBReadAccess
-          PolicyDocument:
+        - PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
@@ -396,7 +394,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-${EnvironmentSuffix}-Lambda-Execution-Role'
+      # RoleName removed for CAPABILITY_IAM compatibility
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -407,7 +405,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: DynamoDBAccess
+        # PolicyName removed for CAPABILITY_IAM compatibility
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -428,7 +426,7 @@ Resources:
     Properties:
       UserName: !Sub '${Environment}-${EnvironmentSuffix}-secure-user'
       Policies:
-        - PolicyName: RequireMFAPolicy
+        # PolicyName removed for CAPABILITY_IAM compatibility
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
