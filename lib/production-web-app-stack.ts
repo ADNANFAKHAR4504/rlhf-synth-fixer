@@ -81,7 +81,8 @@ export class ProductionWebAppStack extends pulumi.ComponentResource {
 
     // Common tags
     const commonTags = {
-      Environment: environmentSuffix.charAt(0).toUpperCase() + environmentSuffix.slice(1),
+      Environment:
+        environmentSuffix.charAt(0).toUpperCase() + environmentSuffix.slice(1),
       Project: projectName,
       ...(args.tags || {}),
     };
@@ -608,7 +609,7 @@ systemctl enable amazon-cloudwatch-agent
     );
 
     // ALB Listener
-    new aws.lb.Listener(
+    const albListener = new aws.lb.Listener(
       'app-listener',
       {
         loadBalancerArn: this.loadBalancer.arn,
@@ -625,7 +626,7 @@ systemctl enable amazon-cloudwatch-agent
           ...commonTags,
         },
       },
-      { parent: this }
+      { parent: this, dependsOn: [this.loadBalancer, targetGroup] }
     );
 
     // Auto Scaling Group with enhanced health checks
@@ -659,12 +660,14 @@ systemctl enable amazon-cloudwatch-agent
           },
           {
             key: 'Environment',
-            value: environmentSuffix.charAt(0).toUpperCase() + environmentSuffix.slice(1),
+            value:
+              environmentSuffix.charAt(0).toUpperCase() +
+              environmentSuffix.slice(1),
             propagateAtLaunch: true,
           },
         ],
       },
-      { parent: this }
+      { parent: this, dependsOn: [launchTemplate, targetGroup] }
     );
 
     // S3 Bucket with enhanced security
