@@ -147,20 +147,33 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Create VPC Flow Logs for security monitoring
-    const flowLogRole = new iam.Role(this, 'VpcFlowLogRole', {
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/VPCFlowLogsDeliveryRolePolicy'
-        ),
-      ],
-    });
-
+    // Create CloudWatch Log Group for VPC Flow Logs
     const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
       logGroupName: `/aws/vpc/flowlogs/${this.commonTags.Project}-${this.commonTags.Environment}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
+    });
+
+    // Create VPC Flow Logs for security monitoring
+    const flowLogRole = new iam.Role(this, 'VpcFlowLogRole', {
+      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+      inlinePolicies: {
+        CloudWatchLogsDelivery: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              resources: [flowLogGroup.logGroupArn],
+            }),
+          ],
+        }),
+      },
     });
 
     new ec2.FlowLog(this, 'VpcFlowLog', {
