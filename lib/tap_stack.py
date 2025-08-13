@@ -20,12 +20,14 @@ infrastructure using Pulumi in Python. The stack provisions:
 All resources are tagged consistently and adhere to AWS best practices
 with the "corp-" prefix and deployment limited to us-west-2 region.
 """
+# pylint: disable=too-many-lines
 
 import json
 from typing import Dict, List, Optional
 
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 from pulumi import ResourceOptions
 
 
@@ -47,7 +49,7 @@ class TapStackArgs:
     self.tags = tags or {"Environment": "Production"}
 
 
-class SecureVPC:
+class SecureVPC:  # pylint: disable=too-many-instance-attributes
   """
   Represents a secure VPC with public/private subnets distributed across two availability zones,
   Internet Gateway, NAT Gateways, route tables, network ACLs, and VPC Flow Logs for monitoring.
@@ -315,6 +317,7 @@ def create_kms_key(tags: Dict[str, str],
   Create a KMS key and alias used for encryption of AWS resources.
   """
   current = aws.get_caller_identity()
+  region = aws.get_region()
   key_policy = json.dumps(
       {
           "Version": "2012-10-17",
@@ -329,7 +332,7 @@ def create_kms_key(tags: Dict[str, str],
               {
                   "Sid": "Allow CloudWatch Logs",
                   "Effect": "Allow",
-                  "Principal": {"Service": "logs.us-west-2.amazonaws.com"},
+                  "Principal": {"Service": f"logs.{region.name}.amazonaws.com"},
                   "Action": [
                       "kms:Encrypt",
                       "kms:Decrypt",
@@ -478,9 +481,25 @@ def create_rds(
       opts=ResourceOptions(provider=provider)
   )
 
-  db_password = aws.ssm.get_parameter(
-      name=db_password_param_name, with_decryption=True
-  ).value
+  # Generate a secure random password
+  db_password = random.RandomPassword(
+      "corp-db-password",
+      length=16,
+      special=True,
+      override_special="!#$%&*()-_=+[]{}<>:?",
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Store the password in SSM Parameter Store
+  aws.ssm.Parameter(
+      "corp-db-password-param",
+      name=db_password_param_name,
+      type="SecureString",
+      value=db_password.result,
+      key_id=kms_key.id,
+      tags={**tags, "Name": "corp-db-password-param"},
+      opts=ResourceOptions(provider=provider)
+  )
 
   rds_instance = aws.rds.Instance(
       "corp-rds-instance",
@@ -495,7 +514,7 @@ def create_rds(
       storage_encrypted=True,
       kms_key_id=kms_key.id,
       username="adminuser",
-      password=db_password,
+      password=db_password.result,
       backup_retention_period=7,
       skip_final_snapshot=True,
       tags={**tags, "Name": "corp-rds-instance"},
@@ -505,7 +524,6 @@ def create_rds(
 
 
 def create_eks_cluster(
-    vpc: aws.ec2.Vpc,
     private_subnet_ids: List[str],
     eks_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
@@ -516,7 +534,7 @@ def create_eks_cluster(
   """
   eks_role = aws.iam.Role(
       "corp-eks-role",
-      assume_policy=json.dumps(
+      assume_role_policy=json.dumps(
           {
               "Version": "2012-10-17",
               "Statement": [
@@ -549,6 +567,7 @@ def create_eks_cluster(
       role_arn=eks_role.arn,
       vpc_config=aws.eks.ClusterVpcConfigArgs(
           subnet_ids=private_subnet_ids,
+          security_group_ids=[eks_sg.id],
           endpoint_public_access=True,
           endpoint_private_access=True,
       ),
@@ -561,7 +580,6 @@ def create_eks_cluster(
 def create_eks_node_group(
     cluster: aws.eks.Cluster,
     subnets: List[aws.ec2.Subnet],
-    eks_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
     provider: aws.Provider,
 ) -> aws.eks.NodeGroup:
@@ -570,7 +588,7 @@ def create_eks_node_group(
   """
   node_role = aws.iam.Role(
       "corp-eks-node-role",
-      assume_policy=json.dumps(
+      assume_role_policy=json.dumps(
           {
               "Version": "2012-10-17",
               "Statement": [
@@ -607,10 +625,11 @@ def create_eks_node_group(
       scaling_config=aws.eks.NodeGroupScalingConfigArgs(
           desired_size=2, min_size=1, max_size=3
       ),
-      remote_access=aws.eks.NodeGroupRemoteAccessArgs(
-          ec2_ssh_key="your-ec2-key",
-          source_security_group_ids=[eks_sg.id],
-      ),
+      # Note: SSH key access is optional and should be configured based on security requirements
+      # remote_access=aws.eks.NodeGroupRemoteAccessArgs(
+      #     ec2_ssh_key="your-ec2-key",  # Replace with actual key name if needed
+      #     source_security_group_ids=[eks_sg.id],
+      # ),
       tags={**tags, "Name": "corp-eks-node-group"},
       opts=ResourceOptions(provider=provider)
   )
@@ -689,7 +708,7 @@ def create_codepipeline(
 
   pipeline_role = aws.iam.Role(
       role_name,
-      assume_policy=json.dumps({
+      assume_role_policy=json.dumps({
           "Version": "2012-10-17",
           "Statement": [{
               "Effect": "Allow",
@@ -739,9 +758,19 @@ def create_codepipeline(
   source_output = "source_output"
   build_output = "build_output"
 
-  github_token = aws.ssm.get_parameter(
-      name=github_oauth_token_param, with_decryption=True
-  ).value
+  # Create a placeholder GitHub token parameter (should be updated with real
+  # token)
+  github_token_param = aws.ssm.Parameter(
+      "corp-github-token-param",
+      name=github_oauth_token_param,
+      type="SecureString",
+      value="placeholder-github-token-update-me",
+      key_id=kms_key.id,
+      tags={**tags, "Name": "corp-github-token-param"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  github_token = github_token_param.value
 
   pipeline = aws.codepipeline.Pipeline(
       "corp-codepipeline",
@@ -965,21 +994,23 @@ class TapStack(pulumi.ComponentResource):
     alb_sg = sgs["alb_sg"]
 
     rds_instance = create_rds(
-        vpc_module.private_subnets,
-        db_sg,
-        kms_key,
-        tags,
+        subnets=vpc_module.private_subnets,
+        db_sg=db_sg,
+        kms_key=kms_key,
+        tags=tags,
         db_password_param_name=f"/{prefix}/{
             args.environment_suffix}/dbPassword",
         provider=provider,
     )
 
     eks_cluster = create_eks_cluster(
-        vpc_module.vpc, [
-            s.id for s in vpc_module.private_subnets], eks_sg, tags, provider
+        private_subnet_ids=[s.id for s in vpc_module.private_subnets],
+        eks_sg=eks_sg,
+        tags=tags,
+        provider=provider
     )
     eks_node_group = create_eks_node_group(
-        eks_cluster, vpc_module.private_subnets, eks_sg, tags, provider
+        eks_cluster, vpc_module.private_subnets, tags, provider
     )
 
     alb, target_group, _ = create_alb(

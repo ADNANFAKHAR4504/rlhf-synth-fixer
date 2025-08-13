@@ -8,11 +8,13 @@ created by the TapStack match the Pulumi stack outputs.
 IMPORTANT: These tests require that the Pulumi stack has already been deployed
 and AWS credentials are available in the environment.
 """
+# pylint: disable=redefined-outer-name
 
 import json
 import subprocess
-import pytest
+
 import boto3
+import pytest
 from botocore.exceptions import ClientError
 
 # -----------------------------
@@ -68,6 +70,7 @@ def aws_clients():
       "lambda": boto3.client("lambda", region_name=AWS_REGION),
       "codepipeline": boto3.client("codepipeline", region_name=AWS_REGION),
       "kms": boto3.client("kms", region_name=AWS_REGION),
+      "ssm": boto3.client("ssm", region_name=AWS_REGION),
   }
 
 
@@ -189,11 +192,14 @@ def test_eks_cluster_exists(pulumi_outputs, aws_clients):
 
     # Verify cluster configuration
     vpc_config = cluster["resourcesVpcConfig"]
-    assert vpc_config["endpointPublicAccess"] is True, "EKS cluster should have public endpoint access"
-    assert vpc_config["endpointPrivateAccess"] is True, "EKS cluster should have private endpoint access"
+    assert vpc_config["endpointPublicAccess"] is True, \
+        "EKS cluster should have public endpoint access"
+    assert vpc_config["endpointPrivateAccess"] is True, \
+        "EKS cluster should have private endpoint access"
 
     # Verify cluster is in the correct VPC and subnets
-    assert vpc_config["vpcId"] == pulumi_outputs["vpc_id"], "EKS cluster should be in the correct VPC"
+    assert vpc_config["vpcId"] == pulumi_outputs["vpc_id"], \
+        "EKS cluster should be in the correct VPC"
     cluster_subnets = set(vpc_config["subnetIds"])
     expected_subnets = set(pulumi_outputs["private_subnet_ids"])
     assert cluster_subnets.issubset(
@@ -240,10 +246,13 @@ def test_eks_node_group_exists(pulumi_outputs, aws_clients):
     assert nodegroup_subnets.issubset(
         expected_subnets), "EKS node group should be in private subnets"
 
-    # Verify remote access configuration
+    # Verify remote access configuration (optional)
+    # Note: Remote access is commented out in the current implementation for
+    # security
     if "remoteAccess" in nodegroup:
       remote_access = nodegroup["remoteAccess"]
-      assert remote_access["ec2SshKey"] == "your-ec2-key", "Node group should have the correct SSH key"
+      # SSH key configuration would be tested here if enabled
+      assert "ec2SshKey" in remote_access, "SSH key should be configured if remote access is enabled"
 
   except ClientError as e:
     pytest.fail(f"Failed to describe EKS node group {node_group_name}: {e}")
@@ -403,7 +412,8 @@ def test_all_subnets_exist(pulumi_outputs, aws_clients):
       assert subnet["State"] == "available", f"Public subnet {subnet_id} not available"
       assert subnet["VpcId"] == pulumi_outputs[
           "vpc_id"], f"Public subnet {subnet_id} not in correct VPC"
-      assert subnet["MapPublicIpOnLaunch"] is True, f"Public subnet {subnet_id} should map public IPs"
+      assert subnet["MapPublicIpOnLaunch"] is True, \
+          f"Public subnet {subnet_id} should map public IPs"
 
       # Verify subnet CIDR is in expected range (10.0.1.0/24, 10.0.2.0/24)
       cidr = subnet["CidrBlock"]
@@ -426,7 +436,8 @@ def test_all_subnets_exist(pulumi_outputs, aws_clients):
       assert subnet["State"] == "available", f"Private subnet {subnet_id} not available"
       assert subnet["VpcId"] == pulumi_outputs[
           "vpc_id"], f"Private subnet {subnet_id} not in correct VPC"
-      assert subnet["MapPublicIpOnLaunch"] is False, f"Private subnet {subnet_id} should not map public IPs"
+      assert subnet["MapPublicIpOnLaunch"] is False, \
+          f"Private subnet {subnet_id} should not map public IPs"
 
       # Verify subnet CIDR is in expected range (10.0.10.0/24, 10.0.20.0/24)
       cidr = subnet["CidrBlock"]
@@ -463,7 +474,8 @@ def test_kms_key_exists(pulumi_outputs, aws_clients):
     aliases_resp = aws_clients["kms"].list_aliases(KeyId=kms_key_id)
     alias_names = [alias["AliasName"] for alias in aliases_resp["Aliases"]]
     expected_alias = "alias/corp-key-alias"
-    assert expected_alias in alias_names, f"Expected alias {expected_alias} not found. Found: {alias_names}"
+    assert expected_alias in alias_names, \
+        f"Expected alias {expected_alias} not found. Found: {alias_names}"
 
   except ClientError as e:
     pytest.fail(f"Failed to describe KMS key {kms_key_id}: {e}")
@@ -492,7 +504,8 @@ def test_security_groups_exist(pulumi_outputs, aws_clients):
     ]
 
     for expected_desc in expected_sgs:
-      assert expected_desc in sg_descriptions, f"Security group with description '{expected_desc}' not found"
+      assert expected_desc in sg_descriptions, \
+          f"Security group with description '{expected_desc}' not found"
 
     # Verify web security group has correct rules
     web_sg = sg_descriptions["Allow HTTP and HTTPS inbound"]
@@ -522,14 +535,14 @@ def test_internet_gateway_exists(pulumi_outputs, aws_clients):
         Filters=[{"Name": "attachment.vpc-id", "Values": [vpc_id]}]
     )
 
-    assert resp["InternetGateways"], f"No Internet Gateway found for VPC {vpc_id}"
+    assert resp["InternetGateways"], "No Internet Gateway found for VPC " + vpc_id
 
     igw = resp["InternetGateways"][0]
     attachments = igw["Attachments"]
     assert len(attachments) == 1, f"IGW should have exactly 1 attachment, found {
         len(attachments)}"
-    assert attachments[0]["VpcId"] == vpc_id, f"IGW should be attached to VPC {vpc_id}"
-    assert attachments[0]["State"] == "available", f"IGW attachment should be available"
+    assert attachments[0]["VpcId"] == vpc_id, "IGW should be attached to VPC " + vpc_id
+    assert attachments[0]["State"] == "available", "IGW attachment should be available"
 
   except ClientError as e:
     pytest.fail(f"Failed to describe Internet Gateway: {e}")
@@ -553,12 +566,41 @@ def test_nat_gateways_exist(pulumi_outputs, aws_clients):
     for nat_gw in nat_gateways:
       assert nat_gw["State"] == "available", f"NAT Gateway {
           nat_gw['NatGatewayId']} should be available"
-      assert nat_gw["SubnetId"] in public_subnet_ids, f"NAT Gateway should be in public subnet"
+      assert nat_gw["SubnetId"] in public_subnet_ids, "NAT Gateway should be in public subnet"
 
       # Verify NAT Gateway has an Elastic IP
       addresses = nat_gw["NatGatewayAddresses"]
-      assert len(addresses) >= 1, f"NAT Gateway should have at least 1 address"
-      assert addresses[0]["AllocationId"], f"NAT Gateway should have an Elastic IP allocation"
+      assert len(addresses) >= 1, "NAT Gateway should have at least 1 address"
+      assert addresses[0]["AllocationId"], "NAT Gateway should have an Elastic IP allocation"
 
   except ClientError as e:
     pytest.fail(f"Failed to describe NAT Gateways: {e}")
+
+
+def test_ssm_parameters_exist(aws_clients):
+  """
+  Test that required SSM parameters are created and accessible.
+  """
+  try:
+    # Test database password parameter
+    db_param_name = "/corp/dev/dbPassword"
+    db_param_resp = aws_clients["ssm"].get_parameter(
+        Name=db_param_name, WithDecryption=True
+    )
+    assert db_param_resp["Parameter"]["Type"] == "SecureString", \
+        "Database password parameter should be SecureString type"
+    assert len(db_param_resp["Parameter"]["Value"]) >= 16, \
+        "Database password should be at least 16 characters"
+
+    # Test GitHub token parameter (placeholder)
+    github_param_name = "/corp/dev/githubToken"
+    github_param_resp = aws_clients["ssm"].get_parameter(
+        Name=github_param_name, WithDecryption=True
+    )
+    assert github_param_resp["Parameter"]["Type"] == "SecureString", \
+        "GitHub token parameter should be SecureString type"
+    assert github_param_resp["Parameter"]["Value"] == "placeholder-github-token-update-me", \
+        "GitHub token should have placeholder value"
+
+  except ClientError as e:
+    pytest.fail(f"Failed to describe SSM parameters: {e}")

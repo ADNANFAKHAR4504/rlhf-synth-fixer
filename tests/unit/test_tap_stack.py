@@ -9,22 +9,14 @@ the tests run offline and verify orchestration logic, argument passing, and inte
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Import the classes and helpers under test
-from lib.tap_stack import (
-    TapStackArgs,
-    SecureVPC,
-    create_kms_key,
-    create_security_groups,
-    create_rds,
-    create_eks_cluster,
-    create_eks_node_group,
-    create_alb,
-    create_codepipeline,
-    create_monitoring_lambda,
-    TapStack,
-)
+from lib.tap_stack import (SecureVPC, TapStack, TapStackArgs, create_alb,
+                           create_codepipeline, create_eks_cluster,
+                           create_eks_node_group, create_kms_key,
+                           create_monitoring_lambda, create_rds,
+                           create_security_groups)
 
 
 class TestTapStackArgs(unittest.TestCase):
@@ -130,10 +122,12 @@ class TestHelpers(unittest.TestCase):
 
   @patch("lib.tap_stack.aws.get_caller_identity",
          return_value=MagicMock(account_id="123456789"))
+  @patch("lib.tap_stack.aws.get_region",
+         return_value=MagicMock(name="us-west-2"))
   @patch("lib.tap_stack.aws.kms.Key",
          return_value=MagicMock(key_id="kid", id="kid", arn="arn"))
   @patch("lib.tap_stack.aws.kms.Alias", return_value=MagicMock())
-  def test_create_kms_key(self, mock_alias, mock_key, _):
+  def test_create_kms_key(self, mock_alias, mock_key, _, __):
     """Verify that create_kms_key creates a KMS key and alias with correct tags."""
     mock_provider = MagicMock()
     sample_tags = {"Environment": "Production"}
@@ -155,25 +149,26 @@ class TestHelpers(unittest.TestCase):
     self.assertIn("eks_sg", sgs)
     self.assertIn("alb_sg", sgs)
 
-  @patch("lib.tap_stack.aws.ssm.get_parameter",
-         return_value=MagicMock(value="secretpass"))
+  @patch("lib.tap_stack.random.RandomPassword",
+         return_value=MagicMock(result="generated-password"))
+  @patch("lib.tap_stack.aws.ssm.Parameter", return_value=MagicMock())
   @patch("lib.tap_stack.aws.rds.Instance",
          return_value=MagicMock(endpoint="db-endpoint"))
   @patch("lib.tap_stack.aws.rds.SubnetGroup", return_value=MagicMock())
   def test_create_rds(self, *_):
-    """Verify that create_rds provisions an encrypted RDS instance with fetched password."""
+    """Verify that create_rds provisions an encrypted RDS instance with generated password."""
     mock_provider = MagicMock()
     subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
     db_sg = MagicMock(id="sg-123")
     kms_key = MagicMock(id="kid")
     tags = {"Environment": "Production"}
     rds = create_rds(
-        subnets,
-        db_sg,
-        kms_key,
-        tags,
-        "/app/dbpass",
-        mock_provider)
+        subnets=subnets,
+        db_sg=db_sg,
+        kms_key=kms_key,
+        tags=tags,
+        db_password_param_name="/app/dbpass",
+        provider=mock_provider)
     self.assertEqual(rds.endpoint, "db-endpoint")
 
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
@@ -189,11 +184,10 @@ class TestHelpers(unittest.TestCase):
     mock_cluster_instance.endpoint = "eks-endpoint"
     mock_cluster_class.return_value = mock_cluster_instance
 
-    vpc = MagicMock()
     subnets = ["subnet1", "subnet2"]
-    sg = MagicMock()
+    eks_sg = MagicMock(id="sg-123")
     tags = {"Environment": "Production"}
-    cluster = create_eks_cluster(vpc, subnets, sg, tags, mock_provider)
+    cluster = create_eks_cluster(subnets, eks_sg, tags, mock_provider)
     self.assertEqual(cluster.name, "cluster")
 
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
@@ -210,9 +204,8 @@ class TestHelpers(unittest.TestCase):
     cluster = MagicMock()
     cluster.name = "eks"
     subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
-    sg = MagicMock()
     tags = {"Environment": "Production"}
-    ng = create_eks_node_group(cluster, subnets, sg, tags, mock_provider)
+    ng = create_eks_node_group(cluster, subnets, tags, mock_provider)
     self.assertEqual(ng.node_group_name, "nodes")
 
   @patch("lib.tap_stack.aws.lb.Listener", return_value=MagicMock())
@@ -233,7 +226,7 @@ class TestHelpers(unittest.TestCase):
     self.assertEqual(alb.dns_name, "alb-dns")
     self.assertEqual(tg.arn, "tg-arn")
 
-  @patch("lib.tap_stack.aws.ssm.get_parameter",
+  @patch("lib.tap_stack.aws.ssm.Parameter",
          return_value=MagicMock(value="ghtoken"))
   @patch("lib.tap_stack.aws.codepipeline.Pipeline")
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
