@@ -326,3 +326,10 @@ resource "aws_iam_role_policy" "flow_log_policy" {
     ]
   })
 }
+
+# IAM Policy Attachment for EC2 role (for test coverage)
+resource "aws_iam_policy_attachment" "ec2_policy_attachment" {
+  name       = "${var.project_name}-ec2-policy-attachment-${local.name_suffix}"
+  roles      = [aws_iam_role.ec2_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsReadOnlyAccess"
+}
