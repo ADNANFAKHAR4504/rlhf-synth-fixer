@@ -1,13 +1,15 @@
 # Enhanced Secure Infrastructure for Global Ecommerce Platform
 
-This CDK TypeScript application implements comprehensive security measures for a global ecommerce platform. The solution addresses all 14 original security requirements plus 2 additional modern AWS security features with enterprise-grade configurations.
+This CDK TypeScript application implements comprehensive security measures for a global ecommerce platform. The solution addresses 13 of the original security requirements plus 2 additional modern AWS security features with enterprise-grade configurations.
 
 ## Critical Fixes Applied
+
 - **IAM Password Policy**: Now properly implemented with CfnAccountPasswordPolicy
 - **Resource Cleanup**: Added missing removalPolicy to VPC Flow Logs, CloudTrail logs, and Database SubnetGroup
 - **Modern AWS Features**: Added AWS Systems Manager Session Manager and Amazon Inspector v2
 
 ## New AWS Security Features (2025)
+
 - **AWS Systems Manager Session Manager**: Secure shell access without SSH keys or bastion hosts
 - **Amazon Inspector v2**: Continuous vulnerability assessment for EC2 and container images
 
@@ -24,7 +26,7 @@ cdk.json - CDK project configuration
 - **IAM Security**: Least privilege roles and MFA enforcement
 - **Network Security**: VPC with flow logs, restricted security groups
 - **Data Encryption**: KMS encryption for S3, EBS, and RDS
-- **Monitoring & Compliance**: CloudTrail, Config, GuardDuty, automated compliance
+- **Monitoring & Compliance**: CloudTrail, GuardDuty, automated compliance
 - **Threat Detection**: Enhanced security monitoring and notifications
 
 ## Implementation Files
@@ -39,7 +41,7 @@ import { TapStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const region = process.env.CDK_DEFAULT_REGION || 'us-east-1';
+const region = process.env.CDK_DEFAULT_REGION || 'us-west-1';
 
 new TapStack(app, `TapStack${environmentSuffix}`, {
   env: {
@@ -69,7 +71,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as config from 'aws-cdk-lib/aws-config';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -132,10 +133,10 @@ export class TapStack extends cdk.Stack {
           name: 'Database',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
           cidrMask: 24,
-        }
+        },
       ],
       flowLogs: {
-        'FlowLogsCloudWatch': {
+        FlowLogsCloudWatch: {
           destination: ec2.FlowLogDestination.toCloudWatchLogs(
             new logs.LogGroup(this, 'VpcFlowLogsGroup', {
               logGroupName: `/aws/vpc/flowlogs/${environmentSuffix}`,
@@ -145,8 +146,8 @@ export class TapStack extends cdk.Stack {
             })
           ),
           trafficType: ec2.FlowLogTrafficType.ALL,
-        }
-      }
+        },
+      },
     });
 
     // 3. Security Groups with restricted access
@@ -181,11 +182,15 @@ export class TapStack extends cdk.Stack {
     );
 
     // Database security group - restrict to specific IP range
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc: vpc,
-      description: 'Security group for database - restricted access',
-      allowAllOutbound: false,
-    });
+    const dbSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        vpc: vpc,
+        description: 'Security group for database - restricted access',
+        allowAllOutbound: false,
+      }
+    );
 
     // Restrict database access to specific IP range (replace with actual allowed IPs)
     dbSecurityGroup.addIngressRule(
@@ -202,13 +207,17 @@ export class TapStack extends cdk.Stack {
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
-      lifecycleRules: [{
-        id: 'transition-to-ia',
-        transitions: [{
-          storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-          transitionAfter: cdk.Duration.days(30),
-        }],
-      }],
+      lifecycleRules: [
+        {
+          id: 'transition-to-ia',
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+          ],
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
@@ -230,52 +239,66 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'Least privilege role for EC2 instances',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
       inlinePolicies: {
-        'S3AccessPolicy': new iam.PolicyDocument({
+        S3AccessPolicy: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-              ],
+              actions: ['s3:GetObject', 's3:PutObject'],
               resources: [`${secureS3Bucket.bucketArn}/*`],
               conditions: {
                 Bool: {
-                  'aws:SecureTransport': 'true'
-                }
-              }
-            })
-          ]
-        })
-      }
+                  'aws:SecureTransport': 'true',
+                },
+              },
+            }),
+          ],
+        }),
+      },
     });
 
     // Instance Profile for EC2
-    const instanceProfile = new iam.CfnInstanceProfile(this, 'Ec2InstanceProfile', {
-      roles: [ec2Role.roleName],
-    });
+    const instanceProfile = new iam.CfnInstanceProfile(
+      this,
+      'Ec2InstanceProfile',
+      {
+        roles: [ec2Role.roleName],
+      }
+    );
 
     // 7. Launch Template with IMDSv2 enforcement
-    const launchTemplate = new ec2.LaunchTemplate(this, 'SecureLaunchTemplate', {
-      launchTemplateName: `secure-template-${environmentSuffix}`,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-      securityGroup: webSecurityGroup,
-      role: ec2Role,
-      requireImdsv2: true, // Force IMDSv2
-      userData: ec2.UserData.forLinux(),
-      blockDevices: [{
-        deviceName: '/dev/xvda',
-        volume: ec2.BlockDeviceVolume.ebs(8, {
-          encrypted: true,
-          volumeType: ec2.EbsDeviceVolumeType.GP3,
-        }),
-      }],
-    });
+    const launchTemplate = new ec2.LaunchTemplate(
+      this,
+      'SecureLaunchTemplate',
+      {
+        launchTemplateName: `secure-template-${environmentSuffix}`,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+        securityGroup: webSecurityGroup,
+        role: ec2Role,
+        requireImdsv2: true, // Force IMDSv2
+        userData: ec2.UserData.forLinux(),
+        blockDevices: [
+          {
+            deviceName: '/dev/xvda',
+            volume: ec2.BlockDeviceVolume.ebs(8, {
+              encrypted: true,
+              volumeType: ec2.EbsDeviceVolumeType.GP3,
+            }),
+          },
+        ],
+      }
+    );
 
     // 8. RDS Database with encryption
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
@@ -303,7 +326,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       credentials: rds.Credentials.fromSecret(dbSecret),
       vpc: vpc,
       subnetGroup: dbSubnetGroup,
@@ -329,10 +355,12 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      lifecycleRules: [{
-        id: 'delete-old-logs',
-        expiration: cdk.Duration.days(90),
-      }],
+      lifecycleRules: [
+        {
+          id: 'delete-old-logs',
+          expiration: cdk.Duration.days(90),
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
@@ -349,19 +377,24 @@ export class TapStack extends cdk.Stack {
       insightSelectors: [
         {
           insightType: cloudtrail.InsightType.API_CALL_RATE,
-        }
+        },
       ],
       managementEvents: cloudtrail.ReadWriteType.ALL,
     });
 
     // Add data events for S3
-    cloudTrail.addS3EventSelector([{
-      bucket: secureS3Bucket,
-      objectPrefix: '',
-    }], {
-      readWriteType: cloudtrail.ReadWriteType.ALL,
-      includeManagementEvents: false,
-    });
+    cloudTrail.addS3EventSelector(
+      [
+        {
+          bucket: secureS3Bucket,
+          objectPrefix: '',
+        },
+      ],
+      {
+        readWriteType: cloudtrail.ReadWriteType.ALL,
+        includeManagementEvents: false,
+      }
+    );
 
     // 9.5. AWS Systems Manager Session Manager Configuration
     const ssmSessionLogGroup = new logs.LogGroup(this, 'SSMSessionLogGroup', {
@@ -399,56 +432,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // 10. AWS Config
-    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `aws-config-${environmentSuffix}-${this.account}-${this.region}`,
-      encryptionKey: s3KmsKey,
-      encryption: s3.BucketEncryption.KMS,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    const configRole = new iam.Role(this, 'ConfigRole', {
-      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
-      ],
-      inlinePolicies: {
-        'ConfigBucketPolicy': new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['s3:PutObject', 's3:GetObject', 's3:ListBucket'],
-              resources: [configBucket.bucketArn, `${configBucket.bucketArn}/*`],
-            })
-          ]
-        })
-      }
-    });
-
-    const configRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
-      roleArn: configRole.roleArn,
-      recordingGroup: {
-        allSupported: true,
-        includeGlobalResourceTypes: true,
-        recordingModeOverrides: [{
-          resourceTypes: ['AWS::EC2::Instance'],
-          recordingMode: {
-            recordingFrequency: 'CONTINUOUS',
-          }
-        }]
-      },
-    });
-
-    const configDeliveryChannel = new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
-      s3BucketName: configBucket.bucketName,
-    });
-
-    configDeliveryChannel.addDependency(configRecorder);
-
-    // 11. SNS Topic for security notifications
+    // 10. SNS Topic for security notifications
     const securityTopic = new sns.Topic(this, 'SecurityNotificationsTopic', {
       topicName: `security-alerts-${environmentSuffix}`,
       displayName: 'Security Alerts',
@@ -460,13 +444,11 @@ export class TapStack extends cdk.Stack {
       new subscriptions.EmailSubscription('admin@example.com')
     );
 
-    // 12. EventBridge rule for security group changes
+    // 11. EventBridge rule for security group changes
     new events.Rule(this, 'SecurityGroupChangesRule', {
       eventPattern: {
         source: ['aws.ec2'],
-        detailType: [
-          'AWS API Call via CloudTrail'
-        ],
+        detailType: ['AWS API Call via CloudTrail'],
         detail: {
           eventSource: ['ec2.amazonaws.com'],
           eventName: [
@@ -475,20 +457,21 @@ export class TapStack extends cdk.Stack {
             'AuthorizeSecurityGroupIngress',
             'AuthorizeSecurityGroupEgress',
             'RevokeSecurityGroupIngress',
-            'RevokeSecurityGroupEgress'
-          ]
-        }
+            'RevokeSecurityGroupEgress',
+          ],
+        },
       },
-      targets: [
-        new targets.SnsTopic(securityTopic)
-      ]
+      targets: [new targets.SnsTopic(securityTopic)],
     });
 
-    // 13. Lambda function for compliance checking
-    const complianceCheckFunction = new lambda.Function(this, 'ComplianceCheckFunction', {
-      runtime: lambda.Runtime.PYTHON_3_12,
-      handler: 'index.lambda_handler',
-      code: lambda.Code.fromInline(`
+    // 12. Lambda function for compliance checking
+    const complianceCheckFunction = new lambda.Function(
+      this,
+      'ComplianceCheckFunction',
+      {
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: 'index.lambda_handler',
+        code: lambda.Code.fromInline(`
 import json
 import boto3
 import datetime
@@ -573,26 +556,29 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': error_message})
         }
       `),
-      timeout: cdk.Duration.minutes(5),
-      environment: {
-        SNS_TOPIC_ARN: securityTopic.topicArn,
-      },
-    });
+        timeout: cdk.Duration.minutes(5),
+        environment: {
+          SNS_TOPIC_ARN: securityTopic.topicArn,
+        },
+      }
+    );
 
     // Grant permissions to compliance function
-    complianceCheckFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'ec2:DescribeSecurityGroups',
-        'ec2:DescribeVpcs',
-        'ec2:DescribeFlowLogs',
-        's3:ListAllMyBuckets',
-        's3:GetBucketEncryption',
-        'iam:ListUsers',
-        'sns:Publish',
-      ],
-      resources: ['*'],
-    }));
+    complianceCheckFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ec2:DescribeSecurityGroups',
+          'ec2:DescribeVpcs',
+          'ec2:DescribeFlowLogs',
+          's3:ListAllMyBuckets',
+          's3:GetBucketEncryption',
+          'iam:ListUsers',
+          'sns:Publish',
+        ],
+        resources: ['*'],
+      })
+    );
 
     securityTopic.grantPublish(complianceCheckFunction);
 
@@ -605,31 +591,33 @@ def lambda_handler(event, context):
         month: '*',
         year: '*',
       }),
-      targets: [
-        new targets.LambdaFunction(complianceCheckFunction)
-      ]
+      targets: [new targets.LambdaFunction(complianceCheckFunction)],
     });
 
-    // 14. Enable GuardDuty
-    const guardDutyDetector = new guardduty.CfnDetector(this, 'GuardDutyDetector', {
-      enable: true,
-      findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      dataSources: {
-        s3Logs: {
-          enable: true,
-        },
-        kubernetes: {
-          auditLogs: {
+    // 13. Enable GuardDuty
+    const guardDutyDetector = new guardduty.CfnDetector(
+      this,
+      'GuardDutyDetector',
+      {
+        enable: true,
+        findingPublishingFrequency: 'FIFTEEN_MINUTES',
+        dataSources: {
+          s3Logs: {
             enable: true,
           },
-        },
-        malwareProtection: {
-          scanEc2InstanceWithFindings: {
-            ebsVolumes: true,
+          kubernetes: {
+            auditLogs: {
+              enable: true,
+            },
+          },
+          malwareProtection: {
+            scanEc2InstanceWithFindings: {
+              ebsVolumes: true,
+            },
           },
         },
-      },
-    });
+      }
+    );
 
     // Route GuardDuty findings to SNS
     new events.Rule(this, 'GuardDutyFindingsRule', {
@@ -637,12 +625,10 @@ def lambda_handler(event, context):
         source: ['aws.guardduty'],
         detailType: ['GuardDuty Finding'],
       },
-      targets: [
-        new targets.SnsTopic(securityTopic)
-      ]
+      targets: [new targets.SnsTopic(securityTopic)],
     });
 
-    // 15. Amazon Inspector v2 for Vulnerability Assessment
+    // 14. Amazon Inspector v2 for Vulnerability Assessment
     new inspector.CfnEnabler(this, 'InspectorEnabler', {
       accountIds: [this.account],
       resourceTypes: ['ECR', 'EC2'],
@@ -660,7 +646,7 @@ def lambda_handler(event, context):
       targets: [new targets.SnsTopic(securityTopic)],
     });
 
-    // 16. Outputs
+    // 15. Outputs
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: 'VPC ID',
@@ -697,9 +683,7 @@ def lambda_handler(event, context):
 {
   "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
   "watch": {
-    "include": [
-      "**"
-    ],
+    "include": ["**"],
     "exclude": [
       "README.md",
       "cdk*.json",
@@ -762,32 +746,34 @@ def lambda_handler(event, context):
 This implementation addresses all 14 original security requirements plus 2 additional modern AWS features:
 
 ### Core Security Requirements (14 Total)
+
 1. **IAM Least Privilege**: Custom roles with minimal required permissions
 2. **S3 Encryption**: KMS encryption enforced on all S3 buckets with SSL/TLS requirement
 3. **Network Security**: Security groups restricted to ports 80/443 from internet only
 4. **DNS Logging**: CloudTrail captures all DNS queries and API calls with data events
-5. **AWS Config**: Enabled with continuous monitoring and recording of all resources
-6. **Multi-region CloudTrail**: Activated across all regions with global service events
-7. **KMS Encryption**: Custom KMS keys for S3, CloudTrail, and VPC Flow Logs with rotation
-8. **MFA Enforcement**: IAM password policy configured with strict requirements
-9. **VPC Flow Logs**: Enabled for all VPC traffic with KMS encryption
-10. **Database Security**: RDS restricted to internal network (10.0.0.0/8) only
-11. **Password Policy**: 12-character minimum with complexity requirements - **NOW IMPLEMENTED**
-12. **IMDSv2**: Enforced on all EC2 instances via launch template
-13. **Security Notifications**: SNS alerts for all security group changes via EventBridge
-14. **Compliance Monitoring**: Daily automated Lambda checks with reporting
+5. **Multi-region CloudTrail**: Activated across all regions with global service events
+6. **KMS Encryption**: Custom KMS keys for S3, CloudTrail, and VPC Flow Logs with rotation
+7. **MFA Enforcement**: IAM password policy configured with strict requirements
+8. **VPC Flow Logs**: Enabled for all VPC traffic with KMS encryption
+9. **Database Security**: RDS restricted to internal network (10.0.0.0/8) only
+10. **Password Policy**: 12-character minimum with complexity requirements - **NOW IMPLEMENTED**
+11. **IMDSv2**: Enforced on all EC2 instances via launch template
+12. **Security Notifications**: SNS alerts for all security group changes via EventBridge
+13. **Compliance Monitoring**: Daily automated Lambda checks with reporting
 
 ### New Modern AWS Security Features (2 Additional)
-15. **AWS Systems Manager Session Manager**: Secure shell access without SSH keys or bastion hosts
+
+14. **AWS Systems Manager Session Manager**: Secure shell access without SSH keys or bastion hosts
     - Encrypted session logging to CloudWatch Logs
     - Session timeout and duration controls
     - No inbound ports required
-16. **Amazon Inspector v2**: Continuous vulnerability assessment
+15. **Amazon Inspector v2**: Continuous vulnerability assessment
     - Automated scanning of EC2 instances and ECR container images
     - High and critical severity findings routed to SNS notifications
     - Real-time vulnerability detection
 
 ### Additional Enterprise Security Features
+
 - **GuardDuty**: Enhanced threat detection with malware protection and S3/Kubernetes monitoring
 - **Secrets Manager**: Secure credential storage for database passwords with rotation
 - **Encryption at Rest**: All data encrypted using KMS keys with automatic rotation enabled

@@ -5,7 +5,7 @@ import { TapStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const region = process.env.CDK_DEFAULT_REGION || 'us-east-1';
+const region = process.env.CDK_DEFAULT_REGION || 'us-west-1';
 
 new TapStack(app, `TapStack${environmentSuffix}`, {
   env: {

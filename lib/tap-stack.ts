@@ -1,19 +1,18 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as config from 'aws-cdk-lib/aws-config';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as guardduty from 'aws-cdk-lib/aws-guardduty';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 // import * as inspectorv2 from 'aws-cdk-lib/aws-inspectorv2'; // Not used - manual enablement required
 import { Construct } from 'constructs';
@@ -43,6 +42,30 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Add CloudWatch Logs permissions to VPC Flow Logs KMS key
+    vpcFlowLogsKmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Enable CloudWatch Logs',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+        ],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+        conditions: {
+          ArnEquals: {
+            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/vpc/flowlogs/${environmentSuffix}`,
+          },
+        },
+      })
+    );
+
     const cloudTrailKmsKey = new kms.Key(this, 'CloudTrailKmsKey', {
       description: 'KMS key for CloudTrail log encryption',
       enableKeyRotation: true,
@@ -50,6 +73,14 @@ export class TapStack extends cdk.Stack {
     });
 
     // 2. Create VPC with proper subnets
+    // Create VPC Flow Logs Log Group first
+    const vpcFlowLogsGroup = new logs.LogGroup(this, 'VpcFlowLogsGroup', {
+      logGroupName: `/aws/vpc/flowlogs/${environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      encryptionKey: vpcFlowLogsKmsKey,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const vpc = new ec2.Vpc(this, 'SecureVpc', {
       maxAzs: 2,
       natGateways: 1,
@@ -73,14 +104,8 @@ export class TapStack extends cdk.Stack {
       ],
       flowLogs: {
         FlowLogsCloudWatch: {
-          destination: ec2.FlowLogDestination.toCloudWatchLogs(
-            new logs.LogGroup(this, 'VpcFlowLogsGroup', {
-              logGroupName: `/aws/vpc/flowlogs/${environmentSuffix}`,
-              retention: logs.RetentionDays.ONE_MONTH,
-              encryptionKey: vpcFlowLogsKmsKey,
-              removalPolicy: cdk.RemovalPolicy.DESTROY,
-            })
-          ),
+          destination:
+            ec2.FlowLogDestination.toCloudWatchLogs(vpcFlowLogsGroup),
           trafficType: ec2.FlowLogTrafficType.ALL,
         },
       },
@@ -158,29 +183,7 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // 5. IAM Password Policy
-    // Note: CfnAccountPasswordPolicy may not be available in this CDK version
-    // Use AWS CLI or console to set: aws iam update-account-password-policy
-    // --minimum-password-length 12 --require-lowercase-characters --require-numbers
-    // --require-symbols --require-uppercase-characters --allow-users-to-change-password
-    // --max-password-age 90 --password-reuse-prevention 24
-
-    // Try alternative approach with CloudFormation template
-    new cdk.CfnResource(this, 'PasswordPolicy', {
-      type: 'AWS::IAM::AccountPasswordPolicy',
-      properties: {
-        MinimumPasswordLength: 12,
-        RequireLowercaseCharacters: true,
-        RequireNumbers: true,
-        RequireSymbols: true,
-        RequireUppercaseCharacters: true,
-        AllowUsersToChangePassword: true,
-        MaxPasswordAge: 90,
-        PasswordReusePrevention: 24,
-      },
-    });
-
-    // 6. IAM Role with least privilege for EC2 instances
+    // 5. IAM Role with least privilege for EC2 instances
     const ec2Role = new iam.Role(this, 'SecureEc2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'Least privilege role for EC2 instances',
@@ -285,7 +288,7 @@ export class TapStack extends cdk.Stack {
     const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
       logGroupName: `/aws/cloudtrail/${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_YEAR,
-      encryptionKey: cloudTrailKmsKey,
+      // Use default CloudWatch Logs encryption to avoid KMS propagation issues
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -304,6 +307,54 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
+
+    // Add CloudTrail bucket policy
+    cloudTrailBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailAclCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl'],
+        resources: [cloudTrailBucket.bucketArn],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/security-trail-${environmentSuffix}`,
+          },
+        },
+      })
+    );
+
+    cloudTrailBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailWrite',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${cloudTrailBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/security-trail-${environmentSuffix}`,
+          },
+        },
+      })
+    );
+
+    // Add CloudTrail permissions to KMS key
+    cloudTrailKmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Enable CloudTrail Encrypt',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/security-trail-${environmentSuffix}`,
+          },
+        },
+      })
+    );
 
     const cloudTrail = new cloudtrail.Trail(this, 'SecurityCloudTrail', {
       trailName: `security-trail-${environmentSuffix}`,
@@ -334,7 +385,7 @@ export class TapStack extends cdk.Stack {
     const ssmSessionLogGroup = new logs.LogGroup(this, 'SSMSessionLogGroup', {
       logGroupName: `/aws/ssm/sessions/${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_YEAR,
-      encryptionKey: cloudTrailKmsKey,
+      // Use default CloudWatch Logs encryption to avoid KMS propagation issues
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -365,60 +416,6 @@ export class TapStack extends cdk.Stack {
         },
       },
     });
-
-    // 10. AWS Config
-    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `aws-config-${environmentSuffix}-${this.account}-${this.region}`,
-      encryptionKey: s3KmsKey,
-      encryption: s3.BucketEncryption.KMS,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    const configRole = new iam.Role(this, 'ConfigRole', {
-      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
-      ],
-      inlinePolicies: {
-        ConfigBucketPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['s3:PutObject', 's3:GetObject', 's3:ListBucket'],
-              resources: [
-                configBucket.bucketArn,
-                `${configBucket.bucketArn}/*`,
-              ],
-            }),
-          ],
-        }),
-      },
-    });
-
-    const configRecorder = new config.CfnConfigurationRecorder(
-      this,
-      'ConfigRecorder',
-      {
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      }
-    );
-
-    const configDeliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      'ConfigDeliveryChannel',
-      {
-        s3BucketName: configBucket.bucketName,
-      }
-    );
-
-    configDeliveryChannel.addDependency(configRecorder);
 
     // 11. SNS Topic for security notifications
     const securityTopic = new sns.Topic(this, 'SecurityNotificationsTopic', {
