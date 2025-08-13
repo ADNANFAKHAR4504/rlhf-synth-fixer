@@ -375,7 +375,7 @@ def create_security_groups(
     vpc: aws.ec2.Vpc, tags: Dict[str, str], provider: aws.Provider
 ) -> Dict[str, aws.ec2.SecurityGroup]:
   """
-  Create security groups for web (ALB and EKS nodes), database, and ALB itself.
+  Create security groups for web (ALB and EKS nodes), database, ALB, and EKS cluster.
   """
 
   web_sg = aws.ec2.SecurityGroup(
@@ -417,27 +417,81 @@ def create_security_groups(
       opts=ResourceOptions(provider=provider)
   )
 
-  eks_sg = aws.ec2.SecurityGroup(
-      "corp-eks-sg",
+  # EKS Cluster security group
+  eks_cluster_sg = aws.ec2.SecurityGroup(
+      "corp-eks-cluster-sg",
+      vpc_id=vpc.id,
+      description="EKS cluster security group",
+      tags={**tags, "Name": "corp-eks-cluster-sg"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # EKS Node Group security group
+  eks_nodes_sg = aws.ec2.SecurityGroup(
+      "corp-eks-nodes-sg",
       vpc_id=vpc.id,
       description="EKS worker nodes security group",
-      ingress=[
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="-1", from_port=0, to_port=0, self=True
-          ),
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"]
-          ),
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=443, to_port=443, cidr_blocks=["0.0.0.0/0"]
-          ),
-      ],
-      egress=[
-          aws.ec2.SecurityGroupEgressArgs(
-              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
-          )
-      ],
-      tags={**tags, "Name": "corp-eks-sg"},
+      tags={**tags, "Name": "corp-eks-nodes-sg"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Allow all traffic within node group
+  aws.ec2.SecurityGroupRule(
+      "eks-nodes-ingress-self",
+      type="ingress",
+      from_port=0,
+      to_port=65535,
+      protocol="-1",
+      self=True,
+      security_group_id=eks_nodes_sg.id,
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Allow nodes to communicate with cluster
+  aws.ec2.SecurityGroupRule(
+      "eks-nodes-ingress-cluster",
+      type="ingress",
+      from_port=1025,
+      to_port=65535,
+      protocol="tcp",
+      source_security_group_id=eks_cluster_sg.id,
+      security_group_id=eks_nodes_sg.id,
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Allow cluster to communicate with nodes
+  aws.ec2.SecurityGroupRule(
+      "eks-cluster-ingress-nodes",
+      type="ingress",
+      from_port=443,
+      to_port=443,
+      protocol="tcp",
+      source_security_group_id=eks_nodes_sg.id,
+      security_group_id=eks_cluster_sg.id,
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Allow all outbound traffic from nodes
+  aws.ec2.SecurityGroupRule(
+      "eks-nodes-egress-all",
+      type="egress",
+      from_port=0,
+      to_port=0,
+      protocol="-1",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=eks_nodes_sg.id,
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Allow all outbound traffic from cluster
+  aws.ec2.SecurityGroupRule(
+      "eks-cluster-egress-all",
+      type="egress",
+      from_port=0,
+      to_port=0,
+      protocol="-1",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=eks_cluster_sg.id,
       opts=ResourceOptions(provider=provider)
   )
 
@@ -465,7 +519,8 @@ def create_security_groups(
   return {
       "web_sg": web_sg,
       "db_sg": db_sg,
-      "eks_sg": eks_sg,
+      "eks_cluster_sg": eks_cluster_sg,
+      "eks_nodes_sg": eks_nodes_sg,
       "alb_sg": alb_sg,
   }
 
@@ -534,7 +589,7 @@ def create_rds(
 
 def create_eks_cluster(
     private_subnet_ids: List[str],
-    eks_sg: aws.ec2.SecurityGroup,
+    eks_cluster_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
     provider: aws.Provider,
 ) -> aws.eks.Cluster:
@@ -572,7 +627,7 @@ def create_eks_cluster(
       role_arn=eks_role.arn,
       vpc_config=aws.eks.ClusterVpcConfigArgs(
           subnet_ids=private_subnet_ids,
-          security_group_ids=[eks_sg.id],
+          security_group_ids=[eks_cluster_sg.id],
           endpoint_public_access=True,
           endpoint_private_access=True,
       ),
@@ -585,11 +640,12 @@ def create_eks_cluster(
 def create_eks_node_group(
     cluster: aws.eks.Cluster,
     subnets: List[aws.ec2.Subnet],
+    eks_nodes_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
     provider: aws.Provider,
 ) -> aws.eks.NodeGroup:
   """
-  Create EKS worker node group with IAM role and autoscaling configuration.
+  Create EKS worker node group with IAM role and minimal autoscaling configuration for testing.
   """
   node_role = aws.iam.Role(
       "corp-eks-node-role",
@@ -621,19 +677,41 @@ def create_eks_node_group(
         opts=ResourceOptions(provider=provider)
     )
 
+  # Create launch template with user data for proper EKS node configuration
+  user_data = cluster.name.apply(lambda cluster_name: f"""#!/bin/bash
+/etc/eks/bootstrap.sh {cluster_name}
+""")
+
+  launch_template = aws.ec2.LaunchTemplate(
+      "corp-eks-node-launch-template",
+      vpc_security_group_ids=[eks_nodes_sg.id],
+      user_data=pulumi.Output.secret(
+          user_data.apply(
+              lambda ud: pulumi.Output.from_input(ud).apply(
+                  lambda x: __import__('base64').b64encode(
+                      x.encode()).decode()))),
+      tags={**tags, "Name": "corp-eks-node-launch-template"},
+      opts=ResourceOptions(provider=provider)
+  )
+
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
       node_role_arn=node_role.arn,
       subnet_ids=[s.id for s in subnets],
-      instance_types=["t3.medium"],
+      instance_types=["t3.small"],  # Smaller instance type for testing
+      capacity_type="ON_DEMAND",
       scaling_config=aws.eks.NodeGroupScalingConfigArgs(
-          desired_size=2, min_size=1, max_size=3
+          desired_size=1, min_size=1, max_size=2  # Minimal scaling for testing
+      ),
+      launch_template=aws.eks.NodeGroupLaunchTemplateArgs(
+          id=launch_template.id,
+          version=launch_template.latest_version
       ),
       # Note: SSH key access is optional and should be configured based on security requirements
       # remote_access=aws.eks.NodeGroupRemoteAccessArgs(
       #     ec2_ssh_key="your-ec2-key",  # Replace with actual key name if needed
-      #     source_security_group_ids=[eks_sg.id],
+      #     source_security_group_ids=[eks_nodes_sg.id],
       # ),
       tags={**tags, "Name": "corp-eks-node-group"},
       opts=ResourceOptions(provider=provider)
@@ -1106,7 +1184,8 @@ class TapStack(pulumi.ComponentResource):
 
     sgs = create_security_groups(vpc_module.vpc, tags, provider)
     db_sg = sgs["db_sg"]
-    eks_sg = sgs["eks_sg"]
+    eks_cluster_sg = sgs["eks_cluster_sg"]
+    eks_nodes_sg = sgs["eks_nodes_sg"]
     alb_sg = sgs["alb_sg"]
 
     rds_instance = create_rds(
@@ -1121,12 +1200,16 @@ class TapStack(pulumi.ComponentResource):
 
     eks_cluster = create_eks_cluster(
         private_subnet_ids=[s.id for s in vpc_module.private_subnets],
-        eks_sg=eks_sg,
+        eks_cluster_sg=eks_cluster_sg,
         tags=tags,
         provider=provider
     )
     eks_node_group = create_eks_node_group(
-        eks_cluster, vpc_module.private_subnets, tags, provider
+        cluster=eks_cluster,
+        subnets=vpc_module.private_subnets,
+        eks_nodes_sg=eks_nodes_sg,
+        tags=tags,
+        provider=provider
     )
 
     alb, target_group, _ = create_alb(
