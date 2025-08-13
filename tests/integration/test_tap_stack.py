@@ -28,7 +28,7 @@ class TestTapStackIntegration(unittest.TestCase):
 
   def setUp(self):
     """Set up AWS credentials from environment for live testing"""
-    self.aws_region = os.getenv("AWS_REGION", "us-west-2")
+    self.aws_region = os.getenv("AWS_REGION", "us-west-1")
     self.api_gateway_url = flat_outputs.get("api_gateway_url")
     self.lambda_function_name = flat_outputs.get("lambda_function_name")
     self.dynamodb_table_name = flat_outputs.get("dynamodb_table_name")
