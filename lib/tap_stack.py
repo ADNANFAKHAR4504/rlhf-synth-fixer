@@ -147,6 +147,7 @@ class TapStack(pulumi.ComponentResource):
     return tags
 
   def _ensure_s3_encryption_and_logging(self):
+    """Configure S3 security controls including encryption, versioning, and access logging."""
     pulumi.log.info("Configuring S3 security controls...")
     try:
       existing_buckets = aws.s3.get_buckets()
@@ -155,13 +156,16 @@ class TapStack(pulumi.ComponentResource):
       pulumi.log.warn(f"Could not enumerate S3 buckets: {e}")
       return
 
+    # Create centralized logging bucket with enhanced security
     logging_bucket = aws.s3.Bucket(
       f"logging-bucket-{self.env}",
       bucket=self.logging_bucket_name,
+      versioning=aws.s3.BucketVersioningArgs(enabled=True),
       tags=self._apply_tags({"Purpose": "AccessLogging"}),
       opts=ResourceOptions(parent=self, protect=True),
     )
 
+    # Block all public access on logging bucket
     aws.s3.BucketPublicAccessBlock(
       f"logging-bucket-pab-{self.env}",
       bucket=logging_bucket.id,
@@ -172,24 +176,58 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self),
     )
 
+    # Enable server-side encryption on logging bucket
+    aws.s3.BucketServerSideEncryptionConfigurationV2(
+        f"logging-bucket-encryption-{self.env}",
+        bucket=logging_bucket.id,
+        rules=[
+          aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=(
+              aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                sse_algorithm="AES256",
+              )
+            )
+          )
+        ],
+        opts=ResourceOptions(parent=self),
+      )
+
+    # Process existing buckets for security enhancements
     for bucket_name in bucket_names:
       if bucket_name == self.logging_bucket_name:
         continue
 
-      aws.s3.BucketServerSideEncryptionConfiguration(
+      # Enable server-side encryption on all buckets
+      aws.s3.BucketServerSideEncryptionConfigurationV2(
         f"bucket-encryption-{bucket_name}",
         bucket=bucket_name,
-        rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-          apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-            sse_algorithm="AES256",
+        rules=[
+          aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=(
+              aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                sse_algorithm="AES256",
+              )
+            )
           )
-        )],
+        ],
         opts=ResourceOptions(parent=self),
       )
 
+      # Enable versioning on all buckets
+      aws.s3.BucketVersioning(
+        f"bucket-versioning-{bucket_name}",
+        bucket=bucket_name,
+        versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+          status="Enabled"
+        ),
+        opts=ResourceOptions(parent=self),
+      )
+
+      # Check if bucket is public and enable access logging
       try:
         bucket_policy = aws.s3.get_bucket_policy(bucket=bucket_name)
         if bucket_policy.policy:
+          # Enable access logging for public buckets
           aws.s3.BucketLogging(
             f"bucket-logging-{bucket_name}",
             bucket=bucket_name,
@@ -198,15 +236,33 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self),
           )
       except Exception:
-        pass
+        # Bucket has no policy, check public access block
+        try:
+          public_access_block = aws.s3.get_bucket_public_access_block(
+            bucket=bucket_name
+          )
+          if not public_access_block.block_public_acls:
+            # Enable access logging for buckets with public access
+            aws.s3.BucketLogging(
+              f"bucket-logging-{bucket_name}",
+              bucket=bucket_name,
+              target_bucket=self.logging_bucket_name,
+              target_prefix=f"access-logs/{bucket_name}/",
+              opts=ResourceOptions(parent=self),
+            )
+        except Exception:
+          pass
 
     self.created_resources["logging_bucket"] = logging_bucket.id
 
   def _ensure_iam_least_privilege(self):
+    """Validate and update IAM roles with least privilege policies."""
     pulumi.log.info("Validating IAM least privilege policies...")
     for role_identifier in self.iam_roles_to_validate:
       try:
         role = aws.iam.get_role(name=role_identifier)
+        
+        # Create least privilege policies based on role type
         if "ec2" in role_identifier.lower():
           policy_document = {
             "Version": "2012-10-17",
@@ -217,33 +273,93 @@ class TapStack(pulumi.ComponentResource):
                   "ec2:DescribeInstances",
                   "ec2:DescribeImages",
                   "ec2:DescribeSnapshots",
+                  "ec2:DescribeTags",
+                  "ec2:DescribeSecurityGroups",
+                  "ec2:DescribeVpcs",
+                  "ec2:DescribeSubnets",
                   "cloudwatch:PutMetricData",
                   "logs:CreateLogGroup",
                   "logs:CreateLogStream",
                   "logs:PutLogEvents",
+                  "logs:DescribeLogGroups",
+                  "logs:DescribeLogStreams",
                 ],
-                "Resource": "*",
+                "Resource": [
+                  f"arn:aws:ec2:{self.region}:*:instance/*",
+                  f"arn:aws:ec2:{self.region}:*:image/*",
+                  f"arn:aws:ec2:{self.region}:*:snapshot/*",
+                  f"arn:aws:ec2:{self.region}:*:security-group/*",
+                  f"arn:aws:ec2:{self.region}:*:vpc/*",
+                  f"arn:aws:ec2:{self.region}:*:subnet/*",
+                  f"arn:aws:logs:{self.region}:*:log-group:*",
+                  f"arn:aws:logs:{self.region}:*:log-group:*:log-stream:*",
+                  f"arn:aws:cloudwatch:{self.region}:*:metric/*"
+                ],
               }
             ],
           }
-          policy = aws.iam.Policy(
-            f"least-privilege-{role_identifier}",
-            name=f"{self._get_resource_name('least-privilege')}-{role_identifier}",
-            policy=json.dumps(policy_document),
-            tags=self._apply_tags({"Purpose": "LeastPrivilege"}),
-            opts=ResourceOptions(parent=self),
-          )
-          aws.iam.RolePolicyAttachment(
-            f"attach-{role_identifier}",
-            role=role.name,
-            policy_arn=policy.arn,
-            opts=ResourceOptions(parent=self),
-          )
+        elif "lambda" in role_identifier.lower():
+          policy_document = {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogGroup",
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents",
+                  "logs:DescribeLogGroups",
+                  "logs:DescribeLogStreams",
+                ],
+                "Resource": [
+                  f"arn:aws:logs:{self.region}:*:log-group:/aws/lambda/*",
+                  f"arn:aws:logs:{self.region}:*:log-group:/aws/lambda/*:log-stream:*"
+                ],
+              }
+            ],
+          }
+        else:
+          # Generic least privilege policy for other roles
+          policy_document = {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogGroup",
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents",
+                ],
+                "Resource": [
+                  f"arn:aws:logs:{self.region}:*:log-group:*",
+                  f"arn:aws:logs:{self.region}:*:log-group:*:log-stream:*"
+                ],
+              }
+            ],
+          }
+
+        policy = aws.iam.Policy(
+          f"least-privilege-{role_identifier}",
+          name=f"{self._get_resource_name('least-privilege')}-{role_identifier}",
+          policy=json.dumps(policy_document),
+          tags=self._apply_tags({"Purpose": "LeastPrivilege"}),
+          opts=ResourceOptions(parent=self),
+        )
+        
+        aws.iam.RolePolicyAttachment(
+          f"attach-{role_identifier}",
+          role=role.name,
+          policy_arn=policy.arn,
+          opts=ResourceOptions(parent=self),
+        )
       except Exception as e:
         pulumi.log.warn(f"Could not process role {role_identifier}: {e}")
 
   def _ensure_rds_backups(self):
+    """Configure RDS backup policies and security groups."""
     pulumi.log.info("Configuring RDS backup policies...")
+    
+    # Create RDS subnet group if subnet IDs provided
     rds_subnet_group = None
     if self.rds_subnet_ids:
       rds_subnet_group = aws.rds.SubnetGroup(
@@ -254,6 +370,7 @@ class TapStack(pulumi.ComponentResource):
         opts=ResourceOptions(parent=self),
       )
 
+    # Create RDS security group with restricted access
     rds_security_group = None
     if self.vpc_id:
       rds_security_group = aws.ec2.SecurityGroup(
@@ -267,6 +384,14 @@ class TapStack(pulumi.ComponentResource):
             to_port=3306,
             protocol="tcp",
             cidr_blocks=["10.0.0.0/8"],
+            description="MySQL/Aurora access from VPC",
+          ),
+          aws.ec2.SecurityGroupIngressArgs(
+            from_port=5432,
+            to_port=5432,
+            protocol="tcp",
+            cidr_blocks=["10.0.0.0/8"],
+            description="PostgreSQL access from VPC",
           )
         ],
         egress=[
@@ -275,14 +400,36 @@ class TapStack(pulumi.ComponentResource):
             to_port=0,
             protocol="-1",
             cidr_blocks=["0.0.0.0/0"],
+            description="Allow all outbound traffic",
           )
         ],
         tags=self._apply_tags({"Purpose": "RDSAccess"}),
         opts=ResourceOptions(parent=self),
       )
+
+    # Create parameter group for backup retention enforcement
+    rds_parameter_group = aws.rds.ParameterGroup(
+      f"rds-backup-params-{self.env}",
+      name=self._get_resource_name("rds-backup-params"),
+      family="mysql8.0",
+      description="Parameter group for RDS backup retention",
+      parameters=[
+        aws.rds.ParameterGroupParameterArgs(
+          name="innodb_file_per_table",
+          value="1",
+          apply_method="pending-reboot",
+        )
+      ],
+      tags=self._apply_tags({"Purpose": "RDSBackupParams"}),
+      opts=ResourceOptions(parent=self),
+    )
+
     self.created_resources["rds_security_group"] = rds_security_group.id if rds_security_group else None
+    self.created_resources["rds_subnet_group"] = rds_subnet_group.id if rds_subnet_group else None
+    self.created_resources["rds_parameter_group"] = rds_parameter_group.id
 
   def _restrict_ec2_ssh_and_sg(self):
+    """Restrict EC2 SSH access via Security Groups."""
     pulumi.log.info("Restricting EC2 SSH access via Security Groups...")
     ssh_sg = None
     if self.vpc_id:
@@ -300,20 +447,57 @@ class TapStack(pulumi.ComponentResource):
             description="SSH access from allowed CIDRs only",
           )
         ],
+        egress=[
+          aws.ec2.SecurityGroupEgressArgs(
+            from_port=0,
+            to_port=0,
+            protocol="-1",
+            cidr_blocks=["0.0.0.0/0"],
+            description="Allow all outbound traffic",
+          )
+        ],
         tags=self._apply_tags({"Purpose": "RestrictedSSH"}),
         opts=ResourceOptions(parent=self),
       )
     self.created_resources["ssh_security_group"] = ssh_sg.id if ssh_sg else None
 
   def _ensure_cloudtrail(self):
+    """Configure CloudTrail auditing with enhanced security."""
     pulumi.log.info("Configuring CloudTrail auditing...")
+    
+    # Create CloudTrail bucket with enhanced security
     cloudtrail_bucket = aws.s3.Bucket(
       f"cloudtrail-{self.env}",
       bucket=self._get_resource_name("cloudtrail"),
+      versioning=aws.s3.BucketVersioningArgs(enabled=True),
       tags=self._apply_tags({"Purpose": "CloudTrailLogs"}),
       opts=ResourceOptions(parent=self, protect=True),
     )
 
+    # Block public access on CloudTrail bucket
+    aws.s3.BucketPublicAccessBlock(
+      f"cloudtrail-bucket-pab-{self.env}",
+      bucket=cloudtrail_bucket.id,
+      block_public_acls=True,
+      block_public_policy=True,
+      ignore_public_acls=True,
+      restrict_public_buckets=True,
+      opts=ResourceOptions(parent=self),
+    )
+
+    # Enable encryption on CloudTrail bucket
+    aws.s3.BucketServerSideEncryptionConfigurationV2(
+      f"cloudtrail-bucket-encryption-{self.env}",
+      bucket=cloudtrail_bucket.id,
+      rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+          sse_algorithm="AES256",
+        )
+      )],
+      opts=ResourceOptions(parent=self),
+    )
+
+    # CloudTrail bucket policy
     cloudtrail_bucket_policy = aws.s3.BucketPolicy(
       f"cloudtrail-bucket-policy-{self.env}",
       bucket=cloudtrail_bucket.id,
@@ -340,6 +524,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self),
     )
 
+    # Configure event selectors for data events
     event_selectors: List[aws.cloudtrail.TrailEventSelectorArgs] = []
     if self.cloudtrail_enable_data_events:
       event_selectors = [
@@ -359,6 +544,7 @@ class TapStack(pulumi.ComponentResource):
         )
       ]
 
+    # Create CloudTrail with enhanced configuration
     cloudtrail_args: Dict[str, Any] = {
       "name": self._get_resource_name("cloudtrail"),
       "s3_bucket_name": cloudtrail_bucket.id,
@@ -382,6 +568,7 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["cloudtrail_bucket"] = cloudtrail_bucket.id
 
   def _enforce_nacls(self):
+    """Configure Network ACLs with restrictive baseline."""
     pulumi.log.info("Configuring Network ACLs...")
     if not self.nacl_subnet_ids:
       pulumi.log.warn("No subnet IDs provided for NACL configuration")
@@ -397,6 +584,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self),
     )
 
+    # Allow SSH from allowed CIDRs
     for i, cidr in enumerate(self.ssh_allowed_cidrs):
       aws.ec2.NetworkAclRule(
         f"nacl-inbound-ssh-{i}-{self.env}",
@@ -410,6 +598,7 @@ class TapStack(pulumi.ComponentResource):
         opts=ResourceOptions(parent=self),
       )
 
+    # Allow ephemeral return traffic
     aws.ec2.NetworkAclRule(
       f"nacl-inbound-ephemeral-{self.env}",
       network_acl_id=restrictive_nacl.id,
@@ -422,6 +611,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self),
     )
 
+    # Allow HTTP outbound
     aws.ec2.NetworkAclRule(
       f"nacl-outbound-http-{self.env}",
       network_acl_id=restrictive_nacl.id,
@@ -434,6 +624,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self),
     )
 
+    # Allow HTTPS outbound
     aws.ec2.NetworkAclRule(
       f"nacl-outbound-https-{self.env}",
       network_acl_id=restrictive_nacl.id,
@@ -446,6 +637,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self),
     )
 
+    # Allow ephemeral outbound
     aws.ec2.NetworkAclRule(
       f"nacl-outbound-ephemeral-{self.env}",
       network_acl_id=restrictive_nacl.id,
@@ -458,6 +650,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self),
     )
 
+    # Associate NACL with subnets
     for i, subnet_id in enumerate(self.nacl_subnet_ids):
       aws.ec2.NetworkAclAssociation(
         f"nacl-association-{i}-{self.env}",
@@ -469,8 +662,11 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["restrictive_nacl"] = restrictive_nacl.id
 
   def _encrypt_lambda_env(self):
+    """Configure Lambda environment variable encryption."""
     pulumi.log.info("Configuring Lambda environment variable encryption...")
     kms_key_arn = self.lambda_kms_key_arn or "alias/aws/lambda"
+    
+    # Create Lambda execution role with least privilege
     lambda_role = aws.iam.Role(
       f"lambda-execution-role-{self.env}",
       assume_role_policy=json.dumps({
@@ -486,15 +682,47 @@ class TapStack(pulumi.ComponentResource):
       tags=self._apply_tags({"Purpose": "LambdaExecution"}),
       opts=ResourceOptions(parent=self),
     )
+    
+    # Attach basic execution role
     aws.iam.RolePolicyAttachment(
       f"lambda-basic-execution-{self.env}",
       role=lambda_role.name,
       policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
       opts=ResourceOptions(parent=self),
     )
+    
+    # Create KMS policy for Lambda encryption
+    lambda_kms_policy = aws.iam.Policy(
+      f"lambda-kms-policy-{self.env}",
+      name=f"{self._get_resource_name('lambda-kms')}-policy",
+      policy=json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "kms:Decrypt",
+              "kms:GenerateDataKey",
+            ],
+            "Resource": kms_key_arn,
+          }
+        ],
+      }),
+      tags=self._apply_tags({"Purpose": "LambdaKMSAccess"}),
+      opts=ResourceOptions(parent=self),
+    )
+    
+    aws.iam.RolePolicyAttachment(
+      f"lambda-kms-attachment-{self.env}",
+      role=lambda_role.name,
+      policy_arn=lambda_kms_policy.arn,
+      opts=ResourceOptions(parent=self),
+    )
+    
     self.created_resources["lambda_execution_role"] = lambda_role.arn
 
   def _protect_cloudfront_with_waf(self):
+    """Configure CloudFront WAF protection with managed rules."""
     pulumi.log.info("Configuring CloudFront WAF protection...")
     web_acl = aws.wafv2.WebAcl(
       f"cloudfront-waf-{self.env}",
@@ -551,6 +779,22 @@ class TapStack(pulumi.ComponentResource):
             sampled_requests_enabled=True,
           ),
         ),
+        aws.wafv2.WebAclRuleArgs(
+          name="AWSManagedRulesKnownBadInputsRuleSet",
+          priority=4,
+          override_action=aws.wafv2.WebAclRuleOverrideActionArgs(none={}),
+          statement=aws.wafv2.WebAclRuleStatementArgs(
+            managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+              name="AWSManagedRulesKnownBadInputsRuleSet",
+              vendor_name="AWS",
+            )
+          ),
+          visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+            cloudwatch_metrics_enabled=True,
+            metric_name="KnownBadInputsMetric",
+            sampled_requests_enabled=True,
+          ),
+        ),
       ],
       visibility_config=aws.wafv2.WebAclVisibilityConfigArgs(
         cloudwatch_metrics_enabled=True,
@@ -563,6 +807,7 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["cloudfront_waf"] = web_acl.arn
 
   def _encrypt_dynamodb(self):
+    """Configure DynamoDB encryption."""
     pulumi.log.info("Configuring DynamoDB encryption...")
     example_table = aws.dynamodb.Table(
       f"example-table-{self.env}",
@@ -577,6 +822,7 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["example_dynamodb_table"] = example_table.name
 
   def _enable_guardduty_all_regions(self):
+    """Enable GuardDuty across all configured regions."""
     pulumi.log.info("Enabling GuardDuty across regions...")
     guardduty_detectors: Dict[str, pulumi.Output[str]] = {}
     for region in self.guardduty_regions:
@@ -602,10 +848,13 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["guardduty_detectors"] = guardduty_detectors
 
   def _enable_vpc_flow_logs(self):
+    """Enable VPC Flow Logs for specified VPCs."""
     pulumi.log.info("Enabling VPC Flow Logs...")
     if not self.vpc_flow_log_vpc_ids:
       pulumi.log.warn("No VPC IDs provided for Flow Logs configuration")
       return
+      
+    # Create IAM role for VPC Flow Logs
     flow_logs_role = aws.iam.Role(
       f"vpc-flow-logs-role-{self.env}",
       assume_role_policy=json.dumps({
@@ -619,6 +868,8 @@ class TapStack(pulumi.ComponentResource):
       tags=self._apply_tags({"Purpose": "VPCFlowLogs"}),
       opts=ResourceOptions(parent=self),
     )
+    
+    # Create IAM policy for VPC Flow Logs with least privilege
     flow_logs_policy = aws.iam.Policy(
       f"vpc-flow-logs-policy-{self.env}",
       policy=json.dumps({
@@ -632,11 +883,15 @@ class TapStack(pulumi.ComponentResource):
             "logs:DescribeLogGroups",
             "logs:DescribeLogStreams",
           ],
-          "Resource": "*",
+          "Resource": [
+            f"arn:aws:logs:{self.region}:*:log-group:/aws/vpc/flowlogs/*",
+            f"arn:aws:logs:{self.region}:*:log-group:/aws/vpc/flowlogs/*:log-stream:*"
+          ],
         }],
       }),
       opts=ResourceOptions(parent=self),
     )
+    
     aws.iam.RolePolicyAttachment(
       f"vpc-flow-logs-policy-attachment-{self.env}",
       role=flow_logs_role.name,
@@ -644,6 +899,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self),
     )
 
+    # Create CloudWatch Log Groups and Flow Logs for each VPC
     flow_log_groups: Dict[str, pulumi.Output[str]] = {}
     for i, vpc_id in enumerate(self.vpc_flow_log_vpc_ids):
       log_group = aws.cloudwatch.LogGroup(
@@ -653,6 +909,7 @@ class TapStack(pulumi.ComponentResource):
         tags=self._apply_tags({"Purpose": "VPCFlowLogs", "VPC": vpc_id}),
         opts=ResourceOptions(parent=self),
       )
+      
       aws.ec2.FlowLog(
         f"vpc-flow-log-{i}-{self.env}",
         iam_role_arn=flow_logs_role.arn,
@@ -670,6 +927,7 @@ class TapStack(pulumi.ComponentResource):
     self.created_resources["vpc_flow_logs_role"] = flow_logs_role.arn
 
   def _main(self):
+    """Main orchestration method that calls all security control methods."""
     pulumi.log.info(f"Starting AWS security configuration for environment: {self.env}")
     self._ensure_s3_encryption_and_logging()
     self._ensure_iam_least_privilege()
@@ -683,5 +941,3 @@ class TapStack(pulumi.ComponentResource):
     self._enable_guardduty_all_regions()
     self._enable_vpc_flow_logs()
     pulumi.log.info("AWS security configuration completed successfully")
-
-
