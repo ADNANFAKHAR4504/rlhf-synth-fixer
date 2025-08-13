@@ -159,6 +159,8 @@ def test_rds_instance_exists_and_available(pulumi_outputs, aws_clients):
     # Verify RDS configuration matches your stack
     assert db_instance["Engine"] == "postgres", f"Expected PostgreSQL, got {
         db_instance['Engine']}"
+    assert db_instance["EngineVersion"].startswith("15."), f"Expected PostgreSQL 15.x, got {
+        db_instance['EngineVersion']}"
     assert db_instance["DBInstanceClass"] == "db.t3.medium", f"Unexpected instance class: {
         db_instance['DBInstanceClass']}"
     assert db_instance["StorageEncrypted"] is True, "RDS storage should be encrypted"

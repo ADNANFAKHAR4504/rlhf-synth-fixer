@@ -513,7 +513,7 @@ def create_rds(
   rds_instance = aws.rds.Instance(
       "corp-rds-instance",
       engine="postgres",
-      engine_version="15.4",
+      engine_version="15.8",
       instance_class="db.t3.medium",
       allocated_storage=20,
       db_subnet_group_name=subnet_group.name,
@@ -671,8 +671,8 @@ def create_alb(
           path="/",
           interval=30,
           timeout=5,
-          healthy_threshold=5,
-          unhealthy_threshold=2,
+          healthy_threshold=2,
+          unhealthy_threshold=3,
           matcher="200-399",
       ),
       tags={**tags, "Name": "corp-alb-target-group"},
@@ -728,20 +728,21 @@ def create_codepipeline(
   aws.iam.RolePolicyAttachment(
       "codepipeline-access",
       role=pipeline_role.name,
-      policy_arn="arn:aws:iam::aws:policy/AWSCodePipelineServiceRole",
+      policy_arn="arn:aws:iam::aws:policy/service-role/AWSCodePipelineServiceRole",
       opts=ResourceOptions(provider=provider)
   )
 
   aws.iam.RolePolicyAttachment(
       "codebuild-access",
       role=pipeline_role.name,
-      policy_arn="arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess",
+      policy_arn="arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess",
       opts=ResourceOptions(provider=provider)
   )
 
   artifact_bucket = aws.s3.Bucket(
       "corp-codepipeline-artifact-bucket",
       acl="private",
+      versioning=aws.s3.BucketVersioningArgs(enabled=True),
       tags={**tags, "Name": "corp-codepipeline-artifact-bucket"},
       opts=ResourceOptions(provider=provider)
   )
@@ -805,6 +806,63 @@ def create_codepipeline(
 
   github_token = github_token_param.value
 
+  # Create CodeBuild project for building the application
+  codebuild_role = aws.iam.Role(
+      "corp-codebuild-role",
+      assume_role_policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [{
+              "Effect": "Allow",
+              "Principal": {"Service": "codebuild.amazonaws.com"},
+              "Action": "sts:AssumeRole",
+          }],
+      }),
+      tags={**tags, "Name": "corp-codebuild-role"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  aws.iam.RolePolicyAttachment(
+      "codebuild-basic-policy",
+      role=codebuild_role.name,
+      policy_arn="arn:aws:iam::aws:policy/CloudWatchLogsFullAccess",
+      opts=ResourceOptions(provider=provider)
+  )
+
+  aws.iam.RolePolicyAttachment(
+      "codebuild-s3-policy",
+      role=codebuild_role.name,
+      policy_arn="arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Add additional required policies for CodeBuild
+  aws.iam.RolePolicyAttachment(
+      "codebuild-s3-full-policy",
+      role=codebuild_role.name,
+      policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess",
+      opts=ResourceOptions(provider=provider)
+  )
+
+  codebuild_project = aws.codebuild.Project(
+      "corp-codebuild-project",
+      name="corp-codebuild-project",
+      service_role=codebuild_role.arn,
+      artifacts=aws.codebuild.ProjectArtifactsArgs(
+          type="CODEPIPELINE"
+      ),
+      environment=aws.codebuild.ProjectEnvironmentArgs(
+          compute_type="BUILD_GENERAL1_SMALL",
+          image="aws/codebuild/amazonlinux2-x86_64-standard:5.0",
+          type="LINUX_CONTAINER",
+      ),
+      source=aws.codebuild.ProjectSourceArgs(
+          type="CODEPIPELINE",
+          buildspec="version: 0.2\nphases:\n  build:\n    commands:\n      - echo Build completed on `date`"
+      ),
+      tags={**tags, "Name": "corp-codebuild-project"},
+      opts=ResourceOptions(provider=provider)
+  )
+
   pipeline = aws.codepipeline.Pipeline(
       "corp-codepipeline",
       role_arn=pipeline_role.arn,
@@ -853,9 +911,9 @@ def create_codepipeline(
               "name": "Deploy",
               "actions": [{
                   "name": "DeployToEKS",
-                  "category": "Deploy",
+                  "category": "Build",
                   "owner": "AWS",
-                  "provider": "ECS",
+                  "provider": "CodeBuild",
                   "input_artifacts": [build_output],
                   "version": "1",
                   "run_order": 1,
@@ -908,7 +966,7 @@ def create_monitoring_lambda(
   aws.iam.RolePolicyAttachment(
       "lambda-basic-execution",
       role=lambda_role.name,
-      policy_arn="arn:aws:iam::aws:policy/AWSLambdaBasicExecutionRole",
+      policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
       opts=ResourceOptions(provider=provider)
   )
 
