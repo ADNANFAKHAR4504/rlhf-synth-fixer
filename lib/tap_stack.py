@@ -58,7 +58,7 @@ class SecureVPC:
     self.name_prefix = name_prefix
     self.vpc_cidr = vpc_cidr
     self.tags = tags
-    self.region = aws.get_region().name
+    self.region = "us-west-2"  # Explicitly set to us-west-2
     self.availability_zones = aws.get_availability_zones(
         state="available").names[:2]
 
@@ -82,6 +82,10 @@ class SecureVPC:
         enable_dns_support=True,
         enable_dns_hostnames=True,
         tags={**self.tags, "Name": f"{self.name_prefix}-vpc"},
+        opts=ResourceOptions(
+            provider=aws.Provider(
+                "us-west-2-provider",
+                region="us-west-2"))
     )
 
   def _create_internet_gateway(self) -> aws.ec2.InternetGateway:
@@ -89,9 +93,14 @@ class SecureVPC:
         f"{self.name_prefix}-igw",
         vpc_id=self.vpc.id,
         tags={**self.tags, "Name": f"{self.name_prefix}-igw"},
+        opts=ResourceOptions(
+            provider=aws.Provider(
+                "us-west-2-provider",
+                region="us-west-2"))
     )
 
   def _create_public_subnets(self) -> List[aws.ec2.Subnet]:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     return [
         aws.ec2.Subnet(
             f"{self.name_prefix}-public-{i + 1}",
@@ -100,11 +109,13 @@ class SecureVPC:
             availability_zone=az,
             map_public_ip_on_launch=True,
             tags={**self.tags, "Name": f"{self.name_prefix}-public-{i + 1}"},
+            opts=ResourceOptions(provider=provider)
         )
         for i, az in enumerate(self.availability_zones)
     ]
 
   def _create_private_subnets(self) -> List[aws.ec2.Subnet]:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     return [
         aws.ec2.Subnet(
             f"{self.name_prefix}-private-{i + 1}",
@@ -112,78 +123,93 @@ class SecureVPC:
             cidr_block=f"10.0.{(i + 1) * 10}.0/24",
             availability_zone=az,
             tags={**self.tags, "Name": f"{self.name_prefix}-private-{i + 1}"},
+            opts=ResourceOptions(provider=provider)
         )
         for i, az in enumerate(self.availability_zones)
     ]
 
   def _create_elastic_ips(self) -> List[aws.ec2.Eip]:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     return [
         aws.ec2.Eip(
             f"{self.name_prefix}-nat-eip-{i + 1}",
             domain="vpc",
             tags={**self.tags, "Name": f"{self.name_prefix}-nat-eip-{i + 1}"},
+            opts=ResourceOptions(provider=provider)
         )
         for i in range(len(self.availability_zones))
     ]
 
   def _create_nat_gateways(self) -> List[aws.ec2.NatGateway]:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     return [
         aws.ec2.NatGateway(
             f"{self.name_prefix}-nat-{i + 1}",
             allocation_id=self.eips[i].id,
             subnet_id=self.public_subnets[i].id,
             tags={**self.tags, "Name": f"{self.name_prefix}-nat-{i + 1}"},
+            opts=ResourceOptions(provider=provider)
         )
         for i in range(len(self.availability_zones))
     ]
 
   def _create_public_route_table(self) -> aws.ec2.RouteTable:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     rt = aws.ec2.RouteTable(
         f"{self.name_prefix}-public-rt",
         vpc_id=self.vpc.id,
         tags={**self.tags, "Name": f"{self.name_prefix}-public-rt"},
+        opts=ResourceOptions(provider=provider)
     )
     aws.ec2.Route(
         f"{self.name_prefix}-public-route",
         route_table_id=rt.id,
         destination_cidr_block="0.0.0.0/0",
         gateway_id=self.igw.id,
+        opts=ResourceOptions(provider=provider)
     )
     for i, subnet in enumerate(self.public_subnets):
       aws.ec2.RouteTableAssociation(
           f"{self.name_prefix}-public-rta-{i + 1}",
           route_table_id=rt.id,
           subnet_id=subnet.id,
+          opts=ResourceOptions(provider=provider)
       )
     return rt
 
   def _create_private_route_tables(self) -> List[aws.ec2.RouteTable]:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     rts = []
     for i, subnet in enumerate(self.private_subnets):
       rt = aws.ec2.RouteTable(
           f"{self.name_prefix}-private-rt-{i + 1}",
           vpc_id=self.vpc.id,
           tags={**self.tags, "Name": f"{self.name_prefix}-private-rt-{i + 1}"},
+          opts=ResourceOptions(provider=provider)
       )
       aws.ec2.Route(
           f"{self.name_prefix}-private-route-{i + 1}",
           route_table_id=rt.id,
           destination_cidr_block="0.0.0.0/0",
           nat_gateway_id=self.nat_gateways[i].id,
+          opts=ResourceOptions(provider=provider)
       )
       aws.ec2.RouteTableAssociation(
           f"{self.name_prefix}-private-rta-{i + 1}",
           route_table_id=rt.id,
           subnet_id=subnet.id,
+          opts=ResourceOptions(provider=provider)
       )
       rts.append(rt)
     return rts
 
   def _create_public_nacl(self) -> aws.ec2.NetworkAcl:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     nacl = aws.ec2.NetworkAcl(
         f"{self.name_prefix}-public-nacl",
         vpc_id=self.vpc.id,
         tags={**self.tags, "Name": f"{self.name_prefix}-public-nacl"},
+        opts=ResourceOptions(provider=provider)
     )
     aws.ec2.NetworkAclRule(
         f"{self.name_prefix}-public-http",
@@ -194,6 +220,7 @@ class SecureVPC:
         from_port=80,
         to_port=80,
         cidr_block="0.0.0.0/0",
+        opts=ResourceOptions(provider=provider)
     )
     aws.ec2.NetworkAclRule(
         f"{self.name_prefix}-public-https",
@@ -204,30 +231,36 @@ class SecureVPC:
         from_port=443,
         to_port=443,
         cidr_block="0.0.0.0/0",
+        opts=ResourceOptions(provider=provider)
     )
     for i, subnet in enumerate(self.public_subnets):
       aws.ec2.NetworkAclAssociation(
           f"{self.name_prefix}-public-nacl-assoc-{i + 1}",
           network_acl_id=nacl.id,
           subnet_id=subnet.id,
+          opts=ResourceOptions(provider=provider)
       )
     return nacl
 
   def _create_private_nacl(self) -> aws.ec2.NetworkAcl:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     nacl = aws.ec2.NetworkAcl(
         f"{self.name_prefix}-private-nacl",
         vpc_id=self.vpc.id,
         tags={**self.tags, "Name": f"{self.name_prefix}-private-nacl"},
+        opts=ResourceOptions(provider=provider)
     )
     for i, subnet in enumerate(self.private_subnets):
       aws.ec2.NetworkAclAssociation(
           f"{self.name_prefix}-private-nacl-assoc-{i + 1}",
           network_acl_id=nacl.id,
           subnet_id=subnet.id,
+          opts=ResourceOptions(provider=provider)
       )
     return nacl
 
   def _create_flow_logs_role(self) -> aws.iam.Role:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     assume_policy = json.dumps(
         {
             "Version": "2012-10-17",
@@ -244,6 +277,7 @@ class SecureVPC:
         f"{self.name_prefix}-flow-logs-role",
         assume_policy=assume_policy,
         tags={**self.tags, "Name": f"{self.name_prefix}-flow-logs-role"},
+        opts=ResourceOptions(provider=provider)
     )
     # Inline policy for log permissions
     aws.iam.RolePolicy(
@@ -267,14 +301,17 @@ class SecureVPC:
                 ]
             }
         ),
+        opts=ResourceOptions(provider=provider)
     )
     return role
 
   def _create_flow_logs(self) -> aws.ec2.FlowLog:
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
     log_group = aws.cloudwatch.LogGroup(
         f"{self.name_prefix}-flow-logs-group",
         retention_in_days=30,
         tags={**self.tags, "Name": f"{self.name_prefix}-flow-logs-group"},
+        opts=ResourceOptions(provider=provider)
     )
     return aws.ec2.FlowLog(
         f"{self.name_prefix}-flow-logs",
@@ -284,6 +321,7 @@ class SecureVPC:
         vpc_id=self.vpc.id,
         traffic_type="ALL",
         tags={**self.tags, "Name": f"{self.name_prefix}-flow-logs"},
+        opts=ResourceOptions(provider=provider)
     )
 
 
@@ -291,6 +329,7 @@ def create_kms_key(tags: Dict[str, str]) -> aws.kms.Key:
   """
   Create a KMS key and alias used for encryption of AWS resources.
   """
+  provider = aws.Provider("us-west-2-provider", region="us-west-2")
   current = aws.get_caller_identity()
   key_policy = json.dumps(
       {
@@ -325,11 +364,13 @@ def create_kms_key(tags: Dict[str, str]) -> aws.kms.Key:
       description="KMS key for corp infra encryption",
       policy=key_policy,
       tags={**tags, "Name": "corp-kms-key"},
+      opts=ResourceOptions(provider=provider)
   )
   aws.kms.Alias(
       "corp-kms-alias",
       name="alias/corp-key-alias",
       target_key_id=kms_key.key_id,
+      opts=ResourceOptions(provider=provider)
   )
   return kms_key
 
@@ -340,6 +381,7 @@ def create_security_groups(
   """
   Create security groups for web (ALB and EKS nodes), database, and ALB itself.
   """
+  provider = aws.Provider("us-west-2-provider", region="us-west-2")
 
   web_sg = aws.ec2.SecurityGroup(
       "corp-web-sg",
@@ -359,6 +401,7 @@ def create_security_groups(
           )
       ],
       tags={**tags, "Name": "corp-web-sg"},
+      opts=ResourceOptions(provider=provider)
   )
 
   db_sg = aws.ec2.SecurityGroup(
@@ -376,6 +419,7 @@ def create_security_groups(
           )
       ],
       tags={**tags, "Name": "corp-db-sg"},
+      opts=ResourceOptions(provider=provider)
   )
 
   eks_sg = aws.ec2.SecurityGroup(
@@ -399,6 +443,7 @@ def create_security_groups(
           )
       ],
       tags={**tags, "Name": "corp-eks-sg"},
+      opts=ResourceOptions(provider=provider)
   )
 
   alb_sg = aws.ec2.SecurityGroup(
@@ -419,6 +464,7 @@ def create_security_groups(
           )
       ],
       tags={**tags, "Name": "corp-alb-sg"},
+      opts=ResourceOptions(provider=provider)
   )
 
   return {
@@ -439,12 +485,14 @@ def create_rds(
   """
   Create a multi-AZ PostgreSQL RDS instance with encryption, private subnets, and secure password.
   """
+  provider = aws.Provider("us-west-2-provider", region="us-west-2")
   subnet_ids = [s.id for s in subnets]
 
   subnet_group = aws.rds.SubnetGroup(
       "corp-rds-subnet-group",
       subnet_ids=subnet_ids,
       tags={**tags, "Name": "corp-rds-subnet-group"},
+      opts=ResourceOptions(provider=provider)
   )
 
   db_password = aws.ssm.get_parameter(
@@ -468,6 +516,7 @@ def create_rds(
       backup_retention_period=7,
       skip_final_snapshot=True,
       tags={**tags, "Name": "corp-rds-instance"},
+      opts=ResourceOptions(provider=provider)
   )
   return rds_instance
 
@@ -481,6 +530,7 @@ def create_eks_cluster(
   """
   Create an EKS cluster with IAM role, configured with private subnets and network settings.
   """
+  provider = aws.Provider("us-west-2-provider", region="us-west-2")
   eks_role = aws.iam.Role(
       "corp-eks-role",
       assume_policy=json.dumps(
@@ -496,16 +546,19 @@ def create_eks_cluster(
           }
       ),
       tags={**tags, "Name": "corp-eks-role"},
+      opts=ResourceOptions(provider=provider)
   )
   aws.iam.RolePolicyAttachment(
       "corp-eks-cluster-policy-attachment",
       role=eks_role.name,
       policy_arn="arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+      opts=ResourceOptions(provider=provider)
   )
   aws.iam.RolePolicyAttachment(
       "corp-eks-service-policy-attachment",
       role=eks_role.name,
       policy_arn="arn:aws:iam::aws:policy/AmazonEKSServicePolicy",
+      opts=ResourceOptions(provider=provider)
   )
 
   cluster = aws.eks.Cluster(
@@ -517,6 +570,7 @@ def create_eks_cluster(
           endpoint_private_access=True,
       ),
       tags={**tags, "Name": "corp-eks-cluster"},
+      opts=ResourceOptions(provider=provider)
   )
   return cluster
 
@@ -530,6 +584,7 @@ def create_eks_node_group(
   """
   Create EKS worker node group with IAM role and autoscaling configuration.
   """
+  provider = aws.Provider("us-west-2-provider", region="us-west-2")
   node_role = aws.iam.Role(
       "corp-eks-node-role",
       assume_policy=json.dumps(
@@ -545,6 +600,7 @@ def create_eks_node_group(
           }
       ),
       tags={**tags, "Name": "corp-eks-node-role"},
+      opts=ResourceOptions(provider=provider)
   )
   policies = [
       "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
@@ -556,6 +612,7 @@ def create_eks_node_group(
         f"corp-eks-node-policy-attachment-{i}",
         role=node_role.name,
         policy_arn=pol_arn,
+        opts=ResourceOptions(provider=provider)
     )
 
   node_group = aws.eks.NodeGroup(
@@ -572,6 +629,7 @@ def create_eks_node_group(
           source_security_group_ids=[eks_sg.id],
       ),
       tags={**tags, "Name": "corp-eks-node-group"},
+      opts=ResourceOptions(provider=provider)
   )
   return node_group
 
@@ -582,6 +640,7 @@ def create_alb(
   """
   Create Application Load Balancer, Target Group, and HTTP Listener routing to EKS.
   """
+  provider = aws.Provider("us-west-2-provider", region="us-west-2")
 
   alb = aws.lb.LoadBalancer(
       "corp-alb",
@@ -590,6 +649,7 @@ def create_alb(
       security_groups=[alb_sg.id],
       subnets=[s.id for s in public_subnets],
       tags={**tags, "Name": "corp-alb"},
+      opts=ResourceOptions(provider=provider)
   )
 
   target_group = aws.lb.TargetGroup(
@@ -607,6 +667,7 @@ def create_alb(
           matcher="200-399",
       ),
       tags={**tags, "Name": "corp-alb-target-group"},
+      opts=ResourceOptions(provider=provider)
   )
 
   listener = aws.lb.Listener(
@@ -621,6 +682,7 @@ def create_alb(
           )
       ],
       tags={**tags, "Name": "corp-alb-listener"},
+      opts=ResourceOptions(provider=provider)
   )
 
   return alb, target_group, listener
@@ -638,6 +700,7 @@ def create_codepipeline(
   """
   Create AWS CodePipeline for CI/CD from GitHub to EKS with encrypted S3 artifact store.
   """
+  provider = aws.Provider("us-west-2-provider", region="us-west-2")
 
   pipeline_role = aws.iam.Role(
       role_name,
@@ -650,24 +713,28 @@ def create_codepipeline(
           }],
       }),
       tags={**tags, "Name": role_name},
+      opts=ResourceOptions(provider=provider)
   )
 
   aws.iam.RolePolicyAttachment(
       "codepipeline-access",
       role=pipeline_role.name,
       policy_arn="arn:aws:iam::aws:policy/AWSCodePipelineFullAccess",
+      opts=ResourceOptions(provider=provider)
   )
 
   aws.iam.RolePolicyAttachment(
       "codebuild-access",
       role=pipeline_role.name,
       policy_arn="arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess",
+      opts=ResourceOptions(provider=provider)
   )
 
   artifact_bucket = aws.s3.Bucket(
       "corp-codepipeline-artifact-bucket",
       acl="private",
       tags={**tags, "Name": "corp-codepipeline-artifact-bucket"},
+      opts=ResourceOptions(provider=provider)
   )
 
   aws.s3.BucketServerSideEncryptionConfigurationV2(
@@ -680,7 +747,8 @@ def create_codepipeline(
                   "kms_master_key_id": kms_key.arn,
               }
           }]
-      }]
+      }],
+      opts=ResourceOptions(provider=provider)
   )
 
   source_output = "source_output"
@@ -749,6 +817,7 @@ def create_codepipeline(
           },
       ],
       tags={**tags, "Name": "corp-codepipeline"},
+      opts=ResourceOptions(provider=provider)
   )
   return pipeline
 
@@ -763,6 +832,7 @@ def create_monitoring_lambda(
   Create a Lambda function to perform health checks and send metrics to CloudWatch.
   Scheduled every 5 minutes using CloudWatch Events.
   """
+  provider = aws.Provider("us-west-2-provider", region="us-west-2")
   assume_role_policy = json.dumps(
       {
           "Version": "2012-10-17",
@@ -778,19 +848,22 @@ def create_monitoring_lambda(
 
   lambda_role = aws.iam.Role(
       "corp-health-check-lambda-role",
-      assume_policy=assume_role_policy,
+      assume_role_policy=assume_role_policy,
       tags={**tags, "Name": "corp-health-check-lambda-role"},
+      opts=ResourceOptions(provider=provider)
   )
 
   aws.iam.RolePolicyAttachment(
       "lambda-vpc-access",
       role=lambda_role.name,
       policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+      opts=ResourceOptions(provider=provider)
   )
   aws.iam.RolePolicyAttachment(
       "lambda-basic-execution",
       role=lambda_role.name,
       policy_arn="arn:aws:iam::aws:policy/AWSLambdaBasicExecutionRole",
+      opts=ResourceOptions(provider=provider)
   )
 
   lambda_code = """import json
@@ -845,18 +918,21 @@ def lambda_handler(event, context):
           variables={"ENV": "production"}),
       kms_key_arn=kms_key.arn,
       tags={**tags, "Name": "corp-health-check-lambda"},
+      opts=ResourceOptions(provider=provider)
   )
 
   cloudwatch_rule = aws.cloudwatch.EventRule(
       "corp-health-check-schedule",
       schedule_expression="rate(5 minutes)",
       tags={**tags, "Name": "corp-health-check-schedule"},
+      opts=ResourceOptions(provider=provider)
   )
 
   aws.cloudwatch.EventTarget(
       "corp-health-check-target",
       rule=cloudwatch_rule.name,
       arn=lambda_func.arn,
+      opts=ResourceOptions(provider=provider)
   )
 
   aws.lambda_.Permission(
@@ -866,6 +942,7 @@ def lambda_handler(event, context):
       function=lambda_func.name,
       principal="events.amazonaws.com",
       source_arn=cloudwatch_rule.arn,
+      opts=ResourceOptions(provider=provider)
   )
 
   return lambda_func
@@ -884,6 +961,9 @@ class TapStack(pulumi.ComponentResource):
       opts: Optional[ResourceOptions] = None,
   ):
     super().__init__("tap:TapStack", name, None, opts)
+
+    # Create provider for us-west-2 region
+    provider = aws.Provider("us-west-2-provider", region="us-west-2")
 
     # Validate deployment region
     aws_cfg = pulumi.Config("aws")
@@ -959,7 +1039,7 @@ class TapStack(pulumi.ComponentResource):
             )
         ],
         tags={**tags, "Name": f"{prefix}-lambda-sg"},
-        opts=ResourceOptions(parent=self),
+        opts=ResourceOptions(provider=provider, parent=self),
     )
     health_lambda = create_monitoring_lambda(
         vpc_module.private_subnets, lambda_sg, kms_key, tags
