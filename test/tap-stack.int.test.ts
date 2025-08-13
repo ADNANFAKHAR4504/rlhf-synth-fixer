@@ -308,11 +308,6 @@ describe('Nova Model Breaking - Secure Infrastructure Integration Tests', () => 
       // This test validates the overall security posture
       // Based on the individual component tests above
       
-      // 1. S3 buckets block all public access ✓
-      // 2. Security groups only allow SSH from specific CIDR ✓  
-      // 3. IAM roles have minimal permissions ✓
-      // 4. Encryption is enabled everywhere ✓
-      // 5. Access logging is enabled ✓
       
       expect(stackOutputs.MainS3BucketName).toBeDefined();
       expect(stackOutputs.SSHSecurityGroupId).toBeDefined();
