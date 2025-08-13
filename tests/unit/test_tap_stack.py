@@ -192,37 +192,25 @@ class TestHelpers(unittest.TestCase):
     cluster = create_eks_cluster(subnets, eks_sg, tags, mock_provider)
     self.assertEqual(cluster.name, "cluster")
 
-  @patch("lib.tap_stack.pulumi.Output")
-  @patch("lib.tap_stack.aws.ec2.LaunchTemplate", return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock())
   @patch("lib.tap_stack.aws.eks.NodeGroup")
   def test_create_eks_node_group(self, mock_ng_class, _mock_role,
-                                 _mock_role_policy, _mock_launch_template, mock_pulumi_output, *_):
+                                 _mock_role_policy, *_):
     """Ensure create_eks_node_group provisions a node group with correct scaling configuration."""
-    # Mock Pulumi Output methods
-    mock_output_instance = MagicMock()
-    mock_output_instance.apply.return_value = mock_output_instance  # Enable chaining
-    mock_pulumi_output.secret.return_value = mock_output_instance
-    mock_pulumi_output.from_input.return_value = mock_output_instance
-
     mock_provider = MagicMock()
     mock_ng_instance = MagicMock()
     mock_ng_instance.node_group_name = "nodes"
     mock_ng_class.return_value = mock_ng_instance
 
     cluster = MagicMock()
-    cluster_name_output = MagicMock()
-    cluster_name_output.apply.return_value = mock_output_instance
-    cluster.name = cluster_name_output
+    cluster.name = "eks-cluster"
     subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
-    eks_nodes_sg = MagicMock(id="sg-nodes")
     tags = {"Environment": "Production"}
     ng = create_eks_node_group(
         cluster=cluster,
         subnets=subnets,
-        eks_nodes_sg=eks_nodes_sg,
         tags=tags,
         provider=mock_provider
     )

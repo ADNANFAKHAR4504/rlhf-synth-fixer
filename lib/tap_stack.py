@@ -640,7 +640,6 @@ def create_eks_cluster(
 def create_eks_node_group(
     cluster: aws.eks.Cluster,
     subnets: List[aws.ec2.Subnet],
-    eks_nodes_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
     provider: aws.Provider,
 ) -> aws.eks.NodeGroup:
@@ -677,19 +676,6 @@ def create_eks_node_group(
         opts=ResourceOptions(provider=provider)
     )
 
-  # Create launch template with user data for proper EKS node configuration
-  user_data_script = cluster.name.apply(lambda cluster_name: f"""#!/bin/bash
-/etc/eks/bootstrap.sh {cluster_name}
-""")
-
-  launch_template = aws.ec2.LaunchTemplate(
-      "corp-eks-node-launch-template",
-      vpc_security_group_ids=[eks_nodes_sg.id],
-      user_data=user_data_script,
-      tags={**tags, "Name": "corp-eks-node-launch-template"},
-      opts=ResourceOptions(provider=provider)
-  )
-
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
@@ -700,15 +686,8 @@ def create_eks_node_group(
       scaling_config=aws.eks.NodeGroupScalingConfigArgs(
           desired_size=1, min_size=1, max_size=2  # Minimal scaling for testing
       ),
-      launch_template=aws.eks.NodeGroupLaunchTemplateArgs(
-          id=launch_template.id,
-          version=launch_template.latest_version
-      ),
-      # Note: SSH key access is optional and should be configured based on security requirements
-      # remote_access=aws.eks.NodeGroupRemoteAccessArgs(
-      #     ec2_ssh_key="your-ec2-key",  # Replace with actual key name if needed
-      #     source_security_group_ids=[eks_nodes_sg.id],
-      # ),
+      # Use default EKS optimized AMI - no custom launch template needed
+      # EKS will handle the bootstrap script automatically
       tags={**tags, "Name": "corp-eks-node-group"},
       opts=ResourceOptions(provider=provider)
   )
@@ -1181,7 +1160,7 @@ class TapStack(pulumi.ComponentResource):
     sgs = create_security_groups(vpc_module.vpc, tags, provider)
     db_sg = sgs["db_sg"]
     eks_cluster_sg = sgs["eks_cluster_sg"]
-    eks_nodes_sg = sgs["eks_nodes_sg"]
+    # eks_nodes_sg not needed since we use default EKS node configuration
     alb_sg = sgs["alb_sg"]
 
     rds_instance = create_rds(
@@ -1203,7 +1182,6 @@ class TapStack(pulumi.ComponentResource):
     eks_node_group = create_eks_node_group(
         cluster=eks_cluster,
         subnets=vpc_module.private_subnets,
-        eks_nodes_sg=eks_nodes_sg,
         tags=tags,
         provider=provider
     )
