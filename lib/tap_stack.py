@@ -221,7 +221,11 @@ def get_vpc_with_fallback():
                 aws.ec2.Vpc.get(
                     get_resource_name("vpc"), 
                     existing_vpc_id, 
-                    opts=pulumi.ResourceOptions(provider=aws_provider)
+                    opts=pulumi.ResourceOptions(
+                        provider=aws_provider,
+                        protect=True,  # Protect reused VPC from deletion
+                        retain_on_delete=True  # Don't delete when stack is destroyed
+                    )
                 ),
                 existing_vpc_id
             )
@@ -296,7 +300,10 @@ def create_internet_gateway(vpc, existing_vpc_id=None):
                 return aws.ec2.InternetGateway.get(
                     get_resource_name("igw"),
                     existing_igw_id,
-                    opts=pulumi.ResourceOptions(provider=aws_provider)
+                    opts=pulumi.ResourceOptions(
+                        provider=aws_provider,
+                        retain_on_delete=True  # Don't delete existing IGW when stack is destroyed
+                    )
                 )
         
         # Create new Internet Gateway if none exists
@@ -349,7 +356,9 @@ def find_existing_subnets(vpc_id: str, availability_zones: list):
             pulumi.log.info(f"Found {len(suitable_subnets)} existing suitable subnets")
             return suitable_subnets[:2]  # Return first 2 suitable subnets
         else:
-            pulumi.log.info(f"Found only {len(suitable_subnets)} suitable subnets, need to create more")
+            pulumi.log.info(
+                f"Found only {len(suitable_subnets)} suitable subnets, need to create more"
+            )
             return suitable_subnets
             
     except Exception as e:
@@ -374,11 +383,17 @@ for i, az in enumerate(availability_zones):
         subnet = aws.ec2.Subnet.get(
             get_resource_name(f"public-subnet-{i+1}"),
             subnet_info['id'],
-            opts=pulumi.ResourceOptions(provider=aws_provider)
+            opts=pulumi.ResourceOptions(
+                provider=aws_provider,
+                retain_on_delete=True  # Don't delete existing subnets when stack is destroyed
+            )
         )
     else:
         # Create new subnet with available CIDR
-        cidr_block = available_cidrs[i - len(existing_subnets)] if (i - len(existing_subnets)) < len(available_cidrs) else f"10.0.{i+100}.0/24"
+        if (i - len(existing_subnets)) < len(available_cidrs):
+            cidr_block = available_cidrs[i - len(existing_subnets)]
+        else:
+            cidr_block = f"10.0.{i+100}.0/24"
         
         subnet = aws.ec2.Subnet(
             get_resource_name(f"public-subnet-{i+1}"),
