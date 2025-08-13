@@ -34,19 +34,40 @@ def get_short_name(resource_type: str, max_length: int = 32) -> str:
 def calculate_ipv6_cidr(vpc_cidr: str, subnet_index: int) -> str:
     """Calculate IPv6 CIDR for subnet with error handling."""
     try:
+        # Handle case where VPC might not have IPv6 CIDR block
+        if not vpc_cidr or vpc_cidr == "" or vpc_cidr is None:
+            pulumi.log.warn("No IPv6 CIDR block available, skipping IPv6 for subnet")
+            return None
+            
         base_prefix = vpc_cidr.replace("::/56", "")
+        if not base_prefix or base_prefix == "":
+            pulumi.log.warn("Invalid IPv6 CIDR format, skipping IPv6 for subnet")
+            return None
+            
         if subnet_index == 0:
             return f"{base_prefix}::/64"
         
+        # For subsequent subnets, increment the subnet ID
         parts = base_prefix.split(":")
+        # Ensure we have enough parts
+        while len(parts) < 4:
+            parts.append("0")
+            
+        # Increment the last part for subnet differentiation
         last_part = parts[-1] if parts[-1] else "0"
-        last_int = int(last_part, 16) + subnet_index
-        parts[-1] = f"{last_int:x}"
+        try:
+            last_int = int(last_part, 16) + subnet_index
+            parts[-1] = f"{last_int:x}"
+        except ValueError:
+            # If conversion fails, use subnet_index directly
+            parts[-1] = f"{subnet_index:x}"
+            
         return f"{':'.join(parts)}::/64"
+        
     except Exception as e:
         pulumi.log.warn(f"IPv6 CIDR calculation failed: {e}")
-        # Fallback to a simple calculation
-        return f"2001:db8:{subnet_index:x}::/64"
+        # Return None instead of fallback to avoid invalid CIDR
+        return None
 
 
 # Initialize AWS provider first
@@ -164,18 +185,13 @@ internet_gateway = create_internet_gateway(vpc)
 
 public_subnets = []
 for i, az in enumerate(availability_zones):
-    ipv6_cidr_calc = vpc.ipv6_cidr_block.apply(
-        lambda cidr, subnet_idx=i: calculate_ipv6_cidr(cidr, subnet_idx)
-    )
-    
+    # Create subnet without IPv6 for compatibility with reused VPCs
     subnet = aws.ec2.Subnet(
         get_resource_name(f"public-subnet-{i+1}"),
         vpc_id=vpc.id,
         cidr_block=f"10.0.{i+1}.0/24",
         availability_zone=az,
         map_public_ip_on_launch=True,
-        assign_ipv6_address_on_creation=True,
-        ipv6_cidr_block=ipv6_cidr_calc,
         tags={
             "Name": get_resource_name(f"public-subnet-{i+1}"),
             "Environment": ENVIRONMENT,
@@ -217,13 +233,14 @@ ipv4_route = aws.ec2.Route(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-ipv6_route = aws.ec2.Route(
-    get_resource_name("ipv6-route"),
-    route_table_id=public_route_table.id,
-    destination_ipv6_cidr_block="::/0",
-    gateway_id=internet_gateway.id,
-    opts=pulumi.ResourceOptions(provider=aws_provider)
-)
+# Skip IPv6 route for compatibility with reused VPCs
+# ipv6_route = aws.ec2.Route(
+#     get_resource_name("ipv6-route"),
+#     route_table_id=public_route_table.id,
+#     destination_ipv6_cidr_block="::/0",
+#     gateway_id=internet_gateway.id,
+#     opts=pulumi.ResourceOptions(provider=aws_provider)
+# )
 
 for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
