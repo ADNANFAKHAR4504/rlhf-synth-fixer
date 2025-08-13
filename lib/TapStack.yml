@@ -482,7 +482,7 @@ Resources:
         - Namespace: 'aws:autoscaling:launchconfiguration'
           OptionName: 'InstanceType'
           Value: 't3.small'
-        - Namespace: 'aws:autoscaling:launchconfiguration' # Add AppSecurityGroup to instances
+        - Namespace: 'aws:autoscaling:launchconfiguration'
           OptionName: 'SecurityGroups'
           Value: !Ref AppSecurityGroup
 
@@ -497,16 +497,23 @@ Resources:
           OptionName: 'AssociatePublicIpAddress'
           Value: 'false'
 
-        # Load Balancer Configuration - NOW DECOUPLED
+        # Load Balancer Configuration - DECOUPLED
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'LoadBalancerType'
-          Value: 'none' # Tell Beanstalk not to create a load balancer
+          Value: 'none'
         - Namespace: 'aws:elasticbeanstalk:environment'
           OptionName: 'ServiceRole'
           Value: !Ref BeanstalkServiceRole
+
+        # Link to external Target Group
         - Namespace: 'aws:elasticbeanstalk:environment:process:default'
           OptionName: 'TargetGroupARNs'
-          Value: !Ref WebAppTargetGroup # Link to the external Target Group
+          Value: !Ref WebAppTargetGroup
+
+        # Process health check (optional - can be removed if not needed)
+        - Namespace: 'aws:elasticbeanstalk:environment:process:default'
+          OptionName: 'HealthCheckPath'
+          Value: '/'
 
         # Auto Scaling Configuration
         - Namespace: 'aws:autoscaling:asg'
