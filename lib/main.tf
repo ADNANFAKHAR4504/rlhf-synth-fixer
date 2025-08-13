@@ -25,8 +25,8 @@ variable "project" {
   default     = "sre-stack"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9-_]*$", var.project))
-    error_message = "project must start with an alphanumeric character and contain only letters, numbers, hyphen, or underscore."
+    condition     = length(trimspace(var.project)) > 0
+    error_message = "project must be a non-empty string."
   }
 }
 
@@ -58,7 +58,8 @@ variable "public_subnet_cidrs" {
   default     = ["10.0.1.0/24", "10.0.2.0/24"]
 
   validation {
-    condition     = length(var.public_subnet_cidrs) == 2 && alltrue([for c in var.public_subnet_cidrs : can(cidrhost(c, 0))])
+    condition = length(var.public_subnet_cidrs) == 2 &&
+      length([for c in var.public_subnet_cidrs : c if can(cidrhost(c, 0))]) == 2
     error_message = "public_subnet_cidrs must be a list of exactly two valid CIDRs."
   }
 }
@@ -69,7 +70,8 @@ variable "private_subnet_cidrs" {
   default     = ["10.0.101.0/24", "10.0.102.0/24"]
 
   validation {
-    condition     = length(var.private_subnet_cidrs) == 2 && alltrue([for c in var.private_subnet_cidrs : can(cidrhost(c, 0))])
+    condition = length(var.private_subnet_cidrs) == 2 &&
+      length([for c in var.private_subnet_cidrs : c if can(cidrhost(c, 0))]) == 2
     error_message = "private_subnet_cidrs must be a list of exactly two valid CIDRs."
   }
 }
@@ -86,11 +88,9 @@ variable "bucket_name" {
   default     = ""
 
   validation {
-    condition = length(trimspace(var.bucket_name)) == 0 || can(regex(
-      "^(?!\\d+\\.\\d+\\.\\d+\\.\\d+$)[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$",
-      lower(var.bucket_name)
-    ))
-    error_message = "bucket_name must be empty or 3–63 chars of lowercase letters, numbers, and hyphens; cannot resemble an IPv4 address; must not start/end with '-'."
+    condition = length(trimspace(var.bucket_name)) == 0 ||
+      (length(trimspace(var.bucket_name)) >= 3 && length(trimspace(var.bucket_name)) <= 63)
+    error_message = "bucket_name must be empty or 3–63 characters."
   }
 }
 
@@ -100,7 +100,7 @@ variable "allowed_ssh_cidrs" {
   default     = []
 
   validation {
-    condition     = alltrue([for c in var.allowed_ssh_cidrs : can(cidrhost(c, 0))])
+    condition     = length([for c in var.allowed_ssh_cidrs : c if can(cidrhost(c, 0))]) == length(var.allowed_ssh_cidrs)
     error_message = "Every item in allowed_ssh_cidrs must be a valid CIDR."
   }
 }
@@ -139,8 +139,8 @@ data "aws_ami" "al2023" {
 ########################
 
 locals {
-  env      = lower(var.environment)
-  is_dev   = local.env == "dev"
+  env       = lower(var.environment)
+  is_dev    = local.env == "dev"
   is_nondev = !local.is_dev
 
   # Feature toggles
@@ -151,15 +151,20 @@ locals {
 
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
-  name_prefix = lower(join("-", [var.project, local.env]))
+  # Sanitize for DNS-style names (avoid underscores/spaces)
+  project_sanitized = replace(replace(lower(trimspace(var.project)), "_", "-"), " ", "-")
+  env_sanitized     = replace(replace(lower(trimspace(local.env)), "_", "-"), " ", "-")
 
-  # Bucket name generation & sanitization
-  bucket_name_raw  = trimspace(var.bucket_name)
-  bucket_base_name = length(local.bucket_name_raw) > 0 ? local.bucket_name_raw : "${local.name_prefix}-app-bucket"
-  bucket_name_s1   = lower(regexreplace(local.bucket_base_name, "[^a-z0-9-]", "-"))
-  bucket_name_s2   = regexreplace(local.bucket_name_s1, "-{2,}", "-")
-  bucket_name_s3   = regexreplace(local.bucket_name_s2, "^-|-$", "")
-  effective_bucket_name = substr(local.bucket_name_s3, 0, 63)
+  name_prefix = "${local.project_sanitized}-${local.env_sanitized}"
+
+  # Bucket naming without regex functions (broadly safe):
+  # - lowercase
+  # - replace underscores/spaces with hyphens
+  # - truncate to 63 chars
+  bucket_name_raw   = lower(trimspace(var.bucket_name))
+  bucket_name_step1 = replace(replace(local.bucket_name_raw, "_", "-"), " ", "-")
+  bucket_base_name  = length(local.bucket_name_step1) > 0 ? local.bucket_name_step1 : "${local.name_prefix}-app-bucket"
+  effective_bucket_name = substr(local.bucket_base_name, 0, 63)
 
   common_tags = {
     Project     = var.project
@@ -348,7 +353,6 @@ resource "aws_instance" "app" {
   associate_public_ip_address = local.associate_public_ip
   monitoring                  = local.enable_detailed_monitoring
 
-  # Minimal root volume, encrypted by default in most regions (account setting)
   root_block_device {
     volume_size = 8
     volume_type = "gp3"
@@ -455,5 +459,5 @@ output "s3_bucket_name" {
 
 output "nat_gateway_id" {
   description = "NAT Gateway ID (empty in dev)"
-  value       = try(aws_nat_gateway.ngw[0].id, "")
+  value       = local.enable_nat ? aws_nat_gateway.ngw[0].id : ""
 }
