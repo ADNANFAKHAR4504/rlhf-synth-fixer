@@ -517,7 +517,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
+      BucketName: !Sub 'secure-buckets-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -683,11 +683,11 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                   - 's3:DeleteObject'
-                Resource: !Sub 'arn:aws:s3:::secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}/*'
+                Resource: !Sub 'arn:aws:s3:::secure-buckets-${AWS::AccountId}-us-west-2-tapstack-${Environment}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
-                Resource: !Sub 'arn:aws:s3:::secure-bucket-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
+                Resource: !Sub 'arn:aws:s3:::secure-buckets-${AWS::AccountId}-us-west-2-tapstack-${Environment}'
         # KMS access for S3 encryption/decryption
         - PolicyName: KMSAccess
           PolicyDocument:
