@@ -1577,21 +1577,39 @@
                   ]
                 }
               },
-              "Action": [
-                "s3:PutObject",
-                "s3:GetBucketAcl"
-              ],
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "S3LogsBucket",
-                    "Arn"
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${S3LogsBucket.Arn}/*"
+              }
+            },
+            {
+              "Sid": "ELBAccessLogsBucketAcl",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": [
+                    "arn:aws:iam::${ELBAccountId}:root",
+                    {
+                      "ELBAccountId": {
+                        "Fn::FindInMap": [
+                          "ELBAccountMap",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          "AccountId"
+                        ]
+                      }
+                    }
                   ]
-                },
-                {
-                  "Fn::Sub": "${S3LogsBucket.Arn}/*"
                 }
-              ]
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "S3LogsBucket",
+                  "Arn"
+                ]
+              }
             }
           ]
         }
