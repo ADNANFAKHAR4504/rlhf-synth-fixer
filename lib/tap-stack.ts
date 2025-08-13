@@ -274,7 +274,7 @@ export class TapStack extends cdk.Stack {
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
+        ec2.InstanceSize.MEDIUM
       ),
       vpc: vpc,
       subnetGroup: dbSubnetGroup,
