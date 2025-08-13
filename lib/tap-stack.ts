@@ -35,7 +35,9 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     // Explicitly tag log group
-    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaLogGroup).add(k, v));
+    Object.entries(commonTags).forEach(([k, v]) =>
+      cdk.Tags.of(lambdaLogGroup).add(k, v)
+    );
 
     // IAM Role for Lambda
     const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
@@ -63,7 +65,9 @@ export class TapStack extends cdk.Stack {
       },
     });
     // Explicitly tag IAM role
-    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaExecutionRole).add(k, v));
+    Object.entries(commonTags).forEach(([k, v]) =>
+      cdk.Tags.of(lambdaExecutionRole).add(k, v)
+    );
 
     // Lambda Function
     const lambdaFunction = new lambda.Function(this, 'ProcessingLambda', {
@@ -82,18 +86,21 @@ export class TapStack extends cdk.Stack {
         'High-performance Lambda function for processing web requests in nova-team development environment',
     });
     // Explicitly tag Lambda function
-    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaFunction).add(k, v));
+    Object.entries(commonTags).forEach(([k, v]) =>
+      cdk.Tags.of(lambdaFunction).add(k, v)
+    );
 
     // Lambda Alias for Provisioned Concurrency
     const lambdaAlias = new lambda.Alias(this, 'LambdaAlias', {
       aliasName: uniqueAliasName,
       version: lambdaFunction.currentVersion,
-      description:
-        `Live alias for production traffic with provisioned concurrency (${stackName})`,
+      description: `Live alias for production traffic with provisioned concurrency (${stackName})`,
       provisionedConcurrentExecutions: 5, // Set to a safe value within account limits
     });
     // Explicitly tag Lambda alias
-    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(lambdaAlias).add(k, v));
+    Object.entries(commonTags).forEach(([k, v]) =>
+      cdk.Tags.of(lambdaAlias).add(k, v)
+    );
 
     // CORRECTED: Provisioned Concurrency Auto Scaling using the high-level helper method.
     // This is the recommended approach. It's cleaner and less verbose.
@@ -104,7 +111,7 @@ export class TapStack extends cdk.Stack {
 
     // We then apply the target tracking policy directly to the scaling object.
     scaling.scaleOnUtilization({
-      utilizationTarget: 0.70, // This is 70%
+      utilizationTarget: 0.7, // This is 70%
       scaleInCooldown: cdk.Duration.seconds(300),
       scaleOutCooldown: cdk.Duration.seconds(300),
       policyName: `${stackName}-lambda-scaling-policy-nova-team-development`,
@@ -115,7 +122,6 @@ export class TapStack extends cdk.Stack {
     // - new applicationautoscaling.ScalableTarget(...
     // - new applicationautoscaling.TargetTrackingScalingPolicy(...
     // --- They are redundant because addAutoScaling() handles them ---
-
 
     // API Gateway HTTP API
     const httpApi = new apigateway.HttpApi(this, 'NovaHttpApi', {
@@ -139,7 +145,9 @@ export class TapStack extends cdk.Stack {
         ],
       },
     });
-    Object.entries(commonTags).forEach(([k, v]) => cdk.Tags.of(httpApi).add(k, v));
+    Object.entries(commonTags).forEach(([k, v]) =>
+      cdk.Tags.of(httpApi).add(k, v)
+    );
 
     // Lambda Integration with API Gateway
     const lambdaIntegration = new apigatewayIntegrations.HttpLambdaIntegration(
