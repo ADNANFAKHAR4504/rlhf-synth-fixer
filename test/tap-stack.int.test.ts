@@ -267,10 +267,10 @@ describe('TapStack Integration Tests', () => {
     test('Resource naming includes environment suffix', () => {
       // Check that resources include environment suffix in their names/ARNs
       if (outputs.DataBucketName) {
-        expect(outputs.DataBucketName).toMatch(/synthtrainr639/);
+        expect(outputs.DataBucketName).toMatch(/secure-data-bucket-pr977-718240086340-ap-northeast-2/);
       }
       if (outputs.LogsBucketName) {
-        expect(outputs.LogsBucketName).toMatch(/synthtrainr639/);
+        expect(outputs.LogsBucketName).toMatch(/access-logs-bucket-pr977-718240086340-ap-northeast-2/);
       }
       if (outputs.AccessAnalyzerArn) {
         expect(outputs.AccessAnalyzerArn).toMatch(/SecurityAccessAnalyzer-synthtrainr639/);
