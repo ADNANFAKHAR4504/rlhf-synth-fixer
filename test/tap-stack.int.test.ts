@@ -228,7 +228,8 @@ describe('Cloud Environment Infrastructure Integration Tests', () => {
   describe('Container Resources', () => {
     test('ECS cluster should be active', async () => {
       const clusters = await ecsClient.send(new DescribeClustersCommand({
-        clusters: [`cloudenv-cluster-${environmentSuffix}`]
+        clusters: [`cloudenv-cluster-${environmentSuffix}`],
+        include: ['SETTINGS']
       }));
 
       if (clusters.clusters && clusters.clusters.length > 0) {
