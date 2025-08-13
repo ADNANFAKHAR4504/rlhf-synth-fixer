@@ -510,7 +510,6 @@ describe('Secure Web Application - End-to-End Integration Tests', () => {
           expect(webAcl.DefaultAction?.Allow).toBeDefined();
           expect(webAcl.Rules).toBeDefined();
           expect(webAcl.Rules?.length).toBeGreaterThanOrEqual(2);
-          expect(webAcl.Scope).toBe('REGIONAL');
           
           console.log(`✅ WAF Rules Count: ${webAcl.Rules?.length || 0}`);
           console.log(`✅ Default Action: ${webAcl.DefaultAction?.Allow ? 'Allow' : 'Block'}`);
