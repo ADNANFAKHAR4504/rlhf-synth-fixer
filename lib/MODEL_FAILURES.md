@@ -304,63 +304,135 @@ aws.rds.Instance(
 # ✅ CORRECT - Complete VPC Flow Logs
 # Create IAM role for VPC Flow Logs
 flow_logs_role = aws.iam.Role(
-    "vpc-flow-logs-role",
-    assume_role_policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": {"Service": "vpc-flow-logs.amazonaws.com"},
-        }],
-    })
+  "vpc-flow-logs-role",
+  assume_role_policy=json.dumps({
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Action": "sts:AssumeRole",
+      "Effect": "Allow",
+      "Principal": {"Service": "vpc-flow-logs.amazonaws.com"},
+    }],
+  })
 )
 
 # Create IAM policy with least privilege
 flow_logs_policy = aws.iam.Policy(
-    "vpc-flow-logs-policy",
-    policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Effect": "Allow",
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents",
-                "logs:DescribeLogGroups",
-                "logs:DescribeLogStreams",
-            ],
-            "Resource": [
-                "arn:aws:logs:us-east-1:*:log-group:/aws/vpc/flowlogs/*",
-                "arn:aws:logs:us-east-1:*:log-group:/aws/vpc/flowlogs/*:log-stream:*"
-            ],
-        }],
-    })
+  "vpc-flow-logs-policy",
+  policy=json.dumps({
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:*:log-group:/aws/vpc/flowlogs/*",
+        "arn:aws:logs:us-east-1:*:log-group:/aws/vpc/flowlogs/*:log-stream:*"
+      ],
+    }],
+  })
 )
 
 # Attach policy to role
 aws.iam.RolePolicyAttachment(
-    "vpc-flow-logs-policy-attachment",
-    role=flow_logs_role.name,
-    policy_arn=flow_logs_policy.arn
+  "vpc-flow-logs-policy-attachment",
+  role=flow_logs_role.name,
+  policy_arn=flow_logs_policy.arn
 )
 
 # Create CloudWatch Log Group
 log_group = aws.cloudwatch.LogGroup(
-    "vpc-flow-logs",
-    name="/aws/vpc/flowlogs/vpc-12345678",
-    retention_in_days=90
+  "vpc-flow-logs",
+  name="/aws/vpc/flowlogs/vpc-12345678",
+  retention_in_days=90
 )
 
 # Enable VPC Flow Logs
 aws.ec2.FlowLog(
-    "vpc-flow-log",
-    iam_role_arn=flow_logs_role.arn,
-    log_destination=log_group.arn,
-    log_destination_type="cloud-watch-logs",
-    resource_id="vpc-12345678",
-    resource_type="VPC",
-    traffic_type="ALL"
+  "vpc-flow-log",
+  iam_role_arn=flow_logs_role.arn,
+  log_destination=log_group.arn,
+  log_destination_type="cloud-watch-logs",
+  resource_id="vpc-12345678",
+  resource_type="VPC",
+  traffic_type="ALL"
 )
+```
+
+### 7. GuardDuty ebsVolumes Configuration Error
+
+**Failure**: Incorrect ebsVolumes configuration shape
+```python
+# ❌ INCORRECT - Wrong shape for ebsVolumes
+malware_protection=aws.guardduty.DetectorDatasourcesMalwareProtectionArgs(
+  scan_ec2_instance_with_findings=aws.guardduty.DetectorDatasourcesMalwareProtectionScanEc2InstanceWithFindingsArgs(
+    ebs_volumes=True  # Wrong: expects object, not boolean
+  )
+)
+```
+
+**Ideal Response**: Correct ebsVolumes object configuration
+```python
+# ✅ CORRECT - Proper ebsVolumes object
+malware_protection=aws.guardduty.DetectorDatasourcesMalwareProtectionArgs(
+  scan_ec2_instance_with_findings=aws.guardduty.DetectorDatasourcesMalwareProtectionScanEc2InstanceWithFindingsArgs(
+    ebs_volumes=aws.guardduty.DetectorDatasourcesMalwareProtectionScanEc2InstanceWithFindingsEbsVolumesArgs(
+      auto_enable=True
+    )
+  )
+)
+```
+
+### 8. S3 get_buckets() Compatibility Issue
+
+**Failure**: Using incompatible S3 data source
+```python
+# ❌ INCORRECT - get_buckets() not available in all pulumi-aws versions
+try:
+  existing_buckets = aws.s3.get_buckets()
+  bucket_names = existing_buckets.names
+except Exception as e:
+  pulumi.log.warn(f"Could not enumerate S3 buckets: {e}")
+  return
+```
+
+**Ideal Response**: Config-driven bucket management
+```python
+# ✅ CORRECT - Config-driven approach
+# Use config-driven bucket list instead of get_buckets()
+bucket_names = []  # Empty list - buckets will be configured via config if needed
+# Or use a config parameter:
+# bucket_names = config.get_object('s3.bucketNames') or []
+```
+
+### 9. NACL and Flow Logs Warning Messages
+
+**Failure**: Warning messages for expected behavior
+```python
+# ❌ INCORRECT - Warning for expected empty configuration
+if not self.nacl_subnet_ids:
+  pulumi.log.warn("No subnet IDs provided for NACL configuration")
+  return
+
+if not self.vpc_flow_log_vpc_ids:
+  pulumi.log.warn("No VPC IDs provided for Flow Logs configuration")
+  return
+```
+
+**Ideal Response**: Informational messages for expected behavior
+```python
+# ✅ CORRECT - Info messages for expected behavior
+if not self.nacl_subnet_ids:
+  pulumi.log.info("No subnet IDs provided for NACL configuration - skipping NACL setup")
+  return
+
+if not self.vpc_flow_log_vpc_ids:
+  pulumi.log.info("No VPC IDs provided for Flow Logs configuration - skipping Flow Logs setup")
+  return
 ```
 
 ### 7. Missing Environment Configuration

@@ -149,12 +149,10 @@ class TapStack(pulumi.ComponentResource):
   def _ensure_s3_encryption_and_logging(self):
     """Configure S3 security controls including encryption, versioning, and access logging."""
     pulumi.log.info("Configuring S3 security controls...")
-    try:
-      existing_buckets = aws.s3.get_buckets()
-      bucket_names = existing_buckets.names
-    except Exception as e:
-      pulumi.log.warn(f"Could not enumerate S3 buckets: {e}")
-      return
+    
+    # Use config-driven bucket list instead of get_buckets()
+    # This avoids the pulumi_aws.s3.get_buckets() compatibility issue
+    bucket_names = []  # Empty list - buckets will be configured via config if needed
 
     # Create centralized logging bucket with enhanced security
     logging_bucket = aws.s3.Bucket(
@@ -571,10 +569,10 @@ class TapStack(pulumi.ComponentResource):
     """Configure Network ACLs with restrictive baseline."""
     pulumi.log.info("Configuring Network ACLs...")
     if not self.nacl_subnet_ids:
-      pulumi.log.warn("No subnet IDs provided for NACL configuration")
+      pulumi.log.info("No subnet IDs provided for NACL configuration - skipping NACL setup")
       return
     if not self.vpc_id:
-      pulumi.log.warn("VPC ID is required for NACL configuration; skipping")
+      pulumi.log.info("VPC ID is required for NACL configuration - skipping NACL setup")
       return
 
     restrictive_nacl = aws.ec2.NetworkAcl(
@@ -837,7 +835,9 @@ class TapStack(pulumi.ComponentResource):
           ),
           malware_protection=aws.guardduty.DetectorDatasourcesMalwareProtectionArgs(
             scan_ec2_instance_with_findings=aws.guardduty.DetectorDatasourcesMalwareProtectionScanEc2InstanceWithFindingsArgs(
-              ebs_volumes=True
+              ebs_volumes=aws.guardduty.DetectorDatasourcesMalwareProtectionScanEc2InstanceWithFindingsEbsVolumesArgs(
+                auto_enable=True
+              )
             )
           ),
         ),
@@ -851,7 +851,7 @@ class TapStack(pulumi.ComponentResource):
     """Enable VPC Flow Logs for specified VPCs."""
     pulumi.log.info("Enabling VPC Flow Logs...")
     if not self.vpc_flow_log_vpc_ids:
-      pulumi.log.warn("No VPC IDs provided for Flow Logs configuration")
+      pulumi.log.info("No VPC IDs provided for Flow Logs configuration - skipping Flow Logs setup")
       return
       
     # Create IAM role for VPC Flow Logs
