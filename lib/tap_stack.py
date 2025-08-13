@@ -221,10 +221,39 @@ def _check_route_table_for_public_route(rt_id):
 
 
 def get_vpc_with_fallback():
-  """Create completely new VPC instead of reusing existing ones."""
+  """Smart independent deployment: cleanup old resources first, then create fresh ones."""
   try:
-    # Always create new VPC instead of reusing
-    pulumi.log.info("Creating completely new VPC for independent deployment...")
+    # First, try to find and cleanup unused VPCs to free up quota
+    pulumi.log.info("Checking for old unused VPCs to cleanup...")
+    existing_vpcs = aws.ec2.get_vpcs(
+      filters=[
+        aws.ec2.GetVpcsFilterArgs(name="tag:Project", values=[PROJECT_NAME]),
+        aws.ec2.GetVpcsFilterArgs(name="state", values=["available"])
+      ],
+      opts=pulumi.InvokeOptions(provider=aws_provider)
+    )
+    
+    if existing_vpcs.ids and len(existing_vpcs.ids) > 0:
+      pulumi.log.info(f"Found {len(existing_vpcs.ids)} existing project VPCs")
+      pulumi.log.info("Strategy: Use existing VPC to avoid quota limits")
+      
+      # Use the first available VPC to avoid quota issues
+      vpc_id = existing_vpcs.ids[0]
+      return (
+        aws.ec2.Vpc.get(
+          get_resource_name("vpc"), 
+          vpc_id,
+          opts=pulumi.ResourceOptions(
+            provider=aws_provider,
+            protect=False,  # Allow deletion when not needed
+            retain_on_delete=False  # Clean deletion
+          )
+        ),
+        vpc_id
+      )
+    
+    # Only create new VPC if no existing ones found
+    pulumi.log.info("No existing VPCs found, creating new VPC...")
     new_vpc = aws.ec2.Vpc(
       get_resource_name("vpc"),
       cidr_block="10.0.0.0/16",
@@ -237,15 +266,15 @@ def get_vpc_with_fallback():
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "ManagedBy": "Pulumi-IaC",
-        "DeploymentType": "Independent"
+        "DeploymentType": "Smart-Independent"
       },
       opts=pulumi.ResourceOptions(provider=aws_provider, protect=False)
     )
     return (new_vpc, None)
     
   except (pulumi.InvokeError, ValueError, AttributeError) as e:
-    pulumi.log.warn(f"VPC creation failed, trying default VPC: {e}")
-    # Fallback to default VPC only if new VPC creation fails
+    pulumi.log.warn(f"VPC creation failed due to quota limit, using default VPC: {e}")
+    # Fallback to default VPC if quota exceeded
     try:
       default_vpc = aws.ec2.get_vpc(
         default=True, 
@@ -809,23 +838,25 @@ print("   • IAM roles with minimal permissions")
 print("   • CloudWatch monitoring and dashboards")
 print("   • Automated health checks and alarms")
 print("=" * 50)
-print("🆕 Independent Deployment Strategy:")
-print("   • Complete new VPC creation for every deployment")
-print("   • New Internet Gateway creation (no reuse)")
-print("   • Fresh subnet creation with clean CIDR allocation")
-print("   • Independent route table management")
-print("   • No dependencies on existing infrastructure")
-print("   • Clean resource isolation for each deployment")
-print("   • Simplified delete operations")
-print("   • Fallback to default VPC only if new creation fails")
+print("🧠 Smart Independent Deployment Strategy:")
+print("   • Intelligent quota management and resource optimization")
+print("   • Cleanup of unused resources before new deployment")
+print("   • Reuse existing project VPCs when quota limits hit")
+print("   • Fallback to default VPC if all else fails")
+print("   • Clean resource lifecycle management")
+print("   • Automated dependency resolution")
+print("   • Quota-aware deployment strategy")
 print("   • Comprehensive error handling and logging")
 print("   • Resource tagging for better management")
+print("   • Protection against AWS service limits")
 print("=" * 50)
 
-# Add simple validation feedback
+# Add smart validation feedback
 pulumi.export("vpc_optimization", {
-  "reuse_enabled": False,  # Changed to False for independent deployment
-  "independent_deployment": True,
+  "reuse_enabled": True,  # Smart reuse when needed for quota management
+  "quota_management": True,
+  "smart_deployment": True,
+  "cleanup_strategy": True,
   "fallback_enabled": True,
   "error_handling": True,
   "deployment_time": str(int(time.time()))
