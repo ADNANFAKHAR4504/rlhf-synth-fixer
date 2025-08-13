@@ -43,23 +43,11 @@ import * as path from 'path';
 // Load stack outputs from deployment
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../pulumi-outputs/stack-outputs.json');
-    if (fs.existsSync(outputsPath)) {
-      const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-      return JSON.parse(outputsContent);
-    }
-    
-    // Fallback to CDK outputs if Pulumi outputs don't exist
-    const cdkOutputsPath = path.join(__dirname, '../cdk-outputs/flat-outputs.json');
-    if (fs.existsSync(cdkOutputsPath)) {
-      const outputsContent = fs.readFileSync(cdkOutputsPath, 'utf8');
-      return JSON.parse(outputsContent);
-    }
-    
-    throw new Error('No stack outputs found');
+    const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+    const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+    return JSON.parse(outputsContent);
   } catch (error) {
-    console.warn(`Failed to load stack outputs: ${error}`);
-    return null;
+    throw new Error(`Failed to load stack outputs: ${error}`);
   }
 };
 
@@ -135,22 +123,23 @@ describe('TAP Stack Integration Tests', () => {
   beforeAll(async () => {
     // Load stack outputs
     stackOutputs = loadStackOutputs();
-    
-    if (!stackOutputs) {
-      console.warn('No stack outputs found. Skipping integration tests.');
-      return;
+
+    // Get the first stack (assuming single stack deployment)
+    const stackName = Object.keys(stackOutputs)[0];
+    if (!stackName) {
+      throw new Error('No stack outputs found');
     }
-    
-    resourceIds = extractResourceIds(stackOutputs);
+
+    // Extract resource IDs from the stack outputs
+    resourceIds = extractResourceIds(stackOutputs[stackName]);
     clients = initializeClients();
     
     // Get AWS account ID
-    try {
-      const identity = await clients.sts.send(new GetCallerIdentityCommand({}));
-      accountId = identity.Account!;
-    } catch (error) {
-      console.warn('Failed to get AWS account ID:', error);
-    }
+    const stsResponse = await clients.sts.send(new GetCallerIdentityCommand({}));
+    accountId = stsResponse.Account!;
+
+    console.log(`Testing infrastructure for account: ${accountId}`);
+    console.log(`Stack outputs loaded: ${Object.keys(stackOutputs[stackName]).join(', ')}`);
   }, testTimeout);
 
   describe('Infrastructure Deployment Verification', () => {
