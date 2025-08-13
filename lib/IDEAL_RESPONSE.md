@@ -1,7 +1,7 @@
 Below is the format for the ideal resposne:
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure using auto-named IAM resources'
+Description: 'IaC-AWS-Nova-Model-Breaking: Secure multi-tier web application infrastructure with CloudTrail, CloudWatch Alarms, and MFA enforcement.'
 
 # Parameters section for customizable values
 Parameters:
@@ -27,6 +27,14 @@ Parameters:
     MinLength: 1
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+  
+  # Email for alarm notifications
+  NotificationEmail:
+    Type: String
+    Description: 'Email address to receive CloudWatch alarm notifications.'
+    Default: 'default@example.com'
+    AllowedPattern: '^.+@.+$'
+    ConstraintDescription: 'Must be a valid email address.'
 
   # Project name for resource naming
   ProjectName:
@@ -64,8 +72,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-VPC'
-        - Key: Project
-          Value: !Ref ProjectName
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -73,8 +79,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-IGW'
-        - Key: Project
-          Value: !Ref ProjectName
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -92,8 +96,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Public-Subnet-AZ1'
-        - Key: Project
-          Value: !Ref ProjectName
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -105,8 +107,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Public-Subnet-AZ2'
-        - Key: Project
-          Value: !Ref ProjectName
 
   PrivateAppSubnet1:
     Type: AWS::EC2::Subnet
@@ -117,8 +117,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Private-App-Subnet-AZ1'
-        - Key: Project
-          Value: !Ref ProjectName
 
   PrivateAppSubnet2:
     Type: AWS::EC2::Subnet
@@ -129,8 +127,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Private-App-Subnet-AZ2'
-        - Key: Project
-          Value: !Ref ProjectName
 
   PrivateDataSubnet1:
     Type: AWS::EC2::Subnet
@@ -141,8 +137,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Private-Data-Subnet-AZ1'
-        - Key: Project
-          Value: !Ref ProjectName
 
   PrivateDataSubnet2:
     Type: AWS::EC2::Subnet
@@ -153,52 +147,35 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-Private-Data-Subnet-AZ2'
-        - Key: Project
-          Value: !Ref ProjectName
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-NAT-EIP-AZ1'
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-NAT-EIP-AZ2'
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-NAT-Gateway-AZ1'
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-NAT-Gateway-AZ2'
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MainVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-Public-Routes'
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -224,9 +201,6 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MainVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-Private-Routes-AZ1'
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -251,9 +225,6 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MainVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-Private-Routes-AZ2'
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -291,11 +262,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-ApplicationData'
-        - Key: Project
-          Value: !Ref ProjectName
 
   EC2InstanceRole:
     Type: AWS::IAM::Role
@@ -330,11 +296,6 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Ref DatabaseSecret
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-EC2-Role'
-        - Key: Project
-          Value: !Ref ProjectName
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -357,21 +318,10 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS traffic from internet'
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: '0.0.0.0/0'
-          Description: 'HTTP traffic from internet (for redirect to HTTPS)'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-ALB-SecurityGroup'
-        - Key: Project
-          Value: !Ref ProjectName
 
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -384,21 +334,10 @@ Resources:
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: 'HTTPS traffic from ALB only'
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref SSHAccessCIDR
-          Description: 'SSH access from specified CIDR'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-Web-SecurityGroup'
-        - Key: Project
-          Value: !Ref ProjectName
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -411,12 +350,6 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref WebSecurityGroup
-          Description: 'MySQL traffic from web tier only'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-Database-SecurityGroup'
-        - Key: Project
-          Value: !Ref ProjectName
 
   # ========================================
   # 4. DATA ENCRYPTION IN TRANSIT (SSL/TLS)
@@ -430,11 +363,6 @@ Resources:
       SubnetIds:
         - !Ref PrivateDataSubnet1
         - !Ref PrivateDataSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-DatabaseSubnetGroup'
-        - Key: Project
-          Value: !Ref ProjectName
 
   DatabaseParameterGroup:
     Type: AWS::RDS::DBParameterGroup
@@ -444,11 +372,6 @@ Resources:
       Family: 'mysql8.0'
       Parameters:
         require_secure_transport: 'ON'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-DatabaseParameterGroup'
-        - Key: Project
-          Value: !Ref ProjectName
 
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
@@ -460,11 +383,6 @@ Resources:
         GenerateStringKey: 'password'
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-DatabaseSecret'
-        - Key: Project
-          Value: !Ref ProjectName
 
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
@@ -487,11 +405,6 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       DeletionProtection: false
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-Database'
-        - Key: Project
-          Value: !Ref ProjectName
 
   # ========================================
   # 5. AWS WAF INTEGRATION
@@ -508,11 +421,6 @@ Resources:
         - !Ref PublicSubnet2
       SecurityGroups:
         - !Ref ALBSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-ApplicationLoadBalancer'
-        - Key: Project
-          Value: !Ref ProjectName
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -525,11 +433,6 @@ Resources:
       HealthCheckPath: '/health'
       HealthCheckProtocol: HTTPS
       TargetType: instance
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-TargetGroup'
-        - Key: Project
-          Value: !Ref ProjectName
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -579,11 +482,6 @@ Resources:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
         MetricName: !Sub '${ProjectName}-WebACL'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-WebACL'
-        - Key: Project
-          Value: !Ref ProjectName
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -600,11 +498,6 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/apigateway/${ProjectName}'
       RetentionInDays: 14
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-APIGateway-LogGroup'
-        - Key: Project
-          Value: !Ref ProjectName
 
   APIGatewayLoggingRole:
     Type: AWS::IAM::Role
@@ -618,11 +511,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-APIGateway-Logging-Role'
-        - Key: Project
-          Value: !Ref ProjectName
 
   APIGatewayAccount:
     Type: AWS::ApiGateway::Account
@@ -637,11 +525,6 @@ Resources:
       EndpointConfiguration:
         Types:
           - REGIONAL
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-RestAPI'
-        - Key: Project
-          Value: !Ref ProjectName
 
   APIResource:
     Type: AWS::ApiGateway::Resource
@@ -691,11 +574,6 @@ Resources:
           LoggingLevel: INFO
           DataTraceEnabled: true
           MetricsEnabled: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-API-Stage'
-        - Key: Project
-          Value: !Ref ProjectName
 
   # ========================================
   # 7. AUTOMATED SECURITY PATCHING VIA LAMBDA
@@ -724,11 +602,6 @@ Resources:
                   - ssm:DescribeInstanceInformation
                   - ec2:DescribeInstances
                 Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-Lambda-Patching-Role'
-        - Key: Project
-          Value: !Ref ProjectName
 
   PatchingLambdaFunction:
     Type: AWS::Lambda::Function
@@ -748,35 +621,24 @@ Resources:
               ec2_client = boto3.client('ec2')
               
               try:
-                  # Get instances with PatchGroup=WebApp tag
                   response = ec2_client.describe_instances(
                       Filters=[
-                          {
-                              'Name': 'tag:PatchGroup',
-                              'Values': ['WebApp']
-                          },
-                          {
-                              'Name': 'instance-state-name',
-                              'Values': ['running']
-                          }
+                          {'Name': 'tag:PatchGroup', 'Values': ['WebApp']},
+                          {'Name': 'instance-state-name', 'Values': ['running']}
                       ]
                   )
-                  
-                  instance_ids = []
-                  for reservation in response['Reservations']:
-                      for instance in reservation['Instances']:
-                          instance_ids.append(instance['InstanceId'])
+                  instance_ids = [
+                      instance['InstanceId'] 
+                      for reservation in response['Reservations'] 
+                      for instance in reservation['Instances']
+                  ]
                   
                   if instance_ids:
-                      # Send patch baseline command
                       command_response = ssm_client.send_command(
                           InstanceIds=instance_ids,
                           DocumentName='AWS-RunPatchBaseline',
-                          Parameters={
-                              'Operation': ['Install']
-                          }
+                          Parameters={'Operation': ['Install']}
                       )
-                      
                       return {
                           'statusCode': 200,
                           'body': json.dumps({
@@ -784,26 +646,9 @@ Resources:
                               'commandId': command_response['Command']['CommandId']
                           })
                       }
-                  else:
-                      return {
-                          'statusCode': 200,
-                          'body': json.dumps({
-                              'message': 'No instances found with PatchGroup=WebApp tag'
-                          })
-                      }
-                      
+                  return {'statusCode': 200, 'body': json.dumps({'message': 'No instances found'})}
               except Exception as e:
-                  return {
-                      'statusCode': 500,
-                      'body': json.dumps({
-                          'error': str(e)
-                      })
-                  }
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-Patching-Lambda'
-        - Key: Project
-          Value: !Ref ProjectName
+                  return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 
   PatchingScheduleRule:
     Type: AWS::Events::Rule
@@ -814,6 +659,151 @@ Resources:
       Targets:
         - Arn: !GetAtt PatchingLambdaFunction.Arn
           Id: !Sub '${ProjectName}-PatchingLambdaTarget'
+
+  # ========================================
+  # 8. CLOUDTRAIL AUDITING
+  # ========================================
+
+  CloudTrailLogBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'ct-${ProjectNameLower}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldLogs
+            Status: Enabled
+            Prefix: ''
+            ExpirationInDays: 365
+
+  CloudTrailLogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailLogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailLogBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringNotEqualsIfExists:
+                's3:x-amz-server-side-encryption': 'AES256'
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: !Sub '${CloudTrailLogBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+  MainCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailLogBucketPolicy
+    Properties:
+      TrailName: !Sub '${ProjectName}-MainTrail'
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref CloudTrailLogBucket
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+
+  # ========================================
+  # 9. REAL-TIME MONITORING
+  # ========================================
+
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub '${ProjectName} Alarm Notifications'
+      TopicName: !Sub '${ProjectName}-AlarmTopic'
+
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+      TopicArn: !Ref AlarmNotificationTopic
+
+  RDSCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-RDS-High-CPU'
+      AlarmDescription: 'Alarm for high RDS CPU utilization'
+      Namespace: 'AWS/RDS'
+      MetricName: 'CPUUtilization'
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseInstance
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
+
+  # ========================================
+  # 10. MFA ENFORCEMENT
+  # ========================================
+
+  MFAAdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # RoleName property removed for CAPABILITY_IAM compatibility
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' # Allows users in the account to assume this role
+            Action: 'sts:AssumeRole'
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': 'true'
+      Policies:
+        - PolicyName: 'MFA-ReadOnly-Access'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:Describe*'
+                  - 'rds:Describe*'
+                  - 's3:List*'
+                Resource: '*'
 
 # Outputs section for Integration Tests
 Outputs:
@@ -841,12 +831,6 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-EC2InstanceRoleName"
 
-  EC2InstanceRoleArn:
-    Description: The ARN of the IAM Role for EC2 instances
-    Value: !GetAtt EC2InstanceRole.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-EC2InstanceRoleArn"
-
   ALBArn:
     Description: The ARN of the Application Load Balancer
     Value: !Ref ApplicationLoadBalancer
@@ -870,4 +854,23 @@ Outputs:
     Value: !Ref PatchingLambdaFunction
     Export:
       Name: !Sub "${AWS::StackName}-PatchingLambdaFunctionName"
+      
+  # New outputs for added components
+  CloudTrailName:
+    Description: The name of the CloudTrail trail
+    Value: !Ref MainCloudTrail
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudTrailName"
+      
+  RDSCPUAlarmName:
+    Description: The name of the RDS CPU CloudWatch Alarm
+    Value: !Ref RDSCPUAlarm
+    Export:
+      Name: !Sub "${AWS::StackName}-RDSCPUAlarmName"
+      
+  MFAAdminRoleName:
+    Description: The name of the MFA-enforced Admin Role
+    Value: !Ref MFAAdminRole
+    Export:
+      Name: !Sub "${AWS::StackName}-MFAAdminRoleName"
 ```
