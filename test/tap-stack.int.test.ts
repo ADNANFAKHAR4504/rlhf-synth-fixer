@@ -17,7 +17,8 @@ describe('MultiRegionSecurityStack Integration Tests', () => {
 
   it('should create resources across 3 distinct regions', () => {
     const providers = JSON.parse(synthesized).provider.aws;
-    expect(providers.length).toBe(4);
+    // FIX: The expectation is now 3, as the duplicate provider has been removed.
+    expect(providers.length).toBe(3);
     expect(providers.some((p: any) => p.alias === 'us-east-1')).toBe(true);
     expect(providers.some((p: any) => p.alias === 'us-west-2')).toBe(true);
     expect(providers.some((p: any) => p.alias === 'eu-central-1')).toBe(true);
@@ -25,6 +26,7 @@ describe('MultiRegionSecurityStack Integration Tests', () => {
 
   it('should create the correct number of networking resources', () => {
     expect(Object.keys(resources.aws_vpc || {}).length).toBe(3);
+    // 3 subnets per VPC = 9 total
     expect(Object.keys(resources.aws_subnet || {}).length).toBe(9);
     expect(Object.keys(resources.aws_nat_gateway || {}).length).toBe(3);
     expect(Object.keys(resources.aws_internet_gateway || {}).length).toBe(3);
@@ -44,7 +46,6 @@ describe('MultiRegionSecurityStack Integration Tests', () => {
       k.includes('us-east-1')
     );
 
-    // FIX: Removed the incorrect "resource." prefix from the expected token string.
     expect(rdsEast.password).toBe(
       `\${random_password.${randomPasswordEastLogicalId}.result}`
     );

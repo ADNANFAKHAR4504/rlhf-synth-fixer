@@ -1,5 +1,6 @@
 import { Construct } from 'constructs';
-import { App, TerraformStack, Fn } from 'cdktf';
+// FIX: Removed 'App' as it was unused in this file.
+import { TerraformStack, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { Password } from '@cdktf/provider-random/lib/password';
@@ -77,10 +78,18 @@ export class MultiRegionSecurityStack extends TerraformStack {
     // --- Add Providers ---
     new RandomProvider(this, 'random');
 
-    const centralProvider = new AwsProvider(this, 'central-aws-provider', {
-      region: 'us-east-1',
-      alias: 'us-east-1',
-    });
+    const providers = new Map<string, AwsProvider>();
+    for (const config of REGION_CONFIGS) {
+      providers.set(
+        config.region,
+        new AwsProvider(this, `aws-provider-${config.region}`, {
+          region: config.region,
+          alias: config.region,
+        })
+      );
+    }
+
+    const centralProvider = providers.get('us-east-1')!;
 
     // --- Centralized Logging S3 Bucket (in us-east-1) ---
     const centralLogBucket = new S3Bucket(this, 'CentralLogBucket', {
@@ -166,14 +175,7 @@ export class MultiRegionSecurityStack extends TerraformStack {
 
     // --- Multi-Region Resource Loop ---
     for (const config of REGION_CONFIGS) {
-      const regionProvider = new AwsProvider(
-        this,
-        `aws-provider-${config.region}`,
-        {
-          region: config.region,
-          alias: config.region,
-        }
-      );
+      const regionProvider = providers.get(config.region)!;
 
       const tags = { ...COMMON_TAGS, Region: config.region };
 
@@ -186,7 +188,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         tags: { ...tags, Name: `vpc-${config.region}` },
       });
 
-      // ... [Networking, Routing, SG, and NACL code remains the same] ...
       const igw = new InternetGateway(this, `IGW-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
@@ -342,7 +343,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         toPort: 0,
       });
 
-      // --- Logging & Monitoring ---
       new FlowLog(this, `FlowLog-${config.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
@@ -353,7 +353,6 @@ export class MultiRegionSecurityStack extends TerraformStack {
         tags: { ...tags, Name: `flow-log-${config.region}` },
       });
 
-      // --- Storage (Example Encrypted RDS with Generated Password) ---
       const dbPassword = new Password(this, `DBPassword-${config.region}`, {
         length: 16,
         special: true,
@@ -401,14 +400,10 @@ export class MultiRegionSecurityStack extends TerraformStack {
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [dbSg.id],
         username: 'dbadmin',
-        password: dbPassword.result, // Use the generated password
+        password: dbPassword.result,
         skipFinalSnapshot: true,
         tags: { ...tags, Name: `app-db-${config.region}` },
       });
     }
   }
 }
-
-const app = new App();
-new MultiRegionSecurityStack(app, 'multi-region-secure-stack');
-app.synth();
