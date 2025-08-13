@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, Fn, TerraformIterator
+from cdktf import TerraformStack, TerraformOutput, Fn, TerraformIterator, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -35,6 +35,15 @@ class TapStack(TerraformStack):
     environment_suffix = kwargs.get("environment_suffix", "dev")
     aws_region = kwargs.get("aws_region", "us-east-1")
     default_tags = kwargs.get("default_tags", {})
+    
+    # Configure S3 backend for remote state with DynamoDB locking
+    S3Backend(self,
+      bucket="iac-rlhf-tf-states",
+      key=f"cdktf/{environment_suffix}/terraform.tfstate",
+      region=aws_region,
+      encrypt=True,
+      dynamodb_table=f"terraform-state-lock-{environment_suffix}"
+    )
     
     # Merge production environment tag with default tags
     production_tags = {
