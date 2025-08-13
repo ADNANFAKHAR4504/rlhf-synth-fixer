@@ -1,24 +1,23 @@
 """Integration tests for TapStack infrastructure deployment."""
 import json
-import subprocess
-import time
 import os
 import sys
+import time
 
 # Add lib directory to path for tap_stack imports
 lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib')
 if lib_path not in sys.path:
   sys.path.insert(0, lib_path)
 
-# Mock requests if not available
 try:
   import requests
 except ImportError:
+  # Mock requests for testing environments
   class MockRequests:
     class RequestException(Exception):
       pass
     @staticmethod
-    def get(url, timeout=None):
+    def get(url, timeout=None):  # pylint: disable=unused-argument
       class MockResponse:
         status_code = 200
         text = "Dual-Stack Web Application"
@@ -27,6 +26,16 @@ except ImportError:
           return self.json_data
       return MockResponse()
   requests = MockRequests()
+
+# Add lib directory to path for tap_stack imports
+lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib')
+if lib_path not in sys.path:
+  sys.path.insert(0, lib_path)
+
+# Add lib directory to path for tap_stack imports
+lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib')
+if lib_path not in sys.path:
+  sys.path.insert(0, lib_path)
 
 # Configuration from environment and tap_stack
 ENVIRONMENT_SUFFIX = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
@@ -76,19 +85,33 @@ def run_command(command: str) -> str:
       ],
       
       # ALB outputs from tap_stack.py
-      "alb_arn": f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:loadbalancer/app/{TapStackConfig.PROJECT_NAME}-{TapStackConfig.ENVIRONMENT}-web-alb-{TapStackConfig.DEPLOYMENT_ID}/1234567890123456",
-      "alb_dns_name": f"{TapStackConfig.PROJECT_NAME}-{TapStackConfig.ENVIRONMENT}-web-alb-{TapStackConfig.DEPLOYMENT_ID}.{AWS_REGION}.elb.amazonaws.com",
+      "alb_arn": (f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:"
+                  f"loadbalancer/app/{TapStackConfig.PROJECT_NAME}-"
+                  f"{TapStackConfig.ENVIRONMENT}-web-alb-"
+                  f"{TapStackConfig.DEPLOYMENT_ID}/1234567890123456"),
+      "alb_dns_name": (f"{TapStackConfig.PROJECT_NAME}-"
+                       f"{TapStackConfig.ENVIRONMENT}-web-alb-"
+                       f"{TapStackConfig.DEPLOYMENT_ID}.{AWS_REGION}.elb.amazonaws.com"),
       "alb_zone_id": "Z1D633PJN98FT9",
       "alb_security_group_id": f"sg-{TapStackConfig.DEPLOYMENT_ID}alb",
       
       # Target Group outputs
-      "target_group_arn": f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:targetgroup/{TapStackConfig.PROJECT_NAME}-{TapStackConfig.ENVIRONMENT}-web-tg-{TapStackConfig.DEPLOYMENT_ID}/1234567890123456",
+      "target_group_arn": (f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:"
+                           f"targetgroup/{TapStackConfig.PROJECT_NAME}-"
+                           f"{TapStackConfig.ENVIRONMENT}-web-tg-"
+                           f"{TapStackConfig.DEPLOYMENT_ID}/1234567890123456"),
       
       # Application URL
-      "application_url": f"http://{TapStackConfig.PROJECT_NAME}-{TapStackConfig.ENVIRONMENT}-web-alb-{TapStackConfig.DEPLOYMENT_ID}.{AWS_REGION}.elb.amazonaws.com",
+      "application_url": (f"http://{TapStackConfig.PROJECT_NAME}-"
+                          f"{TapStackConfig.ENVIRONMENT}-web-alb-"
+                          f"{TapStackConfig.DEPLOYMENT_ID}.{AWS_REGION}.elb.amazonaws.com"),
       
       # CloudWatch dashboard URL
-      "cloudwatch_dashboard_url": f"https://{AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region={AWS_REGION}#dashboards:name={TapStackConfig.PROJECT_NAME}-{TapStackConfig.ENVIRONMENT}-monitoring-dashboard-{TapStackConfig.DEPLOYMENT_ID}",
+      "cloudwatch_dashboard_url": (f"https://{AWS_REGION}.console.aws.amazon.com/"
+                                   f"cloudwatch/home?region={AWS_REGION}#dashboards:"
+                                   f"name={TapStackConfig.PROJECT_NAME}-"
+                                   f"{TapStackConfig.ENVIRONMENT}-monitoring-dashboard-"
+                                   f"{TapStackConfig.DEPLOYMENT_ID}"),
       
       # Deployment summary from tap_stack.py
       "deployment_summary": {
@@ -110,25 +133,28 @@ def run_command(command: str) -> str:
         "step_4": "Monitor the infrastructure using the CloudWatch dashboard",
         "verification": {
           "web_access": "Open the application_url in a web browser",
-          "ipv6_test": "Use 'curl -6' with the ALB DNS name to test IPv6 connectivity",
+          "ipv6_test": ("Use 'curl -6' with the ALB DNS name to test "
+                        "IPv6 connectivity"),
           "health_check": "Check target group health in AWS Console",
           "monitoring": "View metrics in the CloudWatch dashboard"
         }
       }
     })
   
-  elif "pulumi stack ls" in command:
+  if "pulumi stack ls" in command:
     return f"{STACK}    {TapStackConfig.ENVIRONMENT}    2025-08-13T10:30:00Z"
   
-  elif "aws elbv2 describe-target-health" in command:
+  if "aws elbv2 describe-target-health" in command:
     return json.dumps({
       "TargetHealthDescriptions": [
-        {"Target": {"Id": f"i-{TapStackConfig.DEPLOYMENT_ID}001"}, "TargetHealth": {"State": "healthy"}},
-        {"Target": {"Id": f"i-{TapStackConfig.DEPLOYMENT_ID}002"}, "TargetHealth": {"State": "healthy"}}
+        {"Target": {"Id": f"i-{TapStackConfig.DEPLOYMENT_ID}001"}, 
+         "TargetHealth": {"State": "healthy"}},
+        {"Target": {"Id": f"i-{TapStackConfig.DEPLOYMENT_ID}002"}, 
+         "TargetHealth": {"State": "healthy"}}
       ]
     })
   
-  elif "aws ec2 describe-instances" in command:
+  if "aws ec2 describe-instances" in command:
     return json.dumps({
       "Reservations": [{
         "Instances": [
@@ -407,7 +433,7 @@ def test_tap_stack_dual_stack_networking():
   assert len(public_ips) > 0, "Should have IPv4 addresses"
   assert len(ipv6_addresses) > 0, "Should have IPv6 addresses"
   
-  print(f"✅ Dual-stack networking: IPv4 + IPv6 configured")
+  print("✅ Dual-stack networking: IPv4 + IPv6 configured")
 
 
 def _test_deployment_components(outputs: dict):
@@ -465,7 +491,7 @@ def _test_application_health(url: str):
       return
     
     print(f"Got status {response.status_code}")
-  except Exception as e:
+  except (ConnectionError, TimeoutError, requests.RequestException) as e:
     print(f"Request failed - {e}")
     # In testing mode, we'll pass this as expected
     print("✅ Mock health check completed")
@@ -486,9 +512,9 @@ def _test_health_endpoint(url: str):
       # tap_stack creates /health endpoint with "healthy" content
       assert "healthy" in response.text.lower()
       return True
-    else:
-      print(f"Health endpoint returned status: {response.status_code}")
-  except Exception as e:
+    
+    print(f"Health endpoint returned status: {response.status_code}")
+  except (ConnectionError, TimeoutError, requests.RequestException) as e:
     print(f"Health endpoint test failed - {e}")
     # In mock mode, simulate healthy response
     print("✅ Mock health endpoint check completed")

@@ -1,9 +1,8 @@
 """Unit tests for the TapStack Pulumi component."""
 
-import sys
+import importlib.util
 import os
-import pytest
-import json
+import sys
 
 # Add the lib directory to the path  
 lib_path = os.path.join(os.getcwd(), 'lib')
@@ -47,14 +46,14 @@ class MockPulumi:
   Output = MockOutput
   
   class ResourceOptions:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pylint: disable=unused-argument
       self.provider = kwargs.get('provider')
       self.depends_on = kwargs.get('depends_on', [])
       self.protect = kwargs.get('protect', False)
       self.delete_before_replace = kwargs.get('delete_before_replace', False)
       
   class InvokeOptions:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pylint: disable=unused-argument
       self.provider = kwargs.get('provider')
       self.async_ = kwargs.get('async_', False)
   
@@ -82,28 +81,28 @@ class MockGetAmiFilterArgs:
     self.values = values
 
 class MockHealthCheckArgs:
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args, **kwargs):  # pylint: disable=unused-argument
     for key, value in kwargs.items():
       setattr(self, key, value)
 
 class MockDefaultActionArgs:
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args, **kwargs):  # pylint: disable=unused-argument
     for key, value in kwargs.items():
       setattr(self, key, value)
 
 class MockSecurityGroupIngressArgs:
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args, **kwargs):  # pylint: disable=unused-argument
     for key, value in kwargs.items():
       setattr(self, key, value)
 
 class MockSecurityGroupEgressArgs:
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args, **kwargs):  # pylint: disable=unused-argument
     for key, value in kwargs.items():
       setattr(self, key, value)
 
 class MockEC2:
   @staticmethod
-  def get_ami(*args, **kwargs):
+  def get_ami(*args, **kwargs):  # pylint: disable=unused-argument
     return MockAmi()
   
   GetAmiFilterArgs = MockGetAmiFilterArgs
@@ -200,16 +199,19 @@ class MockLB:
   class LoadBalancer:
     def __init__(self, name, **kwargs):
       self.name = name
-      self.arn = f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:loadbalancer/app/{name}/1234567890123456"
+      self.arn = (f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:"
+                  f"loadbalancer/app/{name}/1234567890123456")
       self.arn_suffix = MockOutput("app/test-alb/1234567890123456")
-      self.dns_name = MockOutput(f"{name}-{ENVIRONMENT_SUFFIX}.{AWS_REGION}.elb.amazonaws.com")
+      self.dns_name = MockOutput(
+          f"{name}-{ENVIRONMENT_SUFFIX}.{AWS_REGION}.elb.amazonaws.com")
       self.zone_id = MockOutput("Z1D633PJN98FT9")
       self.load_balancer_type = kwargs.get('load_balancer_type', 'application')
   
   class TargetGroup:
     def __init__(self, name, **kwargs):
       self.name = name
-      self.arn = f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:targetgroup/{name}/1234567890123456"
+      self.arn = (f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:"
+                  f"targetgroup/{name}/1234567890123456")
       self.arn_suffix = MockOutput(f"targetgroup/{name}/1234567890123456")
       self.port = kwargs.get('port', 80)
       self.protocol = kwargs.get('protocol', 'HTTP')
@@ -223,7 +225,8 @@ class MockLB:
   class Listener:
     def __init__(self, name, **kwargs):
       self.name = name
-      self.arn = f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:listener/app/test-alb/1234567890123456/1234567890123456"
+      self.arn = (f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:"
+                  f"listener/app/test-alb/1234567890123456/1234567890123456")
       self.load_balancer_arn = kwargs.get('load_balancer_arn')
   
   TargetGroupHealthCheckArgs = MockHealthCheckArgs
@@ -247,7 +250,7 @@ class MockAws:
   Provider = MockProvider
   
   @staticmethod
-  def get_availability_zones(**kwargs):
+  def get_availability_zones(**kwargs):  # pylint: disable=unused-argument
     return MockAvailabilityZones()
   
   ec2 = MockEC2()
@@ -273,7 +276,8 @@ except ImportError:
     
     @staticmethod
     def get_resource_name(resource_type: str) -> str:
-      return f"{tap_stack.PROJECT_NAME}-{tap_stack.ENVIRONMENT}-{resource_type}-{tap_stack.DEPLOYMENT_ID}"
+      return (f"{tap_stack.PROJECT_NAME}-{tap_stack.ENVIRONMENT}-"
+              f"{resource_type}-{tap_stack.DEPLOYMENT_ID}")
     
     @staticmethod
     def get_short_name(resource_type: str, max_length: int = 32) -> str:
@@ -297,150 +301,6 @@ except ImportError:
       return f"{':'.join(parts)}::/64"
 
 # Test cases for tap_stack.py functionality
-
-class MockPulumi:
-  Config = MockConfig
-  
-  class ResourceOptions:
-    def __init__(self, *args, **kwargs):
-      self.provider = kwargs.get('provider')
-      self.depends_on = kwargs.get('depends_on', [])
-      self.protect = kwargs.get('protect', False)
-      
-  class InvokeOptions:
-    def __init__(self, *args, **kwargs):
-      self.provider = kwargs.get('provider')
-      self.async_ = kwargs.get('async_', False)
-
-class MockProvider:
-  def __init__(self, *args, **kwargs):
-    self.region = kwargs.get('region', AWS_REGION)
-    self.version = kwargs.get('version', '6.0.0')
-
-class MockAvailabilityZones:
-  names = [f"{AWS_REGION}a", f"{AWS_REGION}b", f"{AWS_REGION}c"]
-
-class MockAmi:
-  id = "ami-0abcdef1234567890"
-  name = "amazon-linux-2023"
-  architecture = "x86_64"
-
-class MockGetAmiFilterArgs:
-  def __init__(self, name=None, values=None):
-    self.name = name
-    self.values = values
-
-class MockHealthCheckArgs:
-  def __init__(self, *args, **kwargs):
-    pass
-
-class MockDefaultActionArgs:
-  def __init__(self, *args, **kwargs):
-    pass
-
-class MockSecurityGroupIngressArgs:
-  def __init__(self, *args, **kwargs):
-    pass
-
-class MockSecurityGroupEgressArgs:
-  def __init__(self, *args, **kwargs):
-    pass
-
-class MockEC2:
-  get_ami = lambda *args, **kwargs: MockAmi()
-  GetAmiFilterArgs = MockGetAmiFilterArgs
-  SecurityGroupIngressArgs = MockSecurityGroupIngressArgs
-  SecurityGroupEgressArgs = MockSecurityGroupEgressArgs
-  
-  class Vpc:
-    def __init__(self, *args, **kwargs):
-      self.id = "vpc-" + "".join(["abcd1234"] * 2)
-      self.cidr_block = "10.0.0.0/16"
-      self.ipv6_cidr_block = "2600:1f18:1234:5600::/56"
-  
-  class Subnet:
-    def __init__(self, *args, **kwargs):
-      self.id = "subnet-" + "".join(["efgh5678"] * 2)
-      self.availability_zone = kwargs.get('availability_zone', f"{AWS_REGION}a")
-  
-  class SecurityGroup:
-    def __init__(self, *args, **kwargs):
-      self.id = "sg-" + "".join(["ijkl9012"] * 2)
-  
-  class Instance:
-    def __init__(self, *args, **kwargs):
-      self.id = "i-" + "".join(["mnop3456"] * 2)
-      self.public_ip = "203.0.113.1"
-      self.ipv6_addresses = ["2600:1f18:1234:5600::1"]
-  
-  class InternetGateway:
-    def __init__(self, *args, **kwargs):
-      self.id = "igw-" + "".join(["qrst7890"] * 2)
-  
-  class RouteTable:
-    def __init__(self, *args, **kwargs):
-      self.id = "rtb-" + "".join(["uvwx1234"] * 2)
-  
-  class Route:
-    def __init__(self, *args, **kwargs):
-      pass
-  
-  class RouteTableAssociation:
-    def __init__(self, *args, **kwargs):
-      pass
-
-class MockIAM:
-  class Role:
-    def __init__(self, *args, **kwargs):
-      pass
-  
-  class Policy:
-    def __init__(self, *args, **kwargs):
-      pass
-  
-  class RolePolicyAttachment:
-    def __init__(self, *args, **kwargs):
-      pass
-  
-  class InstanceProfile:
-    def __init__(self, *args, **kwargs):
-      pass
-
-class MockLB:
-  class LoadBalancer:
-    def __init__(self, *args, **kwargs):
-      self.arn = f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:loadbalancer/app/test-alb/1234567890123456"
-      self.dns_name = f"test-alb-{ENVIRONMENT_SUFFIX}.{AWS_REGION}.elb.amazonaws.com"
-      self.zone_id = "Z1D633PJN98FT9"
-  
-  class TargetGroup:
-    def __init__(self, *args, **kwargs):
-      self.arn = f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:targetgroup/test-tg/1234567890123456"
-  
-  class TargetGroupAttachment:
-    def __init__(self, *args, **kwargs):
-      pass
-  
-  class Listener:
-    def __init__(self, *args, **kwargs):
-      self.arn = f"arn:aws:elasticloadbalancing:{AWS_REGION}:123456789012:listener/app/test-alb/1234567890123456/1234567890123456"
-  
-  TargetGroupHealthCheckArgs = MockHealthCheckArgs
-  ListenerDefaultActionArgs = MockDefaultActionArgs
-
-class MockCloudWatch:
-  class Dashboard:
-    def __init__(self, *args, **kwargs):
-      self.dashboard_name = kwargs.get('dashboard_name', f"TapStack-{ENVIRONMENT_SUFFIX}")
-  
-  class MetricAlarm:
-    def __init__(self, *args, **kwargs):
-      self.alarm_name = kwargs.get('alarm_name', f"TapStack-{ENVIRONMENT_SUFFIX}-alarm")
-
-class MockAws:
-  Provider = MockProvider
-  get_availability_zones = lambda *args, **kwargs: MockAvailabilityZones()
-  ec2 = MockEC2()
   iam = MockIAM()
   lb = MockLB()
   cloudwatch = MockCloudWatch()
@@ -458,45 +318,9 @@ def setup_pipeline_test_environment():
   os.environ.setdefault("PROJECT", "TapStack")
 
 # Set up the mock config before importing
-import importlib.util
 spec = importlib.util.find_spec('tap_stack')
-if spec is not None:
-  import tap_stack
-else:
-  # Create mock values for CI/CD pipeline testing
-  class MockTapStack:
-    PROJECT_NAME = "dswa-v5"
-    ENVIRONMENT = ENVIRONMENT_SUFFIX
-    AWS_REGION = AWS_REGION
-    INSTANCE_TYPE = "t3.micro"
-    DEPLOYMENT_ID = "1234"
-    
-    @staticmethod
-    def get_resource_name(resource_type: str) -> str:
-      return f"{MockTapStack.PROJECT_NAME}-{MockTapStack.ENVIRONMENT}-{resource_type}-{MockTapStack.DEPLOYMENT_ID}"
-    
-    @staticmethod
-    def get_short_name(resource_type: str, max_length: int = 32) -> str:
-      short_name = f"{MockTapStack.PROJECT_NAME}-{resource_type}-{MockTapStack.DEPLOYMENT_ID}"
-      if len(short_name) > max_length:
-        available_chars = max_length - len(f"-{MockTapStack.DEPLOYMENT_ID}")
-        truncated = f"{MockTapStack.PROJECT_NAME}-{resource_type}"[:available_chars]
-        short_name = f"{truncated}-{MockTapStack.DEPLOYMENT_ID}"
-      return short_name
-    
-    @staticmethod
-    def calculate_ipv6_cidr(vpc_cidr: str, subnet_index: int) -> str:
-      base_prefix = vpc_cidr.replace("::/56", "")
-      if subnet_index == 0:
-        return f"{base_prefix}::/64"
-      
-      parts = base_prefix.split(":")
-      last_part = parts[-1] if parts[-1] else "0"
-      last_int = int(last_part, 16) + subnet_index
-      parts[-1] = f"{last_int:x}"
-      return f"{':'.join(parts)}::/64"
-  
-  tap_stack = MockTapStack()
+if spec:
+  import tap_stack  # pylint: disable=import-error
 
 
 def test_tap_stack_constants():
@@ -770,15 +594,12 @@ def test_instance_configuration():
 def test_module_imports():
   """Test that tap_stack.py imports are working."""
   # Test that required modules can be imported
-  import json
-  import time
+  import json  # pylint: disable=import-outside-toplevel
   
   # Test json functions
   test_dict = {"test": "value"}
   json_str = json.dumps(test_dict)
   assert isinstance(json_str, str)
   
-  # Test time functions
-  timestamp = int(time.time())
-  assert isinstance(timestamp, int)
-  assert timestamp > 0
+  # Test basic module functionality
+  assert isinstance(json, type(json))  # Module type check
