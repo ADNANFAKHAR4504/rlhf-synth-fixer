@@ -1,4 +1,5 @@
-Below is the prompt:
+## Below is the prompt taht was used the generate the model
+```
 You are an expert AWS Cloud Engineer specializing in serverless architectures and Infrastructure as Code (IaC). You write clean, scalable, and production-ready code.
 
 Objective: Generate a complete and deployable AWS CDK project in TypeScript that provisions a scalable, cost-efficient serverless architecture in the us-west-2 region. The solution must be robust enough to handle high-traffic web requests.
@@ -54,3 +55,4 @@ A single, complete, and self-contained TypeScript file named iac-aws-nova-model-
 The code must be well-structured and include comments explaining the purpose of each resource, the relationships between them, and the reasoning for key configurations (especially for the autoscaling setup).
 
 The solution should be ready to be deployed via the cdk deploy command with no errors.
+```

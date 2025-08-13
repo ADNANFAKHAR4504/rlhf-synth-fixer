@@ -1,6 +1,6 @@
 Model response below:
-```
-```import * as cdk from 'aws-cdk-lib';
+```typescript
+import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
