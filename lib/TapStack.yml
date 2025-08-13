@@ -538,11 +538,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub "${ApplicationBucket}/*"
+                Resource: !Sub "${ApplicationBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref ApplicationBucket
+                Resource: !GetAtt ApplicationBucket.Arn
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${EnvironmentSuffix}-EC2-Role"
