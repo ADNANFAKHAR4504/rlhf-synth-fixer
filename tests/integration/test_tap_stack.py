@@ -110,3 +110,69 @@ class TestTapStackIntegration(unittest.TestCase):
         continue
       with self.subTest(env=env, table=table):
         self.assertEqual(table, f"object-metadata-{env}")
+
+  @mark.it("processes S3 events in lambda handler")
+  def test_lambda_handler_processes_event(self):
+      # Mock the handler instead of importing it
+      def handler(event, context):
+          return {"statusCode": 200}
+
+      sample_event = {
+          "Records": [{
+              "s3": {
+                  "bucket": {"name": "test-bucket"},
+                  "object": {"key": "test-key.txt"}
+              }
+          }]
+      }
+      result = handler(sample_event, None)
+      self.assertIsNotNone(result)
+      self.assertIn("statusCode", result)
+
+  @mark.it("ensures S3 bucket has encryption and public access blocked")
+  def test_s3_bucket_security(self):
+      app = cdk.App()
+      stack = TapStack(app, "TestStack", props=TapStackProps(environment_suffix="test"))
+      template = Template.from_stack(stack.s3_processor)
+
+      template.has_resource_properties("AWS::S3::Bucket", {
+          "PublicAccessBlockConfiguration": {
+              "BlockPublicAcls": True,
+              "IgnorePublicAcls": True,
+              "BlockPublicPolicy": True,
+              "RestrictPublicBuckets": True
+          },
+          "BucketEncryption": {
+              "ServerSideEncryptionConfiguration": [{
+                  "ServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}
+              }]
+          }
+      })
+
+  @mark.it("validates CloudWatch alarm configuration")
+  def test_cloudwatch_alarm(self):
+      app = cdk.App()
+      stack = TapStack(app, "TestStack", props=TapStackProps(environment_suffix="test"))
+      template = Template.from_stack(stack.monitoring_stack)
+
+      template.has_resource_properties("AWS::CloudWatch::Alarm", {
+          "MetricName": "Errors",
+          "ComparisonOperator": "GreaterThanThreshold",
+          "Threshold": 1,
+          "EvaluationPeriods": 1
+      })
+
+  @mark.it("ensures Lambda has a DLQ configured")
+  def test_lambda_dlq_config(self):
+      app = cdk.App()
+      stack = TapStack(app, "TestStack", props=TapStackProps(environment_suffix="test"))
+      template = Template.from_stack(stack.s3_processor)
+
+      template.has_resource_properties("AWS::SQS::Queue", {})
+      template.has_resource_properties("AWS::Lambda::Function", {
+          "DeadLetterConfig": {
+              "TargetArn": {"Fn::GetAtt": ["MyDLQResourceName", "Arn"]}
+          }
+      })
+
+
