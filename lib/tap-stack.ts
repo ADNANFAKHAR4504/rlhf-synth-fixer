@@ -69,6 +69,36 @@ export class TapStack extends cdk.Stack {
               ],
               resources: ['*'],
             }),
+            new iam.PolicyStatement({
+              sid: 'Allow RDS',
+              effect: iam.Effect.ALLOW,
+              principals: [
+                new iam.ServicePrincipal('rds.amazonaws.com'),
+              ],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              sid: 'Allow Secrets Manager',
+              effect: iam.Effect.ALLOW,
+              principals: [
+                new iam.ServicePrincipal('secretsmanager.amazonaws.com'),
+              ],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+              ],
+              resources: ['*'],
+            }),
           ],
         }),
       }
@@ -298,11 +328,15 @@ export class TapStack extends cdk.Stack {
         ],
       },
       {
-        Name: 'All Data Events',
+        Name: 'S3 Data Events',
         FieldSelectors: [
           {
             Field: 'eventCategory',
             Equals: ['Data'],
+          },
+          {
+            Field: 'resources.type',
+            Equals: ['AWS::S3::Object'],
           },
         ],
       },
@@ -323,7 +357,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Developer permissions with time-based restrictions
+    // Developer permissions - simplified for compatibility
     developerRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -385,7 +419,7 @@ export class TapStack extends cdk.Stack {
         resources: ['*'],
         conditions: {
           Bool: {
-            'aws:MultiFactorAuthPresent': 'false', // Require MFA for dangerous actions
+            'aws:MultiFactorAuthPresent': 'false',
           },
         },
       })
