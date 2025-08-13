@@ -10,7 +10,7 @@ Define a CloudFormation Parameter named Environment of type String, with Allowed
 Define a Parameter named LogLevel of type String, with AllowedValues of INFO, WARN, and ERROR, and a default value of INFO.
 
 Lambda Function Specifics:
-Set the Environment variables for the Lambda function to include STAGE (referencing the Environment parameter), AWS_REGION (referencing the current region, us-east-1), and LOG_LEVEL (referencing the LogLevel parameter).
+Set the Environment variables for the Lambda function to include STAGE (referencing the Environment parameter), REGION (referencing the current region, us-east-1), and LOG_LEVEL (referencing the LogLevel parameter).
 
 Create an IAM Role for the Lambda function, strictly adhering to the principle of least privilege. This role should only grant the permissions necessary for the Lambda to write logs to CloudWatch and perform dynamodb:PutItem on the DynamoDB table.
 
