@@ -221,7 +221,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-serverless-app-lambda-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -293,7 +292,6 @@ Resources:
   ApiGatewayCloudWatchRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-serverless-app-apigateway-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
