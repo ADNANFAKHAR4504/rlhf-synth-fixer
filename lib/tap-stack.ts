@@ -103,25 +103,19 @@ export class TapStack extends cdk.Stack {
     );
 
     // CORRECTED: Provisioned Concurrency Auto Scaling using the high-level helper method.
-    // This is the recommended approach. It's cleaner and less verbose.
+    // Updated for 100+ RPS: higher min/max and utilization target
     const scaling = lambdaAlias.addAutoScaling({
-      minCapacity: 1,
-      maxCapacity: 10,
+      minCapacity: 10,
+      maxCapacity: 200,
     });
 
     // We then apply the target tracking policy directly to the scaling object.
     scaling.scaleOnUtilization({
-      utilizationTarget: 0.7, // This is 70%
-      scaleInCooldown: cdk.Duration.seconds(300),
-      scaleOutCooldown: cdk.Duration.seconds(300),
+      utilizationTarget: 0.8, // 80% utilization for higher throughput
+      scaleInCooldown: cdk.Duration.seconds(120),
+      scaleOutCooldown: cdk.Duration.seconds(120),
       policyName: `${stackName}-lambda-scaling-policy-nova-team-development`,
     });
-
-    // --- The following manual definitions have been REMOVED ---
-    // - new iam.Role(this, 'AutoScalingRole', ...
-    // - new applicationautoscaling.ScalableTarget(...
-    // - new applicationautoscaling.TargetTrackingScalingPolicy(...
-    // --- They are redundant because addAutoScaling() handles them ---
 
     // API Gateway HTTP API
     const httpApi = new apigateway.HttpApi(this, 'NovaHttpApi', {

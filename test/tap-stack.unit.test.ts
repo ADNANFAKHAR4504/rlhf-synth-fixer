@@ -62,7 +62,7 @@ describe('TapStack', () => {
     const found = Object.values(aliases).some((alias: any) => {
       const props = alias.Properties;
       return (
-        startsWith(props.Name, 'TestTapStack-live-') &&
+        props.Name.match(/^TestTapStack-live-[a-zA-Z0-9]+$/) &&
         typeof props.Description === 'string' &&
         props.Description.includes('Live alias for production traffic') &&
         props.ProvisionedConcurrencyConfig &&
@@ -92,7 +92,7 @@ describe('TapStack', () => {
         props.ServiceNamespace === 'lambda' &&
         props.ScalableDimension === 'lambda:function:ProvisionedConcurrency' &&
         typeof props.ResourceId === 'string' &&
-        props.ResourceId.startsWith('function:TestTapStack-lambda-nova-destruction-dev-')
+        props.ResourceId.match(/^function:TestTapStack-lambda-nova-destruction-dev-[a-zA-Z0-9]+:TestTapStack-live-[a-zA-Z0-9]+$/)
       );
     });
     expect(found).toBe(false);
@@ -108,7 +108,7 @@ describe('TapStack', () => {
   test('Outputs Lambda function name', () => {
     const outputs = template.findOutputs('LambdaFunctionName');
     expect(outputs.LambdaFunctionName.Description).toBe('Lambda function name');
-    expect(outputs.LambdaFunctionName.Export.Name).toMatch('TestTapStack-lambda-function-name');
+    expect(outputs.LambdaFunctionName.Export.Name).toBe('TestTapStack-lambda-function-name');
   });
 
   test('Outputs Lambda alias name', () => {
