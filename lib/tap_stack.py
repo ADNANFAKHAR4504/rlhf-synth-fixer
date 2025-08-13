@@ -247,7 +247,8 @@ def get_vpc_with_fallback():
           opts=pulumi.ResourceOptions(
             provider=aws_provider,
             protect=True,  # Protect from deletion to avoid dependency conflicts
-            retain_on_delete=True  # Keep VPC to avoid dependency issues
+            retain_on_delete=True,  # Keep VPC to avoid dependency issues
+            ignore_changes=["*"]  # Ignore all changes to prevent conflicts
           )
         ),
         vpc_id
@@ -391,7 +392,8 @@ def get_or_create_route_table(vpc, existing_vpc_id, internet_gateway):
           opts=pulumi.ResourceOptions(
             provider=aws_provider, 
             protect=True,  # Protect existing route tables
-            retain_on_delete=True  # Avoid dependency conflicts
+            retain_on_delete=True,  # Avoid dependency conflicts
+            ignore_changes=["*"]  # Ignore all changes to prevent conflicts
           )
         )
     
@@ -489,7 +491,8 @@ def get_or_create_subnets(vpc, existing_vpc_id, availability_zones):
             opts=pulumi.ResourceOptions(
               provider=aws_provider, 
               protect=True,  # Protect existing subnets from deletion
-              retain_on_delete=True  # Avoid dependency conflicts
+              retain_on_delete=True,  # Avoid dependency conflicts
+              ignore_changes=["*"]  # Ignore all changes to prevent conflicts
             )
           ) for i, subnet in enumerate(existing_subnets[:2])
         ]
