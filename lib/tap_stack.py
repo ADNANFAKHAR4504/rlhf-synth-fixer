@@ -463,7 +463,35 @@ class TapStack(pulumi.ComponentResource):
     """Configure CloudTrail auditing with enhanced security."""
     pulumi.log.info("Configuring CloudTrail auditing...")
     
-    # Create CloudTrail bucket with enhanced security and unique name
+    # Check if any CloudTrail trails already exist to avoid MaximumNumberOfTrailsExceeded
+    try:
+      existing_trails = aws.cloudtrail.get_trails()
+      if existing_trails and existing_trails.trails and len(existing_trails.trails) > 0:
+        # If trails exist, import the first one instead of creating new
+        existing_trail = existing_trails.trails[0]
+        pulumi.log.info(f"Found existing CloudTrail trail: {existing_trail.name}, importing instead of creating new")
+        
+        # Import existing trail with ignore_changes to avoid conflicts
+        cloudtrail = aws.cloudtrail.Trail(
+          f"main-cloudtrail-{self.env}",
+          name=existing_trail.name,
+          opts=ResourceOptions(
+            parent=self, 
+            protect=False,
+            import_=existing_trail.trail_arn,
+            ignore_changes=["kms_key_id", "is_multi_region_trail", "tags", "s3_bucket_name", "event_selectors"]
+          ),
+        )
+        
+        self.created_resources["cloudtrail"] = cloudtrail.name
+        self.created_resources["cloudtrail_bucket"] = existing_trail.s3_bucket_name
+        pulumi.log.info("Successfully imported existing CloudTrail trail")
+        return
+        
+    except Exception as e:
+      pulumi.log.info(f"No existing trails found or error checking trails: {e}, proceeding to create new trail")
+    
+    # Create CloudTrail bucket with enhanced security and stable unique name
     import random
     import string
     random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))

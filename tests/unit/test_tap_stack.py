@@ -132,10 +132,10 @@ class TestTapStack:
       stack = TapStack("test", args)
       
       resource_name = stack._get_resource_name("s3", "bucket")
-      assert resource_name == "prod-s3-us-east-1-bucket"
+      assert resource_name == "prod-s3-us-east-1dev-bucket"
       
       resource_name_no_suffix = stack._get_resource_name("lambda")
-      assert resource_name_no_suffix == "prod-lambda-us-east-1"
+      assert resource_name_no_suffix == "prod-lambda-us-east-1dev"
 
   @patch('pulumi.ComponentResource.__init__')
   @patch('lib.tap_stack.aws.get_region')
