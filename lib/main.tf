@@ -30,7 +30,10 @@ variable "aws_region" {
 variable "vpc_id" {
   description = "ID of the VPC where the Security Group will be created"
   type        = string
-  default     = "vpc-default-placeholder"  # Placeholder; override with actual VPC ID in pipeline or production
+  validation {
+    condition     = can(regex("^vpc-[0-9a-f]{8,17}$", var.vpc_id))
+    error_message = "Invalid VPC ID format. It should be in the form 'vpc-xxxxxxxx' or 'vpc-xxxxxxxxxxxxxxxxx' where x is a hexadecimal digit."
+  }
 }
 
 variable "allowed_ipv4_cidrs" {
@@ -87,15 +90,6 @@ resource "null_resource" "cidr_warning" {
 
   provisioner "local-exec" {
     command = "echo 'Warning: allowed_ipv4_cidrs and allowed_ipv6_cidrs are both empty. No ingress rules will be created.'"
-  }
-}
-
-# Validate vpc_id to prevent using placeholder in production
-resource "null_resource" "vpc_id_check" {
-  count = var.vpc_id == "vpc-default-placeholder" ? 1 : 0
-
-  provisioner "local-exec" {
-    command = "echo 'Warning: Using default vpc_id placeholder. Please provide a valid VPC ID for production.'"
   }
 }
 
