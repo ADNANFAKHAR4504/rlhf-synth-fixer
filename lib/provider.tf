@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 
   # backend "s3" {
@@ -41,13 +45,19 @@ data "aws_caller_identity" "current" {}
 # Data source to get current AWS region
 data "aws_region" "current" {}
 
+# Random ID for unique resource naming when environment_suffix is not provided
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 # Local values for consistent naming
 locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
 
   # Environment suffix for unique resource naming (supports randomness)
-  environment_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
+  # Generate random suffix if not provided to avoid resource conflicts
+  environment_suffix = var.environment_suffix != "" ? var.environment_suffix : "${var.environment}${random_id.suffix.hex}"
 
   # Common naming prefix with environment suffix for uniqueness
   name_prefix = "${var.project_name}-${local.environment_suffix}"
