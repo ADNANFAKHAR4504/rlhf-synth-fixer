@@ -265,7 +265,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'MyApp-Lambda-Execution-Role-${AWS::Region}'
+
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -465,7 +465,7 @@ Resources:
       EnablePerformanceInsights: true
       PerformanceInsightsRetentionPeriod: 7
       MonitoringInterval: 60
-      MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       Tags:
         - Key: Name
           Value: Production-PostgreSQL-DB
@@ -476,7 +476,7 @@ Resources:
   RDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: rds-monitoring-role
+
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

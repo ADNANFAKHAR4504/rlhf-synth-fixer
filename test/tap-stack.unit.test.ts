@@ -810,8 +810,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
         expect(output.Export.Name).toBeDefined();
         expect(output.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
       });
+      });
     });
-  });
 
   describe('Resource Tagging', () => {
     test('all resources should have Environment: Production tag', () => {
