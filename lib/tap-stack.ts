@@ -92,7 +92,7 @@ export class TapStack extends cdk.Stack {
       `CloudEnvDistribution-${environmentSuffix}`,
       {
         defaultBehavior: {
-          origin: new origins.S3Origin(bucket),
+          origin: origins.S3BucketOrigin.withOriginAccessControl(bucket),
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
@@ -368,6 +368,7 @@ systemctl restart httpd
       {
         vpc,
         clusterName: `cloudenv-cluster-${environmentSuffix}`,
+        enableFargateCapacityProviders: true,
         containerInsights: true,
       }
     );
@@ -416,11 +417,11 @@ systemctl restart httpd
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'ALB Request Count',
-        left: [alb.metricRequestCount()],
+        left: [alb.metrics.requestCount()],
       }),
       new cloudwatch.GraphWidget({
         title: 'ALB Response Time',
-        left: [alb.metricTargetResponseTime()],
+        left: [alb.metrics.targetResponseTime()],
       }),
       new cloudwatch.GraphWidget({
         title: 'ASG Instance Count',
@@ -513,7 +514,7 @@ systemctl restart httpd
       exportName: `LoadBalancerDNS-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'LoadBalancerDNS', {
+    new cdk.CfnOutput(this, 'LoadBalancerDNS-Alt', {
       value: alb.loadBalancerDnsName,
       description: 'Application Load Balancer DNS name (alternate naming)',
       exportName: `LoadBalancerDNS-alt-${environmentSuffix}`,
@@ -525,7 +526,7 @@ systemctl restart httpd
       exportName: `DatabaseEndpoint-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+    new cdk.CfnOutput(this, 'DatabaseEndpoint-Alt', {
       value: dbCluster.clusterEndpoint.hostname,
       description: 'RDS Aurora cluster endpoint (alternate naming)',
       exportName: `DatabaseEndpoint-alt-${environmentSuffix}`,
@@ -537,7 +538,7 @@ systemctl restart httpd
       exportName: `S3BucketName-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'S3BucketName', {
+    new cdk.CfnOutput(this, 'S3BucketName-Alt', {
       value: bucket.bucketName,
       description: 'S3 bucket name for application data (alternate naming)',
       exportName: `S3BucketName-alt-${environmentSuffix}`,
@@ -549,7 +550,7 @@ systemctl restart httpd
       exportName: `CloudFrontDistribution-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'CloudFrontDistribution', {
+    new cdk.CfnOutput(this, 'CloudFrontDistribution-Alt', {
       value: distribution.distributionDomainName,
       description: 'CloudFront distribution domain name (alternate naming)',
       exportName: `CloudFrontDistribution-alt-${environmentSuffix}`,
@@ -561,7 +562,7 @@ systemctl restart httpd
       exportName: `EFSFileSystemId-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'EFSFileSystemId', {
+    new cdk.CfnOutput(this, 'EFSFileSystemId-Alt', {
       value: fileSystem.fileSystemId,
       description: 'EFS file system ID (alternate naming)',
       exportName: `EFSFileSystemId-alt-${environmentSuffix}`,
@@ -574,7 +575,7 @@ systemctl restart httpd
       exportName: `ECSClusterName-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'ECSClusterName', {
+    new cdk.CfnOutput(this, 'ECSClusterName-Alt', {
       value: ecsCluster.clusterName,
       description: 'ECS Cluster name (alternate naming)',
       exportName: `ECSClusterName-alt-${environmentSuffix}`,
@@ -586,32 +587,32 @@ systemctl restart httpd
       exportName: `CloudWatchDashboard-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'CloudWatchDashboard', {
+    new cdk.CfnOutput(this, 'CloudWatchDashboard-Alt', {
       value: dashboard.dashboardName,
       description: 'CloudWatch Dashboard name (alternate naming)',
       exportName: `CloudWatchDashboard-alt-${environmentSuffix}`,
     });
 
     // Log Group outputs for monitoring
-    new cdk.CfnOutput(this, `AppLogGroup-${environmentSuffix}`, {
+    new cdk.CfnOutput(this, `AppLogGroupOutput-${environmentSuffix}`, {
       value: appLogGroup.logGroupName,
       description: 'Application Log Group name',
       exportName: `AppLogGroup-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'AppLogGroup', {
+    new cdk.CfnOutput(this, 'AppLogGroup-Alt', {
       value: appLogGroup.logGroupName,
       description: 'Application Log Group name (alternate naming)',
       exportName: `AppLogGroup-alt-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `ECSLogGroup-${environmentSuffix}`, {
+    new cdk.CfnOutput(this, `ECSLogGroupOutput-${environmentSuffix}`, {
       value: ecsLogGroup.logGroupName,
       description: 'ECS Log Group name',
       exportName: `ECSLogGroup-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'ECSLogGroup', {
+    new cdk.CfnOutput(this, 'ECSLogGroup-Alt', {
       value: ecsLogGroup.logGroupName,
       description: 'ECS Log Group name (alternate naming)',
       exportName: `ECSLogGroup-alt-${environmentSuffix}`,
