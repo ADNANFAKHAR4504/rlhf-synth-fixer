@@ -40,6 +40,15 @@
       "MinLength": 4,
       "MaxLength": 16,
       "Description": "RDS master username"
+    },
+    "DBMasterPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "RDS master password",
+      "MinLength": 8,
+      "MaxLength": 128,
+      "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]+$",
+      "ConstraintDescription": "Must be at least 8 characters long and contain alphanumeric and special characters"
     }
   },
   "Mappings": {
@@ -1195,13 +1204,8 @@
           "Fn::Sub": "${Environment}-rds-credentials-${EnvironmentSuffix}"
         },
         "Description": "RDS database credentials",
-        "GenerateSecretString": {
-          "SecretStringTemplate": {
-            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
-          },
-          "GenerateStringKey": "password",
-          "PasswordLength": 32,
-          "ExcludeCharacters": "\"@/\\"
+        "SecretString": {
+          "Fn::Sub": "{\"username\": \"${DBMasterUsername}\", \"password\": \"${DBMasterPassword}\"}"
         },
         "KmsKeyId": {
           "Ref": "KMSKey"
@@ -1246,10 +1250,10 @@
         "Engine": "mysql",
         "EngineVersion": "8.0.39",
         "MasterUsername": {
-          "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:username}}"
+          "Ref": "DBMasterUsername"
         },
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}"
+          "Ref": "DBMasterPassword"
         },
         "AllocatedStorage": "20",
         "StorageType": "gp3",
