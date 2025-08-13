@@ -97,9 +97,10 @@ def find_existing_vpc():
 def find_existing_igw(vpc_id: str):
     """Find existing Internet Gateway for a specific VPC ID."""
     try:
-        existing_igws = aws.ec2.get_internet_gateways(
+        # Use the correct AWS data source for Internet Gateways
+        existing_igws = aws.ec2.get_internet_gateway(
             filters=[
-                aws.ec2.GetInternetGatewaysFilterArgs(
+                aws.ec2.GetInternetGatewayFilterArgs(
                     name="attachment.vpc-id",
                     values=[vpc_id]
                 )
@@ -107,12 +108,64 @@ def find_existing_igw(vpc_id: str):
             opts=pulumi.InvokeOptions(provider=aws_provider)
         )
         
-        if existing_igws.ids and len(existing_igws.ids) > 0:
-            return existing_igws.ids[0]
+        if existing_igws.id:
+            return existing_igws.id
         return None
     except Exception as e:
         pulumi.log.warn(f"Could not find existing IGW for VPC {vpc_id}: {e}")
         return None
+
+
+def find_available_subnet_cidrs(vpc_id: str):
+    """Find available CIDR blocks for new subnets in the VPC."""
+    try:
+        # Get existing subnets in the VPC
+        existing_subnets = aws.ec2.get_subnets(
+            filters=[
+                aws.ec2.GetSubnetsFilterArgs(
+                    name="vpc-id",
+                    values=[vpc_id]
+                )
+            ],
+            opts=pulumi.InvokeOptions(provider=aws_provider)
+        )
+        
+        # Parse existing CIDR blocks
+        used_cidrs = []
+        for subnet_id in existing_subnets.ids:
+            subnet_info = aws.ec2.get_subnet(
+                id=subnet_id,
+                opts=pulumi.InvokeOptions(provider=aws_provider)
+            )
+            used_cidrs.append(subnet_info.cidr_block)
+        
+        pulumi.log.info(f"Existing subnets in VPC {vpc_id}: {used_cidrs}")
+        
+        # Find available CIDR blocks (avoid conflicts)
+        available_cidrs = []
+        for i in range(10, 20):  # Use 10.0.10.0/24, 10.0.11.0/24, etc.
+            potential_cidr = f"10.0.{i}.0/24"
+            if potential_cidr not in used_cidrs:
+                available_cidrs.append(potential_cidr)
+                if len(available_cidrs) >= 2:  # We need 2 subnets
+                    break
+        
+        if len(available_cidrs) < 2:
+            # Fallback to higher ranges
+            for i in range(100, 110):
+                potential_cidr = f"10.0.{i}.0/24"
+                if potential_cidr not in used_cidrs:
+                    available_cidrs.append(potential_cidr)
+                    if len(available_cidrs) >= 2:
+                        break
+        
+        pulumi.log.info(f"Available CIDR blocks: {available_cidrs}")
+        return available_cidrs[:2]  # Return first 2 available CIDRs
+        
+    except Exception as e:
+        pulumi.log.warn(f"Could not analyze existing subnets: {e}")
+        # Return fallback CIDRs that are less likely to conflict
+        return ["10.0.100.0/24", "10.0.101.0/24"]
 
 
 def get_vpc_with_fallback():
@@ -225,23 +278,82 @@ def create_internet_gateway(vpc, existing_vpc_id=None):
 # Create or reuse Internet Gateway
 internet_gateway = create_internet_gateway(vpc, existing_vpc_id)
 
+def find_existing_subnets(vpc_id: str, availability_zones: list):
+    """Find existing subnets in the VPC that can be reused."""
+    try:
+        existing_subnets = aws.ec2.get_subnets(
+            filters=[
+                aws.ec2.GetSubnetsFilterArgs(name="vpc-id", values=[vpc_id]),
+                aws.ec2.GetSubnetsFilterArgs(name="state", values=["available"])
+            ],
+            opts=pulumi.InvokeOptions(provider=aws_provider)
+        )
+        
+        suitable_subnets = []
+        for subnet_id in existing_subnets.ids:
+            subnet_info = aws.ec2.get_subnet(
+                id=subnet_id,
+                opts=pulumi.InvokeOptions(provider=aws_provider)
+            )
+            
+            # Check if subnet is in one of our target AZs and is public-like
+            if subnet_info.availability_zone in availability_zones:
+                suitable_subnets.append({
+                    'id': subnet_id,
+                    'az': subnet_info.availability_zone,
+                    'cidr': subnet_info.cidr_block
+                })
+        
+        if len(suitable_subnets) >= 2:
+            pulumi.log.info(f"Found {len(suitable_subnets)} existing suitable subnets")
+            return suitable_subnets[:2]  # Return first 2 suitable subnets
+        else:
+            pulumi.log.info(f"Found only {len(suitable_subnets)} suitable subnets, need to create more")
+            return suitable_subnets
+            
+    except Exception as e:
+        pulumi.log.warn(f"Could not find existing subnets: {e}")
+        return []
+
+
+# Get or create subnets with conflict avoidance
+if existing_vpc_id:
+    existing_subnets = find_existing_subnets(existing_vpc_id, availability_zones)
+    available_cidrs = find_available_subnet_cidrs(existing_vpc_id)
+else:
+    existing_subnets = []
+    available_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]  # Default for new VPCs
+
 public_subnets = []
 for i, az in enumerate(availability_zones):
-    # Create subnet without IPv6 for compatibility with reused VPCs
-    subnet = aws.ec2.Subnet(
-        get_resource_name(f"public-subnet-{i+1}"),
-        vpc_id=vpc.id,
-        cidr_block=f"10.0.{i+1}.0/24",
-        availability_zone=az,
-        map_public_ip_on_launch=True,
-        tags={
-            "Name": get_resource_name(f"public-subnet-{i+1}"),
-            "Environment": ENVIRONMENT,
-            "Project": PROJECT_NAME,
-            "Type": "Public"
-        },
-        opts=pulumi.ResourceOptions(provider=aws_provider)
-    )
+    # First, try to reuse existing suitable subnet
+    if i < len(existing_subnets):
+        subnet_info = existing_subnets[i]
+        pulumi.log.info(f"Reusing existing subnet {subnet_info['id']} in AZ {az}")
+        subnet = aws.ec2.Subnet.get(
+            get_resource_name(f"public-subnet-{i+1}"),
+            subnet_info['id'],
+            opts=pulumi.ResourceOptions(provider=aws_provider)
+        )
+    else:
+        # Create new subnet with available CIDR
+        cidr_block = available_cidrs[i - len(existing_subnets)] if (i - len(existing_subnets)) < len(available_cidrs) else f"10.0.{i+100}.0/24"
+        
+        subnet = aws.ec2.Subnet(
+            get_resource_name(f"public-subnet-{i+1}"),
+            vpc_id=vpc.id,
+            cidr_block=cidr_block,
+            availability_zone=az,
+            map_public_ip_on_launch=True,
+            tags={
+                "Name": get_resource_name(f"public-subnet-{i+1}"),
+                "Environment": ENVIRONMENT,
+                "Project": PROJECT_NAME,
+                "Type": "Public"
+            },
+            opts=pulumi.ResourceOptions(provider=aws_provider)
+        )
+    
     public_subnets.append(subnet)
 
 route_table = aws.ec2.RouteTable(
@@ -670,11 +782,12 @@ print("   • Automated health checks and alarms")
 print("=" * 50)
 print("🔧 VPC Limit Optimization:")
 print("   • Automatic VPC reuse for existing project VPCs")
-print("   • Automatic Internet Gateway reuse for existing VPCs")
+print("   • Automatic Internet Gateway discovery and reuse")
+print("   • Automatic subnet discovery and reuse")
+print("   • Smart CIDR conflict avoidance for new subnets")
 print("   • Fallback to default VPC if creation fails")
 print("   • Comprehensive error handling and logging")
 print("   • Resource tagging for better management")
-print("   • IPv6 compatibility for both new and existing VPCs")
 print("=" * 50)
 
 # Add simple validation feedback
