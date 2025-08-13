@@ -168,7 +168,7 @@ describe('TapStack Unit Tests', () => {
         );
 
         expect(lambdaFunc).toBeDefined();
-        expect((lambdaFunc as any).handler).toBe('index.handler');
+        expect((lambdaFunc as any).handler).toBe('lambda-handler.handler');
         expect((lambdaFunc as any).runtime).toBe('nodejs18.x');
         expect((lambdaFunc as any).timeout).toBe(expectedFunc.timeout);
         expect((lambdaFunc as any).memory_size).toBe(expectedFunc.memory);
@@ -261,8 +261,6 @@ describe('TapStack Unit Tests', () => {
         expect(permission.principal).toBe('apigateway.amazonaws.com');
       });
     });
-
-    test('should configure API Gateway method settings with throttling', () => {
   });
 
   describe('Resource Configuration Validation', () => {
@@ -452,7 +450,6 @@ describe('TapStack Unit Tests', () => {
       Object.entries(expectedCounts).forEach(
         ([resourceType, expectedCount]) => {
           const resources = synthesized.resource[resourceType];
-
           const actualCount = resources ? Object.keys(resources).length : 0;
           expect(actualCount).toBe(expectedCount);
         }
@@ -460,3 +457,6 @@ describe('TapStack Unit Tests', () => {
     });
   });
 });
+
+
+
