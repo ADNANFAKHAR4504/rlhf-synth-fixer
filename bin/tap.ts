@@ -15,6 +15,7 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
 // Calculate the stack name
 const stackName = `TapStack${environmentSuffix}`;
+// Make sure ENVIRONMENT_SUFFIX is set correctly in your pipeline/environment
 
 // defautlTags is structured in adherence to the AwsProviderDefaultTags interface
 const defaultTags = {
