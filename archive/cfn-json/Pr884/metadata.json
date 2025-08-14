@@ -10,10 +10,16 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Security Configuration",
-    "Network Configuration", 
+    "Network Configuration",
     "Database Management",
     "Monitoring Setup",
     "Access Control",
     "Resource Scaling"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
 }
