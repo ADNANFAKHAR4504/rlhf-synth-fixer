@@ -97,6 +97,9 @@
       "us-east-1": {
         "AccountId": "127311923021"
       },
+      "us-east-2": {
+        "AccountId": "718240086340"
+      },
       "us-west-2": {
         "AccountId": "797873946194"
       },
