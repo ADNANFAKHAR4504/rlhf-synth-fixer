@@ -1491,7 +1491,7 @@
               },
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${S3LogsBucket.Arn}/*"
+                "Fn::Sub": "${S3LogsBucket.Arn}/alb-logs/AWSLogs/${AWS::AccountId}/*"
               }
             },
             {
