@@ -1,19 +1,19 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeVpcEndpointsCommand,
   DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  S3Client,
-  GetBucketVersioningCommand,
   GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
   GetBucketPolicyCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -27,9 +27,24 @@ describe('Terraform Infrastructure Integration Tests', () => {
     // Load deployment outputs
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
     if (!fs.existsSync(outputsPath)) {
-      throw new Error('Deployment outputs not found. Please deploy infrastructure first.');
+      throw new Error('Deployment outputs not found. Please deploy infrastructure first using: cd lib && terraform apply');
     }
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    
+    const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    
+    // Handle potential string arrays by parsing them if they're stringified JSON
+    outputs = {};
+    for (const [key, value] of Object.entries(rawOutputs)) {
+      if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+        try {
+          outputs[key] = JSON.parse(value);
+        } catch (e) {
+          outputs[key] = value;
+        }
+      } else {
+        outputs[key] = value;
+      }
+    }
   });
 
   describe('VPC and Networking', () => {
