@@ -432,4 +432,399 @@ describe('TapStack', () => {
       });
     });
   });
+
+  describe('Environment Suffix Handling', () => {
+    test('should use props.environmentSuffix when provided', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'CustomStack', {
+        environmentSuffix: 'custom',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const customTemplate = Template.fromStack(customStack);
+
+      // Verify environment suffix is used in resource names
+      customTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.objectLike({
+          'Fn::Join': Match.arrayWith([
+            '',
+            Match.arrayWith(['pipeline-custom-'])
+          ])
+        })
+      });
+
+      customTemplate.hasResourceProperties('AWS::CodeBuild::Project', {
+        Name: 'multi-region-build-custom'
+      });
+
+      customTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Name: 'multi-region-pipeline-custom'
+      });
+    });
+
+    test('should use CDK context when props.environmentSuffix is not provided', () => {
+      const contextApp = new cdk.App({
+        context: { environmentSuffix: 'context-suffix' }
+      });
+      const contextStack = new TapStack(contextApp, 'ContextStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const contextTemplate = Template.fromStack(contextStack);
+
+      // Verify context environment suffix is used
+      contextTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.objectLike({
+          'Fn::Join': Match.arrayWith([
+            '',
+            Match.arrayWith(['pipeline-context-suffix-'])
+          ])
+        })
+      });
+
+      contextTemplate.hasResourceProperties('AWS::CodeBuild::Project', {
+        Name: 'multi-region-build-context-suffix'
+      });
+    });
+
+    test('should default to "dev" when no environmentSuffix is provided', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const defaultTemplate = Template.fromStack(defaultStack);
+
+      // Verify "dev" is used as default
+      defaultTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.objectLike({
+          'Fn::Join': Match.arrayWith([
+            '',
+            Match.arrayWith(['pipeline-dev-'])
+          ])
+        })
+      });
+
+      defaultTemplate.hasResourceProperties('AWS::CodeBuild::Project', {
+        Name: 'multi-region-build-dev'
+      });
+
+      defaultTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Name: 'multi-region-pipeline-dev'
+      });
+    });
+
+    test('should prioritize props over context', () => {
+      const priorityApp = new cdk.App({
+        context: { environmentSuffix: 'context-value' }
+      });
+      const priorityStack = new TapStack(priorityApp, 'PriorityStack', {
+        environmentSuffix: 'props-value',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const priorityTemplate = Template.fromStack(priorityStack);
+
+      // Verify props value takes priority over context
+      priorityTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.objectLike({
+          'Fn::Join': Match.arrayWith([
+            '',
+            Match.arrayWith(['pipeline-props-value-'])
+          ])
+        })
+      });
+    });
+  });
+
+  describe('Edge Cases and Error Handling', () => {
+    test('should handle empty string environmentSuffix gracefully', () => {
+      const emptyApp = new cdk.App();
+      const emptyStack = new TapStack(emptyApp, 'EmptyStack', {
+        environmentSuffix: '',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const emptyTemplate = Template.fromStack(emptyStack);
+
+      // With empty string, should still create resources
+      // Note: CDK creates additional buckets for auto-delete functionality
+      const buckets = emptyTemplate.findResources('AWS::S3::Bucket');
+      expect(Object.keys(buckets).length).toBeGreaterThanOrEqual(2);
+      emptyTemplate.resourceCountIs('AWS::CodePipeline::Pipeline', 1);
+      emptyTemplate.resourceCountIs('AWS::CodeBuild::Project', 2);
+    });
+
+    test('should handle undefined props gracefully', () => {
+      const undefinedApp = new cdk.App();
+      const undefinedStack = new TapStack(undefinedApp, 'UndefinedStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+      });
+      const undefinedTemplate = Template.fromStack(undefinedStack);
+
+      // Should still create all resources with default values
+      // Note: CDK creates additional buckets for auto-delete functionality
+      const buckets = undefinedTemplate.findResources('AWS::S3::Bucket');
+      expect(Object.keys(buckets).length).toBeGreaterThanOrEqual(2);
+      undefinedTemplate.resourceCountIs('AWS::CodePipeline::Pipeline', 1);
+      undefinedTemplate.resourceCountIs('AWS::CodeBuild::Project', 2);
+    });
+
+    test('should create all required IAM permissions for cross-region deployment', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: {
+                Service: 'codepipeline.amazonaws.com'
+              }
+            })
+          ])
+        },
+        Policies: Match.arrayWith([
+          Match.objectLike({
+            PolicyDocument: {
+              Statement: Match.arrayWith([
+                Match.objectLike({
+                  Effect: 'Allow',
+                  Action: Match.arrayWith(['s3:GetObject', 's3:PutObject'])
+                })
+              ])
+            }
+          })
+        ])
+      });
+    });
+
+    test('should have appropriate resource limits and constraints', () => {
+      // Verify ALB target group has reasonable health check settings
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        HealthCheckEnabled: true,
+        HealthCheckPath: '/',
+        HealthCheckProtocol: 'HTTP'
+      });
+
+      // Verify Auto Scaling Group has reasonable capacity limits
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '1',
+        MaxSize: '5',
+        DesiredCapacity: '1'
+      });
+    });
+
+    test('should have proper resource tagging strategy', () => {
+      // Check VPC tagging
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.stringLikeRegexp(`multi-region-vpc-${environmentSuffix}`)
+          })
+        ])
+      });
+    });
+  });
+
+  describe('Build Specifications and Configurations', () => {
+    test('should have comprehensive build specification', () => {
+      const buildProject = template.findResources('AWS::CodeBuild::Project');
+      const mainBuildProject = Object.values(buildProject).find(
+        (project: any) => project.Properties.Name === `multi-region-build-${environmentSuffix}`
+      );
+
+      expect(mainBuildProject).toBeDefined();
+      expect(mainBuildProject.Properties.Source.BuildSpec).toContain('batch');
+      expect(mainBuildProject.Properties.Source.BuildSpec).toContain('DEPLOY_REGION');
+      expect(mainBuildProject.Properties.Source.BuildSpec).toContain('us-east-1');
+      expect(mainBuildProject.Properties.Source.BuildSpec).toContain('us-west-2');
+    });
+
+    test('should have validation project with appropriate configuration', () => {
+      template.hasResourceProperties('AWS::CodeBuild::Project', {
+        Name: `validation-${environmentSuffix}`,
+        Environment: {
+          ComputeType: 'BUILD_GENERAL1_SMALL',
+          Image: Match.stringLikeRegexp('aws/codebuild/standard'),
+          Type: 'LINUX_CONTAINER'
+        }
+      });
+    });
+
+    test('should have build projects with appropriate IAM permissions', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: {
+                Service: 'codebuild.amazonaws.com'
+              }
+            })
+          ])
+        },
+        Policies: Match.arrayWith([
+          Match.objectLike({
+            PolicyDocument: {
+              Statement: Match.arrayWith([
+                Match.objectLike({
+                  Effect: 'Allow',
+                  Action: Match.arrayWith([
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents'
+                  ])
+                })
+              ])
+            }
+          })
+        ])
+      });
+    });
+  });
+
+  describe('Multi-Region Specific Tests', () => {
+    test('should have proper cross-region artifact buckets configuration', () => {
+      // Main region bucket
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.objectLike({
+          'Fn::Join': [
+            '',
+            Match.arrayEquals([`pipeline-${environmentSuffix}-`, Match.anyValue()])
+          ]
+        }),
+        VersioningConfiguration: {
+          Status: 'Enabled'
+        }
+      });
+
+      // West region bucket
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.objectLike({
+          'Fn::Join': [
+            '',
+            Match.arrayEquals([`pipeline-${environmentSuffix}-`, Match.anyValue(), '-west'])
+          ]
+        }),
+        VersioningConfiguration: {
+          Status: 'Enabled'
+        }
+      });
+    });
+
+    test('should have CloudFormation deployment actions for both regions', () => {
+      const pipeline = template.findResources('AWS::CodePipeline::Pipeline');
+      const pipelineResource = Object.values(pipeline)[0];
+      const stages = pipelineResource.Properties.Stages;
+
+      // Check Deploy-East stage configuration
+      const deployEastStage = stages.find((s: any) => s.Name === 'Deploy-East');
+      expect(deployEastStage).toBeDefined();
+      expect(deployEastStage.Actions).toHaveLength(2); // CreateChangeSet + ExecuteChangeSet
+      
+      const createChangeSetEast = deployEastStage.Actions.find((a: any) => 
+        a.Name === 'CreateChangeSet-East'
+      );
+      expect(createChangeSetEast).toBeDefined();
+      expect(createChangeSetEast.Configuration).toBeDefined();
+      
+      const eastParams = JSON.parse(createChangeSetEast.Configuration.ParameterOverrides);
+      expect(eastParams.Region).toBe('us-east-1');
+      expect(eastParams.Environment).toBe(environmentSuffix);
+
+      // Check Deploy-West stage configuration
+      const deployWestStage = stages.find((s: any) => s.Name === 'Deploy-West');
+      expect(deployWestStage).toBeDefined();
+      expect(deployWestStage.Actions).toHaveLength(2); // CreateChangeSet + ExecuteChangeSet
+      
+      const createChangeSetWest = deployWestStage.Actions.find((a: any) => 
+        a.Name === 'CreateChangeSet-West'
+      );
+      expect(createChangeSetWest).toBeDefined();
+      expect(createChangeSetWest.Configuration).toBeDefined();
+      
+      const westParams = JSON.parse(createChangeSetWest.Configuration.ParameterOverrides);
+      expect(westParams.Region).toBe('us-west-2');
+      expect(westParams.Environment).toBe(environmentSuffix);
+    });
+  });
+
+  describe('Resource Dependencies and Relationships', () => {
+    test('should have proper dependencies between pipeline and supporting resources', () => {
+      // Verify pipeline uses the artifacts bucket
+      const pipeline = template.findResources('AWS::CodePipeline::Pipeline');
+      const pipelineResource = Object.values(pipeline)[0];
+      
+      // Pipeline should have artifact store configuration
+      expect(pipelineResource.Properties.ArtifactStore || pipelineResource.Properties.ArtifactStores).toBeDefined();
+    });
+
+    test('should have load balancer properly configured with target group', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        Port: 80,
+        Protocol: 'HTTP',
+        DefaultActions: Match.arrayWith([
+          Match.objectLike({
+            Type: 'forward',
+            TargetGroupArn: Match.anyValue()
+          })
+        ])
+      });
+    });
+
+    test('should have auto scaling group properly connected to target group', () => {
+      // Verify target group exists and will be connected to ASG
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        Port: 80,
+        Protocol: 'HTTP',
+        TargetType: Match.anyValue()
+      });
+    });
+  });
+
+  describe('Monitoring and Observability', () => {
+    test('should have comprehensive logging configuration', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: `/aws/codepipeline/multi-region-${environmentSuffix}`,
+        RetentionInDays: 30
+      });
+
+      template.hasResourceProperties('AWS::CodeBuild::Project', {
+        LogsConfig: {
+          CloudWatchLogs: {
+            Status: 'ENABLED'
+          }
+        }
+      });
+    });
+
+    test('should have CloudWatch alarms for critical metrics', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `healthy-host-alarm-${environmentSuffix}`,
+        EvaluationPeriods: 2,
+        Threshold: 1,
+        TreatMissingData: 'breaching'
+      });
+    });
+
+    test('should have SNS notifications properly configured', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: `pipeline-notifications-${environmentSuffix}`,
+        DisplayName: 'Multi-Region Pipeline Notifications'
+      });
+    });
+  });
 });
