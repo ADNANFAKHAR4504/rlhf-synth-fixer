@@ -30,11 +30,13 @@ export class VpcStack extends Construct {
 
     this.vpcId = vpc.id;
 
+    const awsRegion = process.env.AWS_REGION || 'us-west-2';
+
     // Private Subnets
     const privateSubnet1 = new Subnet(this, 'prodPrivateSubnet1', {
       vpcId: vpc.id,
       cidrBlock: '10.0.1.0/24',
-      availabilityZone: 'us-east-1a',
+      availabilityZone: `${awsRegion}a`, // <-- Use region variable
       tags: {
         Name: `prod-private-subnet-1-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -45,7 +47,7 @@ export class VpcStack extends Construct {
     const privateSubnet2 = new Subnet(this, 'prodPrivateSubnet2', {
       vpcId: vpc.id,
       cidrBlock: '10.0.2.0/24',
-      availabilityZone: 'us-east-1b',
+      availabilityZone: `${awsRegion}b`, // <-- Use region variable
       tags: {
         Name: `prod-private-subnet-2-${environmentSuffix}`,
         Environment: environmentSuffix,
