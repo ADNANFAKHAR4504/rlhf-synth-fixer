@@ -1276,7 +1276,7 @@ resource "aws_launch_template" "app" {
     }
   }
 
-  user_data_base64 = base64encode(templatefile("${path.module}/user-data.sh", {
+  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
     db_endpoint = aws_db_instance.main.endpoint
   }))
 
