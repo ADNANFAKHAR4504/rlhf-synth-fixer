@@ -1,25 +1,25 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure multi-tier infrastructure with S3 data lake, EC2 compute, RDS database, and comprehensive security controls'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Secure multi-tier infrastructure with S3 data lake, EC2 compute, RDS database, and comprehensive security controls"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
       - Label:
-          default: 'Network Configuration'
+          default: "Network Configuration"
         Parameters:
           - VpcCidr
           - AllowedCidrBlock
       - Label:
-          default: 'Database Configuration'
+          default: "Database Configuration"
         Parameters:
           - DBUsername
           - DBPassword
       - Label:
-          default: 'EC2 Configuration'
+          default: "EC2 Configuration"
         Parameters:
           - InstanceType
           - KeyPairName
@@ -27,76 +27,67 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-  
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
   VpcCidr:
     Type: String
-    Default: '10.0.0.0/16'
-    Description: 'CIDR block for VPC'
-  
+    Default: "10.0.0.0/16"
+    Description: "CIDR block for VPC"
+
   AllowedCidrBlock:
     Type: String
-    Default: '0.0.0.0/0'
-    Description: 'CIDR block allowed for security group access'
-  
+    Default: "0.0.0.0/0"
+    Description: "CIDR block allowed for security group access"
+
   DBUsername:
     Type: String
-    Default: 'admin'
-    Description: 'Database administrator username'
+    Default: "admin"
+    Description: "Database administrator username"
     MinLength: 1
     MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-  
-  DBPassword:
-    Type: String
-    Default: 'AdminPass123!'
-    NoEcho: true
-    Description: 'Database administrator password'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*]*'
-  
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+
   InstanceType:
     Type: String
-    Default: 't3.micro'
-    Description: 'EC2 Instance type'
+    Default: "t3.micro"
+    Description: "EC2 Instance type"
     AllowedValues:
       - t3.micro
       - t3.small
       - t3.medium
-  
+
   KeyPairName:
     Type: String
-    Default: ''
-    Description: 'EC2 Key Pair name (optional - leave empty for no SSH access)'
+    Default: ""
+    Description: "EC2 Key Pair name (optional - leave empty for no SSH access)"
 
 Conditions:
-  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
   # ==========================================
   # KMS Keys for Encryption
   # ==========================================
-  
+
   S3KMSKey:
     Type: AWS::KMS::Key
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Description: !Sub 'KMS Key for S3 bucket encryption - ${EnvironmentSuffix}'
+      Description: !Sub "KMS Key for S3 bucket encryption - ${EnvironmentSuffix}"
       EnableKeyRotation: true
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
           - Sid: Allow S3 Service
             Effect: Allow
             Principal:
@@ -104,12 +95,12 @@ Resources:
             Action:
               - kms:Decrypt
               - kms:GenerateDataKey
-            Resource: '*'
+            Resource: "*"
 
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/tap-${EnvironmentSuffix}-s3-key'
+      AliasName: !Sub "alias/tap-${EnvironmentSuffix}-s3-key"
       TargetKeyId: !Ref S3KMSKey
 
   RDSKMSKey:
@@ -117,22 +108,22 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Description: !Sub 'KMS Key for RDS encryption - ${EnvironmentSuffix}'
+      Description: !Sub "KMS Key for RDS encryption - ${EnvironmentSuffix}"
       EnableKeyRotation: true
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
 
   RDSKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/tap-${EnvironmentSuffix}-rds-key'
+      AliasName: !Sub "alias/tap-${EnvironmentSuffix}-rds-key"
       TargetKeyId: !Ref RDSKMSKey
 
   CloudTrailKMSKey:
@@ -140,17 +131,17 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Description: !Sub 'KMS Key for CloudTrail logs encryption - ${EnvironmentSuffix}'
+      Description: !Sub "KMS Key for CloudTrail logs encryption - ${EnvironmentSuffix}"
       EnableKeyRotation: true
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
           - Sid: Allow CloudTrail Service
             Effect: Allow
             Principal:
@@ -158,21 +149,38 @@ Resources:
             Action:
               - kms:GenerateDataKey*
               - kms:Decrypt
-            Resource: '*'
+            Resource: "*"
             Condition:
               StringLike:
-                'kms:EncryptionContext:aws:cloudtrail:arn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*'
+                "kms:EncryptionContext:aws:cloudtrail:arn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*"
 
   CloudTrailKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/tap-${EnvironmentSuffix}-cloudtrail-key'
+      AliasName: !Sub "alias/tap-${EnvironmentSuffix}-cloudtrail-key"
       TargetKeyId: !Ref CloudTrailKMSKey
+
+  # ==========================================
+  # Secrets Manager for Database Password
+  # ==========================================
+
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub "tap-${EnvironmentSuffix}-db-secret"
+      Description: "Database credentials for RDS instance"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
 
   # ==========================================
   # VPC and Network Configuration
   # ==========================================
-  
+
   VPC:
     Type: AWS::EC2::VPC
     DeletionPolicy: Delete
@@ -183,7 +191,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-vpc'
+          Value: !Sub "tap-${EnvironmentSuffix}-vpc"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -192,7 +200,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-igw'
+          Value: !Sub "tap-${EnvironmentSuffix}-igw"
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -206,12 +214,12 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: "10.0.1.0/24"
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-public-subnet-1'
+          Value: !Sub "tap-${EnvironmentSuffix}-public-subnet-1"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -219,12 +227,12 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: "10.0.2.0/24"
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-public-subnet-2'
+          Value: !Sub "tap-${EnvironmentSuffix}-public-subnet-2"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -232,11 +240,11 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: "10.0.11.0/24"
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-private-subnet-1'
+          Value: !Sub "tap-${EnvironmentSuffix}-private-subnet-1"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -244,11 +252,11 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: '10.0.12.0/24'
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: "10.0.12.0/24"
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-private-subnet-2'
+          Value: !Sub "tap-${EnvironmentSuffix}-private-subnet-2"
 
   DatabaseSubnet1:
     Type: AWS::EC2::Subnet
@@ -256,11 +264,11 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: '10.0.21.0/24'
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: "10.0.21.0/24"
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-database-subnet-1'
+          Value: !Sub "tap-${EnvironmentSuffix}-database-subnet-1"
 
   DatabaseSubnet2:
     Type: AWS::EC2::Subnet
@@ -268,11 +276,11 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: '10.0.22.0/24'
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: "10.0.22.0/24"
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-database-subnet-2'
+          Value: !Sub "tap-${EnvironmentSuffix}-database-subnet-2"
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -282,7 +290,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-nat-eip-1'
+          Value: !Sub "tap-${EnvironmentSuffix}-nat-eip-1"
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -293,7 +301,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-nat-1'
+          Value: !Sub "tap-${EnvironmentSuffix}-nat-1"
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -303,7 +311,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-public-routes'
+          Value: !Sub "tap-${EnvironmentSuffix}-public-routes"
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -333,7 +341,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-private-routes-1'
+          Value: !Sub "tap-${EnvironmentSuffix}-private-routes-1"
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -357,76 +365,76 @@ Resources:
   # ==========================================
   # Security Groups
   # ==========================================
-  
+
   APIGatewaySecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'tap-${EnvironmentSuffix}-api-sg'
-      GroupDescription: 'Security group for API Gateway VPC Link'
+      GroupName: !Sub "tap-${EnvironmentSuffix}-api-sg"
+      GroupDescription: "Security group for API Gateway VPC Link"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: !Ref AllowedCidrBlock
-          Description: 'HTTPS access from allowed CIDR'
+          Description: "HTTPS access from allowed CIDR"
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-api-sg'
+          Value: !Sub "tap-${EnvironmentSuffix}-api-sg"
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'tap-${EnvironmentSuffix}-web-server-sg'
-      GroupDescription: 'Security group for EC2 instances'
+      GroupName: !Sub "tap-${EnvironmentSuffix}-web-server-sg"
+      GroupDescription: "Security group for EC2 instances"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref APIGatewaySecurityGroup
-          Description: 'HTTPS from API Gateway'
+          Description: "HTTPS from API Gateway"
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref APIGatewaySecurityGroup
-          Description: 'HTTP from API Gateway'
+          Description: "HTTP from API Gateway"
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-web-server-sg'
+          Value: !Sub "tap-${EnvironmentSuffix}-web-server-sg"
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'tap-${EnvironmentSuffix}-database-sg'
-      GroupDescription: 'Security group for RDS database'
+      GroupName: !Sub "tap-${EnvironmentSuffix}-database-sg"
+      GroupDescription: "Security group for RDS database"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: 'MySQL access from web servers'
+          Description: "MySQL access from web servers"
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-database-sg'
+          Value: !Sub "tap-${EnvironmentSuffix}-database-sg"
 
   # ==========================================
   # S3 Buckets for Data Lake
   # ==========================================
-  
+
   DataLakeBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'tap-${EnvironmentSuffix}-data-lake-${AWS::AccountId}'
+      BucketName: !Sub "tap-${EnvironmentSuffix}-data-lake-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -442,14 +450,14 @@ Resources:
         Status: Enabled
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: 'data-lake-access-logs/'
+        LogFilePrefix: "data-lake-access-logs/"
 
   LoggingBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'tap-${EnvironmentSuffix}-logs-${AWS::AccountId}'
+      BucketName: !Sub "tap-${EnvironmentSuffix}-logs-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -472,7 +480,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'tap-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub "tap-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -490,7 +498,7 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
@@ -503,23 +511,22 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Resource: !Sub "${CloudTrailBucket.Arn}/*"
             Condition:
               StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+                "s3:x-amz-acl": "bucket-owner-full-control"
 
   # ==========================================
   # IAM Roles and Policies
   # ==========================================
-  
+
   EC2Role:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub 'tap-${EnvironmentSuffix}-ec2-role'
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -533,7 +540,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'tap-${EnvironmentSuffix}-ec2-profile'
+      InstanceProfileName: !Sub "tap-${EnvironmentSuffix}-ec2-profile"
       Roles:
         - !Ref EC2Role
 
@@ -542,9 +549,9 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      PolicyName: !Sub 'tap-${EnvironmentSuffix}-s3-access-policy'
+      PolicyName: !Sub "tap-${EnvironmentSuffix}-s3-access-policy"
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Action:
@@ -554,32 +561,32 @@ Resources:
               - s3:ListBucket
             Resource:
               - !GetAtt DataLakeBucket.Arn
-              - !Sub '${DataLakeBucket.Arn}/*'
+              - !Sub "${DataLakeBucket.Arn}/*"
           - Effect: Deny
             Action:
               - iam:DeleteRolePolicy
               - iam:DetachRolePolicy
               - iam:PutRolePolicy
-            Resource: '*'
+            Resource: "*"
       Roles:
         - !Ref EC2Role
 
   # ==========================================
   # EC2 Instances
   # ==========================================
-  
+
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub 'tap-${EnvironmentSuffix}-launch-template'
+      LaunchTemplateName: !Sub "tap-${EnvironmentSuffix}-launch-template"
       LaunchTemplateData:
-        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
-        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
         Monitoring:
           Enabled: true
         UserData:
@@ -588,7 +595,7 @@ Resources:
             yum update -y
             yum install -y amazon-cloudwatch-agent
             yum install -y amazon-inspector-agent
-            
+
             # Configure CloudWatch Agent
             cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
             {
@@ -622,7 +629,7 @@ Resources:
               }
             }
             EOF
-            
+
             # Start CloudWatch Agent
             amazon-cloudwatch-agent-ctl -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
@@ -637,7 +644,7 @@ Resources:
       SubnetId: !Ref PrivateSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-ec2-1'
+          Value: !Sub "tap-${EnvironmentSuffix}-ec2-1"
 
   EC2Instance2:
     Type: AWS::EC2::Instance
@@ -650,38 +657,40 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-ec2-2'
+          Value: !Sub "tap-${EnvironmentSuffix}-ec2-2"
 
   # ==========================================
   # RDS Database
   # ==========================================
-  
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBSubnetGroupName: !Sub 'tap-${EnvironmentSuffix}-db-subnet-group'
-      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      DBSubnetGroupName: !Sub "tap-${EnvironmentSuffix}-db-subnet-group"
+      DBSubnetGroupDescription: "Subnet group for RDS database"
       SubnetIds:
         - !Ref DatabaseSubnet1
         - !Ref DatabaseSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-db-subnet-group'
+          Value: !Sub "tap-${EnvironmentSuffix}-db-subnet-group"
 
   DBInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub 'tap-${EnvironmentSuffix}-db'
+      DBInstanceIdentifier: !Sub "tap-${EnvironmentSuffix}-db"
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.39'
+      EngineVersion: "8.0.39"
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      AllocatedStorage: '20'
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        SecretArn: !Ref DBSecret
+      AllocatedStorage: "20"
       StorageType: gp3
       StorageEncrypted: true
       KmsKeyId: !Ref RDSKMSKey
@@ -689,8 +698,8 @@ Resources:
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
       EnableCloudwatchLogsExports:
         - error
         - general
@@ -699,16 +708,15 @@ Resources:
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
       Tags:
         - Key: Name
-          Value: !Sub 'tap-${EnvironmentSuffix}-db'
+          Value: !Sub "tap-${EnvironmentSuffix}-db"
 
   RDSEnhancedMonitoringRole:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub 'tap-${EnvironmentSuffix}-rds-monitoring-role'
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -720,14 +728,14 @@ Resources:
   # ==========================================
   # CloudTrail
   # ==========================================
-  
+
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub 'tap-${EnvironmentSuffix}-trail'
+      TrailName: !Sub "tap-${EnvironmentSuffix}-trail"
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -738,33 +746,33 @@ Resources:
         - ReadWriteType: All
           IncludeManagementEvents: true
           DataResources:
-            - Type: 'AWS::S3::Object'
+            - Type: "AWS::S3::Object"
               Values:
-                - !Sub '${DataLakeBucket.Arn}/'
+                - !Sub "${DataLakeBucket.Arn}/"
 
   # ==========================================
   # CloudWatch Log Groups
   # ==========================================
-  
+
   RDSLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/rds/instance/tap-${EnvironmentSuffix}-db/error'
+      LogGroupName: !Sub "/aws/rds/instance/tap-${EnvironmentSuffix}-db/error"
       RetentionInDays: 7
 
   # ==========================================
   # API Gateway
   # ==========================================
-  
+
   RestApi:
     Type: AWS::ApiGateway::RestApi
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Name: !Sub 'tap-${EnvironmentSuffix}-api'
-      Description: 'API Gateway for public access control'
+      Name: !Sub "tap-${EnvironmentSuffix}-api"
+      Description: "API Gateway for public access control"
       EndpointConfiguration:
         Types:
           - REGIONAL
@@ -774,7 +782,7 @@ Resources:
     Properties:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
-      PathPart: 'data'
+      PathPart: "data"
 
   ApiMethod:
     Type: AWS::ApiGateway::Method
@@ -801,97 +809,97 @@ Resources:
 
 Outputs:
   VPCId:
-    Description: 'VPC ID'
+    Description: "VPC ID"
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub "${AWS::StackName}-VPCId"
 
   DataLakeBucketName:
-    Description: 'S3 Data Lake Bucket Name'
+    Description: "S3 Data Lake Bucket Name"
     Value: !Ref DataLakeBucket
     Export:
-      Name: !Sub '${AWS::StackName}-DataLakeBucketName'
+      Name: !Sub "${AWS::StackName}-DataLakeBucketName"
 
   LoggingBucketName:
-    Description: 'S3 Logging Bucket Name'
+    Description: "S3 Logging Bucket Name"
     Value: !Ref LoggingBucket
     Export:
-      Name: !Sub '${AWS::StackName}-LoggingBucketName'
+      Name: !Sub "${AWS::StackName}-LoggingBucketName"
 
   CloudTrailBucketName:
-    Description: 'S3 CloudTrail Bucket Name'
+    Description: "S3 CloudTrail Bucket Name"
     Value: !Ref CloudTrailBucket
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailBucketName'
+      Name: !Sub "${AWS::StackName}-CloudTrailBucketName"
 
   EC2Instance1Id:
-    Description: 'EC2 Instance 1 ID'
+    Description: "EC2 Instance 1 ID"
     Value: !Ref EC2Instance1
     Export:
-      Name: !Sub '${AWS::StackName}-EC2Instance1Id'
+      Name: !Sub "${AWS::StackName}-EC2Instance1Id"
 
   EC2Instance2Id:
-    Description: 'EC2 Instance 2 ID'
+    Description: "EC2 Instance 2 ID"
     Value: !Ref EC2Instance2
     Export:
-      Name: !Sub '${AWS::StackName}-EC2Instance2Id'
+      Name: !Sub "${AWS::StackName}-EC2Instance2Id"
 
   DBInstanceEndpoint:
-    Description: 'RDS Database Endpoint'
+    Description: "RDS Database Endpoint"
     Value: !GetAtt DBInstance.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-DBInstanceEndpoint'
+      Name: !Sub "${AWS::StackName}-DBInstanceEndpoint"
 
   DBInstancePort:
-    Description: 'RDS Database Port'
+    Description: "RDS Database Port"
     Value: !GetAtt DBInstance.Endpoint.Port
     Export:
-      Name: !Sub '${AWS::StackName}-DBInstancePort'
+      Name: !Sub "${AWS::StackName}-DBInstancePort"
 
   ApiGatewayEndpoint:
-    Description: 'API Gateway Endpoint URL'
-    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Description: "API Gateway Endpoint URL"
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
     Export:
-      Name: !Sub '${AWS::StackName}-ApiGatewayEndpoint'
+      Name: !Sub "${AWS::StackName}-ApiGatewayEndpoint"
 
   CloudTrailName:
-    Description: 'CloudTrail Name'
+    Description: "CloudTrail Name"
     Value: !Ref CloudTrail
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailName'
+      Name: !Sub "${AWS::StackName}-CloudTrailName"
 
   EC2RoleArn:
-    Description: 'EC2 Role ARN'
+    Description: "EC2 Role ARN"
     Value: !GetAtt EC2Role.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-EC2RoleArn'
+      Name: !Sub "${AWS::StackName}-EC2RoleArn"
 
   S3KMSKeyId:
-    Description: 'S3 KMS Key ID'
+    Description: "S3 KMS Key ID"
     Value: !Ref S3KMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-S3KMSKeyId'
+      Name: !Sub "${AWS::StackName}-S3KMSKeyId"
 
   RDSKMSKeyId:
-    Description: 'RDS KMS Key ID'
+    Description: "RDS KMS Key ID"
     Value: !Ref RDSKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-RDSKMSKeyId'
+      Name: !Sub "${AWS::StackName}-RDSKMSKeyId"
 
   CloudTrailKMSKeyId:
-    Description: 'CloudTrail KMS Key ID'
+    Description: "CloudTrail KMS Key ID"
     Value: !Ref CloudTrailKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailKMSKeyId'
+      Name: !Sub "${AWS::StackName}-CloudTrailKMSKeyId"
 
   StackName:
-    Description: 'Name of this CloudFormation stack'
+    Description: "Name of this CloudFormation stack"
     Value: !Ref AWS::StackName
     Export:
-      Name: !Sub '${AWS::StackName}-StackName'
+      Name: !Sub "${AWS::StackName}-StackName"
 
   EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
+    Description: "Environment suffix used for this deployment"
     Value: !Ref EnvironmentSuffix
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
