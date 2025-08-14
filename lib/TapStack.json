@@ -150,6 +150,14 @@
         "Production"
       ]
     },
+    "IsTest": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "Test"
+      ]
+    },
     "HasKeyPair": {
       "Fn::Not": [
         {
@@ -2578,7 +2586,30 @@
       "UpdateReplacePolicy": "Delete",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${Environment}-config-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": [
+            "${env}-config-bucket-${suffix}-${account}",
+            {
+              "env": {
+                "Fn::If": [
+                  "IsProduction",
+                  "production",
+                  {
+                    "Fn::If": [
+                      "IsTest",
+                      "test",
+                      "development"
+                    ]
+                  }
+                ]
+              },
+              "suffix": {
+                "Ref": "EnvironmentSuffix"
+              },
+              "account": {
+                "Ref": "AWS::AccountId"
+              }
+            }
+          ]
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -2653,9 +2684,6 @@
     "ConfigRecorderRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${Environment}-ConfigRecorderRole-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
