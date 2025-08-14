@@ -1,6 +1,12 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import AWS from 'aws-sdk';
+import { EC2 } from '@aws-sdk/client-ec2';
+import { S3 } from '@aws-sdk/client-s3';
+import { IAM } from '@aws-sdk/client-iam';
+import { CloudTrail } from '@aws-sdk/client-cloudtrail';
+import { CloudWatch } from '@aws-sdk/client-cloudwatch';
+import { CloudWatchLogs } from '@aws-sdk/client-cloudwatch-logs';
+import { SNS } from '@aws-sdk/client-sns';
 
 // Load outputs from CloudFormation deployment
 let outputs: any;
@@ -15,31 +21,28 @@ try {
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const projectName = process.env.PROJECT_NAME || 'TapProject';
 
-// Initialize AWS SDK
+// Initialize AWS SDK v3 clients
 const awsConfig = {
-  region: 'us-west-2',
-  ...(process.env.AWS_PROFILE && { credentials: new AWS.SharedIniFileCredentials({ profile: process.env.AWS_PROFILE }) })
+  region: 'us-west-2'
 };
 
-AWS.config.update(awsConfig);
-
 describe('TapStack CloudFormation Integration Tests', () => {
-  let ec2: AWS.EC2;
-  let s3: AWS.S3;
-  let iam: AWS.IAM;
-  let cloudtrail: AWS.CloudTrail;
-  let cloudwatch: AWS.CloudWatch;
-  let cloudwatchLogs: AWS.CloudWatchLogs;
-  let sns: AWS.SNS;
+  let ec2: EC2;
+  let s3: S3;
+  let iam: IAM;
+  let cloudtrail: CloudTrail;
+  let cloudwatch: CloudWatch;
+  let cloudwatchLogs: CloudWatchLogs;
+  let sns: SNS;
 
   beforeAll(() => {
-    ec2 = new AWS.EC2();
-    s3 = new AWS.S3();
-    iam = new AWS.IAM();
-    cloudtrail = new AWS.CloudTrail();
-    cloudwatch = new AWS.CloudWatch();
-    cloudwatchLogs = new AWS.CloudWatchLogs();
-    sns = new AWS.SNS();
+    ec2 = new EC2(awsConfig);
+    s3 = new S3(awsConfig);
+    iam = new IAM(awsConfig);
+    cloudtrail = new CloudTrail(awsConfig);
+    cloudwatch = new CloudWatch(awsConfig);
+    cloudwatchLogs = new CloudWatchLogs(awsConfig);
+    sns = new SNS(awsConfig);
   });
 
   describe('Stack Deployment Validation', () => {
@@ -49,13 +52,13 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const vpcResponse = await ec2.describeVpcs({ VpcIds: [outputs.VPCId] }).promise();
-      const vpc = vpcResponse.Vpcs[0];
+      const vpcResponse = await ec2.describeVpcs({ VpcIds: [outputs.VPCId] });
+      const vpc = vpcResponse.Vpcs![0];
       
       expect(vpc).toBeDefined();
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      expect((vpc as any).EnableDnsHostnames).toBe(true);
+      expect((vpc as any).EnableDnsSupport).toBe(true);
       expect(vpc.State).toBe('available');
     });
 
@@ -67,10 +70,10 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
       const subnetsResponse = await ec2.describeSubnets({
         SubnetIds: [outputs.PublicSubnetId, outputs.PrivateSubnetId]
-      }).promise();
+      });
       
-      const publicSubnet = subnetsResponse.Subnets.find(s => s.SubnetId === outputs.PublicSubnetId);
-      const privateSubnet = subnetsResponse.Subnets.find(s => s.SubnetId === outputs.PrivateSubnetId);
+      const publicSubnet = subnetsResponse.Subnets!.find((s: any) => s.SubnetId === outputs.PublicSubnetId);
+      const privateSubnet = subnetsResponse.Subnets!.find((s: any) => s.SubnetId === outputs.PrivateSubnetId);
       
       expect(publicSubnet).toBeDefined();
       expect(privateSubnet).toBeDefined();
@@ -88,13 +91,13 @@ describe('TapStack CloudFormation Integration Tests', () => {
       }
 
       const natGateways = await ec2.describeNatGateways({
-        Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
-      }).promise();
+        Filter: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
+      });
       
-      expect(natGateways.NatGateways.length).toBeGreaterThan(0);
-      const natGateway = natGateways.NatGateways[0];
+      expect(natGateways.NatGateways!.length).toBeGreaterThan(0);
+      const natGateway = natGateways.NatGateways![0];
       expect(natGateway.State).toBe('available');
-      expect(natGateway.AllocationId).toBeDefined();
+      expect((natGateway as any).AllocationId).toBeDefined();
     });
 
     test('should have route tables with correct routes', async () => {
@@ -106,22 +109,22 @@ describe('TapStack CloudFormation Integration Tests', () => {
       // Test public subnet route table
       const publicRouteTables = await ec2.describeRouteTables({
         Filters: [{ Name: 'association.subnet-id', Values: [outputs.PublicSubnetId] }]
-      }).promise();
+      });
       
-      expect(publicRouteTables.RouteTables.length).toBeGreaterThan(0);
-      const publicRouteTable = publicRouteTables.RouteTables[0];
-      const internetRoute = publicRouteTable.Routes.find(route => route.DestinationCidrBlock === '0.0.0.0/0');
+      expect(publicRouteTables.RouteTables!.length).toBeGreaterThan(0);
+      const publicRouteTable = publicRouteTables.RouteTables![0];
+      const internetRoute = publicRouteTable.Routes!.find((route: any) => route.DestinationCidrBlock === '0.0.0.0/0');
       expect(internetRoute).toBeDefined();
       expect(internetRoute!.GatewayId).toBeDefined();
 
       // Test private subnet route table
       const privateRouteTables = await ec2.describeRouteTables({
         Filters: [{ Name: 'association.subnet-id', Values: [outputs.PrivateSubnetId] }]
-      }).promise();
+      });
       
-      expect(privateRouteTables.RouteTables.length).toBeGreaterThan(0);
-      const privateRouteTable = privateRouteTables.RouteTables[0];
-      const natRoute = privateRouteTable.Routes.find(route => route.DestinationCidrBlock === '0.0.0.0/0');
+      expect(privateRouteTables.RouteTables!.length).toBeGreaterThan(0);
+      const privateRouteTable = privateRouteTables.RouteTables![0];
+      const natRoute = privateRouteTable.Routes!.find((route: any) => route.DestinationCidrBlock === '0.0.0.0/0');
       expect(natRoute).toBeDefined();
       expect(natRoute!.NatGatewayId).toBeDefined();
     });
@@ -134,8 +137,8 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const encryptionResponse = await s3.getBucketEncryption({ Bucket: outputs.S3BucketName }).promise();
-      const encryption = encryptionResponse.ServerSideEncryptionConfiguration!.Rules[0];
+      const encryptionResponse = await s3.getBucketEncryption({ Bucket: outputs.S3BucketName });
+      const encryption = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
       
       expect(encryption.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
     });
@@ -146,7 +149,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const publicAccessResponse = await s3.getPublicAccessBlock({ Bucket: outputs.S3BucketName }).promise();
+      const publicAccessResponse = await s3.getPublicAccessBlock({ Bucket: outputs.S3BucketName });
       const publicAccess = publicAccessResponse.PublicAccessBlockConfiguration!;
       
       expect(publicAccess.BlockPublicAcls).toBe(true);
@@ -161,7 +164,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const versioningResponse = await s3.getBucketVersioning({ Bucket: outputs.S3BucketName }).promise();
+      const versioningResponse = await s3.getBucketVersioning({ Bucket: outputs.S3BucketName });
       expect(versioningResponse.Status).toBe('Enabled');
     });
 
@@ -180,13 +183,13 @@ describe('TapStack CloudFormation Integration Tests', () => {
           Bucket: outputs.S3BucketName,
           Key: testKey,
           Body: testContent
-        }).promise();
+        });
         
         // Download and verify
         const downloadResponse = await s3.getObject({
           Bucket: outputs.S3BucketName,
           Key: testKey
-        }).promise();
+        });
         
         expect(downloadResponse.Body!.toString()).toBe(testContent);
         
@@ -194,7 +197,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         await s3.deleteObject({
           Bucket: outputs.S3BucketName,
           Key: testKey
-        }).promise();
+        });
       } catch (error) {
         console.warn('S3 object test failed:', error);
         // Don't fail the test if there are permission issues
@@ -210,13 +213,13 @@ describe('TapStack CloudFormation Integration Tests', () => {
       }
 
       const roleName = outputs.EC2RoleArn.split('/').pop();
-      const roleResponse = await iam.getRole({ RoleName: roleName }).promise();
+      const roleResponse = await iam.getRole({ RoleName: roleName });
       
       expect(roleResponse.Role).toBeDefined();
-      expect(roleResponse.Role.AssumeRolePolicyDocument).toBeDefined();
+      expect(roleResponse.Role!.AssumeRolePolicyDocument).toBeDefined();
       
       // Test assume role policy
-      const assumePolicy = JSON.parse(roleResponse.Role.AssumeRolePolicyDocument!);
+      const assumePolicy = JSON.parse(roleResponse.Role!.AssumeRolePolicyDocument!);
       expect(assumePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
     });
 
@@ -227,10 +230,10 @@ describe('TapStack CloudFormation Integration Tests', () => {
       }
 
       const roleName = outputs.LambdaRoleArn.split('/').pop();
-      const policiesResponse = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
+      const policiesResponse = await iam.listAttachedRolePolicies({ RoleName: roleName });
       
-      const hasBasicExecutionRole = policiesResponse.AttachedPolicies.some(
-        policy => policy.PolicyName === 'AWSLambdaBasicExecutionRole'
+      const hasBasicExecutionRole = policiesResponse.AttachedPolicies!.some(
+        (policy: any) => policy.PolicyName === 'AWSLambdaBasicExecutionRole'
       );
       expect(hasBasicExecutionRole).toBe(true);
     });
@@ -239,10 +242,10 @@ describe('TapStack CloudFormation Integration Tests', () => {
       // Test for CloudWatch events role (may not be in outputs)
       try {
         const roleName = `${projectName}-cloudwatch-events-role`;
-        const roleResponse = await iam.getRole({ RoleName: roleName }).promise();
+        const roleResponse = await iam.getRole({ RoleName: roleName });
         
         expect(roleResponse.Role).toBeDefined();
-        const assumePolicy = JSON.parse(roleResponse.Role.AssumeRolePolicyDocument!);
+        const assumePolicy = JSON.parse(roleResponse.Role!.AssumeRolePolicyDocument!);
         expect(assumePolicy.Statement[0].Principal.Service).toBe('events.amazonaws.com');
       } catch (error) {
         console.warn('CloudWatch events role test skipped:', error);
@@ -257,7 +260,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const trailResponse = await cloudtrail.describeTrails({ trailNameList: [outputs.CloudTrailArn] }).promise();
+      const trailResponse = await cloudtrail.describeTrails({ trailNameList: [outputs.CloudTrailArn] });
       const trail = trailResponse.trailList![0];
       
       expect(trail).toBeDefined();
@@ -273,7 +276,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const eventSelectorsResponse = await cloudtrail.getEventSelectors({ TrailName: outputs.CloudTrailArn }).promise();
+      const eventSelectorsResponse = await cloudtrail.getEventSelectors({ TrailName: outputs.CloudTrailArn });
       const eventSelectors = eventSelectorsResponse.EventSelectors!;
       
       expect(eventSelectors.length).toBeGreaterThan(0);
@@ -287,7 +290,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const trailResponse = await cloudtrail.describeTrails({ trailNameList: [outputs.CloudTrailArn] }).promise();
+      const trailResponse = await cloudtrail.describeTrails({ trailNameList: [outputs.CloudTrailArn] });
       const trail = trailResponse.trailList![0];
       
       if (trail.S3BucketName) {
@@ -296,7 +299,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
             Bucket: trail.S3BucketName,
             Prefix: 'AWSLogs/',
             MaxKeys: 10
-          }).promise();
+          });
           
           // Should have some CloudTrail log files (may take time to appear)
           expect(objectsResponse.Contents!.length).toBeGreaterThanOrEqual(0);
@@ -317,11 +320,11 @@ describe('TapStack CloudFormation Integration Tests', () => {
       try {
         const alarmsResponse = await cloudwatch.describeAlarms({
           AlarmNames: alarmNames
-        }).promise();
+        });
         
         expect(alarmsResponse.MetricAlarms!.length).toBeGreaterThan(0);
         
-        alarmsResponse.MetricAlarms!.forEach(alarm => {
+        alarmsResponse.MetricAlarms!.forEach((alarm: any) => {
           expect(alarm.AlarmActions).toBeDefined();
           expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
         });
@@ -336,7 +339,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const topicResponse = await sns.getTopicAttributes({ TopicArn: outputs.SecurityTopicArn }).promise();
+      const topicResponse = await sns.getTopicAttributes({ TopicArn: outputs.SecurityTopicArn });
       expect(topicResponse.Attributes!.TopicArn).toBe(outputs.SecurityTopicArn);
     });
 
@@ -344,13 +347,13 @@ describe('TapStack CloudFormation Integration Tests', () => {
       try {
         const logGroupsResponse = await cloudwatchLogs.describeLogGroups({
           logGroupNamePrefix: 'CloudTrail/'
-        }).promise();
+        });
         
         if (logGroupsResponse.logGroups!.length > 0) {
           const logGroupName = logGroupsResponse.logGroups![0].logGroupName!;
           const metricFiltersResponse = await cloudwatchLogs.describeMetricFilters({
             logGroupName: logGroupName
-          }).promise();
+          });
           
           expect(metricFiltersResponse.metricFilters!.length).toBeGreaterThanOrEqual(0);
         }
@@ -365,7 +368,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       try {
         const logGroupsResponse = await cloudwatchLogs.describeLogGroups({
           logGroupNamePrefix: `/aws/s3/${projectName}`
-        }).promise();
+        });
         
         if (logGroupsResponse.logGroups!.length > 0) {
           const logGroup = logGroupsResponse.logGroups![0];
@@ -380,10 +383,10 @@ describe('TapStack CloudFormation Integration Tests', () => {
       // Test for access logs bucket lifecycle
       try {
         const accessLogsBucketName = `${projectName}-access-logs-${process.env.AWS_ACCOUNT_ID || 'test'}-us-west-2`;
-        const lifecycleResponse = await s3.getBucketLifecycleConfiguration({ Bucket: accessLogsBucketName }).promise();
+        const lifecycleResponse = await s3.getBucketLifecycleConfiguration({ Bucket: accessLogsBucketName });
         
         expect(lifecycleResponse.Rules!.length).toBeGreaterThan(0);
-        const deleteRule = lifecycleResponse.Rules!.find(rule => rule.Id === 'DeleteOldLogs');
+        const deleteRule = lifecycleResponse.Rules!.find((rule: any) => rule.Id === 'DeleteOldLogs');
         expect(deleteRule).toBeDefined();
         expect(deleteRule!.Expiration!.Days).toBe(90);
       } catch (error) {
@@ -401,7 +404,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
       const securityGroupsResponse = await ec2.describeSecurityGroups({
         Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
-      }).promise();
+      });
       
       // Should have at least the default security group
       expect(securityGroupsResponse.SecurityGroups!.length).toBeGreaterThan(0);
@@ -415,7 +418,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
       const networkAclsResponse = await ec2.describeNetworkAcls({
         Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
-      }).promise();
+      });
       
       // Should have at least the default network ACL
       expect(networkAclsResponse.NetworkAcls!.length).toBeGreaterThan(0);
@@ -429,11 +432,11 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
 
-      const vpcResponse = await ec2.describeVpcs({ VpcIds: [outputs.VPCId] }).promise();
-      const vpc = vpcResponse.Vpcs[0];
+      const vpcResponse = await ec2.describeVpcs({ VpcIds: [outputs.VPCId] });
+      const vpc = vpcResponse.Vpcs![0];
       
       const requiredTags = ['Environment', 'Owner', 'Project', 'Name'];
-      const tagKeys = vpc.Tags!.map(tag => tag.Key);
+      const tagKeys = vpc.Tags!.map((tag: any) => tag.Key);
       
       requiredTags.forEach(requiredTag => {
         expect(tagKeys).toContain(requiredTag);
@@ -447,8 +450,8 @@ describe('TapStack CloudFormation Integration Tests', () => {
       }
 
       try {
-        const taggingResponse = await s3.getBucketTagging({ Bucket: outputs.S3BucketName }).promise();
-        const tagKeys = taggingResponse.TagSet!.map(tag => tag.Key);
+        const taggingResponse = await s3.getBucketTagging({ Bucket: outputs.S3BucketName });
+        const tagKeys = taggingResponse.TagSet!.map((tag: any) => tag.Key);
         
         const requiredTags = ['Environment', 'Owner', 'Project', 'Name'];
         requiredTags.forEach(requiredTag => {

@@ -4,7 +4,7 @@ Description: 'Secure AWS infrastructure with IAM roles, S3 bucket, VPC networkin
 Parameters:
   ProjectName:
     Type: String
-    Default: 'TapProject'
+    Default: 'tapproject'
     Description: 'Name of the project for resource naming and tagging'
   
   Environment:
@@ -199,7 +199,7 @@ Resources:
   TapS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-secure-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectName}securebucket${AWS::AccountId}${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -216,10 +216,14 @@ Resources:
         DestinationBucketName: !Ref S3AccessLogsBucket
         LogFilePrefix: 'access-logs/'
       NotificationConfiguration:
-        CloudWatchConfigurations:
+        TopicConfigurations:
           - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3CloudWatchLogGroup
+            Topic: !Ref SecurityAlarmTopic
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: 'uploads/'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-secure-bucket'
@@ -233,7 +237,7 @@ Resources:
   S3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-access-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectName}accesslogs${AWS::AccountId}${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -384,7 +388,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectName}cloudtrail${AWS::AccountId}${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -454,9 +458,6 @@ Resources:
             - Type: 'AWS::S3::Object'
               Values:
                 - !Sub '${TapS3Bucket}/*'
-            - Type: 'AWS::S3::Bucket'
-              Values:
-                - !Ref TapS3Bucket
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-cloudtrail'

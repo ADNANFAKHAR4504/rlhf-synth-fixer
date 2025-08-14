@@ -11,9 +11,30 @@ describe('TapStack CloudFormation Template', () => {
     const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     
-    // Parse YAML to JSON for testing
+    // Parse YAML to JSON for testing with CloudFormation intrinsic function support
     const yaml = require('js-yaml');
-    template = yaml.load(templateContent);
+    
+    // Use a simple approach - replace CloudFormation tags with regular strings
+    const processedContent = templateContent
+      .replace(/!Ref/g, 'Ref')
+      .replace(/!Sub/g, 'Sub')
+      .replace(/!GetAtt/g, 'GetAtt')
+      .replace(/!FindInMap/g, 'FindInMap')
+      .replace(/!Join/g, 'Join')
+      .replace(/!Select/g, 'Select')
+      .replace(/!Split/g, 'Split')
+      .replace(/!Base64/g, 'Base64')
+      .replace(/!Cidr/g, 'Cidr')
+      .replace(/!ImportValue/g, 'ImportValue')
+      .replace(/!GetAZs/g, 'GetAZs')
+      .replace(/!Condition/g, 'Condition')
+      .replace(/!And/g, 'And')
+      .replace(/!Equals/g, 'Equals')
+      .replace(/!If/g, 'If')
+      .replace(/!Not/g, 'Not')
+      .replace(/!Or/g, 'Or');
+    
+    template = yaml.load(processedContent);
   });
 
   describe('Template Structure', () => {
@@ -40,7 +61,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have ProjectName parameter with correct properties', () => {
       const param = template.Parameters.ProjectName;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('TapProject');
+      expect(param.Default).toBe('tapproject');
       expect(param.Description).toBeDefined();
     });
 
@@ -269,13 +290,13 @@ describe('TapStack CloudFormation Template', () => {
     test('VPCId output should be correct', () => {
       const output = template.Outputs.VPCId;
       expect(output.Description).toBe('VPC ID');
-      expect(output.Value.Ref).toBe('TapVPC');
+      expect(output.Value).toBe('Ref TapVPC');
     });
 
     test('S3BucketName output should be correct', () => {
       const output = template.Outputs.S3BucketName;
       expect(output.Description).toBe('S3 Bucket Name');
-      expect(output.Value.Ref).toBe('TapS3Bucket');
+      expect(output.Value).toBe('Ref TapS3Bucket');
     });
   });
 
