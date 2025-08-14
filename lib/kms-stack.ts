@@ -1,5 +1,6 @@
 // lib/kms-stack.ts
 
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { Construct } from 'constructs';
 
@@ -13,6 +14,7 @@ export class KmsStack extends Construct {
   constructor(scope: Construct, id: string, props?: KmsStackProps) {
     super(scope, id);
 
+    const caller = new DataAwsCallerIdentity(this, 'current');
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // KMS Key
@@ -26,7 +28,7 @@ export class KmsStack extends Construct {
             Sid: 'Enable root account full access',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '*'}:root`,
+              AWS: `arn:aws:iam::\${${caller.accountId}}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
