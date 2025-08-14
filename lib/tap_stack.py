@@ -9,10 +9,13 @@ and automated backup strategies.
 
 import json
 import os
+import re
+import random
+import string
+import base64
 from typing import Dict, Any, Optional
 import pulumi
 import pulumi_aws as aws
-import base64
 from pulumi import ComponentResource, ResourceOptions, Output
 
 
@@ -385,166 +388,176 @@ class TapStack(ComponentResource):
         )
     
     def _create_iam_roles(self):
-      """Create IAM roles with least privilege principle."""
-      # EC2 Instance Role
-      self.ec2_role = aws.iam.Role(
-          f"{self.name_prefix}-ec2-role",
-          assume_role_policy=json.dumps({
-              "Version": "2012-10-17",
-              "Statement": [{
-                  "Action": "sts:AssumeRole",
-                  "Effect": "Allow",
-                  "Principal": {"Service": "ec2.amazonaws.com"},
-              }],
-          }),
-          tags={
-              "Name": f"{self.name_prefix}-ec2-role",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # EC2 Instance Profile
-      self.ec2_instance_profile = aws.iam.InstanceProfile(
-          f"{self.name_prefix}-ec2-profile",
-          role=self.ec2_role.name,
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # Fargate Task Execution Role
-      self.fargate_execution_role = aws.iam.Role(
-          f"{self.name_prefix}-fargate-execution-role",
-          assume_role_policy=json.dumps({
-              "Version": "2012-10-17",
-              "Statement": [{
-                  "Action": "sts:AssumeRole",
-                  "Effect": "Allow",
-                  "Principal": {"Service": "ecs-tasks.amazonaws.com"},
-              }],
-          }),
-          managed_policy_arns=[
-              "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-          ],
-          tags={
-              "Name": f"{self.name_prefix}-fargate-execution-role",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # Fargate Task Role
-      self.fargate_task_role = aws.iam.Role(
-          f"{self.name_prefix}-fargate-task-role",
-          assume_role_policy=json.dumps({
-              "Version": "2012-10-17",
-              "Statement": [{
-                  "Action": "sts:AssumeRole",
-                  "Effect": "Allow",
-                  "Principal": {"Service": "ecs-tasks.amazonaws.com"},
-              }],
-          }),
-          tags={
-              "Name": f"{self.name_prefix}-fargate-task-role",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # CodePipeline Service Role with no managed policies
-      self.codepipeline_role = aws.iam.Role(
-          f"{self.name_prefix}-codepipeline-role",
-          assume_role_policy=json.dumps({
-              "Version": "2012-10-17",
-              "Statement": [{
-                  "Action": "sts:AssumeRole",
-                  "Effect": "Allow",
-                  "Principal": {"Service": "codepipeline.amazonaws.com"},
-              }],
-          }),
-          tags={
-              "Name": f"{self.name_prefix}-codepipeline-role",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # Create custom policy for CodePipeline with all necessary permissions
-      self.codepipeline_policy = aws.iam.RolePolicy(
-          f"{self.name_prefix}-codepipeline-policy",
-          role=self.codepipeline_role.id,
-          policy=json.dumps({
-              "Version": "2012-10-17",
-              "Statement": [
-                  {
-                      "Effect": "Allow",
-                      "Action": [
-                          "s3:GetBucketVersioning",
-                          "s3:GetObject",
-                          "s3:GetObjectVersion",
-                          "s3:PutObject",
-                          "s3:ListBucket"
-                      ],
-                      "Resource": [
-                          "arn:aws:s3:::*",
-                          "arn:aws:s3:::*/*"
-                      ]
-                  },
-                  {
-                      "Effect": "Allow",
-                      "Action": [
-                          "codebuild:BatchGetBuilds",
-                          "codebuild:StartBuild"
-                      ],
-                      "Resource": "*"
-                  },
-                  {
-                      "Effect": "Allow",
-                      "Action": [
-                          "ecs:DescribeServices",
-                          "ecs:DescribeTaskDefinition",
-                          "ecs:DescribeTasks",
-                          "ecs:ListTasks",
-                          "ecs:RegisterTaskDefinition",
-                          "ecs:UpdateService"
-                      ],
-                      "Resource": "*"
-                  },
-                  {
-                      "Effect": "Allow",
-                      "Action": [
-                          "iam:PassRole"
-                      ],
-                      "Resource": "*",
-                      "Condition": {
-                          "StringEqualsIfExists": {
-                              "iam:PassedToService": [
-                                  "ecs-tasks.amazonaws.com"
-                              ]
-                          }
-                      }
-                  },
-                  {
-                      "Effect": "Allow",
-                      "Action": [
-                          "logs:CreateLogGroup",
-                          "logs:CreateLogStream",
-                          "logs:PutLogEvents"
-                      ],
-                      "Resource": "arn:aws:logs:*:*:*"
-                  }
-              ]
-          }),
-          opts=ResourceOptions(parent=self)
-      )
-
-
+        """Create IAM roles with least privilege principle."""
+        # EC2 Instance Role
+        self.ec2_role = aws.iam.Role(
+            f"{self.name_prefix}-ec2-role",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "ec2.amazonaws.com"},
+                }],
+            }),
+            tags={
+                "Name": f"{self.name_prefix}-ec2-role",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # EC2 Instance Profile
+        self.ec2_instance_profile = aws.iam.InstanceProfile(
+            f"{self.name_prefix}-ec2-profile",
+            role=self.ec2_role.name,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Fargate Task Execution Role
+        self.fargate_execution_role = aws.iam.Role(
+            f"{self.name_prefix}-fargate-execution-role",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                }],
+            }),
+            managed_policy_arns=[
+                "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+            ],
+            tags={
+                "Name": f"{self.name_prefix}-fargate-execution-role",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Fargate Task Role
+        self.fargate_task_role = aws.iam.Role(
+            f"{self.name_prefix}-fargate-task-role",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                }],
+            }),
+            tags={
+                "Name": f"{self.name_prefix}-fargate-task-role",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # CodePipeline Service Role with no managed policies
+        self.codepipeline_role = aws.iam.Role(
+            f"{self.name_prefix}-codepipeline-role",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "codepipeline.amazonaws.com"},
+                }],
+            }),
+            tags={
+                "Name": f"{self.name_prefix}-codepipeline-role",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create custom policy for CodePipeline with all necessary permissions
+        self.codepipeline_policy = aws.iam.RolePolicy(
+            f"{self.name_prefix}-codepipeline-policy",
+            role=self.codepipeline_role.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetBucketVersioning",
+                            "s3:GetObject",
+                            "s3:GetObjectVersion",
+                            "s3:PutObject",
+                            "s3:ListBucket"
+                        ],
+                        "Resource": [
+                            "arn:aws:s3:::*",
+                            "arn:aws:s3:::*/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "codebuild:BatchGetBuilds",
+                            "codebuild:StartBuild"
+                        ],
+                        "Resource": "*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ecs:DescribeServices",
+                            "ecs:DescribeTaskDefinition",
+                            "ecs:DescribeTasks",
+                            "ecs:ListTasks",
+                            "ecs:RegisterTaskDefinition",
+                            "ecs:UpdateService"
+                        ],
+                        "Resource": "*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "iam:PassRole"
+                        ],
+                        "Resource": "*",
+                        "Condition": {
+                            "StringEqualsIfExists": {
+                                "iam:PassedToService": [
+                                    "ecs-tasks.amazonaws.com"
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents"
+                        ],
+                        "Resource": "arn:aws:logs:*:*:*"
+                    }
+                ]
+            }),
+            opts=ResourceOptions(parent=self)
+        )
     
     def _create_s3_buckets(self):
         """Create S3 buckets with encryption and versioning."""
+        # Get stack name and make it lowercase and remove invalid characters
+        stack_name = pulumi.get_stack().lower()
+        # Remove any invalid characters and replace with hyphens
+        stack_name = re.sub(r'[^a-z0-9-]', '-', stack_name)
+        # Remove consecutive hyphens
+        stack_name = re.sub(r'-+', '-', stack_name)
+        # Remove leading/trailing hyphens
+        stack_name = stack_name.strip('-')
+        
+        # Add a random suffix to ensure uniqueness
+        random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        
         # Application Bucket
         self.app_bucket = aws.s3.Bucket(
             f"{self.name_prefix}-app-bucket",
-            bucket=f"{self.name_prefix}-app-bucket-{pulumi.get_stack()}",
+            bucket=f"{self.name_prefix}-app-{stack_name}-{random_suffix}".lower(),
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
@@ -576,7 +589,7 @@ class TapStack(ComponentResource):
         # Backup Bucket
         self.backup_bucket = aws.s3.Bucket(
             f"{self.name_prefix}-backup-bucket",
-            bucket=f"{self.name_prefix}-backup-bucket-{pulumi.get_stack()}",
+            bucket=f"{self.name_prefix}-backup-{stack_name}-{random_suffix}".lower(),
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
@@ -681,63 +694,63 @@ class TapStack(ComponentResource):
         )
     
     def _create_launch_template(self):
-      """Create launch template for Auto Scaling Group."""
-      # Get latest Amazon Linux 2 AMI
-      ami = aws.ec2.get_ami(
-          most_recent=True,
-          owners=["amazon"],
-          filters=[
-              {"name": "name", "values": ["amzn2-ami-hvm-*"]},
-              {"name": "architecture", "values": ["x86_64"]},
-          ]
-      )
-      
-      # User data script
-      user_data = """#!/bin/bash
-  yum update -y
-  yum install -y amazon-cloudwatch-agent
-  yum install -y docker
-  systemctl start docker
-  systemctl enable docker
-  usermod -a -G docker ec2-user
-  """
-      
-      self.launch_template = aws.ec2.LaunchTemplate(
-          f"{self.name_prefix}-launch-template",
-          name_prefix=f"{self.name_prefix}-lt-",
-          image_id=ami.id,
-          instance_type="c5.large",  # C5 series for compute-intensive tasks
-          vpc_security_group_ids=[self.ec2_sg.id],
-          iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-              name=self.ec2_instance_profile.name
-          ),
-          user_data=pulumi.Output.from_input(user_data).apply(
-              lambda ud: base64.b64encode(ud.encode('utf-8')).decode('utf-8')
-          ),
-          block_device_mappings=[
-              aws.ec2.LaunchTemplateBlockDeviceMappingArgs(
-                  device_name="/dev/xvda",
-                  ebs=aws.ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
-                      volume_size=20,
-                      volume_type="gp3",
-                      encrypted=True,
-                      kms_key_id=self.kms_key.arn,
-                      delete_on_termination=True,
-                  ),
-              )
-          ],
-          tag_specifications=[
-              aws.ec2.LaunchTemplateTagSpecificationArgs(
-                  resource_type="instance",
-                  tags={
-                      "Name": f"{self.name_prefix}-instance",
-                      "Environment": self.environment_suffix,
-                  },
-              )
-          ],
-          opts=ResourceOptions(parent=self)
-      )
-
+        """Create launch template for Auto Scaling Group."""
+        # Get latest Amazon Linux 2 AMI
+        ami = aws.ec2.get_ami(
+            most_recent=True,
+            owners=["amazon"],
+            filters=[
+                {"name": "name", "values": ["amzn2-ami-hvm-*"]},
+                {"name": "architecture", "values": ["x86_64"]},
+            ]
+        )
+        
+        # User data script
+        user_data = """#!/bin/bash
+yum update -y
+yum install -y amazon-cloudwatch-agent
+yum install -y docker
+systemctl start docker
+systemctl enable docker
+usermod -a -G docker ec2-user
+"""
+        
+        # Encode user data to base64
+        user_data_b64 = base64.b64encode(user_data.encode('utf-8')).decode('utf-8')
+        
+        self.launch_template = aws.ec2.LaunchTemplate(
+            f"{self.name_prefix}-launch-template",
+            name_prefix=f"{self.name_prefix}-lt-",
+            image_id=ami.id,
+            instance_type="c5.large",  # C5 series for compute-intensive tasks
+            vpc_security_group_ids=[self.ec2_sg.id],
+            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
+                name=self.ec2_instance_profile.name
+            ),
+            user_data=user_data_b64,
+            block_device_mappings=[
+                aws.ec2.LaunchTemplateBlockDeviceMappingArgs(
+                    device_name="/dev/xvda",
+                    ebs=aws.ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
+                        volume_size=20,
+                        volume_type="gp3",
+                        encrypted=True,
+                        kms_key_id=self.kms_key.arn,
+                        delete_on_termination=True,
+                    ),
+                )
+            ],
+            tag_specifications=[
+                aws.ec2.LaunchTemplateTagSpecificationArgs(
+                    resource_type="instance",
+                    tags={
+                        "Name": f"{self.name_prefix}-instance",
+                        "Environment": self.environment_suffix,
+                    },
+                )
+            ],
+            opts=ResourceOptions(parent=self)
+        )
     
     def _create_auto_scaling_group(self):
         """Create Auto Scaling Group for high availability."""
@@ -922,153 +935,151 @@ class TapStack(ComponentResource):
         )
     
     def _create_fargate_cluster(self):
-      """Create ECS Fargate cluster."""
-      self.ecs_cluster = aws.ecs.Cluster(
-          f"{self.name_prefix}-cluster",
-          name=f"{self.name_prefix}-cluster",
-          settings=[
-              aws.ecs.ClusterSettingArgs(
-                  name="containerInsights",
-                  value="enabled",
-              )
-          ],
-          tags={
-              "Name": f"{self.name_prefix}-cluster",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # CloudWatch Log Group
-      self.log_group = aws.cloudwatch.LogGroup(
-          f"{self.name_prefix}-log-group",
-          name=f"/ecs/{self.name_prefix}",
-          retention_in_days=14,
-          kms_key_id=self.kms_key.arn,
-          tags={
-              "Name": f"{self.name_prefix}-log-group",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # Get current AWS region
-      current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
-      
-      # Create container definition with proper Output handling
-      def create_container_definition(log_group_name):
-          return json.dumps([{
-              "name": f"{self.name_prefix}-container",
-              "image": "nginx:latest",
-              "portMappings": [{
-                  "containerPort": 80,
-                  "protocol": "tcp",
-              }],
-              "logConfiguration": {
-                  "logDriver": "awslogs",
-                  "options": {
-                      "awslogs-group": log_group_name,
-                      "awslogs-region": current_region,
-                      "awslogs-stream-prefix": "ecs",
-                  },
-              },
-              "environment": [
-                  {"name": "ENVIRONMENT", "value": self.environment_suffix}
-              ],
-          }])
-      
-      # Task Definition
-      self.task_definition = aws.ecs.TaskDefinition(
-          f"{self.name_prefix}-task",
-          family=f"{self.name_prefix}-task",
-          network_mode="awsvpc",
-          requires_compatibilities=["FARGATE"],
-          cpu="256",
-          memory="512",
-          execution_role_arn=self.fargate_execution_role.arn,
-          task_role_arn=self.fargate_task_role.arn,
-          container_definitions=self.log_group.name.apply(create_container_definition),
-          tags={
-              "Name": f"{self.name_prefix}-task",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-
+        """Create ECS Fargate cluster."""
+        self.ecs_cluster = aws.ecs.Cluster(
+            f"{self.name_prefix}-cluster",
+            name=f"{self.name_prefix}-cluster",
+            settings=[
+                aws.ecs.ClusterSettingArgs(
+                    name="containerInsights",
+                    value="enabled",
+                )
+            ],
+            tags={
+                "Name": f"{self.name_prefix}-cluster",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # CloudWatch Log Group
+        self.log_group = aws.cloudwatch.LogGroup(
+            f"{self.name_prefix}-log-group",
+            name=f"/ecs/{self.name_prefix}",
+            retention_in_days=14,
+            kms_key_id=self.kms_key.arn,
+            tags={
+                "Name": f"{self.name_prefix}-log-group",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Get current AWS region
+        current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
+        
+        # Create container definition with proper Output handling
+        def create_container_definition(log_group_name):
+            return json.dumps([{
+                "name": f"{self.name_prefix}-container",
+                "image": "nginx:latest",
+                "portMappings": [{
+                    "containerPort": 80,
+                    "protocol": "tcp",
+                }],
+                "logConfiguration": {
+                    "logDriver": "awslogs",
+                    "options": {
+                        "awslogs-group": log_group_name,
+                        "awslogs-region": current_region,
+                        "awslogs-stream-prefix": "ecs",
+                    },
+                },
+                "environment": [
+                    {"name": "ENVIRONMENT", "value": self.environment_suffix}
+                ],
+            }])
+        
+        # Task Definition
+        self.task_definition = aws.ecs.TaskDefinition(
+            f"{self.name_prefix}-task",
+            family=f"{self.name_prefix}-task",
+            network_mode="awsvpc",
+            requires_compatibilities=["FARGATE"],
+            cpu="256",
+            memory="512",
+            execution_role_arn=self.fargate_execution_role.arn,
+            task_role_arn=self.fargate_task_role.arn,
+            container_definitions=self.log_group.name.apply(create_container_definition),
+            tags={
+                "Name": f"{self.name_prefix}-task",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
     
     def _create_fargate_service(self):
-      """Create ECS Fargate service."""
-      # Target Group for Fargate
-      self.fargate_target_group = aws.lb.TargetGroup(
-          f"{self.name_prefix}-fargate-tg",
-          name=f"{self.name_prefix}-fargate-tg",
-          port=80,
-          protocol="HTTP",
-          vpc_id=self.vpc.id,
-          target_type="ip",
-          health_check=aws.lb.TargetGroupHealthCheckArgs(
-              enabled=True,
-              healthy_threshold=2,
-              interval=30,
-              matcher="200",
-              path="/",
-              port="traffic-port",
-              protocol="HTTP",
-              timeout=5,
-              unhealthy_threshold=2,
-          ),
-          tags={
-              "Name": f"{self.name_prefix}-fargate-tg",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # ALB Listener Rule for Fargate
-      self.fargate_listener_rule = aws.lb.ListenerRule(
-          f"{self.name_prefix}-fargate-rule",
-          listener_arn=self.alb_listener.arn,
-          priority=100,
-          actions=[aws.lb.ListenerRuleActionArgs(
-              type="forward",
-              target_group_arn=self.fargate_target_group.arn,
-          )],
-          conditions=[aws.lb.ListenerRuleConditionArgs(
-              path_pattern=aws.lb.ListenerRuleConditionPathPatternArgs(
-                  values=["/api/*"]
-              ),
-          )],
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # ECS Service
-      self.ecs_service = aws.ecs.Service(
-          f"{self.name_prefix}-service",
-          name=f"{self.name_prefix}-service",
-          cluster=self.ecs_cluster.id,
-          task_definition=self.task_definition.arn,
-          desired_count=2,
-          launch_type="FARGATE",
-          network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
-              subnets=[subnet.id for subnet in self.private_subnets],
-              security_groups=[self.fargate_sg.id],
-              assign_public_ip=False,
-          ),
-          load_balancers=[aws.ecs.ServiceLoadBalancerArgs(
-              target_group_arn=self.fargate_target_group.arn,
-              container_name=f"{self.name_prefix}-container",
-              container_port=80,
-          )],
-          tags={
-              "Name": f"{self.name_prefix}-service",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(
-              parent=self,
-              depends_on=[self.alb_listener]  # Move depends_on to ResourceOptions
-          )
-      )
-
+        """Create ECS Fargate service."""
+        # Target Group for Fargate
+        self.fargate_target_group = aws.lb.TargetGroup(
+            f"{self.name_prefix}-fargate-tg",
+            name=f"{self.name_prefix}-fargate-tg",
+            port=80,
+            protocol="HTTP",
+            vpc_id=self.vpc.id,
+            target_type="ip",
+            health_check=aws.lb.TargetGroupHealthCheckArgs(
+                enabled=True,
+                healthy_threshold=2,
+                interval=30,
+                matcher="200",
+                path="/",
+                port="traffic-port",
+                protocol="HTTP",
+                timeout=5,
+                unhealthy_threshold=2,
+            ),
+            tags={
+                "Name": f"{self.name_prefix}-fargate-tg",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # ALB Listener Rule for Fargate
+        self.fargate_listener_rule = aws.lb.ListenerRule(
+            f"{self.name_prefix}-fargate-rule",
+            listener_arn=self.alb_listener.arn,
+            priority=100,
+            actions=[aws.lb.ListenerRuleActionArgs(
+                type="forward",
+                target_group_arn=self.fargate_target_group.arn,
+            )],
+            conditions=[aws.lb.ListenerRuleConditionArgs(
+                path_pattern=aws.lb.ListenerRuleConditionPathPatternArgs(
+                    values=["/api/*"]
+                ),
+            )],
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # ECS Service
+        self.ecs_service = aws.ecs.Service(
+            f"{self.name_prefix}-service",
+            name=f"{self.name_prefix}-service",
+            cluster=self.ecs_cluster.id,
+            task_definition=self.task_definition.arn,
+            desired_count=2,
+            launch_type="FARGATE",
+            network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
+                subnets=[subnet.id for subnet in self.private_subnets],
+                security_groups=[self.fargate_sg.id],
+                assign_public_ip=False,
+            ),
+            load_balancers=[aws.ecs.ServiceLoadBalancerArgs(
+                target_group_arn=self.fargate_target_group.arn,
+                container_name=f"{self.name_prefix}-container",
+                container_port=80,
+            )],
+            tags={
+                "Name": f"{self.name_prefix}-service",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[self.alb_listener]
+            )
+        )
     
     def _create_cloudwatch_alarms(self):
         """Create CloudWatch alarms for monitoring."""
@@ -1156,10 +1167,22 @@ class TapStack(ComponentResource):
     
     def _create_codepipeline(self):
         """Create CI/CD pipeline using AWS CodePipeline."""
+        # Get stack name and make it lowercase and remove invalid characters
+        stack_name = pulumi.get_stack().lower()
+        # Remove any invalid characters and replace with hyphens
+        stack_name = re.sub(r'[^a-z0-9-]', '-', stack_name)
+        # Remove consecutive hyphens
+        stack_name = re.sub(r'-+', '-', stack_name)
+        # Remove leading/trailing hyphens
+        stack_name = stack_name.strip('-')
+        
+        # Add a random suffix to ensure uniqueness
+        random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        
         # CodePipeline Artifact Store (S3 Bucket)
         self.pipeline_bucket = aws.s3.Bucket(
             f"{self.name_prefix}-pipeline-bucket",
-            bucket=f"{self.name_prefix}-pipeline-{pulumi.get_stack()}",
+            bucket=f"{self.name_prefix}-pipeline-{stack_name}-{random_suffix}".lower(),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                     apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
