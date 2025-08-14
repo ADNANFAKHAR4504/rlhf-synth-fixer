@@ -119,9 +119,10 @@
         },
         "SSLCertificateArn": {
             "Type": "String",
-            "Description": "ARN of SSL certificate in AWS Certificate Manager for HTTPS",
-            "AllowedPattern": "^arn:aws:acm:.*",
-            "ConstraintDescription": "Must be a valid ACM certificate ARN"
+            "Default": "",
+            "Description": "Optional: ARN of SSL certificate in AWS Certificate Manager for HTTPS (leave empty for HTTP-only)",
+            "AllowedPattern": "^$|^arn:aws:acm:.*",
+            "ConstraintDescription": "Must be empty or a valid ACM certificate ARN"
         },
         "CPUAlarmThreshold": {
             "Type": "Number",
@@ -155,6 +156,18 @@
                     "Fn::Equals": [
                         {
                             "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasSSLCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "SSLCertificateArn"
                         },
                         ""
                     ]
@@ -1283,6 +1296,7 @@
         },
         "HTTPSListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasSSLCertificate",
             "Properties": {
                 "DefaultActions": [
                     {
@@ -1312,12 +1326,23 @@
             "Properties": {
                 "DefaultActions": [
                     {
-                        "Type": "redirect",
-                        "RedirectConfig": {
-                            "Protocol": "HTTPS",
-                            "Port": "443",
-                            "StatusCode": "HTTP_301"
-                        }
+                        "Fn::If": [
+                            "HasSSLCertificate",
+                            {
+                                "Type": "redirect",
+                                "RedirectConfig": {
+                                    "Protocol": "HTTPS",
+                                    "Port": "443",
+                                    "StatusCode": "HTTP_301"
+                                }
+                            },
+                            {
+                                "Type": "forward",
+                                "TargetGroupArn": {
+                                    "Ref": "TargetGroup"
+                                }
+                            }
+                        ]
                     }
                 ],
                 "LoadBalancerArn": {
@@ -1540,9 +1565,17 @@
             }
         },
         "LoadBalancerURL": {
-            "Description": "Application Load Balancer HTTPS URL",
+            "Description": "Application Load Balancer URL (HTTPS if certificate provided, HTTP otherwise)",
             "Value": {
-                "Fn::Sub": "https://${ApplicationLoadBalancer.DNSName}"
+                "Fn::If": [
+                    "HasSSLCertificate",
+                    {
+                        "Fn::Sub": "https://${ApplicationLoadBalancer.DNSName}"
+                    },
+                    {
+                        "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
+                    }
+                ]
             },
             "Export": {
                 "Name": {

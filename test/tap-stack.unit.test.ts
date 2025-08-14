@@ -55,6 +55,14 @@ describe('TapStack CloudFormation Template', () => {
     test('should have IsDetailedMonitoringEnabled condition', () => {
       expect(template.Conditions.IsDetailedMonitoringEnabled).toBeDefined();
     });
+
+    test('should have HasSSLCertificate condition for optional SSL usage', () => {
+      expect(template.Conditions.HasSSLCertificate).toBeDefined();
+      expect(template.Conditions.HasSSLCertificate['Fn::Not']).toBeDefined();
+      expect(
+        template.Conditions.HasSSLCertificate['Fn::Not'][0]['Fn::Equals']
+      ).toEqual([{ Ref: 'SSLCertificateArn' }, '']);
+    });
   });
 
   describe('Parameters', () => {
@@ -117,12 +125,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(keyPairParam.Description).toContain('Optional');
     });
 
-    test('SSLCertificateArn parameter should require valid ACM ARN', () => {
+    test('SSLCertificateArn parameter should be optional with valid pattern', () => {
       const sslParam = template.Parameters.SSLCertificateArn;
       expect(sslParam.Type).toBe('String');
-      expect(sslParam.AllowedPattern).toBe('^arn:aws:acm:.*');
+      expect(sslParam.Default).toBe('');
+      expect(sslParam.AllowedPattern).toBe('^$|^arn:aws:acm:.*');
+      expect(sslParam.Description).toContain('Optional');
       expect(sslParam.ConstraintDescription).toContain(
-        'valid ACM certificate ARN'
+        'empty or a valid ACM certificate ARN'
       );
     });
 
@@ -378,9 +388,12 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('LoadBalancerURL should use HTTPS', () => {
-      const lbUrl = template.Outputs.LoadBalancerURL;
-      expect(lbUrl.Value['Fn::Sub']).toContain('https://');
+    test('LoadBalancerURL should use conditional protocol', () => {
+      const urlOutput = template.Outputs.LoadBalancerURL;
+      expect(urlOutput.Value['Fn::If']).toBeDefined();
+      expect(urlOutput.Value['Fn::If'][0]).toBe('HasSSLCertificate');
+      expect(urlOutput.Value['Fn::If'][1]['Fn::Sub']).toContain('https://');
+      expect(urlOutput.Value['Fn::If'][2]['Fn::Sub']).toContain('http://');
     });
 
     test('SecurityImplemented output should list key features', () => {
@@ -466,8 +479,11 @@ function createMockTemplate(): any {
       },
       SSLCertificateArn: {
         Type: 'String',
-        AllowedPattern: '^arn:aws:acm:.*',
-        ConstraintDescription: 'Must be a valid ACM certificate ARN',
+        Default: '',
+        Description:
+          'Optional: ARN of SSL certificate in AWS Certificate Manager for HTTPS (leave empty for HTTP-only)',
+        AllowedPattern: '^$|^arn:aws:acm:.*',
+        ConstraintDescription: 'Must be empty or a valid ACM certificate ARN',
       },
       CPUAlarmThreshold: {
         Type: 'Number',
@@ -487,6 +503,9 @@ function createMockTemplate(): any {
       },
       HasKeyPair: {
         'Fn::Not': [{ 'Fn::Equals': [{ Ref: 'KeyPairName' }, ''] }],
+      },
+      HasSSLCertificate: {
+        'Fn::Not': [{ 'Fn::Equals': [{ Ref: 'SSLCertificateArn' }, ''] }],
       },
     },
     Resources: {
@@ -627,8 +646,15 @@ function createMockTemplate(): any {
         Export: { Name: { 'Fn::Sub': '${AWS::StackName}-ALB-DNS' } },
       },
       LoadBalancerURL: {
-        Description: 'Application Load Balancer HTTPS URL',
-        Value: { 'Fn::Sub': 'https://${ApplicationLoadBalancer.DNSName}' },
+        Description:
+          'Application Load Balancer URL (HTTPS if certificate provided, HTTP otherwise)',
+        Value: {
+          'Fn::If': [
+            'HasSSLCertificate',
+            { 'Fn::Sub': 'https://${ApplicationLoadBalancer.DNSName}' },
+            { 'Fn::Sub': 'http://${ApplicationLoadBalancer.DNSName}' },
+          ],
+        },
         Export: { Name: { 'Fn::Sub': '${AWS::StackName}-ALB-URL' } },
       },
       StaticContentBucketName: {
