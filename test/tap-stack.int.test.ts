@@ -33,25 +33,9 @@ import * as path from 'path';
 // Load stack outputs
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../pulumi-outputs/stack-outputs.json');
-    if (fs.existsSync(outputsPath)) {
-      const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-      return JSON.parse(outputsContent);
-    }
-    
-    // Fallback to environment variables if outputs file doesn't exist
-    return {
-      vpcId: process.env.VPC_ID,
-      dataBucketName: process.env.DATA_BUCKET_NAME,
-      logsBucketName: process.env.LOGS_BUCKET_NAME,
-      databaseEndpoint: process.env.DATABASE_ENDPOINT,
-      webInstanceId: process.env.WEB_INSTANCE_ID,
-      webInstancePrivateIp: process.env.WEB_INSTANCE_PRIVATE_IP,
-      environmentSuffix: process.env.ENVIRONMENT_SUFFIX || 'dev',
-      mainKmsKeyAlias: process.env.MAIN_KMS_KEY_ALIAS,
-      rdsKmsKeyAlias: process.env.RDS_KMS_KEY_ALIAS,
-      ec2InstanceProfileName: process.env.EC2_INSTANCE_PROFILE_NAME,
-    };
+    const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+    const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+    return JSON.parse(outputsContent);
   } catch (error) {
     throw new Error(`Failed to load stack outputs: ${error}`);
   }
@@ -98,15 +82,27 @@ describe('TAP Infrastructure Integration Tests', () => {
   let accountId: string;
 
   beforeAll(async () => {
-    // Load stack outputs and initialize clients
+    // Load stack outputs
     stackOutputs = loadStackOutputs();
+
+    // Get the first stack (assuming single stack deployment)
+    const stackName = Object.keys(stackOutputs)[0];
+    if (!stackName) {
+      throw new Error('No stack outputs found');
+    }
+
+    // Extract the actual outputs from the stack
+    stackOutputs = stackOutputs[stackName];
+
+    console.log('Stack outputs loaded:', Object.keys(stackOutputs));
+
+    // Initialize AWS clients
     clients = initializeClients();
 
     // Get AWS account ID
     const identity = await clients.sts.send(new GetCallerIdentityCommand({}));
     accountId = identity.Account!;
 
-    console.log('Stack outputs loaded:', Object.keys(stackOutputs));
     console.log('AWS Account ID:', accountId);
   }, 60000);
 
