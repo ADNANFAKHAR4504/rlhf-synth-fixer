@@ -1,7 +1,3 @@
-The user wants me to generate a new professional prompt based on their provided text, with the key change being the replacement of Pulumi with AWS CDK and Python. The prompt should be in Markdown, detail all the requirements, and specify the expected output.
-
-Here is the professional prompt covering all the user's requirements:
-
 # Task: Develop a Scalable and Cost-Effective Serverless Platform using AWS CDK and Python
 
 As a Cloud Infrastructure Developer, your task is to design and implement a robust, scalable, and cost-optimized serverless infrastructure on AWS. This platform will serve as the foundation for deploying Python-based serverless functions, ensuring high performance, centralized logging, and integrated monitoring.
