@@ -1,34 +1,34 @@
 import {
-  S3Client,
-  ListBucketsCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand,
-} from '@aws-sdk/client-s3';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeFlowLogsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeTagsCommand,
-} from '@aws-sdk/client-ec2';
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+  ListDashboardsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  CloudWatchClient,
-  ListDashboardsCommand,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
+  DescribeFlowLogsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeTagsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import {
-  SNSClient,
-  ListTopicsCommand,
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  ListBucketsCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
   GetTopicAttributesCommand,
+  ListTopicsCommand,
+  SNSClient,
 } from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -201,14 +201,14 @@ describe('Security Infrastructure Integration Tests', () => {
       
       expect(response.DashboardEntries).toBeDefined();
       const securityDashboard = response.DashboardEntries!.find(d => 
-        d.DashboardName?.includes('synthtrainr86')
+        d.DashboardName?.includes('SecurityMetrics-synthtrainr86')
       );
       expect(securityDashboard).toBeDefined();
     }, testTimeout);
 
     test('CloudWatch alarms are configured', async () => {
       const response = await cloudWatchClient.send(new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'TapStacksynthtrainr86'
+        AlarmNamePrefix: 'TapStacksynthtrainr86Monitoring'
       }));
       
       expect(response.MetricAlarms).toBeDefined();
