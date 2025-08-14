@@ -57,6 +57,7 @@ class TapStack(ComponentResource):
         self.account_id = caller_identity.account_id
         
         # Initialize components
+        self._create_dlq()  # Create DLQ first so we can reference it in IAM policy
         self._create_iam_roles()
         self._create_s3_buckets()
         self._create_dynamodb_tables()
@@ -75,6 +76,15 @@ class TapStack(ComponentResource):
             "migration_status": "initialized",
             "environment": args.environment_suffix,
         })
+    
+    def _create_dlq(self):
+        """Create Dead Letter Queue for Lambda functions."""
+        self.dlq = aws.sqs.Queue(
+            f"tap-dlq-{self.args.environment_suffix}",
+            name=f"tap-dlq-{self.args.environment_suffix}",
+            message_retention_seconds=1209600,  # 14 days
+            opts=ResourceOptions(parent=self)
+        )
     
     def _create_iam_roles(self):
         """Create IAM roles following least privilege principle."""
@@ -108,13 +118,14 @@ class TapStack(ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # Lambda policy for DynamoDB and S3 access
+        # FIXED: Lambda policy with SQS permissions for DLQ
         lambda_policy = aws.iam.Policy(
             f"lambda-policy-{self.args.environment_suffix}",
-            description="Least privilege policy for Lambda functions",
+            description="Least privilege policy for Lambda functions with SQS permissions",
             policy=pulumi.Output.all(
                 account_id=self.account_id,
-                env_suffix=self.args.environment_suffix
+                env_suffix=self.args.environment_suffix,
+                dlq_arn=self.dlq.arn
             ).apply(lambda args: json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -130,7 +141,8 @@ class TapStack(ComponentResource):
                         ],
                         "Resource": [
                             f"arn:aws:dynamodb:*:{args['account_id']}:table/tap-table-{args['env_suffix']}",
-                            f"arn:aws:dynamodb:*:{args['account_id']}:table/tap-table-{args['env_suffix']}/index/*"
+                            f"arn:aws:dynamodb:*:{args['account_id']}:table/tap-table-{args['env_suffix']}/index/*",
+                            f"arn:aws:dynamodb:*:{args['account_id']}:table/tap-migration-state-{args['env_suffix']}"
                         ]
                     },
                     {
@@ -161,10 +173,20 @@ class TapStack(ComponentResource):
                             "logs:PutLogEvents"
                         ],
                         "Resource": f"arn:aws:logs:*:{args['account_id']}:log-group:/aws/lambda/tap-*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:SendMessage",
+                            "sqs:ReceiveMessage",
+                            "sqs:DeleteMessage",
+                            "sqs:GetQueueAttributes"
+                        ],
+                        "Resource": args['dlq_arn']
                     }
                 ]
             })),
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.dlq])
         )
         
         aws.iam.RolePolicyAttachment(
@@ -556,7 +578,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             memory_size=256,
             tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
             dead_letter_config=aws.lambda_.FunctionDeadLetterConfigArgs(
-                target_arn=self._create_dlq().arn
+                target_arn=self.dlq.arn
             ),
             tags={
                 "Environment": self.args.environment_suffix,
@@ -571,15 +593,6 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             f"lambda-logs-{self.args.environment_suffix}",
             name=pulumi.Output.concat("/aws/lambda/", self.lambda_function.name),
             retention_in_days=14,
-            opts=ResourceOptions(parent=self)
-        )
-    
-    def _create_dlq(self):
-        """Create Dead Letter Queue for Lambda functions."""
-        return aws.sqs.Queue(
-            f"tap-dlq-{self.args.environment_suffix}",
-            name=f"tap-dlq-{self.args.environment_suffix}",
-            message_retention_seconds=1209600,  # 14 days
             opts=ResourceOptions(parent=self)
         )
     
@@ -628,20 +641,20 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # Create methods and integrations
-        self._create_api_methods(health_resource, proxy_resource)
+        # Create methods and integrations - FIXED: Store integrations for dependency tracking
+        self.integrations = self._create_api_methods(health_resource, proxy_resource)
         
-        # Create deployment
+        # FIXED: Create deployment with explicit dependency on all integrations
         deployment = aws.apigateway.Deployment(
             f"api-deployment-{self.args.environment_suffix}",
             rest_api=self.api.id,
             opts=ResourceOptions(
                 parent=self,
-                depends_on=[health_resource, proxy_resource]
+                depends_on=self.integrations  # Ensure all integrations are created first
             )
         )
         
-        # FIXED: Create stage and store as instance variable
+        # Create stage and store as instance variable
         self.stage = aws.apigateway.Stage(
             f"api-stage-{self.args.environment_suffix}",
             deployment=deployment.id,
@@ -675,12 +688,12 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # FIXED: Create usage plan with proper dependency on Stage
+        # Create usage plan with proper dependency on Stage
         self.usage_plan = aws.apigateway.UsagePlan(
             f"tap-usage-plan-{self.args.environment_suffix}",
             api_stages=[aws.apigateway.UsagePlanApiStageArgs(
                 api_id=self.api.id,
-                stage=self.stage.stage_name,  # Reference the Stage resource's stage_name
+                stage=self.stage.stage_name,
             )],
             quota_settings=aws.apigateway.UsagePlanQuotaSettingsArgs(
                 limit=10000,
@@ -690,11 +703,13 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
                 burst_limit=500,
                 rate_limit=200
             ),
-            opts=ResourceOptions(parent=self, depends_on=[self.stage])  # CRITICAL: Add explicit dependency
+            opts=ResourceOptions(parent=self, depends_on=[self.stage])
         )
     
     def _create_api_methods(self, health_resource, proxy_resource):
         """Create API Gateway methods and integrations."""
+        
+        integrations = []  # Track all integrations for deployment dependency
         
         # Lambda permission for API Gateway
         lambda_permission = aws.lambda_.Permission(
@@ -726,36 +741,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             uri=self.lambda_function.invoke_arn,
             opts=ResourceOptions(parent=self, depends_on=[lambda_permission])
         )
-        
-        # Health method response - FIXED: Using response_parameters instead of response_headers
-        health_method_response = aws.apigateway.MethodResponse(
-            f"health-method-response-{self.args.environment_suffix}",
-            rest_api=self.api.id,
-            resource_id=health_resource.id,
-            http_method=health_method.http_method,
-            status_code="200",
-            response_parameters={
-                "method.response.header.Access-Control-Allow-Origin": True,
-                "method.response.header.Access-Control-Allow-Methods": True,
-                "method.response.header.Access-Control-Allow-Headers": True
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Health integration response
-        health_integration_response = aws.apigateway.IntegrationResponse(
-            f"health-integration-response-{self.args.environment_suffix}",
-            rest_api=self.api.id,
-            resource_id=health_resource.id,
-            http_method=health_method.http_method,
-            status_code=health_method_response.status_code,
-            response_parameters={
-                "method.response.header.Access-Control-Allow-Origin": "'*'",
-                "method.response.header.Access-Control-Allow-Methods": "'GET,OPTIONS'",
-                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-            },
-            opts=ResourceOptions(parent=self, depends_on=[health_integration])
-        )
+        integrations.append(health_integration)
         
         # Proxy endpoint - ANY method
         proxy_method = aws.apigateway.Method(
@@ -777,36 +763,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             uri=self.lambda_function.invoke_arn,
             opts=ResourceOptions(parent=self, depends_on=[lambda_permission])
         )
-        
-        # Proxy method response - FIXED: Using response_parameters instead of response_headers
-        proxy_method_response = aws.apigateway.MethodResponse(
-            f"proxy-method-response-{self.args.environment_suffix}",
-            rest_api=self.api.id,
-            resource_id=proxy_resource.id,
-            http_method=proxy_method.http_method,
-            status_code="200",
-            response_parameters={
-                "method.response.header.Access-Control-Allow-Origin": True,
-                "method.response.header.Access-Control-Allow-Methods": True,
-                "method.response.header.Access-Control-Allow-Headers": True
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Proxy integration response
-        proxy_integration_response = aws.apigateway.IntegrationResponse(
-            f"proxy-integration-response-{self.args.environment_suffix}",
-            rest_api=self.api.id,
-            resource_id=proxy_resource.id,
-            http_method=proxy_method.http_method,
-            status_code=proxy_method_response.status_code,
-            response_parameters={
-                "method.response.header.Access-Control-Allow-Origin": "'*'",
-                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
-                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-            },
-            opts=ResourceOptions(parent=self, depends_on=[proxy_integration])
-        )
+        integrations.append(proxy_integration)
         
         # OPTIONS method for CORS (health endpoint)
         health_options_method = aws.apigateway.Method(
@@ -829,8 +786,9 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             },
             opts=ResourceOptions(parent=self)
         )
+        integrations.append(health_options_integration)
         
-        # OPTIONS method response for health endpoint - FIXED: Using response_parameters
+        # OPTIONS method response for health endpoint
         health_options_method_response = aws.apigateway.MethodResponse(
             f"health-options-method-response-{self.args.environment_suffix}",
             rest_api=self.api.id,
@@ -880,8 +838,9 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             },
             opts=ResourceOptions(parent=self)
         )
+        integrations.append(proxy_options_integration)
         
-        # OPTIONS method response for proxy endpoint - FIXED: Using response_parameters
+        # OPTIONS method response for proxy endpoint
         proxy_options_method_response = aws.apigateway.MethodResponse(
             f"proxy-options-method-response-{self.args.environment_suffix}",
             rest_api=self.api.id,
@@ -909,6 +868,8 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             },
             opts=ResourceOptions(parent=self, depends_on=[proxy_options_integration])
         )
+        
+        return integrations  # Return list of integrations for deployment dependency
     
     def _create_monitoring(self):
         """Create comprehensive monitoring and alerting."""
@@ -1009,7 +970,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
     def _create_alarms(self):
         """Create CloudWatch alarms for monitoring."""
         
-        # Lambda error alarm - FIXED: Using 'name' instead of 'alarm_name'
+        # Lambda error alarm
         aws.cloudwatch.MetricAlarm(
             f"lambda-errors-{self.args.environment_suffix}",
             name=f"TAP-Lambda-Errors-{self.args.environment_suffix}",
@@ -1027,7 +988,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # Lambda duration alarm - FIXED: Using 'name' instead of 'alarm_name'
+        # Lambda duration alarm
         aws.cloudwatch.MetricAlarm(
             f"lambda-duration-{self.args.environment_suffix}",
             name=f"TAP-Lambda-Duration-{self.args.environment_suffix}",
@@ -1044,7 +1005,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # API Gateway 5XX errors - FIXED: Using 'name' instead of 'alarm_name'
+        # API Gateway 5XX errors
         aws.cloudwatch.MetricAlarm(
             f"api-gateway-5xx-{self.args.environment_suffix}",
             name=f"TAP-API-5XX-Errors-{self.args.environment_suffix}",
@@ -1061,7 +1022,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # API Gateway latency alarm - FIXED: Using 'name' instead of 'alarm_name'
+        # API Gateway latency alarm
         aws.cloudwatch.MetricAlarm(
             f"api-gateway-latency-{self.args.environment_suffix}",
             name=f"TAP-API-Latency-{self.args.environment_suffix}",
@@ -1078,7 +1039,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # DynamoDB throttles - FIXED: Using 'name' instead of 'alarm_name'
+        # DynamoDB throttles
         aws.cloudwatch.MetricAlarm(
             f"dynamodb-throttles-{self.args.environment_suffix}",
             name=f"TAP-DynamoDB-Throttles-{self.args.environment_suffix}",
@@ -1095,7 +1056,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # DynamoDB system errors - FIXED: Using 'name' instead of 'alarm_name'
+        # DynamoDB system errors
         aws.cloudwatch.MetricAlarm(
             f"dynamodb-errors-{self.args.environment_suffix}",
             name=f"TAP-DynamoDB-Errors-{self.args.environment_suffix}",
@@ -1284,7 +1245,7 @@ def rollback_migration(event: Dict[str, Any], context) -> Dict[str, Any]:
     table.update_item(
         Key={'migration_id': migration_id},
         UpdateExpression='SET #status = :status, rollback_at = :timestamp',
-        ExpressionAttributeNames={'#status': 'status'},
+        ExpressionAttributeNames={'#status': 'status'},  
         ExpressionAttributeValues={
             ':status': 'rolled_back',
             ':timestamp': datetime.utcnow().isoformat()
