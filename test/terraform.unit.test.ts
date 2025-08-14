@@ -165,8 +165,11 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('Security Hub is enabled', () => {
       const monitoringContent = fs.readFileSync(path.join(libPath, 'monitoring.tf'), 'utf8');
-      expect(monitoringContent).toContain('aws_securityhub_account');
+      // Security Hub account is already enabled in AWS, so we only manage the standards subscription
       expect(monitoringContent).toContain('aws_securityhub_standards_subscription');
+      expect(monitoringContent).toContain('aws-foundational-security-best-practices');
+      // Ensure we don't have the conflicting account resource
+      expect(monitoringContent).not.toContain('aws_securityhub_account');
     });
   });
 

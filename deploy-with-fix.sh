@@ -47,7 +47,8 @@ fi
 echo ""
 echo "🚀 Deploying infrastructure..."
 echo "   - Security Hub fix applied ✅"
-echo "   - Using data source instead of resource"
+echo "   - Removed conflicting Security Hub account resource"
+echo "   - Keeping only standards subscription"
 echo ""
 if terraform apply -auto-approve tfplan; then
     echo ""
