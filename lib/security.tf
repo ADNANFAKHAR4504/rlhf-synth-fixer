@@ -219,7 +219,7 @@ resource "aws_network_acl" "private" {
 
 # IAM Role for EC2 instances with least privilege
 resource "aws_iam_role" "ec2_role" {
-  name_prefix = "${var.project_name}-ec2-role-${local.name_suffix}"
+  name_prefix = "ec2-role-${local.name_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -242,7 +242,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM Policy for EC2 role with minimal permissions
 resource "aws_iam_role_policy" "ec2_policy" {
-  name_prefix = "${var.project_name}-ec2-policy-${local.name_suffix}"
+  name_prefix = "ec2-policy-${local.name_suffix}"
   role        = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -272,7 +272,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 
 # IAM Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name_prefix = "${var.project_name}-ec2-profile-${local.name_suffix}"
+  name_prefix = "ec2-profile-${local.name_suffix}"
   role        = aws_iam_role.ec2_role.name
 
   tags = merge(local.common_tags, {
@@ -283,7 +283,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "flow_log_role" {
-  name_prefix = "${var.project_name}-flow-log-role-${local.name_suffix}"
+  name_prefix = "flow-log-role-${local.name_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -306,7 +306,7 @@ resource "aws_iam_role" "flow_log_role" {
 
 # IAM Policy for VPC Flow Logs
 resource "aws_iam_role_policy" "flow_log_policy" {
-  name_prefix = "${var.project_name}-flow-log-policy-${local.name_suffix}"
+  name_prefix = "flow-log-policy-${local.name_suffix}"
   role        = aws_iam_role.flow_log_role.id
 
   policy = jsonencode({
@@ -329,7 +329,7 @@ resource "aws_iam_role_policy" "flow_log_policy" {
 
 # IAM Policy Attachment for EC2 role (for test coverage)
 resource "aws_iam_policy_attachment" "ec2_policy_attachment" {
-  name       = "${var.project_name}-ec2-policy-attachment-${local.name_suffix}"
+  name       = "ec2-policy-attach-${local.name_suffix}"
   roles      = [aws_iam_role.ec2_role.name]
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsReadOnlyAccess"
 }
