@@ -71,6 +71,7 @@ describe('TapStack CloudFormation Template', () => {
       'EnvironmentSuffix',
       'AllowedCIDR',
       'InstanceType',
+      'AmiId',
       'KeyPairName',
       'MinSize',
       'MaxSize',
@@ -116,6 +117,17 @@ describe('TapStack CloudFormation Template', () => {
       expect(instanceParam.AllowedValues).toContain('t3.micro');
       expect(instanceParam.AllowedValues).toContain('t3.medium');
       expect(instanceParam.AllowedValues).toContain('m5.large');
+    });
+
+    test('AmiId parameter should use SSM parameter for latest AMI', () => {
+      const amiParam = template.Parameters.AmiId;
+      expect(amiParam.Type).toBe(
+        'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+      );
+      expect(amiParam.Default).toBe(
+        '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+      );
+      expect(amiParam.Description).toContain('AMI ID for EC2 instances');
     });
 
     test('KeyPairName parameter should be optional', () => {
@@ -453,6 +465,12 @@ function createMockTemplate(): any {
           'm5.large',
           'm5.xlarge',
         ],
+      },
+      AmiId: {
+        Description: 'AMI ID for EC2 instances',
+        Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>',
+        Default:
+          '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2',
       },
       KeyPairName: {
         Type: 'String',

@@ -19,6 +19,7 @@ Metadata:
           default: 'Application Configuration'
         Parameters:
           - InstanceType
+          - AmiId
           - KeyPairName
           - MinSize
           - MaxSize
@@ -123,17 +124,16 @@ Parameters:
     Description: 'Enable detailed CloudWatch monitoring for EC2 instances'
     AllowedValues: ['true', 'false']
 
+  AmiId:
+    Description: 'AMI ID for EC2 instances'
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
 # Conditions for conditional resource creation
 Conditions:
   IsDetailedMonitoringEnabled: !Equals [!Ref EnableDetailedMonitoring, 'true']
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
   HasSSLCertificate: !Not [!Equals [!Ref SSLCertificateArn, '']]
-
-# Mappings for region-specific AMI IDs
-Mappings:
-  RegionAMIMap:
-    us-west-2:
-      AmazonLinux2: 'ami-0c02fb55956c7d316' # Amazon Linux 2 AMI (HVM), SSD Volume Type
 
 Resources:
   # VPC and Network Infrastructure
@@ -771,7 +771,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Launch-Template'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionAMIMap, !Ref 'AWS::Region', AmazonLinux2]
+        ImageId: !Ref AmiId
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:

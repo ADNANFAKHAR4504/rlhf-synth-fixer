@@ -20,6 +20,7 @@
                     },
                     "Parameters": [
                         "InstanceType",
+                        "AmiId",
                         "KeyPairName",
                         "MinSize",
                         "MaxSize",
@@ -144,6 +145,11 @@
                 "true",
                 "false"
             ]
+        },
+        "AmiId": {
+            "Description": "AMI ID for EC2 instances",
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
         }
     },
     "Conditions": {
@@ -178,13 +184,6 @@
                     ]
                 }
             ]
-        }
-    },
-    "Mappings": {
-        "RegionAMIMap": {
-            "us-west-2": {
-                "AmazonLinux2": "ami-0c02fb55956c7d316"
-            }
         }
     },
     "Resources": {
@@ -1379,13 +1378,7 @@
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
-                        "Fn::FindInMap": [
-                            "RegionAMIMap",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "AmazonLinux2"
-                        ]
+                        "Ref": "AmiId"
                     },
                     "InstanceType": {
                         "Ref": "InstanceType"
