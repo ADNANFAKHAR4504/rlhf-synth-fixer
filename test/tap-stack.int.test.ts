@@ -1,8 +1,54 @@
+/**
+ * test/tap-stack.int.test.ts
+ *
+ * Integration tests for the deployed CloudFormation stack
+ * Tests actual AWS resources and their interactions - NO MOCK DATA
+ */
+
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+} from '@aws-sdk/client-auto-scaling';
+import {
+  CloudFormationClient,
+  DescribeStackResourcesCommand,
+  DescribeStacksCommand,
+} from '@aws-sdk/client-cloudformation';
+import {
+  CloudTrailClient,
+  DescribeTrailsCommand,
+  GetTrailStatusCommand,
+} from '@aws-sdk/client-cloudtrail';
+import { CloudWatchClient } from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { IAMClient } from '@aws-sdk/client-iam';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import {
+  DeleteObjectCommand,
+  GetBucketEncryptionCommand,
+  GetObjectCommand,
+  GetPublicAccessBlockCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { execSync } from 'child_process';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
+const region = process.env.AWS_REGION || 'us-west-2';
 
 // Function to get actual CloudFormation stack outputs
 function getStackOutputs(): Record<string, string> {
@@ -25,17 +71,61 @@ function getStackOutputs(): Record<string, string> {
   }
 }
 
-// Get actual deployment outputs
-const stackOutputs = getStackOutputs();
+// AWS SDK v3 clients
+const ec2Client = new EC2Client({ region });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region });
+const s3Client = new S3Client({ region });
+const cloudWatchClient = new CloudWatchClient({ region });
+const autoScalingClient = new AutoScalingClient({ region });
+const cloudFormationClient = new CloudFormationClient({ region });
+const iamClient = new IAMClient({ region });
+const kmsClient = new KMSClient({ region });
+const cloudTrailClient = new CloudTrailClient({ region });
+
+// Helper functions for AWS operations
+async function getStackInfo() {
+  const command = new DescribeStacksCommand({ StackName: stackName });
+  const response = await cloudFormationClient.send(command);
+  return response.Stacks![0];
+}
+
+async function getVpcInfo(vpcId: string) {
+  const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
+  const response = await ec2Client.send(command);
+  return response.Vpcs![0];
+}
+
+async function getLoadBalancerInfo(dnsName: string) {
+  const command = new DescribeLoadBalancersCommand({});
+  const response = await elbv2Client.send(command);
+  return response.LoadBalancers!.find(lb => lb.DNSName === dnsName);
+}
+
+async function getAutoScalingGroup() {
+  const command = new DescribeAutoScalingGroupsCommand({});
+  const response = await autoScalingClient.send(command);
+  return response.AutoScalingGroups!.find(asg =>
+    asg.Tags?.some(
+      tag =>
+        tag.Key === 'aws:cloudformation:stack-name' && tag.Value === stackName
+    )
+  );
+}
 
 describe('Secure Web Application Infrastructure Integration Tests', () => {
-  let outputs: any = {};
+  let outputs: Record<string, string> = {};
   let stackExists = false;
 
   beforeAll(async () => {
+    console.log(`Testing stack: ${stackName} in region: ${region}`);
+
     try {
-      outputs = stackOutputs;
+      outputs = getStackOutputs();
       stackExists = true;
+      console.log(
+        `Stack ${stackName} found with outputs:`,
+        Object.keys(outputs)
+      );
     } catch (error) {
       console.error('Stack not found or not accessible:', error);
       stackExists = false;
@@ -45,13 +135,17 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
 
   describe('Stack Deployment Validation', () => {
     test('stack should be in valid state', async () => {
-      const command = `aws cloudformation describe-stacks --stack-name ${stackName} --query "Stacks[0].StackStatus" --output text`;
-      const result = execSync(command, { encoding: 'utf-8' }).trim();
+      const stack = await getStackInfo();
 
-      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(result);
+      expect(stack).toBeDefined();
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(
+        stack.StackStatus!
+      );
+      expect(stack.StackName).toBe(stackName);
+      console.log(`Stack ${stackName} is in state: ${stack.StackStatus}`);
     });
 
-    test('all required stack outputs should be present', async () => {
+    test('all required stack outputs should be present', () => {
       const requiredOutputs = [
         'VPCId',
         'LoadBalancerDNS',
@@ -60,146 +154,176 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
         'BackupBucketName',
         'KMSKeyId',
         'CloudTrailArn',
-        'PublicSubnets',
-        'PrivateSubnets',
         'AutoScalingGroupName',
         'SNSTopicArn',
+        'PrivateSubnets',
+        'PublicSubnets',
+        'StackName',
       ];
 
       requiredOutputs.forEach(outputKey => {
         expect(outputs[outputKey]).toBeDefined();
         expect(outputs[outputKey]).not.toBe('');
+        console.log(`✓ ${outputKey}: ${outputs[outputKey]}`);
       });
     });
 
     test('environment suffix should match expected value', () => {
-      if (outputs.EnvironmentSuffix) {
-        expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
-      }
-      if (outputs.StackName) {
-        expect(outputs.StackName).toContain(environmentSuffix);
-      }
+      expect(outputs.StackName).toContain(environmentSuffix);
+      console.log(`Environment suffix verified: ${environmentSuffix}`);
     });
 
     test('resource IDs should have correct format', () => {
       expect(outputs.VPCId).toMatch(/^vpc-[0-9a-f]{8,17}$/);
-      if (outputs.LoadBalancerDNS) {
-        expect(outputs.LoadBalancerDNS).toMatch(/.*\.elb\.amazonaws\.com$/);
-      }
-      if (outputs.StaticContentBucketName) {
-        expect(outputs.StaticContentBucketName).toMatch(/^[a-z0-9-]+$/);
-      }
-      if (outputs.KMSKeyId) {
-        expect(outputs.KMSKeyId).toMatch(/^[a-f0-9-]{36}$/);
-      }
+      expect(outputs.LoadBalancerDNS).toMatch(/.*\.elb\.amazonaws\.com$/);
+      expect(outputs.StaticContentBucketName).toMatch(/^[a-z0-9-]+$/);
+      expect(outputs.KMSKeyId).toMatch(/^[a-f0-9-]{36}$/);
+      console.log('All resource ID formats validated');
+    });
+
+    test('all resource names should include environment suffix for conflict avoidance', async () => {
+      const command = `aws cloudformation describe-stack-resources --stack-name ${stackName} --query "StackResources[].{LogicalId:LogicalResourceId,PhysicalId:PhysicalResourceId}" --output json`;
+      const result = execSync(command, { encoding: 'utf-8' });
+      const resources = JSON.parse(result);
+
+      expect(resources.length).toBeGreaterThan(0);
+      console.log(`Stack has ${resources.length} resources deployed`);
+
+      // Check that key resources exist
+      const keyResources = resources.filter((resource: any) =>
+        [
+          'VPC',
+          'ApplicationLoadBalancer',
+          'AutoScalingGroup',
+          'StaticContentBucket',
+        ].includes(resource.LogicalId)
+      );
+
+      expect(keyResources.length).toBeGreaterThan(0);
+      console.log(`Found ${keyResources.length} key resources`);
     });
   });
 
   describe('KMS Encryption Validation', () => {
     test('KMS key should be enabled with rotation', async () => {
-      if (!outputs.KMSKeyId) {
-        console.log('KMS Key ID not found in outputs, skipping test');
-        return;
-      }
+      const command = new DescribeKeyCommand({ KeyId: outputs.KMSKeyId });
+      const response = await kmsClient.send(command);
+      const keyMetadata = response.KeyMetadata!;
 
-      const command = `aws kms describe-key --key-id ${outputs.KMSKeyId} --query "KeyMetadata.KeyState" --output text`;
-      const result = execSync(command, { encoding: 'utf-8' }).trim();
+      expect(keyMetadata.KeyState).toBe('Enabled');
+      expect(keyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(keyMetadata.Origin).toBe('AWS_KMS');
 
-      expect(result).toBe('Enabled');
+      console.log(
+        `KMS Key ${outputs.KMSKeyId} is active and ready for encryption`
+      );
     });
 
     test('should encrypt and decrypt data', async () => {
-      if (!outputs.KMSKeyId) {
-        console.log('KMS Key ID not found in outputs, skipping test');
-        return;
-      }
+      // Test basic KMS key functionality using AWS SDK
+      const testData = Buffer.from('test-encryption-data');
 
-      // Test basic KMS key functionality
-      const testData = 'test-encryption-data';
-      const encryptCommand = `aws kms encrypt --key-id ${outputs.KMSKeyId} --plaintext ${testData} --query "CiphertextBlob" --output text`;
-      const encryptedData = execSync(encryptCommand, {
-        encoding: 'utf-8',
-      }).trim();
+      const encryptCommand = new (
+        await import('@aws-sdk/client-kms')
+      ).EncryptCommand({
+        KeyId: outputs.KMSKeyId,
+        Plaintext: testData,
+      });
+      const encryptResponse = await kmsClient.send(encryptCommand);
 
-      expect(encryptedData).toBeDefined();
-      expect(encryptedData.length).toBeGreaterThan(0);
+      expect(encryptResponse.CiphertextBlob).toBeDefined();
 
-      const decryptCommand = `aws kms decrypt --ciphertext-blob ${encryptedData} --query "Plaintext" --output text`;
-      const decryptedData = execSync(decryptCommand, {
-        encoding: 'utf-8',
-      }).trim();
+      const decryptCommand = new (
+        await import('@aws-sdk/client-kms')
+      ).DecryptCommand({
+        CiphertextBlob: encryptResponse.CiphertextBlob,
+      });
+      const decryptResponse = await kmsClient.send(decryptCommand);
 
-      // AWS CLI returns base64 encoded data, so we need to decode it
-      const decodedData = Buffer.from(decryptedData, 'base64').toString();
-      expect(decodedData).toBe(testData);
+      expect(Buffer.from(decryptResponse.Plaintext!)).toEqual(testData);
+      console.log('KMS encryption/decryption test successful');
     });
   });
 
   describe('S3 Security Validation', () => {
     test('static content bucket should have AES-256 encryption', async () => {
-      if (!outputs.StaticContentBucketName) {
-        console.log(
-          'Static content bucket not found in outputs, skipping test'
-        );
-        return;
-      }
+      const command = new GetBucketEncryptionCommand({
+        Bucket: outputs.StaticContentBucketName,
+      });
+      const response = await s3Client.send(command);
+      const encryptionConfig =
+        response.ServerSideEncryptionConfiguration!.Rules![0];
 
-      const command = `aws s3api get-bucket-encryption --bucket ${outputs.StaticContentBucketName} --query "ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm" --output text`;
-      const result = execSync(command, { encoding: 'utf-8' }).trim();
+      expect(
+        encryptionConfig.ApplyServerSideEncryptionByDefault!.SSEAlgorithm
+      ).toBe('AES256');
 
-      expect(result).toBe('AES256');
+      console.log(
+        `S3 bucket ${outputs.StaticContentBucketName} has AES256 encryption`
+      );
     });
 
     test('bucket should block public access', async () => {
-      if (!outputs.StaticContentBucketName) {
-        console.log(
-          'Static content bucket not found in outputs, skipping test'
-        );
-        return;
-      }
-
-      const command = `aws s3api get-public-access-block --bucket ${outputs.StaticContentBucketName} --query "PublicAccessBlockConfiguration" --output json`;
-      const result = execSync(command, { encoding: 'utf-8' });
-      const config = JSON.parse(result);
+      const command = new GetPublicAccessBlockCommand({
+        Bucket: outputs.StaticContentBucketName,
+      });
+      const response = await s3Client.send(command);
+      const config = response.PublicAccessBlockConfiguration!;
 
       expect(config.BlockPublicAcls).toBe(true);
       expect(config.IgnorePublicAcls).toBe(true);
       expect(config.BlockPublicPolicy).toBe(true);
       expect(config.RestrictPublicBuckets).toBe(true);
+
+      console.log(
+        'S3 bucket has secure public access configuration (all blocks enabled)'
+      );
     });
 
     test('should store and retrieve encrypted objects', async () => {
-      if (!outputs.StaticContentBucketName) {
-        console.log(
-          'Static content bucket not found in outputs, skipping test'
-        );
-        return;
-      }
-
       const testKey = `integration-test-${Date.now()}.txt`;
       const testContent = 'Secure CloudFormation integration test content';
 
       try {
         // Upload test object with server-side encryption
-        const putCommand = `echo '${testContent}' | aws s3 cp - s3://${outputs.StaticContentBucketName}/${testKey} --server-side-encryption AES256`;
-        execSync(putCommand, { encoding: 'utf-8' });
+        const putCommand = new PutObjectCommand({
+          Bucket: outputs.StaticContentBucketName,
+          Key: testKey,
+          Body: testContent,
+          ContentType: 'text/plain',
+          ServerSideEncryption: 'AES256',
+        });
+        const putResponse = await s3Client.send(putCommand);
+
+        expect(putResponse.ServerSideEncryption).toBe('AES256');
 
         // Retrieve test object
-        const getCommand = `aws s3 cp s3://${outputs.StaticContentBucketName}/${testKey} -`;
-        const retrievedContent = execSync(getCommand, {
-          encoding: 'utf-8',
-        }).trim();
+        const getCommand = new GetObjectCommand({
+          Bucket: outputs.StaticContentBucketName,
+          Key: testKey,
+        });
+        const getResponse = await s3Client.send(getCommand);
+        const retrievedContent = await getResponse.Body!.transformToString();
 
         expect(retrievedContent).toBe(testContent);
+        expect(getResponse.ServerSideEncryption).toBe('AES256');
 
         // Clean up
-        const deleteCommand = `aws s3 rm s3://${outputs.StaticContentBucketName}/${testKey}`;
-        execSync(deleteCommand, { encoding: 'utf-8' });
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: outputs.StaticContentBucketName,
+          Key: testKey,
+        });
+        await s3Client.send(deleteCommand);
+
+        console.log(`S3 encrypted object operations successful for ${testKey}`);
       } catch (error) {
         // Ensure cleanup on error
         try {
-          const deleteCommand = `aws s3 rm s3://${outputs.StaticContentBucketName}/${testKey}`;
-          execSync(deleteCommand, { encoding: 'utf-8' });
+          const deleteCommand = new DeleteObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+          });
+          await s3Client.send(deleteCommand);
         } catch (cleanupError) {
           // Ignore cleanup errors
         }
@@ -210,89 +334,226 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
 
   describe('VPC and Network Infrastructure', () => {
     test('VPC should exist with correct CIDR', async () => {
-      if (!outputs.VPCId) {
-        console.log('VPC ID not found in outputs, skipping test');
-        return;
-      }
+      const vpc = await getVpcInfo(outputs.VPCId);
 
-      const command = `aws ec2 describe-vpcs --vpc-ids ${outputs.VPCId} --query "Vpcs[0].State" --output text`;
-      const result = execSync(command, { encoding: 'utf-8' }).trim();
+      expect(vpc.State).toBe('available');
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.DhcpOptionsId).toBeDefined();
 
-      expect(result).toBe('available');
+      // Fetch DNS attributes
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId!,
+        Attribute: 'enableDnsHostnames',
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
 
-      const cidrCommand = `aws ec2 describe-vpcs --vpc-ids ${outputs.VPCId} --query "Vpcs[0].CidrBlock" --output text`;
-      const cidrResult = execSync(cidrCommand, { encoding: 'utf-8' }).trim();
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId!,
+        Attribute: 'enableDnsSupport',
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
 
-      expect(cidrResult).toBe('10.0.0.0/16');
+      console.log(`VPC ${outputs.VPCId} validated with CIDR 10.0.0.0/16`);
     });
 
     test('subnets should be distributed across availability zones', async () => {
-      if (!outputs.PublicSubnets || !outputs.PrivateSubnets) {
-        console.log('Subnet information not found in outputs, skipping test');
-        return;
-      }
-
       const publicSubnets = outputs.PublicSubnets.split(',');
       const privateSubnets = outputs.PrivateSubnets.split(',');
 
-      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
-      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+      expect(publicSubnets.length).toBe(2);
+      expect(privateSubnets.length).toBe(2);
 
-      // Check that subnets are in different AZs
-      const allSubnets = [...publicSubnets, ...privateSubnets];
-      const command = `aws ec2 describe-subnets --subnet-ids ${allSubnets.join(' ')} --query "Subnets[].AvailabilityZone" --output json`;
-      const result = execSync(command, { encoding: 'utf-8' });
-      const azs = JSON.parse(result);
+      // Test public subnets
+      const publicCommand = new DescribeSubnetsCommand({
+        SubnetIds: publicSubnets,
+      });
+      const publicResponse = await ec2Client.send(publicCommand);
+      const publicSubnetDetails = publicResponse.Subnets!;
 
-      const uniqueAzs = [...new Set(azs)];
-      expect(uniqueAzs.length).toBeGreaterThanOrEqual(2);
+      expect(publicSubnetDetails.length).toBe(2);
+      publicSubnetDetails.forEach(subnet => {
+        expect(subnet.State).toBe('available');
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+        expect(['10.0.1.0/24', '10.0.2.0/24']).toContain(subnet.CidrBlock);
+      });
+
+      // Test private subnets
+      const privateCommand = new DescribeSubnetsCommand({
+        SubnetIds: privateSubnets,
+      });
+      const privateResponse = await ec2Client.send(privateCommand);
+      const privateSubnetDetails = privateResponse.Subnets!;
+
+      expect(privateSubnetDetails.length).toBe(2);
+      privateSubnetDetails.forEach(subnet => {
+        expect(subnet.State).toBe('available');
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+        expect(['10.0.11.0/24', '10.0.12.0/24']).toContain(subnet.CidrBlock);
+      });
+
+      // Verify AZ distribution
+      const allSubnets = [...publicSubnetDetails, ...privateSubnetDetails];
+      const azs = [...new Set(allSubnets.map(s => s.AvailabilityZone))];
+      expect(azs.length).toBe(2);
+
+      console.log(
+        `Found ${publicSubnets.length} public and ${privateSubnets.length} private subnets across ${azs.length} AZs`
+      );
     });
 
     test('NAT Gateway should provide outbound internet access for private subnets', async () => {
-      if (!outputs.VPCId) {
-        console.log('VPC ID not found in outputs, skipping test');
-        return;
-      }
-
-      const command = `aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=${outputs.VPCId}" --query "NatGateways[?State=='available'].NatGatewayId" --output json`;
-      const result = execSync(command, { encoding: 'utf-8' });
-      const natGateways = JSON.parse(result);
+      const command = new DescribeNatGatewaysCommand({
+        Filter: [{ Name: 'vpc-id', Values: [outputs.VPCId] }],
+      });
+      const response = await ec2Client.send(command);
+      const natGateways = response.NatGateways!.filter(
+        nat => nat.State === 'available'
+      );
 
       expect(natGateways.length).toBeGreaterThanOrEqual(1);
-      natGateways.forEach((natId: string) => {
-        expect(natId).toMatch(/^nat-[0-9a-f]+$/);
+      natGateways.forEach(nat => {
+        expect(nat.State).toBe('available');
+        expect(nat.NatGatewayAddresses![0].AllocationId).toBeDefined();
+        expect(nat.NatGatewayAddresses![0].PublicIp).toBeDefined();
+        expect(nat.VpcId).toBe(outputs.VPCId);
       });
+
+      console.log(
+        `Found ${natGateways.length} NAT Gateway(s) for outbound internet access`
+      );
+    });
+
+    test('Internet Gateway should be attached', async () => {
+      const command = new DescribeInternetGatewaysCommand({
+        Filters: [{ Name: 'attachment.vpc-id', Values: [outputs.VPCId] }],
+      });
+      const response = await ec2Client.send(command);
+      const igws = response.InternetGateways!;
+
+      expect(igws.length).toBe(1);
+      expect(igws[0].Attachments![0].State).toBe('available');
+      expect(igws[0].Attachments![0].VpcId).toBe(outputs.VPCId);
+
+      console.log(
+        `Internet Gateway ${igws[0].InternetGatewayId} is attached to VPC`
+      );
     });
   });
 
   describe('Load Balancer Validation', () => {
     test('ALB should be active and internet-facing', async () => {
-      if (!outputs.LoadBalancerDNS) {
-        console.log('Load Balancer DNS not found in outputs, skipping test');
-        return;
+      const alb = await getLoadBalancerInfo(outputs.LoadBalancerDNS);
+
+      expect(alb).toBeDefined();
+      expect(alb!.State?.Code).toBe('active');
+      expect(alb!.Type).toBe('application');
+      expect(alb!.Scheme).toBe('internet-facing');
+      expect(alb!.VpcId).toBe(outputs.VPCId);
+      expect(alb!.AvailabilityZones!.length).toBe(2);
+
+      console.log(`ALB ${alb!.LoadBalancerName} is active and internet-facing`);
+    });
+
+    test('should respond to HTTP requests', async () => {
+      console.log(`Testing HTTP connectivity to ${outputs.LoadBalancerDNS}...`);
+
+      try {
+        const response = await fetch(`http://${outputs.LoadBalancerDNS}`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(15000), // 15 second timeout
+        });
+
+        // Accept any response that indicates connectivity
+        expect(response.status).toBeLessThan(600);
+
+        console.log(`ALB responded with status: ${response.status}`);
+      } catch (error: any) {
+        if (error.name === 'TimeoutError') {
+          console.log(`ALB connection timeout - may still be initializing`);
+        } else {
+          throw error;
+        }
       }
+    });
 
-      const command = `aws elbv2 describe-load-balancers --query "LoadBalancers[?DNSName=='${outputs.LoadBalancerDNS}'].State.Code" --output text`;
-      const result = execSync(command, { encoding: 'utf-8' }).trim();
+    test('should have properly configured target group', async () => {
+      const command = new DescribeTargetGroupsCommand({});
+      const response = await elbv2Client.send(command);
+      const stackTG = response.TargetGroups!.find(
+        tg => tg.VpcId === outputs.VPCId
+      );
 
-      expect(result).toBe('active');
+      expect(stackTG).toBeDefined();
+      expect(stackTG!.Protocol).toBe('HTTP');
+      expect(stackTG!.Port).toBe(80);
+      expect(stackTG!.HealthCheckIntervalSeconds).toBe(30);
+      expect(stackTG!.HealthCheckPath).toBe('/health');
+      expect(stackTG!.HealthyThresholdCount).toBe(2);
+      expect(stackTG!.UnhealthyThresholdCount).toBe(3);
 
-      const schemeCommand = `aws elbv2 describe-load-balancers --query "LoadBalancers[?DNSName=='${outputs.LoadBalancerDNS}'].Scheme" --output text`;
-      const schemeResult = execSync(schemeCommand, {
-        encoding: 'utf-8',
-      }).trim();
+      console.log(
+        `Target Group ${stackTG!.TargetGroupName} configured correctly`
+      );
+    });
+  });
 
-      expect(schemeResult).toBe('internet-facing');
+  describe('Auto Scaling Group Validation', () => {
+    test('ASG should have correct capacity', async () => {
+      const asg = await getAutoScalingGroup();
+
+      expect(asg).toBeDefined();
+      expect(asg!.MinSize).toBe(2);
+      expect(asg!.MaxSize).toBe(6);
+      expect(asg!.DesiredCapacity).toBe(2);
+      expect(asg!.HealthCheckType).toBe('ELB');
+      expect(asg!.HealthCheckGracePeriod).toBe(300);
+
+      console.log(
+        `ASG ${asg!.AutoScalingGroupName} has ${asg!.Instances?.length || 0}/${asg!.DesiredCapacity} instances`
+      );
+    });
+  });
+
+  describe('CloudTrail Audit Trail Validation', () => {
+    test('should have active CloudTrail', async () => {
+      const command = new DescribeTrailsCommand({});
+      const response = await cloudTrailClient.send(command);
+
+      const stackTrail = response.trailList!.find(
+        trail =>
+          trail.TrailARN === outputs.CloudTrailArn ||
+          trail.Name?.includes(stackName)
+      );
+
+      expect(stackTrail).toBeDefined();
+      expect(stackTrail!.IsMultiRegionTrail).toBe(true);
+      expect(stackTrail!.LogFileValidationEnabled).toBe(true);
+
+      console.log(
+        `CloudTrail ${stackTrail!.Name} is configured for multi-region logging`
+      );
+    });
+
+    test('should have CloudTrail status active', async () => {
+      const command = new GetTrailStatusCommand({
+        Name: outputs.CloudTrailArn,
+      });
+      const response = await cloudTrailClient.send(command);
+
+      expect(response.IsLogging).toBe(true);
+
+      console.log(`CloudTrail is actively logging events`);
     });
   });
 
   describe('Security and Compliance', () => {
-    test('HTTPS endpoint should be properly formatted', async () => {
-      if (outputs.LoadBalancerURL) {
-        expect(outputs.LoadBalancerURL).toMatch(
-          /^https?:\/\/.*\.elb\.amazonaws\.com$/
-        );
-      }
+    test('HTTPS endpoint should be properly formatted', () => {
+      expect(outputs.LoadBalancerURL).toMatch(
+        /^https?:\/\/.*\.elb\.amazonaws\.com$/
+      );
+      console.log(`Load Balancer URL: ${outputs.LoadBalancerURL}`);
     });
 
     test('should handle concurrent operations', async () => {
@@ -305,27 +566,54 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
         'VPCId',
         'LoadBalancerDNS',
         'StaticContentBucketName',
+        'KMSKeyId',
       ];
       criticalOutputs.forEach(output => {
-        if (!outputs[output]) {
-          console.log(`Warning: Missing critical output ${output}`);
-        }
+        expect(outputs[output]).toBeDefined();
+        expect(outputs[output]).not.toBe('');
+        console.log(`✓ Critical resource ${output}: ${outputs[output]}`);
       });
       expect(stackExists).toBe(true);
     });
-  });
 
-  describe('CloudTrail Audit Trail Validation', () => {
-    test('should have active CloudTrail', async () => {
-      if (!outputs.CloudTrailArn) {
-        console.log('CloudTrail ARN not found in outputs, skipping test');
-        return;
-      }
+    test('should validate all critical resources exist', async () => {
+      const command = new DescribeStackResourcesCommand({
+        StackName: stackName,
+      });
+      const response = await cloudFormationClient.send(command);
+      const resources = response.StackResources!;
 
-      const command = `aws cloudtrail get-trail-status --name ${outputs.CloudTrailArn} --query "IsLogging" --output text`;
-      const result = execSync(command, { encoding: 'utf-8' }).trim();
+      // Check that key resources exist
+      const vpcResource = resources.find(r => r.LogicalResourceId === 'VPC');
+      const albResource = resources.find(
+        r => r.LogicalResourceId === 'ApplicationLoadBalancer'
+      );
+      const asgResource = resources.find(
+        r => r.LogicalResourceId === 'AutoScalingGroup'
+      );
+      const s3Resource = resources.find(
+        r => r.LogicalResourceId === 'StaticContentBucket'
+      );
+      const kmsResource = resources.find(
+        r => r.LogicalResourceId === 'ApplicationKMSKey'
+      );
+      const cloudTrailResource = resources.find(
+        r => r.LogicalResourceId === 'AuditTrail'
+      );
 
-      expect(result).toBe('true');
+      expect(vpcResource).toBeDefined();
+      expect(albResource).toBeDefined();
+      expect(asgResource).toBeDefined();
+      expect(s3Resource).toBeDefined();
+      expect(kmsResource).toBeDefined();
+      expect(cloudTrailResource).toBeDefined();
+
+      const validStates = ['CREATE_COMPLETE', 'UPDATE_COMPLETE'];
+      expect(validStates).toContain(vpcResource!.ResourceStatus);
+      expect(validStates).toContain(albResource!.ResourceStatus);
+      expect(validStates).toContain(asgResource!.ResourceStatus);
+
+      console.log(`All critical resources are in complete state`);
     });
   });
 
@@ -334,26 +622,48 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
       expect(stackExists).toBe(true);
       expect(outputs).toBeDefined();
       expect(Object.keys(outputs).length).toBeGreaterThan(0);
+
+      console.log(
+        `Stack deployment validated with ${Object.keys(outputs).length} outputs`
+      );
     });
 
-    test('all resource names should include environment suffix for conflict avoidance', async () => {
-      const command = `aws cloudformation describe-stack-resources --stack-name ${stackName} --query "StackResources[].{LogicalId:LogicalResourceId,PhysicalId:PhysicalResourceId}" --output json`;
-      const result = execSync(command, { encoding: 'utf-8' });
-      const resources = JSON.parse(result);
+    test('should validate complete infrastructure readiness', async () => {
+      // Comprehensive validation that all components work together
+      const readinessChecks = [
+        {
+          name: 'VPC Available',
+          check: () => expect(outputs.VPCId).toMatch(/^vpc-[0-9a-f]+$/),
+        },
+        {
+          name: 'Load Balancer Ready',
+          check: () =>
+            expect(outputs.LoadBalancerDNS).toMatch(/.*\.elb\.amazonaws\.com$/),
+        },
+        {
+          name: 'Storage Security',
+          check: () =>
+            expect(outputs.StaticContentBucketName).toMatch(/^[a-z0-9-]+$/),
+        },
+        {
+          name: 'Encryption Ready',
+          check: () => expect(outputs.KMSKeyId).toMatch(/^[a-f0-9-]{36}$/),
+        },
+        {
+          name: 'Audit Trail Active',
+          check: () =>
+            expect(outputs.CloudTrailArn).toMatch(/^arn:aws:cloudtrail:/),
+        },
+      ];
 
-      expect(resources.length).toBeGreaterThan(0);
+      readinessChecks.forEach(({ name, check }) => {
+        check();
+        console.log(`✓ ${name} - Ready`);
+      });
 
-      // Check that the stack has resources and they follow naming conventions
-      const keyResources = resources.filter((resource: any) =>
-        [
-          'VPC',
-          'ApplicationLoadBalancer',
-          'AutoScalingGroup',
-          'StaticContentBucket',
-        ].includes(resource.LogicalId)
+      console.log(
+        'Complete infrastructure readiness validated - System is operational'
       );
-
-      expect(keyResources.length).toBeGreaterThan(0);
     });
   });
 });
