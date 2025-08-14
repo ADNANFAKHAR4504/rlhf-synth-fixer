@@ -1,7 +1,3 @@
-Nice — here's a ready-to-use, copy-pasteable **user prompt** you can give to an engineer or to an AI to produce a single `main.tf` (self-contained) Terraform file that meets your requirements and follows best practices.
-
----
-
 # Prompt — Generate `main.tf` (single-file Terraform stack for HTTP/HTTPS-only SG)
 
 You are asked to generate a **single Terraform file named `main.tf`** for a brand-new AWS stack. The `provider.tf` file already exists and is configured to read the `aws_region` variable — **so `main.tf` must declare the `aws_region` variable** (with validation and a sensible default) and all other variables, resources, and outputs. **Do not reference any external modules** (no `module` blocks pointing to remote or local modules). Everything must be implemented with native Terraform resources in this single file.
