@@ -634,7 +634,7 @@ resource "aws_cloudtrail" "main" {
     Environment = var.environment
   }
 
-  depends_on = [aws_s3_bucket_policy.cloudtrail_policy]
+  depends_on = [aws_s3_bucket_policy.cloudtrail]
 
   lifecycle {
     prevent_destroy = true
@@ -797,39 +797,8 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-variable "organization_name" {
-  description = "Organization name"
-  type        = string
-}
-
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-variable "organization_name" {
-  description = "Organization name"
-  type        = string
-}
-
 variable "kms_key_arn" {
   description = "KMS key ARN for encryption"
-  type        = string
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-variable "organization_name" {
-  description = "Organization name"
   type        = string
 }
 
@@ -841,21 +810,6 @@ variable "vpc_id" {
 variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed for management access"
   type        = list(string)
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-variable "organization_name" {
-  description = "Organization name"
-  type        = string
-}
-
-variable "kms_key_arn" {
-  description = "KMS key ARN for S3 encryption"
-  type        = string
 }
 
 ```

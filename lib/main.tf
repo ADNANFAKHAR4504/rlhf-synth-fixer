@@ -222,7 +222,7 @@ resource "random_string" "app_bucket_suffix" {
 
 # S3 bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "dev${var.organization_name}ct${random_string.bucket_suffix.result}"
+  bucket = "${var.environment}-${var.organization_name}-ct-${random_string.bucket_suffix.result}"
 
   tags = {
     Name    = "${var.environment}-${var.organization_name}-cloudtrail-logs"
@@ -318,7 +318,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # Application data bucket
 resource "aws_s3_bucket" "app_data" {
-  bucket = "dev${var.organization_name}app${random_string.app_bucket_suffix.result}"
+  bucket = "${var.environment}-${var.organization_name}-app-${random_string.app_bucket_suffix.result}"
 
   tags = {
     Name    = "${var.environment}-${var.organization_name}-app-data"
@@ -392,15 +392,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
       prefix = ""
     }
 
-    # Noncurrent version transition to Glacier after 30 days
+    # Noncurrent version transition to Glacier after 60 days
     noncurrent_version_transition {
-      noncurrent_days = 30
+      noncurrent_days = 60
       storage_class   = "GLACIER"
     }
 
-    # Noncurrent version expiration - delete old versions after 90 days
+    # Noncurrent version expiration - delete old versions after 120 days
     noncurrent_version_expiration {
-      noncurrent_days = 90
+      noncurrent_days = 120
     }
 
     # Abort incomplete multipart uploads after 1 day
