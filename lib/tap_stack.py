@@ -511,11 +511,11 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
 """
 
     # Clean the AMI ID - remove any brackets if present
-    ami_id = ami_param.value.apply(lambda v: v.strip('[]'))
+    # ami_id = ami_param.value.apply(lambda v: v.strip('[]'))
     
     lt = aws.ec2.LaunchTemplate(
         f"{name_prefix}-lt",
-        image_id=ami_id,
+        image_id=ami_param.value,
         instance_type="t3.micro",
         vpc_security_group_ids=[instance_sg],
         user_data=base64.b64encode(user_data.encode("utf-8")).decode("utf-8"),
