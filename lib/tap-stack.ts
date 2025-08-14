@@ -66,9 +66,9 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly dataAccessRoleArn: pulumi.Output<string>;
   public readonly auditRoleArn: pulumi.Output<string>;
 
-  // CloudTrail
-  public readonly cloudTrailArn: pulumi.Output<string>;
-  public readonly cloudTrailLogGroupArn: pulumi.Output<string>;
+  // CloudTrail properties commented out due to testing limitations
+  // public readonly cloudTrailArn: pulumi.Output<string>;
+  // public readonly cloudTrailLogGroupArn: pulumi.Output<string>;
 
   // Security Policies
   public readonly securityPolicyArn: pulumi.Output<string>;
@@ -119,8 +119,9 @@ export class TapStack extends pulumi.ComponentResource {
     this.cloudTrailKmsKeyArn = securityStack.cloudTrailKmsKeyArn;
     this.dataAccessRoleArn = securityStack.dataAccessRoleArn;
     this.auditRoleArn = securityStack.auditRoleArn;
-    this.cloudTrailArn = securityStack.cloudTrailArn;
-    this.cloudTrailLogGroupArn = securityStack.cloudTrailLogGroupArn;
+    // CloudTrail references commented out due to testing limitations
+    // this.cloudTrailArn = securityStack.cloudTrailArn;
+    // this.cloudTrailLogGroupArn = securityStack.cloudTrailLogGroupArn;
     this.securityPolicyArn = securityStack.securityPolicyArn;
     this.mfaEnforcementPolicyArn = securityStack.mfaEnforcementPolicyArn;
     this.s3SecurityPolicyArn = securityStack.s3SecurityPolicyArn;
@@ -141,8 +142,9 @@ export class TapStack extends pulumi.ComponentResource {
       cloudTrailKmsKeyArn: this.cloudTrailKmsKeyArn,
       dataAccessRoleArn: this.dataAccessRoleArn,
       auditRoleArn: this.auditRoleArn,
-      cloudTrailArn: this.cloudTrailArn,
-      cloudTrailLogGroupArn: this.cloudTrailLogGroupArn,
+      // CloudTrail outputs commented out due to testing limitations
+      // cloudTrailArn: this.cloudTrailArn,
+      // cloudTrailLogGroupArn: this.cloudTrailLogGroupArn,
       securityPolicyArn: this.securityPolicyArn,
       mfaEnforcementPolicyArn: this.mfaEnforcementPolicyArn,
       s3SecurityPolicyArn: this.s3SecurityPolicyArn,

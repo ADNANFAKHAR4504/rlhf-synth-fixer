@@ -57,9 +57,9 @@ export const cloudTrailKmsKeyArn = tapStack.cloudTrailKmsKeyArn;
 export const dataAccessRoleArn = tapStack.dataAccessRoleArn;
 export const auditRoleArn = tapStack.auditRoleArn;
 
-// CloudTrail
-export const cloudTrailArn = tapStack.cloudTrailArn;
-export const cloudTrailLogGroupArn = tapStack.cloudTrailLogGroupArn;
+// CloudTrail exports commented out due to testing limitations
+// export const cloudTrailArn = tapStack.cloudTrailArn;
+// export const cloudTrailLogGroupArn = tapStack.cloudTrailLogGroupArn;
 
 // Security Policies
 export const securityPolicyArn = tapStack.securityPolicyArn;
