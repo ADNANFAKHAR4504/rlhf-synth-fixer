@@ -72,7 +72,7 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = props?.awsRegion || 'us-east-1';
     const defaultTags = props?.defaultTags?.tags || {};
-    
+
     // Add timestamp for uniqueness in CI/CD environments
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const uniqueSuffix = `${environmentSuffix}-${timestamp}`;
