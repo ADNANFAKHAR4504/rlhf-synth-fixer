@@ -355,7 +355,7 @@ Resources:
   SecureEnvEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      #RoleName: !Sub SecureEnv-EC2-Role-${Environment}
+      # RoleName removed to avoid CAPABILITY_NAMED_IAM requirement
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -386,7 +386,7 @@ Resources:
   SecureEnvEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub SecureEnv-EC2-Profile-${Environment}
+      # InstanceProfileName removed to avoid CAPABILITY_NAMED_IAM requirement
       Roles:
         - !Ref SecureEnvEC2Role
 
@@ -614,7 +614,7 @@ Resources:
   SecureEnvConfigRole:
     Type: AWS::IAM::Role
     Properties:
-      #RoleName: !Sub SecureEnv-Config-Role-${Environment}
+      # RoleName removed to avoid CAPABILITY_NAMED_IAM requirement
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -745,7 +745,7 @@ Resources:
   SecureEnvFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
-      #RoleName: !Sub SecureEnv-FlowLog-Role-${Environment}
+      # RoleName removed to avoid CAPABILITY_NAMED_IAM requirement
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
