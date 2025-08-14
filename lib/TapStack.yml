@@ -20,15 +20,19 @@ Parameters:
 
   NotificationEmail:
     Type: String
-    Description: 'Email address for CloudWatch alarm notifications'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid email address'
+    Default: ''
+    Description: 'Email address for CloudWatch alarm notifications (optional)'
+    AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: 'Must be a valid email address or empty'
 
 Mappings:
   RegionMap:
     us-west-2:
       AvailabilityZone1: 'us-west-2a'
       AvailabilityZone2: 'us-west-2b'
+
+Conditions:
+  HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, '']]
 
 Resources:
   # ===============================
@@ -504,6 +508,7 @@ Resources:
 
   SecurityAlarmSubscription:
     Type: AWS::SNS::Subscription
+    Condition: HasNotificationEmail
     Properties:
       TopicArn: !Ref SecurityAlarmTopic
       Protocol: email

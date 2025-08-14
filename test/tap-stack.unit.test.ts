@@ -82,7 +82,8 @@ describe('TapStack CloudFormation Template', () => {
     test('should have NotificationEmail parameter with email validation', () => {
       const param = template.Parameters.NotificationEmail;
       expect(param.Type).toBe('String');
-      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+      expect(param.Default).toBe('');
+      expect(param.AllowedPattern).toBe('^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
       expect(param.ConstraintDescription).toBeDefined();
     });
   });
