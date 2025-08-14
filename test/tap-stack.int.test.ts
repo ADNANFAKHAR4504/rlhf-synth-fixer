@@ -551,7 +551,7 @@ describe('TAP Security Infrastructure Integration Tests', () => {
       expect(prodProtection).toBeDefined();
       expect(prodProtection.Effect).toBe('Deny');
       expect(prodProtection.Action).toContain('ec2:TerminateInstances');
-      expect(prodProtection.Condition['ForAllValues:StringLike']['ec2:ResourceTag/Environment']).toContain('prod*');
+      expect(prodProtection.Condition.StringLike['ec2:ResourceTag/Environment']).toContain('prod*');
       
       // Verify critical system time-based protection
       const timeProtection = policyDocument.Statement.find((s: any) => 

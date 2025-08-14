@@ -126,7 +126,7 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Action: ['ec2:TerminateInstances'],
               Resource: '*',
               Condition: {
-                'ForAllValues:StringLike': {
+                StringLike: {
                   'ec2:ResourceTag/Environment': ['prod*', 'production*'],
                 },
                 BoolIfExists: {
@@ -140,7 +140,7 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Action: ['ec2:TerminateInstances'],
               Resource: '*',
               Condition: {
-                'ForAllValues:StringLike': {
+                StringLike: {
                   'ec2:ResourceTag/CriticalSystem': ['true', 'yes'],
                 },
                 DateNotBetween: {
@@ -154,7 +154,7 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Action: ['ec2:StopInstances'],
               Resource: '*',
               Condition: {
-                'ForAllValues:StringNotLike': {
+                StringNotLike: {
                   'ec2:ResourceTag/Environment': ['prod*', 'production*'],
                 },
                 StringEquals: {

@@ -250,8 +250,8 @@ describe('Security Modules Unit Tests', () => {
       expect(prodStatement).toBeDefined();
       expect(prodStatement.Effect).toBe('Deny');
       expect(prodStatement.Action).toContain('ec2:TerminateInstances');
-      expect(prodStatement.Condition['ForAllValues:StringLike']['ec2:ResourceTag/Environment']).toContain('prod*');
-      expect(prodStatement.Condition['ForAllValues:StringLike']['ec2:ResourceTag/Environment']).toContain('production*');
+      expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toContain('prod*');
+      expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toContain('production*');
       expect(prodStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
       
       // Validate critical system time-based protection
@@ -259,8 +259,8 @@ describe('Security Modules Unit Tests', () => {
       expect(criticalStatement).toBeDefined();
       expect(criticalStatement.Effect).toBe('Deny');
       expect(criticalStatement.Action).toContain('ec2:TerminateInstances');
-      expect(criticalStatement.Condition['ForAllValues:StringLike']['ec2:ResourceTag/CriticalSystem']).toContain('true');
-      expect(criticalStatement.Condition['ForAllValues:StringLike']['ec2:ResourceTag/CriticalSystem']).toContain('yes');
+      expect(criticalStatement.Condition.StringLike['ec2:ResourceTag/CriticalSystem']).toContain('true');
+      expect(criticalStatement.Condition.StringLike['ec2:ResourceTag/CriticalSystem']).toContain('yes');
       expect(criticalStatement.Condition.DateNotBetween['aws:CurrentTime']).toEqual(['08:00Z', '18:00Z']);
       
       // Validate allow statement for non-production instances
@@ -268,8 +268,8 @@ describe('Security Modules Unit Tests', () => {
       expect(allowStatement).toBeDefined();
       expect(allowStatement.Effect).toBe('Allow');
       expect(allowStatement.Action).toContain('ec2:StopInstances');
-      expect(allowStatement.Condition['ForAllValues:StringNotLike']['ec2:ResourceTag/Environment']).toContain('prod*');
-      expect(allowStatement.Condition['ForAllValues:StringNotLike']['ec2:ResourceTag/Environment']).toContain('production*');
+      expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toContain('prod*');
+      expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toContain('production*');
       expect(allowStatement.Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
     });
 
@@ -1022,7 +1022,7 @@ describe('Security Modules Unit Tests', () => {
         
         expect(prodStatement.Effect).toBe('Deny');
         expect(prodStatement.Action).toContain('ec2:TerminateInstances');
-        expect(prodStatement.Condition['ForAllValues:StringLike']['ec2:ResourceTag/Environment']).toContain('prod*');
+        expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toContain('prod*');
         expect(prodStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
       });
 
@@ -1038,7 +1038,7 @@ describe('Security Modules Unit Tests', () => {
         
         expect(criticalStatement.Effect).toBe('Deny');
         expect(criticalStatement.Action).toContain('ec2:TerminateInstances');
-        expect(criticalStatement.Condition['ForAllValues:StringLike']['ec2:ResourceTag/CriticalSystem']).toContain('true');
+        expect(criticalStatement.Condition.StringLike['ec2:ResourceTag/CriticalSystem']).toContain('true');
         expect(criticalStatement.Condition.DateNotBetween['aws:CurrentTime']).toEqual(['08:00Z', '18:00Z']);
       });
 
@@ -1054,7 +1054,7 @@ describe('Security Modules Unit Tests', () => {
         
         expect(allowStatement.Effect).toBe('Allow');
         expect(allowStatement.Action).toContain('ec2:StopInstances');
-        expect(allowStatement.Condition['ForAllValues:StringNotLike']['ec2:ResourceTag/Environment']).toContain('prod*');
+        expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toContain('prod*');
         expect(allowStatement.Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
       });
     });
