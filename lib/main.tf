@@ -266,7 +266,7 @@ resource "aws_security_group" "ec2_sg" {
 
 # IAM policy for MFA enforcement
 resource "aws_iam_policy" "mfa_policy" {
-  name        = "MFAEnforcementPolicy-${var.environment_suffix}"
+  name        = "MFAEnforcementPolicy-${var.environment_suffix}-1"
   description = "Policy to enforce MFA for all users"
 
   policy = jsonencode({
