@@ -771,7 +771,7 @@ resource "aws_lb" "main" {
     Name = "${local.name_prefix}-alb"
   })
 
-  depends_on = var.enable_alb_logs ? [aws_s3_bucket_policy.logs_alb] : []
+
 }
 
 # ALB Target Group
@@ -864,6 +864,8 @@ data "aws_elb_service_account" "main" {}
 
 # S3 bucket policy for ALB access logs
 resource "aws_s3_bucket_policy" "logs_alb" {
+  count = var.enable_alb_logs ? 1 : 0
+
   bucket = aws_s3_bucket.logs.id
 
   policy = jsonencode({
