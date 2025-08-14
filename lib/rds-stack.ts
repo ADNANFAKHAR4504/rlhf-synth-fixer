@@ -44,6 +44,7 @@ export class RdsStack extends Construct {
       password: dbPassword, // <-- Use env var or secret
       publiclyAccessible: false,
       vpcSecurityGroupIds: props?.securityGroupIds || [],
+      enabledCloudwatchLogsExports: ['audit', 'error', 'general', 'slowquery'], // Enable logs
       tags: {
         Name: `prod-rds-instance-${environmentSuffix}`,
         Environment: environmentSuffix,

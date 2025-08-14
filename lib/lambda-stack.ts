@@ -2,6 +2,7 @@
 
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -43,7 +44,7 @@ export class LambdaStack extends Construct {
     });
 
     // Lambda Function
-    new LambdaFunction(this, 'prodSecureLambda', {
+    const lambdaFunction = new LambdaFunction(this, 'prodSecureLambda', {
       functionName: `prod-secure-lambda-${environmentSuffix}`,
       role: lambdaExecutionRole.arn,
       handler: 'index.handler',
@@ -65,6 +66,15 @@ export class LambdaStack extends Construct {
         Name: `prod-secure-lambda-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
+    });
+
+    // Lambda Permission
+    new LambdaPermission(this, 'prodLambdaInvokePermission', {
+      statementId: 'AllowExecutionFromIAM',
+      action: 'lambda:InvokeFunction',
+      functionName: lambdaFunction.functionName,
+      principal: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:root`, // Restrict to your account
+      // Optionally, restrict to a specific role or service
     });
   }
 }

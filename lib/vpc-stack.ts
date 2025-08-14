@@ -5,6 +5,7 @@ import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -72,6 +73,14 @@ export class VpcStack extends Construct {
       tags: { Name: `prod-igw-${environmentSuffix}` },
     });
 
+    // Public Subnet
+    const publicSubnet = new Subnet(this, 'prodPublicSubnet', {
+      vpcId: vpc.id,
+      cidrBlock: '10.0.3.0/24',
+      availabilityZone: `${awsRegion}a`,
+      tags: { Name: `prod-public-subnet-${environmentSuffix}`, Environment: environmentSuffix, Type: 'public' },
+    });
+
     // EIP for NAT
     const natEip = new Eip(this, 'prodNatEip', {
       // No 'vpc' property needed
@@ -81,7 +90,7 @@ export class VpcStack extends Construct {
     // NAT Gateway
     const natGw = new NatGateway(this, 'prodNatGw', {
       allocationId: natEip.id,
-      subnetId: privateSubnet1.id, // Use a public subnet for NAT
+      subnetId: publicSubnet.id, // <-- Correct: NAT in public subnet
       tags: { Name: `prod-natgw-${environmentSuffix}` },
     });
 
@@ -93,9 +102,6 @@ export class VpcStack extends Construct {
       gatewayId: igw.id,
     });
 
-    // Attach public route table to public subnet
-    // ...add association...
-
     const privateRt = new RouteTable(this, 'prodPrivateRt', { vpcId: vpc.id });
     new Route(this, 'prodPrivateRoute', {
       routeTableId: privateRt.id,
@@ -103,20 +109,26 @@ export class VpcStack extends Construct {
       natGatewayId: natGw.id,
     });
 
-    // Attach private route table to private subnets
-    // ...add association...
+    // Associate route tables with subnets
+    new RouteTableAssociation(this, 'publicSubnetAssoc', {
+      subnetId: publicSubnet.id,
+      routeTableId: publicRt.id,
+    });
+    new RouteTableAssociation(this, 'privateSubnet1Assoc', {
+      subnetId: privateSubnet1.id,
+      routeTableId: privateRt.id,
+    });
+    new RouteTableAssociation(this, 'privateSubnet2Assoc', {
+      subnetId: privateSubnet2.id,
+      routeTableId: privateRt.id,
+    });
 
     // EC2 Security Group
     const ec2Sg = new SecurityGroup(this, 'prodEc2Sg', {
       vpcId: vpc.id,
       description: 'EC2 security group',
       ingress: [
-        {
-          fromPort: 22,
-          toPort: 22,
-          protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
-        }, // SSH example
+        { fromPort: 22, toPort: 22, protocol: 'tcp', cidrBlocks: ['203.0.113.0/24'] }, // Replace with your trusted CIDR
       ],
       egress: [
         { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
