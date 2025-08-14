@@ -1,57 +1,120 @@
-import {
-  AwsProvider,
-  AwsProviderDefaultTags,
-} from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import { TerraformStack, Fn } from 'cdktf';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { VpcModule, SecurityGroupModule, LaunchTemplateModule, AutoScalingGroupModule, S3Module } from '../lib/modules';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
-interface TapStackProps {
-  environmentSuffix?: string;
-  stateBucket?: string;
-  stateBucketRegion?: string;
-  awsRegion?: string;
-  defaultTags?: AwsProviderDefaultTags;
+interface Config {
+  environment: 'dev' | 'qa' | 'prod';
+  project: string;
+  region: string;
+  vpcCidr: string;
+  instanceType: string;
+  amiNameFilter: string;
+  keyName: string;
+  minSize: number;
+  maxSize: number;
+  desiredCapacity: number;
 }
 
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-
-const AWS_REGION_OVERRIDE = '';
-
 export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, config: Config) {
     super(scope, id);
 
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
-
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // AWS Provider Configuration
     new AwsProvider(this, 'aws', {
-      region: awsRegion,
-      defaultTags: defaultTags,
+      region: config.region,
     });
 
-    // Configure S3 Backend with native state locking
-    new S3Backend(this, {
-      bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
-      region: stateBucketRegion,
-      encrypt: true,
-    });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
+    const namePrefix = `${config.environment}-${config.project}`;
+    const tags = {
+      Environment: config.environment,
+      Project: config.project,
+    };
 
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    // Find the latest Amazon Linux 2 AMI
+    const ami = new DataAwsAmi(this, 'amazonLinuxAmi', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: [config.amiNameFilter],
+        },
+      ],
+    });
+
+    // VPC Module
+    const vpc = new VpcModule(this, 'vpcModule', {
+      name: namePrefix,
+      environment: config.environment,
+      cidrBlock: config.vpcCidr,
+      tags,
+    });
+
+    // Security Group Module for EC2 instances
+    const ec2Sg = new SecurityGroupModule(this, 'ec2SecurityGroup', {
+      name: `${namePrefix}-ec2`,
+      environment: config.environment,
+      vpcId: vpc.vpc.id,
+      ingressRules: [
+        {
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'], // Be more restrictive in production
+        },
+        {
+          fromPort: 80,
+          toPort: 80,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      egressRules: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+    });
+
+    // Launch Template Module
+    const launchTemplate = new LaunchTemplateModule(this, 'launchTemplateModule', {
+      name: namePrefix,
+      environment: config.environment,
+      instanceType: config.instanceType,
+      amiId: ami.id,
+      keyName: config.keyName,
+      securityGroupIds: [ec2Sg.securityGroup.id],
+      userData: Fn.base64encode(
+        `#!/bin/bash
+          echo "Hello, World! from EC2" > index.html
+          nohup busybox httpd -f -p 80 &`,
+      ),
+      tags,
+    });
+
+    // Auto Scaling Group Module
+    const asg = new AutoScalingGroupModule(this, 'autoScalingGroupModule', {
+      name: namePrefix,
+      environment: config.environment,
+      launchTemplateId: launchTemplate.launchTemplate.id,
+      subnetIds: vpc.publicSubnets.map((s) => s.id),
+      minSize: config.minSize,
+      maxSize: config.maxSize,
+      desiredCapacity: config.desiredCapacity,
+      tags,
+    });
+
+    // S3 Bucket Module
+    new S3Module(this, 's3BucketModule', {
+      name: `${namePrefix}-data`,
+      environment: config.environment,
+      bucketName: `${namePrefix}-data-${this.node.id}`.toLowerCase(),
+      tags,
+    });
   }
 }
