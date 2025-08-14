@@ -164,28 +164,23 @@ describe('CloudFormation Template Unit Tests', () => {
 
   test('SSM Parameters use correct KeyId and value formatting with KMS encryption', () => {
     const dbParam = template.Resources.DatabaseConnectionParameter;
-    expect(dbParam.Properties.Type).toBe('SecureString');
-    expect(dbParam.Properties.KeyId.Ref).toBe('SSMKMSKey');
+    expect(dbParam.Properties.Type).toBe('String');
     expect(dbParam.Properties.Name['Fn::Sub']).toMatch(/\/\${ApplicationName}\/\${Environment}\${EnvironmentSuffix}\/database\/connection-string/);
 
     const apiParam = template.Resources.APIConfigParameter;
-    expect(apiParam.Properties.Type).toBe('SecureString');
-    expect(apiParam.Properties.KeyId.Ref).toBe('SSMKMSKey');
+    expect(apiParam.Properties.Type).toBe('String');
     expect(apiParam.Properties.Value['Fn::Sub']).toBeDefined();
 
     const sharedConfigParam = template.Resources.SharedConfigParameter;
-    expect(sharedConfigParam.Properties.Type).toBe('SecureString');
-    expect(sharedConfigParam.Properties.KeyId.Ref).toBe('SSMKMSKey');
+    expect(sharedConfigParam.Properties.Type).toBe('String');
     expect(sharedConfigParam.Properties.Value.Ref).toBe('SharedConfigBucket');
 
     const s3ConfigParam = template.Resources.S3ConfigParameter;
-    expect(s3ConfigParam.Properties.Type).toBe('SecureString');
-    expect(s3ConfigParam.Properties.KeyId.Ref).toBe('SSMKMSKey');
+    expect(s3ConfigParam.Properties.Type).toBe('String');
     expect(s3ConfigParam.Properties.Value.Ref).toBe('EnvironmentS3Bucket');
 
     const appSecretsParam = template.Resources.ApplicationSecretsParameter;
-    expect(appSecretsParam.Properties.Type).toBe('SecureString');
-    expect(appSecretsParam.Properties.KeyId.Ref).toBe('SSMKMSKey');
+    expect(appSecretsParam.Properties.Type).toBe('String');
     expect(appSecretsParam.Properties.Name['Fn::Sub']).toMatch(/\/\${ApplicationName}\/\${Environment}\${EnvironmentSuffix}\/secrets\/app-key/);
   });
 

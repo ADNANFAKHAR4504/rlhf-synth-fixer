@@ -648,10 +648,7 @@
                 "Name": {
                     "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/database/connection-string"
                 },
-                "Type": "SecureString",
-                "KeyId": {
-                    "Ref": "SSMKMSKey"
-                },
+                "Type": "String",
                 "Value": {
                     "Fn::Sub": "dynamodb://table=${ApplicationName}-${Environment}${EnvironmentSuffix}-data;region=${AWS::Region}"
                 },
@@ -674,10 +671,7 @@
                 "Name": {
                     "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/api/config"
                 },
-                "Type": "SecureString",
-                "KeyId": {
-                    "Ref": "SSMKMSKey"
-                },
+                "Type": "String",
                 "Value": {
                     "Fn::Sub": [
                         "{\n  \"timeout\": 30,\n  \"retries\": 3,\n  \"environment\": \"${Environment}\",\n  \"log_level\": \"${LogLevel}\"\n}\n",
@@ -711,10 +705,7 @@
                 "Name": {
                     "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/s3/bucket-name"
                 },
-                "Type": "SecureString",
-                "KeyId": {
-                    "Ref": "SSMKMSKey"
-                },
+                "Type": "String",
                 "Value": {
                     "Ref": "EnvironmentS3Bucket"
                 },
@@ -737,10 +728,7 @@
                 "Name": {
                     "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/s3/shared-config-bucket"
                 },
-                "Type": "SecureString",
-                "KeyId": {
-                    "Ref": "SSMKMSKey"
-                },
+                "Type": "String",
                 "Value": {
                     "Ref": "SharedConfigBucket"
                 },
@@ -761,10 +749,7 @@
                 "Name": {
                     "Fn::Sub": "/${ApplicationName}/${Environment}${EnvironmentSuffix}/secrets/app-key"
                 },
-                "Type": "SecureString",
-                "KeyId": {
-                    "Ref": "SSMKMSKey"
-                },
+                "Type": "String",
                 "Value": {
                     "Fn::Sub": "secret-key-for-${Environment}${EnvironmentSuffix}-${AWS::AccountId}"
                 },
