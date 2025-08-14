@@ -37,6 +37,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Mappings.AWSRegionAMI['us-east-1']).toBeDefined();
       expect(template.Mappings.AWSRegionAMI['us-east-1'].AMI).toBeDefined();
     });
+
+    test('should have conditions section', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.HasKeyPair).toBeDefined();
+    });
   });
 
   describe('Parameters', () => {
@@ -67,6 +72,7 @@ describe('TapStack CloudFormation Template', () => {
     test('OfficeIpAddress parameter should have correct validation', () => {
       const officeIpParam = template.Parameters.OfficeIpAddress;
       expect(officeIpParam.Type).toBe('String');
+      expect(officeIpParam.Default).toBe('0.0.0.0/0');
       expect(officeIpParam.Description).toContain('Office IP address');
       expect(officeIpParam.AllowedPattern).toBe('^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(3[0-2]|[12]?\\d)$');
       expect(officeIpParam.ConstraintDescription).toContain('CIDR format');
@@ -80,10 +86,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(instanceTypeParam.ConstraintDescription).toContain('valid EC2 instance type');
     });
 
-    test('KeyPairName parameter should be required', () => {
+    test('KeyPairName parameter should be optional', () => {
       const keyPairParam = template.Parameters.KeyPairName;
-      expect(keyPairParam.Type).toBe('AWS::EC2::KeyPair::KeyName');
-      expect(keyPairParam.Description).toContain('existing EC2 KeyPair');
+      expect(keyPairParam.Type).toBe('String');
+      expect(keyPairParam.Default).toBe('');
+      expect(keyPairParam.Description).toContain('Optional');
     });
 
     // Edge case tests for parameter validation
@@ -256,6 +263,20 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
+    describe('Launch Template', () => {
+      test('should have launch template with conditional KeyName', () => {
+        const launchTemplate = template.Resources.ProjectXLaunchTemplate;
+        expect(launchTemplate).toBeDefined();
+        expect(launchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
+        
+        const launchTemplateData = launchTemplate.Properties.LaunchTemplateData;
+        expect(launchTemplateData.KeyName['Fn::If']).toBeDefined();
+        expect(launchTemplateData.KeyName['Fn::If'][0]).toBe('HasKeyPair');
+        expect(launchTemplateData.KeyName['Fn::If'][1].Ref).toBe('KeyPairName');
+        expect(launchTemplateData.KeyName['Fn::If'][2].Ref).toBe('AWS::NoValue');
+      });
+    });
+
     describe('IAM Resources', () => {
       test('should have instance role with correct policies', () => {
         const role = template.Resources.ProjectXInstanceRole;
@@ -357,6 +378,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources).toBeDefined();
       expect(template.Parameters).toBeDefined();
       expect(template.Outputs).toBeDefined();
+      expect(template.Conditions).toBeDefined();
       expect(Object.keys(template.Resources).length).toBeGreaterThan(20);
     });
   });
