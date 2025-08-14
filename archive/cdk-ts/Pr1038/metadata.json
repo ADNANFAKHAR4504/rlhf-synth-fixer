@@ -1,0 +1,14 @@
+{
+  "po_id": "trainr244",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-08-12T21:03:22+05:30",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}
