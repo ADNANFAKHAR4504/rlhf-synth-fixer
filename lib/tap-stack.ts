@@ -75,6 +75,20 @@ export class TapStack extends cdk.Stack {
     });
     cdk.Tags.of(logGroup).add('Environment', 'Production');
 
+    kmsKey.addToResourcePolicy(
+    new iam.PolicyStatement({
+      principals: [new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`)],
+      actions: [
+        'kms:Encrypt',
+        'kms:Decrypt',
+        'kms:ReEncrypt*',
+        'kms:GenerateDataKey*',
+        'kms:DescribeKey',
+      ],
+      resources: ['*'],
+    })
+  );
+
     // Application Load Balancer Security Group
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
