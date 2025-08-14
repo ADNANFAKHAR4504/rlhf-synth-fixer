@@ -68,7 +68,7 @@ class WebApplicationStack(Stack):
     web_sg = ec2.SecurityGroup(
       self, "WebSecurityGroup1",
       vpc=vpc,
-      allow_all_outbound=True,
+      allow_all_outbound=False,
       description="Allows outbound traffic from web servers"
     )
     
