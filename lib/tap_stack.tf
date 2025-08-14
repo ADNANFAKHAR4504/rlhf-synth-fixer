@@ -180,8 +180,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
-  count = length(aws_subnet.public)
-
+  count  = length(aws_subnet.public)
   domain = "vpc"
 
   tags = merge(local.common_tags, {
@@ -192,8 +191,7 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "main" {
-  count = length(aws_subnet.public)
-
+  count         = length(aws_subnet.public)
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
@@ -393,9 +391,7 @@ resource "aws_iam_role_policy" "ssm_parameter_access" {
       },
       {
         Effect = "Allow"
-        Action = [
-          "kms:Decrypt"
-        ]
+        Action = ["kms:Decrypt"]
         Resource = data.aws_kms_key.ssm.arn
       }
     ]
@@ -515,9 +511,8 @@ resource "aws_cloudwatch_log_group" "rds" {
 }
 
 # =============================================================================
-# Launch Template
+# User data (inline, single file)
 # =============================================================================
-
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-"
   image_id      = data.aws_ssm_parameter.amazon_linux_ami.value
@@ -713,7 +708,7 @@ resource "aws_db_instance" "app" {
   storage_encrypted     = true
 
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15.11"
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
