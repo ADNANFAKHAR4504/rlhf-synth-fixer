@@ -38,7 +38,7 @@ export class CloudTrailConstruct extends Construct {
       }
     );
 
-    // CloudWatch Log Group for CloudTrail
+    // CloudWatch Log Group for CloudTrail - ensure KMS key is available
     this.logGroup = new logs.LogGroup(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-CloudTrail-Logs`,
@@ -48,6 +48,9 @@ export class CloudTrailConstruct extends Construct {
         encryptionKey: encryptionKey,
       }
     );
+
+    // Ensure LogGroup depends on the KMS key
+    this.logGroup.node.addDependency(encryptionKey);
 
     // CloudTrail with comprehensive logging
     this.trail = new cloudtrail.Trail(
@@ -64,6 +67,10 @@ export class CloudTrailConstruct extends Construct {
         s3KeyPrefix: 'cloudtrail-logs/',
       }
     );
+
+    // Ensure Trail depends on the KMS key and LogGroup
+    this.trail.node.addDependency(encryptionKey);
+    this.trail.node.addDependency(this.logGroup);
 
     // Add advanced event selectors for comprehensive logging
     const cfnTrail = this.trail.node.defaultChild as cloudtrail.CfnTrail;

@@ -77,6 +77,12 @@ export class TapStack extends cdk.Stack {
     // Create MFA enforcement
     const mfaConstruct = new MfaConstruct(this, 'MfaConstruct');
 
+    // Add explicit dependencies to ensure KMS keys are created first
+    cloudTrailConstruct.node.addDependency(kmsConstruct);
+    secretsConstruct.node.addDependency(kmsConstruct);
+    configConstruct.node.addDependency(kmsConstruct);
+    iamConstruct.node.addDependency(kmsConstruct);
+
     // Add security group references to outputs for cross-stack usage
     new cdk.CfnOutput(this, 'WebSecurityGroupId', {
       value: securityGroupsConstruct.webSecurityGroup.securityGroupId,
@@ -148,6 +154,9 @@ export class TapStack extends cdk.Stack {
 
     // Add bucket read permissions to the role
     dataBucket.grantRead(lambdaRole);
+
+    // Add dependencies for resources that use KMS keys
+    dataBucket.node.addDependency(kmsConstruct);
 
     // Output the bucket name
     new cdk.CfnOutput(this, 'DataBucketName', {
