@@ -40,8 +40,8 @@ The TapStack template has been updated to implement a "gold standard" secure S3 
 1. **Lint Warning - Parameter Not Used**: 
    - Issue: `W2001 Parameter ExternalAccountId not used` from cfn-lint
    - Root Cause: ExternalAccountId parameter was defined but not used after commenting out cross-account access
-   - Resolution: Removed parameter and hardcoded external account ID `123456789012` directly in bucket policy
-   - Impact: No more lint warnings, template is clean
+   - Resolution: Removed parameter and commented out cross-account access policy completely
+   - Impact: No more lint warnings, template is clean and deployment-ready
 
 2. **Invalid Principal in Policy Error**: 
    - Issue: `Invalid principal in policy (Service: S3, Status Code: 400)` for SecureDataBucketPolicy during deployment
@@ -75,9 +75,9 @@ The TapStack template has been updated to implement a "gold standard" secure S3 
    - Impact: Stack now deploys successfully without cross-account access
 
 5. **S3 Bucket Name Conflicts**: 
-   - Issue: Bucket names already existed causing "already exists" errors
+   - Issue: Bucket names already existed causing "already exists" errors (secure-data-718240086340-us-west-2 already exists)
    - Resolution: Removed explicit bucket names to let CloudFormation auto-generate unique names
-   - Impact: Stack deploys successfully with auto-generated bucket names
+   - Impact: Stack deploys successfully with auto-generated bucket names, no more naming conflicts
 
 6. **S3 Bucket Policy Resource Format**: 
    - Issue: Resource references in bucket policy were not in proper ARN format

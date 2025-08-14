@@ -45,7 +45,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secure-logs-${AWS::AccountId}-${AWS::Region}'
+      # Let CloudFormation auto-generate unique bucket name
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -75,7 +75,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secure-data-${AWS::AccountId}-${AWS::Region}'
+      # Let CloudFormation auto-generate unique bucket name
       # Enable versioning for data protection
       VersioningConfiguration:
         Status: Enabled

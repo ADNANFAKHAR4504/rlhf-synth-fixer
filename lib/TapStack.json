@@ -61,9 +61,6 @@
         "LoggingBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "secure-logs-${AWS::AccountId}-${AWS::Region}"
-                },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "BlockPublicPolicy": true,
@@ -109,9 +106,6 @@
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "secure-data-${AWS::AccountId}-${AWS::Region}"
-                },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
