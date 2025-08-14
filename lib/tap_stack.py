@@ -12,7 +12,6 @@ from typing import Optional
 
 import pulumi
 from pulumi import ResourceOptions
-
 from lib.main import deploy_infrastructure
 
 
