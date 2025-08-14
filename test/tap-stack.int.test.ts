@@ -45,33 +45,37 @@ describe('TapStack Integration Tests', () => {
     test('should have proper resource dependencies', () => {
       // Verify that resources have proper DependsOn relationships
       const resources = template.toJSON().Resources;
-      
+
       // Find VPC Flow Log and verify it depends on VPC
-      const flowLogResource = Object.values(resources).find((r: any) => 
-        r.Type === 'AWS::EC2::FlowLog'
+      const flowLogResource = Object.values(resources).find(
+        (r: any) => r.Type === 'AWS::EC2::FlowLog'
       );
       expect(flowLogResource).toBeDefined();
-      
+
       // Find VPC Endpoints and verify they depend on VPC
-      const vpcEndpoints = Object.values(resources).filter((r: any) => 
-        r.Type === 'AWS::EC2::VPCEndpoint'
+      const vpcEndpoints = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::EC2::VPCEndpoint'
       );
       expect(vpcEndpoints.length).toBeGreaterThan(0);
     });
 
     test('should have consistent tagging across all resources', () => {
       const resources = template.toJSON().Resources;
-      
+
       // Check that all tagged resources have the standard tags
       Object.values(resources).forEach((resource: any) => {
         if (resource.Properties?.Tags) {
           const tags = resource.Properties.Tags;
-          const hasEnvironmentTag = tags.some((tag: any) => tag.Key === 'Environment');
+          const hasEnvironmentTag = tags.some(
+            (tag: any) => tag.Key === 'Environment'
+          );
           const hasServiceTag = tags.some((tag: any) => tag.Key === 'Service');
-          
+
           if (hasEnvironmentTag || hasServiceTag) {
             // If any standard tag is present, all should be present
-            expect(tags.some((tag: any) => tag.Key === 'Environment')).toBe(true);
+            expect(tags.some((tag: any) => tag.Key === 'Environment')).toBe(
+              true
+            );
             expect(tags.some((tag: any) => tag.Key === 'Service')).toBe(true);
             expect(tags.some((tag: any) => tag.Key === 'Owner')).toBe(true);
             expect(tags.some((tag: any) => tag.Key === 'Project')).toBe(true);
@@ -114,7 +118,10 @@ describe('TapStack Integration Tests', () => {
               Statement: Match.arrayWith([
                 Match.objectLike({
                   Effect: 'Allow',
-                  Action: Match.arrayWith(['kms:Decrypt', 'kms:GenerateDataKey']),
+                  Action: Match.arrayWith([
+                    'kms:Decrypt',
+                    'kms:GenerateDataKey',
+                  ]),
                   Resource: Match.anyValue(),
                 }),
               ]),
@@ -202,17 +209,18 @@ describe('TapStack Integration Tests', () => {
     test('should have IAM roles with proper inline policies', () => {
       // Verify that at least one IAM role has inline policies
       const iamRoles = template.findResources('AWS::IAM::Role');
-      const rolesWithPolicies = Object.values(iamRoles).filter((role: any) => 
-        role.Properties?.Policies && role.Properties.Policies.length > 0
+      const rolesWithPolicies = Object.values(iamRoles).filter(
+        (role: any) =>
+          role.Properties?.Policies && role.Properties.Policies.length > 0
       );
-      
+
       expect(rolesWithPolicies.length).toBeGreaterThan(0);
-      
+
       // Verify that roles with policies have proper structure
       rolesWithPolicies.forEach((role: any) => {
         expect(role.Properties.Policies).toBeDefined();
         expect(Array.isArray(role.Properties.Policies)).toBe(true);
-        
+
         role.Properties.Policies.forEach((policy: any) => {
           expect(policy.PolicyName).toBeDefined();
           expect(policy.PolicyDocument).toBeDefined();
@@ -286,10 +294,12 @@ describe('TapStack Integration Tests', () => {
       // Verify that VPC endpoints exist
       const vpcEndpoints = template.findResources('AWS::EC2::VPCEndpoint');
       expect(Object.keys(vpcEndpoints).length).toBeGreaterThan(0);
-      
+
       // Verify endpoints have valid types (Interface or Gateway)
       Object.values(vpcEndpoints).forEach((endpoint: any) => {
-        expect(['Interface', 'Gateway']).toContain(endpoint.Properties.VpcEndpointType);
+        expect(['Interface', 'Gateway']).toContain(
+          endpoint.Properties.VpcEndpointType
+        );
       });
     });
 
@@ -313,7 +323,7 @@ describe('TapStack Integration Tests', () => {
       // Verify IAM roles reference KMS keys
       const iamRoles = template.findResources('AWS::IAM::Role');
       const kmsKeys = template.findResources('AWS::KMS::Key');
-      
+
       expect(Object.keys(iamRoles).length).toBeGreaterThan(0);
       expect(Object.keys(kmsKeys).length).toBe(3);
     });
@@ -322,7 +332,7 @@ describe('TapStack Integration Tests', () => {
       // Verify VPC Flow Logs depend on VPC
       const flowLogs = template.findResources('AWS::EC2::FlowLog');
       const vpcs = template.findResources('AWS::EC2::VPC');
-      
+
       expect(Object.keys(flowLogs).length).toBeGreaterThan(0);
       expect(Object.keys(vpcs).length).toBe(1);
     });
@@ -363,13 +373,13 @@ describe('TapStack Integration Tests', () => {
 
     test('should have valid output values', () => {
       const outputs = template.toJSON().Outputs;
-      
+
       // Verify VPC ID output references actual VPC
       expect(outputs.VpcId.Value).toBeDefined();
-      
+
       // Verify KMS key ARN output references actual key
       expect(outputs.DataKeyArn.Value).toBeDefined();
-      
+
       // Verify Lambda role ARN output references actual role
       expect(outputs.LambdaExecutionRoleArn.Value).toBeDefined();
     });
@@ -390,13 +400,15 @@ describe('TapStack Integration Tests', () => {
       // Verify prod stack has different resource names
       const prodResources = prodTemplate.toJSON().Resources;
       const testResources = template.toJSON().Resources;
-      
-      expect(Object.keys(prodResources).length).toBe(Object.keys(testResources).length);
+
+      expect(Object.keys(prodResources).length).toBe(
+        Object.keys(testResources).length
+      );
     });
 
     test('should have environment-specific tags', () => {
       const resources = template.toJSON().Resources;
-      
+
       // Check that all tagged resources have the correct environment tag
       Object.values(resources).forEach((resource: any) => {
         if (resource.Properties?.Tags) {
@@ -425,19 +437,27 @@ describe('TapStack Integration Tests', () => {
 
     test('should have compliance tags on all resources', () => {
       const resources = template.toJSON().Resources;
-      
+
       Object.values(resources).forEach((resource: any) => {
         if (resource.Properties?.Tags) {
           const tags = resource.Properties.Tags;
-          const hasComplianceTags = tags.some((tag: any) => 
+          const hasComplianceTags = tags.some((tag: any) =>
             ['ComplianceLevel', 'DataClassification'].includes(tag.Key)
           );
-          
+
           if (hasComplianceTags) {
-            expect(tags.some((tag: any) => tag.Key === 'ComplianceLevel')).toBe(true);
-            expect(tags.some((tag: any) => tag.Key === 'DataClassification')).toBe(true);
-            expect(tags.some((tag: any) => tag.Key === 'BackupRequired')).toBe(true);
-            expect(tags.some((tag: any) => tag.Key === 'MonitoringEnabled')).toBe(true);
+            expect(tags.some((tag: any) => tag.Key === 'ComplianceLevel')).toBe(
+              true
+            );
+            expect(
+              tags.some((tag: any) => tag.Key === 'DataClassification')
+            ).toBe(true);
+            expect(tags.some((tag: any) => tag.Key === 'BackupRequired')).toBe(
+              true
+            );
+            expect(
+              tags.some((tag: any) => tag.Key === 'MonitoringEnabled')
+            ).toBe(true);
           }
         }
       });
@@ -468,17 +488,23 @@ describe('TapStack Integration Tests', () => {
   describe('Resource Limits and Constraints', () => {
     test('should not exceed AWS service limits', () => {
       const resources = template.toJSON().Resources;
-      
+
       // Check KMS key count (limit is 100 per region)
-      const kmsKeys = Object.values(resources).filter((r: any) => r.Type === 'AWS::KMS::Key');
+      const kmsKeys = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::KMS::Key'
+      );
       expect(kmsKeys.length).toBeLessThanOrEqual(100);
-      
+
       // Check IAM role count (limit is 5000 per account)
-      const iamRoles = Object.values(resources).filter((r: any) => r.Type === 'AWS::IAM::Role');
+      const iamRoles = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::IAM::Role'
+      );
       expect(iamRoles.length).toBeLessThanOrEqual(5000);
-      
+
       // Check VPC count (limit is 5 per region)
-      const vpcs = Object.values(resources).filter((r: any) => r.Type === 'AWS::EC2::VPC');
+      const vpcs = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::EC2::VPC'
+      );
       expect(vpcs.length).toBeLessThanOrEqual(5);
     });
 

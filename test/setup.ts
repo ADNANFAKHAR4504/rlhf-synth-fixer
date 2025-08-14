@@ -11,4 +11,4 @@ if (typeof (global as any).fetch === 'undefined') {
 }
 
 // Export empty to satisfy module requirements
-export {}; 
+export {};

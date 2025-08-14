@@ -154,8 +154,10 @@ describe('TapStack', () => {
         environmentSuffix: 'test',
       });
       const iamConstruct = testStack.node.findChild('IamConstruct') as any;
-      const crossAccountPolicy = iamConstruct.createCrossAccountPolicy(['123456789012']);
-      
+      const crossAccountPolicy = iamConstruct.createCrossAccountPolicy([
+        '123456789012',
+      ]);
+
       expect(crossAccountPolicy).toBeDefined();
     });
   });
@@ -179,7 +181,9 @@ describe('TapStack', () => {
     });
 
     test('should create multiple subnet types', () => {
-      const subnetCount = Object.keys(template.findResources('AWS::EC2::Subnet')).length;
+      const subnetCount = Object.keys(
+        template.findResources('AWS::EC2::Subnet')
+      ).length;
       expect(subnetCount).toBeGreaterThan(0);
     });
 
@@ -190,12 +194,16 @@ describe('TapStack', () => {
     });
 
     test('should create VPC endpoints for AWS services', () => {
-      const endpointCount = Object.keys(template.findResources('AWS::EC2::VPCEndpoint')).length;
+      const endpointCount = Object.keys(
+        template.findResources('AWS::EC2::VPCEndpoint')
+      ).length;
       expect(endpointCount).toBeGreaterThan(0);
     });
 
     test('should create security groups with proper rules', () => {
-      const securityGroupCount = Object.keys(template.findResources('AWS::EC2::SecurityGroup')).length;
+      const securityGroupCount = Object.keys(
+        template.findResources('AWS::EC2::SecurityGroup')
+      ).length;
       expect(securityGroupCount).toBeGreaterThan(0);
     });
 
@@ -215,10 +223,13 @@ describe('TapStack', () => {
     });
 
     test('should create Application Load Balancer', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Type: 'application',
-        Scheme: 'internet-facing',
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Type: 'application',
+          Scheme: 'internet-facing',
+        }
+      );
     });
 
     test('should create WAF Web ACL', () => {
@@ -260,7 +271,9 @@ describe('TapStack', () => {
     });
 
     test('should create multiple S3 buckets', () => {
-      const bucketCount = Object.keys(template.findResources('AWS::S3::Bucket')).length;
+      const bucketCount = Object.keys(
+        template.findResources('AWS::S3::Bucket')
+      ).length;
       expect(bucketCount).toBeGreaterThanOrEqual(3); // data, logs, backup
     });
 
@@ -335,17 +348,23 @@ describe('TapStack', () => {
     });
 
     test('should create multiple security groups', () => {
-      const securityGroupCount = Object.keys(template.findResources('AWS::EC2::SecurityGroup')).length;
+      const securityGroupCount = Object.keys(
+        template.findResources('AWS::EC2::SecurityGroup')
+      ).length;
       expect(securityGroupCount).toBeGreaterThan(0);
     });
 
     test('should create VPC endpoints', () => {
-      const endpointCount = Object.keys(template.findResources('AWS::EC2::VPCEndpoint')).length;
+      const endpointCount = Object.keys(
+        template.findResources('AWS::EC2::VPCEndpoint')
+      ).length;
       expect(endpointCount).toBeGreaterThan(0);
     });
 
     test('should create S3 buckets', () => {
-      const bucketCount = Object.keys(template.findResources('AWS::S3::Bucket')).length;
+      const bucketCount = Object.keys(
+        template.findResources('AWS::S3::Bucket')
+      ).length;
       expect(bucketCount).toBeGreaterThanOrEqual(3);
     });
 
@@ -410,9 +429,7 @@ describe('TapStack', () => {
   describe('Environment Variables', () => {
     test('should use environment suffix in resource names', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: 'test' },
-        ]),
+        Tags: Match.arrayWith([{ Key: 'Environment', Value: 'test' }]),
       });
     });
   });
@@ -428,19 +445,33 @@ describe('TaggingUtils', () => {
 
     test('should generate resource name with suffix', () => {
       const { TaggingUtils } = require('../lib/utils/tagging');
-      const name = TaggingUtils.generateResourceName('prod', 'api', 'lambda', 'v1');
+      const name = TaggingUtils.generateResourceName(
+        'prod',
+        'api',
+        'lambda',
+        'v1'
+      );
       expect(name).toBe('prod-api-lambda-v1');
     });
 
     test('should handle empty suffix', () => {
       const { TaggingUtils } = require('../lib/utils/tagging');
-      const name = TaggingUtils.generateResourceName('prod', 'api', 'lambda', '');
+      const name = TaggingUtils.generateResourceName(
+        'prod',
+        'api',
+        'lambda',
+        ''
+      );
       expect(name).toBe('prod-api-lambda');
     });
 
     test('should handle special characters in parameters', () => {
       const { TaggingUtils } = require('../lib/utils/tagging');
-      const name = TaggingUtils.generateResourceName('prod', 'api-service', 'lambda-function');
+      const name = TaggingUtils.generateResourceName(
+        'prod',
+        'api-service',
+        'lambda-function'
+      );
       expect(name).toBe('prod-api-service-lambda-function');
     });
   });
@@ -448,30 +479,56 @@ describe('TaggingUtils', () => {
   describe('applyStandardTags', () => {
     test('should apply standard tags without additional tags', () => {
       const { TaggingUtils } = require('../lib/utils/tagging');
-      const output = new cdk.CfnOutput(new cdk.Stack(new cdk.App(), 'TestStack'), 'TestOutput', {
-        value: 'test',
-      });
+      const output = new cdk.CfnOutput(
+        new cdk.Stack(new cdk.App(), 'TestStack'),
+        'TestOutput',
+        {
+          value: 'test',
+        }
+      );
       TaggingUtils.applyStandardTags(output, 'prod', 'api', 'owner', 'project');
       expect(output).toBeDefined();
     });
 
     test('should apply standard tags with additional tags', () => {
       const { TaggingUtils } = require('../lib/utils/tagging');
-      const output = new cdk.CfnOutput(new cdk.Stack(new cdk.App(), 'TestStack'), 'TestOutput', {
-        value: 'test',
-      });
-      TaggingUtils.applyStandardTags(output, 'prod', 'api', 'owner', 'project', {
-        ResourceType: 'Test',
-      });
+      const output = new cdk.CfnOutput(
+        new cdk.Stack(new cdk.App(), 'TestStack'),
+        'TestOutput',
+        {
+          value: 'test',
+        }
+      );
+      TaggingUtils.applyStandardTags(
+        output,
+        'prod',
+        'api',
+        'owner',
+        'project',
+        {
+          ResourceType: 'Test',
+        }
+      );
       expect(output).toBeDefined();
     });
 
     test('should handle empty additional tags', () => {
       const { TaggingUtils } = require('../lib/utils/tagging');
-      const output = new cdk.CfnOutput(new cdk.Stack(new cdk.App(), 'TestStack'), 'TestOutput', {
-        value: 'test',
-      });
-      TaggingUtils.applyStandardTags(output, 'prod', 'api', 'owner', 'project', {});
+      const output = new cdk.CfnOutput(
+        new cdk.Stack(new cdk.App(), 'TestStack'),
+        'TestOutput',
+        {
+          value: 'test',
+        }
+      );
+      TaggingUtils.applyStandardTags(
+        output,
+        'prod',
+        'api',
+        'owner',
+        'project',
+        {}
+      );
       expect(output).toBeDefined();
     });
   });
