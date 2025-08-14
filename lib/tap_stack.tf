@@ -173,8 +173,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
-  count = length(aws_subnet.public)
-
+  count  = length(aws_subnet.public)
   domain = "vpc"
 
   tags = merge(local.common_tags, {
@@ -185,8 +184,7 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "main" {
-  count = length(aws_subnet.public)
-
+  count         = length(aws_subnet.public)
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
@@ -386,9 +384,7 @@ resource "aws_iam_role_policy" "ssm_parameter_access" {
       },
       {
         Effect = "Allow"
-        Action = [
-          "kms:Decrypt"
-        ]
+        Action = ["kms:Decrypt"]
         Resource = data.aws_kms_key.ssm.arn
       }
     ]
@@ -457,22 +453,22 @@ resource "aws_ssm_parameter" "cloudwatch_config" {
         files = {
           collect_list = [
             {
-              file_path      = "/var/log/messages"
-              log_group_name = "/app/${local.name_prefix}/web"
+              file_path       = "/var/log/messages"
+              log_group_name  = "/app/${local.name_prefix}/web"
               log_stream_name = "{instance_id}/messages"
-              timezone       = "UTC"
+              timezone        = "UTC"
             },
             {
-              file_path      = "/var/log/nginx/access.log"
-              log_group_name = "/app/${local.name_prefix}/web"
+              file_path       = "/var/log/nginx/access.log"
+              log_group_name  = "/app/${local.name_prefix}/web"
               log_stream_name = "{instance_id}/nginx-access"
-              timezone       = "UTC"
+              timezone        = "UTC"
             },
             {
-              file_path      = "/var/log/nginx/error.log"
-              log_group_name = "/app/${local.name_prefix}/web"
+              file_path       = "/var/log/nginx/error.log"
+              log_group_name  = "/app/${local.name_prefix}/web"
               log_stream_name = "{instance_id}/nginx-error"
-              timezone       = "UTC"
+              timezone        = "UTC"
             }
           ]
         }
@@ -508,42 +504,9 @@ resource "aws_cloudwatch_log_group" "rds" {
 }
 
 # =============================================================================
-# Launch Template
+# User data (inline, single file)
 # =============================================================================
 
-resource "aws_launch_template" "app" {
-  name_prefix   = "${local.name_prefix}-"
-  image_id      = data.aws_ssm_parameter.amazon_linux_ami.value
-  instance_type = var.instance_type
-
-  vpc_security_group_ids = [aws_security_group.app.id]
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.instance_profile.name
-  }
-
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    name_prefix = local.name_prefix
-    aws_region  = var.aws_region
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = merge(local.common_tags, {
-      Name = "${local.name_prefix}-instance"
-    })
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-lt"
-  })
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Create user_data.sh content inline since we need single file
 locals {
   user_data_script = <<-EOF
 #!/bin/bash
@@ -587,8 +550,11 @@ aws ssm get-parameter --name "/app/${local.name_prefix}/cloudwatch/config" --reg
 EOF
 }
 
-# Update launch template to use inline user data
-resource "aws_launch_template" "app_updated" {
+# =============================================================================
+# Launch Template (single, uses inline user data)
+# =============================================================================
+
+resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-"
   image_id      = data.aws_ssm_parameter.amazon_linux_ami.value
   instance_type = var.instance_type
@@ -622,18 +588,17 @@ resource "aws_launch_template" "app_updated" {
 # =============================================================================
 
 resource "aws_autoscaling_group" "app" {
-  name                = "${local.name_prefix}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
-
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_desired_capacity
+  name                        = "${local.name_prefix}-asg"
+  vpc_zone_identifier         = aws_subnet.private[*].id
+  target_group_arns           = [aws_lb_target_group.app.arn]
+  health_check_type           = "ELB"
+  health_check_grace_period   = 300
+  min_size                    = var.asg_min_size
+  max_size                    = var.asg_max_size
+  desired_capacity            = var.asg_desired_capacity
 
   launch_template {
-    id      = aws_launch_template.app_updated.id
+    id      = aws_launch_template.app.id
     version = "$Latest"
   }
 
@@ -753,8 +718,8 @@ resource "aws_db_instance" "app" {
   db_subnet_group_name   = aws_db_subnet_group.app.name
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   auto_minor_version_upgrade = true
   deletion_protection        = true
