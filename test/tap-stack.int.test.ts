@@ -24,37 +24,37 @@ describe('TapStack Integration Tests', () => {
   test('Stack synthesizes without errors', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
-    expect(synthesized).toContain('integration-us-east-1-vpc');
+    expect(synthesized).toContain(`integration-${awsRegion}-vpc`);
   });
 
   test('Networking resources are present and tagged', () => {
-    expect(synthesized).toContain('integration-us-east-1-public-subnet');
-    expect(synthesized).toContain('integration-us-east-1-private-subnet');
-    expect(synthesized).toContain('integration-us-east-1-igw');
+    expect(synthesized).toContain(`integration-${awsRegion}-public-subnet`);
+    expect(synthesized).toContain(`integration-${awsRegion}-private-subnet`);
+    expect(synthesized).toContain(`integration-${awsRegion}-igw`);
   });
 
   test('Security groups and rules are correctly configured', () => {
-    expect(synthesized).toContain('integration-us-east-1-web-sg');
-    expect(synthesized).toContain('integration-us-east-1-app-sg');
-    expect(synthesized).toContain('integration-us-east-1-db-sg');
+    expect(synthesized).toContain(`integration-${awsRegion}-web-sg`);
+    expect(synthesized).toContain(`integration-${awsRegion}-app-sg`);
+    expect(synthesized).toContain(`integration-${awsRegion}-db-sg`);
     expect(synthesized).toContain('Allow HTTP from known IP');
     expect(synthesized).toContain('Allow HTTPS from known IP');
     expect(synthesized).toContain('Allow MySQL from app SG');
   });
 
   test('IAM role and policy are least privilege', () => {
-    expect(synthesized).toContain('integration-us-east-1-ec2-role');
+    expect(synthesized).toContain(`integration-${awsRegion}-ec2-role`);
     expect(synthesized).toContain('ec2:DescribeInstances');
   });
 
   test('CloudTrail logging is enabled and bucket is present', () => {
-    expect(synthesized).toContain('integration-us-east-1-trail');
-    expect(synthesized).toContain('integration-us-east-1-trail-bucket');
+    expect(synthesized).toContain(`integration-${awsRegion}-trail`);
+    expect(synthesized).toContain(`integration-${awsRegion}-trail-bucket`);
   });
 
   test('S3 buckets are secure and tagged', () => {
-    expect(synthesized).toContain('integration-us-east-1-app-data');
-    expect(synthesized).toContain('integration-us-east-1-logs');
+    expect(synthesized).toContain(`integration-${awsRegion}-app-data`);
+    expect(synthesized).toContain(`integration-${awsRegion}-logs`);
     expect(synthesized).toContain('application-data');
     expect(synthesized).toContain('logs');
     expect(synthesized).toContain('AES256');
