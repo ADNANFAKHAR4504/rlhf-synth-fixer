@@ -79,14 +79,14 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${Environment}'
+      LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}-${Environment}'
       RetentionInDays: 365
 
   CloudTrailLogStream:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      LogStreamName: !Sub '${AWS::AccountId}_CloudTrail_${AWS::Region}'
+      LogStreamName: !Sub '${AWS::AccountId}_CloudTrail_${AWS::Region}_${AWS::StackName}-${Environment}'
 
   CloudTrailLogsRole:
     Type: AWS::IAM::Role
@@ -111,7 +111,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'cloudtrail-logs-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'cloudtrail-logs-${AWS::StackName}-${Environment}-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -203,7 +203,7 @@ Resources:
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}-${Environment}'
       RetentionInDays: 30
 
   VPCFlowLogs:
@@ -387,7 +387,7 @@ Resources:
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'rds-credentials-${Environment}'
+      Name: !Sub 'rds-credentials-${AWS::StackName}-${Environment}'
       Description: 'RDS Database credentials'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DatabaseUsername}"}'
@@ -409,7 +409,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub 'db-subnet-group-${Environment}'
+      DBSubnetGroupName: !Sub 'db-subnet-group-${AWS::StackName}-${Environment}'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -421,7 +421,7 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub 'database-${Environment}'
+      DBInstanceIdentifier: !Sub 'database-${AWS::StackName}-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.37'
@@ -450,7 +450,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'ALB-${Environment}'
+      Name: !Sub 'ALB-${AWS::StackName}-${Environment}'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -465,7 +465,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'ALBTargetGroup-${Environment}'
+      Name: !Sub 'ALBTargetGroup-${AWS::StackName}-${Environment}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -501,7 +501,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub 'WebACL-${Environment}'
+      Name: !Sub 'WebACL-${AWS::StackName}-${Environment}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -545,10 +545,10 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'WebACL-${Environment}'
+        MetricName: !Sub 'WebACL-${AWS::StackName}-${Environment}'
       Tags:
         - Key: Name
-          Value: !Sub 'WebACL-${Environment}'
+          Value: !Sub 'WebACL-${AWS::StackName}-${Environment}'
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -600,7 +600,7 @@ Resources:
         WebACLId: !GetAtt WebACL.Arn
       Tags:
         - Key: Name
-          Value: !Sub 'CloudFront-${Environment}'
+          Value: !Sub 'CloudFront-${AWS::StackName}-${Environment}'
 
   SSLCertificate:
     Type: AWS::CertificateManager::Certificate
@@ -609,7 +609,7 @@ Resources:
       ValidationMethod: DNS
       Tags:
         - Key: Name
-          Value: !Sub 'SSLCert-${Environment}'
+          Value: !Sub 'SSLCert-${AWS::StackName}-${Environment}'
 
   # =========================================================================
   # 2. ROOT USER MFA - AWS CONFIG RULE
@@ -624,7 +624,7 @@ Resources:
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'aws-config-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'aws-config-${AWS::StackName}-${Environment}-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
