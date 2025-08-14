@@ -140,12 +140,12 @@ export class TapStack extends TerraformStack {
         keyName: keyName,
         securityGroupIds: [ec2Sg.securityGroup.id],
         userData: Fn.base64encode(
-        Fn.rawString(
-          `#!/bin/bash
+          Fn.rawString(
+            `#!/bin/bash
           echo "Hello, World! from EC2" > index.html
           nohup busybox httpd -f -p 80 &`
-        )
-      ),
+          )
+        ),
       }
     );
 
@@ -154,7 +154,7 @@ export class TapStack extends TerraformStack {
       name: namePrefix,
       environment: environment,
       launchTemplateId: launchTemplate.launchTemplate.id,
-      subnetIds: vpc.publicSubnets.map(s => s.id),
+      subnetIds: [Fn.element(vpc.publicSubnets, 0)],
       minSize: minSize,
       maxSize: maxSize,
       desiredCapacity: desiredCapacity,
@@ -175,8 +175,7 @@ export class TapStack extends TerraformStack {
       description: 'The ID of the main VPC.',
     });
     new TerraformOutput(this, 'public_subnet_ids', {
-      value: vpc.publicSubnets.map(s => s.id),
-      description: 'The IDs of the public subnets.',
+    value: vpc.publicSubnets,
     });
     new TerraformOutput(this, 'ec2_security_group_id', {
       value: ec2Sg.securityGroup.id,
