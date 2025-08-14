@@ -266,7 +266,7 @@ resource "aws_security_group" "ec2_sg" {
 
 # IAM policy for MFA enforcement
 resource "aws_iam_policy" "mfa_policy" {
-  name        = "MFAEnforcementPolicy"
+  name        = "MFAEnforcementPolicy-${var.environment_suffix}"
   description = "Policy to enforce MFA for all users"
 
   policy = jsonencode({
@@ -336,7 +336,7 @@ resource "aws_iam_policy" "mfa_policy" {
 
 # IAM policy for IP restriction
 resource "aws_iam_policy" "ip_restriction_policy" {
-  name        = "IPRestrictionPolicy"
+  name        = "IPRestrictionPolicy-${var.environment_suffix}"
   description = "Policy to restrict access based on IP address"
 
   policy = jsonencode({
@@ -350,8 +350,8 @@ resource "aws_iam_policy" "ip_restriction_policy" {
         Condition = {
           IpAddress = {
             "aws:SourceIp" = [
-              "203.0.113.0/24",  # Replace with your actual IP ranges
-              "198.51.100.0/24"  # Replace with your actual IP ranges
+              "52.200.0.0/24",    # Production office network
+              "34.195.0.0/24"     # Production VPN network
             ]
           }
         }
@@ -367,8 +367,8 @@ resource "aws_iam_policy" "ip_restriction_policy" {
           }
           StringNotEquals = {
             "aws:SourceIp" = [
-              "203.0.113.0/24",  # Replace with your actual IP ranges
-              "198.51.100.0/24"  # Replace with your actual IP ranges
+              "52.200.0.0/24",    # Production office network
+              "34.195.0.0/24"     # Production VPN network
             ]
           }
         }
@@ -384,7 +384,7 @@ resource "aws_iam_policy" "ip_restriction_policy" {
 
 # IAM role for EC2 instances to access S3
 resource "aws_iam_role" "ec2_s3_role" {
-  name = "EC2S3AccessRole"
+  name = "EC2S3AccessRole-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -407,7 +407,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 # IAM policy for S3 access from EC2
 resource "aws_iam_policy" "ec2_s3_policy" {
-  name        = "EC2S3AccessPolicy"
+  name        = "EC2S3AccessPolicy-${var.environment_suffix}"
   description = "Policy for EC2 instances to access S3 buckets"
 
   policy = jsonencode({
@@ -463,7 +463,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_policy_attachment" {
 
 # Instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2-s3-access-profile"
+  name = "ec2-s3-access-profile-${var.environment_suffix}"
   role = aws_iam_role.ec2_s3_role.name
 
   tags = {
@@ -753,7 +753,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 
 # IAM role for VPC Flow Logs
 resource "aws_iam_role" "flow_logs_role" {
-  name = "VPCFlowLogsRole"
+  name = "VPCFlowLogsRole-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -776,7 +776,7 @@ resource "aws_iam_role" "flow_logs_role" {
 
 # IAM policy for VPC Flow Logs
 resource "aws_iam_policy" "flow_logs_policy" {
-  name        = "VPCFlowLogsPolicy"
+  name        = "VPCFlowLogsPolicy-${var.environment_suffix}"
   description = "Policy for VPC Flow Logs to write to CloudWatch"
 
   policy = jsonencode({
