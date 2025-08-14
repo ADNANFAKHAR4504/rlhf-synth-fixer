@@ -203,14 +203,11 @@ export class LambdaStack extends Construct {
       },
     });
 
-    // Use CDKTF data source for AWS account ID
-    const caller = new DataAwsCallerIdentity(this, 'current');
-
     new LambdaPermission(this, 'prodLambdaInvokePermission', {
-      statementId: 'AllowExecutionFromIAM',
+      statementId: 'AllowExecutionFromSpecificRole',
       action: 'lambda:InvokeFunction',
       functionName: lambdaFunction.functionName,
-      principal: `arn:aws:iam::${caller.accountId}:root`, // Dynamically fetch account ID
+      principal: lambdaExecutionRole.arn, // Restrict to the Lambda execution role only
     });
   }
 }
