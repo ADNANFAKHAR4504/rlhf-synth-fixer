@@ -639,7 +639,7 @@
                     },
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y aws-cli\n\n# Install CloudWatch agent\nyum install -y amazon-cloudwatch-agent\n\n# Basic system setup\nhostnamectl set-hostname \"projectx-${EnvironmentSuffix}-$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\"\n\n# Signal successful completion\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ProjectXInstance1 --region ${AWS::Region}\n"
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y aws-cli\n\n# Install CloudWatch agent\nyum install -y amazon-cloudwatch-agent\n\n# Basic system setup\nhostnamectl set-hostname \"projectx-${EnvironmentSuffix}-$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\"\n"
                         }
                     },
                     "TagSpecifications": [
@@ -713,11 +713,6 @@
         },
         "ProjectXInstance1": {
             "Type": "AWS::EC2::Instance",
-            "CreationPolicy": {
-                "ResourceSignal": {
-                    "Timeout": "PT15M"
-                }
-            },
             "Properties": {
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
@@ -766,11 +761,6 @@
         },
         "ProjectXInstance2": {
             "Type": "AWS::EC2::Instance",
-            "CreationPolicy": {
-                "ResourceSignal": {
-                    "Timeout": "PT15M"
-                }
-            },
             "Properties": {
                 "LaunchTemplate": {
                     "LaunchTemplateId": {

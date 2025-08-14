@@ -348,9 +348,6 @@ Resources:
             
             # Basic system setup
             hostnamectl set-hostname "projectx-${EnvironmentSuffix}-$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
-            
-            # Signal successful completion
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ProjectXInstance1 --region ${AWS::Region}
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -391,9 +388,6 @@ Resources:
   # EC2 Instance in Private Subnet 1
   ProjectXInstance1:
     Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT15M
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref ProjectXLaunchTemplate
@@ -412,9 +406,6 @@ Resources:
   # EC2 Instance in Private Subnet 2
   ProjectXInstance2:
     Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT15M
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref ProjectXLaunchTemplate
