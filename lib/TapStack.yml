@@ -491,7 +491,7 @@ Resources:
     Properties:
       Runtime: python3.12
       Handler: index.handler
-      Timeout: 900
+      Timeout: 300
       Role: !GetAtt KSKWaiterRole.Arn
       Code:
         ZipFile: |
@@ -499,7 +499,6 @@ Resources:
           log = logging.getLogger()
           log.setLevel(logging.INFO)
           r53 = boto3.client('route53')
-
           def respond(event, status, data=None, reason=None):
               body = {
                   'Status': status,
@@ -510,23 +509,15 @@ Resources:
                   'LogicalResourceId': event['LogicalResourceId'],
                   'Data': data or {}
               }
-              req = urllib.request.Request(
-                  event['ResponseURL'],
-                  data=json.dumps(body).encode('utf-8'),
-                  method='PUT'
-              )
+              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(body).encode('utf-8'), method='PUT')
               req.add_header('content-type', '')
               urllib.request.urlopen(req).read()
-
-          # We consider success when the hosted zone is SIGNING and the named KSK is ACTIVE.
-          def ksk_active_and_signing(hz_id, ksk_name):
+          def ksk_is_active(hz_id, ksk_name):
               resp = r53.get_dnssec(HostedZoneId=hz_id)
-              serve = (resp.get('Status') or {}).get('ServeSignature')
               ksk_ok = any(ksk.get('Name') == ksk_name and ksk.get('Status') == 'ACTIVE'
                            for ksk in resp.get('KeySigningKeys', []))
-              log.info(f"ServeSignature={serve}, KSK_OK={ksk_ok}")
-              return serve == 'SIGNING' and ksk_ok
-
+              log.info(f"Checking KSK {ksk_name}: ACTIVE={ksk_ok}")
+              return ksk_ok
           def handler(event, context):
               try:
                   if event['RequestType'] == 'Delete':
@@ -534,12 +525,12 @@ Resources:
                   props = event['ResourceProperties']
                   hz_id = props['HostedZoneId']
                   ksk_name = props['KSKName']
-                  deadline = time.time() + 900
+                  deadline = time.time() + 240  # 4 minutes max wait
                   while time.time() < deadline:
-                      if ksk_active_and_signing(hz_id, ksk_name):
+                      if ksk_is_active(hz_id, ksk_name):
                           return respond(event, 'SUCCESS', {'Status': 'ACTIVE'})
-                      time.sleep(15)
-                  return respond(event, 'FAILED', reason='KSK did not become ACTIVE/SIGNING in time')
+                      time.sleep(10)
+                  return respond(event, 'FAILED', reason='KSK did not become ACTIVE in time')
               except Exception as e:
                   log.exception('waiter error')
                   return respond(event, 'FAILED', reason=str(e))
