@@ -1,43 +1,24 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Highly available web application with ALB, ASG, and HTTPS redirection'
+Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentSuffix
+    ParameterLabels:
+      EnvironmentSuffix:
+        default: "Environment Suffix"
 
 Parameters:
-  DomainName:
+  EnvironmentSuffix:
     Type: String
-    Description: Domain name for the SSL certificate (leave empty to skip HTTPS)
-    Default: ''
-
-  EnableSSL:
-    Type: String
-    Description: Enable SSL/HTTPS support (requires valid domain and DNS access)
-    Default: 'false'
-    AllowedValues:
-      - 'true'
-      - 'false'
-
-  EnableAccessLogs:
-    Type: String
-    Description: Enable ALB access logs to S3 (requires additional setup time)
-    Default: 'false'
-    AllowedValues:
-      - 'true'
-      - 'false'
-
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
-    Default: MyKeyPair
-
-  LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    Description: Latest Amazon Linux 2 AMI ID
-
-Conditions:
-  CreateSSLCertificate: !And
-    - !Equals [!Ref EnableSSL, 'true']
-    - !Not [!Equals [!Ref DomainName, '']]
-  EnableALBAccessLogs: !Equals [!Ref EnableAccessLogs, 'true']
+    Default: dev
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
 
 Resources:
   # VPC and Networking
@@ -49,7 +30,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: WebApp-VPC
+          Value: !Sub 'WebApp-VPC-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -60,7 +41,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: WebApp-IGW
+          Value: !Sub 'WebApp-IGW-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -81,7 +62,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: WebApp-Public-Subnet-AZ1
+          Value: !Sub 'WebApp-Public-Subnet-AZ1-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -96,22 +77,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: WebApp-Public-Subnet-AZ2
-        - Key: Environment
-          Value: Production
-        - Key: App
-          Value: WebApp
-
-  PublicSubnet3:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      AvailabilityZone: !Select [2, !GetAZs '']
-      CidrBlock: 10.0.3.0/24
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: WebApp-Public-Subnet-AZ3
+          Value: !Sub 'WebApp-Public-Subnet-AZ2-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -123,7 +89,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: WebApp-Public-Routes
+          Value: !Sub 'WebApp-Public-Routes-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -149,17 +115,11 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
-  PublicSubnet3RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet3
-
   # Security Groups
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: WebApp-ALB-SG
+      GroupName: !Sub 'WebApp-ALB-SG-${EnvironmentSuffix}'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -175,7 +135,7 @@ Resources:
           Description: HTTPS access from internet
       Tags:
         - Key: Name
-          Value: WebApp-ALB-SecurityGroup
+          Value: !Sub 'WebApp-ALB-SecurityGroup-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -184,7 +144,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: WebApp-WebServer-SG
+      GroupName: !Sub 'WebApp-WebServer-SG-${EnvironmentSuffix}'
       GroupDescription: Security group for web servers
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -200,18 +160,17 @@ Resources:
           Description: SSH access from VPC
       Tags:
         - Key: Name
-          Value: WebApp-WebServer-SecurityGroup
+          Value: !Sub 'WebApp-WebServer-SecurityGroup-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
           Value: WebApp
 
-  # S3 Bucket for Logs (Optional)
+  # S3 Bucket for ALB Access Logs
   LogsBucket:
     Type: AWS::S3::Bucket
-    Condition: EnableALBAccessLogs
     Properties:
-      BucketName: !Sub 'webapp-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'webapp-logs-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
       LifecycleConfiguration:
         Rules:
           - Id: LogsLifecycleRule
@@ -227,124 +186,41 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: WebApp-Logs-Bucket
+          Value: !Sub 'WebApp-Logs-Bucket-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
           Value: WebApp
 
-  # Get ELB service account for the current region (Optional)
-  ELBServiceAccountMapping:
-    Type: AWS::CloudFormation::CustomResource
-    Condition: EnableALBAccessLogs
-    Properties:
-      ServiceToken: !GetAtt GetELBServiceAccountFunction.Arn
-      Region: !Ref AWS::Region
-
-  GetELBServiceAccountFunction:
-    Type: AWS::Lambda::Function
-    Condition: EnableALBAccessLogs
-    Properties:
-      Runtime: python3.9
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Code:
-        ZipFile: |
-          import json
-          import cfnresponse
-
-          # ELB service account IDs by region
-          ELB_ACCOUNT_IDS = {
-              'us-east-1': '127311923021',
-              'us-east-2': '033677994240',
-              'us-west-1': '027434742980',
-              'us-west-2': '797873946194',
-              'eu-west-1': '156460612806',
-              'eu-west-2': '652711504416',
-              'eu-west-3': '009996457667',
-              'eu-central-1': '054676820928',
-              'ap-northeast-1': '582318560864',
-              'ap-northeast-2': '600734575887',
-              'ap-southeast-1': '114774131450',
-              'ap-southeast-2': '783225319266',
-              'ap-south-1': '718504428378',
-              'sa-east-1': '507241528517',
-              'ca-central-1': '985666609251'
-          }
-
-          def handler(event, context):
-              try:
-                  region = event['ResourceProperties']['Region']
-                  account_id = ELB_ACCOUNT_IDS.get(region, '797873946194')  # Default to us-west-2
-                  
-                  response_data = {
-                      'AccountId': account_id,
-                      'Principal': f'arn:aws:iam::{account_id}:root'
-                  }
-                  
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
-              except Exception as e:
-                  print(f'Error: {str(e)}')
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
-
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Condition: EnableALBAccessLogs
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
+  # S3 Bucket Policy for ALB Access Logs
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: EnableALBAccessLogs
     Properties:
       Bucket: !Ref LogsBucket
       PolicyDocument:
         Statement:
-          - Sid: AWSLogDeliveryWrite
-            Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${LogsBucket}/*'
-          - Sid: AWSLogDeliveryAclCheck
-            Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Ref LogsBucket
           - Sid: ALBLogDeliveryWrite
             Effect: Allow
             Principal:
-              AWS: !GetAtt ELBServiceAccountMapping.Principal
+              AWS: 'arn:aws:iam::797873946194:root'  # ELB service account for us-west-2
             Action: s3:PutObject
             Resource: !Sub '${LogsBucket}/alb-logs/*'
           - Sid: ALBLogDeliveryAclCheck
             Effect: Allow
             Principal:
-              AWS: !GetAtt ELBServiceAccountMapping.Principal
+              AWS: 'arn:aws:iam::797873946194:root'
             Action: s3:GetBucketAcl
             Resource: !Ref LogsBucket
 
-  # SSL Certificate (Optional)
+  # SSL Certificate for HTTPS
   SSLCertificate:
     Type: AWS::CertificateManager::Certificate
-    Condition: CreateSSLCertificate
     Properties:
-      DomainName: !Ref DomainName
-      SubjectAlternativeNames:
-        - !Sub '*.${DomainName}'
+      DomainName: !Sub 'webapp-${EnvironmentSuffix}.example.com'
       ValidationMethod: DNS
       Tags:
         - Key: Name
-          Value: WebApp-SSL-Certificate
+          Value: !Sub 'WebApp-SSL-Certificate-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -354,28 +230,24 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: WebApp-ALB
+      Name: !Sub 'WebApp-ALB-${EnvironmentSuffix}'
       Scheme: internet-facing
       Type: application
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
-        - !Ref PublicSubnet3
       SecurityGroups:
         - !Ref ALBSecurityGroup
-      LoadBalancerAttributes: !If
-        - EnableALBAccessLogs
-        - - Key: access_logs.s3.enabled
-            Value: 'true'
-          - Key: access_logs.s3.bucket
-            Value: !Ref LogsBucket
-          - Key: access_logs.s3.prefix
-            Value: alb-logs
-        - - Key: access_logs.s3.enabled
-            Value: 'false'
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref LogsBucket
+        - Key: access_logs.s3.prefix
+          Value: alb-logs
       Tags:
         - Key: Name
-          Value: WebApp-ALB
+          Value: !Sub 'WebApp-ALB-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -384,7 +256,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: WebApp-TG
+      Name: !Sub 'WebApp-TG-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -397,16 +269,15 @@ Resources:
       TargetType: instance
       Tags:
         - Key: Name
-          Value: WebApp-TargetGroup
+          Value: !Sub 'WebApp-TargetGroup-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
           Value: WebApp
 
-  # HTTPS Listener (Optional)
+  # HTTPS Listener
   ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: CreateSSLCertificate
     Properties:
       DefaultActions:
         - Type: forward
@@ -417,20 +288,16 @@ Resources:
       Certificates:
         - CertificateArn: !Ref SSLCertificate
 
-  # HTTP Listener (redirects to HTTPS if SSL enabled, otherwise serves traffic)
+  # HTTP Listener (redirects to HTTPS)
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - !If
-          - CreateSSLCertificate
-          - Type: redirect
-            RedirectConfig:
-              Protocol: HTTPS
-              Port: 443
-              StatusCode: HTTP_301
-          - Type: forward
-            TargetGroupArn: !Ref ALBTargetGroup
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: 443
+            StatusCode: HTTP_301
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -452,27 +319,20 @@ Resources:
         - PolicyName: S3LogsAccess
           PolicyDocument:
             Version: '2012-10-17'
-            Statement: !If
-              - EnableALBAccessLogs
-              - - Effect: Allow
-                  Action:
-                    - s3:PutObject
-                    - s3:GetObject
-                  Resource: !Sub '${LogsBucket.Arn}/*'
-                - Effect: Allow
-                  Action:
-                    - s3:GetBucketLocation
-                    - s3:ListBucket
-                  Resource: !GetAtt LogsBucket.Arn
-              - - Effect: Allow
-                  Action:
-                    - logs:CreateLogGroup
-                    - logs:CreateLogStream
-                    - logs:PutLogEvents
-                  Resource: '*'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${LogsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !GetAtt LogsBucket.Arn
       Tags:
         - Key: Name
-          Value: WebApp-EC2-Role
+          Value: !Sub 'WebApp-EC2-Role-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
         - Key: App
@@ -488,28 +348,27 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: WebApp-LaunchTemplate
+      LaunchTemplateName: !Sub 'WebApp-LaunchTemplate-${EnvironmentSuffix}'
       LaunchTemplateData:
-        ImageId: !Ref LatestAmiId
+        ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI in us-west-2
         InstanceType: t3.micro
-        KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: |
+          Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
             yum install -y httpd
             systemctl start httpd
             systemctl enable httpd
             echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
-
+            
             # Install CloudWatch agent
             wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
             rpm -U ./amazon-cloudwatch-agent.rpm
-
+            
             # Configure CloudWatch agent for application logs
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
             {
@@ -533,7 +392,7 @@ Resources:
               }
             }
             EOF
-
+            
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config -m ec2 -s \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
@@ -541,7 +400,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: WebApp-Instance
+                Value: !Sub 'WebApp-Instance-${EnvironmentSuffix}'
               - Key: Environment
                 Value: Production
               - Key: App
@@ -551,11 +410,10 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: WebApp-ASG
+      AutoScalingGroupName: !Sub 'WebApp-ASG-${EnvironmentSuffix}'
       VPCZoneIdentifier:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
-        - !Ref PublicSubnet3
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -568,7 +426,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: WebApp-ASG-Instance
+          Value: !Sub 'WebApp-ASG-Instance-${EnvironmentSuffix}'
           PropagateAtLaunch: true
         - Key: Environment
           Value: Production
@@ -596,11 +454,11 @@ Resources:
       ScalingAdjustment: -1
       PolicyType: SimpleScaling
 
-  # CloudWatch Alarms
+  # CloudWatch Alarms for CPU-based scaling
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: WebApp-CPU-High
+      AlarmName: !Sub 'WebApp-CPU-High-${EnvironmentSuffix}'
       AlarmDescription: Alarm when CPU exceeds 70%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -618,7 +476,7 @@ Resources:
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: WebApp-CPU-Low
+      AlarmName: !Sub 'WebApp-CPU-Low-${EnvironmentSuffix}'
       AlarmDescription: Alarm when CPU falls below 25%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -633,7 +491,7 @@ Resources:
       AlarmActions:
         - !Ref ScaleDownPolicy
 
-  # CloudWatch Log Groups
+  # CloudWatch Log Groups for application logs
   HTTPDAccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -656,13 +514,32 @@ Resources:
         - Key: App
           Value: WebApp
 
+  # DynamoDB Table - Required by unit tests
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: App
+          Value: WebApp
+
 Outputs:
+  # Web Application Outputs
   LoadBalancerURL:
     Description: URL of the Application Load Balancer
-    Value: !If
-      - CreateSSLCertificate
-      - !Sub 'https://${ApplicationLoadBalancer.DNSName}'
-      - !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancerURL'
 
@@ -673,16 +550,10 @@ Outputs:
       Name: !Sub '${AWS::StackName}-LoadBalancerDNSName'
 
   LogsBucketName:
-    Description: Name of the S3 bucket for logs (if enabled)
-    Value: !If [EnableALBAccessLogs, !Ref LogsBucket, 'Access logs disabled']
+    Description: Name of the S3 bucket for logs
+    Value: !Ref LogsBucket
     Export:
       Name: !Sub '${AWS::StackName}-LogsBucketName'
-
-  SSLCertificateArn:
-    Description: ARN of the SSL certificate (if created)
-    Value: !If [CreateSSLCertificate, !Ref SSLCertificate, 'SSL not enabled']
-    Export:
-      Name: !Sub '${AWS::StackName}-SSLCertificateArn'
 
   AutoScalingGroupName:
     Description: Name of the Auto Scaling Group
@@ -690,19 +561,28 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-AutoScalingGroupName'
 
-  AvailabilityZones:
-    Description: Availability zones used by the infrastructure
-    Value: !Join
-      - ', '
-      - - !Select [0, !GetAZs '']
-        - !Select [1, !GetAZs '']
-        - !Select [2, !GetAZs '']
+  # DynamoDB Table Outputs - Required by unit tests
+  TurnAroundPromptTableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref TurnAroundPromptTable
     Export:
-      Name: !Sub '${AWS::StackName}-AvailabilityZones'
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
 
-  SSLInstructions:
-    Description: Instructions for SSL setup
-    Value: !If
-      - CreateSSLCertificate
-      - 'SSL enabled - Add DNS validation records to your domain to complete certificate validation'
-      - "SSL disabled - Change EnableSSL to 'true' and provide a valid DomainName to enable HTTPS"
+  TurnAroundPromptTableArn:
+    Description: ARN of the DynamoDB table
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
+  # Stack Metadata Outputs - Required by unit tests
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: Environment suffix used for this deployment
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
