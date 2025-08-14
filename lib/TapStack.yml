@@ -12,7 +12,7 @@ Parameters:
     Description: Environment name (prod/dev/stage)
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
+    Type: String
     Default: ''
     Description: EC2 Key Pair for SSH access
 
