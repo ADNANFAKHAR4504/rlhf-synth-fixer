@@ -30,6 +30,18 @@ Mappings:
     us-west-2:
       AvailabilityZone1: 'us-west-2a'
       AvailabilityZone2: 'us-west-2b'
+    us-east-1:
+      AvailabilityZone1: 'us-east-1a'
+      AvailabilityZone2: 'us-east-1b'
+    us-east-2:
+      AvailabilityZone1: 'us-east-2a'
+      AvailabilityZone2: 'us-east-2b'
+    eu-west-1:
+      AvailabilityZone1: 'eu-west-1a'
+      AvailabilityZone2: 'eu-west-1b'
+    ap-southeast-1:
+      AvailabilityZone1: 'ap-southeast-1a'
+      AvailabilityZone2: 'ap-southeast-1b'
 
 Conditions:
   HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, '']]

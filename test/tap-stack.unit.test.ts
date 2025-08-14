@@ -89,11 +89,18 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Mappings', () => {
-    test('should have RegionMap with us-west-2 availability zones', () => {
+    test('should have RegionMap with availability zones for multiple regions', () => {
       const regionMap = template.Mappings.RegionMap;
+      
+      // Test us-west-2
       expect(regionMap['us-west-2']).toBeDefined();
       expect(regionMap['us-west-2'].AvailabilityZone1).toBe('us-west-2a');
       expect(regionMap['us-west-2'].AvailabilityZone2).toBe('us-west-2b');
+      
+      // Test us-east-1
+      expect(regionMap['us-east-1']).toBeDefined();
+      expect(regionMap['us-east-1'].AvailabilityZone1).toBe('us-east-1a');
+      expect(regionMap['us-east-1'].AvailabilityZone2).toBe('us-east-1b');
     });
   });
 
