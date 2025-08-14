@@ -8,6 +8,7 @@ and automated backup strategies.
 """
 
 import json
+import os
 from typing import Dict, Any, Optional
 import pulumi
 import pulumi_aws as aws
@@ -470,71 +471,70 @@ class TapStack(ComponentResource):
         )
     
     def _create_s3_buckets(self):
-      """Create S3 buckets with encryption and versioning."""
-      # Application Bucket
-      self.app_bucket = aws.s3.Bucket(
-          f"{self.name_prefix}-app-bucket",
-          bucket=f"{self.name_prefix}-app-bucket-{pulumi.get_stack()}",
-          versioning=aws.s3.BucketVersioningArgs(enabled=True),
-          server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-              rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                  apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                      sse_algorithm="aws:kms",
-                      kms_master_key_id=self.kms_key.arn,
-                  ),
-                  bucket_key_enabled=True,
-              )
-          ),
-          tags={
-              "Name": f"{self.name_prefix}-app-bucket",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # Public Access Block for Application Bucket
-      self.app_bucket_pab = aws.s3.BucketPublicAccessBlock(
-          f"{self.name_prefix}-app-bucket-pab",
-          bucket=self.app_bucket.id,
-          block_public_acls=True,
-          block_public_policy=True,
-          ignore_public_acls=True,
-          restrict_public_buckets=True,
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # Backup Bucket
-      self.backup_bucket = aws.s3.Bucket(
-          f"{self.name_prefix}-backup-bucket",
-          bucket=f"{self.name_prefix}-backup-bucket-{pulumi.get_stack()}",
-          versioning=aws.s3.BucketVersioningArgs(enabled=True),
-          server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-              rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                  apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                      sse_algorithm="aws:kms",
-                      kms_master_key_id=self.kms_key.arn,
-                  ),
-                  bucket_key_enabled=True,
-              )
-          ),
-          tags={
-              "Name": f"{self.name_prefix}-backup-bucket",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # Public Access Block for Backup Bucket
-      self.backup_bucket_pab = aws.s3.BucketPublicAccessBlock(
-          f"{self.name_prefix}-backup-bucket-pab",
-          bucket=self.backup_bucket.id,
-          block_public_acls=True,
-          block_public_policy=True,
-          ignore_public_acls=True,
-          restrict_public_buckets=True,
-          opts=ResourceOptions(parent=self)
-      )
-
+        """Create S3 buckets with encryption and versioning."""
+        # Application Bucket
+        self.app_bucket = aws.s3.Bucket(
+            f"{self.name_prefix}-app-bucket",
+            bucket=f"{self.name_prefix}-app-bucket-{pulumi.get_stack()}",
+            versioning=aws.s3.BucketVersioningArgs(enabled=True),
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="aws:kms",
+                        kms_master_key_id=self.kms_key.arn,
+                    ),
+                    bucket_key_enabled=True,
+                )
+            ),
+            tags={
+                "Name": f"{self.name_prefix}-app-bucket",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Public Access Block for Application Bucket
+        self.app_bucket_pab = aws.s3.BucketPublicAccessBlock(
+            f"{self.name_prefix}-app-bucket-pab",
+            bucket=self.app_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Backup Bucket
+        self.backup_bucket = aws.s3.Bucket(
+            f"{self.name_prefix}-backup-bucket",
+            bucket=f"{self.name_prefix}-backup-bucket-{pulumi.get_stack()}",
+            versioning=aws.s3.BucketVersioningArgs(enabled=True),
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="aws:kms",
+                        kms_master_key_id=self.kms_key.arn,
+                    ),
+                    bucket_key_enabled=True,
+                )
+            ),
+            tags={
+                "Name": f"{self.name_prefix}-backup-bucket",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Public Access Block for Backup Bucket
+        self.backup_bucket_pab = aws.s3.BucketPublicAccessBlock(
+            f"{self.name_prefix}-backup-bucket-pab",
+            bucket=self.backup_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self)
+        )
     
     def _create_rds_instance(self):
         """Create RDS instance with Multi-AZ deployment."""
@@ -593,17 +593,21 @@ class TapStack(ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        self.db_secret_version = aws.secretsmanager.SecretVersion(
-            f"{self.name_prefix}-db-secret-version",
-            secret_id=self.db_secret.id,
-            secret_string=json.dumps({
+        # Create secret version with proper handling of Output values
+        def create_secret_string(endpoint):
+            return json.dumps({
                 "username": "admin",
                 "password": "changeme123!",
                 "engine": "mysql",
-                "host": self.rds_instance.endpoint,
+                "host": endpoint,
                 "port": 3306,
                 "dbname": "tapdb"
-            }),
+            })
+        
+        self.db_secret_version = aws.secretsmanager.SecretVersion(
+            f"{self.name_prefix}-db-secret-version",
+            secret_id=self.db_secret.id,
+            secret_string=self.rds_instance.endpoint.apply(create_secret_string),
             opts=ResourceOptions(parent=self)
         )
     
@@ -629,12 +633,14 @@ systemctl enable docker
 usermod -a -G docker ec2-user
 """
         
+        # Get current AWS region
+        current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
+        
         self.launch_template = aws.ec2.LaunchTemplate(
             f"{self.name_prefix}-launch-template",
             name_prefix=f"{self.name_prefix}-lt-",
             image_id=ami.id,
             instance_type="c5.large",  # C5 series for compute-intensive tasks
-            key_name="tap-key",  # Assumes key pair exists
             vpc_security_group_ids=[self.ec2_sg.id],
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
                 name=self.ec2_instance_profile.name
@@ -879,6 +885,9 @@ usermod -a -G docker ec2-user
             opts=ResourceOptions(parent=self)
         )
         
+        # Get current AWS region
+        current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
+        
         # Task Definition
         self.task_definition = aws.ecs.TaskDefinition(
             f"{self.name_prefix}-task",
@@ -900,7 +909,7 @@ usermod -a -G docker ec2-user
                     "logDriver": "awslogs",
                     "options": {
                         "awslogs-group": self.log_group.name,
-                        "awslogs-region": "us-west-2",
+                        "awslogs-region": current_region,
                         "awslogs-stream-prefix": "ecs",
                     },
                 },
@@ -1071,94 +1080,94 @@ usermod -a -G docker ec2-user
         )
     
     def _create_codepipeline(self):
-      """Create CI/CD pipeline using AWS CodePipeline."""
-      # CodePipeline Artifact Store (S3 Bucket)
-      self.pipeline_bucket = aws.s3.Bucket(
-          f"{self.name_prefix}-pipeline-bucket",
-          bucket=f"{self.name_prefix}-pipeline-{pulumi.get_stack()}",
-          server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-              rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                  apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                      sse_algorithm="aws:kms",
-                      kms_master_key_id=self.kms_key.arn,
-                  ),
-              )
-          ),
-          tags={
-              "Name": f"{self.name_prefix}-pipeline-bucket",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # Public Access Block for Pipeline Bucket
-      self.pipeline_bucket_pab = aws.s3.BucketPublicAccessBlock(
-          f"{self.name_prefix}-pipeline-bucket-pab",
-          bucket=self.pipeline_bucket.id,
-          block_public_acls=True,
-          block_public_policy=True,
-          ignore_public_acls=True,
-          restrict_public_buckets=True,
-          opts=ResourceOptions(parent=self)
-      )
-      
-      # CodePipeline
-      self.codepipeline = aws.codepipeline.Pipeline(
-          f"{self.name_prefix}-pipeline",
-          name=f"{self.name_prefix}-pipeline",
-          role_arn=self.codepipeline_role.arn,
-          artifact_stores=[
-              aws.codepipeline.PipelineArtifactStoreArgs(
-                  location=self.pipeline_bucket.bucket,
-                  type="S3",
-                  encryption_key=aws.codepipeline.PipelineArtifactStoreEncryptionKeyArgs(
-                      id=self.kms_key.arn,
-                      type="KMS",
-                  ),
-              )
-          ],
-          stages=[
-              aws.codepipeline.PipelineStageArgs(
-                  name="Source",
-                  actions=[
-                      aws.codepipeline.PipelineStageActionArgs(
-                          name="Source",
-                          category="Source",
-                          owner="ThirdParty",
-                          provider="GitHub",
-                          version="1",
-                          output_artifacts=["source_output"],
-                          configuration={
-                              "Owner": "your-github-username",
-                              "Repo": "your-repo-name",
-                              "Branch": "main",
-                              "OAuthToken": "your-github-token",  # Use Secrets Manager in production
-                          },
-                      )
-                  ],
-              ),
-              aws.codepipeline.PipelineStageArgs(
-                  name="Deploy",
-                  actions=[
-                      aws.codepipeline.PipelineStageActionArgs(
-                          name="Deploy",
-                          category="Deploy",
-                          owner="AWS",
-                          provider="ECS",
-                          version="1",
-                          input_artifacts=["source_output"],
-                          configuration={
-                              "ClusterName": self.ecs_cluster.name,
-                              "ServiceName": self.ecs_service.name,
-                              "FileName": "imagedefinitions.json",
-                          },
-                      )
-                  ],
-              ),
-          ],
-          tags={
-              "Name": f"{self.name_prefix}-pipeline",
-              "Environment": self.environment_suffix,
-          },
-          opts=ResourceOptions(parent=self)
-      )
+        """Create CI/CD pipeline using AWS CodePipeline."""
+        # CodePipeline Artifact Store (S3 Bucket)
+        self.pipeline_bucket = aws.s3.Bucket(
+            f"{self.name_prefix}-pipeline-bucket",
+            bucket=f"{self.name_prefix}-pipeline-{pulumi.get_stack()}",
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="aws:kms",
+                        kms_master_key_id=self.kms_key.arn,
+                    ),
+                )
+            ),
+            tags={
+                "Name": f"{self.name_prefix}-pipeline-bucket",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Public Access Block for Pipeline Bucket
+        self.pipeline_bucket_pab = aws.s3.BucketPublicAccessBlock(
+            f"{self.name_prefix}-pipeline-bucket-pab",
+            bucket=self.pipeline_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # CodePipeline
+        self.codepipeline = aws.codepipeline.Pipeline(
+            f"{self.name_prefix}-pipeline",
+            name=f"{self.name_prefix}-pipeline",
+            role_arn=self.codepipeline_role.arn,
+            artifact_stores=[
+                aws.codepipeline.PipelineArtifactStoreArgs(
+                    location=self.pipeline_bucket.bucket,
+                    type="S3",
+                    encryption_key=aws.codepipeline.PipelineArtifactStoreEncryptionKeyArgs(
+                        id=self.kms_key.arn,
+                        type="KMS",
+                    ),
+                )
+            ],
+            stages=[
+                aws.codepipeline.PipelineStageArgs(
+                    name="Source",
+                    actions=[
+                        aws.codepipeline.PipelineStageActionArgs(
+                            name="Source",
+                            category="Source",
+                            owner="ThirdParty",
+                            provider="GitHub",
+                            version="1",
+                            output_artifacts=["source_output"],
+                            configuration={
+                                "Owner": "your-github-username",
+                                "Repo": "your-repo-name",
+                                "Branch": "main",
+                                "OAuthToken": "your-github-token",  # Use Secrets Manager in production
+                            },
+                        )
+                    ],
+                ),
+                aws.codepipeline.PipelineStageArgs(
+                    name="Deploy",
+                    actions=[
+                        aws.codepipeline.PipelineStageActionArgs(
+                            name="Deploy",
+                            category="Deploy",
+                            owner="AWS",
+                            provider="ECS",
+                            version="1",
+                            input_artifacts=["source_output"],
+                            configuration={
+                                "ClusterName": self.ecs_cluster.name,
+                                "ServiceName": self.ecs_service.name,
+                                "FileName": "imagedefinitions.json",
+                            },
+                        )
+                    ],
+                ),
+            ],
+            tags={
+                "Name": f"{self.name_prefix}-pipeline",
+                "Environment": self.environment_suffix,
+            },
+            opts=ResourceOptions(parent=self)
+        )
