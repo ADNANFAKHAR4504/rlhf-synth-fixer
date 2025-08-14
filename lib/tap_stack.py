@@ -51,7 +51,7 @@ class WebApplicationStack(Stack):
     db_sg = ec2.SecurityGroup(
       self, "DBSecurityGroup1",
       vpc=vpc,
-      allow_all_outbound=True,
+      allow_all_outbound=False,
       description="Allows access to the RDS database"
     )
     
@@ -84,7 +84,6 @@ class WebApplicationStack(Stack):
       description="Allow HTTP traffic from within the VPC"
     )
 
-    ## Ignore as DB quota is reached limit
     db_instance = rds.DatabaseInstance(
       self, "MySQLDBInstance1",
       engine=rds.DatabaseInstanceEngine.mysql(
