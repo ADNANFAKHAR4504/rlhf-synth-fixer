@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { Vpc, VpcConfig } from '@cdktf/provider-aws/lib/vpc';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
@@ -9,7 +9,6 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 interface BaseModuleProps {
   name: string;
@@ -27,10 +26,14 @@ export class VpcModule extends Construct {
   public readonly privateSubnets: Subnet[];
   public readonly internetGateway: InternetGateway;
 
-  constructor(scope: Construct, id: string, props: BaseModuleProps & { cidrBlock: string }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: BaseModuleProps & { cidrBlock: string }
+  ) {
     super(scope, id);
 
-    const region = new DataAwsRegion(this, 'currentRegion');
+    // const region = new DataAwsRegion(this, 'currentRegion');
     const azs = new DataAwsAvailabilityZones(this, 'availableZones', {
       state: 'available',
     });
@@ -134,18 +137,18 @@ export class SecurityGroupModule extends Construct {
         protocol: string;
         cidrBlocks: string[];
       }[];
-    },
+    }
   ) {
     super(scope, id);
 
-    const ingress = props.ingressRules.map((rule) => ({
+    const ingress = props.ingressRules.map(rule => ({
       fromPort: rule.fromPort,
       toPort: rule.toPort,
       protocol: rule.protocol,
       cidrBlocks: rule.cidrBlocks,
     }));
 
-    const egress = props.egressRules.map((rule) => ({
+    const egress = props.egressRules.map(rule => ({
       fromPort: rule.fromPort,
       toPort: rule.toPort,
       protocol: rule.protocol,
@@ -171,7 +174,11 @@ export class SecurityGroupModule extends Construct {
 export class S3Module extends Construct {
   public readonly bucket: S3Bucket;
 
-  constructor(scope: Construct, id: string, props: BaseModuleProps & { bucketName: string }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: BaseModuleProps & { bucketName: string }
+  ) {
     super(scope, id);
 
     this.bucket = new S3Bucket(this, 's3Bucket', {
@@ -200,7 +207,7 @@ export class LaunchTemplateModule extends Construct {
       keyName: string;
       securityGroupIds: string[];
       userData: string;
-    },
+    }
   ) {
     super(scope, id);
 
@@ -234,7 +241,7 @@ export class AutoScalingGroupModule extends Construct {
       minSize: number;
       maxSize: number;
       desiredCapacity: number;
-    },
+    }
   ) {
     super(scope, id);
 

@@ -1,3 +1,4 @@
+// __tests__/tap-stack.unit.test.ts
 import { App, Testing } from 'cdktf';
 import 'cdktf/lib/testing/adapters/jest';
 import { TapStack } from '../lib/tap-stack';
@@ -6,25 +7,21 @@ import { TapStack } from '../lib/tap-stack';
 jest.mock('../lib/modules', () => {
   return {
     VpcModule: jest.fn(() => ({
-      vpcId: 'mock-vpc-id',
-      publicSubnetId: 'mock-public-subnet-id',
+      vpc: { id: 'mock-vpc-id' },
+      publicSubnets: [{ id: 'mock-public-subnet-id' }],
+      privateSubnets: [{ id: 'mock-private-subnet-id' }],
+    })),
+    SecurityGroupModule: jest.fn(() => ({
+      securityGroup: { id: 'mock-security-group-id' },
+    })),
+    LaunchTemplateModule: jest.fn(() => ({
+      launchTemplate: { id: 'mock-launch-template-id' },
+    })),
+    AutoScalingGroupModule: jest.fn(() => ({
+      autoScalingGroup: { id: 'mock-asg-id' },
     })),
     S3Module: jest.fn(() => ({
-      bucketName: 'mock-bucket-name',
-      bucketArn: 'arn:aws:s3:::mock-bucket-name',
-    })),
-    IamModule: jest.fn(() => ({
-      roleName: 'mock-role-name',
-      roleArn: 'arn:aws:iam::123456789012:role/mock-role-name',
-      instanceProfileName: 'mock-instance-profile',
-    })),
-    SecurityModule: jest.fn(() => ({
-      securityGroupId: 'mock-sg-id',
-      securityGroupName: 'mock-sg-name',
-    })),
-    Ec2Module: jest.fn(() => ({
-      instanceId: 'mock-instance-id',
-      instancePublicIp: '1.2.3.4',
+      bucket: { bucket: 'mock-bucket-name' },
     })),
   };
 });
@@ -32,13 +29,14 @@ jest.mock('../lib/modules', () => {
 describe('TapStack Unit Tests', () => {
   let app: App;
   let stack: TapStack;
+  let synthesized: string;
 
   const {
     VpcModule,
+    SecurityGroupModule,
+    LaunchTemplateModule,
+    AutoScalingGroupModule,
     S3Module,
-    IamModule,
-    SecurityModule,
-    Ec2Module,
   } = require('../lib/modules');
 
   beforeEach(() => {
@@ -46,184 +44,154 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Stack Configuration and Synthesis', () => {
-    test('should instantiate with default props and match snapshot', () => {
+    test('should instantiate with custom props', () => {
       app = new App();
-      stack = new TapStack(app, 'TestDefaultStack', { awsRegion: 'us-west-2' });
-      const synthesized = Testing.synth(stack);
+      stack = new TapStack(app, 'CustomStack', {
+        environmentSuffix: 'prod',
+        stateBucket: 'custom-bucket',
+        stateBucketRegion: 'ap-south-1',
+        awsRegion: 'us-west-2',
+        defaultTags: {
+          tags: { Project: 'Custom' },
+        },
+      });
 
-      expect(stack).toBeDefined();
-      expect(synthesized).toBeDefined();
+      synthesized = Testing.synth(stack);
+      const parsed = JSON.parse(synthesized);
+
+      // Backend settings
+      expect(synthesized).toContain('custom-bucket');
+      expect(synthesized).toContain('prod/CustomStack.tfstate');
+      expect(parsed.provider.aws[0].region).toBe('us-west-2');
+
+      // Default tags
+      expect(parsed.provider.aws[0].default_tags[0].tags).toEqual({
+        Project: 'Custom',
+      });
+
       expect(synthesized).toMatchSnapshot();
+    });
+
+    test('should use default values when no props provided', () => {
+      app = new App();
+      stack = new TapStack(app, 'DefaultStack');
+
+      synthesized = Testing.synth(stack);
+      const parsed = JSON.parse(synthesized);
+
+      expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
+      expect(parsed.terraform.backend.s3.key).toBe('dev/DefaultStack.tfstate');
+      expect(parsed.provider.aws[0].region).toBe('us-east-1');
+      expect(synthesized).toMatchSnapshot();
+    });
+
+    test('should configure S3 backend correctly', () => {
+      app = new App();
+      stack = new TapStack(app, 'BackendStack');
+      synthesized = Testing.synth(stack);
+      const parsed = JSON.parse(synthesized);
+
+      expect(parsed.terraform.backend.s3).toBeDefined();
+      expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
+      expect(parsed.terraform.backend.s3.key).toBe(
+        'dev/BackendStack.tfstate'
+      );
+      expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
+      expect(parsed.terraform.backend.s3.encrypt).toBe(true);
+    });
+
+    test('should enable S3 backend state locking', () => {
+      app = new App();
+      stack = new TapStack(app, 'LockingStack');
+      synthesized = Testing.synth(stack);
+      const parsed = JSON.parse(synthesized);
+
+      expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
     });
   });
 
-  describe('VpcModule', () => {
+  describe('Module Instantiation and Wiring', () => {
     beforeEach(() => {
       app = new App();
-      stack = new TapStack(app, 'TestVpc', { awsRegion: 'us-west-2' });
+      stack = new TapStack(app, 'ModuleWiringStack');
       Testing.fullSynth(stack);
     });
 
-    test('should create VpcModule with expected props', () => {
+    test('should create VpcModule with correct props', () => {
       expect(VpcModule).toHaveBeenCalledTimes(1);
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
-        'VpcModule',
+        'vpcModule',
         expect.objectContaining({
-          tags: expect.objectContaining({
-            Environment: 'dev',
-            Owner: 'team-a',
-          }),
+          cidrBlock: '10.0.0.0/16',
+          environment: expect.any(String),
         })
       );
     });
 
-    test('should output vpc_id and public_subnet_id', () => {
-      const outputs = JSON.parse(Testing.synth(stack)).output;
-      expect(outputs.vpc_id.value).toEqual('mock-vpc-id');
-      expect(outputs.public_subnet_id.value).toEqual('mock-public-subnet-id');
-    });
-  });
-
-  describe('S3Module', () => {
-    beforeEach(() => {
-      app = new App();
-      stack = new TapStack(app, 'TestS3', { awsRegion: 'us-west-2' });
-      Testing.fullSynth(stack);
+    test('should create SecurityGroupModule wired to VpcModule VPC', () => {
+      const vpcInstance = VpcModule.mock.results[0].value;
+      expect(SecurityGroupModule).toHaveBeenCalledTimes(1);
+      expect(SecurityGroupModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'ec2SecurityGroup',
+        expect.objectContaining({
+          vpcId: vpcInstance.vpc.id,
+        })
+      );
     });
 
-    test('should create S3Module with versioning and forceDestroy', () => {
+    test('should create LaunchTemplateModule wired to security group', () => {
+      const sgInstance = SecurityGroupModule.mock.results[0].value;
+      expect(LaunchTemplateModule).toHaveBeenCalledTimes(1);
+      expect(LaunchTemplateModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'launchTemplateModule',
+        expect.objectContaining({
+          securityGroupIds: [sgInstance.securityGroup.id],
+        })
+      );
+    });
+
+    test('should create AutoScalingGroupModule wired to launch template', () => {
+      const ltInstance = LaunchTemplateModule.mock.results[0].value;
+      const vpcInstance = VpcModule.mock.results[0].value;
+      expect(AutoScalingGroupModule).toHaveBeenCalledTimes(1);
+      expect(AutoScalingGroupModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'autoScalingGroupModule',
+        expect.objectContaining({
+          launchTemplateId: ltInstance.launchTemplate.id,
+          subnetIds: vpcInstance.publicSubnets.map((s: any) => s.id),
+        })
+      );
+    });
+
+    test('should create S3Module with correct name', () => {
       expect(S3Module).toHaveBeenCalledTimes(1);
       expect(S3Module).toHaveBeenCalledWith(
         expect.anything(),
-        'S3Module',
+        's3BucketModule',
         expect.objectContaining({
-          versioning: true,
-          forceDestroy: true,
-          tags: expect.objectContaining({
-            Environment: 'dev',
-            Owner: 'team-a',
-          }),
+          bucketName: expect.stringContaining('-data-'),
         })
-      );
-    });
-
-    test('should output bucket_name and bucket_arn', () => {
-      const outputs = JSON.parse(Testing.synth(stack)).output;
-      expect(outputs.bucket_name.value).toEqual('mock-bucket-name');
-      expect(outputs.bucket_arn.value).toEqual(
-        'arn:aws:s3:::mock-bucket-name'
       );
     });
   });
 
-  describe('IamModule', () => {
-    beforeEach(() => {
+  describe('Terraform Outputs', () => {
+    test('should output values from mocked modules', () => {
       app = new App();
-      stack = new TapStack(app, 'TestIam', { awsRegion: 'us-west-2' });
-      Testing.fullSynth(stack);
-    });
-
-    test('should create IamModule linked to S3 bucket', () => {
-      const s3Instance = S3Module.mock.results[0].value;
-      expect(IamModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'IamModule',
-        expect.objectContaining({
-          s3BucketArn: s3Instance.bucketArn,
-          s3BucketName: s3Instance.bucketName,
-        })
-      );
-    });
-
-    test('should output iam_role_name, iam_role_arn, and instance_profile_name', () => {
+      stack = new TapStack(app, 'OutputStack');
       const outputs = JSON.parse(Testing.synth(stack)).output;
-      expect(outputs.iam_role_name.value).toEqual('mock-role-name');
-      expect(outputs.iam_role_arn.value).toEqual(
-        'arn:aws:iam::123456789012:role/mock-role-name'
-      );
-      expect(outputs.instance_profile_name.value).toEqual(
-        'mock-instance-profile'
-      );
-    });
-  });
 
-  describe('SecurityModule', () => {
-    beforeEach(() => {
-      app = new App();
-      stack = new TapStack(app, 'TestSecurity', { awsRegion: 'us-west-2' });
-      Testing.fullSynth(stack);
-    });
-
-    test('should create SecurityModule linked to VPC', () => {
-      const vpcInstance = VpcModule.mock.results[0].value;
-      expect(SecurityModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'SecurityModule',
-        expect.objectContaining({
-          vpcId: vpcInstance.vpcId,
-        })
+      expect(outputs.vpc_id.value).toBe('mock-vpc-id');
+      expect(outputs.public_subnet_ids.value).toContain(
+        'mock-public-subnet-id'
+      );
+      expect(outputs.ec2_security_group_id.value).toBe(
+        'mock-security-group-id'
       );
     });
-
-    test('should output security_group_id and security_group_name', () => {
-      const outputs = JSON.parse(Testing.synth(stack)).output;
-      expect(outputs.security_group_id.value).toEqual('mock-sg-id');
-      expect(outputs.security_group_name.value).toEqual('mock-sg-name');
-    });
-  });
-
-  describe('Ec2Module', () => {
-    beforeEach(() => {
-      app = new App();
-      stack = new TapStack(app, 'TestEc2', { awsRegion: 'us-west-2' });
-      Testing.fullSynth(stack);
-    });
-
-    test('should create Ec2Module linked to subnet, SG, and IAM', () => {
-      const vpcInstance = VpcModule.mock.results[0].value;
-      const sgInstance = SecurityModule.mock.results[0].value;
-      const iamInstance = IamModule.mock.results[0].value;
-
-      expect(Ec2Module).toHaveBeenCalledWith(
-        expect.anything(),
-        'Ec2Module',
-        expect.objectContaining({
-          subnetId: vpcInstance.publicSubnetId,
-          securityGroupIds: [sgInstance.securityGroupId],
-          instanceProfileName: iamInstance.instanceProfileName,
-          instanceType: 't2.micro',
-        })
-      );
-    });
-
-    test('should output ec2_instance_id and ec2_instance_public_ip', () => {
-      const outputs = JSON.parse(Testing.synth(stack)).output;
-      expect(outputs.ec2_instance_id.value).toEqual('mock-instance-id');
-      expect(outputs.ec2_instance_public_ip.value).toEqual('1.2.3.4');
-    });
-  });
-
-  // --- Branch coverage for awsRegion selection ---
-  test('should use props.awsRegion when AWS_REGION_OVERRIDE is falsy', () => {
-    delete process.env.AWS_REGION_OVERRIDE; // ensure falsy
-    const { TapStack } = require('../lib/tap-stack');
-    const app = new App();
-    const stack = new TapStack(app, 'TestFallback', { awsRegion: 'us-west-2' });
-    const synthesized = Testing.synth(stack);
-
-    expect(synthesized).toContain('us-west-2');
-  });
-
-  test('should use AWS_REGION_OVERRIDE when provided', () => {
-    process.env.AWS_REGION_OVERRIDE = 'us-west-2';
-    const { TapStack } = require('../lib/tap-stack');
-    const app = new App();
-    const stack = new TapStack(app, 'TestOverride', { awsRegion: 'us-west-2' });
-    const synthesized = Testing.synth(stack);
-
-    expect(synthesized).toContain('us-west-2');
-
-    delete process.env.AWS_REGION_OVERRIDE; // cleanup
   });
 });
