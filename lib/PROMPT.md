@@ -20,5 +20,3 @@
 * Separate Python files or classes for the S3, IAM, and Logging constructs.
 * A `tests/` directory containing unit tests.
 * A `README.md` file explaining how to deploy and test the solution.
-
-**Note:** The solution must exclusively use **AWS CDK with Python**. No other Infrastructure as Code (IaC) tool is permitted.
