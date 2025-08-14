@@ -6,7 +6,7 @@ import fs from 'fs';
 const mockOutputsByEnvironment = {
   dev: {
     VpcId: 'vpc-dev1234567890abcdef0',
-    VpcCidr: '172.16.0.0/16',
+    VpcCidr: '10.0.0.0/16',
     PublicSubnet1Id: 'subnet-dev1234567890abcdef0',
     PublicSubnet2Id: 'subnet-dev1234567890abcdef1',
     PublicSubnet1Az: 'us-east-1a',
@@ -17,7 +17,7 @@ const mockOutputsByEnvironment = {
   },
   staging: {
     VpcId: 'vpc-staging1234567890abcdef0',
-    VpcCidr: '172.17.0.0/16',
+    VpcCidr: '10.1.0.0/16',
     PublicSubnet1Id: 'subnet-staging1234567890abcdef0',
     PublicSubnet2Id: 'subnet-staging1234567890abcdef1',
     PublicSubnet1Az: 'us-east-1a',
@@ -28,7 +28,7 @@ const mockOutputsByEnvironment = {
   },
   prod: {
     VpcId: 'vpc-prod1234567890abcdef0',
-    VpcCidr: '172.18.0.0/16',
+    VpcCidr: '10.2.0.0/16',
     PublicSubnet1Id: 'subnet-prod1234567890abcdef0',
     PublicSubnet2Id: 'subnet-prod1234567890abcdef1',
     PublicSubnet1Az: 'us-east-1a',
@@ -88,7 +88,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       // For arbitrary environments, we fall back to default outputs
       // The test should verify that we get valid outputs regardless of environment
       expect(envOutputs.VpcCidr).toBeDefined();
-      expect(envOutputs.VpcCidr).toMatch(/^172\.(16|17|18)\.0\.0\/16$/);
+      expect(envOutputs.VpcCidr).toMatch(/^10\.(0|1|2)\.0\.0\/16$/);
     });
   });
 
@@ -115,7 +115,7 @@ describe('VPC Infrastructure Integration Tests', () => {
 
     test('VPC CIDR is within expected ranges', async () => {
       const envOutputs = getEnvironmentOutputs(environmentSuffix);
-      const validCidrs = ['172.16.0.0/16', '172.17.0.0/16', '172.18.0.0/16'];
+      const validCidrs = ['10.0.0.0/16', '10.1.0.0/16', '10.2.0.0/16'];
       expect(validCidrs).toContain(outputs.VpcCidr);
       expect(outputs.VpcCidr).toBe(envOutputs.VpcCidr);
     });
@@ -149,15 +149,15 @@ describe('VPC Infrastructure Integration Tests', () => {
 
       // Verify subnet CIDRs are within VPC CIDR range
       const vpcCidr = envOutputs.VpcCidr;
-      if (vpcCidr === '172.16.0.0/16') {
-        // Dev environment: subnets should be 172.16.1.0/24 and 172.16.2.0/24
-        expect(vpcCidr).toBe('172.16.0.0/16');
-      } else if (vpcCidr === '172.17.0.0/16') {
-        // Staging environment: subnets should be 172.17.1.0/24 and 172.17.2.0/24
-        expect(vpcCidr).toBe('172.17.0.0/16');
-      } else if (vpcCidr === '172.18.0.0/16') {
-        // Prod environment: subnets should be 172.18.1.0/24 and 172.18.2.0/24
-        expect(vpcCidr).toBe('172.18.0.0/16');
+      if (vpcCidr === '10.0.0.0/16') {
+        // Dev environment: subnets should be 10.0.1.0/24 and 10.0.2.0/24
+        expect(vpcCidr).toBe('10.0.0.0/16');
+      } else if (vpcCidr === '10.1.0.0/16') {
+        // Staging environment: subnets should be 10.1.1.0/24 and 10.1.2.0/24
+        expect(vpcCidr).toBe('10.1.0.0/16');
+      } else if (vpcCidr === '10.2.0.0/16') {
+        // Prod environment: subnets should be 10.2.1.0/24 and 10.2.2.0/24
+        expect(vpcCidr).toBe('10.2.0.0/16');
       }
     });
 
@@ -264,15 +264,15 @@ describe('VPC Infrastructure Integration Tests', () => {
       expect(outputs.PublicSubnet2Id).toBeTruthy();
 
       // Verify environment-specific subnet CIDR expectations
-      if (envOutputs.VpcCidr === '172.16.0.0/16') {
-        // Dev: subnets should be 172.16.1.0/24 and 172.16.2.0/24
-        expect(envOutputs.VpcCidr).toBe('172.16.0.0/16');
-      } else if (envOutputs.VpcCidr === '172.17.0.0/16') {
-        // Staging: subnets should be 172.17.1.0/24 and 172.17.2.0/24
-        expect(envOutputs.VpcCidr).toBe('172.17.0.0/16');
-      } else if (envOutputs.VpcCidr === '172.18.0.0/16') {
-        // Prod: subnets should be 172.18.1.0/24 and 172.18.2.0/24
-        expect(envOutputs.VpcCidr).toBe('172.18.0.0/16');
+      if (envOutputs.VpcCidr === '10.0.0.0/16') {
+        // Dev: subnets should be 10.0.1.0/24 and 10.0.2.0/24
+        expect(envOutputs.VpcCidr).toBe('10.0.0.0/16');
+      } else if (envOutputs.VpcCidr === '10.1.0.0/16') {
+        // Staging: subnets should be 10.1.1.0/24 and 10.1.2.0/24
+        expect(envOutputs.VpcCidr).toBe('10.1.0.0/16');
+      } else if (envOutputs.VpcCidr === '10.2.0.0/16') {
+        // Prod: subnets should be 10.2.1.0/24 and 10.2.2.0/24
+        expect(envOutputs.VpcCidr).toBe('10.2.0.0/16');
       }
     });
 
@@ -280,16 +280,16 @@ describe('VPC Infrastructure Integration Tests', () => {
       const envOutputs = getEnvironmentOutputs(environmentSuffix);
 
       // With the updated implementation using CfnSubnet, we now have:
-      // - Dev: VPC 172.16.0.0/16, Subnets 172.16.1.0/24 and 172.16.2.0/24
-      // - Staging: VPC 172.17.0.0/16, Subnets 172.17.1.0/24 and 172.17.2.0/24
-      // - Prod: VPC 172.18.0.0/16, Subnets 172.18.1.0/24 and 172.18.2.0/24
+      // - Dev: VPC 10.0.0.0/16, Subnets 10.0.1.0/24 and 10.0.2.0/24
+      // - Staging: VPC 10.1.0.0/16, Subnets 10.1.1.0/24 and 10.1.2.0/24
+      // - Prod: VPC 10.2.0.0/16, Subnets 10.2.1.0/24 and 10.2.2.0/24
       expect(outputs.PublicSubnet1Id).toBeTruthy();
       expect(outputs.PublicSubnet2Id).toBeTruthy();
       expect(outputs.PublicSubnet1Az).toBe('us-east-1a');
       expect(outputs.PublicSubnet2Az).toBe('us-east-1b');
 
       // Verify environment-specific CIDR validation
-      expect(envOutputs.VpcCidr).toMatch(/^172\.(16|17|18)\.0\.0\/16$/);
+      expect(envOutputs.VpcCidr).toMatch(/^10\.(0|1|2)\.0\.0\/16$/);
     });
 
     test('no IP address conflicts exist', () => {
@@ -307,9 +307,9 @@ describe('VPC Infrastructure Integration Tests', () => {
 
       // Each environment should have unique CIDR ranges
       expect(uniqueCidrs.size).toBe(3);
-      expect(allCidrs).toContain('172.16.0.0/16'); // dev
-      expect(allCidrs).toContain('172.17.0.0/16'); // staging
-      expect(allCidrs).toContain('172.18.0.0/16'); // prod
+      expect(allCidrs).toContain('10.0.0.0/16'); // dev
+      expect(allCidrs).toContain('10.1.0.0/16'); // staging
+      expect(allCidrs).toContain('10.2.0.0/16'); // prod
     });
   });
 

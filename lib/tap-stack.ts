@@ -9,20 +9,18 @@ export interface TapStackProps extends cdk.StackProps {
 export class TapStack extends cdk.Stack {
   private getCidrRanges(environmentSuffix: string) {
     // Generate unique CIDR ranges based on environment to avoid conflicts
-    let baseCidr = '172.16.0.0/16';
-    let subnet1Cidr = '172.16.1.0/24';
-    let subnet2Cidr = '172.16.2.0/24';
+    let baseCidr = '10.0.0.0/16';
+    let subnet1Cidr = '10.0.1.0/24';
+    let subnet2Cidr = '10.0.2.0/24';
 
-    // For different environments, you can customize these ranges
-    // Example: dev -> 172.16.0.0/16, staging -> 172.17.0.0/16, prod -> 172.18.0.0/16
     if (environmentSuffix === 'staging') {
-      baseCidr = '172.17.0.0/16';
-      subnet1Cidr = '172.17.1.0/24';
-      subnet2Cidr = '172.17.2.0/24';
+      baseCidr = '10.1.0.0/16';
+      subnet1Cidr = '10.1.1.0/24';
+      subnet2Cidr = '10.1.2.0/24';
     } else if (environmentSuffix === 'prod') {
-      baseCidr = '172.18.0.0/16';
-      subnet1Cidr = '172.18.1.0/24';
-      subnet2Cidr = '172.18.2.0/24';
+      baseCidr = '10.2.0.0/16';
+      subnet1Cidr = '10.2.1.0/24';
+      subnet2Cidr = '10.2.2.0/24';
     }
 
     return {

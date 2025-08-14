@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
+import 'source-map-support/register';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
-// Get environment suffix from context or use default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+// Get environment suffix from environment variable, command line context, or use default
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX ||
+  app.node.tryGetContext('environmentSuffix') ||
+  'dev';
 
 new TapStack(app, `TapStack${environmentSuffix}`, {
   env: {

@@ -23,7 +23,7 @@ describe('TapStack', () => {
   describe('VPC Configuration', () => {
     test('creates VPC with correct CIDR block', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '172.16.0.0/16',
+        CidrBlock: '10.0.0.0/16',
         EnableDnsHostnames: true,
         EnableDnsSupport: true,
       });
@@ -80,7 +80,7 @@ describe('TapStack', () => {
     test('public subnet 1 has correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::Subnet', {
         AvailabilityZone: 'us-east-1a',
-        CidrBlock: '172.16.1.0/24',
+        CidrBlock: '10.0.1.0/24',
         MapPublicIpOnLaunch: true,
         VpcId: { Ref: Match.anyValue() },
       });
@@ -89,7 +89,7 @@ describe('TapStack', () => {
     test('public subnet 2 has correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::Subnet', {
         AvailabilityZone: 'us-east-1b',
-        CidrBlock: '172.16.2.0/24',
+        CidrBlock: '10.0.2.0/24',
         MapPublicIpOnLaunch: true,
         VpcId: { Ref: Match.anyValue() },
       });
@@ -309,17 +309,17 @@ describe('TapStack', () => {
 
       // Verify VPC uses default CIDR
       devTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '172.16.0.0/16',
+        CidrBlock: '10.0.0.0/16',
       });
 
       // Verify subnets use default CIDRs
       devTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.16.1.0/24',
+        CidrBlock: '10.0.1.0/24',
         AvailabilityZone: 'us-east-1a',
       });
 
       devTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.16.2.0/24',
+        CidrBlock: '10.0.2.0/24',
         AvailabilityZone: 'us-east-1b',
       });
     });
@@ -337,17 +337,17 @@ describe('TapStack', () => {
 
       // Verify VPC uses staging CIDR
       stagingTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '172.17.0.0/16',
+        CidrBlock: '10.1.0.0/16',
       });
 
       // Verify subnets use staging CIDRs
       stagingTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.17.1.0/24',
+        CidrBlock: '10.1.1.0/24',
         AvailabilityZone: 'us-east-1a',
       });
 
       stagingTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.17.2.0/24',
+        CidrBlock: '10.1.2.0/24',
         AvailabilityZone: 'us-east-1b',
       });
     });
@@ -365,17 +365,17 @@ describe('TapStack', () => {
 
       // Verify VPC uses production CIDR
       prodTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '172.18.0.0/16',
+        CidrBlock: '10.2.0.0/16',
       });
 
       // Verify subnets use production CIDRs
       prodTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.18.1.0/24',
+        CidrBlock: '10.2.1.0/24',
         AvailabilityZone: 'us-east-1a',
       });
 
       prodTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.18.2.0/24',
+        CidrBlock: '10.2.2.0/24',
         AvailabilityZone: 'us-east-1b',
       });
     });
@@ -393,17 +393,17 @@ describe('TapStack', () => {
 
       // Verify VPC uses default CIDR (fallback)
       unknownTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '172.16.0.0/16',
+        CidrBlock: '10.0.0.0/16',
       });
 
       // Verify subnets use default CIDRs (fallback)
       unknownTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.16.1.0/24',
+        CidrBlock: '10.0.1.0/24',
         AvailabilityZone: 'us-east-1a',
       });
 
       unknownTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.16.2.0/24',
+        CidrBlock: '10.0.2.0/24',
         AvailabilityZone: 'us-east-1b',
       });
     });
@@ -476,17 +476,17 @@ describe('TapStack', () => {
 
       // Verify VPC uses production CIDR (should fall back to default since 'production' !== 'prod')
       productionTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '172.16.0.0/16',
+        CidrBlock: '10.0.0.0/16',
       });
 
       // Verify subnets use default CIDRs (fallback)
       productionTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.16.1.0/24',
+        CidrBlock: '10.0.1.0/24',
         AvailabilityZone: 'us-east-1a',
       });
 
       productionTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '172.16.2.0/24',
+        CidrBlock: '10.0.2.0/24',
         AvailabilityZone: 'us-east-1b',
       });
     });
