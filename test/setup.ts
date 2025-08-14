@@ -3,12 +3,12 @@
 // but not actually used for CDK tests
 
 // Set up any global test configuration if needed
-global.testTimeout = 30000;
+(global as any).testTimeout = 30000;
 
 // Mock any global objects that might be needed
-if (typeof global.fetch === 'undefined') {
-  global.fetch = jest.fn();
+if (typeof (global as any).fetch === 'undefined') {
+  (global as any).fetch = jest.fn();
 }
 
 // Export empty to satisfy module requirements
-module.exports = {}; 
+export {}; 
