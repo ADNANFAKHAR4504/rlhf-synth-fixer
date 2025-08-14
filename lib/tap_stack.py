@@ -700,7 +700,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
         lambda_permission = aws.lambda_.Permission(
             f"api-lambda-permission-{self.args.environment_suffix}",
             action="lambda:InvokeFunction",
-            function=self.lambda_function.name,  # FIXED: Changed from function_name to name
+            function=self.lambda_function.name,
             principal="apigateway.amazonaws.com",
             source_arn=pulumi.Output.concat(self.api.execution_arn, "/*/*"),
             opts=ResourceOptions(parent=self)
@@ -727,17 +727,17 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self, depends_on=[lambda_permission])
         )
         
-        # Health method response
+        # Health method response - FIXED: Using response_parameters instead of response_headers
         health_method_response = aws.apigateway.MethodResponse(
             f"health-method-response-{self.args.environment_suffix}",
             rest_api=self.api.id,
             resource_id=health_resource.id,
             http_method=health_method.http_method,
             status_code="200",
-            response_headers={
-                "Access-Control-Allow-Origin": True,
-                "Access-Control-Allow-Methods": True,
-                "Access-Control-Allow-Headers": True
+            response_parameters={
+                "method.response.header.Access-Control-Allow-Origin": True,
+                "method.response.header.Access-Control-Allow-Methods": True,
+                "method.response.header.Access-Control-Allow-Headers": True
             },
             opts=ResourceOptions(parent=self)
         )
@@ -749,10 +749,10 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             resource_id=health_resource.id,
             http_method=health_method.http_method,
             status_code=health_method_response.status_code,
-            response_headers={
-                "Access-Control-Allow-Origin": "'*'",
-                "Access-Control-Allow-Methods": "'GET,OPTIONS'",
-                "Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            response_parameters={
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
             },
             opts=ResourceOptions(parent=self, depends_on=[health_integration])
         )
@@ -778,17 +778,17 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self, depends_on=[lambda_permission])
         )
         
-        # Proxy method response
+        # Proxy method response - FIXED: Using response_parameters instead of response_headers
         proxy_method_response = aws.apigateway.MethodResponse(
             f"proxy-method-response-{self.args.environment_suffix}",
             rest_api=self.api.id,
             resource_id=proxy_resource.id,
             http_method=proxy_method.http_method,
             status_code="200",
-            response_headers={
-                "Access-Control-Allow-Origin": True,
-                "Access-Control-Allow-Methods": True,
-                "Access-Control-Allow-Headers": True
+            response_parameters={
+                "method.response.header.Access-Control-Allow-Origin": True,
+                "method.response.header.Access-Control-Allow-Methods": True,
+                "method.response.header.Access-Control-Allow-Headers": True
             },
             opts=ResourceOptions(parent=self)
         )
@@ -800,10 +800,10 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             resource_id=proxy_resource.id,
             http_method=proxy_method.http_method,
             status_code=proxy_method_response.status_code,
-            response_headers={
-                "Access-Control-Allow-Origin": "'*'",
-                "Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
-                "Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            response_parameters={
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
             },
             opts=ResourceOptions(parent=self, depends_on=[proxy_integration])
         )
@@ -830,17 +830,17 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # OPTIONS method response for health endpoint
+        # OPTIONS method response for health endpoint - FIXED: Using response_parameters
         health_options_method_response = aws.apigateway.MethodResponse(
             f"health-options-method-response-{self.args.environment_suffix}",
             rest_api=self.api.id,
             resource_id=health_resource.id,
             http_method=health_options_method.http_method,
             status_code="200",
-            response_headers={
-                "Access-Control-Allow-Origin": True,
-                "Access-Control-Allow-Methods": True,
-                "Access-Control-Allow-Headers": True
+            response_parameters={
+                "method.response.header.Access-Control-Allow-Origin": True,
+                "method.response.header.Access-Control-Allow-Methods": True,
+                "method.response.header.Access-Control-Allow-Headers": True
             },
             opts=ResourceOptions(parent=self)
         )
@@ -851,10 +851,10 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             resource_id=health_resource.id,
             http_method=health_options_method.http_method,
             status_code="200",
-            response_headers={
-                "Access-Control-Allow-Origin": "'*'",
-                "Access-Control-Allow-Methods": "'GET,OPTIONS'",
-                "Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            response_parameters={
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
             },
             opts=ResourceOptions(parent=self, depends_on=[health_options_integration])
         )
@@ -881,17 +881,17 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
-        # OPTIONS method response for proxy endpoint
+        # OPTIONS method response for proxy endpoint - FIXED: Using response_parameters
         proxy_options_method_response = aws.apigateway.MethodResponse(
             f"proxy-options-method-response-{self.args.environment_suffix}",
             rest_api=self.api.id,
             resource_id=proxy_resource.id,
             http_method=proxy_options_method.http_method,
             status_code="200",
-            response_headers={
-                "Access-Control-Allow-Origin": True,
-                "Access-Control-Allow-Methods": True,
-                "Access-Control-Allow-Headers": True
+            response_parameters={
+                "method.response.header.Access-Control-Allow-Origin": True,
+                "method.response.header.Access-Control-Allow-Methods": True,
+                "method.response.header.Access-Control-Allow-Headers": True
             },
             opts=ResourceOptions(parent=self)
         )
@@ -902,10 +902,10 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             resource_id=proxy_resource.id,
             http_method=proxy_options_method.http_method,
             status_code="200",
-            response_headers={
-                "Access-Control-Allow-Origin": "'*'",
-                "Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
-                "Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            response_parameters={
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
             },
             opts=ResourceOptions(parent=self, depends_on=[proxy_options_integration])
         )
@@ -1022,7 +1022,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             threshold=5,
             alarm_description="Lambda function errors exceeded threshold",
             alarm_actions=[],  # Add SNS topic ARN here if needed
-            dimensions={"FunctionName": self.lambda_function.name},  # FIXED: Changed from function_name to name
+            dimensions={"FunctionName": self.lambda_function.name},
             treat_missing_data="notBreaching",
             opts=ResourceOptions(parent=self)
         )
@@ -1039,7 +1039,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             statistic="Average",
             threshold=25000,  # 25 seconds
             alarm_description="Lambda function duration exceeded threshold",
-            dimensions={"FunctionName": self.lambda_function.name},  # FIXED: Changed from function_name to name
+            dimensions={"FunctionName": self.lambda_function.name},
             treat_missing_data="notBreaching",
             opts=ResourceOptions(parent=self)
         )
