@@ -1,4 +1,3 @@
-# backup.tf
 # AWS Backup policies for critical resources
 
 # IAM Role for AWS Backup
