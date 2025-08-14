@@ -155,6 +155,9 @@ Conditions:
   CreateMainS3BucketCond: !Equals [!Ref UseExistingS3MainBucket, 'false']
   UseExistingKMSCond: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
   CreateKMSCond: !Equals [!Ref ExistingKMSKeyArn, '']
+  HasFlowLogsRoleArn: !Not [!Equals [!Ref FlowLogsRoleArn, '']]
+  FlowLogCreatableCond:
+    !Or [!Condition HasFlowLogsRoleArn, !Condition CreateNetworking]
   CreateBastionSGFinalCond: !Equals [!Ref ExistingBastionSGId, '']
   CreateWebSGFinalCond: !Equals [!Ref ExistingWebSGId, '']
   CreateDBSGFinalCond: !Equals [!Ref ExistingDBSGId, '']
@@ -1059,20 +1062,30 @@ Resources:
           Value: SecureEnv-FlowLog-Bucket
 
   SecureEnvVPCFlowLog:
+    Condition: FlowLogCreatableCond
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/vpc/flowlogs/${Environment}
       RetentionInDays: 30
 
   SecureEnvFlowLog:
+    Condition: FlowLogCreatableCond
     Type: AWS::EC2::FlowLog
     Properties:
       ResourceId: !If [CreateNetworking, !Ref SecureEnvVPC, !Ref ExistingVPCId]
       ResourceType: VPC
       TrafficType: ALL
-      LogDestinationType: cloud-watch-logs
-      LogGroupName: !Ref SecureEnvVPCFlowLog
-      DeliverLogsPermissionArn: !Ref FlowLogsRoleArn
+      LogDestinationType: !If [HasFlowLogsRoleArn, cloud-watch-logs, s3]
+      LogGroupName:
+        !If [HasFlowLogsRoleArn, !Ref SecureEnvVPCFlowLog, !Ref 'AWS::NoValue']
+      LogDestination:
+        !If [
+          HasFlowLogsRoleArn,
+          !Ref 'AWS::NoValue',
+          !GetAtt SecureEnvFlowLogBucket.Arn,
+        ]
+      DeliverLogsPermissionArn:
+        !If [HasFlowLogsRoleArn, !Ref FlowLogsRoleArn, !Ref 'AWS::NoValue']
 
 Outputs:
   VPCId:
