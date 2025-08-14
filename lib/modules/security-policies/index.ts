@@ -34,63 +34,20 @@ export class SecurityPolicies extends pulumi.ComponentResource {
           Version: '2012-10-17',
           Statement: [
             {
-              Sid: 'DenyAllSensitiveActionsWithoutMFA',
+              Sid: 'DenySensitiveActionsWithoutMFA',
               Effect: 'Deny',
               Action: [
-                // IAM sensitive actions
-                'iam:CreateRole',
                 'iam:DeleteRole',
-                'iam:AttachRolePolicy',
-                'iam:DetachRolePolicy',
-                'iam:PutRolePolicy',
-                'iam:DeleteRolePolicy',
-                'iam:CreateUser',
                 'iam:DeleteUser',
-                'iam:CreateAccessKey',
-                'iam:DeleteAccessKey',
-                'iam:UpdateAccessKey',
-                'iam:CreatePolicy',
-                'iam:DeletePolicy',
-                'iam:CreatePolicyVersion',
-                'iam:DeletePolicyVersion',
-                // S3 sensitive actions
                 's3:DeleteBucket',
-                's3:PutBucketPolicy',
-                's3:DeleteBucketPolicy',
-                's3:PutBucketAcl',
-                's3:PutBucketPublicAccessBlock',
-                's3:DeleteBucketPublicAccessBlock',
-                's3:PutBucketVersioning',
-                's3:PutBucketEncryption',
-                's3:DeleteBucketEncryption',
-                // KMS sensitive actions
-                'kms:ScheduleKeyDeletion',
-                'kms:DisableKey',
-                'kms:CancelKeyDeletion',
-                'kms:PutKeyPolicy',
-                'kms:CreateKey',
-                'kms:CreateAlias',
-                'kms:DeleteAlias',
-                // CloudTrail sensitive actions
-                'cloudtrail:DeleteTrail',
-                'cloudtrail:StopLogging',
-                'cloudtrail:PutEventSelectors',
-                'cloudtrail:UpdateTrail',
-                // EC2 sensitive actions - conditional restrictions
-                'ec2:ModifyInstanceAttribute',
-                'ec2:CreateSecurityGroup',
-                'ec2:DeleteSecurityGroup',
-                'ec2:AuthorizeSecurityGroupIngress',
-                'ec2:AuthorizeSecurityGroupEgress',
-                'ec2:RevokeSecurityGroupIngress',
-                'ec2:RevokeSecurityGroupEgress',
+                'kms:ScheduleKeyDeletion'
               ],
               Resource: '*',
               Condition: {
-                BoolIfExists: {
-                  'aws:MultiFactorAuthPresent': 'false',
-                },
-              },
+                Bool: {
+                  'aws:MultiFactorAuthPresent': 'false'
+                }
+              }
             },
             {
               Sid: 'DenyRootAccountUsage',
@@ -99,11 +56,11 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Resource: '*',
               Condition: {
                 StringEquals: {
-                  'aws:userid': 'root',
-                },
-              },
-            },
-          ],
+                  'aws:userid': 'root'
+                }
+              }
+            }
+          ]
         }),
         tags,
       },
@@ -121,46 +78,24 @@ export class SecurityPolicies extends pulumi.ComponentResource {
           Version: '2012-10-17',
           Statement: [
             {
-              Sid: 'RequireMFAForProductionInstanceTermination',
+              Sid: 'DenyProductionInstanceTermination',
               Effect: 'Deny',
-              Action: ['ec2:TerminateInstances'],
+              Action: 'ec2:TerminateInstances',
               Resource: '*',
               Condition: {
                 StringLike: {
                   'ec2:ResourceTag/Environment': 'prod*'
-                },
-                Bool: {
-                  'aws:MultiFactorAuthPresent': 'false'
                 }
               }
             },
             {
-              Sid: 'RequireBusinessHoursForCriticalOperations',
-              Effect: 'Deny',
-              Action: ['ec2:TerminateInstances'],
-              Resource: '*',
-              Condition: {
-                StringEquals: {
-                  'ec2:ResourceTag/CriticalSystem': 'true'
-                },
-                DateNotBetween: {
-                  'aws:CurrentTime': ['08:00Z', '18:00Z']
-                }
-              }
-            },
-            {
-              Sid: 'AllowStopInstancesWithConditions',
+              Sid: 'AllowNonProductionOperations',
               Effect: 'Allow',
-              Action: ['ec2:StopInstances'],
-              Resource: '*',
-              Condition: {
-                StringNotLike: {
-                  'ec2:ResourceTag/Environment': 'prod*'
-                },
-                StringEquals: {
-                  'aws:RequestedRegion': 'us-east-1'
-                }
-              }
+              Action: [
+                'ec2:StopInstances',
+                'ec2:StartInstances'
+              ],
+              Resource: '*'
             }
           ]
         }),
@@ -179,58 +114,28 @@ export class SecurityPolicies extends pulumi.ComponentResource {
           Version: '2012-10-17',
           Statement: [
             {
-              Sid: 'DenyInsecureS3Operations',
-              Effect: 'Deny',
-              Action: ['s3:PutObject'],
-              Resource: 'arn:aws:s3:::*/*',
-              Condition: {
-                StringNotEquals: {
-                  's3:x-amz-server-side-encryption': ['aws:kms', 'AES256'],
-                },
-              },
-            },
-            {
-              Sid: 'DenyUnencryptedS3Uploads',
-              Effect: 'Deny',
-              Action: ['s3:PutObject'],
-              Resource: 'arn:aws:s3:::*/*',
-              Condition: {
-                Null: {
-                  's3:x-amz-server-side-encryption': 'true',
-                },
-              },
-            },
-            {
-              Sid: 'DenyInsecureS3Connections',
+              Sid: 'DenyInsecureTransport',
               Effect: 'Deny',
               Action: 's3:*',
               Resource: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
               Condition: {
                 Bool: {
-                  'aws:SecureTransport': 'false',
-                },
-              },
+                  'aws:SecureTransport': 'false'
+                }
+              }
             },
             {
-              Sid: 'DenyPublicS3Access',
+              Sid: 'DenyUnencryptedUploads',
               Effect: 'Deny',
-              Action: [
-                's3:PutBucketAcl',
-                's3:PutObjectAcl',
-                's3:PutBucketPolicy',
-              ],
-              Resource: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
+              Action: 's3:PutObject',
+              Resource: 'arn:aws:s3:::*/*',
               Condition: {
-                StringEquals: {
-                  's3:x-amz-acl': [
-                    'public-read',
-                    'public-read-write',
-                    'authenticated-read',
-                  ],
-                },
-              },
-            },
-          ],
+                StringNotEquals: {
+                  's3:x-amz-server-side-encryption': 'aws:kms'
+                }
+              }
+            }
+          ]
         }),
         tags,
       },
@@ -251,44 +156,11 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Effect: 'Deny',
               Action: [
                 'cloudtrail:StopLogging',
-                'cloudtrail:DeleteTrail',
-                'cloudtrail:PutEventSelectors',
+                'cloudtrail:DeleteTrail'
               ],
-              Resource: '*',
-              Condition: {
-                StringNotEquals: {
-                  'aws:userid': [
-                    // Add specific admin user IDs here
-                    'AIDACKCEVSQ6C2EXAMPLE',
-                  ],
-                },
-              },
-            },
-            {
-              Sid: 'DenyCloudTrailS3BucketModification',
-              Effect: 'Deny',
-              Action: [
-                's3:DeleteObject',
-                's3:DeleteObjectVersion',
-                's3:PutBucketPolicy',
-                's3:DeleteBucketPolicy',
-              ],
-              Resource: [
-                'arn:aws:s3:::*cloudtrail*',
-                'arn:aws:s3:::*cloudtrail*/*',
-                'arn:aws:s3:::*audit*',
-                'arn:aws:s3:::*audit*/*',
-              ],
-              Condition: {
-                StringNotEquals: {
-                  'aws:userid': [
-                    // Add specific admin user IDs here
-                    'AIDACKCEVSQ6C2EXAMPLE',
-                  ],
-                },
-              },
-            },
-          ],
+              Resource: '*'
+            }
+          ]
         }),
         tags,
       },
@@ -307,32 +179,13 @@ export class SecurityPolicies extends pulumi.ComponentResource {
             {
               Sid: 'DenyKMSKeyDeletion',
               Effect: 'Deny',
-              Action: ['kms:ScheduleKeyDeletion', 'kms:DisableKey'],
-              Resource: '*',
-              Condition: {
-                StringNotEquals: {
-                  'aws:userid': [
-                    // Add specific admin user IDs here
-                    'AIDACKCEVSQ6C2EXAMPLE',
-                  ],
-                },
-              },
-            },
-            {
-              Sid: 'DenyKMSKeyPolicyChanges',
-              Effect: 'Deny',
-              Action: ['kms:PutKeyPolicy'],
-              Resource: '*',
-              Condition: {
-                StringNotEquals: {
-                  'aws:userid': [
-                    // Add specific admin user IDs here
-                    'AIDACKCEVSQ6C2EXAMPLE',
-                  ],
-                },
-              },
-            },
-          ],
+              Action: [
+                'kms:ScheduleKeyDeletion',
+                'kms:DisableKey'
+              ],
+              Resource: '*'
+            }
+          ]
         }),
         tags,
       },

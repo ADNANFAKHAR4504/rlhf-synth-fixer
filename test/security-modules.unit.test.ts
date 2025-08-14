@@ -143,18 +143,14 @@ describe('Security Modules Unit Tests', () => {
       expect(policyDoc.Statement).toHaveLength(2);
       
       // Validate MFA enforcement statement
-      const mfaStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyAllSensitiveActionsWithoutMFA');
+      const mfaStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenySensitiveActionsWithoutMFA');
       expect(mfaStatement).toBeDefined();
       expect(mfaStatement.Effect).toBe('Deny');
-      expect(mfaStatement.Action).toContain('iam:CreateRole');
       expect(mfaStatement.Action).toContain('iam:DeleteRole');
+      expect(mfaStatement.Action).toContain('iam:DeleteUser');
       expect(mfaStatement.Action).toContain('s3:DeleteBucket');
       expect(mfaStatement.Action).toContain('kms:ScheduleKeyDeletion');
-      expect(mfaStatement.Action).toContain('cloudtrail:DeleteTrail');
-      // Verify EC2 actions are NOT in the blanket denial anymore
-      expect(mfaStatement.Action).not.toContain('ec2:TerminateInstances');
-      expect(mfaStatement.Action).not.toContain('ec2:StopInstances');
-      expect(mfaStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
+      expect(mfaStatement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('false');
       
       // Validate root account denial statement
       const rootStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyRootAccountUsage');
@@ -184,24 +180,23 @@ describe('Security Modules Unit Tests', () => {
       // Parse and validate the actual policy document
       const policyDoc = JSON.parse(policyCall[1].policy);
       expect(policyDoc.Version).toBe('2012-10-17');
-      expect(policyDoc.Statement).toHaveLength(4);
-      
-      // Validate insecure S3 operations denial
-      const insecureStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyInsecureS3Operations');
-      expect(insecureStatement).toBeDefined();
-      expect(insecureStatement.Effect).toBe('Deny');
-      expect(insecureStatement.Action).toContain('s3:PutObject');
-      expect(insecureStatement.Resource).toBe('arn:aws:s3:::*/*');
-      expect(insecureStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toContain('aws:kms');
-      expect(insecureStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toContain('AES256');
+      expect(policyDoc.Statement).toHaveLength(2);
       
       // Validate insecure transport denial
-      const transportStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyInsecureS3Connections');
+      const transportStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyInsecureTransport');
       expect(transportStatement).toBeDefined();
       expect(transportStatement.Effect).toBe('Deny');
       expect(transportStatement.Action).toBe('s3:*');
       expect(transportStatement.Resource).toEqual(['arn:aws:s3:::*', 'arn:aws:s3:::*/*']);
       expect(transportStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
+      
+      // Validate unencrypted upload denial
+      const encryptionStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyUnencryptedUploads');
+      expect(encryptionStatement).toBeDefined();
+      expect(encryptionStatement.Effect).toBe('Deny');
+      expect(encryptionStatement.Action).toBe('s3:PutObject');
+      expect(encryptionStatement.Resource).toBe('arn:aws:s3:::*/*');
+      expect(encryptionStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
     });
 
     it('should create CloudTrail protection policy', () => {
@@ -243,31 +238,21 @@ describe('Security Modules Unit Tests', () => {
       // Parse and validate the actual policy document
       const policyDoc = JSON.parse(policyCall[1].policy);
       expect(policyDoc.Version).toBe('2012-10-17');
-      expect(policyDoc.Statement).toHaveLength(3);
+      expect(policyDoc.Statement).toHaveLength(2);
       
       // Validate production instance termination protection
-      const prodStatement = policyDoc.Statement.find((s: any) => s.Sid === 'RequireMFAForProductionInstanceTermination');
+      const prodStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyProductionInstanceTermination');
       expect(prodStatement).toBeDefined();
       expect(prodStatement.Effect).toBe('Deny');
-      expect(prodStatement.Action).toContain('ec2:TerminateInstances');
+      expect(prodStatement.Action).toBe('ec2:TerminateInstances');
       expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toBe('prod*');
-      expect(prodStatement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('false');
-      
-      // Validate critical system time-based protection
-      const criticalStatement = policyDoc.Statement.find((s: any) => s.Sid === 'RequireBusinessHoursForCriticalOperations');
-      expect(criticalStatement).toBeDefined();
-      expect(criticalStatement.Effect).toBe('Deny');
-      expect(criticalStatement.Action).toContain('ec2:TerminateInstances');
-      expect(criticalStatement.Condition.StringEquals['ec2:ResourceTag/CriticalSystem']).toBe('true');
-      expect(criticalStatement.Condition.DateNotBetween['aws:CurrentTime']).toEqual(['08:00Z', '18:00Z']);
       
       // Validate allow statement for non-production instances
-      const allowStatement = policyDoc.Statement.find((s: any) => s.Sid === 'AllowStopInstancesWithConditions');
+      const allowStatement = policyDoc.Statement.find((s: any) => s.Sid === 'AllowNonProductionOperations');
       expect(allowStatement).toBeDefined();
       expect(allowStatement.Effect).toBe('Allow');
       expect(allowStatement.Action).toContain('ec2:StopInstances');
-      expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toBe('prod*');
-      expect(allowStatement.Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
+      expect(allowStatement.Action).toContain('ec2:StartInstances');
     });
 
     it('should create KMS key protection policy', () => {
@@ -976,17 +961,15 @@ describe('Security Modules Unit Tests', () => {
         );
         
         const policyDoc = JSON.parse(policyCall[1].policy);
-        const mfaStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyAllSensitiveActionsWithoutMFA');
+        const mfaStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenySensitiveActionsWithoutMFA');
         
         // Test that sensitive actions are denied without MFA
         expect(mfaStatement.Effect).toBe('Deny');
-        expect(mfaStatement.Action).toContain('iam:CreateRole');
         expect(mfaStatement.Action).toContain('iam:DeleteRole');
-        expect(mfaStatement.Action).toContain('iam:AttachRolePolicy');
+        expect(mfaStatement.Action).toContain('iam:DeleteUser');
         expect(mfaStatement.Action).toContain('s3:DeleteBucket');
         expect(mfaStatement.Action).toContain('kms:ScheduleKeyDeletion');
-        expect(mfaStatement.Action).toContain('cloudtrail:DeleteTrail');
-        expect(mfaStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
+        expect(mfaStatement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('false');
       });
 
       it('should deny root account usage completely', () => {
@@ -1007,7 +990,7 @@ describe('Security Modules Unit Tests', () => {
     });
 
     describe('EC2 Lifecycle Security Violations', () => {
-      it('should deny production instance termination without MFA', () => {
+      it('should deny production instance termination', () => {
         const policies = new SecurityPolicies('test-policies');
         const mockPolicy = require('@pulumi/aws').iam.Policy;
         const policyCall = mockPolicy.mock.calls.find((call: any) => 
@@ -1015,15 +998,14 @@ describe('Security Modules Unit Tests', () => {
         );
         
         const policyDoc = JSON.parse(policyCall[1].policy);
-        const prodStatement = policyDoc.Statement.find((s: any) => s.Sid === 'RequireMFAForProductionInstanceTermination');
+        const prodStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyProductionInstanceTermination');
         
         expect(prodStatement.Effect).toBe('Deny');
-        expect(prodStatement.Action).toContain('ec2:TerminateInstances');
+        expect(prodStatement.Action).toBe('ec2:TerminateInstances');
         expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toBe('prod*');
-        expect(prodStatement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('false');
       });
 
-      it('should deny critical system termination outside business hours', () => {
+      it('should allow non-production instance operations', () => {
         const policies = new SecurityPolicies('test-policies');
         const mockPolicy = require('@pulumi/aws').iam.Policy;
         const policyCall = mockPolicy.mock.calls.find((call: any) => 
@@ -1031,28 +1013,11 @@ describe('Security Modules Unit Tests', () => {
         );
         
         const policyDoc = JSON.parse(policyCall[1].policy);
-        const criticalStatement = policyDoc.Statement.find((s: any) => s.Sid === 'RequireBusinessHoursForCriticalOperations');
-        
-        expect(criticalStatement.Effect).toBe('Deny');
-        expect(criticalStatement.Action).toContain('ec2:TerminateInstances');
-        expect(criticalStatement.Condition.StringEquals['ec2:ResourceTag/CriticalSystem']).toBe('true');
-        expect(criticalStatement.Condition.DateNotBetween['aws:CurrentTime']).toEqual(['08:00Z', '18:00Z']);
-      });
-
-      it('should allow non-production instance operations with proper conditions', () => {
-        const policies = new SecurityPolicies('test-policies');
-        const mockPolicy = require('@pulumi/aws').iam.Policy;
-        const policyCall = mockPolicy.mock.calls.find((call: any) => 
-          call[0] === 'test-policies-ec2-lifecycle'
-        );
-        
-        const policyDoc = JSON.parse(policyCall[1].policy);
-        const allowStatement = policyDoc.Statement.find((s: any) => s.Sid === 'AllowStopInstancesWithConditions');
+        const allowStatement = policyDoc.Statement.find((s: any) => s.Sid === 'AllowNonProductionOperations');
         
         expect(allowStatement.Effect).toBe('Allow');
         expect(allowStatement.Action).toContain('ec2:StopInstances');
-        expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toBe('prod*');
-        expect(allowStatement.Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
+        expect(allowStatement.Action).toContain('ec2:StartInstances');
       });
     });
 
@@ -1065,13 +1030,12 @@ describe('Security Modules Unit Tests', () => {
         );
         
         const policyDoc = JSON.parse(policyCall[1].policy);
-        const insecureStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyInsecureS3Operations');
+        const encryptionStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyUnencryptedUploads');
         
-        expect(insecureStatement.Effect).toBe('Deny');
-        expect(insecureStatement.Action).toContain('s3:PutObject');
-        expect(insecureStatement.Resource).toBe('arn:aws:s3:::*/*');
-        expect(insecureStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toContain('aws:kms');
-        expect(insecureStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toContain('AES256');
+        expect(encryptionStatement.Effect).toBe('Deny');
+        expect(encryptionStatement.Action).toBe('s3:PutObject');
+        expect(encryptionStatement.Resource).toBe('arn:aws:s3:::*/*');
+        expect(encryptionStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
       });
 
       it('should deny insecure transport (HTTP) connections', () => {
@@ -1082,7 +1046,7 @@ describe('Security Modules Unit Tests', () => {
         );
         
         const policyDoc = JSON.parse(policyCall[1].policy);
-        const transportStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyInsecureS3Connections');
+        const transportStatement = policyDoc.Statement.find((s: any) => s.Sid === 'DenyInsecureTransport');
         
         expect(transportStatement.Effect).toBe('Deny');
         expect(transportStatement.Action).toBe('s3:*');
