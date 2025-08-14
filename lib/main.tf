@@ -113,10 +113,10 @@ variable "tags" {
 locals {
   # Availability zones for us-west-2
   availability_zones = ["us-west-2a", "us-west-2b"]
-  
+
   # Common naming convention
   name_prefix = "nova-model"
-  
+
   # Merge default and custom tags
   common_tags = merge(var.tags, {
     Terraform = "true"
@@ -221,7 +221,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.us-west-2.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -372,8 +372,8 @@ resource "aws_route_table_association" "private" {
 # S3 Gateway Endpoint
 resource "aws_vpc_endpoint" "s3" {
   vpc_id       = aws_vpc.main.id
-  service_name = "com.amazonaws.${data.aws_region.current.name}.s3"
-  
+  service_name = "com.amazonaws.us-west-2.s3"
+
   route_table_ids = [aws_route_table.private.id]
 
   tags = merge(local.common_tags, {
@@ -384,7 +384,7 @@ resource "aws_vpc_endpoint" "s3" {
 # Interface Endpoints for SSM
 resource "aws_vpc_endpoint" "ssm" {
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.ssm"
+  service_name        = "com.amazonaws.us-west-2.ssm"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
@@ -397,7 +397,7 @@ resource "aws_vpc_endpoint" "ssm" {
 
 resource "aws_vpc_endpoint" "ssm_messages" {
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.ssmmessages"
+  service_name        = "com.amazonaws.us-west-2.ssmmessages"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
@@ -410,7 +410,7 @@ resource "aws_vpc_endpoint" "ssm_messages" {
 
 resource "aws_vpc_endpoint" "ec2_messages" {
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.ec2messages"
+  service_name        = "com.amazonaws.us-west-2.ec2messages"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
@@ -424,7 +424,7 @@ resource "aws_vpc_endpoint" "ec2_messages" {
 # KMS Endpoint
 resource "aws_vpc_endpoint" "kms" {
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.kms"
+  service_name        = "com.amazonaws.us-west-2.kms"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
@@ -610,17 +610,15 @@ resource "aws_s3_bucket_versioning" "logs" {
   }
 }
 
-resource "aws_s3_bucket_encryption" "logs" {
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.logs.arn
-        sse_algorithm     = "aws:kms"
-      }
-      bucket_key_enabled = true
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.logs.arn
+      sse_algorithm     = "aws:kms"
     }
+    bucket_key_enabled = true
   }
 }
 
@@ -639,6 +637,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "lifecycle"
     status = "Enabled"
+
+    filter {}
 
     transition {
       days          = var.s3_lifecycle_days
@@ -815,8 +815,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -838,8 +838,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -861,15 +861,15 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "SQLiRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "SQLiRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "${local.name_prefix}WAFMetric"
-    sampled_requests_enabled    = true
+    metric_name                = "${local.name_prefix}WAFMetric"
+    sampled_requests_enabled   = true
   }
 
   tags = merge(local.common_tags, {
@@ -929,7 +929,7 @@ resource "aws_iam_role_policy" "ec2_app" {
           "ssm:GetParametersByPath"
         ]
         Resource = [
-          "arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${local.name_prefix}/*"
+          "arn:${data.aws_partition.current.partition}:ssm:us-west-2:${data.aws_caller_identity.current.account_id}:parameter/${local.name_prefix}/*"
         ]
       },
       {
@@ -940,7 +940,7 @@ resource "aws_iam_role_policy" "ec2_app" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${local.name_prefix}*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:us-west-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${local.name_prefix}*"
       }
     ]
   })
@@ -955,4 +955,884 @@ resource "aws_iam_role_policy_attachment" "ec2_app_ssm" {
 # Instance profile for app instances
 resource "aws_iam_instance_profile" "ec2_app" {
   name = "${local.name_prefix}-ec2-app-profile"
+  role = aws_iam_role.ec2_app.name
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-app-profile"
+  })
 }
+
+# Bastion IAM Role
+resource "aws_iam_role" "bastion" {
+  name = "${local.name_prefix}-bastion-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-bastion-role"
+  })
+}
+
+# Bastion policy - minimal SSM access
+resource "aws_iam_role_policy" "bastion" {
+  name = "${local.name_prefix}-bastion-policy"
+  role = aws_iam_role.bastion.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:UpdateInstanceInformation",
+          "ssm:SendCommand",
+          "ssm:ListCommandInvocations",
+          "ssm:DescribeInstanceInformation"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Attach SSM managed policy to bastion
+resource "aws_iam_role_policy_attachment" "bastion_ssm" {
+  role       = aws_iam_role.bastion.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# Bastion instance profile
+resource "aws_iam_instance_profile" "bastion" {
+  name = "${local.name_prefix}-bastion-profile"
+  role = aws_iam_role.bastion.name
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-bastion-profile"
+  })
+}
+
+# CloudTrail IAM Role
+resource "aws_iam_role" "cloudtrail" {
+  name = "${local.name_prefix}-cloudtrail-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail-role"
+  })
+}
+
+# CloudTrail policy for CloudWatch Logs
+resource "aws_iam_role_policy" "cloudtrail_logs" {
+  name = "${local.name_prefix}-cloudtrail-logs-policy"
+  role = aws_iam_role.cloudtrail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:PutLogEvents",
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream"
+        ]
+        Resource = "arn:${data.aws_partition.current.partition}:logs:us-west-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/cloudtrail/${local.name_prefix}*"
+      }
+    ]
+  })
+}
+
+# AWS Config Service Role
+resource "aws_iam_service_linked_role" "config" {
+  aws_service_name = "config.amazonaws.com"
+}
+
+# =============================================================================
+# RDS SUBNET GROUP AND DATABASE
+# =============================================================================
+
+# RDS Subnet Group
+resource "aws_db_subnet_group" "main" {
+  name       = "${local.name_prefix}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-subnet-group"
+  })
+}
+
+# RDS Parameter Group with secure defaults
+resource "aws_db_parameter_group" "main" {
+  family = "postgres15"
+  name   = "${local.name_prefix}-db-params"
+
+  parameter {
+    name  = "log_statement"
+    value = "all"
+  }
+
+  parameter {
+    name  = "log_min_duration_statement"
+    value = "1000"
+  }
+
+  parameter {
+    name  = "shared_preload_libraries"
+    value = "pg_stat_statements"
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-params"
+  })
+}
+
+# RDS Instance
+resource "aws_db_instance" "main" {
+  identifier            = "${local.name_prefix}-postgres"
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  kms_key_id            = aws_kms_key.general.arn
+
+  db_name        = "appdb"
+  engine         = var.db_engine
+  engine_version = var.db_version
+  instance_class = "db.t4g.micro"
+
+  username                      = "postgres"
+  manage_master_user_password   = true
+  master_user_secret_kms_key_id = aws_kms_key.general.arn
+
+  vpc_security_group_ids = [aws_security_group.db.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  parameter_group_name   = aws_db_parameter_group.main.name
+
+  multi_az            = var.enable_multi_az_db
+  publicly_accessible = false
+
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "Sun:04:00-Sun:05:00"
+  copy_tags_to_snapshot   = true
+
+  deletion_protection = false
+  skip_final_snapshot = true
+
+  performance_insights_enabled          = true
+  performance_insights_kms_key_id       = aws_kms_key.general.arn
+  performance_insights_retention_period = 7
+
+  monitoring_interval = 60
+  monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring.arn
+
+  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-postgres-db"
+  })
+}
+
+# RDS Enhanced Monitoring Role
+resource "aws_iam_role" "rds_enhanced_monitoring" {
+  name = "${local.name_prefix}-rds-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-monitoring-role"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
+  role       = aws_iam_role.rds_enhanced_monitoring.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
+# =============================================================================
+# EC2 LAUNCH TEMPLATE AND AUTO SCALING GROUP
+# =============================================================================
+
+# Launch Template for App instances
+resource "aws_launch_template" "app" {
+  name_prefix   = "${local.name_prefix}-app-"
+  image_id      = data.aws_ssm_parameter.amazon_linux_arm_ami.value
+  instance_type = "t4g.small"
+  key_name      = null # No SSH key - use SSM only
+
+  vpc_security_group_ids = [aws_security_group.app.id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_app.name
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      encrypted             = true
+      kms_key_id            = aws_kms_key.general.arn
+      delete_on_termination = true
+    }
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
+    db_endpoint = aws_db_instance.main.endpoint
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(local.common_tags, {
+      Name = "${local.name_prefix}-app-instance"
+    })
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags = merge(local.common_tags, {
+      Name = "${local.name_prefix}-app-volume"
+    })
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-lt"
+  })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Auto Scaling Group
+resource "aws_autoscaling_group" "app" {
+  name                      = "${local.name_prefix}-app-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.app.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+
+  min_size         = 1
+  max_size         = 6
+  desired_capacity = 2
+
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+
+  enabled_metrics = [
+    "GroupMinSize",
+    "GroupMaxSize",
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+    "GroupTotalInstances"
+  ]
+
+  tag {
+    key                 = "Name"
+    value               = "${local.name_prefix}-app-asg"
+    propagate_at_launch = false
+  }
+
+  dynamic "tag" {
+    for_each = local.common_tags
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = false
+    }
+  }
+
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+  }
+}
+
+# =============================================================================
+# BASTION HOST
+# =============================================================================
+
+# Bastion Host
+resource "aws_instance" "bastion" {
+  ami           = data.aws_ssm_parameter.amazon_linux_arm_ami.value
+  instance_type = "t4g.micro"
+  key_name      = null # No SSH key - use SSM only
+
+  subnet_id                   = aws_subnet.public[0].id
+  vpc_security_group_ids      = [aws_security_group.bastion.id]
+  associate_public_ip_address = true
+
+  iam_instance_profile = aws_iam_instance_profile.bastion.name
+
+  root_block_device {
+    volume_size           = 8
+    volume_type           = "gp3"
+    encrypted             = true
+    kms_key_id            = aws_kms_key.general.arn
+    delete_on_termination = true
+  }
+
+  user_data = base64encode(templatefile("${path.module}/bastion-user-data.sh", {}))
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-bastion"
+  })
+}
+
+# =============================================================================
+# CLOUDWATCH LOG GROUPS
+# =============================================================================
+
+# CloudTrail Log Group
+resource "aws_cloudwatch_log_group" "cloudtrail" {
+  name              = "/aws/cloudtrail/${local.name_prefix}"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.logs.arn
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail-logs"
+  })
+}
+
+# =============================================================================
+# CLOUDTRAIL
+# =============================================================================
+
+resource "aws_cloudtrail" "main" {
+  depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
+
+  name           = "${local.name_prefix}-trail"
+  s3_bucket_name = aws_s3_bucket.logs.bucket
+  s3_key_prefix  = "cloudtrail-logs"
+
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["arn:aws:s3:::*/*"]
+    }
+  }
+
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail.arn
+
+  enable_log_file_validation    = true
+  enable_logging                = true
+  is_multi_region_trail         = true
+  include_global_service_events = true
+
+  kms_key_id = aws_kms_key.logs.arn
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail"
+  })
+}
+
+# CloudTrail S3 bucket policy
+resource "aws_s3_bucket_policy" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/cloudtrail-logs/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# =============================================================================
+# AWS CONFIG
+# =============================================================================
+
+# Config Configuration Recorder
+resource "aws_config_configuration_recorder" "main" {
+  name     = "${local.name_prefix}-config-recorder"
+  role_arn = aws_iam_service_linked_role.config.arn
+
+  recording_group {
+    all_supported                 = true
+    include_global_resource_types = true
+  }
+
+  depends_on = [aws_config_delivery_channel.main]
+}
+
+# Config Delivery Channel
+resource "aws_config_delivery_channel" "main" {
+  name           = "${local.name_prefix}-config-delivery-channel"
+  s3_bucket_name = aws_s3_bucket.logs.bucket
+  s3_key_prefix  = "config-logs"
+
+  snapshot_delivery_properties {
+    delivery_frequency = "TwentyFour_Hours"
+  }
+}
+
+# Config bucket policy
+resource "aws_s3_bucket_policy" "config_logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketExistenceCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.logs.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/config-logs/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+# =============================================================================
+# CLOUDWATCH ALARMS
+# =============================================================================
+
+# ALB 5xx errors alarm
+resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
+  alarm_name          = "${local.name_prefix}-alb-5xx-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HTTPCode_ELB_5XX_Count"
+  namespace           = "AWS/ApplicationELB"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "10"
+  alarm_description   = "This metric monitors ALB 5xx errors"
+  alarm_actions       = []
+
+  dimensions = {
+    LoadBalancer = aws_lb.main.arn_suffix
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-5xx-alarm"
+  })
+}
+
+# ASG CPU utilization alarm
+resource "aws_cloudwatch_metric_alarm" "asg_high_cpu" {
+  alarm_name          = "${local.name_prefix}-asg-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors ASG CPU utilization"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-asg-cpu-alarm"
+  })
+}
+
+# RDS CPU utilization alarm
+resource "aws_cloudwatch_metric_alarm" "rds_high_cpu" {
+  alarm_name          = "${local.name_prefix}-rds-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors RDS CPU utilization"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.main.id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-cpu-alarm"
+  })
+}
+
+# RDS free storage space alarm
+resource "aws_cloudwatch_metric_alarm" "rds_low_storage" {
+  alarm_name          = "${local.name_prefix}-rds-low-storage"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "FreeStorageSpace"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "2000000000" # 2GB in bytes
+  alarm_description   = "This metric monitors RDS free storage space"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.main.id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-storage-alarm"
+  })
+}
+
+# RDS freeable memory alarm
+resource "aws_cloudwatch_metric_alarm" "rds_low_memory" {
+  alarm_name          = "${local.name_prefix}-rds-low-memory"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "FreeableMemory"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "100000000" # 100MB in bytes
+  alarm_description   = "This metric monitors RDS freeable memory"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.main.id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-memory-alarm"
+  })
+}
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+
+# VPC and Networking outputs
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "public_subnet_ids" {
+  description = "IDs of the public subnets"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "public_route_table_id" {
+  description = "ID of the public route table"
+  value       = aws_route_table.public.id
+}
+
+output "private_route_table_id" {
+  description = "ID of the private route table"
+  value       = aws_route_table.private.id
+}
+
+# Load Balancer outputs
+output "alb_dns_name" {
+  description = "DNS name of the load balancer"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_zone_id" {
+  description = "Zone ID of the load balancer"
+  value       = aws_lb.main.zone_id
+}
+
+output "https_listener_arn" {
+  description = "ARN of the HTTPS listener"
+  value       = aws_lb_listener.https.arn
+}
+
+output "http_listener_arn" {
+  description = "ARN of the HTTP listener"
+  value       = aws_lb_listener.http.arn
+}
+
+# WAF output
+output "waf_web_acl_arn" {
+  description = "ARN of the WAF Web ACL"
+  value       = aws_wafv2_web_acl.main.arn
+}
+
+# ACM Certificate output
+output "acm_certificate_arn" {
+  description = "ARN of the ACM certificate"
+  value       = aws_acm_certificate.main.arn
+}
+
+# Security Group outputs
+output "alb_security_group_id" {
+  description = "ID of the ALB security group"
+  value       = aws_security_group.alb.id
+}
+
+output "app_security_group_id" {
+  description = "ID of the app security group"
+  value       = aws_security_group.app.id
+}
+
+output "db_security_group_id" {
+  description = "ID of the database security group"
+  value       = aws_security_group.db.id
+}
+
+output "bastion_security_group_id" {
+  description = "ID of the bastion security group"
+  value       = aws_security_group.bastion.id
+}
+
+output "vpc_endpoints_security_group_id" {
+  description = "ID of the VPC endpoints security group"
+  value       = aws_security_group.vpc_endpoints.id
+}
+
+# RDS outputs
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.main.endpoint
+  sensitive   = true
+}
+
+output "rds_identifier" {
+  description = "RDS instance identifier"
+  value       = aws_db_instance.main.identifier
+}
+
+output "rds_backup_window" {
+  description = "RDS backup window"
+  value       = aws_db_instance.main.backup_window
+}
+
+output "rds_backup_retention" {
+  description = "RDS backup retention period"
+  value       = aws_db_instance.main.backup_retention_period
+}
+
+# CloudTrail outputs
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail"
+  value       = aws_cloudtrail.main.name
+}
+
+output "cloudtrail_arn" {
+  description = "ARN of the CloudTrail"
+  value       = aws_cloudtrail.main.arn
+}
+
+# S3 bucket outputs
+output "s3_logs_bucket_name" {
+  description = "Name of the S3 logs bucket"
+  value       = aws_s3_bucket.logs.bucket
+}
+
+output "s3_logs_bucket_arn" {
+  description = "ARN of the S3 logs bucket"
+  value       = aws_s3_bucket.logs.arn
+}
+
+# CloudWatch outputs
+output "cloudwatch_log_group_name" {
+  description = "Name of the CloudWatch log group for CloudTrail"
+  value       = aws_cloudwatch_log_group.cloudtrail.name
+}
+
+# AWS Config outputs
+output "config_recorder_name" {
+  description = "Name of the AWS Config recorder"
+  value       = aws_config_configuration_recorder.main.name
+}
+
+output "config_delivery_channel_name" {
+  description = "Name of the AWS Config delivery channel"
+  value       = aws_config_delivery_channel.main.name
+}
+
+# KMS outputs
+output "general_kms_key_arn" {
+  description = "ARN of the general KMS key"
+  value       = aws_kms_key.general.arn
+}
+
+output "general_kms_key_alias" {
+  description = "Alias of the general KMS key"
+  value       = aws_kms_alias.general.name
+}
+
+output "logs_kms_key_arn" {
+  description = "ARN of the logs KMS key"
+  value       = aws_kms_key.logs.arn
+}
+
+output "logs_kms_key_alias" {
+  description = "Alias of the logs KMS key"
+  value       = aws_kms_alias.logs.name
+}
+
+# Bastion outputs
+output "bastion_instance_id" {
+  description = "ID of the bastion instance"
+  value       = aws_instance.bastion.id
+}
+
+output "bastion_public_ip" {
+  description = "Public IP of the bastion instance"
+  value       = aws_instance.bastion.public_ip
+}
+
+# =============================================================================
+# RESOURCE INVENTORY & CONSOLE LINKS
+# =============================================================================
+
+/*
+## Resource Inventory & Console Links
+
+### VPC & Networking
+- **VPC**: ${aws_vpc.main.id} 
+  - Console: https://console.aws.amazon.com/vpc/home?region=us-west-2#vpcs:search=${aws_vpc.main.id}
+- **ALB**: ${aws_lb.main.name}
+  - Console: https://console.aws.amazon.com/ec2/v2/home?region=us-west-2#LoadBalancers:search=${aws_lb.main.name}
+
+### Security
+- **WAF Web ACL**: ${aws_wafv2_web_acl.main.name}
+  - Console: https://console.aws.amazon.com/wafv2/homev2/web-acls?region=us-west-2
+- **KMS Keys**: 
+  - General: ${aws_kms_alias.general.name} (${aws_kms_key.general.arn})
+  - Logs: ${aws_kms_alias.logs.name} (${aws_kms_key.logs.arn})
+  - Console: https://console.aws.amazon.com/kms/home?region=us-west-2#/kms/keys
+
+### Database
+- **RDS**: ${aws_db_instance.main.identifier}
+  - Console: https://console.aws.amazon.com/rds/home?region=us-west-2#database:id=${aws_db_instance.main.identifier}
+
+### Logging & Monitoring
+- **CloudTrail**: ${aws_cloudtrail.main.name}
+  - Console: https://console.aws.amazon.com/cloudtrail/home?region=us-west-2#/trails/${aws_cloudtrail.main.name}
+- **AWS Config**: ${aws_config_configuration_recorder.main.name}
+  - Console: https://console.aws.amazon.com/config/home?region=us-west-2
+- **S3 Logs Bucket**: ${aws_s3_bucket.logs.bucket}
+  - Console: https://console.aws.amazon.com/s3/buckets/${aws_s3_bucket.logs.bucket}?region=us-west-2
+
+### Testing & Verification
+
+To test this infrastructure:
+
+```bash
+# Initialize and validate
+terraform init
+terraform validate
+terraform fmt -check
+
+# Plan and apply
+terraform plan -var='bastion_allowed_cidrs=["YOUR_IP/32"]'
+terraform apply -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -auto-approve
+
+# Access via Session Manager (preferred)
+aws ssm start-session --target BASTION_INSTANCE_ID
+
+# Cleanup
+terraform destroy -auto-approve
+```
+
+### Cost Optimization Notes
+- Single NAT Gateway used (can be increased to 2 for HA)
+- t4g.micro/small instances (Graviton-based for cost efficiency)
+- GP3 storage volumes
+- 7-day RDS backup retention (adjust as needed)
+- S3 lifecycle transitions to IA after 90 days
+*/

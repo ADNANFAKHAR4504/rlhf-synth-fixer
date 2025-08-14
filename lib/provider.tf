@@ -10,14 +10,14 @@ terraform {
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
+  # Local backend for development/testing
+  backend "local" {}
 }
 
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Project     = "IaC - AWS Nova Model Breaking"
