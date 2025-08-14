@@ -90,7 +90,7 @@ const defaultTags = {
 };
 
 // All possible regions for local/multi-region use
-const allRegions = ['us-east-1', 'us-west-2', 'us-east-2', 'eu-north-1'];
+const allRegions = ['us-east-1', 'us-west-2', 'us-east-2', 'eu-north-2'];
 
 // Determine target regions
 // In CI/CD, AWS_REGION is usually set → deploy only that region
