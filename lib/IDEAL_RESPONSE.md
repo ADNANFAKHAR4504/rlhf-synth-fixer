@@ -123,20 +123,20 @@ export class ComputeStack extends cdk.Stack {
     const albSg = new ec2.SecurityGroup(this, 'AlbSg', {
       vpc: props.vpc,
       allowAllOutbound: true,
-      description: 'Allow web ingress on 80/443 only.',
+      description: 'Web ingress 80/443.',
     });
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP');
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS');
+    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
+    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS');
 
     this.appSecurityGroup = new ec2.SecurityGroup(this, 'AppSg', {
       vpc: props.vpc,
       allowAllOutbound: true,
-      description: 'EC2 instances behind ALB; only ALB to app port.',
+      description: 'App instances behind ALB.',
     });
     this.appSecurityGroup.addIngressRule(
       albSg,
       ec2.Port.tcp(80),
-      'ALB -> App HTTP'
+      'ALB to App HTTP'
     );
 
     // ALB across all public subnets/AZs
@@ -246,7 +246,7 @@ export class CoreStack extends cdk.Stack {
     this.appSecurityGroup = new ec2.SecurityGroup(this, 'AppSg', {
       vpc: this.vpc,
       allowAllOutbound: true,
-      description: 'Shared app security group',
+      description: 'App SG',
     });
 
     // appInstanceRole will be set from DatabaseStack after creation
@@ -283,7 +283,7 @@ export class DatabaseStack extends cdk.Stack {
     // Create IAM role for app instances here
     this.appInstanceRole = new iam.Role(this, 'AppInstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'App EC2 instance role',
+      description: 'App EC2 role',
     });
 
     // Use shared resources from CoreStack
@@ -294,7 +294,7 @@ export class DatabaseStack extends cdk.Stack {
     dbSg.addIngressRule(
       props.appSecurityGroup,
       ec2.Port.tcp(5432),
-      'App -> DB'
+      'App to DB'
     );
 
     const dbCredentials = rds.Credentials.fromGeneratedSecret('postgres'); // in Secrets Manager

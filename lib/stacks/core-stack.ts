@@ -29,7 +29,7 @@ export class CoreStack extends cdk.Stack {
     this.appSecurityGroup = new ec2.SecurityGroup(this, 'AppSg', {
       vpc: this.vpc,
       allowAllOutbound: true,
-      description: 'Shared app security group',
+      description: 'App SG',
     });
 
     // appInstanceRole will be set from DatabaseStack after creation

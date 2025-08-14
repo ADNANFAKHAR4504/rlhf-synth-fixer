@@ -28,20 +28,20 @@ export class ComputeStack extends cdk.Stack {
     const albSg = new ec2.SecurityGroup(this, 'AlbSg', {
       vpc: props.vpc,
       allowAllOutbound: true,
-      description: 'Allow web ingress on 80/443 only.',
+      description: 'Web ingress 80/443.',
     });
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP');
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS');
+    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
+    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS');
 
     this.appSecurityGroup = new ec2.SecurityGroup(this, 'AppSg', {
       vpc: props.vpc,
       allowAllOutbound: true,
-      description: 'EC2 instances behind ALB; only ALB to app port.',
+      description: 'App instances behind ALB.',
     });
     this.appSecurityGroup.addIngressRule(
       albSg,
       ec2.Port.tcp(80),
-      'ALB -> App HTTP'
+      'ALB to App HTTP'
     );
 
     // ALB across all public subnets/AZs

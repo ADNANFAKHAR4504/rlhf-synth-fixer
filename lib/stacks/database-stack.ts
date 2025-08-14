@@ -24,7 +24,7 @@ export class DatabaseStack extends cdk.Stack {
     // Create IAM role for app instances here
     this.appInstanceRole = new iam.Role(this, 'AppInstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'App EC2 instance role',
+      description: 'App EC2 role',
     });
 
     // Use shared resources from CoreStack
@@ -35,7 +35,7 @@ export class DatabaseStack extends cdk.Stack {
     dbSg.addIngressRule(
       props.appSecurityGroup,
       ec2.Port.tcp(5432),
-      'App -> DB'
+      'App to DB'
     );
 
     const dbCredentials = rds.Credentials.fromGeneratedSecret('postgres'); // in Secrets Manager
