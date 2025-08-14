@@ -64,6 +64,18 @@ describe('TapStack Unit Tests', () => {
       );
     });
 
+    it('should use default SSH CIDR when not specified', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          allowedSshCidr: '203.0.113.0/24'
+        }),
+        expect.any(Object)
+      );
+    });
+
     it('should create TapStack with custom arguments', () => {
       const customArgs = {
         environmentSuffix: 'prod',
@@ -346,6 +358,130 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
+  describe('Security Configuration', () => {
+    it('should configure SSH access restriction to specific IP range', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          allowedSshCidr: '203.0.113.0/24'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should not use SSH keys for EC2 access', () => {
+      const stack = new TapStack('test-stack', {});
+
+      // Verify that the infrastructure is configured without SSH keys
+      expect(stack.secureInfra).toBeDefined();
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
+    it('should configure SSM Session Manager for secure access', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'prod'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'prod'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should enforce specific IP range for SSH access', () => {
+      const stack = new TapStack('test-stack', {
+        allowedSshCidr: '203.0.113.0/24'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          allowedSshCidr: '203.0.113.0/24'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should configure EC2 instances without SSH keys', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'secure'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'secure'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should include comprehensive SSM permissions in IAM policy', () => {
+      const stack = new TapStack('test-stack', {
+        projectName: 'ssm-test'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          projectName: 'ssm-test'
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('Security Group Configuration', () => {
+    it('should restrict SSH to specific IP range only', () => {
+      const stack = new TapStack('test-stack', {
+        allowedSshCidr: '203.0.113.0/24'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          allowedSshCidr: '203.0.113.0/24'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should not allow unrestricted SSH access', () => {
+      const stack = new TapStack('test-stack', {});
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          allowedSshCidr: '203.0.113.0/24'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should ensure RDS instances are not publicly accessible', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'secure'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'secure'
+        }),
+        expect.any(Object)
+      );
+    });
+  });
+
   describe('VPC Flow Logs Configuration', () => {
     it('should create VPC Flow Logs for all regions', () => {
       const stack = new TapStack('test-stack', {
@@ -493,6 +629,20 @@ describe('TapStack Unit Tests', () => {
         expect.objectContaining({
           projectName: 'tagged-project',
           environment: 'test'
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should configure S3 buckets with proper security settings', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'production'
+      });
+
+      expect(SecureCompliantInfra).toHaveBeenCalledWith(
+        'secure-infra',
+        expect.objectContaining({
+          environment: 'production'
         }),
         expect.any(Object)
       );

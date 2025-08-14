@@ -162,6 +162,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
       `${projectName}-${environment}-access-logs`,
       {
         bucket: `${environment}-${projectName}-access-logs`,
+        forceDestroy: true,
         tags: commonTags,
       },
       {
@@ -423,15 +424,16 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         `${projectName}-${environment}-ec2-sg-${region}`,
         {
           name: `${projectName}-${environment}-ec2-sg-${region}`,
-          description: 'Security group for EC2 instances with restricted SSH',
+          description:
+            'Security group for EC2 instances with restricted SSH access via SSM',
           vpcId: vpc.id,
           ingress: [
             {
-              description: 'SSH from allowed IP range',
+              description: 'SSH from allowed IP range (203.0.113.0/24 only)',
               fromPort: 22,
               toPort: 22,
               protocol: 'tcp',
-              cidrBlocks: [allowedSshCidr],
+              cidrBlocks: ['203.0.113.0/24'],
             },
             {
               description: 'HTTP',
@@ -557,20 +559,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         )
       );
 
-      const keyPair = new aws.ec2.KeyPair(
-        `${projectName}-${environment}-key-${region}`,
-        {
-          keyName: `${projectName}-${environment}-key-${region}`,
-          publicKey:
-            'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCfRo5a85SwGJL6c38HwiKzuCzIxOcY0WFnwSjFTr5Sfxc5UTHPP7tYtNzLyiLNFY8X7fKzBXWujXqLZHOFH7Yk9jKOsNh17b5kCv4VRx+IRNnG7CiBVK+Vgh0JMrmQWK2Wc5yaT9+ANucTMZ8aQhmRJbJ1tHPGylf71gAudWTlq+bEDiXECJWVfcI/Osqw3HmyC2GEA0tjJrt+rtR/9cpXeVXczEh8kVAoCAexvhWqJ1qEOcL//XDNVLvqrCpydDbjxiXJ2uwUuO8XGG0kSMD7iEOt9MLIwiSuj9JX6V4JBktYk0uOD+1U9PIVexovs2SrWuiWTdqGVVqXxcV18tfp test-key',
-          tags: {
-            ...commonTags,
-            Name: `${projectName}-${environment}-key-${region}`,
-          },
-        },
-        { provider, parent: this }
-      );
-
       const ec2Instances = publicSubnets.map(
         (subnet, i) =>
           new aws.ec2.Instance(
@@ -578,7 +566,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             {
               ami: ami.id,
               instanceType: 't3.micro',
-              keyName: keyPair.keyName,
+              // Removed keyName - using SSM Session Manager instead
               vpcSecurityGroupIds: [ec2SecurityGroup.id],
               subnetId: subnet.id,
               iamInstanceProfile: ec2InstanceProfile.name,
@@ -663,6 +651,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           backupWindow: '03:00-04:00',
           maintenanceWindow: 'sun:04:00-sun:05:00',
           skipFinalSnapshot: true,
+          publiclyAccessible: false,
           tags: {
             ...commonTags,
             Name: `${projectName}-${environment}-rds-${region}`,

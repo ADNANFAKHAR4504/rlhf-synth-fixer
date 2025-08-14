@@ -42,6 +42,10 @@ import {
   ListBucketsCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import {
+  DescribeInstanceInformationCommand,
+  SSMClient,
+} from '@aws-sdk/client-ssm';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import {
   ListResourcesForWebACLCommand,
@@ -71,6 +75,7 @@ const initializeClients = (region?: string) => {
     kms: new KMSClient({ region: defaultRegion }),
     wafv2: new WAFV2Client({ region: defaultRegion }),
     sts: new STSClient({ region: defaultRegion }),
+    ssm: new SSMClient({ region: defaultRegion }),
   };
 };
 
@@ -379,6 +384,9 @@ describe('TAP Stack Integration Tests', () => {
               expect(instance.VpcId).toBeDefined();
               expect(instance.SubnetId).toBeDefined();
 
+              // Verify no SSH key is associated (using SSM Session Manager instead)
+              expect(instance.KeyName).toBeUndefined();
+
               expect(instance.SecurityGroups!.length).toBeGreaterThan(0);
 
               const tags = instance.Tags || [];
@@ -442,10 +450,21 @@ describe('TAP Stack Integration Tests', () => {
             );
 
             for (const sshRule of sshRules) {
+              // Verify SSH is not open to the world
               const hasOpenAccess = sshRule.IpRanges!.some(
                 range => range.CidrIp === '0.0.0.0/0'
               );
               expect(hasOpenAccess).toBe(false); // SSH should be restricted
+
+              // Verify SSH is only allowed from the specific IP range
+              const allowedCidrs = sshRule.IpRanges!.map(range => range.CidrIp);
+              expect(allowedCidrs).toContain('203.0.113.0/24');
+              
+              // Ensure no other CIDR blocks are allowed for SSH
+              const unauthorizedCidrs = allowedCidrs.filter(
+                cidr => cidr !== '203.0.113.0/24'
+              );
+              expect(unauthorizedCidrs.length).toBe(0);
             }
           }
         }
@@ -454,7 +473,50 @@ describe('TAP Stack Integration Tests', () => {
     );
 
     test(
-      'should have key pairs for EC2 access',
+      'should have SSM Session Manager configured for EC2 access',
+      async () => {
+        if (!resourceIds?.ec2InstanceIds) {
+          console.log(
+            `Skipping test: ${"'No EC2 instance IDs found in outputs'"}`
+          );
+          return;
+        }
+
+        for (const instanceInfo of resourceIds.ec2InstanceIds) {
+          const region = instanceInfo.region || 'us-west-1';
+          const instanceIds = instanceInfo.instanceIds || [instanceInfo];
+
+          const regionalClient = new EC2Client({ region });
+
+          // Verify instances have SSM-compatible IAM roles
+          const instancesResponse = await regionalClient.send(
+            new DescribeInstancesCommand({
+              InstanceIds: instanceIds,
+            })
+          );
+
+          for (const reservation of instancesResponse.Reservations!) {
+            for (const instance of reservation.Instances!) {
+              // Verify instance has IAM instance profile
+              expect(instance.IamInstanceProfile).toBeDefined();
+              expect(instance.IamInstanceProfile!.Arn).toBeDefined();
+
+              // Verify no SSH key is associated (using SSM instead)
+              expect(instance.KeyName).toBeUndefined();
+
+              // Verify instance is in running state or starting
+              expect(['running', 'pending', 'stopping', 'stopped']).toContain(
+                instance.State!.Name
+              );
+            }
+          }
+        }
+      },
+      testTimeout
+    );
+
+    test(
+      'should have proper IAM roles for SSM Session Manager',
       async () => {
         if (!resourceIds?.ec2InstanceIds) {
           console.log(
@@ -466,19 +528,62 @@ describe('TAP Stack Integration Tests', () => {
         for (const instanceInfo of resourceIds.ec2InstanceIds) {
           const region = instanceInfo.region || 'us-west-1';
 
-          const regionalClient = new EC2Client({ region });
+          const iamClient = new IAMClient({ region });
 
-          const response = await regionalClient.send(
-            new DescribeKeyPairsCommand({})
+          // List roles and find EC2 roles for the project
+          const rolesResponse = await iamClient.send(
+            new ListRolesCommand({})
           );
 
-          expect(response.KeyPairs!.length).toBeGreaterThan(0);
-
-          const projectKeyPairs = response.KeyPairs!.filter(
-            kp => kp.KeyName!.includes('webapp') || kp.KeyName!.includes('tap')
+          const projectRoles = rolesResponse.Roles!.filter(
+            role => 
+              role.RoleName!.includes('webapp') || 
+              role.RoleName!.includes('tap') ||
+              role.RoleName!.includes('ec2')
           );
 
-          expect(projectKeyPairs.length).toBeGreaterThan(0);
+          expect(projectRoles.length).toBeGreaterThan(0);
+
+          for (const role of projectRoles) {
+            // Check if role has SSM-related policies
+            const policiesResponse = await iamClient.send(
+              new ListRolePoliciesCommand({
+                RoleName: role.RoleName,
+              })
+            );
+
+            // Check for inline policies that might contain SSM permissions
+            for (const policyName of policiesResponse.PolicyNames!) {
+              const policyResponse = await iamClient.send(
+                new GetRolePolicyCommand({
+                  RoleName: role.RoleName,
+                  PolicyName: policyName,
+                })
+              );
+
+              const policyDocument = JSON.parse(
+                decodeURIComponent(policyResponse.PolicyDocument!)
+              );
+
+              // Look for SSM permissions in the policy
+              const hasSSMPermissions = policyDocument.Statement.some(
+                (statement: any) => {
+                  const actions = Array.isArray(statement.Action) 
+                    ? statement.Action 
+                    : [statement.Action];
+                  
+                  return actions.some((action: string) => 
+                    action.includes('ssm:') || 
+                    action.includes('ssmmessages:')
+                  );
+                }
+              );
+
+              if (hasSSMPermissions) {
+                expect(hasSSMPermissions).toBe(true);
+              }
+            }
+          }
         }
       },
       testTimeout
@@ -2199,9 +2304,14 @@ describe('TAP Stack Integration Tests', () => {
               for (const sshRule of sshRules) {
                 if (sshRule.IpRanges) {
                   for (const ipRange of sshRule.IpRanges) {
+                    // Verify SSH is not open to the world
                     expect(ipRange.CidrIp).not.toBe('0.0.0.0/0');
+                    
+                    // Verify SSH is only allowed from the specific IP range
+                    expect(ipRange.CidrIp).toBe('203.0.113.0/24');
+                    
                     console.log(
-                      `Confirmed SSH access is restricted in SG: ${sg.GroupId}`
+                      `Confirmed SSH access is restricted to 203.0.113.0/24 in SG: ${sg.GroupId}`
                     );
                   }
                 }
