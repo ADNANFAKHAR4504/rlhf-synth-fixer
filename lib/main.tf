@@ -1324,96 +1324,9 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 # EC2 LAUNCH TEMPLATE AND AUTO SCALING GROUP
 # =============================================================================
 
-# Launch Template for App instances
-resource "aws_launch_template" "app" {
-  name_prefix   = "${local.name_prefix}-app-"
-  image_id      = data.aws_ssm_parameter.amazon_linux_arm_ami.value
-  instance_type = "t4g.small"
-  key_name      = null # No SSH key - use SSM only
 
-  vpc_security_group_ids = [aws_security_group.app.id]
 
-  iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_app.name
-  }
 
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_size           = 20
-      volume_type           = "gp3"
-      encrypted             = true
-      kms_key_id            = aws_kms_key.general.arn
-      delete_on_termination = true
-    }
-  }
-
-  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
-    db_endpoint = aws_db_instance.main.endpoint
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = merge(local.common_tags, {
-      Name = "${local.name_prefix}-app-instance"
-    })
-  }
-
-  tag_specifications {
-    resource_type = "volume"
-    tags = merge(local.common_tags, {
-      Name = "${local.name_prefix}-app-volume"
-    })
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-lt"
-  })
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Auto Scaling Group
-resource "aws_autoscaling_group" "app" {
-  name                      = "${local.name_prefix}-app-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  health_check_type         = var.asg_health_check_type
-  health_check_grace_period = 300
-
-  min_size         = 1
-  max_size         = 6
-  desired_capacity = 1
-
-  launch_template {
-    id      = aws_launch_template.app.id
-    version = "$Latest"
-  }
-
-  enabled_metrics = [
-    "GroupMinSize",
-    "GroupMaxSize",
-    "GroupDesiredCapacity",
-    "GroupInServiceInstances",
-    "GroupTotalInstances"
-  ]
-
-  tag {
-    key                 = "Name"
-    value               = "${local.name_prefix}-app-asg"
-    propagate_at_launch = false
-  }
-
-  dynamic "tag" {
-    for_each = local.common_tags
-    content {
-      key                 = tag.key
-      value               = tag.value
-      propagate_at_launch = false
-    }
-  }
-}
 
 # =============================================================================
 # BASTION HOST
@@ -1650,26 +1563,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
   })
 }
 
-# ASG CPU utilization alarm
-resource "aws_cloudwatch_metric_alarm" "asg_high_cpu" {
-  alarm_name          = "${local.name_prefix}-asg-high-cpu"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors ASG CPU utilization"
 
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-asg-cpu-alarm"
-  })
-}
 
 # RDS CPU utilization alarm
 resource "aws_cloudwatch_metric_alarm" "rds_high_cpu" {
@@ -1932,15 +1826,7 @@ output "certificate_arn" {
   value       = var.domain_name != "" && var.hosted_zone_id != "" ? aws_acm_certificate_validation.main[0].certificate_arn : "No certificate configured"
 }
 
-output "asg_name" {
-  description = "Name of the Auto Scaling Group"
-  value       = aws_autoscaling_group.app.name
-}
 
-output "asg_desired_capacity" {
-  description = "Desired capacity of the Auto Scaling Group"
-  value       = aws_autoscaling_group.app.desired_capacity
-}
 
 output "health_check_path" {
   description = "Health check path being used"
