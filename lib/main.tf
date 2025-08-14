@@ -55,7 +55,7 @@ resource "aws_kms_key" "s3_key" {
 
 # KMS key alias for S3
 resource "aws_kms_alias" "s3_key_alias" {
-  name          = "alias/s3-encryption-key"
+  name          = "alias/s3-encryption-key-${var.environment_suffix}"
   target_key_id = aws_kms_key.s3_key.key_id
 }
 
