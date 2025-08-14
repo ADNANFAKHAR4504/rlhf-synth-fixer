@@ -69,10 +69,12 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly dataBucketName: pulumi.Output<string>;
   public readonly logsBucketName: pulumi.Output<string>;
   public readonly databaseEndpoint: pulumi.Output<string>;
+  public readonly dbSubnetGroupName: pulumi.Output<string>;
   public readonly webInstanceId: pulumi.Output<string>;
   public readonly webInstancePrivateIp: pulumi.Output<string>;
   public readonly environmentSuffix: pulumi.Output<string>;
   public readonly ec2InstanceProfileName: pulumi.Output<string>;
+  public readonly ec2RoleName: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, {}, opts);
@@ -104,10 +106,12 @@ export class TapStack extends pulumi.ComponentResource {
     this.dataBucketName = secureStack.dataBucketName;
     this.logsBucketName = secureStack.logsBucketName;
     this.databaseEndpoint = secureStack.databaseEndpoint;
+    this.dbSubnetGroupName = secureStack.dbSubnetGroupName;
     this.webInstanceId = secureStack.webInstanceId;
     this.webInstancePrivateIp = secureStack.webInstancePrivateIp;
     this.environmentSuffix = pulumi.output(environmentSuffix);
     this.ec2InstanceProfileName = secureStack.ec2InstanceProfileName;
+    this.ec2RoleName = secureStack.ec2RoleName;
 
     // Register outputs with the component
     this.registerOutputs({
@@ -115,12 +119,14 @@ export class TapStack extends pulumi.ComponentResource {
       dataBucketName: this.dataBucketName,
       logsBucketName: this.logsBucketName,
       databaseEndpoint: this.databaseEndpoint,
+      dbSubnetGroupName: this.dbSubnetGroupName,
       webInstanceId: this.webInstanceId,
       webInstancePrivateIp: this.webInstancePrivateIp,
       environmentSuffix: this.environmentSuffix,
       mainKmsKeyAlias: this.mainKmsKeyAlias,
       rdsKmsKeyAlias: this.rdsKmsKeyAlias,
       ec2InstanceProfileName: this.ec2InstanceProfileName,
+      ec2RoleName: this.ec2RoleName,
     });
   }
 }

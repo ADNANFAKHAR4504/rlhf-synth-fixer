@@ -90,6 +90,7 @@ export class SecureStack extends pulumi.ComponentResource {
 
   // RDS outputs
   public readonly databaseEndpoint: pulumi.Output<string>;
+  public readonly dbSubnetGroupName: pulumi.Output<string>;
 
   // EC2 outputs
   public readonly webInstanceId: pulumi.Output<string>;
@@ -97,6 +98,7 @@ export class SecureStack extends pulumi.ComponentResource {
 
   // IAM outputs
   public readonly ec2InstanceProfileName: pulumi.Output<string>;
+  public readonly ec2RoleName: pulumi.Output<string>;
 
   constructor(name: string, args: SecureStackArgs, opts?: ResourceOptions) {
     super('tap:secure:SecureStack', name, {}, opts);
@@ -198,9 +200,11 @@ export class SecureStack extends pulumi.ComponentResource {
     this.dataBucketName = s3Stack.dataBucketName;
     this.logsBucketName = s3Stack.logsBucketName;
     this.databaseEndpoint = rdsStack.dbInstanceEndpoint;
+    this.dbSubnetGroupName = rdsStack.dbSubnetGroupName;
     this.webInstanceId = ec2Stack.instanceId;
     this.webInstancePrivateIp = ec2Stack.privateIp;
     this.ec2InstanceProfileName = iamStack.ec2InstanceProfileName;
+    this.ec2RoleName = iamStack.ec2RoleName;
 
     // Register outputs with the component
     this.registerOutputs({
@@ -208,11 +212,13 @@ export class SecureStack extends pulumi.ComponentResource {
       dataBucketName: this.dataBucketName,
       logsBucketName: this.logsBucketName,
       databaseEndpoint: this.databaseEndpoint,
+      dbSubnetGroupName: this.dbSubnetGroupName,
       webInstanceId: this.webInstanceId,
       webInstancePrivateIp: this.webInstancePrivateIp,
       mainKmsKeyAlias: this.mainKmsKeyAlias,
       rdsKmsKeyAlias: this.rdsKmsKeyAlias,
       ec2InstanceProfileName: this.ec2InstanceProfileName,
+      ec2RoleName: this.ec2RoleName,
     });
   }
 }

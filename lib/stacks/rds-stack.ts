@@ -16,6 +16,7 @@ export class RdsStack extends pulumi.ComponentResource {
   public readonly dbInstanceArn: pulumi.Output<string>;
   public readonly dbInstanceEndpoint: pulumi.Output<string>;
   public readonly dbInstancePort: pulumi.Output<number>;
+  public readonly dbSubnetGroupName: pulumi.Output<string>;
 
   constructor(name: string, args: RdsStackArgs, opts?: ResourceOptions) {
     super('tap:rds:RdsStack', name, args, opts);
@@ -122,12 +123,14 @@ export class RdsStack extends pulumi.ComponentResource {
     this.dbInstanceArn = dbInstance.arn;
     this.dbInstanceEndpoint = dbInstance.endpoint;
     this.dbInstancePort = dbInstance.port;
+    this.dbSubnetGroupName = dbSubnetGroup.name;
 
     this.registerOutputs({
       dbInstanceId: this.dbInstanceId,
       dbInstanceArn: this.dbInstanceArn,
       dbInstanceEndpoint: this.dbInstanceEndpoint,
       dbInstancePort: this.dbInstancePort,
+      dbSubnetGroupName: this.dbSubnetGroupName,
     });
   }
 }

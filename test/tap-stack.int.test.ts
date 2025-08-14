@@ -139,8 +139,8 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(vpc.IsDefault).toBe(false);
 
       // Check DNS settings
-      expect(vpc.DnsHostnames).toBe(true);
-      expect(vpc.DnsSupport).toBe(true);
+      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpc.EnableDnsSupport).toBe(true);
 
       // Check tags
       const nameTag = vpc.Tags?.find((tag: any) => tag.Key === 'Name');
@@ -324,7 +324,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       const response = await clients.rds.send(
         new DescribeDBSubnetGroupsCommand({
-          DBSubnetGroupName: `tap-db-subnet-group-dev`, // Assuming dev environment
+          DBSubnetGroupName: stackOutputs.dbSubnetGroupName,
         })
       );
 
@@ -370,7 +370,7 @@ describe('TAP Infrastructure Integration Tests', () => {
     it('should have EC2 role with least privilege policies', async () => {
       const roleResponse = await clients.iam.send(
         new GetRoleCommand({
-          RoleName: 'tap-ec2-role-dev', // Assuming dev environment
+          RoleName: stackOutputs.ec2RoleName,
         })
       );
 

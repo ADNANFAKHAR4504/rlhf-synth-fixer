@@ -15,6 +15,7 @@ export interface IamStackArgs {
 
 export class IamStack extends pulumi.ComponentResource {
   public readonly ec2RoleArn: pulumi.Output<string>;
+  public readonly ec2RoleName: pulumi.Output<string>;
   public readonly ec2InstanceProfileName: pulumi.Output<string>;
 
   constructor(name: string, args: IamStackArgs, opts?: ResourceOptions) {
@@ -98,10 +99,12 @@ export class IamStack extends pulumi.ComponentResource {
     );
 
     this.ec2RoleArn = ec2Role.arn;
+    this.ec2RoleName = ec2Role.name;
     this.ec2InstanceProfileName = instanceProfile.name;
 
     this.registerOutputs({
       ec2RoleArn: this.ec2RoleArn,
+      ec2RoleName: this.ec2RoleName,
       ec2InstanceProfileName: this.ec2InstanceProfileName,
     });
   }
