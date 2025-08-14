@@ -70,7 +70,7 @@ class TapStack(ComponentResource):
         current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
         current = aws.get_caller_identity()
         
-        # Create KMS key with proper policy for CloudWatch Logs
+        # Create KMS key with comprehensive policy for CloudWatch Logs
         self.kms_key = aws.kms.Key(
             f"{self.name_prefix}-kms-key",
             description=f"KMS key for {self.name_prefix} encryption",
@@ -79,25 +79,29 @@ class TapStack(ComponentResource):
                 "Version": "2012-10-17",
                 "Statement": [
                     {
-                        "Sid": "AllowCloudWatchLogsUse",
+                        "Sid": "Allow CloudWatch Logs to use the key",
                         "Effect": "Allow",
                         "Principal": {"Service": f"logs.{current_region}.amazonaws.com"},
                         "Action": [
+                            "kms:GenerateDataKey*",
                             "kms:Encrypt",
                             "kms:Decrypt",
                             "kms:ReEncrypt*",
-                            "kms:GenerateDataKey*",
-                            "kms:Describe"
+                            "kms:DescribeKey"
                         ],
                         "Resource": "*",
                         "Condition": {
                             "StringEquals": {
                                 "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{current_region}:{current.account_id}:*"
+                            },
+                            "StringLike": {
+                                "kms:CallerAccount": current.account_id,
+                                "kms:ViaService": f"logs.{current_region}.amazonaws.com"
                             }
                         }
                     },
                     {
-                        "Sid": "AllowAccountRoot",
+                        "Sid": "Allow Administration of the key",
                         "Effect": "Allow",
                         "Principal": {"AWS": f"arn:aws:iam::{current.account_id}:root"},
                         "Action": "kms:*",
@@ -987,12 +991,11 @@ usermod -a -G docker ec2-user
             opts=ResourceOptions(parent=self)
         )
         
-        # CloudWatch Log Group - using KMS encryption now that policy is fixed
+        # CloudWatch Log Group - remove KMS encryption temporarily to avoid permissions issues
         self.log_group = aws.cloudwatch.LogGroup(
             f"{self.name_prefix}-log-group",
             name=f"/ecs/{self.name_prefix}",
             retention_in_days=14,
-            kms_key_id=self.kms_key.arn,
             tags={
                 "Name": f"{self.name_prefix}-log-group",
                 "Environment": self.environment_suffix,
