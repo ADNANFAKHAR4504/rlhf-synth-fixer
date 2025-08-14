@@ -1,7 +1,7 @@
 1. Region handling and tagging
 
-- Issue: Region wasn’t hardcoded to us-west-1 in the app; we honor environment/CI settings instead. This aligns with the project’s AWS_REGION file and pipeline control.
-- Fix: Kept `bin/tap.ts` env-based region while ensuring tags include `Environment` and stack suffixing via `environmentSuffix`.
+- Issue: Requirement expects a default hardcoded region for compliance.
+- Fix: Updated `bin/tap.ts` and `IDEAL_RESPONSE` so `env.region` defaults to `us-west-2` when `CDK_DEFAULT_REGION` is not set. Tags preserved.
 
 2. VPC design for Lambda
 
@@ -23,10 +23,10 @@
 - Issue: Used deprecated `logRetention` option.
 - Fix: Created explicit `logs.LogGroup` and attached via `logGroup`.
 
-6. API Gateway logging and metrics
+6. API type and access logging
 
-- Issue: Ensure access logging and metrics are explicitly enabled.
-- Fix: Configured `deployOptions` with INFO logging, metrics enabled, and JSON access log format into dedicated LogGroup.
+- Issue: Original response used REST API; we standardized on HTTP API (v2) with explicit routes.
+- Fix: Switched to `HttpApi` with `/`, `/health`, `/data` routes and added access logging via `CfnStage` to a LogGroup.
 
 7. Endpoints for private access
 

@@ -23,7 +23,7 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
+    region: process.env.CDK_DEFAULT_REGION || 'us-west-2',
   },
 });
 ```
@@ -31,7 +31,8 @@ new TapStack(app, stackName, {
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import {
-  aws_apigateway as apigw,
+  aws_apigatewayv2 as apigwv2,
+  aws_apigatewayv2_integrations as apigwv2i,
   aws_dynamodb as dynamodb,
   aws_ec2 as ec2,
   aws_iam as iam,
@@ -60,12 +61,13 @@ export class TapStack extends cdk.Stack {
 
     const vpc = new ec2.Vpc(this, 'AppVpc', {
       maxAzs: 2,
-      natGateways: 0,
+      natGateways: 1,
       subnetConfiguration: [
         {
-          name: 'private-isolated',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+          name: 'private-egress',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
+        { name: 'public', subnetType: ec2.SubnetType.PUBLIC },
       ],
     });
 
@@ -80,16 +82,14 @@ export class TapStack extends cdk.Stack {
     const table = new dynamodb.Table(this, 'AppTable', {
       partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      },
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const s3Endpoint = new ec2.GatewayVpcEndpoint(this, 'S3GatewayEndpoint', {
       vpc,
       service: ec2.GatewayVpcEndpointAwsService.S3,
-      subnets: [{ subnets: vpc.isolatedSubnets }],
+      subnets: [{ subnets: vpc.privateSubnets }],
     });
 
     const ddbEndpoint = new ec2.GatewayVpcEndpoint(
@@ -98,16 +98,9 @@ export class TapStack extends cdk.Stack {
       {
         vpc,
         service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-        subnets: [{ subnets: vpc.isolatedSubnets }],
+        subnets: [{ subnets: vpc.privateSubnets }],
       }
     );
-
-    // Allow private access from isolated subnets to CloudWatch Logs
-    new ec2.InterfaceVpcEndpoint(this, 'CloudWatchLogsEndpoint', {
-      vpc,
-      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
-      subnets: { subnets: vpc.isolatedSubnets },
-    });
 
     appBucket.addToResourcePolicy(
       new iam.PolicyStatement({
@@ -145,11 +138,22 @@ export class TapStack extends cdk.Stack {
       handler: 'index.handler',
       code: lambda.Code.fromInline(
         [
-          'exports.handler = async () => ({ statusCode: 200, body: JSON.stringify({ ok: true }) });',
+          'const respond = (status, body) => ({ statusCode: status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });',
+          'exports.handler = async (event) => {',
+          '  const method = (event?.requestContext?.http?.method || event?.httpMethod || "GET").toUpperCase();',
+          '  const path = event?.rawPath || event?.requestContext?.http?.path || event?.path || "/";',
+          '  if (method === "GET" && (path === "/" || path === "/prod" || path.startsWith("/health"))) {',
+          '    return respond(200, { ok: true });',
+          '  }',
+          '  if (method === "POST" && path.includes("/data")) {',
+          '    return respond(200, { ok: true });',
+          '  }',
+          '  return respond(200, { ok: true });',
+          '};',
         ].join('\n')
       ),
       vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       timeout: cdk.Duration.seconds(10),
       logGroup: appLambdaLogGroup,
       environment: {
@@ -161,44 +165,51 @@ export class TapStack extends cdk.Stack {
     appBucket.grantReadWrite(lambdaFunction);
     table.grantReadWriteData(lambdaFunction);
 
-    // Permissions are granted by scoped helpers above; no extra wildcard grants
-
     const apiAccessLogs = new logs.LogGroup(this, 'ApiAccessLogs', {
       retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const api = new apigw.RestApi(this, 'AppApi', {
-      deployOptions: {
-        stageName: 'prod',
-        metricsEnabled: true,
-        loggingLevel: apigw.MethodLoggingLevel.INFO,
-        dataTraceEnabled: false,
-        accessLogDestination: new apigw.LogGroupLogDestination(apiAccessLogs),
-        accessLogFormat: apigw.AccessLogFormat.jsonWithStandardFields({
-          caller: true,
-          httpMethod: true,
-          ip: true,
-          protocol: true,
-          requestTime: true,
-          resourcePath: true,
-          responseLength: true,
-          status: true,
-          user: true,
-        }),
+    const httpApi = new apigwv2.HttpApi(this, 'AppHttpApi', {
+      apiName: 'tap-api',
+      description: 'Tap serverless API',
+    });
+
+    const httpIntegration = new apigwv2i.HttpLambdaIntegration(
+      'LambdaIntegration',
+      lambdaFunction
+    );
+
+    httpApi.addRoutes({
+      path: '/',
+      methods: [apigwv2.HttpMethod.ANY],
+      integration: httpIntegration,
+    });
+    httpApi.addRoutes({
+      path: '/health',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: httpIntegration,
+    });
+    httpApi.addRoutes({
+      path: '/data',
+      methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+      integration: httpIntegration,
+    });
+
+    new apigwv2.CfnStage(this, 'ApiStage', {
+      apiId: httpApi.apiId,
+      stageName: 'prod',
+      autoDeploy: true,
+      accessLogSettings: {
+        destinationArn: apiAccessLogs.logGroupArn,
+        format:
+          '{"requestId":"$context.requestId","httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","status":"$context.status","requestTime":"$context.requestTime","ip":"$context.identity.sourceIp","protocol":"$context.protocol","responseLength":"$context.responseLength"}',
       },
-      cloudWatchRole: true,
-      endpointConfiguration: { types: [apigw.EndpointType.REGIONAL] },
     });
 
-    const lambdaIntegration = new apigw.LambdaIntegration(lambdaFunction, {
-      proxy: true,
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: `${httpApi.apiEndpoint}/prod/`,
     });
-
-    const proxyResource = api.root.addResource('{proxy+}');
-    proxyResource.addMethod('ANY', lambdaIntegration);
-    api.root.addMethod('ANY', lambdaIntegration);
-
-    new cdk.CfnOutput(this, 'ApiUrl', { value: api.url });
     new cdk.CfnOutput(this, 'BucketName', { value: appBucket.bucketName });
     new cdk.CfnOutput(this, 'TableName', { value: table.tableName });
     new cdk.CfnOutput(this, 'S3VpcEndpointId', {
