@@ -86,15 +86,22 @@ variable "log_retention_days" {
   default     = 30
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming"
+  type        = string
+  default     = "dev"
+}
+
 # =============================================================================
 # Locals
 # =============================================================================
 
 locals {
-  name_prefix = "${var.project}-${var.environment}"
+  name_prefix = "${var.project}-${var.environment}-${var.environment_suffix}"
   common_tags = {
     project     = var.project
     environment = var.environment
+    suffix      = var.environment_suffix
   }
 }
 
@@ -450,29 +457,29 @@ resource "aws_ssm_parameter" "cloudwatch_config" {
   value = jsonencode({
     agent = {
       metrics_collection_interval = 60
-      run_as_user                  = "cwagent"
+      run_as_user                 = "cwagent"
     }
     logs = {
       logs_collected = {
         files = {
           collect_list = [
             {
-              file_path      = "/var/log/messages"
-              log_group_name = "/app/${local.name_prefix}/web"
+              file_path       = "/var/log/messages"
+              log_group_name  = "/app/${local.name_prefix}/web"
               log_stream_name = "{instance_id}/messages"
-              timezone       = "UTC"
+              timezone        = "UTC"
             },
             {
-              file_path      = "/var/log/nginx/access.log"
-              log_group_name = "/app/${local.name_prefix}/web"
+              file_path       = "/var/log/nginx/access.log"
+              log_group_name  = "/app/${local.name_prefix}/web"
               log_stream_name = "{instance_id}/nginx-access"
-              timezone       = "UTC"
+              timezone        = "UTC"
             },
             {
-              file_path      = "/var/log/nginx/error.log"
-              log_group_name = "/app/${local.name_prefix}/web"
+              file_path       = "/var/log/nginx/error.log"
+              log_group_name  = "/app/${local.name_prefix}/web"
               log_stream_name = "{instance_id}/nginx-error"
-              timezone       = "UTC"
+              timezone        = "UTC"
             }
           ]
         }
@@ -522,30 +529,7 @@ resource "aws_launch_template" "app" {
     name = aws_iam_instance_profile.instance_profile.name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    name_prefix = local.name_prefix
-    aws_region  = var.aws_region
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = merge(local.common_tags, {
-      Name = "${local.name_prefix}-instance"
-    })
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-lt"
-  })
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Create user_data.sh content inline since we need single file
-locals {
-  user_data_script = <<-EOF
+  user_data = base64encode(<<-EOF
 #!/bin/bash
 yum update -y
 yum install -y nginx
@@ -565,6 +549,7 @@ cat > /usr/share/nginx/html/index.html << 'HTML'
     <p>Instance ID: INSTANCE_ID_PLACEHOLDER</p>
     <p>Environment: ${var.environment}</p>
     <p>Project: ${var.project}</p>
+    <p>Suffix: ${var.environment_suffix}</p>
 </body>
 </html>
 HTML
@@ -585,21 +570,7 @@ aws ssm get-parameter --name "/app/${local.name_prefix}/cloudwatch/config" --reg
 # Start CloudWatch Agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 EOF
-}
-
-# Update launch template to use inline user data
-resource "aws_launch_template" "app_updated" {
-  name_prefix   = "${local.name_prefix}-"
-  image_id      = data.aws_ssm_parameter.amazon_linux_ami.value
-  instance_type = var.instance_type
-
-  vpc_security_group_ids = [aws_security_group.app.id]
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.instance_profile.name
-  }
-
-  user_data = base64encode(local.user_data_script)
+  )
 
   tag_specifications {
     resource_type = "instance"
@@ -622,10 +593,10 @@ resource "aws_launch_template" "app_updated" {
 # =============================================================================
 
 resource "aws_autoscaling_group" "app" {
-  name                = "${local.name_prefix}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
-  health_check_type   = "ELB"
+  name                      = "${local.name_prefix}-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.app.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.asg_min_size
@@ -633,7 +604,7 @@ resource "aws_autoscaling_group" "app" {
   desired_capacity = var.asg_desired_capacity
 
   launch_template {
-    id      = aws_launch_template.app_updated.id
+    id      = aws_launch_template.app.id
     version = "$Latest"
   }
 
@@ -753,12 +724,12 @@ resource "aws_db_instance" "app" {
   db_subnet_group_name   = aws_db_subnet_group.app.name
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   auto_minor_version_upgrade = true
-  deletion_protection        = true
-  skip_final_snapshot        = false
+  deletion_protection        = false
+  skip_final_snapshot        = true
   final_snapshot_identifier  = "${local.name_prefix}-rds-final-snapshot"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
