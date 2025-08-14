@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, Config (recorder only), VPC Flow Logs, MFA, S3 SSE+logs, and Route53 DNSSEC with KSK activation wait.
+Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, VPC Flow Logs, MFA, S3 SSE+logs, and Route53 DNSSEC with KSK activation wait.
 
 Mappings:
   OrgCIDR:
@@ -35,15 +35,10 @@ Resources:
             Principal: { Service: !Sub "logs.${AWS::Region}.amazonaws.com" }
             Action: [ "kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey" ]
             Resource: "*"
-          - Sid: AllowConfig
-            Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: [ "kms:Decrypt","kms:DescribeKey","kms:Encrypt","kms:GenerateDataKey*","kms:ReEncrypt*" ]
-            Resource: "*"
           - Sid: AllowS3
             Effect: Allow
             Principal: { Service: s3.amazonaws.com }
-            Action: [ "kms:Decrypt","kms:DescribeKey","kms:Encrypt","kms:GenerateDataKey*","kms:ReEncrypt*" ]
+            Action: [ "kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey" ]
             Resource: "*"
 
   EncryptionKeyAlias:
@@ -192,7 +187,7 @@ Resources:
             Principal: { Service: logging.s3.amazonaws.com }
             Action: s3:PutObject
             Resource: !Sub "${AccessLogsBucket.Arn}/*"
-            Condition: { StringEquals: { s3:x-amz-acl: bucket-owner-full-control } }
+            Condition: { StringEquals: { s3:x-amz-acl: bucket-owner-full-control} }
 
   ApplicationBucket:
     Type: AWS::S3::Bucket
@@ -300,31 +295,6 @@ Resources:
     Properties:
       Roles: [ !Ref EC2Role ]
 
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
-      Policies:
-        - PolicyName: ConfigDelivery
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: [ "s3:GetBucketAcl","s3:ListBucket" ]
-                Resource: !GetAtt ConfigBucket.Arn
-              - Effect: Allow
-                Action: "s3:PutObject"
-                Resource: !Sub "${ConfigBucket.Arn}/*"
-                Condition:
-                  StringEquals: { "s3:x-amz-acl": "bucket-owner-full-control" }
-
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
@@ -357,7 +327,11 @@ Resources:
           - Sid: AllowManageOwnPasswords
             Effect: Allow
             Action: [ "iam:ChangePassword","iam:GetUser" ]
-            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
+            Resource: !Join 
+              - ""
+              - - "arn:aws:iam::"
+                - !Ref AWS::AccountId
+                - ":user/${aws:username}"
           - Sid: AllowManageOwnMFA
             Effect: Allow
             Action:
@@ -367,8 +341,16 @@ Resources:
               - iam:ListMFADevices
               - iam:ResyncMFADevice
             Resource:
-              - !Sub "arn:aws:iam::${AWS::AccountId}:mfa/${!aws:username}"
-              - !Sub "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
+              - !Join 
+                - ""
+                - - "arn:aws:iam::"
+                  - !Ref AWS::AccountId
+                  - ":mfa/${aws:username}"
+              - !Join 
+                - ""
+                - - "arn:aws:iam::"
+                  - !Ref AWS::AccountId
+                  - ":user/${aws:username}"
           - Sid: DenyAllUnlessMFA
             Effect: Deny
             NotAction:
@@ -463,15 +445,6 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
       SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
 
-  # ---------------- AWS Config (recorder only; uses existing Delivery Channel) ----------------
-  ConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
   # ---------------- VPC Flow Logs ----------------
   VPCFlowLogs:
     Type: AWS::EC2::FlowLog
@@ -489,7 +462,7 @@ Resources:
     Properties:
       HostedZoneId: !FindInMap [R53, Zone, Id]
       KeyManagementServiceArn: !GetAtt DNSSECKey.Arn
-      Name: "ksk_main"           # must match ^[A-Za-z0-9_]{3,128}$
+      Name: "ksk_main"
       Status: ACTIVE
 
   KSKWaiterRole:
@@ -522,47 +495,54 @@ Resources:
       Role: !GetAtt KSKWaiterRole.Arn
       Code:
         ZipFile: |
-          import json, time, urllib.request, logging, boto3, os
+          import json, time, urllib.request, logging, boto3
           log = logging.getLogger()
           log.setLevel(logging.INFO)
           r53 = boto3.client('route53')
-          def respond(event, context, status, data=None, reason=None):
+
+          def respond(event, status, data=None, reason=None):
               body = {
                   'Status': status,
-                  'Reason': reason or ('See CloudWatch Logs for details'),
+                  'Reason': reason or 'See CloudWatch Logs for details',
                   'PhysicalResourceId': event.get('PhysicalResourceId', 'KSKWaiter'),
                   'StackId': event['StackId'],
                   'RequestId': event['RequestId'],
                   'LogicalResourceId': event['LogicalResourceId'],
                   'Data': data or {}
               }
-              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(body).encode('utf-8'), method='PUT')
+              req = urllib.request.Request(
+                  event['ResponseURL'],
+                  data=json.dumps(body).encode('utf-8'),
+                  method='PUT'
+              )
               req.add_header('content-type', '')
               urllib.request.urlopen(req).read()
-          def wait_for_active(hz_id, ksk_name, timeout=900, interval=15):
-              deadline = time.time() + timeout
-              while time.time() < deadline:
-                  resp = r53.get_dnssec(HostedZoneId=hz_id)
-                  status = resp.get('Status')
-                  log.info(f"KSK status: {status}")
-                  if status == 'ACTIVE':
-                      return True
-                  time.sleep(interval)
-              return False
+
+          # We consider success when the hosted zone is SIGNING and the named KSK is ACTIVE.
+          def ksk_active_and_signing(hz_id, ksk_name):
+              resp = r53.get_dnssec(HostedZoneId=hz_id)
+              serve = (resp.get('Status') or {}).get('ServeSignature')
+              ksk_ok = any(ksk.get('Name') == ksk_name and ksk.get('Status') == 'ACTIVE'
+                           for ksk in resp.get('KeySigningKeys', []))
+              log.info(f"ServeSignature={serve}, KSK_OK={ksk_ok}")
+              return serve == 'SIGNING' and ksk_ok
+
           def handler(event, context):
               try:
                   if event['RequestType'] == 'Delete':
-                      return respond(event, context, 'SUCCESS', {'Message': 'Deleted'})
+                      return respond(event, 'SUCCESS', {'Message': 'Deleted'})
                   props = event['ResourceProperties']
                   hz_id = props['HostedZoneId']
                   ksk_name = props['KSKName']
-                  if wait_for_active(hz_id, ksk_name):
-                      return respond(event, context, 'SUCCESS', {'Status': 'ACTIVE'})
-                  else:
-                      return respond(event, context, 'FAILED', reason='KSK did not become ACTIVE in time')
+                  deadline = time.time() + 900
+                  while time.time() < deadline:
+                      if ksk_active_and_signing(hz_id, ksk_name):
+                          return respond(event, 'SUCCESS', {'Status': 'ACTIVE'})
+                      time.sleep(15)
+                  return respond(event, 'FAILED', reason='KSK did not become ACTIVE/SIGNING in time')
               except Exception as e:
-                  log.exception('Error waiting for KSK ACTIVE')
-                  return respond(event, context, 'FAILED', reason=str(e))
+                  log.exception('waiter error')
+                  return respond(event, 'FAILED', reason=str(e))
 
   WaitForKSKActive:
     Type: Custom::WaitForKSKActive
