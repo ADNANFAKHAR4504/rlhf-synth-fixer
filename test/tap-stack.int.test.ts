@@ -13,7 +13,7 @@ import * as path from 'path';
 const awsRegion =
   process.env.AWS_REGION ||
   process.env.AWS_DEFAULT_REGION ||
-  'us-west-2';
+  'us-east-1';
 
 const ec2Client = new EC2Client({ region: awsRegion });
 const iamClient = new IAMClient({ region: awsRegion });
