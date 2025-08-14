@@ -37,7 +37,13 @@ The TapStack template has been updated to implement a "gold standard" secure S3 
    - Account-level access control
 
 ### ✅ Issues Found and Resolved During Deployment
-1. **Invalid Principal in Policy Error**: 
+1. **Lint Warning - Parameter Not Used**: 
+   - Issue: `W2001 Parameter ExternalAccountId not used` from cfn-lint
+   - Root Cause: ExternalAccountId parameter was defined but not used after commenting out cross-account access
+   - Resolution: Removed parameter and hardcoded external account ID `123456789012` directly in bucket policy
+   - Impact: No more lint warnings, template is clean
+
+2. **Invalid Principal in Policy Error**: 
    - Issue: `Invalid principal in policy (Service: S3, Status Code: 400)` for SecureDataBucketPolicy during deployment
    - Root Cause: Cross-account access policy references non-existent role `ExternalDataReaderRole` in test account `123456789012`
    - Resolution: Commented out cross-account access policy for testing deployment
