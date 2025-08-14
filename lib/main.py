@@ -123,8 +123,7 @@ def deploy_infrastructure():
       region=region,
       s3_bucket_name=s3_bucket.bucket,
       tags=common_tags,
-      provider=provider,
-      depends_on=[s3_bucket]
+      provider=provider
     )
 
   # Export important resource information
