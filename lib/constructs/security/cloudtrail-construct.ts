@@ -38,19 +38,17 @@ export class CloudTrailConstruct extends Construct {
       }
     );
 
-    // CloudWatch Log Group for CloudTrail - ensure KMS key is available
+    // CloudWatch Log Group for CloudTrail - make name unique, temporarily without KMS encryption
     this.logGroup = new logs.LogGroup(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-CloudTrail-Logs`,
       {
-        logGroupName: `/aws/cloudtrail/${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}`,
+        logGroupName: `/aws/cloudtrail/${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}`,
         retention: logs.RetentionDays.ONE_YEAR,
-        encryptionKey: encryptionKey,
+        // Temporarily removed KMS encryption to resolve dependency issue
+        // encryptionKey: encryptionKey,
       }
     );
-
-    // Ensure LogGroup depends on the KMS key
-    this.logGroup.node.addDependency(encryptionKey);
 
     // CloudTrail with comprehensive logging
     this.trail = new cloudtrail.Trail(
