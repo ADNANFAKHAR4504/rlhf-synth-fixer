@@ -154,18 +154,22 @@ Conditions:
   UseExistingS3MainBucketCond: !Equals [!Ref UseExistingS3MainBucket, 'true']
   CreateMainS3BucketCond: !Equals [!Ref UseExistingS3MainBucket, 'false']
   UseExistingKMSCond: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
-  UseExistingBastionSGCond: !Not [!Equals [!Ref ExistingBastionSGId, '']]
+  CreateKMSCond: !Equals [!Ref ExistingKMSKeyArn, '']
   UseExistingWebSGCond: !Not [!Equals [!Ref ExistingWebSGId, '']]
+  CreateWebSGCond: !Equals [!Ref ExistingWebSGId, '']
+  UseExistingBastionSGCond: !Not [!Equals [!Ref ExistingBastionSGId, '']]
+  CreateBastionSGCond: !Equals [!Ref ExistingBastionSGId, '']
   UseExistingDBSGCond: !Not [!Equals [!Ref ExistingDBSGId, '']]
-  UseExistingWebInstanceCond: !Not [!Equals [!Ref ExistingWebInstanceId, '']]
-  UseExistingBastionInstanceCond: !Not [!Equals [!Ref ExistingBastionInstanceId, '']]
+  CreateDBSGCond: !Equals [!Ref ExistingDBSGId, '']
+  CreateWebInstanceCond: !Equals [!Ref ExistingWebInstanceId, '']
+  CreateBastionInstanceCond: !Equals [!Ref ExistingBastionInstanceId, '']
 
 Resources:
   # =========================
   # KMS Key
   # =========================
   SecureEnvKMSKey:
-    Condition: !If [UseExistingKMSCond, !Ref 'AWS::NoValue', 'true']
+    Condition: CreateKMSCond
     Type: AWS::KMS::Key
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -203,7 +207,7 @@ Resources:
       PendingWindowInDays: 7
 
   SecureEnvKMSAlias:
-    Condition: !If [UseExistingKMSCond, !Ref 'AWS::NoValue', 'true']
+    Condition: CreateKMSCond
     Type: AWS::KMS::Alias
     Properties:
       AliasName: alias/SecureEnv-MasterKey
@@ -222,7 +226,8 @@ Resources:
         GenerateStringKey: password
         PasswordLength: 24
         ExcludeCharacters: '"@/\\'
-      KmsKeyId: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
+      KmsKeyId:
+        !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
 
   # =========================
   # VPC and Networking
@@ -431,6 +436,7 @@ Resources:
   # Security Groups
   # =========================
   SecureEnvBastionSG:
+    Condition: CreateBastionSGCond
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub SecureEnv-Bastion-SG-${Environment}
@@ -449,6 +455,7 @@ Resources:
           Value: !Sub SecureEnv-Bastion-SG-${Environment}
 
   SecureEnvWebSG:
+    Condition: CreateWebSGCond
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub SecureEnv-Web-SG-${Environment}
@@ -466,7 +473,12 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          SourceSecurityGroupId: !Ref SecureEnvBastionSG
+          SourceSecurityGroupId:
+            !If [
+              CreateBastionSGCond,
+              !Ref SecureEnvBastionSG,
+              !Ref ExistingBastionSGId,
+            ]
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -475,6 +487,7 @@ Resources:
           Value: !Sub SecureEnv-Web-SG-${Environment}
 
   SecureEnvDBSG:
+    Condition: CreateDBSGCond
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub SecureEnv-DB-SG-${Environment}
@@ -484,11 +497,17 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref SecureEnvWebSG
+          SourceSecurityGroupId:
+            !If [CreateWebSGCond, !Ref SecureEnvWebSG, !Ref ExistingWebSGId]
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref SecureEnvBastionSG
+          SourceSecurityGroupId:
+            !If [
+              CreateBastionSGCond,
+              !Ref SecureEnvBastionSG,
+              !Ref ExistingBastionSGId,
+            ]
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -533,7 +552,12 @@ Resources:
                 Action:
                   - kms:Decrypt
                   - kms:GenerateDataKey
-                Resource: !GetAtt SecureEnvKMSKey.Arn
+                Resource:
+                  !If [
+                    UseExistingKMSCond,
+                    !Ref ExistingKMSKeyArn,
+                    !GetAtt SecureEnvKMSKey.Arn,
+                  ]
 
   SecureEnvEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -559,7 +583,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
+              KMSMasterKeyID:
+                !If [
+                  UseExistingKMSCond,
+                  !Ref ExistingKMSKeyArn,
+                  !Ref SecureEnvKMSKey,
+                ]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -613,7 +642,12 @@ Resources:
               ]
             Condition:
               StringNotEquals:
-                s3:x-amz-server-side-encryption-aws-kms-key-id: !Ref SecureEnvKMSKey
+                s3:x-amz-server-side-encryption-aws-kms-key-id:
+                  !If [
+                    UseExistingKMSCond,
+                    !Ref ExistingKMSKeyArn,
+                    !Ref SecureEnvKMSKey,
+                  ]
 
   # =========================
   # RDS Database
@@ -652,9 +686,10 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
+      KmsKeyId:
+        !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
       VPCSecurityGroups:
-        - !Ref SecureEnvDBSG
+        - !If [UseExistingDBSGCond, !Ref ExistingDBSGId, !Ref SecureEnvDBSG]
       DBSubnetGroupName: !Ref SecureEnvDBSubnetGroup
       BackupRetentionPeriod: 7
       MultiAZ: false
@@ -680,7 +715,11 @@ Resources:
         InstanceType: t3.micro
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         SecurityGroupIds:
-          - !Ref SecureEnvWebSG
+          - !If [
+              UseExistingWebSGCond,
+              !Ref ExistingWebSGId,
+              !Ref SecureEnvWebSG,
+            ]
         IamInstanceProfile:
           Arn: !GetAtt SecureEnvEC2InstanceProfile.Arn
         BlockDeviceMappings:
@@ -689,7 +728,12 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
+              KmsKeyId:
+                !If [
+                  UseExistingKMSCond,
+                  !Ref ExistingKMSKeyArn,
+                  !Ref SecureEnvKMSKey,
+                ]
               DeleteOnTermination: true
         MetadataOptions:
           HttpTokens: required
@@ -704,6 +748,7 @@ Resources:
             systemctl start amazon-cloudwatch-agent
 
   SecureEnvWebInstance:
+    Condition: CreateWebInstanceCond
     Type: AWS::EC2::Instance
     Properties:
       LaunchTemplate:
@@ -720,13 +765,18 @@ Resources:
           Value: !Sub SecureEnv-Web-Instance-${Environment}
 
   SecureEnvBastionInstance:
+    Condition: CreateBastionInstanceCond
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: t3.micro
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       SecurityGroupIds:
-        - !Ref SecureEnvBastionSG
+        - !If [
+            UseExistingBastionSGCond,
+            !Ref ExistingBastionSGId,
+            !Ref SecureEnvBastionSG,
+          ]
       SubnetId:
         !If [
           CreateNetworking,
@@ -739,7 +789,12 @@ Resources:
             VolumeSize: 20
             VolumeType: gp3
             Encrypted: true
-              KmsKeyId: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
+            KmsKeyId:
+              !If [
+                UseExistingKMSCond,
+                !Ref ExistingKMSKeyArn,
+                !Ref SecureEnvKMSKey,
+              ]
             DeleteOnTermination: true
       MetadataOptions:
         HttpTokens: required
@@ -766,7 +821,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
+              KMSMasterKeyID:
+                !If [
+                  UseExistingKMSCond,
+                  !Ref ExistingKMSKeyArn,
+                  !Ref SecureEnvKMSKey,
+                ]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -798,7 +858,8 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       IsLogging: true
-      KMSKeyId: !Ref SecureEnvKMSKey
+      KMSKeyId:
+        !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
@@ -830,7 +891,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
+              KMSMasterKeyID:
+                !If [
+                  UseExistingKMSCond,
+                  !Ref ExistingKMSKeyArn,
+                  !Ref SecureEnvKMSKey,
+                ]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -968,7 +1034,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
+              KMSMasterKeyID:
+                !If [
+                  UseExistingKMSCond,
+                  !Ref ExistingKMSKeyArn,
+                  !Ref SecureEnvKMSKey,
+                ]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -1008,12 +1079,14 @@ Outputs:
 
   KMSKeyId:
     Description: KMS Key ID
+    Condition: CreateKMSCond
     Value: !Ref SecureEnvKMSKey
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Key-ID'
 
   KMSKeyArn:
     Description: KMS Key ARN
+    Condition: CreateKMSCond
     Value: !GetAtt SecureEnvKMSKey.Arn
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Key-ARN'
@@ -1037,12 +1110,14 @@ Outputs:
 
   WebInstanceId:
     Description: Web Instance ID
+    Condition: CreateWebInstanceCond
     Value: !Ref SecureEnvWebInstance
     Export:
       Name: !Sub '${AWS::StackName}-Web-Instance-ID'
 
   BastionInstanceId:
     Description: Bastion Instance ID
+    Condition: CreateBastionInstanceCond
     Value: !Ref SecureEnvBastionInstance
     Export:
       Name: !Sub '${AWS::StackName}-Bastion-Instance-ID'
