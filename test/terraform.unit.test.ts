@@ -1,64 +1,64 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs';
+import * as path from 'path';
 
-let plan: any;
-let planFilePath: string;
+const OUTPUT_DIR = path.resolve(__dirname, '../tf-outputs');
+const PLAN_JSON = path.join(OUTPUT_DIR, 'tfplan.json');
 
-beforeAll(() => {
-  // Allow path override via environment variable
-  const defaultPath = path.resolve(__dirname, "../lib/main.json");
-  planFilePath = process.env.PLAN_JSON || defaultPath;
+const file = () => fs.readFileSync(PLAN_JSON, 'utf8');
+const json = () => JSON.parse(file());
 
-  if (!fs.existsSync(planFilePath)) {
-    throw new Error(`Terraform plan JSON file not found: ${planFilePath}`);
-  }
+describe('Terraform plan.json structure', () => {
+  it('plan.json exists and is valid JSON', () => {
+    expect(fs.existsSync(PLAN_JSON)).toBe(true);
+    expect(() => JSON.parse(file())).not.toThrow();
+  });
 
-  const raw = fs.readFileSync(planFilePath, "utf8");
-  plan = JSON.parse(raw);
-});
-
-describe("Terraform plan.json structure", () => {
-  it("VPC should have correct CIDR", () => {
+  it('VPC should have correct CIDR', () => {
+    const plan = json();
     const vpcResource = plan.resource_changes.find(
-      (r: any) => r.type === "aws_vpc" && r.name === "main"
+      (r: any) => r.type === 'aws_vpc' && r.name === 'main'
     );
     expect(vpcResource).toBeDefined();
-    expect(vpcResource.change.after.cidr_block).toBe("10.0.0.0/16");
+    expect(vpcResource.change.after.cidr_block).toBe('10.0.0.0/16');
   });
 
-  it("Should create a public subnet with correct CIDR", () => {
+  it('Should create a public subnet with correct CIDR', () => {
+    const plan = json();
     const publicSubnet = plan.resource_changes.find(
-      (r: any) => r.type === "aws_subnet" && r.name === "public"
+      (r: any) => r.type === 'aws_subnet' && r.name === 'public'
     );
     expect(publicSubnet).toBeDefined();
-    expect(publicSubnet.change.after.cidr_block).toBe("10.0.1.0/24");
+    expect(publicSubnet.change.after.cidr_block).toBe('10.0.1.0/24');
   });
 
-  it("Should create a private subnet with correct CIDR", () => {
+  it('Should create a private subnet with correct CIDR', () => {
+    const plan = json();
     const privateSubnet = plan.resource_changes.find(
-      (r: any) => r.type === "aws_subnet" && r.name === "private"
+      (r: any) => r.type === 'aws_subnet' && r.name === 'private'
     );
     expect(privateSubnet).toBeDefined();
-    expect(privateSubnet.change.after.cidr_block).toBe("10.0.2.0/24");
+    expect(privateSubnet.change.after.cidr_block).toBe('10.0.2.0/24');
   });
 
-  it("Bastion host should have IAM instance profile", () => {
+  it('Bastion host should have IAM instance profile', () => {
+    const plan = json();
     const bastionInstance = plan.resource_changes.find(
-      (r: any) => r.type === "aws_instance" && r.name === "bastion"
+      (r: any) => r.type === 'aws_instance' && r.name === 'bastion'
     );
     expect(bastionInstance).toBeDefined();
     expect(bastionInstance.change.after.iam_instance_profile).toBeDefined();
   });
 
-  it("Secrets Manager secret should exist", () => {
+  it('Secrets Manager secret should exist', () => {
+    const plan = json();
     const secret = plan.resource_changes.find(
-      (r: any) => r.type === "aws_secretsmanager_secret" && r.name === "app_secrets"
+      (r: any) => r.type === 'aws_secretsmanager_secret' && r.name === 'app_secrets'
     );
     expect(secret).toBeDefined();
   });
 
-  it("Does not contain hardcoded AWS credentials in plan JSON", () => {
-    const planString = JSON.stringify(plan);
+  it('does not contain hardcoded AWS credentials in plan', () => {
+    const planString = file();
     expect(/aws_access_key_id\s*=/.test(planString)).toBe(false);
     expect(/aws_secret_access_key\s*=/.test(planString)).toBe(false);
   });
