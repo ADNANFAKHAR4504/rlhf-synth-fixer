@@ -86,8 +86,6 @@ Resources:
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName:
-        Fn::Sub: "${ProjectName}-codepipeline-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -132,8 +130,6 @@ Resources:
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName:
-        Fn::Sub: "${ProjectName}-codebuild-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
