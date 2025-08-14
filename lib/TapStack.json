@@ -212,21 +212,6 @@
                   }
                 }
               }
-            },
-            {
-              "Sid": "Allow Config",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": [
-                "kms:Encrypt",
-                "kms:Decrypt",
-                "kms:ReEncrypt*",
-                "kms:GenerateDataKey*",
-                "kms:DescribeKey"
-              ],
-              "Resource": "*"
             }
           ]
         },
@@ -2370,17 +2355,6 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-CloudTrailName"
-        }
-      }
-    },
-    "ConfigRecorderName": {
-      "Description": "AWS Config Recorder Name",
-      "Value": {
-        "Ref": "ConfigRecorder"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-ConfigRecorderName"
         }
       }
     }
