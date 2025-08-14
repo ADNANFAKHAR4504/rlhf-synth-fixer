@@ -83,7 +83,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 's3_bucket_name', {
-      value: s3Stack.bucketName, // Make sure S3Stack exposes bucketName
+      value: s3Stack.bucketName,
     });
   }
 }
