@@ -2,7 +2,7 @@
 
 ### **Your Role**
 
-You are an AWS Cloud Engineer. Your task is to write Infrastructure as Code (IaC) using **Pulumi** and **TypeScript**.
+You are an AWS Cloud Engineer. Your task is to write Infrastructure as Code (IaC) using **Pulumi** and **TypeScript**. Deploy all resources to the **us-west-2** region.
 
 ### **Your Objective**
 
@@ -50,6 +50,7 @@ Define the following AWS resources and their configurations in your Pulumi proje
 
 ### **Summary of IaC Constraints**
 
+- **Region**: All resources must be deployed to **us-west-2**.
 - **VPC**: Must contain public and private subnets.
 - **RDS**: Must be encrypted and private.
 - **EC2**: Must be private.

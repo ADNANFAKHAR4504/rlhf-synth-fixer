@@ -13,6 +13,7 @@ import { ResourceOptions } from '@pulumi/pulumi';
 
 // Import your nested stacks here. For example:
 // import { DynamoDBStack } from "./dynamodb-stack";
+import { SecurityStack } from './security-stack';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -43,6 +44,7 @@ export interface TapStackArgs {
 export class TapStack extends pulumi.ComponentResource {
   // Example of a public property for a nested resource's output.
   // public readonly table: pulumi.Output<string>;
+  public readonly securityStack: SecurityStack;
 
   /**
    * Creates a new TapStack component.
@@ -55,8 +57,8 @@ export class TapStack extends pulumi.ComponentResource {
 
     // The following variables are commented out as they are only used in example code.
     // To use them, uncomment the lines below and the corresponding example code.
-    // const environmentSuffix = args.environmentSuffix || 'dev';
-    // const tags = args.tags || {};
+    const environmentSuffix = args.environmentSuffix || 'dev';
+    const tags = args.tags || {};
 
     // --- Instantiate Nested Components Here ---
     // This is where you would create instances of your other component resources,
@@ -67,6 +69,17 @@ export class TapStack extends pulumi.ComponentResource {
     //   environmentSuffix: environmentSuffix,
     //   tags: tags,
     // }, { parent: this });
+
+    // Instantiate SecurityStack for secure three-tier web application
+    this.securityStack = new SecurityStack(
+      'tap-security',
+      {
+        environmentSuffix: environmentSuffix,
+        tags: tags,
+        region: 'us-west-2',
+      },
+      { parent: this, provider: opts?.provider }
+    );
 
     // Example of creating a resource directly (for truly global resources only):
     // const bucket = new aws.s3.Bucket(`tap-global-bucket-${environmentSuffix}`, {
@@ -80,6 +93,21 @@ export class TapStack extends pulumi.ComponentResource {
     // Register the outputs of this component.
     this.registerOutputs({
       // table: this.table,
+      vpcId: this.securityStack.vpcId,
+      publicSubnetIds: this.securityStack.publicSubnetIds,
+      privateSubnetIds: this.securityStack.privateSubnetIds,
+      albDnsName: this.securityStack.albDnsName,
+      rdsEndpoint: this.securityStack.rdsEndpoint,
+      snsTopicArn: this.securityStack.snsTopicArn,
+      // Additional outputs for integration testing
+      albArn: this.securityStack.albArn,
+      targetGroupArn: this.securityStack.targetGroupArn,
+      autoScalingGroupName: this.securityStack.autoScalingGroupName,
+      launchTemplateId: this.securityStack.launchTemplateId,
+      wafWebAclArn: this.securityStack.wafWebAclArn,
+      dbSecurityGroupId: this.securityStack.dbSecurityGroupId,
+      appSecurityGroupId: this.securityStack.appSecurityGroupId,
+      albSecurityGroupId: this.securityStack.albSecurityGroupId,
     });
   }
 }
