@@ -31,10 +31,14 @@ describe('TapStack AWS Infrastructure Integration Tests', () => {
     }
 
     const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
-    // The key in the output file is assumed to match the stack name, e.g., 'TestStack'
-    const stackKey = Object.keys(outputs).find(k => k.toLowerCase().includes('teststack'));
+    
+    // FIX: The lookup for the stack key was hardcoded to 'teststack', which is brittle.
+    // This is changed to use the environment suffix, which is more robust in a CI/CD environment
+    // where stack names are often dynamic and environment-specific.
+    const stackKey = Object.keys(outputs).find(k => k.toLowerCase().includes(suffix.toLowerCase()));
     if (!stackKey) {
-      throw new Error(`No output found for a stack matching 'TestStack' in ${outputFilePath}`);
+      // FIX: Updated the error message to be more descriptive and aid in debugging.
+      throw new Error(`No output found for a stack key including the suffix '${suffix}' in ${outputFilePath}`);
     }
 
     const stackOutputs = outputs[stackKey];
