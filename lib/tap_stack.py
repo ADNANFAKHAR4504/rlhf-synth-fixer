@@ -1124,7 +1124,6 @@ def create_cloudwatch_alarms(
   # ALB unhealthy target alarm
   aws.cloudwatch.MetricAlarm(
       "corp-alb-unhealthy-targets",
-      alarm_name="corp-alb-unhealthy-targets",
       comparison_operator="GreaterThanThreshold",
       evaluation_periods=2,
       metric_name="UnHealthyHostCount",
@@ -1143,7 +1142,6 @@ def create_cloudwatch_alarms(
   # RDS CPU alarm
   aws.cloudwatch.MetricAlarm(
       "corp-rds-high-cpu",
-      alarm_name="corp-rds-high-cpu",
       comparison_operator="GreaterThanThreshold",
       evaluation_periods=2,
       metric_name="CPUUtilization",
