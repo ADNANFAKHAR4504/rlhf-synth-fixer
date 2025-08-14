@@ -47,10 +47,13 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output, tags: Dict,
                 {{
                     "Effect": "Allow",
                     "Action": [
+                        "logs:CreateLogGroup",
                         "logs:CreateLogStream",
-                        "logs:PutLogEvents"
+                        "logs:PutLogEvents",
+                        "logs:DescribeLogStreams"
+                        
                     ],
-                    "Resource": "{args[0]}:*"
+                    "Resource": "{args[0]}*"
                 }}
             ]
         }}"""
