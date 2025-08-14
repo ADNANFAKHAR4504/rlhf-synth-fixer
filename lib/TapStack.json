@@ -58,9 +58,9 @@
         "EnvironmentSuffix": {
             "Type": "String",
             "Description": "Suffix for resource naming to support multiple deployments",
-            "Default": "dev",
-            "AllowedPattern": "^[a-zA-Z0-9]+$",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
+            "Default": "dev-v1",
+            "AllowedPattern": "^[a-zA-Z0-9-]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
         },
         "EnvironmentName": {
             "Type": "String",
@@ -75,7 +75,7 @@
         },
         "ProjectName": {
             "Type": "String",
-            "Default": "securewebapp",
+            "Default": "securewebapp-v1",
             "Description": "Project name for resource naming",
             "AllowedPattern": "^[a-z0-9-]+$",
             "ConstraintDescription": "Must contain only lowercase alphanumeric characters and hyphens"
@@ -805,7 +805,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-appdata"
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-appdata-v1"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -852,10 +852,7 @@
             "Condition": "CreateCloudTrail",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-cloudtrail"
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-cloudtrail-v1"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [

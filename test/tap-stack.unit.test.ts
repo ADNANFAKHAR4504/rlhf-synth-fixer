@@ -62,6 +62,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('vpc-012e207a5ad2facf7');
     });
 
+    test('should have v1 naming convention', () => {
+      expect(templateContent).toContain('securewebapp-v1');
+      expect(templateContent).toContain('dev-v1');
+    });
+
     test('should create NAT Gateway', () => {
       expect(templateContent).toContain('Type: AWS::EC2::NatGateway');
     });
