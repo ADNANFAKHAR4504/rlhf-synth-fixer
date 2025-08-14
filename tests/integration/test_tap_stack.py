@@ -31,7 +31,7 @@ class TestTapStackIntegration(unittest.TestCase):
     template.has_resource_properties("AWS::Lambda::Function", {
       "MemorySize": 512,
       "Runtime": "python3.9",
-      "Handler": "lambda_function.lambda_handler",
+      "Handler": "index.lambda_handler",
       "Architectures": ["arm64"]
     })
 
