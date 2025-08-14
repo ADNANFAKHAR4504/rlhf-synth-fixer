@@ -7,6 +7,8 @@ from typing import Dict, Any, List
 import boto3
 import pytest
 
+# pylint: disable=redefined-outer-name  # Pytest fixture pattern
+
 
 @pytest.fixture(scope="session")
 def region() -> str:

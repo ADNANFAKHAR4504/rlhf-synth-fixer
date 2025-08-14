@@ -151,16 +151,22 @@ class TapStack(pulumi.ComponentResource):
     # Exports for ALL resources
     self._export_all(
         "vpc1",
-        self.vpc1,
-        self.vpc1_sgs,
-        self.vpc1_alb,
-        self.vpc1_asg)
+        {
+            "vpc": self.vpc1,
+            "sgs": self.vpc1_sgs,
+            "alb": self.vpc1_alb,
+            "asg": self.vpc1_asg
+        }
+    )
     self._export_all(
         "vpc2",
-        self.vpc2,
-        self.vpc2_sgs,
-        self.vpc2_alb,
-        self.vpc2_asg)
+        {
+            "vpc": self.vpc2,
+            "sgs": self.vpc2_sgs,
+            "alb": self.vpc2_alb,
+            "asg": self.vpc2_asg
+        }
+    )
 
     self.register_outputs({
         "vpc1_id": self.vpc1["vpc"].id,
@@ -495,11 +501,14 @@ class TapStack(pulumi.ComponentResource):
   ) -> Dict[str, object]:
     tags = {**self.common_tags, **self.tags, **extra_tags}
 
-    import pulumi_aws as aws
-    from pulumi import ResourceOptions
+    # Using already imported modules
 
     # Get the latest Amazon Linux 2023 AMI ID from SSM
-    aws_provider = aws.Provider(f"aws-provider-{name_prefix}", region=self.common_tags.get("Region"))
+    # Create AWS provider for the specified region
+    aws_provider = aws.Provider(
+        f"aws-provider-{name_prefix}",
+        region=self.common_tags.get("Region")
+    )
     ami = aws.ec2.get_ami(
         most_recent=True,
         owners=["amazon"],
@@ -566,12 +575,15 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
   def _export_all(
       self,
       prefix: str,
-      vpc_block: Dict[str, object],
-      sgs: Dict[str, aws.ec2.SecurityGroup],
-      alb_block: Dict[str, object],
-      asg_block: Dict[str, object],
+      resources: Dict[str, Dict[str, object]]
   ) -> None:
     """Export every resource id/arn/dns to satisfy task requirement."""
+    # Extract resource blocks
+    vpc_block = resources["vpc"]
+    sgs = resources["sgs"]
+    alb_block = resources["alb"]
+    asg_block = resources["asg"]
+    
     # VPC + core networking
     pulumi.export(f"{prefix}_vpc_id", vpc_block["vpc"].id)
     pulumi.export(f"{prefix}_igw_id", vpc_block["igw"].id)

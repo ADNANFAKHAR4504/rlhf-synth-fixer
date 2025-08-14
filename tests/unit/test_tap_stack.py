@@ -11,6 +11,8 @@ Strategy:
 These tests are intentionally hermetic and fast.
 """
 
+# pylint: disable=protected-access,no-member,unused-argument  # Testing patterns
+
 import sys
 import types
 import importlib
@@ -75,12 +77,22 @@ pulumi_fake.export = _fake_export
 pulumi_fake.Output = _FakeOutput
 pulumi_fake.ResourceOptions = _FakeResourceOptions
 pulumi_fake.ComponentResource = _FakeComponentResource
+# Add fake register_outputs method
+def _fake_register_outputs(self, outputs):
+  pass
+
 pulumi_fake.ComponentResource.register_outputs = _fake_register_outputs
 
 # -----------------------------
 # Minimal fake pulumi_aws
 # -----------------------------
 aws_fake = types.ModuleType("pulumi_aws")
+
+# Create fake submodules
+aws_fake.ec2 = types.ModuleType("ec2")
+aws_fake.lb = types.ModuleType("lb")  
+aws_fake.autoscaling = types.ModuleType("autoscaling")
+aws_fake.ssm = types.ModuleType("ssm")
 
 # Provider and default tags
 
@@ -100,9 +112,9 @@ class _Provider(_FakeResource):
 aws_fake.ProviderDefaultTagsArgs = _ProviderDefaultTagsArgs
 aws_fake.Provider = _Provider
 
-# Namespaces
+# Reassign as SimpleNamespace for attribute assignment
 aws_fake.ec2 = types.SimpleNamespace()
-aws_fake.lb = types.SimpleNamespace()
+aws_fake.lb = types.SimpleNamespace() 
 aws_fake.autoscaling = types.SimpleNamespace()
 aws_fake.ssm = types.SimpleNamespace()
 
@@ -118,9 +130,8 @@ class _Igw(_FakeResource):
 
 
 class _Subnet(_FakeResource):
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    # typical attributes referenced: id is enough
+  # Inherits __init__ from _FakeResource
+  pass
 
 
 class _Eip(_FakeResource):
