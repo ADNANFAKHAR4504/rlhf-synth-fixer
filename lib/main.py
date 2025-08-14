@@ -34,52 +34,85 @@ vpc_cidrs = {
 }
 
 
-def create_cloudtrail_s3_policy(bucket_name: pulumi.Output, region: str) -> pulumi.Output:
-  """Create S3 bucket policy for CloudTrail - using official AWS format"""
+# def create_cloudtrail_s3_policy(bucket_name: pulumi.Output, region: str) -> pulumi.Output:
+#   """Create S3 bucket policy for CloudTrail - using official AWS format"""
+#
+#   # Get current AWS account ID
+#   current = aws.get_caller_identity()
+#   account_id = current.account_id
+#
+#   return pulumi.Output.all(bucket_name, account_id).apply(
+#     lambda args: f"""{{
+#       "Version": "2012-10-17",
+#       "Statement": [
+#         {{
+#           "Sid": "AWSCloudTrailAclCheck20150319",
+#           "Effect": "Allow",
+#           "Principal": {{
+#             "Service": "cloudtrail.amazonaws.com"
+#           }},
+#           "Action": "s3:GetBucketAcl",
+#           "Resource": "arn:aws:s3:::{args[0]}",
+#           "Condition": {{
+#             "StringEquals": {{
+#               "aws:SourceArn": "arn:aws:cloudtrail:{region}:{args[1]}:trail/infrastructure-trail-{region}"
+#             }}
+#           }}
+#         }},
+#         {{
+#           "Sid": "AWSCloudTrailWrite20150319",
+#           "Effect": "Allow",
+#           "Principal": {{
+#             "Service": "cloudtrail.amazonaws.com"
+#           }},
+#           "Action": "s3:PutObject",
+#           "Resource": "arn:aws:s3:::{args[0]}/cloudtrail-logs/{region}/AWSLogs/{args[1]}/*",
+#           "Condition": {{
+#             "StringEquals": {{
+#               "s3:x-amz-acl": "bucket-owner-full-control",
+#               "aws:SourceArn": "arn:aws:cloudtrail:{region}:{args[1]}:trail/infrastructure-trail-{region}"
+#             }}
+#           }}
+#         }}
+#       ]
+#   }}""")
 
-  # Get current AWS account ID
-  current = aws.get_caller_identity()
-  account_id = current.account_id
-
-  return pulumi.Output.all(bucket_name, account_id).apply(
-    lambda args: f"""{{
-      "Version": "2012-10-17",
-      "Statement": [
-        {{
-          "Sid": "AWSCloudTrailAclCheck20150319",
-          "Effect": "Allow",
-          "Principal": {{
-            "Service": "cloudtrail.amazonaws.com"
-          }},
-          "Action": "s3:GetBucketAcl",
-          "Resource": "arn:aws:s3:::{args[0]}",
-          "Condition": {{
-            "StringEquals": {{
-              "aws:SourceArn": "arn:aws:cloudtrail:{region}:{args[1]}:trail/infrastructure-trail-{region}"
-            }}
-          }}
+def create_cloudtrail_s3_policy(bucket_name: pulumi.Output, account_id: str) -> pulumi.Output:
+  """AWS-required S3 bucket policy for CloudTrail"""
+  return bucket_name.apply(lambda b: f"""{{
+    "Version": "2012-10-17",
+    "Statement": [
+      {{
+        "Sid": "AWSCloudTrailAclCheck20150319",
+        "Effect": "Allow",
+        "Principal": {{
+          "Service": "cloudtrail.amazonaws.com"
         }},
-        {{
-          "Sid": "AWSCloudTrailWrite20150319",
-          "Effect": "Allow",
-          "Principal": {{
-            "Service": "cloudtrail.amazonaws.com"
-          }},
-          "Action": "s3:PutObject",
-          "Resource": "arn:aws:s3:::{args[0]}/cloudtrail-logs/{region}/AWSLogs/{args[1]}/*",
-          "Condition": {{
-            "StringEquals": {{
-              "s3:x-amz-acl": "bucket-owner-full-control",
-              "aws:SourceArn": "arn:aws:cloudtrail:{region}:{args[1]}:trail/infrastructure-trail-{region}"
-            }}
+        "Action": "s3:GetBucketAcl",
+        "Resource": "arn:aws:s3:::{b}"
+      }},
+      {{
+        "Sid": "AWSCloudTrailWrite20150319",
+        "Effect": "Allow",
+        "Principal": {{
+          "Service": "cloudtrail.amazonaws.com"
+        }},
+        "Action": "s3:PutObject",
+        "Resource": "arn:aws:s3:::{b}/AWSLogs/{account_id}/*",
+        "Condition": {{
+          "StringEquals": {{
+            "s3:x-amz-acl": "bucket-owner-full-control"
           }}
         }}
-      ]
+      }}
+    ]
   }}""")
 
 
 def deploy_infrastructure():
   """Main function to orchestrate infrastructure deployment"""
+
+  current = aws.get_caller_identity()
 
   # Store resources for cross-region references
   vpcs = {}
@@ -131,16 +164,13 @@ def deploy_infrastructure():
     s3_buckets[region] = s3_bucket
 
     # Create S3 bucket policy for CloudTrail
-    cloudtrail_policy = create_cloudtrail_s3_policy(s3_bucket.bucket, region)
+    cloudtrail_policy = create_cloudtrail_s3_policy(s3_bucket.bucket, current.account_id)
 
     bucket_policy = aws.s3.BucketPolicy(
       f"cloudtrail-bucket-policy-{region}",
       bucket=s3_bucket.id,
       policy=cloudtrail_policy,
-      opts=pulumi.ResourceOptions(
-        provider=provider,
-        depends_on=[s3_bucket]
-      )
+      opts=pulumi.ResourceOptions(provider=provider)
     )
 
     # Setup CloudTrail
