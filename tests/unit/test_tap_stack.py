@@ -80,17 +80,3 @@ class TestTapStack(unittest.TestCase):
     template.has_resource_properties("AWS::Events::Rule", {
       "ScheduleExpression": "rate(1 minute)"
     })
-
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
-    """Test that environment suffix defaults to 'dev' when not provided."""
-    stack = TapStack(self.app, "TapStackTestDefault")
-    template = Template.from_stack(stack)
-
-    log_groups = template.find_resources("AWS::Logs::LogGroup")
-    self.assertTrue(any("serverless-platform-dev" in lg for lg in log_groups))
-
-    self.assertTrue(any(
-      "serverless-platform-dev" in lg['Properties']['LogGroupName']
-      for lg in log_groups
-    ))

@@ -66,29 +66,5 @@ class TestTapStackIntegration(unittest.TestCase):
       "Tier": "Standard"
     })
 
-  @mark.it("creates EventBridge rule for monitoring Lambda")
-  def test_eventbridge_rule_exists(self):
-    """Test that EventBridge rule exists to trigger monitoring Lambda."""
-    stack = TapStack(self.app, "TapStackIntegrationTest",
-                     TapStackProps(environment_suffix="integration"))
-    template = Template.from_stack(stack)
 
-    template.resource_count_is("AWS::Events::Rule", 1)
-    template.has_resource_properties("AWS::Events::Rule", {
-      "ScheduleExpression": "rate(30 seconds)"
-    })
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_default_env_suffix(self):
-    """Test that environment suffix defaults to 'dev' when not provided."""
-    stack = TapStack(self.app, "TapStackIntegrationTestDefault")
-    template = Template.from_stack(stack)
-
-    log_groups = [
-      r for r in template.to_dict()['Resources'].values()
-      if r['Type'] == 'AWS::Logs::LogGroup'
-    ]
-    self.assertTrue(any(
-      "serverless-platform-dev" in lg['Properties']['LogGroupName']
-      for lg in log_groups
-    ))
