@@ -1,4 +1,4 @@
-# AWS High-Availability Infrastructure with Pulumi
+# AWS High-Availability  Infrastructure with Pulumi
 
 This solution implements a robust, high-availability AWS infrastructure in the us-west-2 region using Pulumi Python. The architecture consists of two separate VPCs with complete networking, load balancing, and auto-scaling capabilities.
 
