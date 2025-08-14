@@ -3,6 +3,7 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
@@ -13,6 +14,7 @@ import {
 import {
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
+  GetBucketLoggingCommand,
   GetPublicAccessBlockCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -138,9 +140,23 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(vpc.CidrBlock).toBeDefined();
       expect(vpc.IsDefault).toBe(false);
 
-      // Check DNS settings
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      // Check DNS settings using separate API calls
+      const dnsHostnamesResponse = await clients.ec2.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: stackOutputs.vpcId,
+          Attribute: 'enableDnsHostnames',
+        })
+      );
+      
+      const dnsSupportResponse = await clients.ec2.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: stackOutputs.vpcId,
+          Attribute: 'enableDnsSupport',
+        })
+      );
+
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
 
       // Check tags
       const nameTag = vpc.Tags?.find((tag: any) => tag.Key === 'Name');
@@ -215,6 +231,16 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       expect(httpRule).toBeDefined();
       expect(httpsRule).toBeDefined();
+
+      // Verify database security group only allows access from app tier
+      const dbIngress = dbSg?.IpPermissions || [];
+      const dbRule = dbIngress.find((rule: any) => rule.FromPort === 3306);
+      expect(dbRule).toBeDefined();
+      
+      // DB should only allow access from app security group, not from internet
+      const dbSources = dbRule?.UserIdGroupPairs || [];
+      expect(dbSources.length).toBeGreaterThan(0);
+      expect(dbRule?.IpRanges?.length || 0).toBe(0); // No direct IP access
     });
   });
 
@@ -354,8 +380,30 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(instance.PublicIpAddress).toBeUndefined(); // No public IP
       expect(instance.PrivateIpAddress).toBeDefined();
 
+      // Verify no key pair is assigned
+      expect(instance.KeyName).toBeUndefined();
+
       // Check root device encryption
       expect(instance.RootDeviceType).toBe('ebs');
+
+      // Verify EBS volumes are encrypted
+      if (instance.BlockDeviceMappings) {
+        for (const blockDevice of instance.BlockDeviceMappings) {
+          if (blockDevice.Ebs) {
+            expect(blockDevice.Ebs.Encrypted).toBe(true);
+          }
+        }
+      }
+
+      // Verify required tags
+      const tags = instance.Tags || [];
+      const environmentTag = tags.find((tag: { Key?: string; Value?: string }) => tag.Key === 'Environment');
+      const ownerTag = tags.find((tag: { Key?: string; Value?: string }) => tag.Key === 'Owner');
+      const projectTag = tags.find((tag: { Key?: string; Value?: string }) => tag.Key === 'Project');
+
+      expect(environmentTag?.Value).toBeDefined();
+      expect(ownerTag?.Value).toBeDefined();
+      expect(projectTag?.Value).toBe('TAP');
       
       // Check metadata options (IMDSv2)
       expect(instance.MetadataOptions!.HttpTokens).toBe('required');
@@ -386,6 +434,38 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       expect(profileResponse.InstanceProfile).toBeDefined();
       expect(profileResponse.InstanceProfile!.Roles).toHaveLength(1);
+    });
+  });
+
+  describe('Logging Configuration Tests', () => {
+    it('should have proper logging enabled across services', async () => {
+      // Test RDS CloudWatch logs
+      expect(stackOutputs.databaseEndpoint).toBeDefined();
+      const dbInstanceId = stackOutputs.databaseEndpoint.split('.')[0];
+
+      const rdsResponse = await clients.rds.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        })
+      );
+
+      const dbInstance = rdsResponse.DBInstances![0];
+      
+      // Verify RDS CloudWatch logs are enabled
+      expect(dbInstance.EnabledCloudwatchLogsExports).toBeDefined();
+      expect(dbInstance.EnabledCloudwatchLogsExports).toContain('error');
+      expect(dbInstance.EnabledCloudwatchLogsExports).toContain('general');
+      expect(dbInstance.EnabledCloudwatchLogsExports).toContain('slowquery');
+
+      // Test S3 access logging
+      const logsResponse = await clients.s3.send(
+        new GetBucketLoggingCommand({
+          Bucket: stackOutputs.dataBucketName,
+        })
+      );
+
+      expect(logsResponse.LoggingEnabled).toBeDefined();
+      expect(logsResponse.LoggingEnabled!.TargetBucket).toBe(stackOutputs.logsBucketName);
     });
   });
 
