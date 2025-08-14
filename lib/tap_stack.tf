@@ -683,7 +683,7 @@ resource "aws_db_instance" "main_east" {
 
   identifier     = "${var.project_name}-db-us-east-2"
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15"
   instance_class = var.db_instance_class
 
   allocated_storage     = var.db_allocated_storage
@@ -718,7 +718,7 @@ resource "aws_db_instance" "main_west" {
 
   identifier     = "${var.project_name}-db-us-west-1"
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15"
   instance_class = var.db_instance_class
 
   allocated_storage     = var.db_allocated_storage
