@@ -75,10 +75,10 @@ describe('TapStack', () => {
       expect(Object.keys(aliases).length).toBe(4);
 
       const aliasNames = Object.values(aliases).map(alias => alias.Properties.AliasName);
-      expect(aliasNames).toContain('alias/SecureApp-s3-key');
-      expect(aliasNames).toContain('alias/SecureApp-secrets-key');
-      expect(aliasNames).toContain('alias/SecureApp-cloudtrail-key');
-      expect(aliasNames).toContain('alias/SecureApp-efs-key');
+      expect(aliasNames).toContain('alias/secureapp-s3-key');
+      expect(aliasNames).toContain('alias/secureapp-secrets-key');
+      expect(aliasNames).toContain('alias/secureapp-cloudtrail-key');
+      expect(aliasNames).toContain('alias/secureapp-efs-key');
     });
   });
 

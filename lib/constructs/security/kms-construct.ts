@@ -142,12 +142,12 @@ export class KmsConstruct extends Construct {
 
     // Create aliases for easier key management
     new kms.Alias(this, `${SecurityConfig.RESOURCE_PREFIX}-S3-Key-Alias`, {
-      aliasName: `alias/${SecurityConfig.RESOURCE_PREFIX}-s3-key`,
+      aliasName: `alias/${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-s3-key`,
       targetKey: this.s3Key,
     });
 
     new kms.Alias(this, `${SecurityConfig.RESOURCE_PREFIX}-Secrets-Key-Alias`, {
-      aliasName: `alias/${SecurityConfig.RESOURCE_PREFIX}-secrets-key`,
+      aliasName: `alias/${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-secrets-key`,
       targetKey: this.secretsKey,
     });
 
@@ -155,13 +155,13 @@ export class KmsConstruct extends Construct {
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-CloudTrail-Key-Alias`,
       {
-        aliasName: `alias/${SecurityConfig.RESOURCE_PREFIX}-cloudtrail-key`,
+        aliasName: `alias/${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-cloudtrail-key`,
         targetKey: this.cloudTrailKey,
       }
     );
 
     new kms.Alias(this, `${SecurityConfig.RESOURCE_PREFIX}-EFS-Key-Alias`, {
-      aliasName: `alias/${SecurityConfig.RESOURCE_PREFIX}-efs-key`,
+      aliasName: `alias/${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-efs-key`,
       targetKey: this.efsKey,
     });
   }

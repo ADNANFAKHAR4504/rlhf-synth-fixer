@@ -177,7 +177,7 @@ export class IamConstruct extends Construct {
         description: 'IAM role for AWS Config service',
 
         managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSConfigRole'),
         ],
 
         inlinePolicies: {
@@ -197,6 +197,15 @@ export class IamConstruct extends Construct {
                     `arn:aws:s3:::${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-config-logs`,
                     `arn:aws:s3:::${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-config-logs/*`,
                   ],
+                }),
+                new iam.PolicyStatement({
+                  effect: iam.Effect.ALLOW,
+                  actions: [
+                    'kms:GenerateDataKey*',
+                    'kms:DescribeKey',
+                    'kms:Decrypt',
+                  ],
+                  resources: [kmsKeys.cloudTrailKey.keyArn],
                 }),
               ],
             }),
