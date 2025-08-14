@@ -364,7 +364,7 @@ class TapStack(TerraformStack):
       self.bucket = S3Bucket(
         self,
         "tap_bucket",
-            bucket=f"secure-app-bucket{construct_id.lower()}",
+            bucket=f"secure-app-bucket-1-{construct_id.lower()}",
             tags={"Environment": "Production", "Name": "secure-app-bucket"},
           )
       S3BucketPublicAccessBlock(
