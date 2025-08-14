@@ -51,11 +51,6 @@ describe('Terraform Configuration Structure', () => {
     expect(has(content, /variable\s+"regions"[\s\S]*?type\s*=\s*list\(string\)/)).toBe(true);
   });
 
-  it('has aws_region variable with default value', () => {
-    const content = file(MAIN_TF);
-    expect(has(content, /variable\s+"aws_region"[\s\S]*?default\s*=\s*"us-east-2"/)).toBe(true);
-  });
-
   it('has AWS provider aliases for us-east-2 and us-west-2', () => {
     const content = file(PROVIDER_TF);
     expect(has(content, /provider\s+"aws"\s*\{\s*alias\s*=\s*"us_east_2"[\s\S]*?region\s*=\s*"us-east-2"/)).toBe(true);

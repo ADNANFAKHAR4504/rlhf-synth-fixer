@@ -244,55 +244,51 @@ resource "aws_route_table_association" "private_us_west_2" {
   route_table_id = aws_route_table.private_us_west_2.id
 }
 
-# NAT Gateway Elastic IPs for us-east-2
+# NAT Gateway Elastic IP for us-east-2 (single EIP for cost optimization)
 resource "aws_eip" "nat_us_east_2" {
   provider = aws.us_east_2
-  count    = length(var.public_subnet_cidrs["us-east-2"])
   domain   = "vpc"
 
   tags = {
-    Name = "${var.project_name}-nat-eip-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-nat-eip-${var.environment}"
   }
 
   depends_on = [aws_internet_gateway.us_east_2]
 }
 
-# NAT Gateway Elastic IPs for us-west-2
+# NAT Gateway Elastic IP for us-west-2 (single EIP for cost optimization)
 resource "aws_eip" "nat_us_west_2" {
   provider = aws.us_west_2
-  count    = length(var.public_subnet_cidrs["us-west-2"])
   domain   = "vpc"
 
   tags = {
-    Name = "${var.project_name}-nat-eip-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-nat-eip-${var.environment}"
   }
 
   depends_on = [aws_internet_gateway.us_west_2]
 }
 
-# NAT Gateways for us-east-2
+# NAT Gateway for us-east-2 (single NAT Gateway for cost optimization)
 resource "aws_nat_gateway" "us_east_2" {
   provider      = aws.us_east_2
-  count         = length(var.public_subnet_cidrs["us-east-2"])
-  allocation_id = aws_eip.nat_us_east_2[count.index].id
-  subnet_id     = aws_subnet.public_us_east_2[count.index].id
+  allocation_id = aws_eip.nat_us_east_2.id
+  subnet_id     = aws_subnet.public_us_east_2[0].id
 
   tags = {
-    Name = "${var.project_name}-nat-gw-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-nat-gw-${var.environment}"
   }
 
   depends_on = [aws_internet_gateway.us_east_2]
 }
 
-# NAT Gateways for us-west-2
+# NAT Gateway for us-west-2 (single NAT Gateway for cost optimization)
 resource "aws_nat_gateway" "us_west_2" {
   provider      = aws.us_west_2
-  count         = length(var.public_subnet_cidrs["us-west-2"])
-  allocation_id = aws_eip.nat_us_west_2[count.index].id
-  subnet_id     = aws_subnet.public_us_west_2[count.index].id
+  allocation_id = aws_eip.nat_us_west_2.id
+  subnet_id     = aws_subnet.public_us_west_2[0].id
 
   tags = {
-    Name = "${var.project_name}-nat-gw-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-nat-gw-${var.environment}"
   }
 
   depends_on = [aws_internet_gateway.us_west_2]
@@ -300,18 +296,18 @@ resource "aws_nat_gateway" "us_west_2" {
 
 # Private route table routes for NAT Gateway us-east-2
 resource "aws_route" "private_nat_us_east_2" {
-  provider           = aws.us_east_2
-  route_table_id     = aws_route_table.private_us_east_2.id
+  provider               = aws.us_east_2
+  route_table_id         = aws_route_table.private_us_east_2.id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id     = aws_nat_gateway.us_east_2[0].id
+  nat_gateway_id         = aws_nat_gateway.us_east_2.id
 }
 
 # Private route table routes for NAT Gateway us-west-2
 resource "aws_route" "private_nat_us_west_2" {
-  provider           = aws.us_west_2
-  route_table_id     = aws_route_table.private_us_west_2.id
+  provider               = aws.us_west_2
+  route_table_id         = aws_route_table.private_us_west_2.id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id     = aws_nat_gateway.us_west_2[0].id
+  nat_gateway_id         = aws_nat_gateway.us_west_2.id
 }
 
 ########################
@@ -354,14 +350,14 @@ output "us_east_2_private_route_table_id" {
   value       = aws_route_table.private_us_east_2.id
 }
 
-output "us_east_2_nat_gateway_ids" {
-  description = "NAT Gateway IDs for us-east-2 region"
-  value       = aws_nat_gateway.us_east_2[*].id
+output "us_east_2_nat_gateway_id" {
+  description = "NAT Gateway ID for us-east-2 region"
+  value       = aws_nat_gateway.us_east_2.id
 }
 
-output "us_east_2_nat_gateway_eip_ids" {
-  description = "NAT Gateway Elastic IP IDs for us-east-2 region"
-  value       = aws_eip.nat_us_east_2[*].id
+output "us_east_2_nat_gateway_eip_id" {
+  description = "NAT Gateway Elastic IP ID for us-east-2 region"
+  value       = aws_eip.nat_us_east_2.id
 }
 
 # Outputs for us-west-2 region
@@ -400,14 +396,14 @@ output "us_west_2_private_route_table_id" {
   value       = aws_route_table.private_us_west_2.id
 }
 
-output "us_west_2_nat_gateway_ids" {
-  description = "NAT Gateway IDs for us-west-2 region"
-  value       = aws_nat_gateway.us_west_2[*].id
+output "us_west_2_nat_gateway_id" {
+  description = "NAT Gateway ID for us-west-2 region"
+  value       = aws_nat_gateway.us_west_2.id
 }
 
-output "us_west_2_nat_gateway_eip_ids" {
-  description = "NAT Gateway Elastic IP IDs for us-west-2 region"
-  value       = aws_eip.nat_us_west_2[*].id
+output "us_west_2_nat_gateway_eip_id" {
+  description = "NAT Gateway Elastic IP ID for us-west-2 region"
+  value       = aws_eip.nat_us_west_2.id
 }
 
 # Combined infrastructure outputs for each region
@@ -422,8 +418,8 @@ output "us_east_2_infrastructure" {
     private_subnet_ids   = aws_subnet.private_us_east_2[*].id
     public_route_table_id = aws_route_table.public_us_east_2.id
     private_route_table_id = aws_route_table.private_us_east_2.id
-    nat_gateway_ids      = aws_nat_gateway.us_east_2[*].id
-    nat_gateway_eip_ids  = aws_eip.nat_us_east_2[*].id
+    nat_gateway_id       = aws_nat_gateway.us_east_2.id
+    nat_gateway_eip_id   = aws_eip.nat_us_east_2.id
   }
 }
 
@@ -438,7 +434,7 @@ output "us_west_2_infrastructure" {
     private_subnet_ids   = aws_subnet.private_us_west_2[*].id
     public_route_table_id = aws_route_table.public_us_west_2.id
     private_route_table_id = aws_route_table.private_us_west_2.id
-    nat_gateway_ids      = aws_nat_gateway.us_west_2[*].id
-    nat_gateway_eip_ids  = aws_eip.nat_us_west_2[*].id
+    nat_gateway_id       = aws_nat_gateway.us_west_2.id
+    nat_gateway_eip_id   = aws_eip.nat_us_west_2.id
   }
 }

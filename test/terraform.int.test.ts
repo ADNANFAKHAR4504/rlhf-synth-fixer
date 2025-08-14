@@ -13,8 +13,8 @@ type InfrastructureOutput = {
   private_subnet_ids: string[];
   public_route_table_id: string;
   private_route_table_id: string;
-  nat_gateway_ids: string[];
-  nat_gateway_eip_ids: string[];
+  nat_gateway_id: string;
+  nat_gateway_eip_id: string;
 };
 
 type FlatOutputs = {
@@ -59,8 +59,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
     expect(usEast2Infra.private_route_table_id).toMatch(/^rtb-/);
     expect(usEast2Infra.public_subnet_ids).toHaveLength(2);
     expect(usEast2Infra.private_subnet_ids).toHaveLength(2);
-    expect(usEast2Infra.nat_gateway_ids).toHaveLength(2);
-    expect(usEast2Infra.nat_gateway_eip_ids).toHaveLength(2);
+    expect(usEast2Infra.nat_gateway_id).toMatch(/^nat-/);
+    expect(usEast2Infra.nat_gateway_eip_id).toMatch(/^eipalloc-/);
     
     // Validate subnet IDs format
     usEast2Infra.public_subnet_ids.forEach(subnetId => {
@@ -70,15 +70,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(subnetId).toMatch(/^subnet-/);
     });
 
-    // Validate NAT Gateway IDs format
-    usEast2Infra.nat_gateway_ids.forEach(natId => {
-      expect(natId).toMatch(/^nat-/);
-    });
+    // Validate NAT Gateway ID format
+    expect(usEast2Infra.nat_gateway_id).toMatch(/^nat-/);
 
-    // Validate EIP IDs format
-    usEast2Infra.nat_gateway_eip_ids.forEach(eipId => {
-      expect(eipId).toMatch(/^eipalloc-/);
-    });
+    // Validate EIP ID format
+    expect(usEast2Infra.nat_gateway_eip_id).toMatch(/^eipalloc-/);
   });
 
   it('us-west-2 infrastructure has all required components', () => {
@@ -90,8 +86,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
     expect(usWest2Infra.private_route_table_id).toMatch(/^rtb-/);
     expect(usWest2Infra.public_subnet_ids).toHaveLength(2);
     expect(usWest2Infra.private_subnet_ids).toHaveLength(2);
-    expect(usWest2Infra.nat_gateway_ids).toHaveLength(2);
-    expect(usWest2Infra.nat_gateway_eip_ids).toHaveLength(2);
+    expect(usWest2Infra.nat_gateway_id).toMatch(/^nat-/);
+    expect(usWest2Infra.nat_gateway_eip_id).toMatch(/^eipalloc-/);
     
     // Validate subnet IDs format
     usWest2Infra.public_subnet_ids.forEach(subnetId => {
@@ -101,15 +97,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(subnetId).toMatch(/^subnet-/);
     });
 
-    // Validate NAT Gateway IDs format
-    usWest2Infra.nat_gateway_ids.forEach(natId => {
-      expect(natId).toMatch(/^nat-/);
-    });
+    // Validate NAT Gateway ID format
+    expect(usWest2Infra.nat_gateway_id).toMatch(/^nat-/);
 
-    // Validate EIP IDs format
-    usWest2Infra.nat_gateway_eip_ids.forEach(eipId => {
-      expect(eipId).toMatch(/^eipalloc-/);
-    });
+    // Validate EIP ID format
+    expect(usWest2Infra.nat_gateway_eip_id).toMatch(/^eipalloc-/);
   });
 
   it('both regions have unique resource IDs', () => {
@@ -132,14 +124,10 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     // NAT Gateways should be different
-    usEast2Infra.nat_gateway_ids.forEach(eastNat => {
-      expect(usWest2Infra.nat_gateway_ids).not.toContain(eastNat);
-    });
+    expect(usEast2Infra.nat_gateway_id).not.toBe(usWest2Infra.nat_gateway_id);
 
     // EIPs should be different
-    usEast2Infra.nat_gateway_eip_ids.forEach(eastEip => {
-      expect(usWest2Infra.nat_gateway_eip_ids).not.toContain(eastEip);
-    });
+    expect(usEast2Infra.nat_gateway_eip_id).not.toBe(usWest2Infra.nat_gateway_eip_id);
   });
 
   it('CIDR blocks are correctly configured for each region', () => {
@@ -159,22 +147,22 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   it('each region has the expected number of NAT Gateways', () => {
-    // Both regions should have 2 NAT Gateways (one per public subnet)
-    expect(usEast2Infra.nat_gateway_ids).toHaveLength(2);
-    expect(usWest2Infra.nat_gateway_ids).toHaveLength(2);
+    // Both regions should have 1 NAT Gateway (one per public subnet)
+    expect(usEast2Infra.nat_gateway_id).toMatch(/^nat-/);
+    expect(usWest2Infra.nat_gateway_id).toMatch(/^nat-/);
   });
 
   it('each region has the expected number of Elastic IPs', () => {
-    // Both regions should have 2 Elastic IPs (one per NAT Gateway)
-    expect(usEast2Infra.nat_gateway_eip_ids).toHaveLength(2);
-    expect(usWest2Infra.nat_gateway_eip_ids).toHaveLength(2);
+    // Both regions should have 1 Elastic IP (one per NAT Gateway)
+    expect(usEast2Infra.nat_gateway_eip_id).toMatch(/^eipalloc-/);
+    expect(usWest2Infra.nat_gateway_eip_id).toMatch(/^eipalloc-/);
   });
 
   it('infrastructure outputs contain all required fields', () => {
     const requiredFields = [
       'region', 'vpc_id', 'vpc_cidr_block', 'internet_gateway_id',
       'public_subnet_ids', 'private_subnet_ids', 'public_route_table_id',
-      'private_route_table_id', 'nat_gateway_ids', 'nat_gateway_eip_ids'
+      'private_route_table_id', 'nat_gateway_id', 'nat_gateway_eip_id'
     ];
 
     requiredFields.forEach(field => {
