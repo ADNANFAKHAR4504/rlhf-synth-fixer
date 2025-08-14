@@ -12,7 +12,6 @@ PROJECT STRUCTURE & RULES
 INFRA REQUIREMENTS (exact)
 - Region: `us-west-2`.
 - Use the official AWS provider.
-- Create a dedicated VPC and a single subnet with CIDR `10.0.0.0/24`. Place the EC2 instance in that subnet.
 - Use the latest Amazon Linux 2 AMI available in `us-west-2` (the code should look up the latest AMI, not hardcode an AMI id).
 - Launch a single EC2 instance (t2.micro default, overridable via variables).
 - Create an S3 bucket for application data with **versioning enabled**.
@@ -34,7 +33,7 @@ MODULAR DESIGN & NAMES
 
 VARIABLES & OVERRIDES
 - All sensible defaults must be provided, but every default should be overridable via typed input variables at the root `tap-stack.ts` level. Provide clear variable names and descriptions.
-- Example variable set (not exhaustive): `region`, `environment`, `owner`, `ssh_cidr`, `instance_type`, `instance_key_name`, `s3_bucket_name`, `state_bucket`, `state_key`, `dynamodb_table`, `tags` (map).
+- Example variable set (not exhaustive): `region`, `environment`, `owner`, `ssh_cidr`, `instance_type`, `instance_key_name`, `s3_bucket_name`, `state_bucket`, `state_key`, `tags` (map).
 
 DELIVERABLE FORMAT
 - Provide **only** the complete content of `lib/modules.ts` and `lib/tap-stack.ts` (two files). Do not output other files or additional prose except short header comments inside the files.
