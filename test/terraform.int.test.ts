@@ -155,7 +155,7 @@ describe('TAP Stack Integration Tests', () => {
 
     test('Validates empty outputs', () => {
       const emptyOutputs: TerraformOutputs = {};
-      expect(Object.keys(emptyOutputs).toHaveLength(0);
+      expect(Object.keys(emptyOutputs).toHaveLength(0));
     });
 
     test('Validates malformed outputs', () => {
