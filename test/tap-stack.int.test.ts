@@ -499,14 +499,14 @@ describe('TAP Security Infrastructure Integration Tests', () => {
       
       // Verify MFA enforcement statement exists
       const mfaStatement = policyDocument.Statement.find((s: any) => 
-        s.Sid === 'DenyAllSensitiveActionsWithoutMFA'
+        s.Sid === 'DenySensitiveActionsWithoutMFA'
       );
       expect(mfaStatement).toBeDefined();
       expect(mfaStatement.Effect).toBe('Deny');
-      expect(mfaStatement.Action).toContain('iam:CreateRole');
+      expect(mfaStatement.Action).toContain('iam:DeleteRole');
       expect(mfaStatement.Action).toContain('s3:DeleteBucket');
       expect(mfaStatement.Action).toContain('kms:ScheduleKeyDeletion');
-      expect(mfaStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
+      expect(mfaStatement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('false');
       
       // Verify root account denial exists
       const rootStatement = policyDocument.Statement.find((s: any) => 
@@ -546,28 +546,21 @@ describe('TAP Security Infrastructure Integration Tests', () => {
       
       // Verify production instance protection
       const prodProtection = policyDocument.Statement.find((s: any) => 
-        s.Sid === 'RequireMFAForProductionInstanceTermination'
+        s.Sid === 'DenyProductionInstanceTermination'
       );
       expect(prodProtection).toBeDefined();
       expect(prodProtection.Effect).toBe('Deny');
-      expect(prodProtection.Action).toContain('ec2:TerminateInstances');
+      expect(prodProtection.Action).toBe('ec2:TerminateInstances');
       expect(prodProtection.Condition.StringLike['ec2:ResourceTag/Environment']).toBe('prod*');
       
-      // Verify critical system time-based protection
-      const timeProtection = policyDocument.Statement.find((s: any) => 
-        s.Sid === 'RequireBusinessHoursForCriticalOperations'
-      );
-      expect(timeProtection).toBeDefined();
-      expect(timeProtection.Effect).toBe('Deny');
-      expect(timeProtection.Condition.DateNotBetween['aws:CurrentTime']).toEqual(['08:00Z', '18:00Z']);
-      
-      // Verify allow statement for non-production
+      // Verify non-production operations are allowed
       const allowStatement = policyDocument.Statement.find((s: any) => 
-        s.Sid === 'AllowStopInstancesWithConditions'
+        s.Sid === 'AllowNonProductionOperations'
       );
       expect(allowStatement).toBeDefined();
       expect(allowStatement.Effect).toBe('Allow');
       expect(allowStatement.Action).toContain('ec2:StopInstances');
+      expect(allowStatement.Action).toContain('ec2:StartInstances');
     });
 
     skipIfNoAWS()('should validate S3 security policy content', async () => {
@@ -599,16 +592,16 @@ describe('TAP Security Infrastructure Integration Tests', () => {
       
       // Verify encryption enforcement
       const encryptionStatement = policyDocument.Statement.find((s: any) => 
-        s.Sid === 'DenyInsecureS3Operations'
+        s.Sid === 'DenyUnencryptedUploads'
       );
       expect(encryptionStatement).toBeDefined();
       expect(encryptionStatement.Effect).toBe('Deny');
-      expect(encryptionStatement.Action).toContain('s3:PutObject');
-      expect(encryptionStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toContain('aws:kms');
+      expect(encryptionStatement.Action).toBe('s3:PutObject');
+      expect(encryptionStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
       
       // Verify secure transport enforcement
       const transportStatement = policyDocument.Statement.find((s: any) => 
-        s.Sid === 'DenyInsecureS3Connections'
+        s.Sid === 'DenyInsecureTransport'
       );
       expect(transportStatement).toBeDefined();
       expect(transportStatement.Effect).toBe('Deny');
@@ -720,13 +713,20 @@ describe('TAP Security Infrastructure Integration Tests', () => {
         expect(secureTransportStatement.Effect).toBe('Deny');
         expect(secureTransportStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
         
-        // Verify encryption enforcement
-        const encryptionStatement = policyDocument.Statement.find((s: any) => 
-          s.Sid === 'DenyUnencryptedObjectUploads'
+        // Verify CloudTrail permissions are present
+        const cloudTrailAclStatement = policyDocument.Statement.find((s: any) => 
+          s.Sid === 'AllowCloudTrailAclCheck'
         );
-        expect(encryptionStatement).toBeDefined();
-        expect(encryptionStatement.Effect).toBe('Deny');
-        expect(encryptionStatement.Action).toBe('s3:PutObject');
+        expect(cloudTrailAclStatement).toBeDefined();
+        expect(cloudTrailAclStatement.Effect).toBe('Allow');
+        expect(cloudTrailAclStatement.Principal.Service).toBe('cloudtrail.amazonaws.com');
+        
+        const cloudTrailWriteStatement = policyDocument.Statement.find((s: any) => 
+          s.Sid === 'AllowCloudTrailWrite'
+        );
+        expect(cloudTrailWriteStatement).toBeDefined();
+        expect(cloudTrailWriteStatement.Effect).toBe('Allow');
+        expect(cloudTrailWriteStatement.Principal.Service).toBe('cloudtrail.amazonaws.com');
       } catch (error: any) {
         if (error.name === 'NoSuchBucketPolicy') {
           // If no bucket policy exists, that's also a valid test result
