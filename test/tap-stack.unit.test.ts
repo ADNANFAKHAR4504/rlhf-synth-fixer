@@ -1,4 +1,4 @@
-// test/tap-stack.unit.test.ts - Corrected version
+// test/tap-stack.unit.test.ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
@@ -123,7 +123,7 @@ function findTapStackModule(): any {
       const module = require(path);
       console.log(`✅ Successfully found tap-stack at: ${path}`);
       return { module, path };
-    } catch (error) {
+    } catch (error: any) {
       console.log(`❌ Could not find tap-stack at: ${path} - ${error.message}`);
     }
   }
@@ -135,8 +135,8 @@ function findTapStackModule(): any {
 describe("TapStack", () => {
   let TapStack: any;
   let tapStackModule: any;
-  let mockAwsProvider: jest.MockedFunction<typeof aws.Provider>;
-  let mockComponentResource: jest.MockedFunction<typeof pulumi.ComponentResource>;
+  let mockAwsProvider: jest.MockedClass<typeof aws.Provider>; // Fixed: Use MockedClass for TS2344
+  let mockComponentResource: jest.MockedClass<typeof pulumi.ComponentResource>; // Fixed: Use MockedClass for TS2344
 
   beforeAll(() => {
     const found = findTapStackModule();
@@ -169,8 +169,8 @@ describe("TapStack", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAwsProvider = aws.Provider as jest.MockedFunction<typeof aws.Provider>;
-    mockComponentResource = pulumi.ComponentResource as jest.MockedFunction<typeof pulumi.ComponentResource>;
+    mockAwsProvider = aws.Provider as jest.MockedClass<typeof aws.Provider>; // Fixed: Use MockedClass for TS2344
+    mockComponentResource = pulumi.ComponentResource as jest.MockedClass<typeof pulumi.ComponentResource>; // Fixed: Use MockedClass for TS2344
   });
 
   test("can create TapStack instance with default values", () => {
@@ -301,4 +301,25 @@ describe("TapStack", () => {
     expect(stack.regionalCompute).toBeDefined();
     expect(stack.regionalMonitoring).toBeDefined();
   });
+
+  // Note: If you have a test case around line 127 with a try-catch block, e.g.:
+  /*
+  test("some error handling test", () => {
+    try {
+      // Code that might throw
+    } catch (error) { // TS18046: 'error' is of type 'unknown'
+      expect(error.message).toBe("some message");
+    }
+  });
+  */
+  // Fix it by adding the Error type:
+  /*
+  test("some error handling test", () => {
+    try {
+      // Code that might throw
+    } catch (error: Error) { // Fixed: Added Error type
+      expect(error.message).toBe("some message");
+    }
+  });
+  */
 });
