@@ -1,5 +1,6 @@
 // lib/lambda-stack.ts
 
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
@@ -68,13 +69,14 @@ export class LambdaStack extends Construct {
       },
     });
 
+    const caller = new DataAwsCallerIdentity(this, 'current');
+
     // Lambda Permission
     new LambdaPermission(this, 'prodLambdaInvokePermission', {
       statementId: 'AllowExecutionFromIAM',
       action: 'lambda:InvokeFunction',
       functionName: lambdaFunction.functionName,
-      principal: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:root`, // Restrict to your account
-      // Optionally, restrict to a specific role or service
+      principal: `arn:aws:iam::${caller.accountId}:root`, // Dynamically fetch account ID
     });
   }
 }

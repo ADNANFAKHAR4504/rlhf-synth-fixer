@@ -144,9 +144,10 @@ export class TapStack extends TerraformStack {
 // filepath: [lambda-stack.ts]
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { Construct } from 'constructs';
 import * as path from 'path';
-import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 
 interface LambdaStackProps {
   environmentSuffix?: string;
@@ -202,11 +203,14 @@ export class LambdaStack extends Construct {
       },
     });
 
+    // Use CDKTF data source for AWS account ID
+    const caller = new DataAwsCallerIdentity(this, 'current');
+
     new LambdaPermission(this, 'prodLambdaInvokePermission', {
       statementId: 'AllowExecutionFromIAM',
       action: 'lambda:InvokeFunction',
       functionName: lambdaFunction.functionName,
-      principal: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:root`, // Restrict to your account
+      principal: `arn:aws:iam::${caller.accountId}:root`, // Dynamically fetch account ID
     });
   }
 }

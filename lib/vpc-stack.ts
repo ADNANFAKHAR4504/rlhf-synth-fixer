@@ -78,7 +78,11 @@ export class VpcStack extends Construct {
       vpcId: vpc.id,
       cidrBlock: '10.0.3.0/24',
       availabilityZone: `${awsRegion}a`,
-      tags: { Name: `prod-public-subnet-${environmentSuffix}`, Environment: environmentSuffix, Type: 'public' },
+      tags: {
+        Name: `prod-public-subnet-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Type: 'public',
+      },
     });
 
     // EIP for NAT
@@ -128,7 +132,12 @@ export class VpcStack extends Construct {
       vpcId: vpc.id,
       description: 'EC2 security group',
       ingress: [
-        { fromPort: 22, toPort: 22, protocol: 'tcp', cidrBlocks: ['203.0.113.0/24'] }, // Replace with your trusted CIDR
+        {
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: ['203.0.113.0/24'],
+        }, // Replace with your trusted CIDR
       ],
       egress: [
         { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
