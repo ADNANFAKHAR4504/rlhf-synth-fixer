@@ -50,10 +50,29 @@ variable "cost_center" {
   default     = "IT-001"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource uniqueness (e.g., pr123, test456)"
+  type        = string
+  default     = ""
+}
+
 variable "resource_prefix" {
   description = "Prefix for all resources"
   type        = string
   default     = "corp-"
+}
+
+# Computed locals for naming
+locals {
+  # Create unique suffix with randomness if environment_suffix is provided
+  unique_suffix = var.environment_suffix != "" ? var.environment_suffix : random_id.default_suffix.hex
+  # Full resource prefix with unique suffix for uniqueness
+  full_prefix = "${var.resource_prefix}${local.unique_suffix}-"
+}
+
+# Random ID for default suffix when environment_suffix is not provided
+resource "random_id" "default_suffix" {
+  byte_length = 4
 }
 
 variable "vpc_cidr" {
@@ -102,4 +121,10 @@ variable "db_username" {
   description = "Database username"
   type        = string
   default     = "admin"
+}
+
+variable "create_ec2_instance" {
+  description = "Whether to create EC2 instance for testing"
+  type        = bool
+  default     = false
 }

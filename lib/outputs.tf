@@ -3,6 +3,41 @@ output "vpc_id" {
   value       = aws_vpc.corp_vpc.id
 }
 
+output "aws_region" {
+  description = "AWS region"
+  value       = data.aws_region.current.name
+}
+
+output "environment_suffix" {
+  description = "Environment suffix used for resource naming"
+  value       = local.unique_suffix
+}
+
+output "security_group_id" {
+  description = "ID of the web security group"
+  value       = aws_security_group.web_sg.id
+}
+
+output "s3_bucket_name" {
+  description = "Name of the main S3 bucket"
+  value       = aws_s3_bucket.corp_bucket.id
+}
+
+output "rds_instance_identifier" {
+  description = "RDS instance identifier"
+  value       = aws_db_instance.corp_database.identifier
+}
+
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail"
+  value       = aws_cloudtrail.corp_cloudtrail.name
+}
+
+output "instance_id" {
+  description = "ID of the EC2 instance (if created)"
+  value       = length(aws_instance.corp_web_server) > 0 ? aws_instance.corp_web_server[0].id : null
+}
+
 output "security_requirements_compliance" {
   description = "Security requirements compliance status"
   value = {
@@ -89,5 +124,26 @@ output "launch_template_info" {
     template_name = aws_launch_template.corp_template.name
     ami_id        = aws_launch_template.corp_template.image_id
     instance_type = aws_launch_template.corp_template.instance_type
+  }
+}
+
+# Additional outputs for rollback and cleanup
+output "resource_prefix" {
+  description = "Full resource prefix used for naming"
+  value       = local.full_prefix
+}
+
+output "resources_for_cleanup" {
+  description = "List of resources that need to be cleaned up on rollback"
+  value = {
+    vpc_id                  = aws_vpc.corp_vpc.id
+    security_group_ids      = [aws_security_group.web_sg.id, aws_security_group.db_sg.id]
+    s3_bucket_names         = [aws_s3_bucket.corp_bucket.id, aws_s3_bucket.cloudtrail_bucket.id]
+    rds_instance_identifier = aws_db_instance.corp_database.identifier
+    iam_role_name           = aws_iam_role.ec2_role.name
+    iam_policy_name         = aws_iam_policy.ec2_minimal_policy.name
+    iam_user_name           = aws_iam_user.console_user.name
+    cloudtrail_name         = aws_cloudtrail.corp_cloudtrail.name
+    secrets_manager_secret  = aws_secretsmanager_secret.db_password.name
   }
 }

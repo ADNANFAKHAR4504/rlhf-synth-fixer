@@ -13,12 +13,12 @@ resource "random_password" "db_password" {
 
 # Store the password in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "${var.resource_prefix}db-password"
+  name                    = "${local.full_prefix}db-password"
   description             = "Database password for RDS instance"
   recovery_window_in_days = 7
 
   tags = {
-    Name = "${var.resource_prefix}db-password"
+    Name = "${local.full_prefix}db-password"
   }
 }
 
@@ -37,7 +37,7 @@ resource "aws_vpc" "corp_vpc" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.resource_prefix}vpc"
+    Name = "${local.full_prefix}vpc"
   }
 }
 
@@ -46,7 +46,7 @@ resource "aws_internet_gateway" "corp_igw" {
   vpc_id = aws_vpc.corp_vpc.id
 
   tags = {
-    Name = "${var.resource_prefix}igw"
+    Name = "${local.full_prefix}igw"
   }
 }
 
@@ -60,7 +60,7 @@ resource "aws_subnet" "public_subnets" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.resource_prefix}public-subnet-${count.index + 1}"
+    Name = "${local.full_prefix}public-subnet-${count.index + 1}"
     Type = "Public"
   }
 }
@@ -74,7 +74,7 @@ resource "aws_subnet" "private_subnets" {
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name = "${var.resource_prefix}private-subnet-${count.index + 1}"
+    Name = "${local.full_prefix}private-subnet-${count.index + 1}"
     Type = "Private"
   }
 }
@@ -89,7 +89,7 @@ resource "aws_route_table" "public_rt" {
   }
 
   tags = {
-    Name = "${var.resource_prefix}public-rt"
+    Name = "${local.full_prefix}public-rt"
   }
 }
 
@@ -102,7 +102,7 @@ resource "aws_route_table_association" "public_rta" {
 
 # Security Groups - Only HTTP and HTTPS allowed
 resource "aws_security_group" "web_sg" {
-  name_prefix = "${var.resource_prefix}web-sg"
+  name_prefix = "${local.full_prefix}web-sg"
   description = "Security group for web servers - HTTP and HTTPS only"
   vpc_id      = aws_vpc.corp_vpc.id
 
@@ -133,13 +133,13 @@ resource "aws_security_group" "web_sg" {
   }
 
   tags = {
-    Name = "${var.resource_prefix}web-sg"
+    Name = "${local.full_prefix}web-sg"
   }
 }
 
 # Database Security Group - Only internal access
 resource "aws_security_group" "db_sg" {
-  name_prefix = "${var.resource_prefix}db-sg"
+  name_prefix = "${local.full_prefix}db-sg"
   description = "Security group for database servers"
   vpc_id      = aws_vpc.corp_vpc.id
 
@@ -153,7 +153,7 @@ resource "aws_security_group" "db_sg" {
   }
 
   tags = {
-    Name = "${var.resource_prefix}db-sg"
+    Name = "${local.full_prefix}db-sg"
   }
 }
 
@@ -203,16 +203,16 @@ data "aws_iam_policy_document" "ec2_minimal_policy" {
 }
 
 resource "aws_iam_role" "ec2_role" {
-  name               = "${var.resource_prefix}ec2-role"
+  name               = "${local.full_prefix}ec2-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 
   tags = {
-    Name = "${var.resource_prefix}ec2-role"
+    Name = "${local.full_prefix}ec2-role"
   }
 }
 
 resource "aws_iam_policy" "ec2_minimal_policy" {
-  name        = "${var.resource_prefix}ec2-minimal-policy"
+  name        = "${local.full_prefix}ec2-minimal-policy"
   description = "Minimal policy for EC2 instances following least privilege"
   policy      = data.aws_iam_policy_document.ec2_minimal_policy.json
 }
@@ -223,17 +223,17 @@ resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.resource_prefix}ec2-profile"
+  name = "${local.full_prefix}ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
 
 # IAM User with MFA requirement for console access
 resource "aws_iam_user" "console_user" {
-  name = "${var.resource_prefix}console-user"
+  name = "${local.full_prefix}console-user"
   path = "/"
 
   tags = {
-    Name = "${var.resource_prefix}console-user"
+    Name = "${local.full_prefix}console-user"
   }
 }
 
@@ -298,7 +298,7 @@ data "aws_iam_policy_document" "mfa_policy" {
 }
 
 resource "aws_iam_policy" "mfa_policy" {
-  name        = "${var.resource_prefix}mfa-policy"
+  name        = "${local.full_prefix}mfa-policy"
   description = "Policy requiring MFA for console access"
   policy      = data.aws_iam_policy_document.mfa_policy.json
 }
@@ -319,10 +319,10 @@ resource "random_id" "cloudtrail_suffix" {
 
 # S3 Bucket with default encryption
 resource "aws_s3_bucket" "corp_bucket" {
-  bucket = "${var.resource_prefix}secure-bucket-${random_id.bucket_suffix.hex}"
+  bucket = "${local.full_prefix}secure-bucket-${random_id.bucket_suffix.hex}"
 
   tags = {
-    Name = "${var.resource_prefix}secure-bucket"
+    Name = "${local.full_prefix}secure-bucket"
   }
 }
 
@@ -355,10 +355,10 @@ resource "aws_s3_bucket_versioning" "corp_bucket_versioning" {
 
 # CloudTrail for API logging
 resource "aws_s3_bucket" "cloudtrail_bucket" {
-  bucket = "${var.resource_prefix}cloudtrail-logs-${random_id.cloudtrail_suffix.hex}"
+  bucket = "${local.full_prefix}cloudtrail-logs-${random_id.cloudtrail_suffix.hex}"
 
   tags = {
-    Name = "${var.resource_prefix}cloudtrail-logs"
+    Name = "${local.full_prefix}cloudtrail-logs"
   }
 }
 
@@ -397,7 +397,7 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = ["arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.resource_prefix}cloudtrail"]
+      values   = ["arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.full_prefix}cloudtrail"]
     }
   }
 
@@ -422,7 +422,7 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = ["arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.resource_prefix}cloudtrail"]
+      values   = ["arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.full_prefix}cloudtrail"]
     }
   }
 }
@@ -433,7 +433,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
 }
 
 resource "aws_cloudtrail" "corp_cloudtrail" {
-  name           = "${var.resource_prefix}cloudtrail"
+  name           = "${local.full_prefix}cloudtrail"
   s3_bucket_name = aws_s3_bucket.cloudtrail_bucket.id
 
   event_selector {
@@ -450,17 +450,17 @@ resource "aws_cloudtrail" "corp_cloudtrail" {
   depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]
 
   tags = {
-    Name = "${var.resource_prefix}cloudtrail"
+    Name = "${local.full_prefix}cloudtrail"
   }
 }
 
 # CloudWatch Log Group for API requests
 resource "aws_cloudwatch_log_group" "api_logs" {
-  name              = "/aws/apigateway/${var.resource_prefix}api-logs"
+  name              = "/aws/apigateway/${local.full_prefix}api-logs"
   retention_in_days = 30
 
   tags = {
-    Name = "${var.resource_prefix}api-logs"
+    Name = "${local.full_prefix}api-logs"
   }
 }
 
@@ -482,7 +482,7 @@ data "aws_ami" "approved_ami" {
 
 # Launch Template with approved AMI
 resource "aws_launch_template" "corp_template" {
-  name_prefix   = "${var.resource_prefix}template"
+  name_prefix   = "${local.full_prefix}template"
   image_id      = data.aws_ami.approved_ami.id
   instance_type = var.instance_type
 
@@ -500,28 +500,44 @@ resource "aws_launch_template" "corp_template" {
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name = "${var.resource_prefix}web-server"
+      Name = "${local.full_prefix}web-server"
     }
   }
 
   tags = {
-    Name = "${var.resource_prefix}launch-template"
+    Name = "${local.full_prefix}launch-template"
+  }
+}
+
+# Optional EC2 instance for testing
+resource "aws_instance" "corp_web_server" {
+  count = var.create_ec2_instance ? 1 : 0
+
+  launch_template {
+    id      = aws_launch_template.corp_template.id
+    version = "$Latest"
+  }
+
+  subnet_id = aws_subnet.public_subnets[0].id
+
+  tags = {
+    Name = "${local.full_prefix}web-server-instance"
   }
 }
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "corp_db_subnet_group" {
-  name       = "${var.resource_prefix}db-subnet-group"
+  name       = "${local.full_prefix}db-subnet-group"
   subnet_ids = aws_subnet.private_subnets[*].id
 
   tags = {
-    Name = "${var.resource_prefix}db-subnet-group"
+    Name = "${local.full_prefix}db-subnet-group"
   }
 }
 
 # RDS Instance with encryption at rest and auto-generated password
 resource "aws_db_instance" "corp_database" {
-  identifier     = "${var.resource_prefix}database"
+  identifier     = "${local.full_prefix}database"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.db_instance_class
@@ -546,6 +562,6 @@ resource "aws_db_instance" "corp_database" {
   deletion_protection = false
 
   tags = {
-    Name = "${var.resource_prefix}database"
+    Name = "${local.full_prefix}database"
   }
 }
