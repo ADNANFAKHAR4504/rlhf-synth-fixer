@@ -54,7 +54,7 @@ describe('AWS Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe('available');
       
-      // Check DNS attributes separately
+      // Check DNS attributes separately 
       const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
         VpcId: outputs.vpc_id,
         Attribute: 'enableDnsHostnames'
