@@ -450,7 +450,7 @@ class TapStack(ComponentResource):
           opts=ResourceOptions(parent=self)
       )
       
-      # CodePipeline Service Role with correct managed policies
+      # CodePipeline Service Role with no managed policies
       self.codepipeline_role = aws.iam.Role(
           f"{self.name_prefix}-codepipeline-role",
           assume_role_policy=json.dumps({
@@ -461,9 +461,6 @@ class TapStack(ComponentResource):
                   "Principal": {"Service": "codepipeline.amazonaws.com"},
               }],
           }),
-          managed_policy_arns=[
-              "arn:aws:iam::aws:policy/AWSCodePipelineServiceRole"
-          ],
           tags={
               "Name": f"{self.name_prefix}-codepipeline-role",
               "Environment": self.environment_suffix,
@@ -471,9 +468,9 @@ class TapStack(ComponentResource):
           opts=ResourceOptions(parent=self)
       )
       
-      # Create additional policy for CodePipeline to access S3 and ECS
-      self.codepipeline_additional_policy = aws.iam.RolePolicy(
-          f"{self.name_prefix}-codepipeline-additional-policy",
+      # Create custom policy for CodePipeline with all necessary permissions
+      self.codepipeline_policy = aws.iam.RolePolicy(
+          f"{self.name_prefix}-codepipeline-policy",
           role=self.codepipeline_role.id,
           policy=json.dumps({
               "Version": "2012-10-17",
@@ -484,11 +481,21 @@ class TapStack(ComponentResource):
                           "s3:GetBucketVersioning",
                           "s3:GetObject",
                           "s3:GetObjectVersion",
-                          "s3:PutObject"
+                          "s3:PutObject",
+                          "s3:ListBucket"
                       ],
                       "Resource": [
-                          "arn:aws:s3:::*"
+                          "arn:aws:s3:::*",
+                          "arn:aws:s3:::*/*"
                       ]
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "codebuild:BatchGetBuilds",
+                          "codebuild:StartBuild"
+                      ],
+                      "Resource": "*"
                   },
                   {
                       "Effect": "Allow",
@@ -507,12 +514,29 @@ class TapStack(ComponentResource):
                       "Action": [
                           "iam:PassRole"
                       ],
-                      "Resource": "*"
+                      "Resource": "*",
+                      "Condition": {
+                          "StringEqualsIfExists": {
+                              "iam:PassedToService": [
+                                  "ecs-tasks.amazonaws.com"
+                              ]
+                          }
+                      }
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "logs:CreateLogGroup",
+                          "logs:CreateLogStream",
+                          "logs:PutLogEvents"
+                      ],
+                      "Resource": "arn:aws:logs:*:*:*"
                   }
               ]
           }),
           opts=ResourceOptions(parent=self)
       )
+
 
     
     def _create_s3_buckets(self):
