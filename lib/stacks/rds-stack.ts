@@ -11,7 +11,7 @@ import { ResourceOptions } from '@pulumi/pulumi';
 export interface RdsStackArgs {
   environmentSuffix?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
-  privateSubnetIds: pulumi.Input<string[]>;
+  privateSubnetIds: pulumi.Input<string>[];
   dbSecurityGroupId: pulumi.Input<string>;
   rdsKmsKeyArn: pulumi.Input<string>;
   dbSecretArn: pulumi.Input<string>;

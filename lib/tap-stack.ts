@@ -11,13 +11,13 @@ import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 // Import nested stacks
-import { KmsStack } from './stacks/kms-stack';
-import { VpcStack } from './stacks/vpc-stack';
+import { Ec2Stack } from './stacks/ec2-stack';
 import { IamStack } from './stacks/iam-stack';
+import { KmsStack } from './stacks/kms-stack';
+import { RdsStack } from './stacks/rds-stack';
 import { S3Stack } from './stacks/s3-stack';
 import { SecurityGroupStack } from './stacks/security-group-stack';
-import { RdsStack } from './stacks/rds-stack';
-import { Ec2Stack } from './stacks/ec2-stack';
+import { VpcStack } from './stacks/vpc-stack';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -146,7 +146,7 @@ export class TapStack extends pulumi.ComponentResource {
       'tap-rds',
       {
         environmentSuffix,
-        privateSubnetIds: pulumi.all(vpcStack.privateSubnetIds),
+        privateSubnetIds: vpcStack.privateSubnetIds,
         dbSecurityGroupId: securityGroupStack.dbSecurityGroupId,
         rdsKmsKeyArn: kmsStack.rdsKeyArn,
         dbSecretArn:
