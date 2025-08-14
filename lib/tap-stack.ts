@@ -16,6 +16,7 @@ import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
 import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
 import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
@@ -30,12 +31,6 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
-/**
- * @interface RegionConfig
- * @description Defines the network configuration for a single AWS region.
- * This enhanced interface provides clear, self-documenting properties for CIDR blocks and Availability Zones.
- */
-// FIX: Export the interface so it can be used in test files.
 export interface RegionConfig {
   readonly region: string;
   readonly vpcCidr: string;
@@ -47,25 +42,12 @@ export interface RegionConfig {
   readonly azB: string;
 }
 
-/**
- * @interface StackConfig
- * @description Defines the overall configuration for the multi-region stack.
- * Encapsulates common tags and the array of regional configurations for better organization and scalability.
- */
-// FIX: Export the interface so it can be used in test files.
 export interface StackConfig {
   readonly commonTags: { [key: string]: string };
   readonly regions: RegionConfig[];
 }
 
-/**
- * @class MultiRegionSecurityStack
- * @description A CDKTF stack for provisioning a secure, multi-region AWS infrastructure.
- * This stack focuses on security best practices including least-privilege IAM, customer-managed KMS encryption,
- * centralized logging, and strict network isolation.
- */
 export class MultiRegionSecurityStack extends TerraformStack {
-  // FIX: Updated the constructor to accept a config object, making the stack testable.
   constructor(scope: Construct, id: string, config: StackConfig) {
     super(scope, id);
 
@@ -117,6 +99,39 @@ export class MultiRegionSecurityStack extends TerraformStack {
       bucket: centralLogBucket.id,
       versioningConfiguration: { status: 'Enabled' },
     });
+
+    new S3BucketLifecycleConfiguration(
+      this,
+      'CentralLogBucketLifecycleConfig',
+      {
+        provider: centralProvider,
+        bucket: centralLogBucket.id,
+        rule: [
+          {
+            id: 'log-management-rule',
+            status: 'Enabled',
+            transition: [
+              {
+                days: 90,
+                storageClass: 'STANDARD_IA',
+              },
+            ],
+            // FIX: Wrapped the object in an array.
+            expiration: [
+              {
+                days: 365,
+              },
+            ],
+            // FIX: Wrapped the object in an array.
+            noncurrentVersionExpiration: [
+              {
+                noncurrentDays: 30,
+              },
+            ],
+          },
+        ],
+      }
+    );
 
     new S3BucketServerSideEncryptionConfigurationA(
       this,
@@ -257,7 +272,7 @@ export class MultiRegionSecurityStack extends TerraformStack {
           vpcId: vpc.id,
           cidrBlock: regionConfig.publicSubnetCidr,
           availabilityZone: regionConfig.azA,
-          mapPublicIpOnLaunch: true,
+          mapPublicIpOnLaunch: false,
           tags: { ...tags, Name: `public-subnet-${regionConfig.region}` },
         }
       );
@@ -382,38 +397,46 @@ export class MultiRegionSecurityStack extends TerraformStack {
           },
         ],
       });
-      const publicNacl = new NetworkAcl(
+      const privateNacl = new NetworkAcl(
         this,
-        `PublicNACL-${regionConfig.region}`,
+        `PrivateNACL-${regionConfig.region}`,
         {
           provider: regionProvider,
           vpcId: vpc.id,
-          subnetIds: [publicSubnet.id],
-          tags: { ...tags, Name: `public-nacl-${regionConfig.region}` },
+          subnetIds: [privateSubnet.id, dbSubnetA.id, dbSubnetB.id],
+          tags: { ...tags, Name: `private-nacl-${regionConfig.region}` },
         }
       );
-      new NetworkAclRule(this, `PublicNaclInbound-${regionConfig.region}`, {
-        provider: regionProvider,
-        networkAclId: publicNacl.id,
-        ruleNumber: 100,
-        egress: false,
-        protocol: 'tcp',
-        ruleAction: 'allow',
-        cidrBlock: '0.0.0.0/0',
-        fromPort: 443,
-        toPort: 443,
-      });
-      new NetworkAclRule(this, `PublicNaclOutbound-${regionConfig.region}`, {
-        provider: regionProvider,
-        networkAclId: publicNacl.id,
-        ruleNumber: 100,
-        egress: true,
-        protocol: '-1',
-        ruleAction: 'allow',
-        cidrBlock: '0.0.0.0/0',
-        fromPort: 0,
-        toPort: 0,
-      });
+      new NetworkAclRule(
+        this,
+        `PrivateNaclInboundAllowInternal-${regionConfig.region}`,
+        {
+          provider: regionProvider,
+          networkAclId: privateNacl.id,
+          ruleNumber: 100,
+          egress: false,
+          protocol: '-1',
+          ruleAction: 'allow',
+          cidrBlock: vpc.cidrBlock,
+          fromPort: 0,
+          toPort: 0,
+        }
+      );
+      new NetworkAclRule(
+        this,
+        `PrivateNaclOutboundAllowInternal-${regionConfig.region}`,
+        {
+          provider: regionProvider,
+          networkAclId: privateNacl.id,
+          ruleNumber: 100,
+          egress: true,
+          protocol: '-1',
+          ruleAction: 'allow',
+          cidrBlock: vpc.cidrBlock,
+          fromPort: 0,
+          toPort: 0,
+        }
+      );
       new FlowLog(this, `FlowLog-${regionConfig.region}`, {
         provider: regionProvider,
         vpcId: vpc.id,
@@ -436,13 +459,16 @@ export class MultiRegionSecurityStack extends TerraformStack {
           tags: { ...tags, Name: `db-secret-${regionConfig.region}` },
         }
       );
-      new SecretsmanagerSecretVersion(
+      const dbSecretVersion = new SecretsmanagerSecretVersion(
         this,
         `DBSecretVersion-${regionConfig.region}`,
         {
           provider: regionProvider,
           secretId: dbSecret.id,
-          secretString: dbPassword.result,
+          secretString: JSON.stringify({
+            username: 'dbadmin',
+            password: dbPassword.result,
+          }),
         }
       );
       const dbSubnetGroup = new DbSubnetGroup(
@@ -461,12 +487,13 @@ export class MultiRegionSecurityStack extends TerraformStack {
         engine: 'postgres',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
+        multiAz: true,
         storageEncrypted: true,
         kmsKeyId: regionKmsKey.arn,
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [dbSg.id],
-        username: 'dbadmin',
-        password: dbPassword.result,
+        username: Fn.jsondecode(dbSecretVersion.secretString)['username'],
+        password: Fn.jsondecode(dbSecretVersion.secretString)['password'],
         skipFinalSnapshot: true,
         tags: { ...tags, Name: `app-db-${regionConfig.region}` },
       });

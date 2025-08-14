@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-import { App } from 'cdktf';
 import 'source-map-support/register';
+import { App } from 'cdktf';
 import { MultiRegionSecurityStack, StackConfig } from '../lib/tap-stack';
 
-// FIX: Define the production configuration that will be passed to the stack.
 const PROD_STACK_CONFIG: StackConfig = {
   commonTags: {
     Project: 'SecureCore',
@@ -31,26 +30,24 @@ const PROD_STACK_CONFIG: StackConfig = {
       azA: 'us-west-2a',
       azB: 'us-west-2b',
     },
+    // FIX: Replaced us-east-2 with the required eu-central-1 region.
     {
-      region: 'us-east-2',
+      region: 'eu-central-1',
       vpcCidr: '10.3.0.0/16',
       publicSubnetCidr: '10.3.1.0/24',
       privateSubnetCidr: '10.3.2.0/24',
       dbSubnetACidr: '10.3.3.0/24',
       dbSubnetBCidr: '10.3.4.0/24',
-      azA: 'us-east-2a',
-      azB: 'us-east-2b',
+      azA: 'eu-central-1a',
+      azB: 'eu-central-1b',
     },
   ],
 };
 
 const app = new App();
-
-// FIX: Pass the production configuration as the third argument.
 new MultiRegionSecurityStack(
   app,
   'multi-region-secure-stack',
   PROD_STACK_CONFIG
 );
-
 app.synth();

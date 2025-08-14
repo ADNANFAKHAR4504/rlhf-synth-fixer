@@ -19,7 +19,7 @@ Owner: 'SRE-Team',
 const regions = [
 { name: 'us-east-1', vpcCidr: '10.10.0.0/16' },
 { name: 'us-west-2', vpcCidr: '10.20.0.0/16' },
-{ name: 'us-east-2', vpcCidr: '10.30.0.0/16' },
+{ name: 'eu-central-1', vpcCidr: '10.30.0.0/16' },
 ];
 
 class MultiRegionStack extends TerraformStack {
