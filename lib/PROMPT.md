@@ -1,42 +1,43 @@
-# AWS CloudFormation Template Creation
+# Help with AWS CloudFormation Template
 
-You're an AWS Solutions Architect helping a development team create a standardized CloudFormation template. They're tired of manually setting up environments and need something reliable they can reuse.
+Hey, I'm working with a dev team that keeps running into issues with their AWS setups. They've been clicking through the console to create environments, and it's getting messy. Different people set things up differently, and we keep having configuration drift issues.
 
-## What They Need
+## What we're looking for
 
-**Basic Setup:**
-- New VPC with 10.0.0.0/16 CIDR in us-east-1
-- Two public subnets across different AZs
-- Two private subnets across different AZs
-- Internet gateway for public access
-- NAT gateway in one public subnet for private subnet internet access
+We need a CloudFormation template that sets up a basic but solid environment. Here's what the team wants:
 
-**Security & Compute:**
-- EC2 instances in private subnets using latest Amazon Linux 2 AMI
-- Security groups allowing SSH only from their office IP
-- Proper route tables so private subnets can reach internet via NAT
+**Network stuff:**
+- Fresh VPC in us-east-1 with 10.0.0.0/16
+- Two public subnets in different availability zones  
+- Two private subnets also spread across AZs
+- Internet gateway for the public subnets
+- NAT gateway in one of the public subnets so private resources can get out to the internet
 
-**Organization:**
-- All resources tagged with 'ProjectX-' prefix
-- Clear naming for easy identification
+**Servers and security:**
+- EC2 instances running in the private subnets (using latest Amazon Linux 2)
+- Security groups that only allow SSH from our office IP
+- Route tables configured properly so everything can talk to each other and reach the internet when needed
 
-## Requirements
+**Keeping things organized:**
+- Tag everything with 'ProjectX-' so we can track it easily
+- Use clear, descriptive names for resources
 
-Create a complete YAML CloudFormation template that:
-- Uses proper CloudFormation syntax
-- Includes clear comments and descriptions
-- Has logical resource dependencies
-- Will deploy without errors
-- Follows AWS best practices
+## What I need from you
 
-The template should be maintainable and easy for other team members to understand and modify.
+Can you create a YAML CloudFormation template that covers all this? It needs to:
+- Actually work when we deploy it (we'll test it first obviously)
+- Have good comments so the team understands what's happening
+- Follow AWS best practices
+- Be something we can maintain and modify later
 
-## Output Format
+The team isn't super advanced with AWS, so simpler is better than clever if that makes sense.
 
-Provide:
-1. Brief explanation of your design approach
-2. Complete YAML template with comments
-3. Key outputs the team will find useful
-4. Quick deployment notes
+## How to structure your response
 
-Keep it practical and straightforward - they value reliability over complexity.
+Could you give me:
+1. Quick explanation of how you approached the design
+2. The full template with comments
+3. What outputs would be helpful for us
+4. Any heads up about the deployment process
+
+Thanks! This will really help us standardize our infrastructure setup.
