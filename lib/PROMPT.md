@@ -1,80 +1,57 @@
-You are an expert AWS Cloud Engineer specializing in Infrastructure as Code using the AWS CDK for Terraform (CDKTF) with TypeScript. Your task is to generate a complete, production-ready, and modular CDKTF project that sets up a secure and scalable network foundation in AWS.
+I’m working on an AWS project using CDK for Terraform (CDKTF) with TypeScript, and I need a complete, production-ready setup that builds a secure and scalable network on AWS.
 
-The project must strictly adhere to the following file structure and technical specifications.
+Here’s what I’m looking for:
 
-Project Requirements
-1. Technology Stack:
+Tech stack & setup
 
 Framework: AWS CDK for Terraform (CDKTF)
 
 Language: TypeScript
 
-AWS Provider Version: 3.42.0 or later.
+AWS provider version: 3.42.0 or later
 
-2. File Structure:
-Organize the entire project into the following two files. Do not create any other files; all logic must be contained within these two.
+AWS region: us-west-2
 
-lib/modules.ts: This file must contain a reusable, modular VpcModule class (L3 construct). This module will encapsulate all the networking resources (VPC, subnets, gateways, route tables, security groups) and accept configuration options.
+All resources tagged with: { "Environment": "Production" }
 
-lib/tap-stack.ts: This is the main stack file. It will import and instantiate the VpcModule from lib/modules.ts to compose the final infrastructure. It should be clean and primarily focused on composition, not resource definition.
+Project structure
+I only want two files:
 
-Infrastructure Specifications
-1. General Configuration:
+lib/modules.ts – This should have a reusable VpcModule (L3 construct) that sets up all the networking (VPC, subnets, gateways, route tables, security groups) and takes configuration options.
 
-AWS Region: All resources must be deployed to us-west-2.
+lib/tap-stack.ts – The main stack that imports VpcModule and focuses on composition only (no direct resource definitions).
 
-Tagging: All created resources must be tagged with { "Environment": "Production" }.
-2. VpcModule in lib/modules.ts:
-This class must create the following resources:
+VPC requirements (inside VpcModule):
 
-VPC:
+VPC: CIDR 10.0.0.0/16
 
-Create a single Vpc with the CIDR block 10.0.0.0/16.
+Public subnets: Two subnets in different AZs (us-west-2a and us-west-2b), CIDRs 10.0.1.0/24 and 10.0.2.0/24, must auto-assign public IPs.
 
-Subnets:
+Private subnets: Two subnets in the same AZs, CIDRs 10.0.101.0/24 and 10.0.102.0/24.
 
-Create two public subnets in different Availability Zones (e.g., us-west-2a, us-west-2b).
+Gateways & routes:
 
-CIDRs: 10.0.1.0/24 and 10.0.2.0/24.
+Internet Gateway for public subnets
 
-These subnets must automatically assign public IP addresses to instances launched within them.
+Public route table → IGW for 0.0.0.0/0
 
-Create two private subnets in the same Availability Zones.
+Elastic IP + NAT Gateway in one private subnet
 
-CIDRs: 10.0.101.0/24 and 10.0.102.0/24.
+Private route table → NAT Gateway for 0.0.0.0/0
 
-Gateways & Routing:
+Security groups:
 
-An Internet Gateway attached to the VPC.
+production-web-sg: allow HTTP (80) & HTTPS (443) from anywhere, egress all traffic
 
-A public route table that routes all outbound traffic (0.0.0.0/0) to the Internet Gateway. Associate this with both public subnets.
+production-ssh-sg: allow SSH (22) only from 203.0.113.0/24, egress all traffic
 
-An Elastic IP and a NAT Gateway for one of the private subnets to allow outbound internet access.
+Stack requirements (tap-stack.ts):
 
-A private route table that routes all outbound traffic (0.0.0.0/0) to the NAT Gateway. Associate this with both private subnets.
+Configure AWS provider for us-west-2
 
-Security Groups:
+Instantiate VpcModule to create networking infrastructure
 
-Create a security group named production-web-sg.
+Ensure all resources have the Environment: Production tag
 
-Ingress: Allow HTTP (port 80) and HTTPS (port 443) traffic from anywhere (0.0.0.0/0).
-
-Egress: Allow all outbound traffic.
-
-Create a security group named production-ssh-sg.
-
-Ingress: Allow SSH (port 22) traffic only from the CIDR block 203.0.113.0/24.
-
-Egress: Allow all outbound traffic.
-
-3. TapStack in lib/tap-stack.ts:
-This class must perform the following actions:
-
-Configure the AWS provider for the us-west-2 region.
-
-Instantiate the VpcModule from lib/modules.ts to create the networking infrastructure.
-
-Apply the Environment: Production tag to all resources within the stack.
-
-Expected Output
-Provide the complete, runnable code for both lib/modules.ts and lib/tap-stack.ts in a single response. The code must be well-commented, explaining the purpose of each resource and configuration choice. The final output should be ready to be synthesized by cdktf synth and deployed via terraform apply.
+What I need from you:
+Give me the complete, working code for both modules.ts and tap-stack.ts in one go. Please include clear comments explaining why each resource/config is there. The code should be ready to run with cdktf synth and then deploy with terraform apply.
