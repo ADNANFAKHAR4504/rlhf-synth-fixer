@@ -9,12 +9,30 @@ Tests actual AWS resources created by the Pulumi stack without mocking.
 import unittest
 import os
 
-# Third-party imports - AWS SDK
-import boto3
-from botocore.exceptions import ClientError
+# Third-party imports - AWS SDK with defensive error handling
+try:
+  import boto3
+  from botocore.exceptions import ClientError
+except ImportError as boto_error:
+  raise ImportError(
+    "CRITICAL CI/CD ERROR: Cannot import boto3 for integration tests\n"
+    "The AWS SDK has not been installed in the CI/CD environment.\n"
+    "CI/CD pipeline must run: pipenv install --dev\n"
+    "Integration tests require boto3 to test real AWS resources.\n"
+    f"Original error: {boto_error}"
+  ) from boto_error
 
-# Third-party imports - Pulumi
-from pulumi import automation as auto
+# Third-party imports - Pulumi with defensive error handling
+try:
+  from pulumi import automation as auto
+except ImportError as pulumi_error:
+  raise ImportError(
+    "CRITICAL CI/CD ERROR: Cannot import pulumi.automation for integration tests\n"
+    "The Pulumi SDK has not been installed in the CI/CD environment.\n"
+    "CI/CD pipeline must run: pipenv install --dev\n"
+    "Integration tests require Pulumi automation API.\n"
+    f"Original error: {pulumi_error}"
+  ) from pulumi_error
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
@@ -23,8 +41,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
   def setUp(self):
     """Set up integration test with live stack."""
     self.stack_name = "dev"
-    self.project_name = "pulumi-infra" 
-    
+    self.project_name = "pulumi-infra"
+
     # Initialize AWS clients
     self.ec2_client = boto3.client('ec2', region_name='us-west-2')
     self.ecs_client = boto3.client('ecs', region_name='us-west-2')
@@ -36,10 +54,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     self.cloudfront_client = boto3.client('cloudfront', region_name='us-west-2')
     self.cloudtrail_client = boto3.client('cloudtrail', region_name='us-west-2')
     self.logs_client = boto3.client('logs', region_name='us-west-2')
-    
+
     # Get stack outputs for resource discovery
     self.stack_outputs = self._get_stack_outputs()
-    
+
     # Environment-agnostic resource discovery
     self.environment_suffix = self._discover_environment_suffix()
 
@@ -70,12 +88,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
           {'Name': 'state', 'Values': ['available']}
         ]
       )
-      
+
       for vpc in vpcs['Vpcs']:
         for tag in vpc.get('Tags', []):
           if tag['Key'] == 'EnvironmentSuffix':
             return tag['Value']
-      
+
       # Fallback to 'dev' if not found
       return 'dev'
     except Exception:
@@ -91,14 +109,14 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         {'Name': 'state', 'Values': ['available']}
       ]
     )
-    
+
     self.assertGreater(len(vpcs['Vpcs']), 0, "VPC should be created")
     vpc = vpcs['Vpcs'][0]
     vpc_id = vpc['VpcId']
-    
+
     # Check VPC CIDR
     self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-    
+
     # Check public subnets (should be 2)
     public_subnets = self.ec2_client.describe_subnets(
       Filters=[
@@ -107,8 +125,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       ]
     )
     self.assertEqual(len(public_subnets['Subnets']), 2, "Should have 2 public subnets")
-    
-    # Check private subnets (should be 2)  
+
+    # Check private subnets (should be 2)
     private_subnets = self.ec2_client.describe_subnets(
       Filters=[
         {'Name': 'vpc-id', 'Values': [vpc_id]},
@@ -116,7 +134,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       ]
     )
     self.assertEqual(len(private_subnets['Subnets']), 2, "Should have 2 private subnets")
-    
+
     # Check NAT Gateways (should be 2)
     nat_gateways = self.ec2_client.describe_nat_gateways(
       Filters=[
@@ -135,9 +153,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         {'Name': 'tag:Owner', 'Values': ['DevOps']}
       ]
     )
-    
+
     sg_names = [sg['GroupName'] for sg in security_groups['SecurityGroups']]
-    
+
     # Check required security groups exist
     required_sgs = [
       f'alb-sg-{self.environment_suffix}',
@@ -145,7 +163,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       f'db-sg-{self.environment_suffix}',
       f'cache-sg-{self.environment_suffix}'
     ]
-    
+
     for sg_name in required_sgs:
       self.assertIn(sg_name, sg_names, f"Security group {sg_name} should exist")
 
@@ -153,25 +171,25 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     """Test S3 buckets are created with proper configuration."""
     # Test artifacts bucket
     artifacts_bucket_name = f'microservices-artifacts-{self.environment_suffix}'
-    
+
     try:
       bucket_response = self.s3_client.head_bucket(Bucket=artifacts_bucket_name)
       self.assertIsNotNone(bucket_response)
-      
+
       # Check bucket encryption
       encryption = self.s3_client.get_bucket_encryption(Bucket=artifacts_bucket_name)
       self.assertIn('ServerSideEncryptionConfiguration', encryption)
-      
+
       # Check bucket versioning
       versioning = self.s3_client.get_bucket_versioning(Bucket=artifacts_bucket_name)
       self.assertEqual(versioning.get('Status'), 'Enabled')
-      
+
     except ClientError as e:
       self.fail(f"Artifacts bucket {artifacts_bucket_name} should exist: {e}")
 
     # Test static assets bucket
     static_bucket_name = f'microservices-static-{self.environment_suffix}'
-    
+
     try:
       bucket_response = self.s3_client.head_bucket(Bucket=static_bucket_name)
       self.assertIsNotNone(bucket_response)
@@ -182,96 +200,96 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     """Test RDS PostgreSQL instance is deployed correctly."""
     # Find RDS instance by identifier pattern
     db_identifier = f'microservices-db-{self.environment_suffix}'
-    
+
     try:
       response = self.rds_client.describe_db_instances(
         DBInstanceIdentifier=db_identifier
       )
-      
+
       db_instance = response['DBInstances'][0]
-      
+
       # Check database configuration
       self.assertEqual(db_instance['Engine'], 'postgres')
       self.assertEqual(db_instance['DBInstanceClass'], 'db.t3.micro')
       self.assertTrue(db_instance['MultiAZ'])
       self.assertTrue(db_instance['StorageEncrypted'])
       self.assertEqual(db_instance['DBInstanceStatus'], 'available')
-      
+
     except ClientError as e:
       self.fail(f"RDS instance {db_identifier} should exist: {e}")
 
   def test_elasticache_redis(self):
     """Test ElastiCache Redis cluster is deployed correctly."""
     replication_group_id = f'redis-{self.environment_suffix}'
-    
+
     try:
       response = self.elasticache_client.describe_replication_groups(
         ReplicationGroupId=replication_group_id
       )
-      
+
       replication_group = response['ReplicationGroups'][0]
-      
+
       # Check Redis configuration
       self.assertEqual(replication_group['Status'], 'available')
       self.assertTrue(replication_group['AtRestEncryptionEnabled'])
       self.assertTrue(replication_group['MultiAZ'])
       self.assertTrue(replication_group['AutomaticFailover'] in ['enabled', 'enabling'])
-      
+
     except ClientError as e:
       self.fail(f"Redis cluster {replication_group_id} should exist: {e}")
 
   def test_ecr_repository(self):
     """Test ECR repository is created."""
     repo_name = f'microservices-{self.environment_suffix}'
-    
+
     try:
       response = self.ecr_client.describe_repositories(
         repositoryNames=[repo_name]
       )
-      
+
       repository = response['repositories'][0]
-      
+
       # Check repository configuration
       self.assertEqual(repository['repositoryName'], repo_name)
       self.assertEqual(repository['imageTagMutability'], 'MUTABLE')
-      
+
       # Check image scanning is enabled
       self.assertTrue(repository['imageScanningConfiguration']['scanOnPush'])
-      
+
     except ClientError as e:
       self.fail(f"ECR repository {repo_name} should exist: {e}")
 
   def test_ecs_cluster(self):
     """Test ECS cluster and service are deployed."""
     cluster_name = f'microservices-{self.environment_suffix}'
-    
+
     try:
       # Check cluster
       cluster_response = self.ecs_client.describe_clusters(
         clusters=[cluster_name]
       )
-      
+
       cluster = cluster_response['clusters'][0]
       self.assertEqual(cluster['status'], 'ACTIVE')
       self.assertEqual(cluster['clusterName'], cluster_name)
-      
+
       # Check service
       services_response = self.ecs_client.list_services(cluster=cluster_name)
       self.assertGreater(
         len(services_response['serviceArns']), 0, "Should have at least one service"
       )
-      
+
       # Get service details
       service_response = self.ecs_client.describe_services(
         cluster=cluster_name,
         services=services_response['serviceArns']
       )
-      
+
       service = service_response['services'][0]
       self.assertEqual(service['status'], 'ACTIVE')
       self.assertEqual(service['launchType'], 'FARGATE')
       self.assertGreaterEqual(service['desiredCount'], 2)
-      
+
     except ClientError as e:
       self.fail(f"ECS cluster {cluster_name} should exist: {e}")
 
@@ -279,26 +297,26 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     """Test Application Load Balancer is configured correctly."""
     # Find ALB by tags
     response = self.elbv2_client.describe_load_balancers()
-    
+
     microservices_albs = []
     for alb in response['LoadBalancers']:
       if f'microservices-alb-{self.environment_suffix}' in alb.get('LoadBalancerName', ''):
         microservices_albs.append(alb)
-    
+
     self.assertGreater(len(microservices_albs), 0, "Should have ALB deployed")
-    
+
     alb = microservices_albs[0]
     self.assertEqual(alb['Type'], 'application')
     self.assertEqual(alb['State']['Code'], 'active')
     self.assertEqual(alb['Scheme'], 'internet-facing')
-    
+
     # Check target groups
     target_groups = self.elbv2_client.describe_target_groups(
       LoadBalancerArn=alb['LoadBalancerArn']
     )
-    
+
     self.assertGreater(len(target_groups['TargetGroups']), 0, "Should have target groups")
-    
+
     target_group = target_groups['TargetGroups'][0]
     self.assertEqual(target_group['Protocol'], 'HTTP')
     self.assertEqual(target_group['Port'], 8000)
@@ -307,43 +325,43 @@ class TestTapStackLiveIntegration(unittest.TestCase):
   def test_cloudwatch_logs(self):
     """Test CloudWatch log groups are created."""
     log_group_name = f'/ecs/microservices-{self.environment_suffix}'
-    
+
     try:
       response = self.logs_client.describe_log_groups(
         logGroupNamePrefix=log_group_name
       )
-      
+
       log_groups = [lg for lg in response['logGroups'] if lg['logGroupName'] == log_group_name]
       self.assertGreater(len(log_groups), 0, f"Log group {log_group_name} should exist")
-      
+
       log_group = log_groups[0]
       self.assertEqual(log_group['retentionInDays'], 14)
-      
+
     except ClientError as e:
       self.fail(f"CloudWatch log group {log_group_name} should exist: {e}")
 
   def test_cloudtrail(self):
     """Test CloudTrail is configured for audit logging."""
     trail_name = f'microservices-trail-{self.environment_suffix}'
-    
+
     try:
       response = self.cloudtrail_client.describe_trails()
-      
+
       microservices_trails = []
       for trail in response['trailList']:
         if trail_name in trail.get('Name', ''):
           microservices_trails.append(trail)
-      
+
       self.assertGreater(len(microservices_trails), 0, f"CloudTrail {trail_name} should exist")
-      
+
       trail = microservices_trails[0]
       self.assertTrue(trail['IsMultiRegionTrail'])
       self.assertTrue(trail['IncludeGlobalServiceEvents'])
-      
+
       # Check trail status
       status_response = self.cloudtrail_client.get_trail_status(Name=trail['TrailARN'])
       self.assertTrue(status_response['IsLogging'])
-      
+
     except ClientError as e:
       self.fail(f"CloudTrail {trail_name} should exist and be logging: {e}")
 
@@ -351,7 +369,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     """Test CloudFront distribution is deployed."""
     try:
       response = self.cloudfront_client.list_distributions()
-      
+
       # Find our distribution by comment or origin
       microservices_distributions = []
       for dist in response.get('DistributionList', {}).get('Items', []):
@@ -360,7 +378,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
           if f'microservices-static-{self.environment_suffix}' in origin.get('DomainName', ''):
             microservices_distributions.append(dist)
             break
-      
+
       if microservices_distributions:
         distribution = microservices_distributions[0]
         self.assertEqual(distribution['Status'], 'Deployed')
@@ -369,7 +387,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       else:
         # CloudFront might take time to deploy, so this is informational
         print("Warning: CloudFront distribution not found - may still be deploying")
-        
+
     except ClientError as e:
       print(f"Warning: Could not verify CloudFront distribution: {e}")
 
@@ -383,13 +401,13 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         {'Name': 'tag:Environment', 'Values': ['Production']}
       ]
     )
-    
+
     self.assertGreater(len(vpcs['Vpcs']), 0, "VPC should have proper tags")
-    
+
     # Verify required tags exist on VPC
     vpc = vpcs['Vpcs'][0]
     tag_dict = {tag['Key']: tag['Value'] for tag in vpc.get('Tags', [])}
-    
+
     required_tags = ['Environment', 'Project', 'Owner', 'ManagedBy']
     for tag in required_tags:
       self.assertIn(tag, tag_dict, f"Tag {tag} should be present on VPC")
@@ -402,14 +420,14 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         {'Name': 'tag:Project', 'Values': ['MicroservicesCI']}
       ]
     )
-    
+
     if vpcs['Vpcs']:
       vpc_id = vpcs['Vpcs'][0]['VpcId']
-      
+
       subnets = self.ec2_client.describe_subnets(
         Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
       )
-      
+
       # Get unique AZs
       availability_zones = set(subnet['AvailabilityZone'] for subnet in subnets['Subnets'])
       self.assertGreaterEqual(
@@ -434,7 +452,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       'ecr': False,
       'logs': False
     }
-    
+
     try:
       # VPC health
       vpcs = self.ec2_client.describe_vpcs(
@@ -442,12 +460,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       )
       if vpcs['Vpcs'] and vpcs['Vpcs'][0]['State'] == 'available':
         health_checks['vpc'] = True
-      
+
       # More health checks can be added here...
-      
+
     except Exception as e:
       self.fail(f"Infrastructure health check failed: {e}")
-    
+
     # Report on health status
     failed_checks = [check for check, status in health_checks.items() if not status]
     if failed_checks:
@@ -457,6 +475,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 if __name__ == '__main__':
   # Set environment variables for AWS region
   os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
-  
+
   # Run tests
   unittest.main(verbosity=2)
