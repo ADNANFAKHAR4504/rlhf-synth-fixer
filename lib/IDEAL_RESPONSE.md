@@ -180,7 +180,8 @@ Resources:
                 Action:
                   - codepipeline:PutJobSuccessResult
                   - codepipeline:PutJobFailureResult
-                Resource: "*"
+                Resource:
+                  Fn::Sub: "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:*"
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -193,7 +194,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: "${ProjectName}-test-function"
-      Runtime: python3.9
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role:
         Fn::GetAtt: [LambdaExecutionRole, Arn]
@@ -256,7 +257,7 @@ Resources:
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
         PrivilegedMode: false
       Source:
         Type: CODEPIPELINE
