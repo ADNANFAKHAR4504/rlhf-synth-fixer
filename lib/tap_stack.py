@@ -572,6 +572,8 @@ class TapStack(TerraformStack):
         # Adopt-or-create inputs
         self.add_override("resource.aws_lb.alb.security_groups", "${[local.alb_sg_id]}")
         self.add_override("resource.aws_lb.alb.subnets", "${local.public_subnet_ids}")
+        # Ensure first element points to local to avoid counted ref
+        self.add_override("resource.aws_lb.alb.security_groups.0", "${local.alb_sg_id}")
         tg = LbTargetGroup(
             self,
             "tg",
@@ -681,6 +683,7 @@ class TapStack(TerraformStack):
         # Adopt-or-create for ECS service nets and TG
         self.add_override("resource.aws_ecs_service.service.network_configuration.subnets", "${local.private_subnet_ids}")
         self.add_override("resource.aws_ecs_service.service.network_configuration.security_groups", "${[local.fargate_sg_id]}")
+        self.add_override("resource.aws_ecs_service.service.network_configuration.security_groups.0", "${local.fargate_sg_id}")
         self.add_override("resource.aws_ecs_service.service.load_balancer.0.target_group_arn", "${local.tg_arn}")
 
         # Monitoring: SNS + Alarms
@@ -751,13 +754,13 @@ class TapStack(TerraformStack):
             tags=common_tags,
         )
 
-        # Fix ALB metric dimensions using Terraform expressions
+        # Fix ALB metric dimensions using Terraform expressions and locals
         self.add_override(
             "resource.aws_cloudwatch_metric_alarm.alb-unhealthy.dimensions.LoadBalancer",
-            '${replace(aws_lb.alb.arn_suffix, "loadbalancer/", "")}')
+            '${replace(local.alb_arn, "arn:aws:elasticloadbalancing:${data.aws_partition.current.partition == \"aws-cn\" ? \"cn-\" : \"\"}${var.AWS_REGION}:\d+:loadbalancer/", "")}')
         self.add_override(
             "resource.aws_cloudwatch_metric_alarm.alb-unhealthy.dimensions.TargetGroup",
-            "${aws_lb_target_group.tg.arn_suffix}")
+            "${replace(local.tg_arn, "arn:aws:elasticloadbalancing:${var.AWS_REGION}:\d+:targetgroup/", "")}")
 
         if enable_database and rds is not None:
             CloudwatchMetricAlarm(
