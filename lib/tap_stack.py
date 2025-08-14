@@ -583,7 +583,7 @@ def create_eks_cluster(
     provider: aws.Provider,
 ) -> aws.eks.Cluster:
   """
-  Create EKS cluster with simplified security group.
+  Create EKS cluster with explicit version and logging
   """
   eks_role = aws.iam.Role(
       "corp-eks-role",
@@ -612,13 +612,22 @@ def create_eks_cluster(
   cluster = aws.eks.Cluster(
       "corp-eks-cluster",
       name="corp-eks-cluster",  # Explicit cluster name
+      version="1.29",  
       role_arn=eks_role.arn,
       vpc_config=aws.eks.ClusterVpcConfigArgs(
           subnet_ids=subnet_ids,
-          security_group_ids=[eks_cluster_sg.id],  # Use cluster security group
+          security_group_ids=[eks_cluster_sg.id],
           endpoint_public_access=True,
-          endpoint_private_access=True,
+          endpoint_private_access=True,  
       ),
+      
+      enabled_cluster_log_types=[
+          "api",
+          "audit", 
+          "authenticator",
+          "controllerManager",
+          "scheduler"
+      ],
       tags={**tags, "Name": "corp-eks-cluster"},
       opts=ResourceOptions(provider=provider)
   )
@@ -627,7 +636,7 @@ def create_eks_cluster(
 
 def create_eks_node_group(
     cluster: aws.eks.Cluster,
-    public_subnets: List[aws.ec2.Subnet],
+    private_subnets: List[aws.ec2.Subnet],  
     eks_node_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
     provider: aws.Provider,
@@ -698,23 +707,28 @@ def create_eks_node_group(
       opts=ResourceOptions(provider=provider)
   )
 
-  # Create node group WITHOUT launch template to enable automatic EKS bootstrap
-  # This allows EKS to automatically handle the bootstrap process and user data
+  # Create node group in PRIVATE subnets
+  # Private subnets with NAT Gateway provide proper internet access for EKS bootstrap
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
       # Let Pulumi auto-generate the name to avoid conflicts
       node_role_arn=node_role.arn,
-      subnet_ids=[s.id for s in public_subnets],
-      instance_types=["t3.small"],
+      subnet_ids=[s.id for s in private_subnets],  # PRIVATE subnets
+      instance_types=["t3.medium"],  
       capacity_type="ON_DEMAND",
       scaling_config=aws.eks.NodeGroupScalingConfigArgs(
-          desired_size=1, min_size=1, max_size=1  # Minimum for testing
+          desired_size=1, min_size=1, max_size=3  
       ),
-      # NO launch template - let EKS handle everything automatically
-      # EKS Managed Node Groups use EKS-optimized AMI with automatic bootstrap
-      ami_type="AL2023_x86_64_STANDARD",  # Amazon Linux 2023 EKS-optimized AMI
-      tags={**tags, "Name": "corp-eks-nodegroup"},
+      # Use compatible AMI type for K8s 1.29
+      ami_type="AL2_x86_64",  # Amazon Linux 2 for K8s 1.29 compatibility
+      # Add EKS-required tags 
+      tags={
+          **tags, 
+          "Name": "corp-eks-nodegroup",
+          "kubernetes.io/cluster-autoscaler/enabled": "true",
+          "kubernetes.io/cluster-autoscaler/corp-eks-cluster": "owned"
+      },
       opts=ResourceOptions(provider=provider)
   )
   return node_group
@@ -1306,11 +1320,11 @@ class TapStack(pulumi.ComponentResource):
         provider=provider
     )
 
-    # Node group uses public subnets for internet access with explicit
-    # security group
+    # Node group uses PRIVATE subnets with NAT Gateway
+    # This provides proper internet access for EKS bootstrap process
     eks_node_group = create_eks_node_group(
         cluster=eks_cluster,
-        public_subnets=vpc_module.public_subnets,
+        private_subnets=vpc_module.private_subnets,  # Use private subnets
         eks_node_sg=eks_node_sg,
         tags=tags,
         provider=provider

@@ -224,7 +224,7 @@ class TestHelpers(unittest.TestCase):
     tags = {"Environment": "Production"}
     ng = create_eks_node_group(
         cluster=cluster,
-        public_subnets=public_subnets,
+        private_subnets=public_subnets,  # Renamed parameter but reusing same mock data
         eks_node_sg=eks_node_sg,
         tags=tags,
         provider=mock_provider
