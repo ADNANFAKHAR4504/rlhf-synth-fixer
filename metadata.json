@@ -5,5 +5,15 @@
   "turn_type": "single",
   "po_id": "291638",
   "team": "4",
-  "startedAt": "2025-08-11T16:16:56.784Z"
+  "startedAt": "2025-08-11T16:16:56.784Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration", 
+    "Database Management",
+    "Monitoring Setup",
+    "Access Control",
+    "Resource Scaling"
+  ]
 }
