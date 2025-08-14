@@ -30,6 +30,28 @@ Parameters:
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
     Description: CIDR block for VPC
 
+  UseExistingVPC:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Set to 'true' to use existing VPC and subnets instead of creating new networking
+
+  ExistingVPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC ID to use when UseExistingVPC is 'true'
+
+  ExistingPublicSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Existing public subnet 1 ID when UseExistingVPC is 'true'
+
+  ExistingPrivateSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Existing private subnet 1 ID when UseExistingVPC is 'true'
+
+  ExistingPrivateSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Existing private subnet 2 ID when UseExistingVPC is 'true'
+
   FlowLogsRoleArn:
     Type: String
     Default: ''
@@ -61,6 +83,8 @@ Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
   CreateDetector: !Equals [!Ref CreateGuardDutyDetector, 'true']
   HasFlowLogsRoleArn: !Not [!Equals [!Ref FlowLogsRoleArn, '']]
+  UseExistingNetworking: !Equals [!Ref UseExistingVPC, 'true']
+  CreateNetworking: !Equals [!Ref UseExistingVPC, 'false']
 
 Resources:
   # =========================
@@ -128,6 +152,7 @@ Resources:
   # VPC and Networking
   # =========================
   SecureEnvVPC:
+    Condition: CreateNetworking
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCidr
@@ -137,7 +162,16 @@ Resources:
         - Key: Name
           Value: !Sub SecureEnv-VPC-${Environment}
 
+  VPCIdValue:
+    Type: AWS::SSM::Parameter
+    Condition: UseExistingNetworking
+    Properties:
+      Name: !Sub /TapStack/${Environment}/ExistingVPCId
+      Type: String
+      Value: !Ref ExistingVPCId
+
   SecureEnvInternetGateway:
+    Condition: CreateNetworking
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
@@ -145,12 +179,14 @@ Resources:
           Value: !Sub SecureEnv-IGW-${Environment}
 
   SecureEnvVPCGatewayAttachment:
+    Condition: CreateNetworking
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref SecureEnvVPC
       InternetGatewayId: !Ref SecureEnvInternetGateway
 
   SecureEnvPublicSubnet1:
+    Condition: CreateNetworking
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureEnvVPC
@@ -162,6 +198,7 @@ Resources:
           Value: !Sub SecureEnv-Public-Subnet-1-${Environment}
 
   SecureEnvPublicSubnet2:
+    Condition: CreateNetworking
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureEnvVPC
@@ -173,6 +210,7 @@ Resources:
           Value: !Sub SecureEnv-Public-Subnet-2-${Environment}
 
   SecureEnvPrivateSubnet1:
+    Condition: CreateNetworking
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureEnvVPC
@@ -183,6 +221,7 @@ Resources:
           Value: !Sub SecureEnv-Private-Subnet-1-${Environment}
 
   SecureEnvPrivateSubnet2:
+    Condition: CreateNetworking
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureEnvVPC
@@ -193,6 +232,7 @@ Resources:
           Value: !Sub SecureEnv-Private-Subnet-2-${Environment}
 
   SecureEnvPublicRouteTable:
+    Condition: CreateNetworking
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref SecureEnvVPC
@@ -201,6 +241,7 @@ Resources:
           Value: !Sub SecureEnv-Public-RT-${Environment}
 
   SecureEnvPublicRoute:
+    Condition: CreateNetworking
     Type: AWS::EC2::Route
     DependsOn: SecureEnvVPCGatewayAttachment
     Properties:
@@ -209,18 +250,21 @@ Resources:
       GatewayId: !Ref SecureEnvInternetGateway
 
   SecureEnvPublicSubnet1RouteTableAssociation:
+    Condition: CreateNetworking
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref SecureEnvPublicSubnet1
       RouteTableId: !Ref SecureEnvPublicRouteTable
 
   SecureEnvPublicSubnet2RouteTableAssociation:
+    Condition: CreateNetworking
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref SecureEnvPublicSubnet2
       RouteTableId: !Ref SecureEnvPublicRouteTable
 
   SecureEnvPrivateRouteTable1:
+    Condition: CreateNetworking
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref SecureEnvVPC
@@ -229,6 +273,7 @@ Resources:
           Value: !Sub SecureEnv-Private-RT-1-${Environment}
 
   SecureEnvPrivateRouteTable2:
+    Condition: CreateNetworking
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref SecureEnvVPC
@@ -237,18 +282,21 @@ Resources:
           Value: !Sub SecureEnv-Private-RT-2-${Environment}
 
   SecureEnvPrivateSubnet1RouteTableAssociation:
+    Condition: CreateNetworking
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref SecureEnvPrivateSubnet1
       RouteTableId: !Ref SecureEnvPrivateRouteTable1
 
   SecureEnvPrivateSubnet2RouteTableAssociation:
+    Condition: CreateNetworking
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref SecureEnvPrivateSubnet2
       RouteTableId: !Ref SecureEnvPrivateRouteTable2
 
   SecureEnvEIP1:
+    Condition: CreateNetworking
     Type: AWS::EC2::EIP
     DependsOn: SecureEnvVPCGatewayAttachment
     Properties:
@@ -258,6 +306,7 @@ Resources:
           Value: !Sub SecureEnv-EIP-1-${Environment}
 
   SecureEnvEIP2:
+    Condition: CreateNetworking
     Type: AWS::EC2::EIP
     DependsOn: SecureEnvVPCGatewayAttachment
     Properties:
@@ -267,6 +316,7 @@ Resources:
           Value: !Sub SecureEnv-EIP-2-${Environment}
 
   SecureEnvNATGateway1:
+    Condition: CreateNetworking
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt SecureEnvEIP1.AllocationId
@@ -276,6 +326,7 @@ Resources:
           Value: !Sub SecureEnv-NAT-1-${Environment}
 
   SecureEnvNATGateway2:
+    Condition: CreateNetworking
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt SecureEnvEIP2.AllocationId
@@ -285,6 +336,7 @@ Resources:
           Value: !Sub SecureEnv-NAT-2-${Environment}
 
   SecureEnvPrivateRoute1:
+    Condition: CreateNetworking
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref SecureEnvPrivateRouteTable1
@@ -292,6 +344,7 @@ Resources:
       NatGatewayId: !Ref SecureEnvNATGateway1
 
   SecureEnvPrivateRoute2:
+    Condition: CreateNetworking
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref SecureEnvPrivateRouteTable2
@@ -306,7 +359,7 @@ Resources:
     Properties:
       GroupName: !Sub SecureEnv-Bastion-SG-${Environment}
       GroupDescription: Security group for bastion host
-      VpcId: !Ref SecureEnvVPC
+      VpcId: !If [CreateNetworking, !Ref SecureEnvVPC, !Ref ExistingVPCId]
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -324,7 +377,7 @@ Resources:
     Properties:
       GroupName: !Sub SecureEnv-Web-SG-${Environment}
       GroupDescription: Security group for web instances
-      VpcId: !Ref SecureEnvVPC
+      VpcId: !If [CreateNetworking, !Ref SecureEnvVPC, !Ref ExistingVPCId]
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -350,7 +403,7 @@ Resources:
     Properties:
       GroupName: !Sub SecureEnv-DB-SG-${Environment}
       GroupDescription: Security group for RDS database
-      VpcId: !Ref SecureEnvVPC
+      VpcId: !If [CreateNetworking, !Ref SecureEnvVPC, !Ref ExistingVPCId]
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
@@ -471,8 +524,16 @@ Resources:
       DBSubnetGroupName: !Sub SecureEnv-DB-SubnetGroup-${Environment}
       DBSubnetGroupDescription: Subnet group for RDS
       SubnetIds:
-        - !Ref SecureEnvPrivateSubnet1
-        - !Ref SecureEnvPrivateSubnet2
+        - !If [
+            CreateNetworking,
+            !Ref SecureEnvPrivateSubnet1,
+            !Ref ExistingPrivateSubnet1Id,
+          ]
+        - !If [
+            CreateNetworking,
+            !Ref SecureEnvPrivateSubnet2,
+            !Ref ExistingPrivateSubnet2Id,
+          ]
       Tags:
         - Key: Name
           Value: !Sub SecureEnv-DB-SubnetGroup-${Environment}
@@ -548,7 +609,12 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref SecureEnvLaunchTemplate
         Version: !GetAtt SecureEnvLaunchTemplate.LatestVersionNumber
-      SubnetId: !Ref SecureEnvPrivateSubnet1
+      SubnetId:
+        !If [
+          CreateNetworking,
+          !Ref SecureEnvPrivateSubnet1,
+          !Ref ExistingPrivateSubnet1Id,
+        ]
       Tags:
         - Key: Name
           Value: !Sub SecureEnv-Web-Instance-${Environment}
@@ -561,7 +627,12 @@ Resources:
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       SecurityGroupIds:
         - !Ref SecureEnvBastionSG
-      SubnetId: !Ref SecureEnvPublicSubnet1
+      SubnetId:
+        !If [
+          CreateNetworking,
+          !Ref SecureEnvPublicSubnet1,
+          !Ref ExistingPublicSubnet1Id,
+        ]
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -795,18 +866,25 @@ Resources:
   SecureEnvFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
-      ResourceId: !Ref SecureEnvVPC
+      ResourceId: !If [CreateNetworking, !Ref SecureEnvVPC, !Ref ExistingVPCId]
       ResourceType: VPC
       TrafficType: ALL
-      LogDestinationType: cloud-watch-logs
-      LogGroupName: !Ref SecureEnvVPCFlowLog
+      LogDestinationType: !If [HasFlowLogsRoleArn, cloud-watch-logs, s3]
+      LogGroupName:
+        !If [HasFlowLogsRoleArn, !Ref SecureEnvVPCFlowLog, !Ref 'AWS::NoValue']
+      LogDestination:
+        !If [
+          HasFlowLogsRoleArn,
+          !Ref 'AWS::NoValue',
+          !GetAtt SecureEnvFlowLogBucket.Arn,
+        ]
       DeliverLogsPermissionArn:
         !If [HasFlowLogsRoleArn, !Ref FlowLogsRoleArn, !Ref 'AWS::NoValue']
 
 Outputs:
   VPCId:
     Description: VPC ID
-    Value: !Ref SecureEnvVPC
+    Value: !If [CreateNetworking, !Ref SecureEnvVPC, !Ref ExistingVPCId]
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
