@@ -1,33 +1,7 @@
 ########################
-# Provider Configuration
-########################
-
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.region
-}
-
-
-
-
-########################
 # Data Sources
 ########################
 
-# data.tf
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -69,8 +43,6 @@ data "aws_subnets" "default" {
 ########################
 # Resources
 ########################
-
-# iam.tf
 # IAM role for EC2 instances
 resource "aws_iam_role" "corp_ec2_role" {
   name = "corp-ec2-ha-dr-role"
@@ -180,7 +152,6 @@ resource "aws_security_group" "corp_web_sg" {
   })
 }
 
-# ec2.tf
 # User data script for web server setup
 locals {
   user_data = base64encode(<<-EOF
@@ -235,7 +206,7 @@ resource "aws_instance" "corp_primary_instance" {
   subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.corp_web_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.corp_ec2_profile.name
-  user_data              = local.user_data
+  user_data_base64       = local.user_data
 
   monitoring = true
 
@@ -259,7 +230,7 @@ resource "aws_instance" "corp_secondary_instance" {
   subnet_id              = data.aws_subnets.default.ids[1]
   vpc_security_group_ids = [aws_security_group.corp_web_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.corp_ec2_profile.name
-  user_data              = local.user_data
+  user_data_base64       = local.user_data
 
   monitoring = true
 
@@ -277,7 +248,6 @@ resource "aws_instance" "corp_secondary_instance" {
 }
 
 
-# route53.tf
 # Route 53 hosted zone (assuming you have a domain)
 resource "aws_route53_zone" "corp_zone" {
   name = var.domain_name
@@ -295,9 +265,7 @@ resource "aws_route53_health_check" "corp_primary_health_check" {
   resource_path                   = "/health.html"
   failure_threshold               = 3
   request_interval                = 30
-  cloudwatch_alarm_region         = var.region
-  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.corp_primary_health_alarm.alarm_name
-  insufficient_data_health_status = "Failure"
+  insufficient_data_health_status = "Unhealthy"
 
   tags = merge(var.common_tags, {
     Name = "corp-primary-health-check"
@@ -312,7 +280,7 @@ resource "aws_route53_health_check" "corp_secondary_health_check" {
   resource_path                   = "/health.html"
   failure_threshold               = 3
   request_interval                = 30
-  insufficient_data_health_status = "Failure"
+  insufficient_data_health_status = "Unhealthy"
 
   tags = merge(var.common_tags, {
     Name = "corp-secondary-health-check"
@@ -351,7 +319,6 @@ resource "aws_route53_record" "corp_secondary_record" {
   records         = [aws_instance.corp_secondary_instance.public_ip]
 }
 
-# s3.tf
 # S3 bucket for backups with versioning
 resource "aws_s3_bucket" "corp_backup_bucket" {
   bucket = "corp-backup-${random_id.bucket_suffix.hex}"
@@ -403,6 +370,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "corp_backup_lifecycle" {
     id     = "backup_lifecycle"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -429,7 +400,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "corp_backup_lifecycle" {
   }
 }
 
-# monitoring.tf
 # SNS topic for notifications
 resource "aws_sns_topic" "corp_alerts" {
   name = "corp-ha-dr-alerts"

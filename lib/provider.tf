@@ -1,5 +1,9 @@
 # provider.tf
 
+########################
+# Provider Configuration
+########################
+
 terraform {
   required_version = ">= 1.4.0"
 
@@ -21,7 +25,7 @@ terraform {
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.region
-    default_tags {
+  default_tags {
     tags = var.common_tags
   }
 }
