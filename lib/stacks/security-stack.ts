@@ -460,7 +460,7 @@ export class SecurityStack extends pulumi.ComponentResource {
     this.auditBucketArn = auditBucket.bucket.arn;
     this.s3KmsKeyId = s3KmsKey.key.keyId;
     this.s3KmsKeyArn = s3KmsKey.key.arn;
-    this.cloudTrailKmsKeyId = cloudTrailKmsKey.key.arn;
+    this.cloudTrailKmsKeyId = cloudTrailKmsKey.key.keyId;
     this.cloudTrailKmsKeyArn = cloudTrailKmsKey.key.arn;
     this.dataAccessRoleArn = dataAccessRole.role.arn;
     this.auditRoleArn = auditRole.role.arn;
