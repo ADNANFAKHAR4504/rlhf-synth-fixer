@@ -50,15 +50,15 @@ export class TapStack extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    args: TapStackArgs,
+    args: TapStackArgs = {}, // Add default empty object
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('tap:stack:TapStack', name, args, opts);
 
-    // Apply default values if not provided, mirroring the Python class's behavior.
-    const environmentSuffix = args.environmentSuffix || 'prod';
-    const regions = args.regions || ['us-east-1', 'us-west-2'];
-    const tags = args.tags || {
+    // Apply default values if not provided, with null safety
+    const environmentSuffix = args?.environmentSuffix || 'prod';
+    const regions = args?.regions || ['us-east-1', 'us-west-2'];
+    const tags = args?.tags || {
       Project: 'Pulumi-Tap-Stack',
       Environment: environmentSuffix,
       Application: 'custom-app',
@@ -75,133 +75,154 @@ export class TapStack extends pulumi.ComponentResource {
     this.regionalMonitoring = {};
     this.providers = {};
 
-    // Deploy to each region with proper multi-region setup
-    regions.forEach((region, i) => {
-      const regionSuffix = region.replace(/-/g, '').replace(/gov/g, '');
-      const isPrimary = i === 0;
+    // Only deploy if regions array is not empty
+    if (regions && regions.length > 0) {
+      // Deploy to each region with proper multi-region setup
+      regions.forEach((region, i) => {
+        const regionSuffix = region.replace(/-/g, '').replace(/gov/g, '');
+        const isPrimary = i === 0;
 
-      console.log(
-        `Setting up AWS provider for region: ${region} (${isPrimary ? 'PRIMARY' : 'SECONDARY'})`
-      );
-      this.providers[region] = new aws.Provider(
-        `aws-provider-${regionSuffix}-${environmentSuffix}`,
-        { region: region },
-        { parent: this }
-      );
+        console.log(
+          `Setting up AWS provider for region: ${region} (${isPrimary ? 'PRIMARY' : 'SECONDARY'})`
+        );
+        this.providers[region] = new aws.Provider(
+          `aws-provider-${regionSuffix}-${environmentSuffix}`,
+          { region: region },
+          { parent: this }
+        );
 
-      const providerOpts = (
-        deps: pulumi.Resource[] = []
-      ): pulumi.ResourceOptions => ({
-        parent: this,
-        provider: this.providers[region],
-        dependsOn: deps,
+        const providerOpts = (
+          deps: pulumi.Resource[] = []
+        ): pulumi.ResourceOptions => ({
+          parent: this,
+          provider: this.providers[region],
+          dependsOn: deps,
+        });
+
+        console.log(`Creating Networking Infrastructure for ${region}...`);
+        this.regionalNetworks[region] = new NetworkingInfrastructure(
+          `network-${regionSuffix}-${environmentSuffix}`,
+          {
+            environment: this.environmentSuffix,
+            region: region,
+            tags: this.tags,
+          },
+          providerOpts()
+        );
+
+        console.log(`Creating Security Infrastructure for ${region}...`);
+        this.regionalSecurity[region] = new SecurityInfrastructure(
+          `security-${regionSuffix}-${environmentSuffix}`,
+          {
+            vpcId: this.regionalNetworks[region].vpcId,
+            environment: this.environmentSuffix,
+            tags: this.tags,
+          },
+          providerOpts([this.regionalNetworks[region]])
+        );
+
+        console.log(`Creating Compute Infrastructure for ${region}...`);
+        this.regionalCompute[region] = new ComputeInfrastructure(
+          `compute-${regionSuffix}-${environmentSuffix}`,
+          {
+            vpcId: this.regionalNetworks[region].vpcId,
+            region: region,
+            privateSubnetIds: this.regionalNetworks[region].privateSubnetIds,
+            securityGroupId: this.regionalSecurity[region].webServerSgId,
+            environment: this.environmentSuffix,
+            tags: this.tags,
+          },
+          providerOpts([
+            this.regionalNetworks[region],
+            this.regionalSecurity[region],
+          ])
+        );
+
+        console.log(`Creating Monitoring Infrastructure for ${region}...`);
+        this.regionalMonitoring[region] = new MonitoringInfrastructure(
+          `monitoring-${regionSuffix}-${environmentSuffix}`,
+          {
+            instanceIds: this.regionalCompute[region].instanceIds,
+            environment: this.environmentSuffix,
+            region: region,
+            tags: this.tags,
+          },
+          providerOpts([
+            this.regionalNetworks[region],
+            this.regionalSecurity[region],
+            this.regionalCompute[region],
+          ])
+        );
       });
+    }
 
-      console.log(`Creating Networking Infrastructure for ${region}...`);
-      this.regionalNetworks[region] = new NetworkingInfrastructure(
-        `network-${regionSuffix}-${environmentSuffix}`,
-        {
-          environment: this.environmentSuffix,
-          region: region,
-          tags: this.tags,
-        },
-        providerOpts()
-      );
+    // NOTE: The following outputs are now properties of the TapStack class,
+    // which can be accessed from outside the class.
+    // They are also automatically registered with registerOutputs().
+    // We will export them as public readonly properties instead of using pulumi.export.
 
-      console.log(`Creating Security Infrastructure for ${region}...`);
-      this.regionalSecurity[region] = new SecurityInfrastructure(
-        `security-${regionSuffix}-${environmentSuffix}`,
-        {
-          vpcId: this.regionalNetworks[region].vpcId,
-          environment: this.environmentSuffix,
-          tags: this.tags,
-        },
-        providerOpts([this.regionalNetworks[region]])
-      );
-
-      console.log(`Creating Compute Infrastructure for ${region}...`);
-      this.regionalCompute[region] = new ComputeInfrastructure(
-        `compute-${regionSuffix}-${environmentSuffix}`,
-        {
-          vpcId: this.regionalNetworks[region].vpcId,
-          region: region,
-          privateSubnetIds: this.regionalNetworks[region].privateSubnetIds,
-          securityGroupId: this.regionalSecurity[region].webServerSgId,
-          environment: this.environmentSuffix,
-          tags: this.tags,
-        },
-        providerOpts([
-          this.regionalNetworks[region],
-          this.regionalSecurity[region],
-        ])
-      );
-
-      console.log(`Creating Monitoring Infrastructure for ${region}...`);
-      this.regionalMonitoring[region] = new MonitoringInfrastructure(
-        `monitoring-${regionSuffix}-${environmentSuffix}`,
-        {
-          instanceIds: this.regionalCompute[region].instanceIds,
-          environment: this.environmentSuffix,
-          region: region,
-          tags: this.tags,
-        },
-        providerOpts([
-          this.regionalNetworks[region],
-          this.regionalSecurity[region],
-          this.regionalCompute[region],
-        ])
-      );
+    this.registerOutputs({
+      environment: this.environmentSuffix,
+      tags: this.tags,
+      regions: this.regions,
+      primaryRegion: this.regions.apply(regions =>
+        regions.length > 0 ? regions[0] : null
+      ),
+      primaryVpcId: this.regions.apply(regions =>
+        regions.length > 0 && this.regionalNetworks[regions[0]]
+          ? this.regionalNetworks[regions[0]].vpcId
+          : null
+      ),
+      primaryInstanceIds: this.regions.apply(regions =>
+        regions.length > 0 && this.regionalCompute[regions[0]]
+          ? this.regionalCompute[regions[0]].instanceIds
+          : null
+      ),
+      primaryWebServerSgId: this.regions.apply(regions =>
+        regions.length > 0 && this.regionalSecurity[regions[0]]
+          ? this.regionalSecurity[regions[0]].webServerSgId
+          : null
+      ),
+      primaryDashboardName: this.regions.apply(regions =>
+        regions.length > 0 && this.regionalMonitoring[regions[0]]
+          ? this.regionalMonitoring[regions[0]].dashboardName
+          : null
+      ),
+      allRegionsData: this.regions.apply(regions => {
+        const outputs: { [key: string]: RegionalOutputData } = {};
+        regions.forEach(region => {
+          if (
+            this.regionalNetworks[region] &&
+            this.regionalCompute[region] &&
+            this.regionalSecurity[region] &&
+            this.regionalMonitoring[region]
+          ) {
+            outputs[region] = {
+              vpcId: this.regionalNetworks[region].vpcId,
+              instanceIds: this.regionalCompute[region].instanceIds,
+              securityGroupId: this.regionalSecurity[region].webServerSgId,
+              dashboardName: this.regionalMonitoring[region].dashboardName,
+            };
+          }
+        });
+        return outputs;
+      }),
     });
-
-    console.log('Exporting Outputs for Multi-Region Deployment...');
-
-    pulumi.export('deployed_regions', this.regions);
-    pulumi.export(
-      'total_regions',
-      this.regions.apply(r => r.length)
-    );
-    pulumi.export('environment', this.environmentSuffix);
-    pulumi.export('tags', this.tags);
-
-    this.regions.apply(regions => {
-      if (regions && regions.length > 0) {
-        const primaryRegion = regions[0];
-        pulumi.export('primary_region', primaryRegion);
-        pulumi.export(
-          'primary_vpc_id',
-          this.regionalNetworks[primaryRegion].vpcId
-        );
-        pulumi.export(
-          'primary_instance_ids',
-          this.regionalCompute[primaryRegion].instanceIds
-        );
-        pulumi.export(
-          'primary_web_server_sg_id',
-          this.regionalSecurity[primaryRegion].webServerSgId
-        );
-        pulumi.export(
-          'primary_dashboard_name',
-          this.regionalMonitoring[primaryRegion].dashboardName
-        );
-      }
-    });
-
-    const allRegionsData = this.regions.apply(regions => {
-      // The fix is here: 'pulumi.Output<any>' has been replaced with 'RegionalOutputData'.
-      const outputs: { [key: string]: RegionalOutputData } = {};
-      regions.forEach(region => {
-        outputs[region] = {
-          vpcId: this.regionalNetworks[region].vpcId,
-          instanceIds: this.regionalCompute[region].instanceIds,
-          securityGroupId: this.regionalSecurity[region].webServerSgId,
-          dashboardName: this.regionalMonitoring[region].dashboardName,
-        };
-      });
-      return outputs;
-    });
-
-    pulumi.export('all_regions_data', allRegionsData);
-
-    this.registerOutputs({});
   }
 }
+
+// Note: In a typical Pulumi program, you would create a single instance of TapStack
+// and export its outputs. The following is just an example of how you might do that.
+// In practice, you would create the stack instance in your main program file (index.ts)
+// and export the outputs there.
+
+// Example usage:
+// const tapStack = new TapStack('tap-stack', {
+//   environmentSuffix: 'prod',
+//   regions: ['us-east-1', 'us-west-2'],
+//   tags: { Project: 'MyProject' }
+// });
+
+// export const deployedRegions = tapStack.regions;
+// export const environment = tapStack.environmentSuffix;
+// export const primaryRegion = tapStack.regions.apply(regions => regions.length > 0 ? regions[0] : null);
