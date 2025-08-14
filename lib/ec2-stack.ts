@@ -38,7 +38,7 @@ export class Ec2Stack extends Construct {
     });
 
     new Instance(this, 'prodEc2Instance', {
-      ami: 'ami-xxxxxxxx', // Use a valid AMI
+      ami: 'ami-011e15a70256b7f26', // Amazon Linux 2 AMI for us-west-2
       instanceType: 't3.micro',
       subnetId: props?.subnetId,
       vpcSecurityGroupIds: props?.securityGroupIds,

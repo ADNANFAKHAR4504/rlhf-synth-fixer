@@ -32,6 +32,10 @@ export class LambdaStack extends Construct {
           },
         ],
       }),
+      managedPolicyArns: [
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole', // Add this
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole', // Add this for logging
+      ],
       tags: {
         Name: `prod-lambda-execution-role-${environmentSuffix}`,
         Environment: environmentSuffix,

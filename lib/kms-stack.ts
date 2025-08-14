@@ -23,9 +23,11 @@ export class KmsStack extends Construct {
         Version: '2012-10-17',
         Statement: [
           {
-            Sid: 'Allow specific IAM roles only',
+            Sid: 'Enable root account full access',
             Effect: 'Allow',
-            Principal: { AWS: 'arn:aws:iam::<ACCOUNT_ID>:role/<YourRole>' }, // <-- Replace with your role
+            Principal: {
+              AWS: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '*'}:root`,
+            },
             Action: 'kms:*',
             Resource: '*',
           },
