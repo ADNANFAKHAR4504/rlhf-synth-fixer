@@ -1,23 +1,23 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiate with custom props 1`] = `
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props and match snapshot 1`] = `
 "{
   "output": {
     "instanceId": {
       "description": "The ID of the created EC2 instance.",
       "value": "mock-instance-id"
     },
-    "privateSubnetId": {
-      "description": "The ID of the private subnet.",
-      "value": "mock-private-subnet-id"
+    "privateSubnetIds": {
+      "description": "The IDs of the private subnets.",
+      "value": "mock-private-subnet-1, mock-private-subnet-2"
     },
     "publicSubnetIds": {
       "description": "The IDs of the public subnets.",
-      "value": "mock-public-subnet-id"
+      "value": "mock-public-subnet-1, mock-public-subnet-2"
     },
     "securityGroupId": {
       "description": "The ID of the EC2 Security Group.",
-      "value": "mock-security-group-id"
+      "value": "mock-sg-id"
     },
     "vpcId": {
       "description": "The ID of the main VPC.",
@@ -30,7 +30,9 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiat
         "default_tags": [
           {
             "tags": {
-              "Project": "Custom"
+              "Environment": "Production",
+              "Owner": "CloudTeam",
+              "Project": "Phoenix"
             }
           }
         ],
@@ -41,10 +43,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiat
   "terraform": {
     "backend": {
       "s3": {
-        "bucket": "custom-bucket",
+        "bucket": "my-custom-bucket",
         "encrypt": true,
-        "key": "prod/CustomStack.tfstate",
-        "region": "ap-south-1",
+        "key": "staging/TestCustomStack.tfstate",
+        "region": "us-east-1",
         "use_lockfile": true
       }
     },
@@ -58,24 +60,24 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiat
 }"
 `;
 
-exports[`TapStack Unit Tests Stack Configuration and Synthesis should use default values when no props provided 1`] = `
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with default props and match snapshot 1`] = `
 "{
   "output": {
     "instanceId": {
       "description": "The ID of the created EC2 instance.",
       "value": "mock-instance-id"
     },
-    "privateSubnetId": {
-      "description": "The ID of the private subnet.",
-      "value": "mock-private-subnet-id"
+    "privateSubnetIds": {
+      "description": "The IDs of the private subnets.",
+      "value": "mock-private-subnet-1, mock-private-subnet-2"
     },
     "publicSubnetIds": {
       "description": "The IDs of the public subnets.",
-      "value": "mock-public-subnet-id"
+      "value": "mock-public-subnet-1, mock-public-subnet-2"
     },
     "securityGroupId": {
       "description": "The ID of the EC2 Security Group.",
-      "value": "mock-security-group-id"
+      "value": "mock-sg-id"
     },
     "vpcId": {
       "description": "The ID of the main VPC.",
@@ -86,6 +88,8 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should use defaul
     "aws": [
       {
         "default_tags": [
+          {
+          }
         ],
         "region": "us-west-2"
       }
@@ -96,7 +100,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should use defaul
       "s3": {
         "bucket": "iac-rlhf-tf-states",
         "encrypt": true,
-        "key": "dev/DefaultStack.tfstate",
+        "key": "dev/TestStack.tfstate",
         "region": "us-east-1",
         "use_lockfile": true
       }

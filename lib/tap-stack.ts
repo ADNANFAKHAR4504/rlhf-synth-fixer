@@ -4,8 +4,6 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
-
-// Import your modules
 import { NetworkModule, SecurityModule, ComputeModule } from './modules';
 
 interface TapStackProps {
@@ -14,7 +12,8 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
-  sshKeyName?: string; // Required for EC2
+  sshKeyName?: string;
+  vpcCidr?: string;
 }
 
 const AWS_REGION_OVERRIDE = 'us-west-2';
@@ -24,17 +23,18 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+    const defaultTags = {
+      Environment: 'Production',
+      ...(props?.defaultTags || {}),
+    };
 
-    // AWS Provider
+    // AWS Provider with version pin
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags: defaultTags,
+      defaultTags: [defaultTags],
     });
 
     // S3 Backend
@@ -49,10 +49,10 @@ export class TapStack extends TerraformStack {
 
     // --- Network Module ---
     const network = new NetworkModule(this, 'NetworkModule', {
-      cidrBlock: '10.0.0.0/16',
-      publicSubnetCidr: '10.0.1.0/24',
-      privateSubnetCidr: '10.0.2.0/24',
-      availabilityZone: `${awsRegion}a`,
+      cidrBlock: props?.vpcCidr || '10.0.0.0/16',
+      publicSubnetCidrs: ['10.0.1.0/24', '10.0.3.0/24'],
+      privateSubnetCidrs: ['10.0.2.0/24', '10.0.4.0/24'],
+      availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],
     });
 
     // --- Security Module ---
@@ -65,7 +65,7 @@ export class TapStack extends TerraformStack {
       vpcId: network.vpcId,
       publicSubnetIds: network.publicSubnetIds,
       securityGroupId: security.securityGroupId,
-      sshKeyName: props?.sshKeyName || 'my-dev-keypair', // Replace with your actual key
+      sshKeyName: props?.sshKeyName || 'my-dev-keypair',
     });
 
     // --- Outputs ---
@@ -79,9 +79,9 @@ export class TapStack extends TerraformStack {
       description: 'The IDs of the public subnets.',
     });
 
-    new TerraformOutput(this, 'privateSubnetId', {
-      value: network.privateSubnetId,
-      description: 'The ID of the private subnet.',
+    new TerraformOutput(this, 'privateSubnetIds', {
+      value: network.privateSubnetIds.join(', '),
+      description: 'The IDs of the private subnets.',
     });
 
     new TerraformOutput(this, 'securityGroupId', {

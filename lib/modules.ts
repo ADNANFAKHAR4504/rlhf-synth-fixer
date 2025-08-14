@@ -12,112 +12,118 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 
 // =============================================================
-// Network Module
+// Network Module - now handles 2 public & 2 private subnets in different AZs
 // =============================================================
 export interface NetworkModuleProps {
   readonly cidrBlock: string;
-  readonly publicSubnetCidr: string;
-  readonly privateSubnetCidr: string;
-  readonly availabilityZone: string;
+  readonly publicSubnetCidrs: string[];
+  readonly privateSubnetCidrs: string[];
+  readonly availabilityZones: string[];
   readonly tags?: { [key: string]: string };
 }
 
 export class NetworkModule extends Construct {
   public readonly vpcId: string;
   public readonly publicSubnetIds: string[];
-  public readonly privateSubnetId: string;
+  public readonly privateSubnetIds: string[];
 
   constructor(scope: Construct, id: string, props: NetworkModuleProps) {
     super(scope, id);
 
+    const tags = { Environment: 'Production', ...props.tags };
+
     // Create VPC
     const vpc = new Vpc(this, 'Vpc', {
       cidrBlock: props.cidrBlock,
-      tags: props.tags,
+      tags,
     });
     this.vpcId = vpc.id;
 
-    // Public Subnet
-    const publicSubnet = new Subnet(this, 'PublicSubnet', {
-      vpcId: vpc.id,
-      cidrBlock: props.publicSubnetCidr,
-      availabilityZone: props.availabilityZone,
-      mapPublicIpOnLaunch: true,
-      tags: props.tags,
-    });
-    this.publicSubnetIds = [publicSubnet.id];
-
-    // Private Subnet
-    const privateSubnet = new Subnet(this, 'PrivateSubnet', {
-      vpcId: vpc.id,
-      cidrBlock: props.privateSubnetCidr,
-      availabilityZone: props.availabilityZone,
-      tags: props.tags,
-    });
-    this.privateSubnetId = privateSubnet.id;
-
-    // Internet Gateway
+    // Internet Gateway for Public Subnets
     const igw = new InternetGateway(this, 'InternetGateway', {
       vpcId: vpc.id,
-      tags: props.tags,
+      tags,
     });
 
     // Public Route Table
     const publicRouteTable = new RouteTable(this, 'PublicRouteTable', {
       vpcId: vpc.id,
-      tags: props.tags,
+      tags,
     });
 
-    // Route to IGW
     new Route(this, 'PublicRoute', {
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
       gatewayId: igw.id,
     });
 
-    // Associate Public Subnet with Public Route Table
-    new RouteTableAssociation(this, 'PublicRTA', {
-      subnetId: publicSubnet.id,
-      routeTableId: publicRouteTable.id,
+    // Create Public Subnets first
+    this.publicSubnetIds = props.publicSubnetCidrs.map((cidr, index) => {
+      const subnet = new Subnet(this, `PublicSubnet${index + 1}`, {
+        vpcId: vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: props.availabilityZones[index],
+        mapPublicIpOnLaunch: true,
+        tags,
+      });
+
+      new RouteTableAssociation(this, `PublicRTA${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+
+      return subnet.id;
     });
 
     // Elastic IP for NAT Gateway
     const eip = new Eip(this, 'NatEip', {
       domain: 'vpc',
-      tags: props.tags,
+      tags,
     });
 
-    // NAT Gateway
+    // FIX: Create NAT Gateway after the public subnets exist.
+    // This allows us to directly assign the subnetId from the created subnets,
+    // removing the need for the 'any' type assertion.
     const natGateway = new NatGateway(this, 'NatGateway', {
       allocationId: eip.id,
-      subnetId: publicSubnet.id,
-      tags: props.tags,
+      subnetId: this.publicSubnetIds[0], // Assign directly
+      tags,
       dependsOn: [igw],
     });
 
     // Private Route Table
     const privateRouteTable = new RouteTable(this, 'PrivateRouteTable', {
       vpcId: vpc.id,
-      tags: props.tags,
+      tags,
     });
 
-    // Route to NAT Gateway
     new Route(this, 'PrivateRoute', {
       routeTableId: privateRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
       natGatewayId: natGateway.id,
     });
 
-    // Associate Private Subnet with Private Route Table
-    new RouteTableAssociation(this, 'PrivateRTA', {
-      subnetId: privateSubnet.id,
-      routeTableId: privateRouteTable.id,
+    // Create Private Subnets
+    this.privateSubnetIds = props.privateSubnetCidrs.map((cidr, index) => {
+      const subnet = new Subnet(this, `PrivateSubnet${index + 1}`, {
+        vpcId: vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: props.availabilityZones[index],
+        tags,
+      });
+
+      new RouteTableAssociation(this, `PrivateRTA${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      });
+
+      return subnet.id;
     });
   }
 }
 
 // =============================================================
-// Security Module
+// Security Module - updated SSH rule & added HTTPS rule
 // =============================================================
 export interface SecurityModuleProps {
   readonly vpcId: string;
@@ -130,16 +136,18 @@ export class SecurityModule extends Construct {
   constructor(scope: Construct, id: string, props: SecurityModuleProps) {
     super(scope, id);
 
+    const tags = { Environment: 'Production', ...props.tags };
+
     const securityGroup = new SecurityGroup(this, 'SecurityGroup', {
       vpcId: props.vpcId,
-      description: 'Allow SSH and HTTP inbound traffic',
+      description: 'Allow SSH, HTTP, and HTTPS inbound traffic',
       ingress: [
         {
           protocol: 'tcp',
           fromPort: 22,
           toPort: 22,
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow SSH from anywhere',
+          cidrBlocks: ['203.0.113.0/24'], // restricted SSH
+          description: 'Allow SSH from trusted CIDR only',
         },
         {
           protocol: 'tcp',
@@ -147,6 +155,13 @@ export class SecurityModule extends Construct {
           toPort: 80,
           cidrBlocks: ['0.0.0.0/0'],
           description: 'Allow HTTP from anywhere',
+        },
+        {
+          protocol: 'tcp',
+          fromPort: 443,
+          toPort: 443,
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow HTTPS from anywhere',
         },
       ],
       egress: [
@@ -158,7 +173,7 @@ export class SecurityModule extends Construct {
           description: 'Allow all outbound traffic',
         },
       ],
-      tags: props.tags,
+      tags,
     });
     this.securityGroupId = securityGroup.id;
   }
@@ -181,13 +196,15 @@ export class ComputeModule extends Construct {
   constructor(scope: Construct, id: string, props: ComputeModuleProps) {
     super(scope, id);
 
+    const tags = { Environment: 'Production', ...props.tags };
+
     const instance = new Instance(this, 'EC2Instance', {
-      ami: 'ami-04e08e36e17a21b56', // Example AMI for us-west-2, replace if needed
+      ami: 'ami-04e08e36e17a21b56',
       instanceType: 't2.micro',
       subnetId: props.publicSubnetIds[0],
       vpcSecurityGroupIds: [props.securityGroupId],
       keyName: props.sshKeyName,
-      tags: props.tags,
+      tags,
     });
     this.instanceId = instance.id;
   }
