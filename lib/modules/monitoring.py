@@ -71,18 +71,6 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output[str], tags: Dict
     opts=pulumi.ResourceOptions(provider=provider)
   )
 
-  # Create a "dummy" resource to introduce timing
-  # This forces a dependency chain and gives IAM time to propagate
-  policy_attachment_waiter = aws.iam.RolePolicyAttachment(
-    f"cloudtrail-waiter-{region}",
-    role=cloudtrail_role.name,
-    policy_arn="arn:aws:iam::aws:policy/CloudWatchLogsFullAccess",
-    opts=pulumi.ResourceOptions(
-      provider=provider,
-      depends_on=[cloudtrail_role_policy]
-    )
-  )
-
   trail = aws.cloudtrail.Trail(
     f"cloudtrail-{region}",
     name=f"infrastructure-trail-{region}",
@@ -104,7 +92,7 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output[str], tags: Dict
     tags=tags,
     opts=pulumi.ResourceOptions(
       provider=provider,
-      depends_on=[policy_attachment_waiter, log_group, cloudtrail_policy] + (depends_on or [])  # Ensure role is created first
+      depends_on=[log_group, cloudtrail_role] + (depends_on or [])  # Ensure role is created first
     )
   )
 

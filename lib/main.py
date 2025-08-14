@@ -118,21 +118,8 @@ def deploy_infrastructure():
     )
     s3_buckets[region] = s3_bucket
 
-    # Create S3 bucket policy for CloudTrail
-    cloudtrail_policy = create_cloudtrail_s3_policy(s3_bucket.bucket, region)
-
-    bucket_policy = aws.s3.BucketPolicy(
-      f"cloudtrail-bucket-policy-{region}",
-      bucket=s3_bucket.id,
-      policy=cloudtrail_policy,
-      opts=pulumi.ResourceOptions(
-        provider=provider,
-        depends_on=[s3_bucket]
-      )
-    )
-
     # Setup CloudTrail
-    cloudtrail= setup_cloudtrail(
+    setup_cloudtrail(
       region=region,
       s3_bucket_name=s3_bucket.bucket,
       tags=common_tags,
@@ -140,16 +127,11 @@ def deploy_infrastructure():
       depends_on=[s3_bucket]
     )
 
-    # Ensure CloudTrail waits for S3 bucket policy
-    pulumi.Output.all(bucket_policy.id, cloudtrail.name).apply(
-      lambda args: print(f"CloudTrail {args[1]} created with S3 policy {args[0]}")
-    )
-
   # Export important resource information
-  export_outputs(vpcs, security_groups, iam_roles, s3_buckets)
+  export_outputs(vpcs, security_groups, iam_roles)
 
 
-def export_outputs(vpcs: Dict, security_groups: Dict, iam_roles: Dict, s3_buckets: Dict):
+def export_outputs(vpcs: Dict, security_groups: Dict, iam_roles: Dict):
   """Export important resource information as stack outputs"""
 
   for region in regions:
@@ -167,9 +149,6 @@ def export_outputs(vpcs: Dict, security_groups: Dict, iam_roles: Dict, s3_bucket
                   security_groups[region]["app_sg"].id)
     pulumi.export(f"db_sg_id_{region.replace('-', '_')}",
                   security_groups[region]["db_sg"].id)
-
-    # S3 bucket outputs
-    pulumi.export(f"s3_bucket_{region.replace('-', '_')}", s3_buckets[region].bucket)
 
   # IAM role outputs
   pulumi.export("ec2_role_arn", iam_roles["ec2_role"].arn)
