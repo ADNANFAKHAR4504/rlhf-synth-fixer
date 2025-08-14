@@ -68,7 +68,7 @@ locals {
 
 # Data sources for AMIs
 data "aws_ami" "amazon_linux_east" {
-  provider    = aws.us_east_1
+  provider    = aws.us_east_2
   most_recent = true
   owners      = ["amazon"]
 
@@ -107,7 +107,7 @@ resource "random_password" "db_password" {
 
 # KMS Keys for encryption
 resource "aws_kms_key" "s3_key" {
-  provider                = aws.us_east_1
+  provider                = aws.us_east_2
   description             = "KMS key for S3 bucket encryption"
   deletion_window_in_days = 7
 
@@ -117,13 +117,13 @@ resource "aws_kms_key" "s3_key" {
 }
 
 resource "aws_kms_alias" "s3_key_alias" {
-  provider      = aws.us_east_1
+  provider      = aws.us_east_2
   name          = "alias/${var.project_name}-s3-key"
   target_key_id = aws_kms_key.s3_key.key_id
 }
 
 resource "aws_kms_key" "rds_key_east" {
-  provider                = aws.us_east_1
+  provider                = aws.us_east_2
   description             = "KMS key for RDS encryption in us-east-2"
   deletion_window_in_days = 7
 
@@ -144,7 +144,7 @@ resource "aws_kms_key" "rds_key_west" {
 
 # VPC - US East 1
 resource "aws_vpc" "main_east" {
-  provider             = aws.us_east_1
+  provider             = aws.us_east_2
   cidr_block           = var.vpc_cidrs["us-east-2"]
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -170,7 +170,7 @@ resource "aws_vpc" "main_west" {
 
 # Internet Gateways
 resource "aws_internet_gateway" "main_east" {
-  provider = aws.us_east_1
+  provider = aws.us_east_2
   vpc_id   = aws_vpc.main_east.id
 
   tags = merge(local.common_tags, {
@@ -219,7 +219,7 @@ resource "aws_subnet" "public_west" {
 }
 
 # Private Subnets
-resource "aws_subnet" "private_east_2" {
+resource "aws_subnet" "private_east_1" {
   provider          = aws.us_east_2
   vpc_id            = aws_vpc.main_east.id
   cidr_block        = cidrsubnet(var.vpc_cidrs["us-east-2"], 8, 2)
@@ -233,7 +233,7 @@ resource "aws_subnet" "private_east_2" {
 }
 
 resource "aws_subnet" "private_east_2" {
-  provider          = aws.us_east_1
+  provider          = aws.us_east_2
   vpc_id            = aws_vpc.main_east.id
   cidr_block        = cidrsubnet(var.vpc_cidrs["us-east-2"], 8, 3)
   availability_zone = var.availability_zones["us-east-2"][1]
@@ -273,7 +273,7 @@ resource "aws_subnet" "private_west_2" {
 
 # Route Tables - Public
 resource "aws_route_table" "public_east" {
-  provider = aws.us_east_1
+  provider = aws.us_east_2
   vpc_id   = aws_vpc.main_east.id
 
   route {
@@ -304,7 +304,7 @@ resource "aws_route_table" "public_west" {
 
 # Route Table Associations
 resource "aws_route_table_association" "public_east" {
-  provider       = aws.us_east_1
+  provider       = aws.us_east_2
   subnet_id      = aws_subnet.public_east.id
   route_table_id = aws_route_table.public_east.id
 }
@@ -317,7 +317,7 @@ resource "aws_route_table_association" "public_west" {
 
 # Security Groups for EC2
 resource "aws_security_group" "ec2_east" {
-  provider    = aws.us_east_1
+  provider    = aws.us_east_2
   name        = "${var.project_name}-ec2-sg-us-east-2"
   description = "Security group for EC2 instances in us-east-2"
   vpc_id      = aws_vpc.main_east.id
@@ -480,7 +480,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # EC2 Instances
 resource "aws_instance" "web_east" {
-  provider                    = aws.us_east_1
+  provider                    = aws.us_east_2
   ami                         = data.aws_ami.amazon_linux_east.id
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public_east.id
@@ -543,7 +543,7 @@ resource "aws_instance" "web_west" {
 
 # S3 Bucket
 resource "aws_s3_bucket" "main" {
-  provider = aws.us_east_1
+  provider = aws.us_east_2
   bucket   = "${var.project_name}-bucket-${random_password.db_password.id}"
 
   tags = merge(local.common_tags, {
@@ -553,7 +553,7 @@ resource "aws_s3_bucket" "main" {
 }
 
 resource "aws_s3_bucket_versioning" "main" {
-  provider = aws.us_east_1
+  provider = aws.us_east_2
   bucket   = aws_s3_bucket.main.id
   versioning_configuration {
     status = "Enabled"
@@ -561,7 +561,7 @@ resource "aws_s3_bucket_versioning" "main" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
-  provider = aws.us_east_1
+  provider = aws.us_east_2
   bucket   = aws_s3_bucket.main.id
 
   rule {
@@ -573,7 +573,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 }
 
 resource "aws_s3_bucket_public_access_block" "main" {
-  provider = aws.us_east_1
+  provider = aws.us_east_2
   bucket   = aws_s3_bucket.main.id
 
   block_public_acls       = true
@@ -583,7 +583,7 @@ resource "aws_s3_bucket_public_access_block" "main" {
 }
 
 resource "aws_s3_bucket_policy" "main" {
-  provider = aws.us_east_1
+  provider = aws.us_east_2
   bucket   = aws_s3_bucket.main.id
 
   policy = jsonencode({
@@ -615,7 +615,7 @@ resource "aws_s3_bucket_policy" "main" {
 
 # RDS Subnet Groups
 resource "aws_db_subnet_group" "main_east" {
-  provider   = aws.us_east_1
+  provider   = aws.us_east_2
   name       = "${var.project_name}-db-subnet-group-east"
   subnet_ids = [aws_subnet.private_east_1.id, aws_subnet.private_east_2.id]
 
@@ -638,7 +638,7 @@ resource "aws_db_subnet_group" "main_west" {
 
 # RDS Security Groups
 resource "aws_security_group" "rds_east" {
-  provider    = aws.us_east_1
+  provider    = aws.us_east_2
   name        = "${var.project_name}-rds-sg-us-east-2"
   description = "Security group for RDS in us-east-2"
   vpc_id      = aws_vpc.main_east.id
@@ -679,7 +679,7 @@ resource "aws_security_group" "rds_west" {
 
 # RDS Instances
 resource "aws_db_instance" "main_east" {
-  provider = aws.us_east_1
+  provider = aws.us_east_2
 
   identifier     = "${var.project_name}-db-us-east-2"
   engine         = "postgres"
@@ -752,7 +752,7 @@ resource "aws_db_instance" "main_west" {
 output "vpc_ids" {
   description = "VPC IDs for both regions"
   value = {
-    us_east_1 = aws_vpc.main_east.id
+    us_east_2 = aws_vpc.main_east.id
     us_west_1 = aws_vpc.main_west.id
   }
 }
@@ -760,7 +760,7 @@ output "vpc_ids" {
 output "public_subnet_ids" {
   description = "Public subnet IDs"
   value = {
-    us_east_1 = aws_subnet.public_east.id
+    us_east_2 = aws_subnet.public_east.id
     us_west_1 = aws_subnet.public_west.id
   }
 }
@@ -768,7 +768,7 @@ output "public_subnet_ids" {
 output "private_subnet_ids" {
   description = "Private subnet IDs"
   value = {
-    us_east_1 = [aws_subnet.private_east_1.id, aws_subnet.private_east_2.id]
+    us_east_2 = [aws_subnet.private_east_1.id, aws_subnet.private_east_2.id]
     us_west_1 = [aws_subnet.private_west_1.id, aws_subnet.private_west_2.id]
   }
 }
@@ -776,7 +776,7 @@ output "private_subnet_ids" {
 output "ec2_instance_ids" {
   description = "EC2 instance IDs"
   value = {
-    us_east_1 = aws_instance.web_east.id
+    us_east_2 = aws_instance.web_east.id
     us_west_1 = aws_instance.web_west.id
   }
 }
@@ -784,7 +784,7 @@ output "ec2_instance_ids" {
 output "ec2_public_ips" {
   description = "EC2 instance public IP addresses"
   value = {
-    us_east_1 = aws_instance.web_east.public_ip
+    us_east_2 = aws_instance.web_east.public_ip
     us_west_1 = aws_instance.web_west.public_ip
   }
 }
@@ -802,7 +802,7 @@ output "s3_bucket_arn" {
 output "rds_endpoints" {
   description = "RDS instance endpoints"
   value = {
-    us_east_1 = aws_db_instance.main_east.endpoint
+    us_east_2 = aws_db_instance.main_east.endpoint
     us_west_1 = aws_db_instance.main_west.endpoint
   }
 }
@@ -810,7 +810,7 @@ output "rds_endpoints" {
 output "rds_instance_ids" {
   description = "RDS instance IDs"
   value = {
-    us_east_1 = aws_db_instance.main_east.id
+    us_east_2 = aws_db_instance.main_east.id
     us_west_1 = aws_db_instance.main_west.id
   }
 }
