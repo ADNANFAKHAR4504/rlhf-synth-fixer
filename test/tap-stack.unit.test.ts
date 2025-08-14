@@ -445,10 +445,13 @@ describe('Secure Baseline CloudFormation Template', () => {
   });
 
   describe('Security Best Practices', () => {
-    test('should not have hardcoded secrets or credentials', () => {
-      const templateStr = JSON.stringify(template);
-      expect(templateStr).not.toMatch(/password|secret|key/i);
-    });
+   test('should not have hardcoded secrets or credentials', () => {
+  const templateStr = JSON.stringify(template);
+  
+  // Only check for actual secrets, not legitimate "key" references like KMS keys
+  expect(templateStr).not.toMatch(/password|secret/i);
+  expect(templateStr).not.toMatch(/AKIA[0-9A-Z]{16}/); // AWS Access Key pattern
+});
 
     test('should use secure SSL policy for HTTPS listener', () => {
       const httpsListener = template.Resources.HTTPSListener;
