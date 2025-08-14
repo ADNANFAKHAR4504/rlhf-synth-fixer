@@ -1,47 +1,46 @@
----
-## Building a Secure AWS Environment: Our Plan
----
+# High-Level Prompt: Pulumi AWS Serverless Infrastructure in Python
 
-### What We're Aiming For
+## Goal
+Develop a **modular Pulumi-based infrastructure** in Python to set up a **serverless architecture** on AWS.
 
-Our main task here is to write Terraform code to set up a really **secure AWS environment**. We're especially focusing on how we manage identities and access (IAM) and make our network super secure.
+## Requirements
+1. **AWS Lambda**
+   - Deploy a Python-based AWS Lambda function.
+   - Lambda source code is located in an **external repository**.
 
----
+2. **S3 Bucket**
+   - Create an S3 bucket that:
+     - Triggers the deployed Lambda upon **object creation**.
+     - Has **versioning enabled**.
 
-### Key Things We Need to Implement
+3. **IAM Roles**
+   - Create IAM roles and policies for Lambda execution and S3 access.
+   - Apply the **least privilege principle**.
 
-Here's what your Terraform configuration should include:
+4. **Pulumi Backend**
+   - Use **AWS backend** for Pulumi state management.
 
-- **IAM Policy Management**: We need to make sure all our IAM policy definitions are stored in a **version-controlled repository**.
-- **Security Group Rules**: Define our security group rules to only allow **HTTP (port 80) and HTTPS (port 443)** traffic. No other ports should be open by default.
-- **Least Privilege for IAM**: Every IAM role we create must strictly follow the **principle of least privilege**. This means roles should only have the exact permissions they need, nothing more.
-- **S3 Bucket Encryption**: All S3 buckets we set up **must have default encryption enabled**.
-- **CloudWatch API Logging**: Configure CloudWatch to capture **every single API request** made across our AWS accounts. This is crucial for auditing.
-- **Approved AMIs for EC2**: When creating EC2 instances, we should only use **approved Amazon Machine Images (AMIs)**. These AMIs must come from a **trusted source**.
-- **MFA for Console Access**: For any IAM users who need console access, we need to set up **multi-factor authentication (MFA)**.
-- **Encrypted RDS Storage**: Ensure that the storage for our RDS instances is **encrypted at rest**.
+5. **Region**
+   - All resources must be deployed in **`us-west-2`**.
 
----
+6. **Outputs**
+   - Output the **ARN** of:
+     - The created Lambda function.
+     - The created S3 bucket.
 
-### Important Things to Remember (Our Ground Rules)
+7. **Code Organization**
+   - Follow a **modular architecture**:
+     - Store resource definitions in **classes** under a `components/` folder.
+     - Keep function code separate from Pulumi scripts.
+     - Maintain clean structure for readability and scalability.
 
-Here are the critical requirements and constraints for this project:
+8. **Best Practices**
+   - Ensure clear separation of concerns between components.
+   - Use meaningful variable and class names.
+   - Follow Pulumi and AWS security best practices.
 
-- **IAM Policy Storage**: All IAM policies absolutely _must_ be kept in a version-controlled system.
-- **Security Group Traffic**: Security groups are limited to allowing _only_ HTTP and HTTPS traffic.
-- **IAM Permissions**: We're serious about the principle of least privilege for all IAM roles.
-- **S3 Encryption**: S3 buckets need to have encryption enabled by default.
-- **CloudWatch Logging**: CloudWatch must capture all API requests.
-- **AMI Validation**: We need to confirm that all AMIs used come from a trusted source.
-- **MFA Requirement**: MFA is mandatory for IAM users who access the console.
-- **RDS Encryption**: RDS instance storage must be encrypted at rest.
-
-### Where This Fits In (Environment Context)
-
-Just so you know, this infrastructure will span multiple AWS accounts, specifically in the `us-east-1` region. Our VPCs will have IDs starting with `vpc-`. Also, we have some strict naming conventions: all resources need to be prefixed with 'corp-', and we'll be using specific tagging standards, including 'Environment', 'Owner', and 'CostCenter'.
-
----
-
-### What We're Looking For as an Output
-
-Please provide a **complete Terraform configuration (`.tf` file)** that meets all the specifications above. The code should be well-organized and commented, designed for reusability (think modules!), and easy to understand. It also needs to include outputs that help us confirm everything meets the requirements. Your code should run successfully when validated with `terraform plan`.
+## Expected Deliverable
+- A set of **Python scripts** that, when executed with Pulumi, will:
+  - Deploy the described infrastructure.
+  - Output the specified ARNs.
+  - Follow the modular structure defined above.

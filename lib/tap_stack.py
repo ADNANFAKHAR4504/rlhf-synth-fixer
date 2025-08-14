@@ -1,4 +1,3 @@
-```python
 """
 tap_stack.py
 
@@ -97,4 +96,3 @@ class TapStack(pulumi.ComponentResource):
 
     # Additional useful outputs
     pulumi.export("lambda_role_arn", iam_roles.lambda_role.arn)
-```
