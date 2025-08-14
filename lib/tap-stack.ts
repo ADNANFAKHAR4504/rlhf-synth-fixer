@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import {
-  aws_apigateway as apigw,
+  aws_apigatewayv2 as apigwv2,
+  aws_apigatewayv2_integrations as apigwv2i,
   aws_dynamodb as dynamodb,
   aws_ec2 as ec2,
   aws_iam as iam,
@@ -29,11 +30,15 @@ export class TapStack extends cdk.Stack {
 
     const vpc = new ec2.Vpc(this, 'AppVpc', {
       maxAzs: 2,
-      natGateways: 0,
+      natGateways: 1,
       subnetConfiguration: [
         {
-          name: 'private-isolated',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+          name: 'private-egress',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        {
+          name: 'public',
+          subnetType: ec2.SubnetType.PUBLIC,
         },
       ],
     });
@@ -58,7 +63,7 @@ export class TapStack extends cdk.Stack {
     const s3Endpoint = new ec2.GatewayVpcEndpoint(this, 'S3GatewayEndpoint', {
       vpc,
       service: ec2.GatewayVpcEndpointAwsService.S3,
-      subnets: [{ subnets: vpc.isolatedSubnets }],
+      subnets: [{ subnets: vpc.privateSubnets }],
     });
 
     const ddbEndpoint = new ec2.GatewayVpcEndpoint(
@@ -67,16 +72,11 @@ export class TapStack extends cdk.Stack {
       {
         vpc,
         service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-        subnets: [{ subnets: vpc.isolatedSubnets }],
+        subnets: [{ subnets: vpc.privateSubnets }],
       }
     );
 
-    // Allow private access from isolated subnets to CloudWatch Logs
-    new ec2.InterfaceVpcEndpoint(this, 'CloudWatchLogsEndpoint', {
-      vpc,
-      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
-      subnets: { subnets: vpc.isolatedSubnets },
-    });
+    // With PRIVATE_WITH_EGRESS subnets and NAT, interface endpoint for logs is optional; omit for minimalism
 
     appBucket.addToResourcePolicy(
       new iam.PolicyStatement({
@@ -114,11 +114,21 @@ export class TapStack extends cdk.Stack {
       handler: 'index.handler',
       code: lambda.Code.fromInline(
         [
-          'exports.handler = async () => ({ statusCode: 200, body: JSON.stringify({ ok: true }) });',
+          "const AWS = require('aws-sdk');",
+          'const s3 = new AWS.S3();',
+          'const ddb = new AWS.DynamoDB();',
+          'exports.handler = async (event) => {',
+          '  const bucket = process.env.BUCKET_NAME;',
+          '  const table = process.env.TABLE_NAME;',
+          "  const body = typeof event?.body === 'string' ? event.body : JSON.stringify(event || {});",
+          '  await s3.putObject({ Bucket: bucket, Key: `request-${Date.now()}.json`, Body: body }).promise();',
+          '  await ddb.putItem({ TableName: table, Item: { pk: { S: `req#${Date.now()}` }, ts: { N: String(Date.now()) } } }).promise();',
+          '  return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true }) };',
+          '};',
         ].join('\n')
       ),
       vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       timeout: cdk.Duration.seconds(10),
       logGroup: appLambdaLogGroup,
       environment: {
@@ -134,40 +144,50 @@ export class TapStack extends cdk.Stack {
 
     const apiAccessLogs = new logs.LogGroup(this, 'ApiAccessLogs', {
       retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const api = new apigw.RestApi(this, 'AppApi', {
-      deployOptions: {
-        stageName: 'prod',
-        metricsEnabled: true,
-        loggingLevel: apigw.MethodLoggingLevel.INFO,
-        dataTraceEnabled: false,
-        accessLogDestination: new apigw.LogGroupLogDestination(apiAccessLogs),
-        accessLogFormat: apigw.AccessLogFormat.jsonWithStandardFields({
-          caller: true,
-          httpMethod: true,
-          ip: true,
-          protocol: true,
-          requestTime: true,
-          resourcePath: true,
-          responseLength: true,
-          status: true,
-          user: true,
-        }),
+    const httpApi = new apigwv2.HttpApi(this, 'AppHttpApi', {
+      apiName: 'tap-api',
+      description: 'Tap serverless API',
+    });
+
+    const httpIntegration = new apigwv2i.HttpLambdaIntegration(
+      'LambdaIntegration',
+      lambdaFunction
+    );
+
+    httpApi.addRoutes({
+      path: '/',
+      methods: [apigwv2.HttpMethod.ANY],
+      integration: httpIntegration,
+    });
+    httpApi.addRoutes({
+      path: '/health',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: httpIntegration,
+    });
+    httpApi.addRoutes({
+      path: '/data',
+      methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+      integration: httpIntegration,
+    });
+
+    // Explicit stage with access logging (use L1 for flexible format type)
+    new apigwv2.CfnStage(this, 'ApiStage', {
+      apiId: httpApi.apiId,
+      stageName: 'prod',
+      autoDeploy: true,
+      accessLogSettings: {
+        destinationArn: apiAccessLogs.logGroupArn,
+        format:
+          '{"requestId":"$context.requestId","httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","status":"$context.status","requestTime":"$context.requestTime","ip":"$context.identity.sourceIp","protocol":"$context.protocol","responseLength":"$context.responseLength"}',
       },
-      cloudWatchRole: true,
-      endpointConfiguration: { types: [apigw.EndpointType.REGIONAL] },
     });
 
-    const lambdaIntegration = new apigw.LambdaIntegration(lambdaFunction, {
-      proxy: true,
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: `${httpApi.apiEndpoint}/prod/`,
     });
-
-    const proxyResource = api.root.addResource('{proxy+}');
-    proxyResource.addMethod('ANY', lambdaIntegration);
-    api.root.addMethod('ANY', lambdaIntegration);
-
-    new cdk.CfnOutput(this, 'ApiUrl', { value: api.url });
     new cdk.CfnOutput(this, 'BucketName', { value: appBucket.bucketName });
     new cdk.CfnOutput(this, 'TableName', { value: table.tableName });
     new cdk.CfnOutput(this, 'S3VpcEndpointId', {
