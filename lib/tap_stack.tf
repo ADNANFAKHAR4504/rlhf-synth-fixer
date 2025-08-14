@@ -14,7 +14,7 @@ resource "aws_kms_key" "main_us_west" {
   description             = "Main KMS key for ${local.environment} environment in us-west-1"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -51,7 +51,7 @@ resource "aws_kms_key" "main_eu_central" {
   description             = "Main KMS key for ${local.environment} environment in eu-central-1"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -102,7 +102,7 @@ resource "aws_vpc" "secure_app_vpc_us_west" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "SecureAppVPC-${local.environment}-us-west-1"
   })
@@ -114,7 +114,7 @@ resource "aws_vpc" "secure_app_vpc_eu_central" {
   cidr_block           = "10.1.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "SecureAppVPC-${local.environment}-eu-central-1"
   })
@@ -124,7 +124,7 @@ resource "aws_vpc" "secure_app_vpc_eu_central" {
 resource "aws_internet_gateway" "igw_us_west" {
   provider = aws.us_west
   vpc_id   = aws_vpc.secure_app_vpc_us_west.id
-  
+
   tags = merge(local.common_tags, {
     Name = "SecureIGW-${local.environment}-us-west-1"
   })
@@ -133,7 +133,7 @@ resource "aws_internet_gateway" "igw_us_west" {
 resource "aws_internet_gateway" "igw_eu_central" {
   provider = aws.eu_central
   vpc_id   = aws_vpc.secure_app_vpc_eu_central.id
-  
+
   tags = merge(local.common_tags, {
     Name = "SecureIGW-${local.environment}-eu-central-1"
   })
@@ -145,7 +145,7 @@ resource "aws_subnet" "private_subnet_us_west_1a" {
   vpc_id            = aws_vpc.secure_app_vpc_us_west.id
   cidr_block        = "10.0.1.0/24"
   availability_zone = "us-west-1a"
-  
+
   tags = merge(local.common_tags, {
     Name = "PrivateSubnet-${local.environment}-us-west-1a"
     Type = "Private"
@@ -157,7 +157,7 @@ resource "aws_subnet" "private_subnet_us_west_1c" {
   vpc_id            = aws_vpc.secure_app_vpc_us_west.id
   cidr_block        = "10.0.2.0/24"
   availability_zone = "us-west-1c"
-  
+
   tags = merge(local.common_tags, {
     Name = "PrivateSubnet-${local.environment}-us-west-1c"
     Type = "Private"
@@ -170,7 +170,7 @@ resource "aws_subnet" "private_subnet_eu_central_1a" {
   vpc_id            = aws_vpc.secure_app_vpc_eu_central.id
   cidr_block        = "10.1.1.0/24"
   availability_zone = "eu-central-1a"
-  
+
   tags = merge(local.common_tags, {
     Name = "PrivateSubnet-${local.environment}-eu-central-1a"
     Type = "Private"
@@ -182,7 +182,7 @@ resource "aws_subnet" "private_subnet_eu_central_1b" {
   vpc_id            = aws_vpc.secure_app_vpc_eu_central.id
   cidr_block        = "10.1.2.0/24"
   availability_zone = "eu-central-1b"
-  
+
   tags = merge(local.common_tags, {
     Name = "PrivateSubnet-${local.environment}-eu-central-1b"
     Type = "Private"
@@ -196,7 +196,7 @@ resource "aws_subnet" "public_subnet_us_west_1a" {
   cidr_block              = "10.0.10.0/24"
   availability_zone       = "us-west-1a"
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "PublicSubnet-${local.environment}-us-west-1a"
     Type = "Public"
@@ -209,7 +209,7 @@ resource "aws_subnet" "public_subnet_eu_central_1a" {
   cidr_block              = "10.1.10.0/24"
   availability_zone       = "eu-central-1a"
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "PublicSubnet-${local.environment}-eu-central-1a"
     Type = "Public"
@@ -220,7 +220,7 @@ resource "aws_subnet" "public_subnet_eu_central_1a" {
 resource "aws_eip" "nat_eip_us_west" {
   provider = aws.us_west
   domain   = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "NATGatewayEIP-${local.environment}-us-west-1"
   })
@@ -229,7 +229,7 @@ resource "aws_eip" "nat_eip_us_west" {
 resource "aws_eip" "nat_eip_eu_central" {
   provider = aws.eu_central
   domain   = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "NATGatewayEIP-${local.environment}-eu-central-1"
   })
@@ -239,7 +239,7 @@ resource "aws_nat_gateway" "nat_us_west" {
   provider      = aws.us_west
   allocation_id = aws_eip.nat_eip_us_west.id
   subnet_id     = aws_subnet.public_subnet_us_west_1a.id
-  
+
   tags = merge(local.common_tags, {
     Name = "NATGateway-${local.environment}-us-west-1"
   })
@@ -249,7 +249,7 @@ resource "aws_nat_gateway" "nat_eu_central" {
   provider      = aws.eu_central
   allocation_id = aws_eip.nat_eip_eu_central.id
   subnet_id     = aws_subnet.public_subnet_eu_central_1a.id
-  
+
   tags = merge(local.common_tags, {
     Name = "NATGateway-${local.environment}-eu-central-1"
   })
@@ -259,12 +259,12 @@ resource "aws_nat_gateway" "nat_eu_central" {
 resource "aws_route_table" "private_rt_us_west" {
   provider = aws.us_west
   vpc_id   = aws_vpc.secure_app_vpc_us_west.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat_us_west.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "PrivateRouteTable-${local.environment}-us-west-1"
   })
@@ -273,12 +273,12 @@ resource "aws_route_table" "private_rt_us_west" {
 resource "aws_route_table" "private_rt_eu_central" {
   provider = aws.eu_central
   vpc_id   = aws_vpc.secure_app_vpc_eu_central.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat_eu_central.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "PrivateRouteTable-${local.environment}-eu-central-1"
   })
@@ -287,12 +287,12 @@ resource "aws_route_table" "private_rt_eu_central" {
 resource "aws_route_table" "public_rt_us_west" {
   provider = aws.us_west
   vpc_id   = aws_vpc.secure_app_vpc_us_west.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw_us_west.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "PublicRouteTable-${local.environment}-us-west-1"
   })
@@ -301,12 +301,12 @@ resource "aws_route_table" "public_rt_us_west" {
 resource "aws_route_table" "public_rt_eu_central" {
   provider = aws.eu_central
   vpc_id   = aws_vpc.secure_app_vpc_eu_central.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw_eu_central.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "PublicRouteTable-${local.environment}-eu-central-1"
   })
@@ -355,7 +355,7 @@ resource "aws_security_group" "web_tier_us_west" {
   name        = "WebTierSG-${local.environment}-us-west-1"
   description = "Security group for web tier with restricted access"
   vpc_id      = aws_vpc.secure_app_vpc_us_west.id
-  
+
   ingress {
     from_port   = 443
     to_port     = 443
@@ -363,7 +363,7 @@ resource "aws_security_group" "web_tier_us_west" {
     cidr_blocks = local.allowed_ip_ranges
     description = "HTTPS from allowed IP ranges"
   }
-  
+
   ingress {
     from_port   = 80
     to_port     = 80
@@ -371,7 +371,7 @@ resource "aws_security_group" "web_tier_us_west" {
     cidr_blocks = local.allowed_ip_ranges
     description = "HTTP from allowed IP ranges"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -379,7 +379,7 @@ resource "aws_security_group" "web_tier_us_west" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "WebTierSG-${local.environment}-us-west-1"
     Tier = "Web"
@@ -391,7 +391,7 @@ resource "aws_security_group" "web_tier_eu_central" {
   name        = "WebTierSG-${local.environment}-eu-central-1"
   description = "Security group for web tier with restricted access"
   vpc_id      = aws_vpc.secure_app_vpc_eu_central.id
-  
+
   ingress {
     from_port   = 443
     to_port     = 443
@@ -399,7 +399,7 @@ resource "aws_security_group" "web_tier_eu_central" {
     cidr_blocks = local.allowed_ip_ranges
     description = "HTTPS from allowed IP ranges"
   }
-  
+
   ingress {
     from_port   = 80
     to_port     = 80
@@ -407,7 +407,7 @@ resource "aws_security_group" "web_tier_eu_central" {
     cidr_blocks = local.allowed_ip_ranges
     description = "HTTP from allowed IP ranges"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -415,7 +415,7 @@ resource "aws_security_group" "web_tier_eu_central" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "WebTierSG-${local.environment}-eu-central-1"
     Tier = "Web"
@@ -427,7 +427,7 @@ resource "aws_security_group" "database_tier_us_west" {
   name        = "DatabaseTierSG-${local.environment}-us-west-1"
   description = "Security group for database tier"
   vpc_id      = aws_vpc.secure_app_vpc_us_west.id
-  
+
   ingress {
     from_port       = 3306
     to_port         = 3306
@@ -435,7 +435,7 @@ resource "aws_security_group" "database_tier_us_west" {
     security_groups = [aws_security_group.web_tier_us_west.id]
     description     = "MySQL from web tier"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -443,7 +443,7 @@ resource "aws_security_group" "database_tier_us_west" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "DatabaseTierSG-${local.environment}-us-west-1"
     Tier = "Database"
@@ -455,7 +455,7 @@ resource "aws_security_group" "database_tier_eu_central" {
   name        = "DatabaseTierSG-${local.environment}-eu-central-1"
   description = "Security group for database tier"
   vpc_id      = aws_vpc.secure_app_vpc_eu_central.id
-  
+
   ingress {
     from_port       = 3306
     to_port         = 3306
@@ -463,7 +463,7 @@ resource "aws_security_group" "database_tier_eu_central" {
     security_groups = [aws_security_group.web_tier_eu_central.id]
     description     = "MySQL from web tier"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -471,7 +471,7 @@ resource "aws_security_group" "database_tier_eu_central" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "DatabaseTierSG-${local.environment}-eu-central-1"
     Tier = "Database"
@@ -482,19 +482,19 @@ resource "aws_security_group" "database_tier_eu_central" {
 resource "aws_iam_account_password_policy" "strict" {
   minimum_password_length        = 14
   require_lowercase_characters   = true
-  require_numbers               = true
+  require_numbers                = true
   require_uppercase_characters   = true
-  require_symbols               = true
+  require_symbols                = true
   allow_users_to_change_password = true
-  max_password_age              = 90
-  password_reuse_prevention     = 24
-  hard_expiry                   = false
+  max_password_age               = 90
+  password_reuse_prevention      = 24
+  hard_expiry                    = false
 }
 
 # IAM Role for EC2 instances with least privilege
 resource "aws_iam_role" "ec2_secure_role" {
   name = "EC2SecureRole-${local.environment}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -507,7 +507,7 @@ resource "aws_iam_role" "ec2_secure_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -515,7 +515,7 @@ resource "aws_iam_role" "ec2_secure_role" {
 resource "aws_iam_role_policy" "ec2_secure_policy" {
   name = "EC2SecurePolicy-${local.environment}"
   role = aws_iam_role.ec2_secure_role.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -546,7 +546,7 @@ resource "aws_iam_role_policy" "ec2_secure_policy" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "EC2Profile-${local.environment}"
   role = aws_iam_role.ec2_secure_role.name
-  
+
   tags = local.common_tags
 }
 
@@ -559,7 +559,7 @@ resource "aws_iam_group" "developers" {
 resource "aws_iam_policy" "force_mfa" {
   name        = "ForceMFA-${local.environment}"
   description = "Policy to force MFA for console access"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -617,7 +617,7 @@ resource "aws_iam_policy" "force_mfa" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -633,7 +633,7 @@ resource "aws_cloudwatch_log_group" "application_logs_us_west" {
   name              = "/aws/application/${local.environment}/us-west-1"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main_us_west.arn
-  
+
   tags = merge(local.common_tags, {
     Name = "ApplicationLogs-${local.environment}-us-west-1"
   })
@@ -644,7 +644,7 @@ resource "aws_cloudwatch_log_group" "application_logs_eu_central" {
   name              = "/aws/application/${local.environment}/eu-central-1"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main_eu_central.arn
-  
+
   tags = merge(local.common_tags, {
     Name = "ApplicationLogs-${local.environment}-eu-central-1"
   })
@@ -655,7 +655,7 @@ resource "aws_cloudwatch_log_group" "security_logs_us_west" {
   name              = "/aws/security/${local.environment}/us-west-1"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main_us_west.arn
-  
+
   tags = merge(local.common_tags, {
     Name = "SecurityLogs-${local.environment}-us-west-1"
   })
@@ -666,7 +666,7 @@ resource "aws_cloudwatch_log_group" "security_logs_eu_central" {
   name              = "/aws/security/${local.environment}/eu-central-1"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main_eu_central.arn
-  
+
   tags = merge(local.common_tags, {
     Name = "SecurityLogs-${local.environment}-eu-central-1"
   })
@@ -685,7 +685,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu_us_west" {
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_sns_topic.security_alerts_us_west.arn]
-  
+
   tags = merge(local.common_tags, {
     Name = "HighCPUAlarm-${local.environment}-us-west-1"
   })
@@ -703,7 +703,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu_eu_central" {
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_sns_topic.security_alerts_eu_central.arn]
-  
+
   tags = merge(local.common_tags, {
     Name = "HighCPUAlarm-${local.environment}-eu-central-1"
   })
@@ -711,23 +711,236 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu_eu_central" {
 
 # SNS Topics for security alerts
 resource "aws_sns_topic" "security_alerts_us_west" {
-  provider         = aws.us_west
-  name             = "SecurityAlerts-${local.environment}-us-west-1"
+  provider          = aws.us_west
+  name              = "SecurityAlerts-${local.environment}-us-west-1"
   kms_master_key_id = aws_kms_key.main_us_west.id
-  
+
   tags = merge(local.common_tags, {
     Name = "SecurityAlerts-${local.environment}-us-west-1"
   })
 }
 
 resource "aws_sns_topic" "security_alerts_eu_central" {
-  provider         = aws.eu_central
-  name             = "SecurityAlerts-${local.environment}-eu-central-1"
+  provider          = aws.eu_central
+  name              = "SecurityAlerts-${local.environment}-eu-central-1"
   kms_master_key_id = aws_kms_key.main_eu_central.id
-  
+
   tags = merge(local.common_tags, {
     Name = "SecurityAlerts-${local.environment}-eu-central-1"
   })
+}
+
+# IAM Role for AWS Config
+resource "aws_iam_role" "config_role" {
+  name = "AWSConfigRole-${local.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# Attach AWS managed policy for Config service role
+resource "aws_iam_role_policy_attachment" "config_role_policy" {
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+}
+
+# S3 bucket for AWS Config delivery channel - US West
+resource "aws_s3_bucket" "config_bucket_us_west" {
+  provider      = aws.us_west
+  bucket        = "aws-config-${local.environment}-us-west-1-${random_string.bucket_suffix.result}"
+  force_destroy = true
+
+  tags = merge(local.common_tags, {
+    Name = "AWSConfigBucket-${local.environment}-us-west-1"
+  })
+}
+
+# S3 bucket for AWS Config delivery channel - EU Central  
+resource "aws_s3_bucket" "config_bucket_eu_central" {
+  provider      = aws.eu_central
+  bucket        = "aws-config-${local.environment}-eu-central-1-${random_string.bucket_suffix.result}"
+  force_destroy = true
+
+  tags = merge(local.common_tags, {
+    Name = "AWSConfigBucket-${local.environment}-eu-central-1"
+  })
+}
+
+# S3 bucket encryption for Config bucket - US West
+resource "aws_s3_bucket_server_side_encryption_configuration" "config_bucket_us_west_encryption" {
+  provider = aws.us_west
+  bucket   = aws_s3_bucket.config_bucket_us_west.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main_us_west.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+# S3 bucket encryption for Config bucket - EU Central
+resource "aws_s3_bucket_server_side_encryption_configuration" "config_bucket_eu_central_encryption" {
+  provider = aws.eu_central
+  bucket   = aws_s3_bucket.config_bucket_eu_central.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main_eu_central.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+# S3 bucket public access block for Config bucket - US West
+resource "aws_s3_bucket_public_access_block" "config_bucket_us_west_pab" {
+  provider = aws.us_west
+  bucket   = aws_s3_bucket.config_bucket_us_west.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 bucket public access block for Config bucket - EU Central
+resource "aws_s3_bucket_public_access_block" "config_bucket_eu_central_pab" {
+  provider = aws.eu_central
+  bucket   = aws_s3_bucket.config_bucket_eu_central.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 bucket policy for AWS Config - US West
+resource "aws_s3_bucket_policy" "config_bucket_us_west_policy" {
+  provider = aws.us_west
+  bucket   = aws_s3_bucket.config_bucket_us_west.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.config_bucket_us_west.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketExistenceCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.config_bucket_us_west.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config_bucket_us_west.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+# S3 bucket policy for AWS Config - EU Central
+resource "aws_s3_bucket_policy" "config_bucket_eu_central_policy" {
+  provider = aws.eu_central
+  bucket   = aws_s3_bucket.config_bucket_eu_central.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.config_bucket_eu_central.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketExistenceCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.config_bucket_eu_central.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config_bucket_eu_central.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Random string for S3 bucket suffix
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
 
 # AWS Config Configuration Recorder
@@ -735,26 +948,22 @@ resource "aws_config_configuration_recorder" "recorder_us_west" {
   provider = aws.us_west
   name     = "SecurityRecorder-${local.environment}-us-west-1"
   role_arn = aws_iam_role.config_role.arn
-  
+
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
   }
-  
-  depends_on = [aws_config_delivery_channel.delivery_channel_us_west]
 }
 
 resource "aws_config_configuration_recorder" "recorder_eu_central" {
   provider = aws.eu_central
   name     = "SecurityRecorder-${local.environment}-eu-central-1"
   role_arn = aws_iam_role.config_role.arn
-  
+
   recording_group {
     all_supported                 = true
     include_global_resource_types = false
   }
-  
-  depends_on = [aws_config_delivery_channel.delivery_channel_eu_central]
 }
 
 # AWS Config Delivery Channel
@@ -762,10 +971,20 @@ resource "aws_config_delivery_channel" "delivery_channel_us_west" {
   provider       = aws.us_west
   name           = "SecurityDeliveryChannel-${local.environment}-us-west-1"
   s3_bucket_name = aws_s3_bucket.config_bucket_us_west.bucket
+
+  depends_on = [
+    aws_s3_bucket_policy.config_bucket_us_west_policy,
+    aws_iam_role_policy_attachment.config_role_policy
+  ]
 }
 
 resource "aws_config_delivery_channel" "delivery_channel_eu_central" {
   provider       = aws.eu_central
   name           = "SecurityDeliveryChannel-${local.environment}-eu-central-1"
   s3_bucket_name = aws_s3_bucket.config_bucket_eu_central.bucket
+
+  depends_on = [
+    aws_s3_bucket_policy.config_bucket_eu_central_policy,
+    aws_iam_role_policy_attachment.config_role_policy
+  ]
 }

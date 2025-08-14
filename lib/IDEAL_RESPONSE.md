@@ -634,6 +634,223 @@ resource "aws_sns_topic" "security_alerts_us_west" {
 
 ### AWS Config Setup
 
+First, we need to create the IAM role and S3 buckets for AWS Config:
+
+```hcl
+# From: tap_stack.tf
+# IAM Role for AWS Config
+resource "aws_iam_role" "config_role" {
+  name = "AWSConfigRole-${local.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# Attach AWS managed policy for Config service role
+resource "aws_iam_role_policy_attachment" "config_role_policy" {
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+}
+
+# S3 bucket for AWS Config delivery channel - US West
+resource "aws_s3_bucket" "config_bucket_us_west" {
+  provider      = aws.us_west
+  bucket        = "aws-config-${local.environment}-us-west-1-${random_string.bucket_suffix.result}"
+  force_destroy = true
+
+  tags = merge(local.common_tags, {
+    Name = "AWSConfigBucket-${local.environment}-us-west-1"
+  })
+}
+
+# S3 bucket for AWS Config delivery channel - EU Central  
+resource "aws_s3_bucket" "config_bucket_eu_central" {
+  provider      = aws.eu_central
+  bucket        = "aws-config-${local.environment}-eu-central-1-${random_string.bucket_suffix.result}"
+  force_destroy = true
+
+  tags = merge(local.common_tags, {
+    Name = "AWSConfigBucket-${local.environment}-eu-central-1"
+  })
+}
+
+# Random string for S3 bucket suffix
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# S3 bucket encryption for Config buckets
+resource "aws_s3_bucket_server_side_encryption_configuration" "config_bucket_us_west_encryption" {
+  provider = aws.us_west
+  bucket   = aws_s3_bucket.config_bucket_us_west.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main_us_west.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "config_bucket_eu_central_encryption" {
+  provider = aws.eu_central
+  bucket   = aws_s3_bucket.config_bucket_eu_central.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main_eu_central.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+# S3 bucket public access block for Config buckets
+resource "aws_s3_bucket_public_access_block" "config_bucket_us_west_pab" {
+  provider = aws.us_west
+  bucket   = aws_s3_bucket.config_bucket_us_west.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "config_bucket_eu_central_pab" {
+  provider = aws.eu_central
+  bucket   = aws_s3_bucket.config_bucket_eu_central.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 bucket policies for AWS Config
+resource "aws_s3_bucket_policy" "config_bucket_us_west_policy" {
+  provider = aws.us_west
+  bucket   = aws_s3_bucket.config_bucket_us_west.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.config_bucket_us_west.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketExistenceCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.config_bucket_us_west.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config_bucket_us_west.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "config_bucket_eu_central_policy" {
+  provider = aws.eu_central
+  bucket   = aws_s3_bucket.config_bucket_eu_central.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.config_bucket_eu_central.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketExistenceCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.config_bucket_eu_central.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config_bucket_eu_central.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+```
+
+Now we can create the AWS Config resources:
+
 ```hcl
 # From: tap_stack.tf
 # AWS Config Configuration Recorder
@@ -641,13 +858,22 @@ resource "aws_config_configuration_recorder" "recorder_us_west" {
   provider = aws.us_west
   name     = "SecurityRecorder-${local.environment}-us-west-1"
   role_arn = aws_iam_role.config_role.arn
-  
+
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
   }
-  
-  depends_on = [aws_config_delivery_channel.delivery_channel_us_west]
+}
+
+resource "aws_config_configuration_recorder" "recorder_eu_central" {
+  provider = aws.eu_central
+  name     = "SecurityRecorder-${local.environment}-eu-central-1"
+  role_arn = aws_iam_role.config_role.arn
+
+  recording_group {
+    all_supported                 = true
+    include_global_resource_types = false
+  }
 }
 
 # AWS Config Delivery Channel
@@ -655,6 +881,22 @@ resource "aws_config_delivery_channel" "delivery_channel_us_west" {
   provider       = aws.us_west
   name           = "SecurityDeliveryChannel-${local.environment}-us-west-1"
   s3_bucket_name = aws_s3_bucket.config_bucket_us_west.bucket
+
+  depends_on = [
+    aws_s3_bucket_policy.config_bucket_us_west_policy,
+    aws_iam_role_policy_attachment.config_role_policy
+  ]
+}
+
+resource "aws_config_delivery_channel" "delivery_channel_eu_central" {
+  provider       = aws.eu_central
+  name           = "SecurityDeliveryChannel-${local.environment}-eu-central-1"
+  s3_bucket_name = aws_s3_bucket.config_bucket_eu_central.bucket
+
+  depends_on = [
+    aws_s3_bucket_policy.config_bucket_eu_central_policy,
+    aws_iam_role_policy_attachment.config_role_policy
+  ]
 }
 ```
 
