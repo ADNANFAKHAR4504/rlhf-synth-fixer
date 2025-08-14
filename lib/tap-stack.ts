@@ -18,9 +18,6 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
-/**
- * @interface RegionConfig Defines the network configuration for a single AWS region.
- */
 export interface RegionConfig {
   readonly region: string;
   readonly vpcCidr: string;
@@ -30,17 +27,11 @@ export interface RegionConfig {
   readonly azB: string;
 }
 
-/**
- * @interface StackConfig Defines the overall configuration for the multi-region stack.
- */
 export interface StackConfig {
   readonly commonTags: { [key: string]: string };
   readonly regions: RegionConfig[];
 }
 
-/**
- * @class DualRegionHardenedStack A CDKTF stack for a security-hardened, dual-region AWS infrastructure.
- */
 export class DualRegionHardenedStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: StackConfig) {
     super(scope, id);
@@ -67,7 +58,6 @@ export class DualRegionHardenedStack extends TerraformStack {
       provider: primaryProvider,
     });
 
-    // --- IAM & KMS (Central Definition, Regional Instantiation) ---
     const appServiceRole = new IamRole(this, 'AppServiceRole', {
       provider: primaryProvider,
       name: `hardened-app-service-role-${uniqueSuffix}`,
@@ -89,6 +79,7 @@ export class DualRegionHardenedStack extends TerraformStack {
         provider: providers.get(regionConfig.region)!,
         description: `KMS key for hardened resources in ${regionConfig.region}`,
         enableKeyRotation: true,
+        // FIX: Added a statement to allow the CloudWatch Logs service to use the key.
         policy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -114,6 +105,21 @@ export class DualRegionHardenedStack extends TerraformStack {
               ],
               Resource: '*',
             },
+            {
+              Sid: 'Allow CloudWatch Logs to use the key',
+              Effect: 'Allow',
+              Principal: {
+                Service: `logs.${regionConfig.region}.amazonaws.com`,
+              },
+              Action: [
+                'kms:Encrypt*',
+                'kms:Decrypt*',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:Describe*',
+              ],
+              Resource: '*',
+            },
           ],
         }),
         tags: { ...config.commonTags, Region: regionConfig.region },
@@ -126,7 +132,6 @@ export class DualRegionHardenedStack extends TerraformStack {
       const regionKmsKey = kmsKeys.get(regionConfig.region)!;
       const tags = { ...config.commonTags, Region: regionConfig.region };
 
-      // --- Regional Logging ---
       const logGroup = new CloudwatchLogGroup(
         this,
         `LogGroup-${regionConfig.region}`,
@@ -139,7 +144,6 @@ export class DualRegionHardenedStack extends TerraformStack {
         }
       );
 
-      // --- Regional Networking (Fully Private) ---
       const vpc = new Vpc(this, `VPC-${regionConfig.region}`, {
         provider: regionProvider,
         cidrBlock: regionConfig.vpcCidr,
@@ -171,7 +175,6 @@ export class DualRegionHardenedStack extends TerraformStack {
         }
       );
 
-      // --- VPC Endpoints for AWS Service Connectivity without Internet ---
       const servicesToEndpoint = [
         's3',
         'kms',
@@ -181,14 +184,15 @@ export class DualRegionHardenedStack extends TerraformStack {
         'secretsmanager',
       ];
       for (const service of servicesToEndpoint) {
+        const isGateway = service === 's3';
         new VpcEndpoint(this, `VpcEndpoint-${service}-${regionConfig.region}`, {
           provider: regionProvider,
           vpcId: vpc.id,
           serviceName: `com.amazonaws.${regionConfig.region}.${service}`,
-          vpcEndpointType: service === 's3' ? 'Gateway' : 'Interface',
-          privateDnsEnabled: true,
-          // FIX: Corrected property name from securityGroupId to securityGroupIds
-          securityGroupIds: service !== 's3' ? [vpcSg.id] : undefined,
+          vpcEndpointType: isGateway ? 'Gateway' : 'Interface',
+          // FIX: Only enable Private DNS for Interface endpoints.
+          privateDnsEnabled: !isGateway,
+          securityGroupIds: !isGateway ? [vpcSg.id] : undefined,
           tags: { ...tags, Name: `vpce-${service}-${regionConfig.region}` },
         });
       }
@@ -234,7 +238,6 @@ export class DualRegionHardenedStack extends TerraformStack {
         ],
       });
 
-      // --- Least-Privilege IAM Policy ---
       const appServicePolicy = new IamPolicy(
         this,
         `AppServicePolicy-${regionConfig.region}`,
@@ -273,7 +276,6 @@ export class DualRegionHardenedStack extends TerraformStack {
         }
       );
 
-      // --- Example Resource: Hardened RDS Database ---
       const dbPassword = new Password(
         this,
         `DBPassword-${regionConfig.region}`,
