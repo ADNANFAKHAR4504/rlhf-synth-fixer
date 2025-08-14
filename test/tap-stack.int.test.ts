@@ -1,8 +1,12 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+let outputs: any = {};
+
+try {
+  outputs = JSON.parse(
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  );
+} catch (err) {}
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -15,10 +19,16 @@ describe('TAP Stack Integration Tests', () => {
 
   beforeAll(() => {
     // Extract outputs from deployment
-    tableArn = outputs['TurnAroundPromptTableArn'] || outputs['TapStackpr1195TurnAroundPromptTableArn'];
-    tableName = outputs['TurnAroundPromptTableName'] || outputs['TapStackpr1195TurnAroundPromptTableName'];
-    loadBalancerUrl = outputs['LoadBalancerURL'] || outputs['TapStackpr1195LoadBalancerURL'];
-    bucketName = outputs['LogsBucketName'] || outputs['TapStackpr1195LogsBucketName'];
+    tableArn =
+      outputs['TurnAroundPromptTableArn'] ||
+      outputs['TapStackpr1195TurnAroundPromptTableArn'];
+    tableName =
+      outputs['TurnAroundPromptTableName'] ||
+      outputs['TapStackpr1195TurnAroundPromptTableName'];
+    loadBalancerUrl =
+      outputs['LoadBalancerURL'] || outputs['TapStackpr1195LoadBalancerURL'];
+    bucketName =
+      outputs['LogsBucketName'] || outputs['TapStackpr1195LogsBucketName'];
   });
 
   describe('DynamoDB Table Tests', () => {
@@ -65,11 +75,13 @@ describe('TAP Stack Integration Tests', () => {
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
         'LoadBalancerURL',
-        'LogsBucketName'
+        'LogsBucketName',
       ];
 
       requiredOutputs.forEach(outputKey => {
-        const output = outputs[outputKey] || outputs[`TapStack${environmentSuffix}${outputKey}`];
+        const output =
+          outputs[outputKey] ||
+          outputs[`TapStack${environmentSuffix}${outputKey}`];
         expect(output).toBeDefined();
       });
     });

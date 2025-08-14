@@ -1,17 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
 
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: "Environment Configuration"
-        Parameters:
-          - EnvironmentSuffix
-    ParameterLabels:
-      EnvironmentSuffix:
-        default: "Environment Suffix"
-
 Parameters:
   EnvironmentSuffix:
     Type: String
@@ -19,6 +8,73 @@ Parameters:
     Description: Environment suffix for resource naming (e.g., dev, staging, prod)
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: Must contain only alphanumeric characters
+
+  EnableSSL:
+    Type: String
+    Description: Enable SSL/HTTPS support (requires valid domain and DNS access)
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  DomainName:
+    Type: String
+    Description: Domain name for the SSL certificate (leave empty to disable SSL)
+    Default: ''
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI ID (automatically resolved)
+
+  EnableAccessLogs:
+    Type: String
+    Description: Enable ALB access logs to S3 (disable for faster deployment)
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  CreateSSLCertificate: !And
+    - !Equals [!Ref EnableSSL, 'true']
+    - !Not [!Equals [!Ref DomainName, '']]
+  EnableALBAccessLogs: !Equals [!Ref EnableAccessLogs, 'true']
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      ELBAccountId: '127311923021'
+    us-east-2:
+      ELBAccountId: '033677994240'
+    us-west-1:
+      ELBAccountId: '027434742980'
+    us-west-2:
+      ELBAccountId: '797873946194'
+    eu-west-1:
+      ELBAccountId: '156460612806'
+    eu-west-2:
+      ELBAccountId: '652711504416'
+    eu-west-3:
+      ELBAccountId: '009996457667'
+    eu-central-1:
+      ELBAccountId: '054676820928'
+    eu-north-1:
+      ELBAccountId: '897822967062'
+    ap-northeast-1:
+      ELBAccountId: '582318560864'
+    ap-northeast-2:
+      ELBAccountId: '600734575887'
+    ap-southeast-1:
+      ELBAccountId: '114774131450'
+    ap-southeast-2:
+      ELBAccountId: '783225319266'
+    ap-south-1:
+      ELBAccountId: '718504428378'
+    sa-east-1:
+      ELBAccountId: '507241528517'
+    ca-central-1:
+      ELBAccountId: '985666609251'
 
 Resources:
   # VPC and Networking
@@ -166,9 +222,10 @@ Resources:
         - Key: App
           Value: WebApp
 
-  # S3 Bucket for ALB Access Logs
+  # S3 Bucket for ALB Access Logs (Optional)
   LogsBucket:
     Type: AWS::S3::Bucket
+    Condition: EnableALBAccessLogs
     Properties:
       BucketName: !Sub 'webapp-logs-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
       LifecycleConfiguration:
@@ -192,9 +249,10 @@ Resources:
         - Key: App
           Value: WebApp
 
-  # S3 Bucket Policy for ALB Access Logs
+  # S3 Bucket Policy for ALB Access Logs (Optional)
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: EnableALBAccessLogs
     Properties:
       Bucket: !Ref LogsBucket
       PolicyDocument:
@@ -202,21 +260,28 @@ Resources:
           - Sid: ALBLogDeliveryWrite
             Effect: Allow
             Principal:
-              AWS: 'arn:aws:iam::797873946194:root'  # ELB service account for us-west-2
+              AWS: !Sub
+                - 'arn:aws:iam::${ElbAccountId}:root'
+                - ElbAccountId:
+                    !FindInMap [RegionMap, !Ref 'AWS::Region', ELBAccountId]
             Action: s3:PutObject
             Resource: !Sub '${LogsBucket}/alb-logs/*'
           - Sid: ALBLogDeliveryAclCheck
             Effect: Allow
             Principal:
-              AWS: 'arn:aws:iam::797873946194:root'
+              AWS: !Sub
+                - 'arn:aws:iam::${ElbAccountId}:root'
+                - ElbAccountId:
+                    !FindInMap [RegionMap, !Ref 'AWS::Region', ELBAccountId]
             Action: s3:GetBucketAcl
             Resource: !Ref LogsBucket
 
-  # SSL Certificate for HTTPS
+  # SSL Certificate for HTTPS (Optional)
   SSLCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: CreateSSLCertificate
     Properties:
-      DomainName: !Sub 'webapp-${EnvironmentSuffix}.example.com'
+      DomainName: !Ref DomainName
       ValidationMethod: DNS
       Tags:
         - Key: Name
@@ -238,13 +303,16 @@ Resources:
         - !Ref PublicSubnet2
       SecurityGroups:
         - !Ref ALBSecurityGroup
-      LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: 'true'
-        - Key: access_logs.s3.bucket
-          Value: !Ref LogsBucket
-        - Key: access_logs.s3.prefix
-          Value: alb-logs
+      LoadBalancerAttributes: !If
+        - EnableALBAccessLogs
+        - - Key: access_logs.s3.enabled
+            Value: 'true'
+          - Key: access_logs.s3.bucket
+            Value: !Ref LogsBucket
+          - Key: access_logs.s3.prefix
+            Value: alb-logs
+        - - Key: access_logs.s3.enabled
+            Value: 'false'
       Tags:
         - Key: Name
           Value: !Sub 'WebApp-ALB-${EnvironmentSuffix}'
@@ -275,9 +343,10 @@ Resources:
         - Key: App
           Value: WebApp
 
-  # HTTPS Listener
+  # HTTPS Listener (Optional)
   ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: CreateSSLCertificate
     Properties:
       DefaultActions:
         - Type: forward
@@ -288,16 +357,20 @@ Resources:
       Certificates:
         - CertificateArn: !Ref SSLCertificate
 
-  # HTTP Listener (redirects to HTTPS)
+  # HTTP Listener (redirects to HTTPS if SSL enabled, otherwise serves traffic)
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
+        - !If
+          - CreateSSLCertificate
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: 443
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -319,17 +392,24 @@ Resources:
         - PolicyName: S3LogsAccess
           PolicyDocument:
             Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                Resource: !Sub '${LogsBucket}/*'
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketLocation
-                  - s3:ListBucket
-                Resource: !GetAtt LogsBucket.Arn
+            Statement: !If
+              - EnableALBAccessLogs
+              - - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:GetObject
+                  Resource: !Sub '${LogsBucket.Arn}/*'
+                - Effect: Allow
+                  Action:
+                    - s3:GetBucketLocation
+                    - s3:ListBucket
+                  Resource: !GetAtt LogsBucket.Arn
+              - - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub 'WebApp-EC2-Role-${EnvironmentSuffix}'
@@ -350,25 +430,25 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub 'WebApp-LaunchTemplate-${EnvironmentSuffix}'
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI in us-west-2
+        ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd
             systemctl start httpd
             systemctl enable httpd
             echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
-            
+
             # Install CloudWatch agent
             wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
             rpm -U ./amazon-cloudwatch-agent.rpm
-            
+
             # Configure CloudWatch agent for application logs
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
             {
@@ -392,7 +472,7 @@ Resources:
               }
             }
             EOF
-            
+
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config -m ec2 -s \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
@@ -539,7 +619,10 @@ Outputs:
   # Web Application Outputs
   LoadBalancerURL:
     Description: URL of the Application Load Balancer
-    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+    Value: !If
+      - CreateSSLCertificate
+      - !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+      - !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancerURL'
 
@@ -550,8 +633,8 @@ Outputs:
       Name: !Sub '${AWS::StackName}-LoadBalancerDNSName'
 
   LogsBucketName:
-    Description: Name of the S3 bucket for logs
-    Value: !Ref LogsBucket
+    Description: Name of the S3 bucket for logs (if enabled)
+    Value: !If [EnableALBAccessLogs, !Ref LogsBucket, 'Access logs disabled']
     Export:
       Name: !Sub '${AWS::StackName}-LogsBucketName'
 
@@ -560,6 +643,12 @@ Outputs:
     Value: !Ref AutoScalingGroup
     Export:
       Name: !Sub '${AWS::StackName}-AutoScalingGroupName'
+
+  SSLCertificateArn:
+    Description: ARN of the SSL certificate (if created)
+    Value: !If [CreateSSLCertificate, !Ref SSLCertificate, 'SSL not enabled']
+    Export:
+      Name: !Sub '${AWS::StackName}-SSLCertificateArn'
 
   # DynamoDB Table Outputs - Required by unit tests
   TurnAroundPromptTableName:
@@ -586,3 +675,12 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  SSLStatus:
+    Description: SSL configuration status and instructions
+    Value: !If
+      - CreateSSLCertificate
+      - 'SSL enabled - Add DNS validation records to your domain to complete certificate validation'
+      - 'SSL disabled - Set EnableSSL=true and provide DomainName to enable HTTPS'
+    Export:
+      Name: !Sub '${AWS::StackName}-SSLStatus'

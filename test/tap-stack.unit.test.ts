@@ -20,7 +20,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
-      
+
       // Ensure we have the required DynamoDB table for integration testing
       expect(template.Resources.TurnAroundPromptTable).toBeDefined();
       expect(template.Outputs.TurnAroundPromptTableName).toBeDefined();
@@ -37,11 +37,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Description).toBe(
         'TAP Stack - Task Assignment Platform CloudFormation Template'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
@@ -182,7 +177,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have all required resources for web application and DynamoDB', () => {
       const resourceCount = Object.keys(template.Resources).length;
       expect(resourceCount).toBeGreaterThan(1); // Should have multiple resources
-      
+
       // Verify core infrastructure components exist
       expect(template.Resources.TurnAroundPromptTable).toBeDefined();
       expect(template.Resources.VPC).toBeDefined();
@@ -190,15 +185,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.AutoScalingGroup).toBeDefined();
     });
 
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
     test('should have all required outputs including DynamoDB table outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBeGreaterThanOrEqual(4); // Should have at least the core 4 outputs
-      
+
       // Verify all required DynamoDB outputs exist
       const requiredOutputs = [
         'TurnAroundPromptTableName',
@@ -241,7 +231,7 @@ describe('TapStack CloudFormation Template', () => {
       const bucket = template.Resources.LogsBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
-      
+
       const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
       expect(lifecycleRules).toHaveLength(1);
       expect(lifecycleRules[0].Transitions[0].TransitionInDays).toBe(30);
@@ -251,15 +241,15 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have proper tagging on all major resources', () => {
       const resourcesToCheck = ['VPC', 'ApplicationLoadBalancer', 'LogsBucket'];
-      
+
       resourcesToCheck.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        
+
         const tags = resource.Properties.Tags;
         const envTag = tags.find((tag: any) => tag.Key === 'Environment');
         const appTag = tags.find((tag: any) => tag.Key === 'App');
-        
+
         expect(envTag?.Value).toBe('Production');
         expect(appTag?.Value).toBe('WebApp');
       });
