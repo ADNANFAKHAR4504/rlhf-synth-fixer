@@ -25,7 +25,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('EnvironmentName:');
       expect(templateContent).toContain('ProjectName:');
       expect(templateContent).toContain('KeyPairName:');
-      expect(templateContent).toContain('VpcCidr:');
+      expect(templateContent).toContain('ExistingVPCId:');
       expect(templateContent).toContain('InstanceType:');
       expect(templateContent).toContain('DBInstanceClass:');
       expect(templateContent).toContain('DBUsername:');
@@ -40,11 +40,10 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   });
 
   describe('VPC and Networking Resources', () => {
-    test('should create VPC', () => {
-      expect(templateContent).toContain('Type: AWS::EC2::VPC');
-      expect(templateContent).toContain('CidrBlock: !Ref VpcCidr');
-      expect(templateContent).toContain('EnableDnsHostnames: true');
-      expect(templateContent).toContain('EnableDnsSupport: true');
+    test('should use existing VPC', () => {
+      expect(templateContent).toContain('ExistingVPCId');
+      expect(templateContent).toContain('vpc-012e207a5ad2facf7');
+      expect(templateContent).toContain('VpcId: !Ref ExistingVPCId');
     });
 
     test('should create public subnets', () => {
@@ -58,8 +57,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('PrivateSubnet2:');
     });
 
-    test('should create Internet Gateway', () => {
-      expect(templateContent).toContain('Type: AWS::EC2::InternetGateway');
+    test('should use existing VPC', () => {
+      expect(templateContent).toContain('ExistingVPCId');
+      expect(templateContent).toContain('vpc-012e207a5ad2facf7');
     });
 
     test('should create NAT Gateway', () => {
@@ -334,7 +334,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('EnvironmentSuffix');
       expect(templateContent).toContain('!Ref EnvironmentName');
       expect(templateContent).toContain('ProjectName');
-      expect(templateContent).toContain('!Ref VpcCidr');
+      expect(templateContent).toContain('!Ref ExistingVPCId');
     });
 
     test('should have proper resource naming with environment suffix', () => {

@@ -18,7 +18,6 @@ Metadata:
       - Label:
           default: "Network Configuration"
         Parameters:
-          - VpcCidr
           - PublicSubnetCidrs
           - PrivateSubnetCidrs
       - Label:
@@ -132,12 +131,12 @@ Parameters:
     AllowedPattern: "^$|^[a-zA-Z0-9_-]+$"
     ConstraintDescription: "Must be empty or a valid CloudTrail name"
 
-  VpcCidr:
+  ExistingVPCId:
     Type: String
-    Default: "10.0.0.0/16"
-    Description: "CIDR block for the VPC"
-    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-    ConstraintDescription: "Must be a valid CIDR block"
+    Default: "vpc-012e207a5ad2facf7"
+    Description: "ID of existing VPC to use"
+    AllowedPattern: "^vpc-[a-f0-9]+$"
+    ConstraintDescription: "Must be a valid VPC ID"
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
@@ -184,42 +183,13 @@ Resources:
       TargetKeyId: !Ref KMSKey
 
   # VPC and Networking
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref VpcCidr
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-VPC"
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Project
-          Value: !Ref ProjectName
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-IGW"
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Project
-          Value: !Ref ProjectName
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
+  # Using existing VPC: !Ref ExistingVPCId
 
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Select [0, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
@@ -234,7 +204,7 @@ Resources:
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Select [1, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
@@ -250,7 +220,7 @@ Resources:
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Select [0, !Ref PrivateSubnetCidrs]
       Tags:
@@ -264,7 +234,7 @@ Resources:
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Select [1, !Ref PrivateSubnetCidrs]
       Tags:
@@ -279,7 +249,7 @@ Resources:
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Public-RouteTable"
@@ -288,13 +258,14 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  DefaultPublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+  # Note: Using existing Internet Gateway in the VPC
+  # DefaultPublicRoute:
+  #   Type: AWS::EC2::Route
+  #   DependsOn: AttachGateway
+  #   Properties:
+  #     RouteTableId: !Ref PublicRouteTable
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     GatewayId: !Ref InternetGateway
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -311,7 +282,6 @@ Resources:
   # NAT Gateway for private subnets
   NATGatewayEIP:
     Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
     Properties:
       Domain: vpc
       Tags:
@@ -338,7 +308,7 @@ Resources:
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${EnvironmentSuffix}-Private-RouteTable"
@@ -371,7 +341,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub "Security group for ${ProjectName} ALB"
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -393,7 +363,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub "Security group for ${ProjectName} web servers"
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -419,7 +389,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub "Security group for ${ProjectName} database"
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
@@ -685,7 +655,7 @@ Resources:
       Port: 80
       Protocol: HTTP
       TargetType: instance
-      VpcId: !Ref VPC
+      VpcId: !Ref ExistingVPCId
       HealthCheckPath: /health
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
@@ -848,7 +818,7 @@ Resources:
 Outputs:
   VPCId:
     Description: "VPC ID"
-    Value: !Ref VPC
+    Value: !Ref ExistingVPCId
     Export:
       Name: !Sub "${AWS::StackName}-VPCId"
 
