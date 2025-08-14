@@ -36,9 +36,9 @@ class TestLiveIntegration(unittest.TestCase):
     print(f"Outputs: {cls.outputs}")
 
     # Parse required outputs
+    cls.region = "us-east-1"
     cls.lambda_arn = cls.outputs["lambda_function_arn"].value
     cls.bucket_name = parse_arn(cls.outputs["s3_bucket_arn"].value)
-    cls.region = cls.outputs["region"].value
     cls.lambda_role_arn = cls.outputs["lambda_role_arn"].value
 
     # Use CI runner's direct credentials (no role assumption needed)
