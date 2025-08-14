@@ -1131,10 +1131,31 @@
         "SecurityGroupEgress": [
           {
             "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP outbound for package downloads"
+          },
+          {
+            "IpProtocol": "tcp",
             "FromPort": 443,
             "ToPort": 443,
             "CidrIp": "0.0.0.0/0",
             "Description": "HTTPS outbound for updates"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "DNS resolution"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "DNS resolution over TCP"
           },
           {
             "IpProtocol": "tcp",
@@ -2010,6 +2031,9 @@
               "InstanceType"
             ]
           },
+          "KeyName": {
+            "Ref": "KeyPairName"
+          },
           "SecurityGroupIds": [
             {
               "Ref": "WebServerSecurityGroup"
@@ -2025,7 +2049,7 @@
           },
           "UserData": {
             "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd aws-cfn-bootstrap\nsystemctl start httpd\nsystemctl enable httpd\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\necho 'OK' > /var/www/html/health\n\n# Signal CloudFormation that instance is ready\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
+              "Fn::Sub": "#!/bin/bash\n\n# Enable detailed logging\nexec > >(tee /var/log/user-data.log) 2>&1\necho \"Starting user-data script at $(date)\"\n\n# Set error handling\nset -e\n\n# Update system\necho \"Updating system packages...\"\nyum update -y\n\n# Install required packages\necho \"Installing httpd and aws-cfn-bootstrap...\"\nyum install -y httpd aws-cfn-bootstrap\n\n# Start and enable Apache\necho \"Starting Apache...\"\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content\necho \"Creating web content...\"\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\necho 'OK' > /var/www/html/health\n\n# Set proper permissions\nchmod 644 /var/www/html/index.html /var/www/html/health\nchown apache:apache /var/www/html/index.html /var/www/html/health\n\n# Verify Apache is running\necho \"Verifying Apache status...\"\nsystemctl status httpd\n\n# Test health endpoint\necho \"Testing health endpoint...\"\ncurl -f http://localhost/health || echo \"Health endpoint test failed\"\n\necho \"User-data script completed successfully at $(date)\"\n\n# Signal CloudFormation that instance is ready\necho \"Sending signal to CloudFormation...\"\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
             }
           },
           "BlockDeviceMappings": [
@@ -2093,10 +2117,10 @@
         },
         "HealthCheckPath": "/health",
         "HealthCheckProtocol": "HTTP",
-        "HealthCheckIntervalSeconds": 15,
-        "HealthCheckTimeoutSeconds": 5,
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 10,
         "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
         "TargetType": "instance",
         "Tags": [
           {
@@ -2276,7 +2300,7 @@
           }
         ],
         "HealthCheckType": "ELB",
-        "HealthCheckGracePeriod": 180,
+        "HealthCheckGracePeriod": 300,
         "Tags": [
           {
             "Key": "Name",
@@ -2326,7 +2350,7 @@
         "AutoScalingRollingUpdate": {
           "MinInstancesInService": 1,
           "MaxBatchSize": 1,
-          "PauseTime": "PT5M",
+          "PauseTime": "PT10M",
           "WaitOnResourceSignals": true,
           "SuspendProcesses": [
             "HealthCheck",
