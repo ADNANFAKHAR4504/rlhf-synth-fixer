@@ -42,7 +42,8 @@ export class Networking extends Construct {
     });
 
     // Multi-AZ subnets
-    const azs = [`${props.region}a`, `${props.region}b`];
+    const { region } = props;
+    const azs = [`${region}a`, `${region}b`]; // For us-west-2, this is us-west-2a, us-west-2b
     azs.forEach((az, i) => {
       const publicSubnet = new Subnet(this, `PublicSubnet${i}`, {
         vpcId: this.vpc.id,
