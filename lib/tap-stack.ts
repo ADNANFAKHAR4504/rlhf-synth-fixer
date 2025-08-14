@@ -72,6 +72,10 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = props?.awsRegion || 'us-east-1';
     const defaultTags = props?.defaultTags?.tags || {};
+    
+    // Add timestamp for uniqueness in CI/CD environments
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const uniqueSuffix = `${environmentSuffix}-${timestamp}`;
 
     // Common tags for cost allocation
     const commonTags = {
@@ -103,7 +107,7 @@ export class TapStack extends TerraformStack {
     });
 
     new KmsAlias(this, 'lambda-kms-alias', {
-      name: `alias/ecommerce-lambda-env-vars-${environmentSuffix}`,
+      name: `alias/ecommerce-lambda-env-vars-${uniqueSuffix}`,
       targetKeyId: lambdaKmsKey.keyId,
     });
 
@@ -115,7 +119,7 @@ export class TapStack extends TerraformStack {
     });
 
     new KmsAlias(this, 's3-kms-alias', {
-      name: `alias/ecommerce-s3-bucket-${environmentSuffix}`,
+      name: `alias/ecommerce-s3-bucket-${uniqueSuffix}`,
       targetKeyId: s3KmsKey.keyId,
     });
 
@@ -124,7 +128,7 @@ export class TapStack extends TerraformStack {
       this,
       'product-service-logs',
       {
-        name: `/aws/lambda/ecommerce-product-service-${environmentSuffix}`,
+        name: `/aws/lambda/ecommerce-product-service-${uniqueSuffix}`,
         retentionInDays: 90,
         tags: commonTags,
       }
@@ -134,7 +138,7 @@ export class TapStack extends TerraformStack {
       this,
       'order-service-logs',
       {
-        name: `/aws/lambda/ecommerce-order-service-${environmentSuffix}`,
+        name: `/aws/lambda/ecommerce-order-service-${uniqueSuffix}`,
         retentionInDays: 90,
         tags: commonTags,
       }
@@ -144,7 +148,7 @@ export class TapStack extends TerraformStack {
       this,
       'user-service-logs',
       {
-        name: `/aws/lambda/ecommerce-user-service-${environmentSuffix}`,
+        name: `/aws/lambda/ecommerce-user-service-${uniqueSuffix}`,
         retentionInDays: 90,
         tags: commonTags,
       }
@@ -152,7 +156,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for Lambda functions
     const lambdaRole = new IamRole(this, 'lambda-execution-role', {
-      name: `ecommerce-lambda-execution-role-${environmentSuffix}`,
+      name: `ecommerce-lambda-execution-role-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -177,7 +181,7 @@ export class TapStack extends TerraformStack {
 
     // Custom IAM policy for DynamoDB and KMS access
     const lambdaCustomPolicy = new IamPolicy(this, 'lambda-custom-policy', {
-      name: `ecommerce-lambda-custom-policy-${environmentSuffix}`,
+      name: `ecommerce-lambda-custom-policy-${uniqueSuffix}`,
       description: 'Custom policy for ecommerce Lambda functions',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -209,7 +213,7 @@ export class TapStack extends TerraformStack {
           {
             Effect: 'Allow',
             Action: ['s3:GetObject', 's3:PutObject'],
-            Resource: `arn:aws:s3:::ecommerce-static-assets-${current.accountId}-${environmentSuffix}/*`,
+            Resource: `arn:aws:s3:::ecommerce-static-assets-${current.accountId}-${uniqueSuffix}/*`,
           },
         ],
       }),
@@ -223,7 +227,7 @@ export class TapStack extends TerraformStack {
 
     // DynamoDB Tables
     const productsTable = new DynamodbTable(this, 'products-table', {
-      name: `ecommerce-products-${environmentSuffix}`,
+      name: `ecommerce-products-${uniqueSuffix}`,
       billingMode: 'PROVISIONED',
       readCapacity: 5,
       writeCapacity: 5,
@@ -251,7 +255,7 @@ export class TapStack extends TerraformStack {
     });
 
     const ordersTable = new DynamodbTable(this, 'orders-table', {
-      name: `ecommerce-orders-${environmentSuffix}`,
+      name: `ecommerce-orders-${uniqueSuffix}`,
       billingMode: 'PROVISIONED',
       readCapacity: 5,
       writeCapacity: 5,
@@ -280,7 +284,7 @@ export class TapStack extends TerraformStack {
     });
 
     const usersTable = new DynamodbTable(this, 'users-table', {
-      name: `ecommerce-users-${environmentSuffix}`,
+      name: `ecommerce-users-${uniqueSuffix}`,
       billingMode: 'PROVISIONED',
       readCapacity: 5,
       writeCapacity: 5,
@@ -312,7 +316,7 @@ export class TapStack extends TerraformStack {
       });
 
       new AppautoscalingPolicy(this, `${name}-read-policy`, {
-        name: `DynamoDBReadCapacityUtilization:${readTarget.resourceId}`,
+        name: `DynamoDBReadCapacityUtilization:${readTarget.resourceId}-${uniqueSuffix}`,
         policyType: 'TargetTrackingScaling',
         resourceId: readTarget.resourceId,
         scalableDimension: readTarget.scalableDimension,
@@ -339,7 +343,7 @@ export class TapStack extends TerraformStack {
       );
 
       new AppautoscalingPolicy(this, `${name}-write-policy`, {
-        name: `DynamoDBWriteCapacityUtilization:${writeTarget.resourceId}`,
+        name: `DynamoDBWriteCapacityUtilization:${writeTarget.resourceId}-${uniqueSuffix}`,
         policyType: 'TargetTrackingScaling',
         resourceId: writeTarget.resourceId,
         scalableDimension: writeTarget.scalableDimension,
@@ -381,7 +385,7 @@ def handler(event, context):
       productServiceCode
     );
     const productServiceFunction = new LambdaFunction(this, 'product-service', {
-      functionName: `ecommerce-product-service-${environmentSuffix}`,
+      functionName: `ecommerce-product-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
       handler: 'product-service.handler',
       runtime: 'python3.9',
@@ -428,7 +432,7 @@ def handler(event, context):
       orderServiceCode
     );
     const orderServiceFunction = new LambdaFunction(this, 'order-service', {
-      functionName: `ecommerce-order-service-${environmentSuffix}`,
+      functionName: `ecommerce-order-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
       handler: 'order-service.handler',
       runtime: 'python3.9',
@@ -472,7 +476,7 @@ def handler(event, context):
 
     const userServiceAsset = createLambdaAsset('user-service', userServiceCode);
     const userServiceFunction = new LambdaFunction(this, 'user-service', {
-      functionName: `ecommerce-user-service-${environmentSuffix}`,
+      functionName: `ecommerce-user-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
       handler: 'user-service.handler',
       runtime: 'python3.9',
@@ -493,7 +497,7 @@ def handler(event, context):
 
     // S3 Bucket for static hosting
     const staticBucket = new S3Bucket(this, 'static-assets-bucket', {
-      bucket: `ecommerce-static-assets-${current.accountId}-${environmentSuffix}`,
+      bucket: `ecommerce-static-assets-${current.accountId}-${uniqueSuffix}`,
       tags: commonTags,
     });
 
@@ -545,7 +549,7 @@ def handler(event, context):
 
     // API Gateway
     const api = new ApiGatewayRestApi(this, 'ecommerce-api', {
-      name: `ecommerce-api-${environmentSuffix}`,
+      name: `ecommerce-api-${uniqueSuffix}`,
       description: 'E-commerce serverless API',
       endpointConfiguration: {
         types: ['REGIONAL'],
