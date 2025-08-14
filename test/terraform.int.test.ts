@@ -12,7 +12,7 @@ interface IngressRule {
 }
 
 describe("Terraform Security Group Integration Test", () => {
-  const originalTfDir = path.resolve(__dirname, "../lib"); // directory containing TF code
+  const originalTfDir = path.resolve(__dirname, "../lib");
   const tmpTfDir = fs.mkdtempSync(path.join(os.tmpdir(), "tf-test-"));
   const planFile = "tfplan.json";
 
@@ -21,29 +21,46 @@ describe("Terraform Security Group Integration Test", () => {
       throw new Error(`Terraform directory not found: ${originalTfDir}`);
     }
 
-    // Copy TF files to temp dir
+    // Copy Terraform files to temp directory
     fs.cpSync(originalTfDir, tmpTfDir, { recursive: true });
 
-    // Replace backend "s3" with backend "local" in both main.tf and provider.tf
+    // Remove test.auto.tfvars.json if present
+    const tfvarsPath = path.join(tmpTfDir, "test.auto.tfvars.json");
+    if (fs.existsSync(tfvarsPath)) {
+      fs.rmSync(tfvarsPath);
+    }
+
+    // Rewrite backend and provider blocks in temp files
     const tfFiles = ["main.tf", "provider.tf"];
     tfFiles.forEach((file) => {
       const filePath = path.join(tmpTfDir, file);
       if (fs.existsSync(filePath)) {
         let content = fs.readFileSync(filePath, "utf-8");
+
+        // Replace backend "s3" with local backend
         content = content.replace(
           /backend\s+"s3"\s*\{[^}]+\}/gs,
           'backend "local" {\n    path = "terraform.tfstate"\n  }'
         );
+
+        // Replace provider block with static dummy credentials and skip validation
+        content = content.replace(
+          /provider\s+"aws"\s*\{[^}]+\}/gs,
+          `provider "aws" {
+            region                      = "us-west-2"
+            access_key                  = "dummy"
+            secret_key                  = "dummy"
+            skip_credentials_validation = true
+            skip_metadata_api_check     = true
+            skip_requesting_account_id  = true
+          }`
+        );
+
         fs.writeFileSync(filePath, content);
       }
     });
 
-    // Inject dummy AWS credentials to satisfy provider block
-    process.env.AWS_ACCESS_KEY_ID = "dummy";
-    process.env.AWS_SECRET_ACCESS_KEY = "dummy";
-    process.env.AWS_DEFAULT_REGION = "us-west-2";
-
-    // Run terraform init with local backend
+    // Run terraform init
     const initResult = spawnSync("terraform", ["init", "-input=false"], {
       cwd: tmpTfDir,
       encoding: "utf-8",
@@ -74,7 +91,6 @@ describe("Terraform Security Group Integration Test", () => {
   });
 
   afterAll(() => {
-    // Cleanup temp dir
     fs.rmSync(tmpTfDir, { recursive: true, force: true });
   });
 
