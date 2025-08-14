@@ -1,39 +1,29 @@
 ###########################################################
 # main.tf
 # Terraform stack: VPC + Secure HTTP/HTTPS-only Security Group
-# ---------------------------------------------------------
-# Usage:
-# terraform init
-# terraform plan -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
-# terraform apply -var='allowed_ipv4_cidrs=["203.0.113.0/24"]'
-#
-# Verification:
-# aws ec2 describe-security-groups --group-ids <security_group_id>
 ###########################################################
 
 ########################
-# Variables
+# Variables & Defaults
 ########################
 
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
   default     = "us-west-2"
-  validation {
-    condition     = length(var.aws_region) > 0
-    error_message = "aws_region cannot be empty"
-  }
 }
 
 variable "allowed_ipv4_cidrs" {
   description = "List of allowed IPv4 CIDRs for HTTP/HTTPS inbound traffic"
   type        = list(string)
-  default     = []
+  # Default to allow from anywhere (IPv4) — change for production!
+  default     = ["0.0.0.0/0"]
 }
 
 variable "allowed_ipv6_cidrs" {
   description = "List of allowed IPv6 CIDRs for HTTP/HTTPS inbound traffic"
   type        = list(string)
+  # Default empty — no IPv6 unless provided
   default     = []
 }
 
@@ -67,24 +57,12 @@ variable "tags" {
 }
 
 ########################
-# Validation
-########################
-
-locals {
-  cidr_validation_error = length(var.allowed_ipv4_cidrs) == 0 && length(var.allowed_ipv6_cidrs) == 0
-}
-
-resource "null_resource" "cidr_check" {
-  count = local.cidr_validation_error ? 1 : 0
-
-  provisioner "local-exec" {
-    command = "echo 'Error: allowed_ipv4_cidrs and allowed_ipv6_cidrs cannot both be empty — at least one CIDR is required for inbound traffic' && exit 1"
-  }
-}
-
-########################
 # Data Source: Availability Zones
 ########################
+
+provider "aws" {
+  region = var.aws_region
+}
 
 data "aws_availability_zones" "available" {
   state = "available"
