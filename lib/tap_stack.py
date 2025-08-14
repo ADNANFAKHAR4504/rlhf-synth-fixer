@@ -132,35 +132,37 @@ class TapStack(cdk.Stack):
     return role
 
   def _create_sample_lambda_function(self) -> _lambda.Function:
-      self.sample_function = _lambda.Function(
-          self,
-          "SampleFunction",
-          runtime=_lambda.Runtime.PYTHON_3_9,
-          handler="lambda_function.lambda_handler",
-          code=_lambda.Code.from_inline("def handler(event, context): return 'ok'"),
-          role=self.lambda_execution_role,
-          memory_size=512,
-          timeout=cdk.Duration.minutes(1),
-          architecture=_lambda.Architecture.ARM_64,
-          reserved_concurrent_executions=50,
-          environment={
-              "LOG_LEVEL": "INFO",
-              "POWERTOOLS_SERVICE_NAME": "sample-service",
-              "POWERTOOLS_METRICS_NAMESPACE": "ServerlessPlatform"
-          }
-      )
+    self.sample_function = _lambda.Function(
+        self,
+        "SampleFunction",
+        runtime=_lambda.Runtime.PYTHON_3_9,
+        handler="lambda_function.lambda_handler",
+        code=_lambda.Code.from_inline("def handler(event, context): return 'ok'"),
+        role=self.lambda_execution_role,
+        memory_size=512,
+        timeout=cdk.Duration.minutes(1),
+        architecture=_lambda.Architecture.ARM_64,
+        environment={
+            "LOG_LEVEL": "INFO",
+            "POWERTOOLS_SERVICE_NAME": "sample-service",
+            "POWERTOOLS_METRICS_NAMESPACE": "ServerlessPlatform"
+        }
+    )
 
-      # Version + Alias for provisioned concurrency
-      version = self.sample_function.current_version
-      _lambda.Alias(
-          self,
-          "SampleFunctionAlias",
-          alias_name="prod",
-          version=version,
-          provisioned_concurrent_executions=5
-      )
+    # Publish a new version
+    version = self.sample_function.current_version
 
-      return self.sample_function
+    # Attach alias with provisioned concurrency
+    _lambda.Alias(
+        self,
+        "SampleFunctionAlias",
+        alias_name="prod",
+        version=version,
+        provisioned_concurrent_executions=1  # start small
+    )
+
+    return self.sample_function
+
 
 
 

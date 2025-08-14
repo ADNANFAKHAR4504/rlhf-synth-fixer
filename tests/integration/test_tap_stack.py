@@ -75,20 +75,19 @@ class TestTapStackIntegration(unittest.TestCase):
   # Live resource tests
   # -----------------------
   def _load_stack_outputs(self):
-      """Load outputs from deployed CloudFormation stack."""
-      response = self.cf_client.describe_stacks(StackName=self.stack_name)
-      outputs = response['Stacks'][0].get('Outputs', [])
-      self.stack_outputs = {o['OutputKey']: o['OutputValue'] for o in outputs}
+    """Load outputs from deployed CloudFormation stack."""
+    response = self.cf_client.describe_stacks(StackName=self.stack_name)
+    outputs = response['Stacks'][0].get('Outputs', [])
+    self.stack_outputs = {o['OutputKey']: o['OutputValue'] for o in outputs}
 
   @mark.it("validates deployed Lambda functions")
   def test_lambda_live(self):
-      assert True
+    assert True
 
   @mark.it("validates API Gateway /sample endpoint")
   def test_api_gateway_live(self):
-      assert True
+    assert True
 
   @mark.it("measures Lambda invocation latency")
   def test_lambda_latency(self):
-      assert True
-
+    assert True
