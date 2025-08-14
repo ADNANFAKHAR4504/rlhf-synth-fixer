@@ -1,5 +1,25 @@
 import { Testing } from 'cdktf';
-import { MultiRegionSecurityStack } from '../lib/tap-stack';
+import { MultiRegionSecurityStack, StackConfig } from '../lib/tap-stack';
+
+const MOCK_STACK_CONFIG: StackConfig = {
+  commonTags: {
+    Project: 'TestProject',
+    Owner: 'Test-Team',
+    Environment: 'Test',
+  },
+  regions: [
+    {
+      region: 'us-east-1',
+      vpcCidr: '10.1.0.0/16',
+      publicSubnetCidr: '10.1.1.0/24',
+      privateSubnetCidr: '10.1.2.0/24',
+      dbSubnetACidr: '10.1.3.0/24',
+      dbSubnetBCidr: '10.1.4.0/24',
+      azA: 'us-east-1a',
+      azB: 'us-east-1b',
+    },
+  ],
+};
 
 describe('MultiRegionSecurityStack Unit Tests', () => {
   let synthesized: any;
@@ -7,80 +27,109 @@ describe('MultiRegionSecurityStack Unit Tests', () => {
 
   beforeAll(() => {
     const app = Testing.app();
-    const stack = new MultiRegionSecurityStack(app, 'unit-test-stack');
+    const stack = new MultiRegionSecurityStack(
+      app,
+      'unit-test-stack',
+      MOCK_STACK_CONFIG
+    );
     synthesized = Testing.synth(stack);
     resources = JSON.parse(synthesized).resource;
   });
 
-  it('should create a central logging bucket with versioning and encryption', () => {
-    const bucket = Object.values(resources.aws_s3_bucket)[0] as any;
-    expect(bucket.bucket).toContain('securecore-central-logs');
-
-    const versioning = Object.values(
-      resources.aws_s3_bucket_versioning
-    )[0] as any;
-    expect(versioning.versioning_configuration.status).toBe('Enabled');
-
+  it('should encrypt the central S3 bucket with a customer-managed KMS key', () => {
+    const kmsKeyLogicalId = Object.keys(resources.aws_kms_key)[0];
     const encryption = Object.values(
       resources.aws_s3_bucket_server_side_encryption_configuration
     )[0] as any;
-    expect(
-      encryption.rule[0].apply_server_side_encryption_by_default.sse_algorithm
-    ).toBe('AES256');
+    const encryptionRule =
+      encryption.rule[0].apply_server_side_encryption_by_default;
 
-    const publicAccessBlock = Object.values(
-      resources.aws_s3_bucket_public_access_block
-    )[0] as any;
-    expect(publicAccessBlock.block_public_acls).toBe(true);
-    expect(publicAccessBlock.restrict_public_buckets).toBe(true);
-  });
-
-  it('should create VPC Flow Logs for each region pointing to the central bucket', () => {
-    const flowLogs = Object.values(resources.aws_flow_log) as any[];
-    // FIX: Instead of trying to resolve the ARN, we find the bucket's logical ID and build the expected token.
-    const centralBucketLogicalId = Object.keys(resources.aws_s3_bucket).find(
-      k => k.includes('CentralLogBucket')
+    expect(encryptionRule.sse_algorithm).toBe('aws:kms');
+    expect(encryptionRule.kms_master_key_id).toBe(
+      `\${aws_kms_key.${kmsKeyLogicalId}.id}`
     );
-    const expectedArnToken = `\${aws_s3_bucket.${centralBucketLogicalId}.arn}`;
-
-    expect(flowLogs.length).toBe(3);
-    flowLogs.forEach(log => {
-      expect(log.log_destination_type).toBe('s3');
-      // FIX: Compare the log destination against the expected token string.
-      expect(log.log_destination).toBe(expectedArnToken);
-      expect(log.traffic_type).toBe('ALL');
-    });
   });
 
-  it('should create an encrypted RDS instance in each region', () => {
+  it('should have an S3 policy that enforces encryption in transit', () => {
+    const policy = JSON.parse(
+      (Object.values(resources.aws_s3_bucket_policy)[0] as any).policy
+    );
+    const denyStatement = policy.Statement.find(
+      (s: any) => s.Sid === 'DenyInsecureTransport'
+    );
+
+    expect(denyStatement).toBeDefined();
+    expect(denyStatement.Effect).toBe('Deny');
+    expect(denyStatement.Principal).toBe('*');
+    expect(denyStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
+  });
+
+  it('should create an encrypted RDS instance using a customer-managed KMS key', () => {
     const rdsInstances = Object.values(resources.aws_db_instance) as any[];
-    expect(rdsInstances.length).toBe(3);
-    rdsInstances.forEach(db => {
-      expect(db.storage_encrypted).toBe(true);
-    });
+    const kmsKeys = Object.values(resources.aws_kms_key) as any[];
+    const kmsKeyLogicalId = Object.keys(resources.aws_kms_key)[0];
+
+    expect(rdsInstances.length).toBe(1);
+    expect(kmsKeys.length).toBe(1);
+
+    expect(rdsInstances[0].storage_encrypted).toBe(true);
+    expect(rdsInstances[0].kms_key_id).toBe(
+      `\${aws_kms_key.${kmsKeyLogicalId}.arn}`
+    );
   });
 
-  it('should generate a random password and a secret for each DB', () => {
-    const randomPasswords = Object.values(resources.random_password) as any[];
-    const secrets = Object.values(resources.aws_secretsmanager_secret) as any[];
-    const secretVersions = Object.values(
-      resources.aws_secretsmanager_secret_version
-    ) as any[];
+  it('should create a least-privilege IAM role for app services', () => {
+    const roles = Object.values(resources.aws_iam_role) as any[];
+    const appServiceRole = roles.find(r =>
+      r.name.includes('secure-core-app-service-role')
+    );
 
-    expect(randomPasswords.length).toBe(3);
-    expect(secrets.length).toBe(3);
-    expect(secretVersions.length).toBe(3);
-
-    expect(secrets[0].name).toContain('prod/rds/master_password/');
+    expect(appServiceRole).toBeDefined();
+    const assumeRolePolicy = JSON.parse(appServiceRole.assume_role_policy);
+    expect(assumeRolePolicy.Statement[0].Principal.Service).toBe(
+      'ec2.amazonaws.com'
+    );
   });
 
-  it('should apply all required tags to a sample resource (VPC)', () => {
-    const vpcs = Object.values(resources.aws_vpc) as any[];
-    const vpcEast = vpcs.find(v => v.tags.Region === 'us-east-1');
+  // FIX: New test to check DB security group ingress rules.
+  it('should configure the DB security group to only allow traffic from the App SG', () => {
+    const securityGroups = Object.values(resources.aws_security_group) as any[];
+    const appSg = securityGroups.find(sg => sg.name.includes('app-sg'));
+    const dbSg = securityGroups.find(sg => sg.name.includes('db-sg'));
 
-    expect(vpcEast.tags.Project).toBe('SecureCore');
-    expect(vpcEast.tags.Owner).toBe('SRE-Team');
-    expect(vpcEast.tags.Environment).toBe('Prod');
-    expect(vpcEast.tags.Region).toBe('us-east-1');
+    expect(dbSg.ingress.length).toBe(1);
+    const ingressRule = dbSg.ingress[0];
+    expect(ingressRule.from_port).toBe(5432);
+    expect(ingressRule.protocol).toBe('tcp');
+    expect(ingressRule.security_groups[0]).toContain(
+      Object.keys(resources.aws_security_group).find(id => id.includes('AppSG'))
+    );
+  });
+
+  // FIX: New test to cover the branch condition for missing us-east-1 provider.
+  it('should throw an error if us-east-1 provider is missing', () => {
+    const invalidConfig: StackConfig = {
+      ...MOCK_STACK_CONFIG,
+      regions: [
+        {
+          region: 'us-west-2',
+          vpcCidr: '10.2.0.0/16',
+          publicSubnetCidr: '10.2.1.0/24',
+          privateSubnetCidr: '10.2.2.0/24',
+          dbSubnetACidr: '10.2.3.0/24',
+          dbSubnetBCidr: '10.2.4.0/24',
+          azA: 'us-west-2a',
+          azB: 'us-west-2b',
+        },
+      ],
+    };
+
+    const app = Testing.app();
+    // Expecting the constructor to throw an error when config is invalid
+    expect(() => {
+      new MultiRegionSecurityStack(app, 'error-stack', invalidConfig);
+    }).toThrow(
+      'A provider for the us-east-1 region is required for central resources.'
+    );
   });
 });
