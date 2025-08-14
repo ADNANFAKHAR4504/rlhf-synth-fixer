@@ -58,7 +58,7 @@ Parameters:
   KeyPairName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances (optional)
     Type: String
-    Default: ''
+    Default: 'MyKeyPair'
     ConstraintDescription: Leave empty if SSH access is not required
 
   LatestAmiId:
