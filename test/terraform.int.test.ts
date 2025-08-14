@@ -1,7 +1,5 @@
-import { spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 
 interface IngressRule {
   protocol: string;
@@ -11,124 +9,67 @@ interface IngressRule {
   cidr_v6?: string;
 }
 
-describe("Terraform Security Group Integration Test", () => {
-  const originalTfDir = path.resolve(__dirname, "../lib");
-  const tmpTfDir = fs.mkdtempSync(path.join(os.tmpdir(), "tf-test-"));
-  const planFile = "tfplan.json";
+describe("Terraform Security Group Integration Test (Offline JSON)", () => {
+  const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+  let outputs: any;
 
   beforeAll(() => {
-    if (!fs.existsSync(originalTfDir)) {
-      throw new Error(`Terraform directory not found: ${originalTfDir}`);
+    if (!fs.existsSync(outputsPath)) {
+      throw new Error(`Outputs JSON not found at: ${outputsPath}`);
     }
-
-    // Copy Terraform files to temp directory
-    fs.cpSync(originalTfDir, tmpTfDir, { recursive: true });
-
-    // Remove test.auto.tfvars.json if present
-    const tfvarsPath = path.join(tmpTfDir, "test.auto.tfvars.json");
-    if (fs.existsSync(tfvarsPath)) {
-      fs.rmSync(tfvarsPath);
-    }
-
-    // Rewrite backend and provider blocks in temp files
-    const tfFiles = ["main.tf", "provider.tf"];
-    tfFiles.forEach((file) => {
-      const filePath = path.join(tmpTfDir, file);
-      if (fs.existsSync(filePath)) {
-        let content = fs.readFileSync(filePath, "utf-8");
-
-        // Replace backend "s3" with local backend
-        content = content.replace(
-          /backend\s+"s3"\s*\{[^}]+\}/gs,
-          'backend "local" {\n    path = "terraform.tfstate"\n  }'
-        );
-
-        // Replace provider block with static dummy credentials and skip validation
-        content = content.replace(
-          /provider\s+"aws"\s*\{[^}]+\}/gs,
-          `provider "aws" {
-            region                      = "us-west-2"
-            access_key                  = "dummy"
-            secret_key                  = "dummy"
-            skip_credentials_validation = true
-            skip_metadata_api_check     = true
-            skip_requesting_account_id  = true
-          }`
-        );
-
-        fs.writeFileSync(filePath, content);
-      }
-    });
-
-    // Run terraform init
-    const initResult = spawnSync("terraform", ["init", "-input=false"], {
-      cwd: tmpTfDir,
-      encoding: "utf-8",
-    });
-    if (initResult.status !== 0) {
-      throw new Error(`Terraform init failed:\n${initResult.stdout}\n${initResult.stderr}`);
-    }
-
-    // Run terraform plan
-    const planOut = spawnSync("terraform", ["plan", "-input=false", "-out=tfplan"], {
-      cwd: tmpTfDir,
-      encoding: "utf-8",
-    });
-    if (planOut.status !== 0) {
-      throw new Error(`Terraform plan failed:\n${planOut.stdout}\n${planOut.stderr}`);
-    }
-
-    // Convert plan to JSON
-    const showOut = spawnSync("terraform", ["show", "-json", "tfplan"], {
-      cwd: tmpTfDir,
-      encoding: "utf-8",
-    });
-    if (showOut.status !== 0) {
-      throw new Error(`Terraform show failed:\n${showOut.stdout}\n${showOut.stderr}`);
-    }
-
-    fs.writeFileSync(path.join(tmpTfDir, planFile), showOut.stdout);
+    outputs = JSON.parse(fs.readFileSync(outputsPath, "utf-8"));
   });
 
-  afterAll(() => {
-    fs.rmSync(tmpTfDir, { recursive: true, force: true });
+  it("should contain expected AWS Security Group output", () => {
+    expect(outputs).toBeDefined();
+    expect(outputs.SecurityGroupId).toBeDefined();
+    expect(typeof outputs.SecurityGroupId).toBe("string");
+    expect(outputs.SecurityGroupId).toMatch(/^sg-[0-9a-f]{8,}$/);
   });
 
-  it("should allow only ports 80 and 443 from specified CIDRs", () => {
-    const planPath = path.join(tmpTfDir, planFile);
-    const jsonData = JSON.parse(fs.readFileSync(planPath, "utf-8"));
-
-    const resources = jsonData?.planned_values?.root_module?.resources || [];
-    const sgResource = resources.find((r: any) => r.type === "aws_security_group");
-    expect(sgResource).toBeDefined();
-
-    const ingressRules: IngressRule[] = (sgResource.values.ingress || []).map((rule: any) => {
-      const r: IngressRule = {
-        protocol: rule.protocol,
-        from_port: rule.from_port,
-        to_port: rule.to_port,
-        cidr_v4: rule.cidr_blocks?.[0] ?? undefined,
-        cidr_v6: rule.ipv6_cidr_blocks?.[0] ?? undefined,
-      };
-
-      if (r.cidr_v4 && r.cidr_v6) {
-        r.cidr_v6 = undefined;
-      }
-
-      if (!r.cidr_v4 && !r.cidr_v6 && Array.isArray(rule.cidr_blocks) && rule.cidr_blocks.length > 0) {
-        const first = rule.cidr_blocks[0];
-        if (first.includes(":")) r.cidr_v6 = first;
-        else r.cidr_v4 = first;
-      }
-
-      return r;
-    });
+  it("should allow only HTTP and HTTPS ingress from allowed CIDRs", () => {
+    // Assuming `outputs.SecurityGroupRules` is your exported ingress array
+    const ingressRules: IngressRule[] = outputs.SecurityGroupRules || [];
+    expect(Array.isArray(ingressRules)).toBe(true);
+    expect(ingressRules.length).toBeGreaterThan(0);
 
     ingressRules.forEach((rule) => {
-      expect(["tcp", "6", "-1"]).toContain(rule.protocol);
+      expect(["tcp", "6"]).toContain(rule.protocol);
       expect([80, 443]).toContain(rule.from_port);
       expect([80, 443]).toContain(rule.to_port);
       expect(rule.cidr_v4 || rule.cidr_v6).toBeDefined();
+
+      if (rule.cidr_v4) {
+        expect(rule.cidr_v4).toMatch(/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/);
+      }
+      if (rule.cidr_v6) {
+        expect(rule.cidr_v6).toMatch(/^[0-9a-f:]+\/\d{1,3}$/i);
+      }
+    });
+  });
+
+  it("should meet tagging and naming standards", () => {
+    // Example: enforce AWS tag standards
+    const tags = outputs.Tags || {};
+    expect(tags).toHaveProperty("Environment");
+    expect(tags.Environment).toMatch(/^(dev|staging|prod)$/);
+    expect(tags).toHaveProperty("Owner");
+    expect(typeof tags.Owner).toBe("string");
+  });
+
+  it("should have valid VPC and subnet outputs", () => {
+    expect(outputs.VpcId).toMatch(/^vpc-[0-9a-f]{8,}$/);
+    expect(outputs.SubnetIds).toBeInstanceOf(Array);
+    outputs.SubnetIds.forEach((id: string) =>
+      expect(id).toMatch(/^subnet-[0-9a-f]{8,}$/)
+    );
+  });
+
+  it("should handle edge cases (empty or missing values)", () => {
+    // Defensive check — ensures the stack does not produce empty strings for critical outputs
+    const criticalKeys = ["VpcId", "SubnetIds", "SecurityGroupId"];
+    criticalKeys.forEach((key) => {
+      expect(outputs[key]).toBeTruthy();
     });
   });
 });
