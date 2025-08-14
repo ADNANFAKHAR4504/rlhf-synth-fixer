@@ -2,6 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready highly available and secure cloud environment with VPC, EC2 Auto Scaling, and security groups'
 
 Parameters:
+  EnvironmentSuffix:
+    Description: A suffix to ensure unique resource names across deployments
+    Type: String
+    Default: dev
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]*$'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters and hyphens
+
   EnvironmentName:
     Description: An environment name that is prefixed to resource names
     Type: String
@@ -49,9 +56,10 @@ Parameters:
     ConstraintDescription: Must be a valid EC2 instance type
 
   KeyPairName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances (optional)
+    Type: String
+    Default: ''
+    ConstraintDescription: Leave empty if SSH access is not required
 
   LatestAmiId:
     Description: Latest Amazon Linux 2 AMI ID (automatically resolved)
@@ -79,6 +87,10 @@ Parameters:
     MinValue: 2
     MaxValue: 10
 
+# Conditions
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+
 Resources:
   # VPC Configuration
   VPC:
@@ -89,7 +101,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-VPC'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPC'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Purpose
@@ -101,7 +113,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-IGW'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-IGW'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Purpose
@@ -123,7 +135,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ1'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Subnet-AZ1'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Purpose
@@ -138,7 +150,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ2'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Subnet-AZ2'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Purpose
@@ -151,7 +163,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Routes'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Routes'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Purpose
@@ -181,7 +193,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-WebServer-SG'
+      GroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer-SG'
       GroupDescription: Security group for web servers allowing HTTP and HTTPS traffic
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -228,7 +240,7 @@ Resources:
           Description: 'Allow outbound NTP traffic'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-WebServer-SecurityGroup'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer-SecurityGroup'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Purpose
@@ -249,7 +261,7 @@ Resources:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-EC2-Role'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-EC2-Role'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Purpose
@@ -265,11 +277,11 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
+      LaunchTemplateName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LaunchTemplate'
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Name: !Ref EC2InstanceProfile
         SecurityGroupIds:
@@ -288,7 +300,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${EnvironmentName}-WebServer'
+                Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer'
               - Key: Environment
                 Value: !Ref EnvironmentName
               - Key: Purpose
@@ -296,7 +308,7 @@ Resources:
           - ResourceType: volume
             Tags:
               - Key: Name
-                Value: !Sub '${EnvironmentName}-WebServer-Volume'
+                Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer-Volume'
               - Key: Environment
                 Value: !Ref EnvironmentName
               - Key: Purpose
@@ -306,7 +318,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${EnvironmentName}-ASG'
+      AutoScalingGroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG'
       VPCZoneIdentifier:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
@@ -320,7 +332,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-ASG'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG'
           PropagateAtLaunch: false
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -340,52 +352,52 @@ Outputs:
     Description: A reference to the created VPC
     Value: !Ref VPC
     Export:
-      Name: !Sub '${EnvironmentName}-VPCID'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPCID'
 
   VPCCidr:
     Description: CIDR block of the VPC
     Value: !Ref VpcCIDR
     Export:
-      Name: !Sub '${EnvironmentName}-VPC-CIDR'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPC-CIDR'
 
   PublicSubnets:
     Description: A list of the public subnets
     Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
     Export:
-      Name: !Sub '${EnvironmentName}-PUB-NETS'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-PUB-NETS'
 
   PublicSubnet1:
     Description: A reference to the public subnet in the 1st Availability Zone
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub '${EnvironmentName}-PUB1-SN'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-PUB1-SN'
 
   PublicSubnet2:
     Description: A reference to the public subnet in the 2nd Availability Zone
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub '${EnvironmentName}-PUB2-SN'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-PUB2-SN'
 
   WebServerSecurityGroup:
     Description: Security group with HTTP and HTTPS access
     Value: !Ref WebServerSecurityGroup
     Export:
-      Name: !Sub '${EnvironmentName}-WEB-SG'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WEB-SG'
 
   AutoScalingGroupName:
     Description: Name of the Auto Scaling Group
     Value: !Ref AutoScalingGroup
     Export:
-      Name: !Sub '${EnvironmentName}-ASG-NAME'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG-NAME'
 
   LaunchTemplateId:
     Description: ID of the Launch Template
     Value: !Ref LaunchTemplate
     Export:
-      Name: !Sub '${EnvironmentName}-LT-ID'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LT-ID'
 
   InternetGateway:
     Description: A reference to the Internet Gateway
     Value: !Ref InternetGateway
     Export:
-      Name: !Sub '${EnvironmentName}-IGW'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-IGW'
