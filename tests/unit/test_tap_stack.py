@@ -18,11 +18,20 @@ import pytest
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Set up Pulumi for testing
+class TestMocks(pulumi.runtime.Mocks):
+  def new_resource(self, args):
+    return [args.name + "_id", args.inputs]
+  
+  def call(self, args):
+    # Return mock data for AWS provider calls
+    if args.token == "aws:index/getRegion:getRegion":
+      return {"name": "us-east-1"}
+    elif args.token == "aws:index/getCallerIdentity:getCallerIdentity":
+      return {"accountId": "123456789012"}  # Note: camelCase for Pulumi
+    return {}
+
 pulumi.runtime.set_mocks(
-  mocks=pulumi.runtime.Mocks(
-    call=lambda args: {},
-    new_resource=lambda args: [args.name + "_id", args.inputs]
-  ),
+  mocks=TestMocks(),
   preview=True
 )
 
@@ -98,42 +107,23 @@ class TestTapStack:
       enable_cross_region_replication=False
     )
   
-  @patch('pulumi_aws.get_region')
-  @patch('pulumi_aws.get_caller_identity')
-  def test_tap_stack_initialization(self, mock_caller_identity, mock_get_region, basic_args):
+  def test_tap_stack_initialization(self, basic_args):
     """Test TapStack initialization."""
-    mock_get_region.return_value = Mock(name="us-east-1")
-    mock_caller_identity.return_value = Mock(account_id="123456789012")
-    
     stack = TapStack("test-stack", basic_args)
     
     assert stack.args == basic_args
     assert stack.source_region == "us-east-1"
     assert stack.account_id == "123456789012"
   
-  @patch('pulumi_aws.get_region')
-  @patch('pulumi_aws.get_caller_identity')
-  def test_tap_stack_with_cross_region_replication(
-    self, mock_caller_identity, mock_get_region, cross_region_args
-  ):
+  def test_tap_stack_with_cross_region_replication(self, cross_region_args):
     """Test TapStack with cross-region replication enabled."""
-    mock_get_region.return_value = Mock(name="us-east-1")
-    mock_caller_identity.return_value = Mock(account_id="123456789012")
-    
     stack = TapStack("test-stack", cross_region_args)
     
     assert stack.target_region == "us-west-2"
     assert stack.args.enable_cross_region_replication is True
   
-  @patch('pulumi_aws.get_region')
-  @patch('pulumi_aws.get_caller_identity')
-  def test_tap_stack_minimal_configuration(
-    self, mock_caller_identity, mock_get_region, minimal_args
-  ):
+  def test_tap_stack_minimal_configuration(self, minimal_args):
     """Test TapStack with minimal configuration."""
-    mock_get_region.return_value = Mock(name="us-east-1")
-    mock_caller_identity.return_value = Mock(account_id="123456789012")
-    
     stack = TapStack("test-stack", minimal_args)
     
     assert stack.args.enable_monitoring is False
@@ -141,152 +131,86 @@ class TestTapStack:
   
   def test_iam_role_configuration(self, basic_args):
     """Test IAM role configuration."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", basic_args)
-      
-      # Verify Lambda role exists
-      assert hasattr(stack, 'lambda_role')
-      assert hasattr(stack, 'api_gateway_role')
+    stack = TapStack("test-stack", basic_args)
+    
+    # Verify Lambda role exists
+    assert hasattr(stack, 'lambda_role')
+    assert hasattr(stack, 'api_gateway_role')
   
   def test_s3_bucket_configuration(self, basic_args):
     """Test S3 bucket configuration."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", basic_args)
-      
-      # Verify primary bucket exists
-      assert hasattr(stack, 'primary_bucket')
+    stack = TapStack("test-stack", basic_args)
+    
+    # Verify primary bucket exists
+    assert hasattr(stack, 'primary_bucket')
   
   def test_s3_cross_region_replication(self, cross_region_args):
     """Test S3 cross-region replication configuration."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", cross_region_args)
-      
-      # Verify both buckets exist when cross-region replication is enabled
-      assert hasattr(stack, 'primary_bucket')
-      assert hasattr(stack, 'secondary_bucket')
+    stack = TapStack("test-stack", cross_region_args)
+    
+    # Verify both buckets exist when cross-region replication is enabled
+    assert hasattr(stack, 'primary_bucket')
+    assert hasattr(stack, 'secondary_bucket')
   
   def test_dynamodb_table_configuration(self, basic_args):
     """Test DynamoDB table configuration."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", basic_args)
-      
-      # Verify DynamoDB table exists
-      assert hasattr(stack, 'dynamodb_table')
+    stack = TapStack("test-stack", basic_args)
+    
+    # Verify DynamoDB table exists
+    assert hasattr(stack, 'dynamodb_table')
   
   def test_dynamodb_cross_region_configuration(self, cross_region_args):
     """Test DynamoDB cross-region configuration."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", cross_region_args)
-      
-      # Verify both DynamoDB tables exist when cross-region replication is enabled
-      assert hasattr(stack, 'dynamodb_table')
-      assert hasattr(stack, 'secondary_dynamodb_table')
+    stack = TapStack("test-stack", cross_region_args)
+    
+    # Verify both DynamoDB tables exist when cross-region replication is enabled
+    assert hasattr(stack, 'dynamodb_table')
+    assert hasattr(stack, 'secondary_dynamodb_table')
   
   def test_lambda_function_configuration(self, basic_args):
     """Test Lambda function configuration."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", basic_args)
-      
-      # Verify Lambda function and log group exist
-      assert hasattr(stack, 'lambda_function')
-      assert hasattr(stack, 'lambda_log_group')
+    stack = TapStack("test-stack", basic_args)
+    
+    # Verify Lambda function and log group exist
+    assert hasattr(stack, 'lambda_function')
+    assert hasattr(stack, 'lambda_log_group')
   
   def test_api_gateway_configuration(self, basic_args):
     """Test API Gateway configuration."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", basic_args)
-      
-      # Verify API Gateway and usage plan exist
-      assert hasattr(stack, 'api_gateway')
-      assert hasattr(stack, 'usage_plan')
+    stack = TapStack("test-stack", basic_args)
+    
+    # Verify API Gateway and usage plan exist
+    assert hasattr(stack, 'api_gateway')
+    assert hasattr(stack, 'usage_plan')
   
   def test_monitoring_enabled(self, basic_args):
     """Test monitoring configuration when enabled."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", basic_args)
-      
-      # Verify monitoring resources exist
-      assert hasattr(stack, 'dashboard')
+    stack = TapStack("test-stack", basic_args)
+    
+    # Verify monitoring resources exist
+    assert hasattr(stack, 'dashboard')
   
   def test_monitoring_disabled(self, minimal_args):
     """Test monitoring configuration when disabled."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", minimal_args)
-      
-      # Verify monitoring resources don't exist when disabled
-      assert not hasattr(stack, 'dashboard')
+    stack = TapStack("test-stack", minimal_args)
+    
+    # Verify monitoring resources don't exist when disabled
+    assert not hasattr(stack, 'dashboard')
   
   def test_migration_resources_configuration(self, basic_args):
     """Test migration resources configuration."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      stack = TapStack("test-stack", basic_args)
-      
-      # Verify migration resources exist
-      assert hasattr(stack, 'migration_state_table')
-      assert hasattr(stack, 'migration_function')
+    stack = TapStack("test-stack", basic_args)
+    
+    # Verify migration resources exist
+    assert hasattr(stack, 'migration_state_table')
+    assert hasattr(stack, 'migration_function')
   
   def test_environment_suffix_usage(self, basic_args):
     """Test that environment suffix is used consistently."""
-    with patch('pulumi_aws.get_region') as mock_region, \
-             patch('pulumi_aws.get_caller_identity') as mock_identity:
-      
-      mock_region.return_value = Mock(name="us-east-1")
-      mock_identity.return_value = Mock(account_id="123456789012")
-      
-      basic_args.environment_suffix = "production"
-      stack = TapStack("test-stack", basic_args)
-      
-      assert stack.args.environment_suffix == "production"
+    basic_args.environment_suffix = "production"
+    stack = TapStack("test-stack", basic_args)
+    
+    assert stack.args.environment_suffix == "production"
   
   def test_different_migration_modes(self):
     """Test different migration modes."""
@@ -328,7 +252,7 @@ class TestTapStackIAMConfiguration:
   
   def test_lambda_policy_permissions(self):
     """Test Lambda policy permissions."""
-    # Test would verify DynamoDB, S3, and CloudWatch permissions
+    # Test would verify DynamoDB, S3, CloudWatch, and SQS permissions
     # This is a structural test for the policy format
     expected_actions = [
       "dynamodb:GetItem",
@@ -347,7 +271,7 @@ class TestTapStackIAMConfiguration:
     ]
     
     # In actual test, would verify these actions are in the policy
-    assert len(expected_actions) == 12
+    assert len(expected_actions) == 13
   
   def test_api_gateway_role_configuration(self):
     """Test API Gateway role configuration."""

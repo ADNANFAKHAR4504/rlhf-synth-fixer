@@ -326,14 +326,14 @@ class TapStack(ComponentResource):
       )
       
       # Configure replication
-      aws.s3.BucketReplicationConfiguration(
+      aws.s3.BucketReplicationConfig(
         f"bucket-replication-{self.args.environment_suffix}",
         role=s3_replication_role.arn,
         bucket=self.primary_bucket.id,
-        rules=[aws.s3.BucketReplicationConfigurationRuleArgs(
+        rules=[aws.s3.BucketReplicationConfigRuleArgs(
           id="ReplicateEverything",
           status="Enabled",
-          destination=aws.s3.BucketReplicationConfigurationRuleDestinationArgs(
+          destination=aws.s3.BucketReplicationConfigRuleDestinationArgs(
             bucket=self.secondary_bucket.arn,
             storage_class="STANDARD"
           )
