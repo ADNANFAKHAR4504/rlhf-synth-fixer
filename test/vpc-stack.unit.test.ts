@@ -27,6 +27,11 @@ jest.mock('@pulumi/aws', () => ({
   getAvailabilityZones: jest.fn().mockResolvedValue({
     names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
   }),
+  getAvailabilityZonesOutput: jest.fn().mockReturnValue({
+    names: {
+      apply: jest.fn().mockImplementation((fn) => fn(['us-east-1a', 'us-east-1b', 'us-east-1c']))
+    }
+  }),
 }));
 
 jest.mock('@pulumi/pulumi', () => ({
@@ -34,6 +39,9 @@ jest.mock('@pulumi/pulumi', () => ({
     constructor(type: string, name: string, args: any, opts?: any) {}
     registerOutputs(outputs: any) {}
   },
+  all: jest.fn().mockImplementation((outputs) => ({
+    apply: jest.fn().mockImplementation((fn) => fn(outputs))
+  })),
 }));
 
 import * as aws from '@pulumi/aws';
@@ -101,7 +109,7 @@ describe('VpcStack Unit Tests', () => {
     });
 
     it('should fetch availability zones', () => {
-      expect(aws.getAvailabilityZones).toHaveBeenCalledWith({
+      expect(aws.getAvailabilityZonesOutput).toHaveBeenCalledWith({
         state: 'available',
       });
     });
@@ -338,7 +346,7 @@ describe('VpcStack Unit Tests', () => {
       // Wait for async operations to complete
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(aws.getAvailabilityZones).toHaveBeenCalledWith({
+      expect(aws.getAvailabilityZonesOutput).toHaveBeenCalledWith({
         state: 'available',
       });
     });

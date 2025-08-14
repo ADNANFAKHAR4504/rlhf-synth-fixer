@@ -74,7 +74,7 @@ export class VpcStack extends pulumi.ComponentResource {
             vpcId: vpc.id,
             cidrBlock: `10.0.${i * 2 + 1}.0/24`,
             availabilityZone: az,
-            mapPublicIpOnLaunch: true,
+            mapPublicIpOnLaunch: false,
             tags: {
               Name: `tap-public-subnet-${i}-${environmentSuffix}`,
               Type: 'public',

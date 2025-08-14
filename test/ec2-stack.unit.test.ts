@@ -149,7 +149,7 @@ describe('Ec2Stack Unit Tests', () => {
         expect.objectContaining({
           rootBlockDevice: expect.objectContaining({
             volumeType: 'gp3',
-            volumeSize: 20,
+            volumeSize: 30,
             encrypted: true,
             kmsKeyId: mockKmsKeyArn,
             deleteOnTermination: true,
@@ -179,7 +179,7 @@ describe('Ec2Stack Unit Tests', () => {
       expect(aws.ec2.Instance).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          userData: expect.any(String),
+          userDataBase64: expect.any(String),
         }),
         expect.any(Object)
       );
@@ -282,7 +282,7 @@ describe('Ec2Stack Unit Tests', () => {
       });
 
       const instanceCall = (aws.ec2.Instance as unknown as jest.Mock).mock.calls[0];
-      const userData = Buffer.from(instanceCall[1].userData, 'base64').toString();
+      const userData = Buffer.from(instanceCall[1].userDataBase64, 'base64').toString();
       expect(userData).toContain(`TAP Secure Web Server - ${environmentSuffix}`);
     });
   });
@@ -385,7 +385,7 @@ describe('Ec2Stack Unit Tests', () => {
 
     it('should include CloudWatch agent installation', () => {
       const instanceCall = (aws.ec2.Instance as unknown as jest.Mock).mock.calls[0];
-      const userData = Buffer.from(instanceCall[1].userData, 'base64').toString();
+      const userData = Buffer.from(instanceCall[1].userDataBase64, 'base64').toString();
       
       expect(userData).toContain('yum install -y amazon-cloudwatch-agent');
       expect(userData).toContain('amazon-cloudwatch-agent-ctl');
@@ -393,7 +393,7 @@ describe('Ec2Stack Unit Tests', () => {
 
     it('should include security hardening commands', () => {
       const instanceCall = (aws.ec2.Instance as unknown as jest.Mock).mock.calls[0];
-      const userData = Buffer.from(instanceCall[1].userData, 'base64').toString();
+      const userData = Buffer.from(instanceCall[1].userDataBase64, 'base64').toString();
       
       expect(userData).toContain('net.ipv4.conf.all.send_redirects = 0');
       expect(userData).toContain('net.ipv4.conf.all.accept_source_route = 0');
@@ -402,7 +402,7 @@ describe('Ec2Stack Unit Tests', () => {
 
     it('should include web server setup', () => {
       const instanceCall = (aws.ec2.Instance as unknown as jest.Mock).mock.calls[0];
-      const userData = Buffer.from(instanceCall[1].userData, 'base64').toString();
+      const userData = Buffer.from(instanceCall[1].userDataBase64, 'base64').toString();
       
       expect(userData).toContain('yum install -y httpd');
       expect(userData).toContain('systemctl enable httpd');

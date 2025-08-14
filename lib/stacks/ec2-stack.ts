@@ -120,7 +120,7 @@ chown apache:apache /var/www/html/index.html
           .apply(subnets => subnets[0]), // Use first private subnet
         vpcSecurityGroupIds: [args.webSecurityGroupId],
         iamInstanceProfile: args.ec2InstanceProfileName,
-        userData: Buffer.from(userData).toString('base64'),
+        userDataBase64: Buffer.from(userData).toString('base64'),
         keyName: enableKeyPairs ? 'my-key-pair' : undefined,
         associatePublicIpAddress: false, // No public IP for security
 
@@ -138,7 +138,7 @@ chown apache:apache /var/www/html/index.html
         // Root block device with encryption
         rootBlockDevice: {
           volumeType: 'gp3',
-          volumeSize: 20,
+          volumeSize: 30,
           encrypted: true,
           kmsKeyId: args.mainKmsKeyArn,
           deleteOnTermination: true,

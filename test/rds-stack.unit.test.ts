@@ -30,6 +30,9 @@ jest.mock('@pulumi/pulumi', () => ({
     registerOutputs(outputs: any) {}
   },
   secret: jest.fn((value: string) => value),
+  output: jest.fn().mockImplementation((value) => ({
+    apply: jest.fn().mockImplementation((fn) => fn(value))
+  })),
 }));
 
 import * as aws from '@pulumi/aws';
@@ -69,6 +72,84 @@ describe('RdsStack Unit Tests', () => {
         tags: { Environment: 'prod' },
       });
       expect(rdsStack).toBeDefined();
+    });
+
+    it('should throw error when insufficient private subnets provided', () => {
+      // Mock pulumi.output to simulate the error condition
+      const mockOutput = jest.fn().mockImplementation((value) => ({
+        apply: jest.fn().mockImplementation((fn) => {
+          // Simulate insufficient subnets
+          expect(() => fn(['subnet-12345'])).toThrow('RDS needs at least two private subnets; got 1.');
+        })
+      }));
+      
+      // Temporarily replace the mock
+      const originalMock = require('@pulumi/pulumi').output;
+      require('@pulumi/pulumi').output = mockOutput;
+      
+      try {
+        new RdsStack('test-rds-error', {
+          privateSubnetIds: ['subnet-12345'], // Only one subnet
+          dbSecurityGroupId: mockDbSecurityGroupId,
+          rdsKmsKeyArn: mockKmsKeyArn,
+          dbSecretArn: mockDbSecretArn,
+        });
+      } finally {
+        // Restore original mock
+        require('@pulumi/pulumi').output = originalMock;
+      }
+    });
+
+    it('should throw error when no private subnets provided', () => {
+      // Mock pulumi.output to simulate the error condition
+      const mockOutput = jest.fn().mockImplementation((value) => ({
+        apply: jest.fn().mockImplementation((fn) => {
+          // Simulate no subnets
+          expect(() => fn([])).toThrow('RDS needs at least two private subnets; got 0.');
+        })
+      }));
+      
+      // Temporarily replace the mock
+      const originalMock = require('@pulumi/pulumi').output;
+      require('@pulumi/pulumi').output = mockOutput;
+      
+      try {
+        new RdsStack('test-rds-error-empty', {
+          privateSubnetIds: [], // No subnets
+          dbSecurityGroupId: mockDbSecurityGroupId,
+          rdsKmsKeyArn: mockKmsKeyArn,
+          dbSecretArn: mockDbSecretArn,
+        });
+      } finally {
+        // Restore original mock
+        require('@pulumi/pulumi').output = originalMock;
+      }
+    });
+
+    it('should throw error when null private subnets provided', () => {
+      // Mock pulumi.output to simulate the error condition
+      const mockOutput = jest.fn().mockImplementation((value) => ({
+        apply: jest.fn().mockImplementation((fn) => {
+          // Simulate null subnets
+          expect(() => fn(null)).toThrow('RDS needs at least two private subnets; got 0.');
+        })
+      }));
+      
+      // Temporarily replace the mock
+      const originalMock = require('@pulumi/pulumi').output;
+      require('@pulumi/pulumi').output = mockOutput;
+      
+      try {
+        new RdsStack('test-rds-error-null', {
+          privateSubnetIds: null as any, // Null subnets
+          dbSecurityGroupId: mockDbSecurityGroupId,
+          rdsKmsKeyArn: mockKmsKeyArn,
+          dbSecretArn: mockDbSecretArn,
+        });
+      } finally {
+        // Restore original mock
+        require('@pulumi/pulumi').output = originalMock;
+      }
     });
   });
 
