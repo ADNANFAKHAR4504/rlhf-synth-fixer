@@ -9,7 +9,7 @@ component while preserving the TapStack / TapStackArgs design.
 
 Key points satisfied (see PROMPT.md):
 - Region: us-west-2 (Oregon)
-- Two VPCs with non-overlapping CIDRs
+- Two VPCs with non-overlapping CIDRs 
 - Each VPC has two public and two private subnets across distinct AZs
 - Application Load Balancer (ALB) handling HTTP/HTTPS
 - Auto Scaling Groups with >=2 instances per VPC
