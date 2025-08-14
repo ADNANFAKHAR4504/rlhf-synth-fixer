@@ -44,7 +44,6 @@ describe('RdsStack Unit Tests', () => {
   const mockKmsKeyArn = 'arn:aws:kms:us-east-1:123456789012:key/mock-rds-key';
   const mockPrivateSubnetIds = ['subnet-12345', 'subnet-67890'];
   const mockDbSecurityGroupId = 'sg-db123456';
-  const mockDbSecretArn = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:mock-secret';
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -56,7 +55,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
       });
       expect(rdsStack).toBeDefined();
     });
@@ -67,7 +65,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
         instanceClass: 'db.t3.large',
         tags: { Environment: 'prod' },
       });
@@ -92,7 +89,6 @@ describe('RdsStack Unit Tests', () => {
           privateSubnetIds: ['subnet-12345'], // Only one subnet
           dbSecurityGroupId: mockDbSecurityGroupId,
           rdsKmsKeyArn: mockKmsKeyArn,
-          dbSecretArn: mockDbSecretArn,
         });
       } finally {
         // Restore original mock
@@ -118,7 +114,6 @@ describe('RdsStack Unit Tests', () => {
           privateSubnetIds: [], // No subnets
           dbSecurityGroupId: mockDbSecurityGroupId,
           rdsKmsKeyArn: mockKmsKeyArn,
-          dbSecretArn: mockDbSecretArn,
         });
       } finally {
         // Restore original mock
@@ -144,7 +139,6 @@ describe('RdsStack Unit Tests', () => {
           privateSubnetIds: null as any, // Null subnets
           dbSecurityGroupId: mockDbSecurityGroupId,
           rdsKmsKeyArn: mockKmsKeyArn,
-          dbSecretArn: mockDbSecretArn,
         });
       } finally {
         // Restore original mock
@@ -160,7 +154,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
         tags: { Environment: 'test' },
       });
     });
@@ -188,7 +181,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
         instanceClass: 'db.t3.small',
         tags: { Environment: 'test' },
       });
@@ -255,7 +247,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
       });
 
       expect(aws.rds.Instance).toHaveBeenCalledWith(
@@ -275,7 +266,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
       });
     });
 
@@ -309,7 +299,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
       });
 
       expect(aws.rds.SubnetGroup).toHaveBeenCalledWith(
@@ -336,7 +325,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
       });
 
       expect(aws.rds.Instance).toHaveBeenCalledWith(
@@ -358,7 +346,6 @@ describe('RdsStack Unit Tests', () => {
         privateSubnetIds: mockPrivateSubnetIds,
         dbSecurityGroupId: mockDbSecurityGroupId,
         rdsKmsKeyArn: mockKmsKeyArn,
-        dbSecretArn: mockDbSecretArn,
       });
     });
 

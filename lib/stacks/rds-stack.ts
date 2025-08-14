@@ -8,7 +8,6 @@ export interface RdsStackArgs {
   privateSubnetIds: pulumi.Input<pulumi.Input<string>[]>;
   dbSecurityGroupId: pulumi.Input<string>;
   rdsKmsKeyArn: pulumi.Input<string>;
-  dbSecretArn: pulumi.Input<string>;
   instanceClass?: string;
 }
 

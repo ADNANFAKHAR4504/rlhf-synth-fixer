@@ -108,7 +108,7 @@ describe('TapStack Unit Tests', () => {
 
   describe('Stack Instantiation', () => {
     it('should instantiate successfully with default values', () => {
-      stack = new TapStack('test-stack');
+      stack = new TapStack('test-stack', {});
       expect(stack).toBeDefined();
     });
 
@@ -139,7 +139,7 @@ describe('TapStack Unit Tests', () => {
 
     it('should create KMS stack with correct parameters', () => {
       expect(KmsStack).toHaveBeenCalledWith(
-        'tap-kms',
+        'tap-kms-test',
         {
           environmentSuffix: 'test',
           tags: { Environment: 'test' },
@@ -150,7 +150,7 @@ describe('TapStack Unit Tests', () => {
 
     it('should create VPC stack with correct parameters', () => {
       expect(VpcStack).toHaveBeenCalledWith(
-        'tap-vpc',
+        'tap-vpc-test',
         {
           environmentSuffix: 'test',
           vpcCidr: '10.0.0.0/16',
@@ -263,7 +263,7 @@ describe('TapStack Unit Tests', () => {
 
   describe('Environment Suffix Usage', () => {
     it('should use default environment suffix when not provided', () => {
-      stack = new TapStack('test-stack');
+      stack = new TapStack('test-stack', {});
       
       expect(KmsStack).toHaveBeenCalledWith(
         'tap-kms',

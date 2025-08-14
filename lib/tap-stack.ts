@@ -4,20 +4,16 @@
  * This module defines the TapStack class, the main Pulumi ComponentResource for
  * the TAP (Test Automation Platform) project.
  *
- * It orchestrates the instantiation of other resource-specific components
- * and manages environment-specific configurations.
+ * It serves as the entry point that initializes the SecureStack with appropriate
+ * configuration based on the deployment environment. It handles environment-specific
+ * settings, tagging, and deployment configuration for AWS resources.
+ *
+ * The stack created by this module uses environment suffixes to distinguish between
+ * different deployment environments (development, staging, production, etc.).
  */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-
-// Import nested stacks
-import { Ec2Stack } from './stacks/ec2-stack';
-import { IamStack } from './stacks/iam-stack';
-import { KmsStack } from './stacks/kms-stack';
-import { RdsStack } from './stacks/rds-stack';
-import { S3Stack } from './stacks/s3-stack';
-import { SecurityGroupStack } from './stacks/security-group-stack';
-import { VpcStack } from './stacks/vpc-stack';
+import { SecureStack } from './secure-stack';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -50,140 +46,68 @@ export interface TapStackArgs {
   dbInstanceClass?: string;
 
   /**
-   * Enable key pairs for EC2 instances
+   * Whether to enable key pairs for EC2 instances
    */
   enableKeyPairs?: boolean;
 }
 
 /**
- * Represents the main Pulumi component resource for the TAP project.
+ * TapStack represents the main Pulumi component resource for the TAP project.
  *
- * This component orchestrates the instantiation of other resource-specific components
- * and manages the environment suffix used for naming and configuration.
+ * This component acts as the entry point and orchestrates the creation of the
+ * SecureStack which contains all the secure infrastructure components.
  */
 export class TapStack extends pulumi.ComponentResource {
-  // Infrastructure outputs
+  // Expose SecureStack outputs
+  public readonly mainKmsKeyId: pulumi.Output<string>;
+  public readonly mainKmsKeyArn: pulumi.Output<string>;
+  public readonly rdsKmsKeyArn: pulumi.Output<string>;
   public readonly vpcId: pulumi.Output<string>;
+  public readonly privateSubnetIds: pulumi.Output<string[]>;
   public readonly dataBucketName: pulumi.Output<string>;
   public readonly logsBucketName: pulumi.Output<string>;
   public readonly databaseEndpoint: pulumi.Output<string>;
   public readonly webInstanceId: pulumi.Output<string>;
   public readonly webInstancePrivateIp: pulumi.Output<string>;
 
-  /**
-   * Creates a new TapStack component.
-   * @param name The logical name of this Pulumi component.
-   * @param args Configuration arguments including environment suffix and tags.
-   * @param opts Pulumi options.
-   */
-  constructor(name: string, args?: TapStackArgs, opts?: ResourceOptions) {
-    super('tap:stack:TapStack', name, args, opts);
+  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+    super('tap:stack:TapStack', name, {}, opts);
 
-    const environmentSuffix = args?.environmentSuffix || 'dev';
-    const vpcCidr = args?.vpcCidr || '10.0.0.0/16';
-    const instanceType = args?.instanceType || 't3.micro';
-    const dbInstanceClass = args?.dbInstanceClass || 'db.t3.micro';
-    const enableKeyPairs = args?.enableKeyPairs || false;
-    const tags = args?.tags || {};
+    const environmentSuffix = args.environmentSuffix || 'dev';
 
-    // --- Instantiate Nested Components ---
-
-    // 1. Create KMS keys for encryption
-    const kmsStack = new KmsStack(
-      'tap-kms',
+    // Create the secure infrastructure stack
+    const secureStack = new SecureStack(
+      `tap-secure-infra-${environmentSuffix}`,
       {
-        environmentSuffix,
-        tags,
+        environmentSuffix: args.environmentSuffix,
+        tags: args.tags,
+        vpcCidr: args.vpcCidr,
+        instanceType: args.instanceType,
+        dbInstanceClass: args.dbInstanceClass,
+        enableKeyPairs: args.enableKeyPairs,
       },
       { parent: this }
     );
 
-    // 2. Create VPC infrastructure
-    const vpcStack = new VpcStack(
-      'tap-vpc',
-      {
-        environmentSuffix,
-        vpcCidr,
-        tags,
-      },
-      { parent: this }
-    );
+    // Expose all outputs from the secure stack
+    this.mainKmsKeyId = secureStack.mainKmsKeyId;
+    this.mainKmsKeyArn = secureStack.mainKmsKeyArn;
+    this.rdsKmsKeyArn = secureStack.rdsKmsKeyArn;
+    this.vpcId = secureStack.vpcId;
+    this.privateSubnetIds = secureStack.privateSubnetIds;
+    this.dataBucketName = secureStack.dataBucketName;
+    this.logsBucketName = secureStack.logsBucketName;
+    this.databaseEndpoint = secureStack.databaseEndpoint;
+    this.webInstanceId = secureStack.webInstanceId;
+    this.webInstancePrivateIp = secureStack.webInstancePrivateIp;
 
-    // 3. Create IAM roles and policies
-    const iamStack = new IamStack(
-      'tap-iam',
-      {
-        environmentSuffix,
-        tags,
-      },
-      { parent: this }
-    );
-
-    // 4. Create S3 buckets with encryption
-    const s3Stack = new S3Stack(
-      'tap-s3',
-      {
-        environmentSuffix,
-        mainKmsKeyArn: kmsStack.mainKeyArn,
-        tags,
-      },
-      { parent: this }
-    );
-
-    // 5. Create Security Groups with restrictive rules
-    const securityGroupStack = new SecurityGroupStack(
-      'tap-security-group',
-      {
-        environmentSuffix,
-        vpcId: vpcStack.vpcId,
-        tags,
-      },
-      { parent: this }
-    );
-
-    // 6. Create RDS instance with encryption
-    const rdsStack = new RdsStack(
-      'tap-rds',
-      {
-        environmentSuffix,
-        privateSubnetIds: vpcStack.privateSubnetIds,
-        dbSecurityGroupId: securityGroupStack.dbSecurityGroupId,
-        rdsKmsKeyArn: kmsStack.rdsKeyArn,
-        dbSecretArn:
-          'arn:aws:secretsmanager:us-east-1:123456789012:secret:placeholder',
-        instanceClass: dbInstanceClass,
-        tags,
-      },
-      { parent: this }
-    );
-
-    // 7. Create EC2 instance with encrypted storage
-    const ec2Stack = new Ec2Stack(
-      'tap-ec2',
-      {
-        environmentSuffix,
-        privateSubnetIds: vpcStack.privateSubnetIds,
-        webSecurityGroupId: securityGroupStack.webSecurityGroupId,
-        ec2InstanceProfileName: iamStack.ec2InstanceProfileName,
-        mainKmsKeyArn: kmsStack.mainKeyArn,
-        instanceType,
-        enableKeyPairs,
-        tags,
-      },
-      { parent: this }
-    );
-
-    // --- Expose Outputs from Nested Components ---
-    this.vpcId = vpcStack.vpcId;
-    this.dataBucketName = s3Stack.dataBucketName;
-    this.logsBucketName = s3Stack.logsBucketName;
-    this.databaseEndpoint = rdsStack.dbInstanceEndpoint;
-    this.webInstanceId = ec2Stack.instanceId;
-    this.webInstancePrivateIp = ec2Stack.privateIp;
-
-    // Register the outputs of this component
+    // Register outputs with the component
     this.registerOutputs({
+      mainKmsKeyId: this.mainKmsKeyId,
+      mainKmsKeyArn: this.mainKmsKeyArn,
+      rdsKmsKeyArn: this.rdsKmsKeyArn,
       vpcId: this.vpcId,
+      privateSubnetIds: this.privateSubnetIds,
       dataBucketName: this.dataBucketName,
       logsBucketName: this.logsBucketName,
       databaseEndpoint: this.databaseEndpoint,
