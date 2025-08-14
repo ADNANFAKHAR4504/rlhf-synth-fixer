@@ -8,6 +8,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
   beforeAll(() => {
     // Ensure we're in the lib directory for terraform commands
     process.chdir(libPath);
+    // Initialize Terraform providers before running tests
+    execSync('terraform init -reconfigure -lock=false -upgrade', { cwd: libPath, stdio: 'pipe' });
   });
 
   describe('Terraform Configuration Validation', () => {
