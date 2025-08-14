@@ -1,58 +1,39 @@
-# Building a Secure CloudFormation Template for Our New Web App
+# Secure Web Application Infrastructure Requirements
 
-Hey there! I've been tasked with setting up a secure infrastructure for our company's new web application, and honestly, I want to make sure we get this right from the start. We've had some security incidents in the past, and my manager is really emphasizing the need for a rock-solid setup this time.
+I need help building a secure CloudFormation template for our production web application. After some previous security incidents, management is really focused on getting this infrastructure deployment right from day one. The security team has given me a pretty detailed list of requirements that we need to meet.
 
-## What We're Building
+## Project Overview
 
-We need to deploy a scalable web application that can handle production traffic securely. The app needs to run on EC2 instances, but they absolutely cannot be directly accessible from the internet - everything has to go through a load balancer with HTTPS only.
+We're deploying a web application that needs to be both scalable and secure. The application will run on EC2 instances, but security has made it clear that these instances cannot be directly accessible from the internet. All traffic must flow through a load balancer, and we can only accept HTTPS connections.
 
-## The Security Requirements (Non-negotiable)
+## Security Requirements
 
-My security team has been pretty clear about what they expect:
+The security team has been very specific about what they need to see in this deployment:
 
-**Data Protection:**
+For data protection, all static content goes into S3 buckets with AES-256 encryption enabled. Public buckets are absolutely not allowed - we learned that lesson during our last security audit. The EC2 instances themselves must be placed in private subnets without any public IP addresses.
 
-- All our static content needs to be stored in S3 with AES-256 encryption
-- No public buckets, period - we learned that lesson the hard way
-- EC2 instances must be in private subnets with no public IPs
+From an access control perspective, we need IAM roles that follow the principle of least privilege. No more broad permissions that give access to everything. Security groups should be configured to only allow HTTPS traffic on port 443, and only from our approved IP ranges. They also want MFA requirements implemented for sensitive resource access.
 
-**Access Control:**
+For monitoring and compliance, we need CloudTrail configured to log all API activity. The compliance team requires this for their audits. We also need AWS Config running for continuous monitoring of resource configurations. Automated backups to a separate region are required for disaster recovery purposes. CloudWatch alarms should alert us when CPU utilization gets too high.
 
-- IAM roles with minimal permissions only - no more giving everyone admin access
-- Security groups that only allow HTTPS (port 443) from specific IP ranges
-- MFA requirements for anyone accessing sensitive resources
+Additional protection requirements include AWS Shield for DDoS protection (we had an incident last year) and an Application Load Balancer to distribute traffic across multiple instances.
 
-**Monitoring & Compliance:**
+## Deployment Specifications
 
-- CloudTrail needs to log every API call - the auditors love this stuff
-- AWS Config for continuous monitoring of our resource configurations
-- Automated backups to a different region (disaster recovery requirement)
-- CloudWatch alarms for when CPU usage gets too high
+The entire infrastructure needs to be deployed in the us-west-2 region across two availability zones. All resources must be tagged with 'Environment:Production' for cost tracking and resource management.
 
-**Additional Protection:**
+## Template Requirements
 
-- AWS Shield for DDoS protection (we got hit last year)
-- Application Load Balancer distributing traffic across multiple instances
+I need a complete CloudFormation template written in YAML format that meets these criteria:
 
-## Where We're Deploying
+The template must deploy successfully without errors. I've spent too much time debugging broken templates in the past. It should follow AWS best practices so we don't get flagged during the next security review. The code needs to be maintainable since other team members will need to work with it. The template must pass validation using AWS CloudFormation Designer.
 
-Everything needs to go in us-west-2 across two availability zones. All resources should be tagged with 'Environment:Production' to keep our accounting team happy.
+The template should include proper parameter definitions with validation, clear resource naming conventions, and useful outputs that we can reference in other systems.
 
-## What I'm Looking For
+## Additional Considerations
 
-I need a complete CloudFormation template in YAML that:
+It would be helpful if the template includes comments explaining the security configurations. I need to present this to the architecture review board, and they always have detailed questions about our security implementation.
 
-- Actually deploys without errors (I've wasted too much time debugging broken templates)
-- Follows AWS best practices - I don't want to get called out in the next security review
-- Is maintainable - other team members need to understand this
-- Passes validation using AWS CloudFormation Designer
+The template absolutely must follow the principle of least privilege for all IAM policies. We've been called out before for overly permissive policies during compliance audits.
 
-The template should include proper parameter definitions, clear resource naming, and outputs that we can use for integration with other systems.
-
-## A Few Additional Notes
-
-If you could add comments explaining the security configurations, that would be great. I'll need to present this to the architecture review board, and they always ask detailed questions about our security posture.
-
-Also, please make sure the template follows the principle of least privilege - we've been burned before by overly permissive policies that security flagged during compliance audits.
-
-Thanks for helping me get this right! The timeline is pretty tight, but I'd rather spend time upfront getting the security correct than dealing with incidents later.
+Given the tight timeline, I want to make sure we get the security aspects correct upfront rather than having to fix issues after deployment.

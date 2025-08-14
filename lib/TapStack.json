@@ -834,7 +834,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-static-content-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-static-content-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -903,7 +903,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-backup-${AWS::AccountId}-${BackupRegion}"
+                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-backup-${AWS::AccountId}-${BackupRegion}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -947,7 +947,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-trail-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1026,7 +1026,7 @@
                             "Condition": {
                                 "StringEquals": {
                                     "AWS:SourceArn": {
-                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-audit-trail"
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-${EnvironmentSuffix}-audit-trail"
                                     }
                                 }
                             }
@@ -1045,7 +1045,7 @@
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control",
                                     "AWS:SourceArn": {
-                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-audit-trail"
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-${EnvironmentSuffix}-audit-trail"
                                     }
                                 }
                             }
@@ -1080,7 +1080,7 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${StaticContentBucket}/*"
+                                        "Fn::Sub": "${StaticContentBucket.Arn}/*"
                                     }
                                 ]
                             }
@@ -1140,7 +1140,7 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${StaticContentBucket}/*"
+                                        "Fn::Sub": "${StaticContentBucket.Arn}/*"
                                     }
                                 },
                                 {
@@ -1204,13 +1204,7 @@
                 "LogGroupName": {
                     "Fn::Sub": "/aws/ec2/${EnvironmentName}/application"
                 },
-                "RetentionInDays": 365,
-                "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "ApplicationKMSKey",
-                        "Arn"
-                    ]
-                }
+                "RetentionInDays": 365
             }
         },
         "CloudTrailLogGroup": {

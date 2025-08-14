@@ -481,7 +481,7 @@ Resources:
   StaticContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-${EnvironmentSuffix}-static-content-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-static-content-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -518,7 +518,7 @@ Resources:
   BackupBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-${EnvironmentSuffix}-backup-${AWS::AccountId}-${BackupRegion}'
+      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-backup-${AWS::AccountId}-${BackupRegion}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -542,7 +542,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-trail-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -584,7 +584,7 @@ Resources:
             Resource: !GetAtt CloudTrailBucket.Arn
             Condition:
               StringEquals:
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-audit-trail'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-${EnvironmentSuffix}-audit-trail'
           - Sid: 'AWSCloudTrailWrite'
             Effect: Allow
             Principal:
@@ -594,7 +594,7 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-audit-trail'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-${EnvironmentSuffix}-audit-trail'
 
   # CloudTrail for comprehensive API logging
   AuditTrail:
@@ -614,7 +614,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${StaticContentBucket}/*'
+                - !Sub '${StaticContentBucket.Arn}/*'
       InsightSelectors:
         - InsightType: ApiCallRateInsight
       Tags:
@@ -646,7 +646,7 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
-                Resource: !Sub '${StaticContentBucket}/*'
+                Resource: !Sub '${StaticContentBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
@@ -674,7 +674,6 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/ec2/${EnvironmentName}/application'
       RetentionInDays: 365
-      KmsKeyId: !GetAtt ApplicationKMSKey.Arn
 
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
