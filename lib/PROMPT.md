@@ -23,4 +23,4 @@ In this task, we are tasked with building infrastructure using CDKTF (Cloud Deve
 - **Naming and Tagging**: Follow a clear naming convention and include relevant tags for resource tracking and management.
 
 By the end of this, we should have a fully functional, secure, and scalable infrastructure setup. 
-
+ 
