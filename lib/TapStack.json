@@ -31,8 +31,8 @@
     },
     "KeyPairName": {
       "Type": "String",
-      "Default": "default-keypair",
-      "Description": "EC2 Key Pair for SSH access"
+      "Default": "",
+      "Description": "EC2 Key Pair for SSH access (leave empty to skip SSH access)"
     },
     "DBMasterUsername": {
       "Type": "String",
@@ -148,6 +148,18 @@
           "Ref": "Environment"
         },
         "Production"
+      ]
+    },
+    "HasKeyPair": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KeyPairName"
+            },
+            ""
+          ]
+        }
       ]
     }
   },
@@ -1984,6 +1996,7 @@
     },
     "SSMKeyParameter": {
       "Type": "AWS::SSM::Parameter",
+      "Condition": "HasKeyPair",
       "Properties": {
         "Name": {
           "Fn::Sub": "/${Environment}/ec2/keypair/${EnvironmentSuffix}"
@@ -2013,94 +2026,186 @@
           "Fn::Sub": "${Environment}-LaunchTemplate-${EnvironmentSuffix}"
         },
         "LaunchTemplateData": {
-          "ImageId": {
-            "Fn::FindInMap": [
-              "RegionMap",
-              {
-                "Ref": "AWS::Region"
+          "Fn::If": [
+            "HasKeyPair",
+            {
+              "ImageId": {
+                "Fn::FindInMap": [
+                  "RegionMap",
+                  {
+                    "Ref": "AWS::Region"
+                  },
+                  "AMI"
+                ]
               },
-              "AMI"
-            ]
-          },
-          "InstanceType": {
-            "Fn::FindInMap": [
-              "EnvironmentMap",
-              {
-                "Ref": "Environment"
-              },
-              "InstanceType"
-            ]
-          },
-          "KeyName": {
-            "Ref": "KeyPairName"
-          },
-          "SecurityGroupIds": [
-            {
-              "Ref": "WebServerSecurityGroup"
-            }
-          ],
-          "IamInstanceProfile": {
-            "Arn": {
-              "Fn::GetAtt": [
-                "EC2InstanceProfile",
-                "Arn"
-              ]
-            }
-          },
-          "UserData": {
-            "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\n\n# Enable detailed logging\nexec > >(tee /var/log/user-data.log) 2>&1\necho \"Starting user-data script at $(date)\"\n\n# Set error handling\nset -e\n\n# Update system\necho \"Updating system packages...\"\nyum update -y\n\n# Install required packages\necho \"Installing httpd and aws-cfn-bootstrap...\"\nyum install -y httpd aws-cfn-bootstrap\n\n# Start and enable Apache\necho \"Starting Apache...\"\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content\necho \"Creating web content...\"\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\necho 'OK' > /var/www/html/health\n\n# Set proper permissions\nchmod 644 /var/www/html/index.html /var/www/html/health\nchown apache:apache /var/www/html/index.html /var/www/html/health\n\n# Verify Apache is running\necho \"Verifying Apache status...\"\nsystemctl status httpd\n\n# Test health endpoint\necho \"Testing health endpoint...\"\ncurl -f http://localhost/health || echo \"Health endpoint test failed\"\n\necho \"User-data script completed successfully at $(date)\"\n\n# Signal CloudFormation that instance is ready\necho \"Sending signal to CloudFormation...\"\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
-            }
-          },
-          "BlockDeviceMappings": [
-            {
-              "DeviceName": "/dev/xvda",
-              "Ebs": {
-                "VolumeSize": 20,
-                "VolumeType": "gp3",
-                "Encrypted": true,
-                "KmsKeyId": {
-                  "Ref": "KMSKey"
-                },
-                "DeleteOnTermination": true
-              }
-            }
-          ],
-          "TagSpecifications": [
-            {
-              "ResourceType": "instance",
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Fn::Sub": "${Environment}-WebServer-${EnvironmentSuffix}"
-                  }
-                },
-                {
-                  "Key": "Environment",
-                  "Value": {
+              "InstanceType": {
+                "Fn::FindInMap": [
+                  "EnvironmentMap",
+                  {
                     "Ref": "Environment"
-                  }
-                },
+                  },
+                  "InstanceType"
+                ]
+              },
+              "KeyName": {
+                "Ref": "KeyPairName"
+              },
+              "SecurityGroupIds": [
                 {
-                  "Key": "Owner",
-                  "Value": {
-                    "Ref": "Owner"
-                  }
-                },
+                  "Ref": "WebServerSecurityGroup"
+                }
+              ],
+              "IamInstanceProfile": {
+                "Arn": {
+                  "Fn::GetAtt": [
+                    "EC2InstanceProfile",
+                    "Arn"
+                  ]
+                }
+              },
+              "UserData": {
+                "Fn::Base64": {
+                  "Fn::Sub": "#!/bin/bash\n\n# Enable detailed logging\nexec > >(tee /var/log/user-data.log) 2>&1\necho \"Starting user-data script at $(date)\"\n\n# Set error handling\nset -e\n\n# Update system\necho \"Updating system packages...\"\nyum update -y\n\n# Install required packages\necho \"Installing httpd and aws-cfn-bootstrap...\"\nyum install -y httpd aws-cfn-bootstrap\n\n# Start and enable Apache\necho \"Starting Apache...\"\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content\necho \"Creating web content...\"\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\necho 'OK' > /var/www/html/health\n\n# Set proper permissions\nchmod 644 /var/www/html/index.html /var/www/html/health\nchown apache:apache /var/www/html/index.html /var/www/html/health\n\n# Verify Apache is running\necho \"Verifying Apache status...\"\nsystemctl status httpd\n\n# Test health endpoint\necho \"Testing health endpoint...\"\ncurl -f http://localhost/health || echo \"Health endpoint test failed\"\n\necho \"User-data script completed successfully at $(date)\"\n\n# Signal CloudFormation that instance is ready\necho \"Sending signal to CloudFormation...\"\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
+                }
+              },
+              "BlockDeviceMappings": [
                 {
-                  "Key": "CostCenter",
-                  "Value": {
-                    "Ref": "CostCenter"
+                  "DeviceName": "/dev/xvda",
+                  "Ebs": {
+                    "VolumeSize": 20,
+                    "VolumeType": "gp3",
+                    "Encrypted": true,
+                    "KmsKeyId": {
+                      "Ref": "KMSKey"
+                    },
+                    "DeleteOnTermination": true
                   }
                 }
-              ]
+              ],
+              "TagSpecifications": [
+                {
+                  "ResourceType": "instance",
+                  "Tags": [
+                    {
+                      "Key": "Name",
+                      "Value": {
+                        "Fn::Sub": "${Environment}-WebServer-${EnvironmentSuffix}"
+                      }
+                    },
+                    {
+                      "Key": "Environment",
+                      "Value": {
+                        "Ref": "Environment"
+                      }
+                    },
+                    {
+                      "Key": "Owner",
+                      "Value": {
+                        "Ref": "Owner"
+                      }
+                    },
+                    {
+                      "Key": "CostCenter",
+                      "Value": {
+                        "Ref": "CostCenter"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "MetadataOptions": {
+                "HttpTokens": "required",
+                "HttpPutResponseHopLimit": 1
+              }
+            },
+            {
+              "ImageId": {
+                "Fn::FindInMap": [
+                  "RegionMap",
+                  {
+                    "Ref": "AWS::Region"
+                  },
+                  "AMI"
+                ]
+              },
+              "InstanceType": {
+                "Fn::FindInMap": [
+                  "EnvironmentMap",
+                  {
+                    "Ref": "Environment"
+                  },
+                  "InstanceType"
+                ]
+              },
+              "SecurityGroupIds": [
+                {
+                  "Ref": "WebServerSecurityGroup"
+                }
+              ],
+              "IamInstanceProfile": {
+                "Arn": {
+                  "Fn::GetAtt": [
+                    "EC2InstanceProfile",
+                    "Arn"
+                  ]
+                }
+              },
+              "UserData": {
+                "Fn::Base64": {
+                  "Fn::Sub": "#!/bin/bash\n\n# Enable detailed logging\nexec > >(tee /var/log/user-data.log) 2>&1\necho \"Starting user-data script at $(date)\"\n\n# Set error handling\nset -e\n\n# Update system\necho \"Updating system packages...\"\nyum update -y\n\n# Install required packages\necho \"Installing httpd and aws-cfn-bootstrap...\"\nyum install -y httpd aws-cfn-bootstrap\n\n# Start and enable Apache\necho \"Starting Apache...\"\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content\necho \"Creating web content...\"\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\necho 'OK' > /var/www/html/health\n\n# Set proper permissions\nchmod 644 /var/www/html/index.html /var/www/html/health\nchown apache:apache /var/www/html/index.html /var/www/html/health\n\n# Verify Apache is running\necho \"Verifying Apache status...\"\nsystemctl status httpd\n\n# Test health endpoint\necho \"Testing health endpoint...\"\ncurl -f http://localhost/health || echo \"Health endpoint test failed\"\n\necho \"User-data script completed successfully at $(date)\"\n\n# Signal CloudFormation that instance is ready\necho \"Sending signal to CloudFormation...\"\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
+                }
+              },
+              "BlockDeviceMappings": [
+                {
+                  "DeviceName": "/dev/xvda",
+                  "Ebs": {
+                    "VolumeSize": 20,
+                    "VolumeType": "gp3",
+                    "Encrypted": true,
+                    "KmsKeyId": {
+                      "Ref": "KMSKey"
+                    },
+                    "DeleteOnTermination": true
+                  }
+                }
+              ],
+              "TagSpecifications": [
+                {
+                  "ResourceType": "instance",
+                  "Tags": [
+                    {
+                      "Key": "Name",
+                      "Value": {
+                        "Fn::Sub": "${Environment}-WebServer-${EnvironmentSuffix}"
+                      }
+                    },
+                    {
+                      "Key": "Environment",
+                      "Value": {
+                        "Ref": "Environment"
+                      }
+                    },
+                    {
+                      "Key": "Owner",
+                      "Value": {
+                        "Ref": "Owner"
+                      }
+                    },
+                    {
+                      "Key": "CostCenter",
+                      "Value": {
+                        "Ref": "CostCenter"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "MetadataOptions": {
+                "HttpTokens": "required",
+                "HttpPutResponseHopLimit": 1
+              }
             }
-          ],
-          "MetadataOptions": {
-            "HttpTokens": "required",
-            "HttpPutResponseHopLimit": 1
-          }
+          ]
         }
       }
     },
