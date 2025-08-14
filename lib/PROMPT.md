@@ -1,70 +1,70 @@
-Here's a prompt designed to align with Claude's Sonnet best practices, providing clear and structured instructions for creating a secure AWS infrastructure with Terraform.
+Here's the prompt, rephrased to sound more like human-written requirements in Markdown format:
 
 ---
 
-## 📝 Secure AWS Foundation with Terraform
+## Setting Up a Secure AWS Foundation with Terraform: What We Need
 
 ---
 
-### Objective
+### Our Main Goal
 
-As a cloud security engineer, your primary task is to design and implement a **secure foundational infrastructure** on **AWS** using **Terraform**. The configuration must adhere to security best practices, including robust network isolation, comprehensive logging, secure secrets management, and strict access controls.
+to design and build a really **solid and secure foundational infrastructure on AWS** using **Terraform**. We need to make sure this setup follows all the best security practices, covering everything from strong network separation to thorough logging, safe ways to handle secrets, and strict access rules.
 
 ---
 
-### Core Architectural Components
+### Key Pieces of the Architecture
 
-The Terraform configuration must provision and configure the following AWS services in the `us-west-2` region:
+Your Terraform configuration should set up and configure these AWS services, all within the `us-west-2` region:
 
-- **Virtual Private Cloud (VPC)**: A logically isolated network with both public and private subnets.
-- **Network Access Control Lists (NACLs)**: Stateless firewalls to control traffic at the subnet level.
-- **Security Groups (SGs)**: Stateful firewalls to control traffic at the instance level.
-- **AWS Identity and Access Management (IAM)**: Roles and policies to enforce the principle of least privilege.
-- **AWS Secrets Manager**: A service to securely store and retrieve sensitive data like passwords or API keys.
+- **Virtual Private Cloud (VPC)**: Think of this as our own isolated network space, complete with both public and private sections.
+- **Network Access Control Lists (NACLs)**: These are like stateless firewalls that control traffic at the subnet level.
+- **Security Groups (SGs)**: These are stateful firewalls that control traffic specifically for our instances.
+- **AWS Identity and Access Management (IAM)**: We'll use this to set up roles and policies, making sure everyone (or everything) only has the minimum permissions they actually need.
+- **AWS Secrets Manager**: This service is super important for securely storing and retrieving sensitive stuff like passwords or API keys.
 - **Logging & Monitoring**:
-  - VPC Flow Logs for network traffic visibility.
-  - A CloudTrail trail for auditing AWS account activity.
-  - An S3 bucket configured for server access logging.
+  - **VPC Flow Logs**: To keep an eye on all our network traffic.
+  - A **CloudTrail trail**: For auditing all the activity happening in our AWS account.
+  - An **S3 bucket**: This one will be specifically set up to collect server access logs.
 
 ---
 
-### Technical Specifications & Constraints
+### Details & What's Required
 
-- **Infrastructure as Code (IaC)**: The entire infrastructure must be defined using **Terraform HCL**.
-- **Region**: All resources **must** be provisioned in the **`us-west-2`** region.
-- **Network Security**:
-  - The VPC **must** contain at least one **public subnet** and one **private subnet**.
-  - **Security Groups must deny all inbound traffic by default**. Only explicitly defined `ingress` rules for necessary traffic (e.g., allowing SSH from a specific IP) should be added.
-  - **NACLs must be configured** to restrict inbound and outbound traffic at the subnet level, providing a second layer of defense.
-- **Secrets Management**: The use of hard-coded secrets, passwords, or API keys within the Terraform files is **strictly prohibited**. All sensitive data must be stored and referenced using **AWS Secrets Manager**. You should create a placeholder secret to demonstrate this pattern.
+- **Everything as Code (IaC)**: The entire infrastructure has to be defined using **Terraform HCL**. No manual tweaks\!
+- **Region**: All resources **must** be set up in the **`us-west-2`** region.
+- **Network Security Rules**:
+  - Our VPC absolutely **must** have at least one **public subnet** and one **private subnet**.
+  - **Security Groups need to deny all incoming traffic by default**. We'll only open specific `ingress` rules for necessary traffic, like allowing SSH from a known IP.
+  - **NACLs are essential** to restrict both incoming and outgoing traffic at the subnet level, giving us that crucial second layer of defense.
+- **Handling Secrets**: We're **strictly prohibiting** any hard-coded secrets, passwords, or API keys directly in the Terraform files. All sensitive data **must be stored in and referenced from AWS Secrets Manager**. You should include a simple placeholder secret in your configuration to show how this pattern works.
 - **Comprehensive Logging**:
-  - **VPC Flow Logs** must be enabled to capture IP traffic information for the VPC and sent to a dedicated log group or S3 bucket.
-  - A new **CloudTrail** trail must be created to log all management events.
-  - Any created **S3 buckets** must have **server access logging enabled**, with logs directed to a separate, secure S3 bucket.
-- **Resource Tagging**: **All** created resources (VPC, subnets, SGs, IAM roles, etc.) **must** be tagged with the following keys:
+  - **VPC Flow Logs** must be turned on to capture all IP traffic details for the VPC, and those logs should go to a dedicated log group or S3 bucket.
+  - A brand new **CloudTrail** needs to be created to log all management events.
+  - Any **S3 buckets** we create **must have server access logging enabled**, with those logs being directed to a separate, secure S3 bucket.
+- **Tag Everything**: **Every single resource** you create (VPC, subnets, SGs, IAM roles, etc.) **must have these tags**:
   - `Name`
   - `Environment` (e.g., `development`, `production`)
   - `Owner` (e.g., `DevOpsTeam`)
 
 ---
 
-### Expected Output
+### What We're Looking For in Your Output
 
-Your response should provide a set of well-organized and commented **Terraform configuration files (`.tf`)**. The configuration should be ready to deploy and successfully pass `terraform plan` and `terraform apply` without errors.
+Please provide a set of **well-organized and clearly commented Terraform configuration files (`.tf`)**. The configuration should be ready for deployment and should successfully pass both `terraform plan` and `terraform apply` without any errors.
 
 ```terraform
 # main.tf
-# (Resource definitions for VPC, subnets, etc.)
+# (This is where you'll define major resources like the VPC, subnets, etc.)
 
 # variables.tf
-# (Variable definitions for region, tags, etc.)
+# (Define all your variables here, like the region, tags, etc.)
 
 # outputs.tf
-# (Outputs for important resource IDs or endpoints)
+# (Specify any important resource IDs or endpoints that should be outputted after deployment)
 
 # security.tf
-# (Resource definitions for NACLs, Security Groups, IAM)
+# (This file is for NACLs, Security Groups, and IAM roles/policies)
 
 # logging.tf
-# (Resource definitions for CloudTrail, Flow Logs, S3 logging)
+# (Dedicated to CloudTrail, Flow Logs, and S3 logging configurations)
 ```
