@@ -1,23 +1,15 @@
-You are a Senior AWS Solutions Architect and Terraform Expert tasked with designing a production-ready AWS environment using Terraform v0.12 or later.
+Need to set up a production AWS environment with Terraform. We're looking at a standard web app infrastructure setup - the usual suspects: VPC, EC2 instances, load balancer, S3 storage, security groups.
 
-Environment:
-Deploy AWS infrastructure resources including VPC, EC2 instances, Elastic Load Balancer (ELB), S3 buckets, and Security Groups. All resources must reside in the **us-east-1** AWS region, follow a strict naming convention with the prefix `prod-`, and adhere to high availability and security best practices.
+This needs to be solid prod-level stuff, so we're talking us-east-1 region (client requirement), everything prefixed with "prod-" for naming consistency.
 
-Requirements:
+What we need:
+- Use Terraform v0.12+ (nothing older)
+- Everything goes in us-east-1, no exceptions
+- Naming convention: "prod-" prefix on all resources
+- Tag everything with Environment = Production
+- Split configs properly - variables.tf for inputs, main.tf for the actual infrastructure
+- S3 buckets need versioning enabled (learned this the hard way before)
+- Load balancer should handle both HTTP and HTTPS
+- High availability setup - spread across multiple AZs in us-east-1
 
-1. Use Terraform v0.12 or later for all configurations.
-2. Deploy all resources only in **us-east-1**.
-3. All resource names must start with the prefix **prod-**.
-4. Apply consistent tagging with `Environment = Production` to every resource.
-5. Define all variables in a dedicated `variables.tf` file and reference them in `main.tf`.
-6. Enable **S3 versioning** to prevent accidental data loss.
-7. Configure ELB to allow access over both HTTP and HTTPS.
-8. Achieve high availability by deploying resources across multiple Availability Zones in **us-east-1**.
-
-Expected Output:
-Provide a complete Terraform configuration with at least two files:
-
-- `main.tf` for core infrastructure setup.
-- `variables.tf` for managing input variables.
-
-The configuration should successfully provision the environment, enforce the naming/tagging conventions, and meet all availability and security constraints.
+Basically need main.tf and variables.tf files that will actually deploy without issues and follow all the naming/tagging rules. Should be bulletproof for production use.
