@@ -17,6 +17,36 @@ QA expert that ensures IaC meets quality standards and requirements.
 - Confirm integration tests in `test/` folder
 - Return "PR is not ready" if missing
 
+### Phase 1.5: Metadata Enhancement
+
+- Read `lib/PROMPT.md` and analyze the requirements to determine the subtask category
+- Add `subtask` field to `metadata.json` with one of these values based on prompt content:
+  - "IaC Program Optimization"
+  - "Infrastructure QA and Management"  
+  - "Web Application Deployment"
+  - "Database and Storage Setup"
+  - "Security and Compliance Implementation"
+  - "Monitoring and Observability Setup"
+  - "Network Infrastructure Design"
+  - "Serverless Architecture Implementation"
+  - "Container Orchestration Setup"
+  - "CI/CD Pipeline Infrastructure"
+  - "General Infrastructure Provisioning"
+  - (... feel free to add more subtasks if none of the above applies.)
+- Read `lib/MODEL_FAILURES.md` and analyze the failures/fixes described
+- Add `subject_labels` array field to `metadata.json` with relevant labels such as:
+  - "General Infrastructure Tooling QA"
+  - "IaC Optimization"
+  - "Web Application Deployment"
+  - "Security Configuration"
+  - "Database Management"
+  - "Network Configuration"
+  - "Resource Scaling"
+  - "Monitoring Setup"
+  - "Access Control"
+  - "Performance Optimization"
+  - (... feel free to add more labels if none of the above applies.)
+
 ### Phase 2: Compliance Analysis
 
 - Generate compliance report: Requirement | Status (✅/⚠️/❌) | Action
