@@ -1,8 +1,8 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { commonTags } from '../config/tags';
-import { SecureCloudTrail } from '../modules/cloudtrail';
-import { EnhancedCloudTrail } from '../modules/cloudtrail/enhanced-cloudtrail';
+// import { SecureCloudTrail } from '../modules/cloudtrail';
+// import { EnhancedCloudTrail } from '../modules/cloudtrail/enhanced-cloudtrail';
 import {
   SecureIAMRole,
   createMFAEnforcedPolicy,
