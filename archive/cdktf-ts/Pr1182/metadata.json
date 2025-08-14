@@ -11,5 +11,11 @@
     "General Infrastructure Tooling QA",
     "Network Configuration",
     "IaC Optimization"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
