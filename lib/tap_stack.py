@@ -71,7 +71,7 @@ class TapStack(ComponentResource):
             "primary_bucket_name": self.primary_bucket.bucket,
             "secondary_bucket_name": self.secondary_bucket.bucket if hasattr(self, 'secondary_bucket') else None,
             "dynamodb_table_name": self.dynamodb_table.name,
-            "lambda_function_name": self.lambda_function.function_name,
+            "lambda_function_name": self.lambda_function.name,
             "migration_status": "initialized",
             "environment": args.environment_suffix,
         })
@@ -700,7 +700,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
         lambda_permission = aws.lambda_.Permission(
             f"api-lambda-permission-{self.args.environment_suffix}",
             action="lambda:InvokeFunction",
-            function=self.lambda_function.function_name,
+            function=self.lambda_function.name,  # FIXED: Changed from function_name to name
             principal="apigateway.amazonaws.com",
             source_arn=pulumi.Output.concat(self.api.execution_arn, "/*/*"),
             opts=ResourceOptions(parent=self)
@@ -830,6 +830,35 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             opts=ResourceOptions(parent=self)
         )
         
+        # OPTIONS method response for health endpoint
+        health_options_method_response = aws.apigateway.MethodResponse(
+            f"health-options-method-response-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=health_resource.id,
+            http_method=health_options_method.http_method,
+            status_code="200",
+            response_headers={
+                "Access-Control-Allow-Origin": True,
+                "Access-Control-Allow-Methods": True,
+                "Access-Control-Allow-Headers": True
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        health_options_integration_response = aws.apigateway.IntegrationResponse(
+            f"health-options-integration-response-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=health_resource.id,
+            http_method=health_options_method.http_method,
+            status_code="200",
+            response_headers={
+                "Access-Control-Allow-Origin": "'*'",
+                "Access-Control-Allow-Methods": "'GET,OPTIONS'",
+                "Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            },
+            opts=ResourceOptions(parent=self, depends_on=[health_options_integration])
+        )
+        
         # OPTIONS method for CORS (proxy endpoint)
         proxy_options_method = aws.apigateway.Method(
             f"proxy-options-method-{self.args.environment_suffix}",
@@ -851,6 +880,35 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             },
             opts=ResourceOptions(parent=self)
         )
+        
+        # OPTIONS method response for proxy endpoint
+        proxy_options_method_response = aws.apigateway.MethodResponse(
+            f"proxy-options-method-response-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=proxy_resource.id,
+            http_method=proxy_options_method.http_method,
+            status_code="200",
+            response_headers={
+                "Access-Control-Allow-Origin": True,
+                "Access-Control-Allow-Methods": True,
+                "Access-Control-Allow-Headers": True
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        proxy_options_integration_response = aws.apigateway.IntegrationResponse(
+            f"proxy-options-integration-response-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=proxy_resource.id,
+            http_method=proxy_options_method.http_method,
+            status_code="200",
+            response_headers={
+                "Access-Control-Allow-Origin": "'*'",
+                "Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                "Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            },
+            opts=ResourceOptions(parent=self, depends_on=[proxy_options_integration])
+        )
     
     def _create_monitoring(self):
         """Create comprehensive monitoring and alerting."""
@@ -863,7 +921,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             f"tap-dashboard-{self.args.environment_suffix}",
             dashboard_name=f"TAP-{self.args.environment_suffix}",
             dashboard_body=pulumi.Output.all(
-                lambda_function_name=self.lambda_function.function_name,
+                lambda_function_name=self.lambda_function.name,
                 api_gateway_id=self.api.id,
                 dynamodb_table_name=self.dynamodb_table.name
             ).apply(lambda args: json.dumps({
@@ -964,7 +1022,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             threshold=5,
             alarm_description="Lambda function errors exceeded threshold",
             alarm_actions=[],  # Add SNS topic ARN here if needed
-            dimensions={"FunctionName": self.lambda_function.function_name},
+            dimensions={"FunctionName": self.lambda_function.name},  # FIXED: Changed from function_name to name
             treat_missing_data="notBreaching",
             opts=ResourceOptions(parent=self)
         )
@@ -981,7 +1039,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             statistic="Average",
             threshold=25000,  # 25 seconds
             alarm_description="Lambda function duration exceeded threshold",
-            dimensions={"FunctionName": self.lambda_function.function_name},
+            dimensions={"FunctionName": self.lambda_function.name},  # FIXED: Changed from function_name to name
             treat_missing_data="notBreaching",
             opts=ResourceOptions(parent=self)
         )
