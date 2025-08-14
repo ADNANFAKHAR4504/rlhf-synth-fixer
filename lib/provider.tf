@@ -9,9 +9,7 @@ terraform {
       version = ">= 5.0"
     }
   }
-
-  # Local backend for development/testing
-  backend "local" {}
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
