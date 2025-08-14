@@ -13,6 +13,7 @@ Parameters:
 
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
+    Default: ''
     Description: EC2 Key Pair for SSH access
 
   DBMasterUsername:
@@ -22,14 +23,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: Master username for RDS instance
-
-  DBMasterPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+\-\[\]{}|;:,.<>?]*$'
-    Description: Master password for RDS instance (will be stored in AWS Secrets Manager)
 
   VpcCidr:
     Type: String
@@ -47,6 +40,9 @@ Mappings:
       AMI: ami-0c55b159cbfafe1d0
     us-west-1:
       AMI: ami-01a123bcd456ef789
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
   # =========================
@@ -103,11 +99,11 @@ Resources:
     Properties:
       Name: !Sub SecureEnv-DB-Secret-${Environment}
       Description: Database credentials for SecureEnv RDS instance
-      SecretString: !Sub |
-        {
-          "username": "${DBMasterUsername}",
-          "password": "${DBMasterPassword}"
-        }
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 24
+        ExcludeCharacters: '"@/\\'
       KmsKeyId: !Ref SecureEnvKMSKey
 
   # =========================
@@ -503,7 +499,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: t3.micro
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         SecurityGroupIds:
           - !Ref SecureEnvWebSG
         IamInstanceProfile:
@@ -544,7 +540,7 @@ Resources:
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: t3.micro
-      KeyName: !Ref KeyPairName
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       SecurityGroupIds:
         - !Ref SecureEnvBastionSG
       SubnetId: !Ref SecureEnvPublicSubnet1
