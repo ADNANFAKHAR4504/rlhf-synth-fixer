@@ -28,39 +28,39 @@ describe('TAP Stack Core AWS Infrastructure', () => {
   let bucketName: string;
 
   beforeAll(() => {
-    const suffix = process.env.ENVIRONMENT_SUFFIX;
-    if (!suffix) {
-      throw new Error('ENVIRONMENT_SUFFIX environment variable is not set.');
-    }
+  const suffix = process.env.ENVIRONMENT_SUFFIX;
+  if (!suffix) {
+    throw new Error('ENVIRONMENT_SUFFIX environment variable is not set.');
+  }
 
-    const outputFilePath = path.join(
-      __dirname,
-      '..',
-      'cfn-outputs',
-      'flat-outputs.json'
-    );
-    if (!fs.existsSync(outputFilePath)) {
-      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
-    }
+  const outputFilePath = path.join(
+    __dirname,
+    '..',
+    'cfn-outputs',
+    'flat-outputs.json'
+  );
+  if (!fs.existsSync(outputFilePath)) {
+    throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+  }
 
-    const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
-    const stackKey = Object.keys(outputs).find(k => k.includes(suffix));
-    if (!stackKey) {
-      throw new Error(`No output found for environment: ${suffix}`);
-    }
+  const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
+  const stackKey = Object.keys(outputs).find(k => k.includes(suffix));
+  if (!stackKey) {
+    throw new Error(`No output found for environment: ${suffix}`);
+  }
 
-    const stackOutputs = outputs[stackKey];
-    vpcId = stackOutputs['vpc_id'];
-    publicSubnetId = stackOutputs['public_subnet_id'];
-    ec2InstanceId = stackOutputs['ec2_instance_id'];
-    ec2SecurityGroupId = stackOutputs['security_group_id'];
-    iamRoleName = stackOutputs['iam_role_name'];
-    bucketName = stackOutputs['bucket_name'];
+  const stackOutputs = outputs[stackKey];
+  vpcId = stackOutputs['vpc_id'];
+  publicSubnetId = stackOutputs['public_subnet_id'];
+  ec2InstanceId = stackOutputs['ec2_instance_id'];
+  ec2SecurityGroupId = stackOutputs['security_group_id'];
+  iamRoleName = stackOutputs['iam_role_name'];
+  bucketName = stackOutputs['bucket_name'];
 
-    if (!vpcId || !publicSubnetId || !ec2InstanceId || !ec2SecurityGroupId || !iamRoleName || !bucketName) {
-      throw new Error('Missing one or more required stack outputs.');
-    }
-  });
+  if (!vpcId || !publicSubnetId || !ec2InstanceId || !ec2SecurityGroupId || !iamRoleName || !bucketName) {
+    throw new Error('Missing one or more required stack outputs.');
+  }
+});
 
   // --- VPC Test ---
   describe('VPC Configuration', () => {
