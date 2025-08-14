@@ -1,0 +1,112 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiate with custom props 1`] = `
+"{
+  "output": {
+    "instanceId": {
+      "description": "The ID of the created EC2 instance.",
+      "value": "mock-instance-id"
+    },
+    "privateSubnetId": {
+      "description": "The ID of the private subnet.",
+      "value": "mock-private-subnet-id"
+    },
+    "publicSubnetIds": {
+      "description": "The IDs of the public subnets.",
+      "value": "mock-public-subnet-id"
+    },
+    "securityGroupId": {
+      "description": "The ID of the EC2 Security Group.",
+      "value": "mock-security-group-id"
+    },
+    "vpcId": {
+      "description": "The ID of the main VPC.",
+      "value": "mock-vpc-id"
+    }
+  },
+  "provider": {
+    "aws": [
+      {
+        "default_tags": [
+          {
+            "tags": {
+              "Project": "Custom"
+            }
+          }
+        ],
+        "region": "us-west-2"
+      }
+    ]
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "custom-bucket",
+        "encrypt": true,
+        "key": "prod/CustomStack.tfstate",
+        "region": "ap-south-1",
+        "use_lockfile": true
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.4.0"
+      }
+    }
+  }
+}"
+`;
+
+exports[`TapStack Unit Tests Stack Configuration and Synthesis should use default values when no props provided 1`] = `
+"{
+  "output": {
+    "instanceId": {
+      "description": "The ID of the created EC2 instance.",
+      "value": "mock-instance-id"
+    },
+    "privateSubnetId": {
+      "description": "The ID of the private subnet.",
+      "value": "mock-private-subnet-id"
+    },
+    "publicSubnetIds": {
+      "description": "The IDs of the public subnets.",
+      "value": "mock-public-subnet-id"
+    },
+    "securityGroupId": {
+      "description": "The ID of the EC2 Security Group.",
+      "value": "mock-security-group-id"
+    },
+    "vpcId": {
+      "description": "The ID of the main VPC.",
+      "value": "mock-vpc-id"
+    }
+  },
+  "provider": {
+    "aws": [
+      {
+        "default_tags": [
+        ],
+        "region": "us-west-2"
+      }
+    ]
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "iac-rlhf-tf-states",
+        "encrypt": true,
+        "key": "dev/DefaultStack.tfstate",
+        "region": "us-east-1",
+        "use_lockfile": true
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.4.0"
+      }
+    }
+  }
+}"
+`;
