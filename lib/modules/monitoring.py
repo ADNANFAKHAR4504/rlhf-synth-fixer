@@ -24,17 +24,17 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output[str], tags: Dict
   cloudtrail_role = aws.iam.Role(
     f"cloudtrail-role-{region}",
     assume_role_policy="""{
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "cloudtrail.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
-        }""",
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "cloudtrail.amazonaws.com"
+          },
+          "Action": "sts:AssumeRole"
+        }
+      ]
+    }""",
     tags=tags,
     opts=pulumi.ResourceOptions(provider=provider)
   )
@@ -42,21 +42,26 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output[str], tags: Dict
   # Attach policy to CloudTrail role
   cloudtrail_policy = pulumi.Output.all(log_group.arn).apply(
     lambda args: f"""{{
-            "Version": "2012-10-17",
-            "Statement": [
-                {{
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents",
-                        "logs:DescribeLogStreams"
-                        
-                    ],
-                    "Resource": "{args[0]}*"
-                }}
-            ]
-        }}"""
+      "Version": "2012-10-17",
+      "Statement": [
+        {{
+          "Effect": "Allow",
+          "Action": [
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+          ],
+          "Resource": "{args[0]}:*"
+        }},
+        {{
+          "Effect": "Allow",
+          "Action": [
+              "logs:DescribeLogGroups",
+              "logs:DescribeLogStreams"
+          ],
+          "Resource": "*"
+        }}
+      ]
+    }}"""
   )
 
   aws.iam.RolePolicy(
@@ -87,7 +92,7 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output[str], tags: Dict
     tags=tags,
     opts=pulumi.ResourceOptions(
       provider=provider,
-      depends_on=[log_group, cloudtrail_role] + (depends_on or []) # Ensure role is created first
+      depends_on=[log_group, cloudtrail_role] + (depends_on or [])  # Ensure role is created first
     )
   )
 
