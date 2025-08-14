@@ -161,7 +161,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         `tap-audit-logs-${environmentSuffix}`,
         {
           bucketName: `tap-audit-logs-${environmentSuffix}`,
-          kmsKeyId: cloudTrailKmsKey.key.keyId,
+          kmsKeyId: cloudTrailKmsKey.key.arn,
           allowedIpRanges,
           enableAccessLogging: true,
           enableObjectLock: true,
@@ -212,7 +212,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         `tap-audit-logs-${environmentSuffix}`,
         {
           bucketName: `tap-audit-logs-${environmentSuffix}`,
-          kmsKeyId: cloudTrailKmsKey.key.keyId,
+          kmsKeyId: cloudTrailKmsKey.key.arn,
           enableBucketPolicy: false, // Temporarily disabled to resolve access issues
           tags: {
             Purpose: 'Audit and compliance logs',
@@ -354,7 +354,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         {
           trailName: `tap-security-audit-trail-${environmentSuffix}`,
           s3BucketName: auditBucket.bucket.id,
-          kmsKeyId: cloudTrailKmsKey.key.keyId,
+          kmsKeyId: cloudTrailKmsKey.key.arn,
           includeGlobalServiceEvents: true,
           isMultiRegionTrail: true,
           enableLogFileValidation: true,
@@ -373,7 +373,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         {
           trailName: `tap-security-audit-trail-${environmentSuffix}`,
           s3BucketName: auditBucket.bucket.id,
-          kmsKeyId: cloudTrailKmsKey.key.keyId,
+          kmsKeyId: cloudTrailKmsKey.key.arn,
           includeGlobalServiceEvents: true,
           isMultiRegionTrail: true,
           enableLogFileValidation: true,
@@ -460,7 +460,7 @@ export class SecurityStack extends pulumi.ComponentResource {
     this.auditBucketArn = auditBucket.bucket.arn;
     this.s3KmsKeyId = s3KmsKey.key.keyId;
     this.s3KmsKeyArn = s3KmsKey.key.arn;
-    this.cloudTrailKmsKeyId = cloudTrailKmsKey.key.keyId;
+    this.cloudTrailKmsKeyId = cloudTrailKmsKey.key.arn;
     this.cloudTrailKmsKeyArn = cloudTrailKmsKey.key.arn;
     this.dataAccessRoleArn = dataAccessRole.role.arn;
     this.auditRoleArn = auditRole.role.arn;
