@@ -574,7 +574,7 @@ def create_eks_node_group(
     provider: aws.Provider,
 ) -> aws.eks.NodeGroup:
   """
-  Create EKS node group with explicit security group assignment for proper cluster joining.
+  Create EKS node group with launch template for security group assignment.
   """
   node_role = aws.iam.Role(
       "corp-eks-node-role",
@@ -608,7 +608,24 @@ def create_eks_node_group(
         opts=ResourceOptions(provider=provider)
     )
 
-  # Create node group with explicit security group assignment
+  # Create launch template with security group
+  launch_template = aws.ec2.LaunchTemplate(
+      "corp-eks-node-launch-template",
+      name_prefix="corp-eks-node-",
+      network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfaceArgs(
+          associate_public_ip_address="true",
+          delete_on_termination="true",
+          security_groups=[eks_sg.id],
+      )],
+      tag_specifications=[aws.ec2.LaunchTemplateTagSpecificationArgs(
+          resource_type="instance",
+          tags={**tags, "Name": "corp-eks-node"},
+      )],
+      tags={**tags, "Name": "corp-eks-node-launch-template"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Create node group with launch template
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
@@ -620,9 +637,10 @@ def create_eks_node_group(
       scaling_config=aws.eks.NodeGroupScalingConfigArgs(
           desired_size=1, min_size=1, max_size=1  # Minimum for testing
       ),
-      # CRITICAL: Assign security group to nodes for cluster communication
-      remote_access=aws.eks.NodeGroupRemoteAccessArgs(
-          source_security_group_ids=[eks_sg.id],  # Use the EKS security group
+      # Use launch template for security group assignment
+      launch_template=aws.eks.NodeGroupLaunchTemplateArgs(
+          id=launch_template.id,
+          version=launch_template.latest_version,
       ),
       tags={**tags, "Name": "corp-eks-cluster-nodegroup1"},
       opts=ResourceOptions(provider=provider)

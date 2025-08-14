@@ -194,12 +194,14 @@ class TestHelpers(unittest.TestCase):
     )
     self.assertEqual(cluster.name, "cluster")
 
+  @patch("lib.tap_stack.aws.ec2.LaunchTemplate", return_value=MagicMock(
+      id="lt-123", latest_version="1"))
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock())
   @patch("lib.tap_stack.aws.eks.NodeGroup")
   def test_create_eks_node_group(self, mock_ng_class, _mock_role,
-                                 _mock_role_policy, *_):
+                                 _mock_role_policy, _mock_launch_template, *_):
     """Ensure create_eks_node_group provisions a node group with correct scaling configuration."""
     mock_provider = MagicMock()
     mock_ng_instance = MagicMock()
