@@ -627,7 +627,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-EC2-Instance-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
