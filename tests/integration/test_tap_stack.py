@@ -25,9 +25,10 @@ class TestLiveIntegration(unittest.TestCase):
     #     args=TapStackArgs(environment_suffix=environment_suffix),
     #   )
 
-    stack = auto.create_or_select_stack(
+    stack = auto.select_stack(
       stack_name=cls.stack_name,
-      project_name=cls.project_name
+      project_name=cls.project_name,
+      work_dir=os.path.join(os.path.dirname(__file__), "..")
     )
 
     # print("Deploying Pulumi stack...")
