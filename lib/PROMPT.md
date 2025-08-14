@@ -1,89 +1,61 @@
 ## Context
 You are an AWS CloudFormation expert tasked with creating secure infrastructure-as-code templates. This exercise focuses on implementing comprehensive security controls for sensitive data storage environments.
 
-## Task Description
-Create a **CloudFormation template in YAML format** that establishes a secure AWS infrastructure for storing sensitive data across multiple regions. Your solution must demonstrate advanced security practices and compliance with enterprise-grade requirements.
+Hey there! I need help building a secure CloudFormation template for our company's sensitive data storage. We're getting more serious about security compliance and need something that really locks things down properly.
 
-## Requirements Specification
+## What we need
 
-### Core Security Requirements
-1. **Encryption Standards**
-   - Configure all S3 buckets with server-side encryption using AES-256
-   - Utilize AWS Key Management Service (KMS) for encryption key management
-   - Ensure encryption at rest for all sensitive resources
+I'm looking for a YAML CloudFormation template that can handle sensitive data storage with all the security bells and whistles. The compliance team has been breathing down our necks about this stuff, so it needs to be bulletproof.
 
-2. **Access Control & IAM**
-   - Implement IAM roles following strict least privilege principle
-   - Enable multi-factor authentication (MFA) for all IAM users handling sensitive data
-   - Create restrictive IAM policies limiting users/roles to specific required actions per service
+### The security stuff that's non-negotiable:
 
-3. **Monitoring & Compliance**
-   - Configure AWS CloudTrail to log all S3 bucket access requests
-   - Ensure comprehensive audit trail for compliance requirements
-   - Implement monitoring for security events
+**Encryption everywhere** - All our S3 buckets need to use AES-256 encryption. I want KMS managing the keys because that seems to be what everyone recommends. Everything should be encrypted at rest - no exceptions.
 
-4. **Network Security**
-   - Ensure no resources are publicly accessible by default unless explicitly required
-   - Implement proper security group configurations
-   - Follow defense-in-depth principles
+**IAM that actually makes sense** - I'm tired of seeing overly permissive policies. Let's do this right with least privilege access. Anyone touching sensitive data needs MFA enabled. I want policies that are restrictive but don't break functionality.
 
-5. **Data Lifecycle Management**
-   - Apply lifecycle policies to S3 buckets for automatic transition to Amazon S3 Glacier after 30 days
-   - Optimize storage costs while maintaining data accessibility
+**Audit logging** - CloudTrail needs to track every single access to our S3 buckets. The auditors love their paper trails, and frankly, so do I when something goes wrong.
 
-## Technical Constraints
-- **Platform**: AWS CloudFormation
-- **Format**: YAML syntax only
-- **Validation**: Template must pass AWS CloudFormation validation
-- **Deployment**: Must successfully create infrastructure when deployed
-- **Compliance**: Demonstrate adherence to all security specifications
+**Keep things private** - Nothing should be publicly accessible unless there's a really good reason. I've seen too many data breaches from misconfigured S3 buckets.
 
-## Deliverable Requirements
+**Cost optimization** - Data that's older than 30 days should automatically move to Glacier. Storage costs add up fast, but we still need to keep everything accessible when needed.
 
-### Template Structure
-Your CloudFormation template should include:
-- **Parameters**: Allow customization for different environments
-- **Mappings**: Region-specific configurations if needed
-- **Conditions**: Environment-based resource creation logic
-- **Resources**: All required AWS resources with proper dependencies
-- **Outputs**: Key resource identifiers and endpoints
+## Technical requirements
 
-### Security Implementation
-Focus on these critical areas:
-- S3 bucket configurations with encryption and access controls
-- IAM roles, policies, and users with MFA requirements
-- KMS key creation and management
-- CloudTrail configuration for audit logging
-- Lifecycle policies for cost optimization
+- Must be in YAML format (I find it easier to read than JSON)
+- Needs to pass CloudFormation validation 
+- Should actually deploy without errors when we test it
+- Has to work across multiple environments (dev, staging, prod)
+
+## What the template should include
+
+I need the usual CloudFormation sections - parameters for customization, resources for the actual infrastructure, and outputs so we can reference things later. 
+
+For the security implementation, focus on:
+- S3 buckets with proper encryption and access controls
+- IAM roles and policies (with MFA where it makes sense)
+- KMS key setup and management
+- CloudTrail configuration for our audit requirements
+- Lifecycle policies to manage costs
 - Network security configurations
 
-### Best Practices
-- Use descriptive resource names and consistent naming conventions
-- Include comprehensive documentation through comments
-- Implement proper resource dependencies and ordering
-- Follow AWS Well-Architected Framework security pillar guidelines
-- Ensure template reusability across environments
+## Some other things to consider
 
-## Success Criteria
-1. **Functional**: Template deploys successfully without errors
-2. **Secure**: All security requirements are properly implemented
-3. **Compliant**: Meets enterprise compliance standards
-4. **Maintainable**: Code is well-structured and documented
-5. **Scalable**: Design supports multi-region deployment
+It would be great if this could support cross-region replication for disaster recovery. We haven't had a major outage yet, but better safe than sorry.
 
-## Additional Considerations
-- Consider cross-region replication for disaster recovery
-- Implement proper tagging strategy for resource management
-- Include cost optimization strategies where applicable
-- Ensure template supports different environment configurations (dev, staging, prod)
+Make sure to use good naming conventions and add comments where the security decisions might not be obvious. The next person who has to maintain this (probably me in 6 months) will thank you.
 
-## Expected Output Format
-Provide a complete YAML CloudFormation template that:
-- Starts with `AWSTemplateFormatVersion: '2010-09-09'`
-- Includes a meaningful `Description`
-- Contains all required sections (Parameters, Resources, Outputs)
-- Implements every security requirement specified
-- Includes inline comments explaining security decisions
-- Follows YAML syntax best practices
+Also, proper resource tagging would be helpful for cost tracking and resource management.
 
-**Note**: Your template will be validated against AWS CloudFormation standards and tested for successful deployment. Ensure all security controls are properly configured and documented.
+## What success looks like
+
+- Template deploys cleanly without any errors
+- All the security requirements are actually implemented (not just checked off)
+- Meets our compliance requirements 
+- Code is readable and well-documented
+- Works across different environments and regions
+
+## Output format
+
+Just give me a standard CloudFormation YAML template starting with the version declaration. Include a good description of what it does. Make sure all the required sections are there and that every security requirement is properly implemented with comments explaining the important decisions.
+
+The template will get tested against AWS CloudFormation validation and deployed to make sure it actually works, so please double-check everything before submitting.
