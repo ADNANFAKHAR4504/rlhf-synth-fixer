@@ -4,7 +4,7 @@
 variable "aws_region" {
   description = "AWS provider region"
   type        = string
-  default     = "eu-west-1"
+  default     = "eu-west-3"
 }
 variable "bucket_region" {
   description = "Region for the S3 bucket"

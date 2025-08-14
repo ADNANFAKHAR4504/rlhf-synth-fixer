@@ -6,7 +6,7 @@
 variable "aws_region" {
 description = "AWS provider region"
 type = string
-default = "eu-west-1"
+default = "eu-west-3"
 }
 variable "bucket_region" {
 description = "Region for the S3 bucket"
@@ -125,10 +125,10 @@ Statement = [
 Sid = "Enable IAM User Permissions"
 Effect = "Allow"
 Principal = {
-AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+AWS = "arn:aws:iam::${data.aws*caller_identity.current.account_id}:root"
 }
-Action = "kms:_"
-Resource = "_"
+Action = "kms:*"
+Resource = "\_"
 },
 {
 Sid = "Allow S3 Service"
