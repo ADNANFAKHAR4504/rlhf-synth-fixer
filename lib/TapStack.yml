@@ -36,6 +36,11 @@ Parameters:
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
     Description: CIDR block for VPC
 
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: SSM parameter for the latest Amazon Linux 2023 AMI (region-specific)
+
   UseExistingVPC:
     Type: String
     AllowedValues: ['true', 'false']
@@ -81,17 +86,6 @@ Parameters:
     Type: String
     Default: ''
     Description: If a GuardDuty detector already exists in this account/region, provide its DetectorId here
-
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c55b159cbfafe1d0
-    us-west-2:
-      AMI: ami-01a123bcd456ef789
-    us-east-2:
-      AMI: ami-0c55b159cbfafe1d0
-    us-west-1:
-      AMI: ami-01a123bcd456ef789
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
@@ -590,7 +584,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub SecureEnv-LaunchTemplate-${Environment}
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         SecurityGroupIds:
@@ -636,7 +630,7 @@ Resources:
   SecureEnvBastionInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Ref LatestAmiId
       InstanceType: t3.micro
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       SecurityGroupIds:
