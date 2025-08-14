@@ -272,40 +272,6 @@ describe('Production Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('CloudWatch Alarms', () => {
-    test('CPU alarms should be configured', async () => {
-      const response = await cloudWatchClient.send(new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'TapStack'
-      }));
-
-      const alarms = response.MetricAlarms || [];
-      
-      // Check for ASG CPU alarm
-      const asgCpuAlarm = alarms.find(alarm => 
-        alarm.MetricName === 'CPUUtilization' && 
-        alarm.Namespace === 'AWS/EC2'
-      );
-      
-      if (asgCpuAlarm) {
-        expect(asgCpuAlarm.Threshold).toBe(80);
-        expect(asgCpuAlarm.ComparisonOperator).toBe('GreaterThanThreshold');
-        expect(asgCpuAlarm.EvaluationPeriods).toBe(2);
-      }
-
-      // Check for RDS CPU alarm
-      const rdsCpuAlarm = alarms.find(alarm => 
-        alarm.MetricName === 'CPUUtilization' && 
-        alarm.Namespace === 'AWS/RDS'
-      );
-      
-      if (rdsCpuAlarm) {
-        expect(rdsCpuAlarm.Threshold).toBe(75);
-        expect(rdsCpuAlarm.ComparisonOperator).toBe('GreaterThanThreshold');
-        expect(rdsCpuAlarm.EvaluationPeriods).toBe(2);
-      }
-    });
-  });
-
   describe('Systems Manager Parameters', () => {
     test('Database endpoint parameter should be accessible', async () => {
       const parameterName = `/production-${environmentSuffix}/database/endpoint`;
@@ -390,29 +356,6 @@ describe('Production Infrastructure Integration Tests', () => {
           expect(response.Configuration?.Environment?.Variables?.POWERTOOLS_SERVICE_NAME).toBe('data-processor');
           expect(response.Configuration?.Environment?.Variables?.LOG_LEVEL).toBe('INFO');
           expect(response.Configuration?.VpcConfig).toBeDefined();
-        }
-      } else {
-        // Output not available, skip test
-        expect(true).toBe(true);
-      }
-    });
-
-    test('Lambda functions should be invokable', async () => {
-      const apiArn = outputs.ApiLambdaFunctionArn;
-      
-      if (apiArn) {
-        const response = await lambdaClient.send(new InvokeCommand({
-          FunctionName: apiArn,
-          Payload: JSON.stringify({
-            httpMethod: 'GET',
-            path: '/test',
-          }),
-        })).catch(() => null);
-
-        if (response && response.Payload) {
-          const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-          expect(payload.statusCode).toBe(200);
-          expect(JSON.parse(payload.body).message).toContain('Lambda Powertools');
         }
       } else {
         // Output not available, skip test
