@@ -158,7 +158,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnetCidr]
       MapPublicIpOnLaunch: true
       Tags:
@@ -176,7 +176,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnetCidr]
       Tags:
         - Key: Name
@@ -193,7 +193,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1c'
+      AvailabilityZone: !Select [2, !GetAZs '']
       CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, DatabaseSubnetCidr]
       Tags:
         - Key: Name
@@ -740,12 +740,13 @@ Resources:
   # RDS Instance with encryption
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Delete  # Changed from Snapshot to ensure complete cleanup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete # W3011 fix
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43' # E3691 fix (valid version)
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -795,7 +796,7 @@ Resources:
             Encrypted: true
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -859,13 +860,14 @@ Resources:
       IsMultiRegionTrail: false
       EnableLogFileValidation: true
       KMSKeyId: !Ref S3KMSKey
+      IsLogging: true # E3003 fix
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
           DataResources:
             - Type: 'AWS::S3::Object'
-              Values: 
-                - !Sub '${ApplicationBucket}/*'
+              Values:
+                - !GetAtt ApplicationBucket.Arn # W1020: Remove unnecessary !Sub
       Tags:
         - Key: env
           Value: !Ref Environment
