@@ -32,7 +32,9 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
       this.accessLogsBucket = new aws.s3.Bucket(
         `${name}-access-logs`,
         {
-          bucket: args.bucketName ? `${args.bucketName}-access-logs` : undefined,
+          bucket: args.bucketName
+            ? `${args.bucketName}-access-logs`
+            : undefined,
           forceDestroy: false,
           tags: { ...commonTags, ...args.tags, Purpose: 'Access Logs' },
         },

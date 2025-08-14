@@ -223,29 +223,31 @@ export class SecurityStack extends pulumi.ComponentResource {
     const dataAccessRole = new SecureIAMRole(
       `tap-data-access-${environmentSuffix}`,
       {
-        assumeRolePolicy: pulumi.all([accountId]).apply(([accountId]) => JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                AWS: `arn:aws:iam::${accountId}:root`,
+        assumeRolePolicy: pulumi.all([accountId]).apply(([accountId]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Action: 'sts:AssumeRole',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${accountId}:root`,
+                },
+                Condition: {
+                  Bool: {
+                    'aws:MultiFactorAuthPresent': 'true',
+                  },
+                  StringEquals: {
+                    'aws:RequestedRegion': 'us-east-1',
+                  },
+                  IpAddress: {
+                    'aws:SourceIp': allowedIpRanges,
+                  },
+                },
               },
-              Condition: {
-                Bool: {
-                  'aws:MultiFactorAuthPresent': 'true',
-                },
-                StringEquals: {
-                  'aws:RequestedRegion': 'us-east-1',
-                },
-                IpAddress: {
-                  'aws:SourceIp': allowedIpRanges,
-                },
-              },
-            },
-          ],
-        })),
+            ],
+          })
+        ),
         roleName: `tap-data-access-role-${environmentSuffix}`,
         policies: enableEnhancedSecurity
           ? [
@@ -270,29 +272,31 @@ export class SecurityStack extends pulumi.ComponentResource {
     const auditRole = new SecureIAMRole(
       `tap-audit-access-${environmentSuffix}`,
       {
-        assumeRolePolicy: pulumi.all([accountId]).apply(([accountId]) => JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                AWS: `arn:aws:iam::${accountId}:root`,
+        assumeRolePolicy: pulumi.all([accountId]).apply(([accountId]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Action: 'sts:AssumeRole',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${accountId}:root`,
+                },
+                Condition: {
+                  Bool: {
+                    'aws:MultiFactorAuthPresent': 'true',
+                  },
+                  StringEquals: {
+                    'aws:RequestedRegion': 'us-east-1',
+                  },
+                  IpAddress: {
+                    'aws:SourceIp': allowedIpRanges,
+                  },
+                },
               },
-              Condition: {
-                Bool: {
-                  'aws:MultiFactorAuthPresent': 'true',
-                },
-                StringEquals: {
-                  'aws:RequestedRegion': 'us-east-1',
-                },
-                IpAddress: {
-                  'aws:SourceIp': allowedIpRanges,
-                },
-              },
-            },
-          ],
-        })),
+            ],
+          })
+        ),
         roleName: `tap-audit-access-role-${environmentSuffix}`,
         policies: enableEnhancedSecurity
           ? [
