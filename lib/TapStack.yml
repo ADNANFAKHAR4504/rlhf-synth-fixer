@@ -30,6 +30,17 @@ Parameters:
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
     Description: CIDR block for VPC
 
+  CreateGuardDutyDetector:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Whether to create a new GuardDuty detector (set to 'true' only if one does not already exist in this region)
+
+  ExistingGuardDutyDetectorId:
+    Type: String
+    Default: ''
+    Description: If a GuardDuty detector already exists in this account/region, provide its DetectorId here
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -43,6 +54,7 @@ Mappings:
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  CreateDetector: !Equals [!Ref CreateGuardDutyDetector, 'true']
 
 Resources:
   # =========================
@@ -623,7 +635,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
 
   SecureEnvConfigBucket:
     Type: AWS::S3::Bucket
@@ -685,9 +697,12 @@ Resources:
   # GuardDuty
   # =========================
   SecureEnvGuardDuty:
+    Condition: CreateDetector
     Type: AWS::GuardDuty::Detector
     Properties:
       Enable: true
+
+  # Removed placeholder custom resource; use conditional output instead
 
   # =========================
   # WAF
@@ -848,7 +863,12 @@ Outputs:
 
   GuardDutyDetectorId:
     Description: GuardDuty Detector ID
-    Value: !Ref SecureEnvGuardDuty
+    Value:
+      !If [
+        CreateDetector,
+        !Ref SecureEnvGuardDuty,
+        !Ref ExistingGuardDutyDetectorId,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-GuardDuty-Detector-ID'
 
