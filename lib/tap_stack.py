@@ -20,7 +20,7 @@ Key points satisfied (see PROMPT.md):
 Note:
 - We keep TapStack and TapStackArgs intact and encapsulate all resources under
   the component. We also emit pulumi.export for every created resource per the
-  task's requirement.
+  task's requirement. 
 """
 
 from __future__ import annotations
