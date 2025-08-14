@@ -41,6 +41,12 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
     Description: SSM parameter for the latest Amazon Linux 2023 AMI (region-specific)
 
+  NameSuffix:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[a-z0-9-]{0,32}$'
+    Description: Optional lowercase suffix to make S3 bucket names unique (e.g., pr1200)
+
   UseExistingVPC:
     Type: String
     AllowedValues: ['true', 'false']
@@ -93,6 +99,7 @@ Conditions:
   HasFlowLogsRoleArn: !Not [!Equals [!Ref FlowLogsRoleArn, '']]
   UseExistingNetworking: !Equals [!Ref UseExistingVPC, 'true']
   CreateNetworking: !Equals [!Ref UseExistingVPC, 'false']
+  HasNameSuffix: !Not [!Equals [!Ref NameSuffix, '']]
 
 Resources:
   # =========================
@@ -477,7 +484,10 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secureenv-secure-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !If
+        - HasNameSuffix
+        - !Sub 'secureenv-secure-bucket-${AWS::AccountId}-${AWS::Region}-${NameSuffix}'
+        - !Sub 'secureenv-secure-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -665,7 +675,10 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secureenv-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !If
+        - HasNameSuffix
+        - !Sub 'secureenv-cloudtrail-${AWS::AccountId}-${AWS::Region}-${NameSuffix}'
+        - !Sub 'secureenv-cloudtrail-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -715,7 +728,10 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secureenv-config-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !If
+        - HasNameSuffix
+        - !Sub 'secureenv-config-${AWS::AccountId}-${AWS::Region}-${NameSuffix}'
+        - !Sub 'secureenv-config-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -845,7 +861,10 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secureenv-flowlogs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !If
+        - HasNameSuffix
+        - !Sub 'secureenv-flowlogs-${AWS::AccountId}-${AWS::Region}-${NameSuffix}'
+        - !Sub 'secureenv-flowlogs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
