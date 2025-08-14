@@ -72,6 +72,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('terraform validate passes', async () => {
       try {
+        // Initialize providers if not already done (without backend)
+        try {
+          await execAsync('terraform init -backend=false', {
+            cwd: libPath,
+          });
+        } catch (initError) {
+          // If already initialized, continue
+        }
+
         const { stdout, stderr } = await execAsync('terraform validate', {
           cwd: libPath,
         });
