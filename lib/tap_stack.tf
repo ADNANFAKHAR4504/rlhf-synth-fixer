@@ -698,6 +698,12 @@ resource "aws_db_subnet_group" "app" {
   })
 }
 
+data "aws_rds_engine_version" "pg_default" {
+  engine                           = "postgres"
+  preferred_major_engine_version   = "15"  # keep Postgres 15 line; change to "16" if you prefer
+  default_only                     = true  # pick region's current default minor for that major
+}
+
 resource "aws_db_instance" "app" {
   identifier = "${local.name_prefix}-rds"
 
@@ -707,7 +713,7 @@ resource "aws_db_instance" "app" {
   storage_encrypted     = true
 
   engine         = "postgres"
-  engine_version = "15.11"
+  engine_version = data.aws_rds_engine_version.pg_default.version  # <= updated
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
@@ -717,22 +723,17 @@ resource "aws_db_instance" "app" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.app.name
 
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
-  auto_minor_version_upgrade = true
-  deletion_protection        = true
-  skip_final_snapshot        = false
-  final_snapshot_identifier  = "${local.name_prefix}-rds-final-snapshot"
-
+  backup_retention_period      = 7
+  backup_window                = "03:00-04:00"
+  maintenance_window           = "sun:04:00-sun:05:00"
+  auto_minor_version_upgrade   = true
+  deletion_protection          = true
+  skip_final_snapshot          = false
+  final_snapshot_identifier    = "${local.name_prefix}-rds-final-snapshot"
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  multi_az                     = true
 
-  multi_az = true
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-rds"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds" })
 }
 
 # =============================================================================
