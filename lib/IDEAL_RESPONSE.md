@@ -46,7 +46,7 @@ export class TapStack extends cdk.Stack {
     // Create VPC with specified CIDR block
     const vpc = new ec2.Vpc(this, 'VPC', {
       ipAddresses: ec2.IpAddresses.cidr(cidrRanges.vpcCidr),
-      availabilityZones: ['us-east-1a', 'us-east-1b'],
+      availabilityZones: ['eu-west-1a', 'eu-west-1b'],
       subnetConfiguration: [], // We'll create subnets manually with specific CIDRs
       enableDnsHostnames: true,
       enableDnsSupport: true,
@@ -80,9 +80,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Create public subnet 1 in us-east-1a with explicit CfnSubnet construct
+    // Create public subnet 1 in eu-west-1a with explicit CfnSubnet construct
     const publicSubnet1 = new ec2.CfnSubnet(this, 'PublicSubnet1', {
-      availabilityZone: 'us-east-1a',
+      availabilityZone: 'eu-west-1a',
       vpcId: vpc.vpcId,
       cidrBlock: cidrRanges.subnet1Cidr,
       mapPublicIpOnLaunch: true,
@@ -98,9 +98,9 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // Create public subnet 2 in us-east-1b with explicit CfnSubnet construct
+    // Create public subnet 2 in eu-west-1b with explicit CfnSubnet construct
     const publicSubnet2 = new ec2.CfnSubnet(this, 'PublicSubnet2', {
-      availabilityZone: 'us-east-1b',
+      availabilityZone: 'eu-west-1b',
       vpcId: vpc.vpcId,
       cidrBlock: cidrRanges.subnet2Cidr,
       mapPublicIpOnLaunch: true,
@@ -169,7 +169,7 @@ export class TapStack extends cdk.Stack {
 
     // Create VPC endpoints for enhanced private connectivity (future VPC Lattice preparation)
     const s3VpcEndpoint = new ec2.CfnVPCEndpoint(this, 'S3Endpoint', {
-      serviceName: 'com.amazonaws.us-east-1.s3',
+      serviceName: 'com.amazonaws.eu-west-1.s3',
       vpcId: vpc.vpcId,
       vpcEndpointType: 'Gateway',
       routeTableIds: [publicRouteTable.ref],
@@ -190,7 +190,7 @@ export class TapStack extends cdk.Stack {
       this,
       'DynamoDBEndpoint',
       {
-        serviceName: 'com.amazonaws.us-east-1.dynamodb',
+        serviceName: 'com.amazonaws.eu-west-1.dynamodb',
         vpcId: vpc.vpcId,
         vpcEndpointType: 'Gateway',
         routeTableIds: [publicRouteTable.ref],

@@ -9,8 +9,8 @@ const mockOutputsByEnvironment = {
     VpcCidr: '10.0.0.0/16',
     PublicSubnet1Id: 'subnet-dev1234567890abcdef0',
     PublicSubnet2Id: 'subnet-dev1234567890abcdef1',
-    PublicSubnet1Az: 'us-east-1a',
-    PublicSubnet2Az: 'us-east-1b',
+    PublicSubnet1Az: 'eu-west-1a',
+    PublicSubnet2Az: 'eu-west-1b',
     InternetGatewayId: 'igw-dev1234567890abcdef0',
     S3VpcEndpointId: 'vpce-dev1234567890abcdef0',
     DynamoDBVpcEndpointId: 'vpce-dev1234567890abcdef1',
@@ -20,8 +20,8 @@ const mockOutputsByEnvironment = {
     VpcCidr: '10.1.0.0/16',
     PublicSubnet1Id: 'subnet-staging1234567890abcdef0',
     PublicSubnet2Id: 'subnet-staging1234567890abcdef1',
-    PublicSubnet1Az: 'us-east-1a',
-    PublicSubnet2Az: 'us-east-1b',
+    PublicSubnet1Az: 'eu-west-1a',
+    PublicSubnet2Az: 'eu-west-1b',
     InternetGatewayId: 'igw-staging1234567890abcdef0',
     S3VpcEndpointId: 'vpce-staging1234567890abcdef0',
     DynamoDBVpcEndpointId: 'vpce-staging1234567890abcdef1',
@@ -31,8 +31,8 @@ const mockOutputsByEnvironment = {
     VpcCidr: '10.2.0.0/16',
     PublicSubnet1Id: 'subnet-prod1234567890abcdef0',
     PublicSubnet2Id: 'subnet-prod1234567890abcdef1',
-    PublicSubnet1Az: 'us-east-1a',
-    PublicSubnet2Az: 'us-east-1b',
+    PublicSubnet1Az: 'eu-west-1a',
+    PublicSubnet2Az: 'eu-west-1b',
     InternetGatewayId: 'igw-prod1234567890abcdef0',
     S3VpcEndpointId: 'vpce-prod1234567890abcdef0',
     DynamoDBVpcEndpointId: 'vpce-prod1234567890abcdef1',
@@ -56,7 +56,7 @@ try {
 }
 
 // Initialize AWS SDK client
-const ec2Client = new EC2Client({ region: 'us-east-1' });
+const ec2Client = new EC2Client({ region: 'eu-west-1' });
 
 // Get environment suffix from environment variable
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -130,8 +130,8 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
 
     test('subnets are in different availability zones', async () => {
-      expect(outputs.PublicSubnet1Az).toBe('us-east-1a');
-      expect(outputs.PublicSubnet2Az).toBe('us-east-1b');
+      expect(outputs.PublicSubnet1Az).toBe('eu-west-1a');
+      expect(outputs.PublicSubnet2Az).toBe('eu-west-1b');
       expect(outputs.PublicSubnet1Az).not.toBe(outputs.PublicSubnet2Az);
     });
 
@@ -285,8 +285,8 @@ describe('VPC Infrastructure Integration Tests', () => {
       // - Prod: VPC 10.2.0.0/16, Subnets 10.2.1.0/24 and 10.2.2.0/24
       expect(outputs.PublicSubnet1Id).toBeTruthy();
       expect(outputs.PublicSubnet2Id).toBeTruthy();
-      expect(outputs.PublicSubnet1Az).toBe('us-east-1a');
-      expect(outputs.PublicSubnet2Az).toBe('us-east-1b');
+      expect(outputs.PublicSubnet1Az).toBe('eu-west-1a');
+      expect(outputs.PublicSubnet2Az).toBe('eu-west-1b');
 
       // Verify environment-specific CIDR validation
       expect(envOutputs.VpcCidr).toMatch(/^10\.(0|1|2)\.0\.0\/16$/);
@@ -338,8 +338,8 @@ describe('VPC Infrastructure Integration Tests', () => {
 
   describe('High Availability', () => {
     test('resources are distributed across multiple AZs', () => {
-      expect(outputs.PublicSubnet1Az).toBe('us-east-1a');
-      expect(outputs.PublicSubnet2Az).toBe('us-east-1b');
+      expect(outputs.PublicSubnet1Az).toBe('eu-west-1a');
+      expect(outputs.PublicSubnet2Az).toBe('eu-west-1b');
       const azs = [outputs.PublicSubnet1Az, outputs.PublicSubnet2Az];
       const uniqueAzs = new Set(azs);
       expect(uniqueAzs.size).toBe(2);
@@ -354,8 +354,8 @@ describe('VPC Infrastructure Integration Tests', () => {
     test('AZ distribution is consistent across environments', () => {
       // Verify AZ distribution is the same regardless of environment
       const envOutputs = getEnvironmentOutputs(environmentSuffix);
-      expect(outputs.PublicSubnet1Az).toBe('us-east-1a');
-      expect(outputs.PublicSubnet2Az).toBe('us-east-1b');
+      expect(outputs.PublicSubnet1Az).toBe('eu-west-1a');
+      expect(outputs.PublicSubnet2Az).toBe('eu-west-1b');
     });
   });
 
