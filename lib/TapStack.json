@@ -1377,7 +1377,7 @@
                     "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-lt"
                 },
                 "LaunchTemplateData": {
-                    "ImageId": "ami-0989fb15ce71ba39e",
+                    "ImageId": "ami-0c02fb55956c7d316",
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
