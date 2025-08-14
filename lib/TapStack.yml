@@ -155,12 +155,12 @@ Conditions:
   CreateMainS3BucketCond: !Equals [!Ref UseExistingS3MainBucket, 'false']
   UseExistingKMSCond: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
   CreateKMSCond: !Equals [!Ref ExistingKMSKeyArn, '']
+  CreateBastionSGFinalCond: !Equals [!Ref ExistingBastionSGId, '']
+  CreateWebSGFinalCond: !Equals [!Ref ExistingWebSGId, '']
+  CreateDBSGFinalCond: !Equals [!Ref ExistingDBSGId, '']
   UseExistingWebSGCond: !Not [!Equals [!Ref ExistingWebSGId, '']]
-  CreateWebSGCond: !Equals [!Ref ExistingWebSGId, '']
   UseExistingBastionSGCond: !Not [!Equals [!Ref ExistingBastionSGId, '']]
-  CreateBastionSGCond: !Equals [!Ref ExistingBastionSGId, '']
   UseExistingDBSGCond: !Not [!Equals [!Ref ExistingDBSGId, '']]
-  CreateDBSGCond: !Equals [!Ref ExistingDBSGId, '']
   CreateWebInstanceCond: !Equals [!Ref ExistingWebInstanceId, '']
   CreateBastionInstanceCond: !Equals [!Ref ExistingBastionInstanceId, '']
 
@@ -436,7 +436,7 @@ Resources:
   # Security Groups
   # =========================
   SecureEnvBastionSG:
-    Condition: CreateBastionSGCond
+    Condition: CreateBastionSGFinalCond
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub SecureEnv-Bastion-SG-${Environment}
@@ -455,7 +455,7 @@ Resources:
           Value: !Sub SecureEnv-Bastion-SG-${Environment}
 
   SecureEnvWebSG:
-    Condition: CreateWebSGCond
+    Condition: CreateWebSGFinalCond
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub SecureEnv-Web-SG-${Environment}
@@ -475,7 +475,7 @@ Resources:
           ToPort: 22
           SourceSecurityGroupId:
             !If [
-              CreateBastionSGCond,
+              CreateBastionSGFinalCond,
               !Ref SecureEnvBastionSG,
               !Ref ExistingBastionSGId,
             ]
@@ -487,7 +487,7 @@ Resources:
           Value: !Sub SecureEnv-Web-SG-${Environment}
 
   SecureEnvDBSG:
-    Condition: CreateDBSGCond
+    Condition: CreateDBSGFinalCond
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub SecureEnv-DB-SG-${Environment}
@@ -498,13 +498,17 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId:
-            !If [CreateWebSGCond, !Ref SecureEnvWebSG, !Ref ExistingWebSGId]
+            !If [
+              CreateWebSGFinalCond,
+              !Ref SecureEnvWebSG,
+              !Ref ExistingWebSGId,
+            ]
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId:
             !If [
-              CreateBastionSGCond,
+              CreateBastionSGFinalCond,
               !Ref SecureEnvBastionSG,
               !Ref ExistingBastionSGId,
             ]
