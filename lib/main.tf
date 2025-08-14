@@ -4,7 +4,7 @@ locals {
 }
 
 # -----------------------------
-# Networking (VPC + Subnets)
+# Networking (VPC + Subnets) 
 # -----------------------------
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
