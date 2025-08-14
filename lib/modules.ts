@@ -182,7 +182,7 @@ export class ComputeModule extends Construct {
     super(scope, id);
 
     const instance = new Instance(this, 'EC2Instance', {
-      ami: 'ami-0c55b159cbfafe1f0', // Example AMI for us-west-2, replace if needed
+      ami: 'ami-04e08e36e17a21b56', // Example AMI for us-west-2, replace if needed
       instanceType: 't2.micro',
       subnetId: props.publicSubnetIds[0],
       vpcSecurityGroupIds: [props.securityGroupId],
