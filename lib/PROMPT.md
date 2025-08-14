@@ -4,9 +4,9 @@ You are tasked with setting up a **secure AWS environment using Terraform CDK (T
 
 ---
 
-## 🔒 Security Requirements
+## Security Requirements
 
-### 🛡️ VPC
+### VPC
 
 - Create a **VPC named `secure-network`** in the `us-west-2` region.
 - Include:
@@ -16,7 +16,7 @@ You are tasked with setting up a **secure AWS environment using Terraform CDK (T
 
 ---
 
-### 🔐 Network Controls
+### Network Controls
 
 - **Security Groups**:
   - Allow inbound traffic **only on ports 80 (HTTP) and 443 (HTTPS)**.
@@ -27,7 +27,7 @@ You are tasked with setting up a **secure AWS environment using Terraform CDK (T
 
 ---
 
-### 🖥️ Compute
+### Compute
 
 - Launch an **EC2 instance** in the **public subnet**.
 - Attach the **Security Group** created above.
@@ -36,7 +36,7 @@ You are tasked with setting up a **secure AWS environment using Terraform CDK (T
 
 ---
 
-### 📦 Storage (S3)
+### Storage (S3)
 
 - Create an **S3 bucket** for storing **web application logs**.
 - Enable **Server-Side Encryption** (AES-256 or AWS KMS).
@@ -44,7 +44,7 @@ You are tasked with setting up a **secure AWS environment using Terraform CDK (T
 
 ---
 
-### 🔐 IAM
+### IAM
 
 - Create an **IAM Role** for the EC2 instance.
 - Attach an **IAM Policy** with **minimal access**:
@@ -52,7 +52,7 @@ You are tasked with setting up a **secure AWS environment using Terraform CDK (T
 
 ---
 
-### 🏷️ Tagging
+### Tagging
 
 All AWS resources must be tagged with:
 
