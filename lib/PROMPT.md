@@ -24,5 +24,3 @@ In this task, we are tasked with building infrastructure using CDKTF (Cloud Deve
 
 By the end of this, we should have a fully functional, secure, and scalable infrastructure setup. 
  
-
- 
