@@ -5,11 +5,11 @@ Implements secure VPCs, networking, monitoring, and compliance
 
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, List
-from modules.vpc import create_vpc_infrastructure
-from modules.security import create_security_groups, create_s3_bucket
-from modules.monitoring import setup_cloudtrail
-from modules.iam import create_iam_roles
+from typing import Dict
+from lib.modules.vpc import create_vpc_infrastructure
+from lib.modules.security import create_security_groups, create_s3_bucket
+from lib.modules.monitoring import setup_cloudtrail
+from lib.modules.iam import create_iam_roles
 
 # Configuration
 config = pulumi.Config()
@@ -34,7 +34,7 @@ vpc_cidrs = {
 }
 
 
-def main():
+def deploy_infrastructure():
   """Main function to orchestrate infrastructure deployment"""
 
   # Store resources for cross-region references

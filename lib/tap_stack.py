@@ -13,7 +13,7 @@ from typing import Optional
 import pulumi
 from pulumi import ResourceOptions
 
-from lib.main import main
+from lib.main import deploy_infrastructure
 
 
 class TapStackArgs:
@@ -58,4 +58,4 @@ class TapStack(pulumi.ComponentResource):
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
 
-        main()
+        deploy_infrastructure()
