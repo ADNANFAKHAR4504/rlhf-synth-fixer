@@ -1055,11 +1055,11 @@ output "infrastructure_summary" {
       kms_key_arn = aws_kms_key.main.arn
       kms_key_id  = aws_kms_key.main.key_id
     }
-          monitoring = {
-        cloudtrail_name = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : null
-        log_group_name  = aws_cloudwatch_log_group.cloudtrail.name
-        log_group_arn   = aws_cloudwatch_log_group.cloudtrail.arn
-      }
+    monitoring = {
+      cloudtrail_name = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : null
+      log_group_name  = aws_cloudwatch_log_group.cloudtrail.name
+      log_group_arn   = aws_cloudwatch_log_group.cloudtrail.arn
+    }
     security_groups = {
       web  = aws_security_group.web.id
       app  = aws_security_group.app.id
