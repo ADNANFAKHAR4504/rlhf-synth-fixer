@@ -136,6 +136,36 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
+    // Allow ALB log delivery to write to the bucket
+    albLogsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowALBLogDelivery',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal(
+            'logdelivery.elasticloadbalancing.amazonaws.com'
+          ),
+        ],
+        actions: ['s3:PutObject'],
+        resources: [`${albLogsBucket.bucketArn}/*`],
+      })
+    );
+
+    // Allow ALB log delivery to check ACL
+    albLogsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowALBLogDeliveryAclCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal(
+            'logdelivery.elasticloadbalancing.amazonaws.com'
+          ),
+        ],
+        actions: ['s3:GetBucketAcl'],
+        resources: [albLogsBucket.bucketArn],
+      })
+    );
+
     // For testing, we'll skip the certificate creation since we don't have a real domain
     // In production, this would use DNS validation with a real hosted zone
 

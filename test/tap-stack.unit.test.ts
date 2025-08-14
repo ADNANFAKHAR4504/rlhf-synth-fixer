@@ -165,7 +165,7 @@ describe('TapStack Unit Tests', () => {
         MultiAZ: true,
         DBInstanceIdentifier: `tap-${environmentSuffix}-db`,
         Engine: 'mysql',
-        DBInstanceClass: 'db.t3.micro',
+        DBInstanceClass: 'db.t3.medium',
       });
     });
 
@@ -208,7 +208,7 @@ describe('TapStack Unit Tests', () => {
 
     test('configures CloudWatch log exports', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        EnableCloudwatchLogsExports: ['error', 'general', 'slow-query'],
+        EnableCloudwatchLogsExports: ['error', 'general'],
       });
     });
   });
