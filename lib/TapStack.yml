@@ -1,0 +1,869 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Secure AWS Infrastructure Environment with comprehensive security controls.
+  Implements KMS encryption, secure VPC, RDS, EC2, S3, CloudTrail, Config,
+  GuardDuty, WAF, Flow Logs, and monitoring.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [prod, dev, stage]
+    Description: Environment name (prod/dev/stage)
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair for SSH access
+
+  DBMasterUsername:
+    Type: String
+    Default: dbadmin
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    Description: Master username for RDS instance
+
+  DBMasterPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9!@#$%^&*()_+-=[]{}|;:,.<>?]*'
+    Description: Master password for RDS instance (will be stored in AWS Secrets Manager)
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    Description: CIDR block for VPC
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0c55b159cbfafe1d0
+    us-west-2:
+      AMI: ami-01a123bcd456ef789
+    us-east-2:
+      AMI: ami-0c55b159cbfafe1d0
+    us-west-1:
+      AMI: ami-01a123bcd456ef789
+
+Resources:
+  # =========================
+  # KMS Key
+  # =========================
+  SecureEnvKMSKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: KMS Key for SecureEnv encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRoot
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudTrail
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: AllowRDS
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub rds.${AWS::Region}.amazonaws.com
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+
+  SecureEnvKMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/SecureEnv-MasterKey
+      TargetKeyId: !Ref SecureEnvKMSKey
+
+  # =========================
+  # AWS Secrets Manager
+  # =========================
+  SecureEnvDBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub SecureEnv-DB-Secret-${Environment}
+      Description: Database credentials for SecureEnv RDS instance
+      SecretString: !Sub |
+        {
+          "username": "${DBMasterUsername}",
+          "password": "${DBMasterPassword}"
+        }
+      KmsKeyId: !Ref SecureEnvKMSKey
+
+  # =========================
+  # VPC and Networking
+  # =========================
+  SecureEnvVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-VPC-${Environment}
+
+  SecureEnvInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-IGW-${Environment}
+
+  SecureEnvVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      InternetGatewayId: !Ref SecureEnvInternetGateway
+
+  SecureEnvPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 6, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Public-Subnet-1-${Environment}
+
+  SecureEnvPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 6, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Public-Subnet-2-${Environment}
+
+  SecureEnvPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 6, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Private-Subnet-1-${Environment}
+
+  SecureEnvPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 6, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Private-Subnet-2-${Environment}
+
+  SecureEnvPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Public-RT-${Environment}
+
+  SecureEnvPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: SecureEnvVPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref SecureEnvPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SecureEnvInternetGateway
+
+  SecureEnvPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecureEnvPublicSubnet1
+      RouteTableId: !Ref SecureEnvPublicRouteTable
+
+  SecureEnvPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecureEnvPublicSubnet2
+      RouteTableId: !Ref SecureEnvPublicRouteTable
+
+  SecureEnvPrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Private-RT-1-${Environment}
+
+  SecureEnvPrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Private-RT-2-${Environment}
+
+  SecureEnvPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecureEnvPrivateSubnet1
+      RouteTableId: !Ref SecureEnvPrivateRouteTable1
+
+  SecureEnvPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecureEnvPrivateSubnet2
+      RouteTableId: !Ref SecureEnvPrivateRouteTable2
+
+  SecureEnvEIP1:
+    Type: AWS::EC2::EIP
+    DependsOn: SecureEnvVPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-EIP-1-${Environment}
+
+  SecureEnvEIP2:
+    Type: AWS::EC2::EIP
+    DependsOn: SecureEnvVPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-EIP-2-${Environment}
+
+  SecureEnvNATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt SecureEnvEIP1.AllocationId
+      SubnetId: !Ref SecureEnvPublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-NAT-1-${Environment}
+
+  SecureEnvNATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt SecureEnvEIP2.AllocationId
+      SubnetId: !Ref SecureEnvPublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-NAT-2-${Environment}
+
+  SecureEnvPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref SecureEnvPrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref SecureEnvNATGateway1
+
+  SecureEnvPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref SecureEnvPrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref SecureEnvNATGateway2
+
+  # =========================
+  # Security Groups
+  # =========================
+  SecureEnvBastionSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub SecureEnv-Bastion-SG-${Environment}
+      GroupDescription: Security group for bastion host
+      VpcId: !Ref SecureEnvVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Bastion-SG-${Environment}
+
+  SecureEnvWebSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub SecureEnv-Web-SG-${Environment}
+      GroupDescription: Security group for web instances
+      VpcId: !Ref SecureEnvVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref SecureEnvBastionSG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Web-SG-${Environment}
+
+  SecureEnvDBSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub SecureEnv-DB-SG-${Environment}
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref SecureEnvVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref SecureEnvWebSG
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref SecureEnvBastionSG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-DB-SG-${Environment}
+
+  # =========================
+  # IAM Roles
+  # =========================
+  SecureEnvEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SecureEnv-EC2-Role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SecureEnvEC2Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${SecureEnvS3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt SecureEnvKMSKey.Arn
+
+  SecureEnvEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub SecureEnv-EC2-Profile-${Environment}
+      Roles:
+        - !Ref SecureEnvEC2Role
+
+  # =========================
+  # S3 Bucket
+  # =========================
+  SecureEnvS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'secureenv-secure-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecureEnvKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Secure-Bucket-${Environment}
+
+  SecureEnvS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureEnvS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${SecureEnvS3Bucket}/*'
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+          - Sid: DenyIncorrectEncryptionHeader
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${SecureEnvS3Bucket}/*'
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption-aws-kms-key-id: !Ref SecureEnvKMSKey
+
+  # =========================
+  # RDS Database
+  # =========================
+  SecureEnvDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub SecureEnv-DB-SubnetGroup-${Environment}
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref SecureEnvPrivateSubnet1
+        - !Ref SecureEnvPrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-DB-SubnetGroup-${Environment}
+
+  SecureEnvRDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub SecureEnv-MySQL-DB-${Environment}
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.43'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${SecureEnvDBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${SecureEnvDBSecret}:SecretString:password}}'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !Ref SecureEnvKMSKey
+      VPCSecurityGroups:
+        - !Ref SecureEnvDBSG
+      DBSubnetGroupName: !Ref SecureEnvDBSubnetGroup
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: true
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-MySQL-DB-${Environment}
+
+  # =========================
+  # EC2 Launch Template
+  # =========================
+  SecureEnvLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub SecureEnv-LaunchTemplate-${Environment}
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: t3.micro
+        KeyName: !Ref KeyPairName
+        SecurityGroupIds:
+          - !Ref SecureEnvWebSG
+        IamInstanceProfile:
+          Arn: !GetAtt SecureEnvEC2InstanceProfile.Arn
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !Ref SecureEnvKMSKey
+              DeleteOnTermination: true
+        MetadataOptions:
+          HttpTokens: required
+          HttpPutResponseHopLimit: 1
+          HttpEndpoint: enabled
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-cloudwatch-agent
+            systemctl enable amazon-cloudwatch-agent
+            systemctl start amazon-cloudwatch-agent
+
+  SecureEnvWebInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref SecureEnvLaunchTemplate
+        Version: !GetAtt SecureEnvLaunchTemplate.LatestVersionNumber
+      SubnetId: !Ref SecureEnvPrivateSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Web-Instance-${Environment}
+
+  SecureEnvBastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: t3.micro
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds:
+        - !Ref SecureEnvBastionSG
+      SubnetId: !Ref SecureEnvPublicSubnet1
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId: !Ref SecureEnvKMSKey
+            DeleteOnTermination: true
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        HttpEndpoint: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub SecureEnv-Bastion-Host-${Environment}
+
+  # =========================
+  # CloudTrail
+  # =========================
+  SecureEnvCloudTrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'secureenv-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecureEnvKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 365
+      Tags:
+        - Key: Name
+          Value: SecureEnv-CloudTrail-Bucket
+
+  SecureEnvCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub SecureEnv-CloudTrail-${Environment}
+      S3BucketName: !Ref SecureEnvCloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      KMSKeyId: !Ref SecureEnvKMSKey
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${SecureEnvS3Bucket}/*'
+
+  # =========================
+  # AWS Config
+  # =========================
+  SecureEnvConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SecureEnv-Config-Role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/ConfigRole
+
+  SecureEnvConfigBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'secureenv-config-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecureEnvKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldConfig
+            Status: Enabled
+            ExpirationInDays: 2555
+      Tags:
+        - Key: Name
+          Value: SecureEnv-Config-Bucket
+
+  SecureEnvConfigurationRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub SecureEnv-Config-Recorder-${Environment}
+      RoleARN: !GetAtt SecureEnvConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  SecureEnvDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub SecureEnv-Config-DeliveryChannel-${Environment}
+      S3BucketName: !Ref SecureEnvConfigBucket
+
+  SecureEnvConfigRuleS3Encryption:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub SecureEnv-S3-Bucket-Encryption-${Environment}
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+
+  SecureEnvConfigRuleRDSEncryption:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub SecureEnv-RDS-Encryption-${Environment}
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_STORAGE_ENCRYPTED
+
+  # =========================
+  # GuardDuty
+  # =========================
+  SecureEnvGuardDuty:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+
+  # =========================
+  # WAF
+  # =========================
+  SecureEnvWAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub SecureEnv-WebACL-${Environment}
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: SQLInjectionRule
+          Priority: 1
+          Statement:
+            SqliMatchStatement:
+              FieldToMatch:
+                Body: {}
+              TextTransformations:
+                - Priority: 0
+                  Type: URL_DECODE
+                - Priority: 1
+                  Type: HTML_ENTITY_DECODE
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLInjectionRule
+        - Name: XSSRule
+          Priority: 2
+          Statement:
+            XssMatchStatement:
+              FieldToMatch:
+                Body: {}
+              TextTransformations:
+                - Priority: 0
+                  Type: URL_DECODE
+                - Priority: 1
+                  Type: HTML_ENTITY_DECODE
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: XSSRule
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: SecureEnv-WebACL
+
+  # =========================
+  # VPC Flow Logs
+  # =========================
+  SecureEnvFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SecureEnv-FlowLog-Role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/VPCFlowLogs
+
+  SecureEnvFlowLogBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'secureenv-flowlogs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecureEnvKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFlowLogs
+            Status: Enabled
+            ExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: SecureEnv-FlowLog-Bucket
+
+  SecureEnvVPCFlowLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/vpc/flowlogs/${Environment}
+      RetentionInDays: 30
+
+  SecureEnvFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceId: !Ref SecureEnvVPC
+      ResourceType: VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref SecureEnvVPCFlowLog
+      DeliverLogsPermissionArn: !GetAtt SecureEnvFlowLogRole.Arn
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref SecureEnvVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  KMSKeyId:
+    Description: KMS Key ID
+    Value: !Ref SecureEnvKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ID'
+
+  KMSKeyArn:
+    Description: KMS Key ARN
+    Value: !GetAtt SecureEnvKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ARN'
+
+  S3BucketName:
+    Description: S3 Bucket Name
+    Value: !Ref SecureEnvS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-Bucket-Name'
+
+  RDSInstanceId:
+    Description: RDS Instance ID
+    Value: !Ref SecureEnvRDSInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-Instance-ID'
+
+  WebInstanceId:
+    Description: Web Instance ID
+    Value: !Ref SecureEnvWebInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-Web-Instance-ID'
+
+  BastionInstanceId:
+    Description: Bastion Instance ID
+    Value: !Ref SecureEnvBastionInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-Bastion-Instance-ID'
+
+  CloudTrailName:
+    Description: CloudTrail Name
+    Value: !Ref SecureEnvCloudTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-Name'
+
+  GuardDutyDetectorId:
+    Description: GuardDuty Detector ID
+    Value: !Ref SecureEnvGuardDuty
+    Export:
+      Name: !Sub '${AWS::StackName}-GuardDuty-Detector-ID'
+
+  WAFWebACLId:
+    Description: WAF Web ACL ID
+    Value: !Ref SecureEnvWAFWebACL
+    Export:
+      Name: !Sub '${AWS::StackName}-WAF-WebACL-ID'
+
+  Environment:
+    Description: Environment name
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
