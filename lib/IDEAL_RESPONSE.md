@@ -13,7 +13,7 @@ terraform {
       version = "~> 5.0"
     }
     random = {
-      source  = "hashicorp/random" 
+      source  = "hashicorp/random"
       version = "~> 3.0"
     }
   }
@@ -600,16 +600,19 @@ output "log_reader_role_arn" {
 ### 📝 **Usage Instructions**
 
 1. **Initialize Terraform**:
+
    ```bash
    terraform init
    ```
 
 2. **Plan the deployment**:
+
    ```bash
    terraform plan
    ```
 
 3. **Apply the configuration**:
+
    ```bash
    terraform apply
    ```
