@@ -22,7 +22,7 @@ export class RdsStack extends pulumi.ComponentResource {
     super('tap:rds:RdsStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
-    const instanceClass = args.instanceClass || 'db.t3.micro';
+    const instanceClass = args.instanceClass || 'db.t4g.micro';
     const tags = args.tags || {};
 
     // Tripwire to catch bad subnet inputs early
@@ -110,6 +110,7 @@ export class RdsStack extends pulumi.ComponentResource {
         monitoringInterval: 60,
         monitoringRoleArn: monitoringRole.arn,
 
+        // Performance Insights configuration
         performanceInsightsEnabled: true,
         performanceInsightsKmsKeyId: args.rdsKmsKeyArn,
         performanceInsightsRetentionPeriod: 7,
