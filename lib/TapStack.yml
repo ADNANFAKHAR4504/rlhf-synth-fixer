@@ -17,7 +17,6 @@ Metadata:
           default: "Database Configuration"
         Parameters:
           - DBUsername
-          - DBPassword
       - Label:
           default: "EC2 Configuration"
         Parameters:
@@ -540,7 +539,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "tap-${EnvironmentSuffix}-ec2-profile"
       Roles:
         - !Ref EC2Role
 
@@ -549,7 +547,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      PolicyName: !Sub "tap-${EnvironmentSuffix}-s3-access-policy"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
