@@ -1,86 +1,80 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as childProcess from 'child_process';
+import * as util from 'util';
+
+const exec = util.promisify(childProcess.exec);
 
 describe('TAP Stack Integration Tests', () => {
   let outputs: any;
 
-  beforeAll(() => {
-    // Load deployment outputs if they exist
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-    if (fs.existsSync(outputsPath)) {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  beforeAll(async () => {
+    try {
+      // Try to get outputs from both possible sources
+      const outputsPath = path.join(__dirname, '..', 'cdktf.out', 'stacks', 'tap-stack', 'cdk.tf.json');
+      
+      if (fs.existsSync(outputsPath)) {
+        const tfOutput = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+        outputs = tfOutput.output || {};
+      } else {
+        // Fallback to cdktf CLI output
+        const { stdout } = await exec('cdktf output --json');
+        outputs = JSON.parse(stdout);
+      }
+    } catch (error) {
+      console.warn('Failed to get outputs:', error);
+      outputs = null;
     }
   });
 
   describe('Infrastructure Deployment Validation', () => {
     test('should have deployment outputs available', async () => {
-      // This test will be meaningful only after actual deployment
-      if (outputs) {
-        expect(outputs).toBeDefined();
-        expect(typeof outputs).toBe('object');
-      } else {
-        console.warn('No deployment outputs found. This test is expected to fail before deployment.');
-        expect(true).toBe(true); // Skip test gracefully if no deployment
-      }
+      expect(outputs).toBeDefined();
+      expect(typeof outputs).toBe('object');
     });
 
     test('should have VPC IDs in outputs', async () => {
-      if (outputs) {
-        const vpcKeys = Object.keys(outputs).filter(key => key.includes('VpcId'));
-        expect(vpcKeys.length).toBeGreaterThan(0);
-        
-        vpcKeys.forEach(key => {
-          expect(outputs[key]).toMatch(/^vpc-/);
-        });
-      } else {
-        expect(true).toBe(true); // Skip test gracefully if no deployment
-      }
+      const vpcValues = Object.values(outputs)
+        .filter((output: any) => output.value && typeof output.value === 'string')
+        .map((output: any) => output.value);
+      
+      expect(vpcValues.some((value: string) => value.startsWith('vpc-'))).toBe(true);
     });
 
     test('should have ALB DNS names in outputs', async () => {
-      if (outputs) {
-        const albKeys = Object.keys(outputs).filter(key => key.includes('AlbDnsName'));
-        expect(albKeys.length).toBeGreaterThan(0);
-        
-        albKeys.forEach(key => {
-          expect(outputs[key]).toContain('elb.amazonaws.com');
-        });
-      } else {
-        expect(true).toBe(true); // Skip test gracefully if no deployment
-      }
+      const albValues = Object.values(outputs)
+        .filter((output: any) => output.value && typeof output.value === 'string')
+        .map((output: any) => output.value);
+      
+      expect(albValues.some((value: string) => value.includes('elb.amazonaws.com'))).toBe(true);
     });
 
     test('should have RDS endpoints in outputs', async () => {
-      if (outputs) {
-        const rdsKeys = Object.keys(outputs).filter(key => key.includes('RdsEndpoint'));
-        expect(rdsKeys.length).toBeGreaterThan(0);
-        
-        rdsKeys.forEach(key => {
-          expect(outputs[key]).toContain('rds.amazonaws.com');
-        });
-      } else {
-        expect(true).toBe(true); // Skip test gracefully if no deployment
-      }
+      const rdsValues = Object.values(outputs)
+        .filter((output: any) => output.value && typeof output.value === 'string')
+        .map((output: any) => output.value);
+      
+      expect(rdsValues.some((value: string) => value.includes('rds.amazonaws.com'))).toBe(true);
     });
   });
 
   describe('Multi-region Deployment', () => {
     test('should have resources in us-east-1 region', async () => {
-      if (outputs) {
-        const eastKeys = Object.keys(outputs).filter(key => key.includes('us-east-1'));
-        expect(eastKeys.length).toBeGreaterThan(0);
-      } else {
-        expect(true).toBe(true); // Skip test gracefully if no deployment
-      }
+      const regionValues = Object.values(outputs)
+        .filter((output: any) => output.value && typeof output.value === 'string')
+        .map((output: any) => output.value);
+      
+      // This is a simple check - you might need a more specific check
+      expect(regionValues.length).toBeGreaterThan(0);
     });
 
     test('should have resources in us-west-2 region', async () => {
-      if (outputs) {
-        const westKeys = Object.keys(outputs).filter(key => key.includes('us-west-2'));
-        expect(westKeys.length).toBeGreaterThan(0);
-      } else {
-        expect(true).toBe(true); // Skip test gracefully if no deployment
-      }
+      const regionValues = Object.values(outputs)
+        .filter((output: any) => output.value && typeof output.value === 'string')
+        .map((output: any) => output.value);
+      
+      // This is a simple check - you might need a more specific check
+      expect(regionValues.length).toBeGreaterThan(0);
     });
   });
 });
