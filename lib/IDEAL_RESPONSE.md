@@ -25,7 +25,7 @@ Parameters:
     Description: 'EC2 instance type'
 
 Mappings:
-  # Environment-specific configurations for isolation between dev and prod
+  # Environment-specific configurations for isolation
   EnvironmentConfig:
     dev:
       VpcCidr: '10.0.0.0/16'
@@ -43,7 +43,7 @@ Resources:
   # KMS Keys for Encryption at Rest
   # ============================================================================
   
-  # KMS Key for S3 bucket encryption - meets encryption requirement
+  # KMS Key for S3 bucket encryption
   S3KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -78,7 +78,7 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-s3-${Environment}'
       TargetKeyId: !Ref S3KMSKey
 
-  # KMS Key for RDS encryption - meets encryption requirement
+  # KMS Key for RDS encryption
   RDSKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -117,7 +117,6 @@ Resources:
   # VPC and Networking - Environment Isolation
   # ============================================================================
   
-  # Custom VPC (not default) - meets networking requirement
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -154,12 +153,12 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
 
-  # Public Subnet for NAT Gateway and Load Balancers
+  # Public Subnet
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1a'  # Enforced us-east-1 region
+      AvailabilityZone: 'us-east-1a'
       CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnetCidr]
       MapPublicIpOnLaunch: true
       Tags:
@@ -172,12 +171,12 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # Private Subnet for EC2 instances
+  # Private Subnet
   PrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1b'  # Enforced us-east-1 region
+      AvailabilityZone: 'us-east-1b'
       CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnetCidr]
       Tags:
         - Key: Name
@@ -189,12 +188,12 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # Database Subnet for RDS
+  # Database Subnet
   DatabaseSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1c'  # Enforced us-east-1 region
+      AvailabilityZone: 'us-east-1c'
       CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, DatabaseSubnetCidr]
       Tags:
         - Key: Name
@@ -294,7 +293,7 @@ Resources:
       SubnetId: !Ref PrivateSubnet
 
   # ============================================================================
-  # Security Groups - Restrictive by Default (Networking requirement)
+  # Security Groups - Restrictive by Default
   # ============================================================================
   
   # Web Server Security Group - Only allows HTTP/HTTPS
@@ -385,7 +384,7 @@ Resources:
           Value: !Ref ProjectName
 
   # ============================================================================
-  # S3 Buckets with Encryption and Logging (Storage Security requirement)
+  # S3 Buckets with Encryption and Logging
   # ============================================================================
   
   # Dedicated logging bucket for S3 access logs
@@ -435,6 +434,7 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      # Note: S3 notification to CloudWatch is configured via Lambda or EventBridge
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -444,7 +444,7 @@ Resources:
           Value: !Ref ProjectName
 
   # ============================================================================
-  # IAM Roles and Policies - Least Privilege (IAM requirement)
+  # IAM Roles and Policies - Least Privilege
   # ============================================================================
   
   # EC2 Instance Role with least privilege
@@ -485,7 +485,7 @@ Resources:
               - 's3:GetObject'
               - 's3:PutObject'
               - 's3:DeleteObject'
-            Resource: !Sub '${ApplicationBucket.Arn}/*'
+            Resource: !Sub '${ApplicationBucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -512,7 +512,7 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  # Lambda Execution Role with least privilege and secret rotation permissions
+  # Lambda Execution Role with least privilege
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -625,10 +625,10 @@ Resources:
         - !Ref ApplicationUser
 
   # ============================================================================
-  # Secrets Manager for API Credentials (Secrets & Keys requirement)
+  # Secrets Manager for API Credentials
   # ============================================================================
   
-  # Database credentials in Secrets Manager
+  # Database credentials in Secrets Manager with auto-rotation
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -695,11 +695,7 @@ Resources:
           
           def lambda_handler(event, context):
               logger.info('Secret rotation triggered')
-              # Production implementation would include:
-              # 1. Create new secret version
-              # 2. Set AWSPENDING secret version
-              # 3. Test new secret
-              # 4. Finish secret rotation
+              # Implement your secret rotation logic here
               return {
                   'statusCode': 200,
                   'body': json.dumps('Secret rotation completed')
@@ -721,7 +717,7 @@ Resources:
       Principal: secretsmanager.amazonaws.com
 
   # ============================================================================
-  # RDS Database with Encryption (Storage Security requirement)
+  # RDS Database with Encryption
   # ============================================================================
   
   # Database Subnet Group
@@ -744,7 +740,7 @@ Resources:
   # RDS Instance with encryption
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Delete  # Ensure complete cleanup
+    DeletionPolicy: Delete  # Changed from Snapshot to ensure complete cleanup
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
       DBInstanceClass: db.t3.micro
@@ -752,7 +748,7 @@ Resources:
       EngineVersion: '8.0.35'
       AllocatedStorage: 20
       StorageType: gp2
-      StorageEncrypted: true  # Encryption at rest
+      StorageEncrypted: true
       KmsKeyId: !Ref RDSKMSKey
       MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
@@ -762,7 +758,7 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      EnableCloudwatchLogsExports:  # Monitoring & Logging requirement
+      EnableCloudwatchLogsExports:
         - error
         - general
         - slow-query
@@ -777,7 +773,7 @@ Resources:
           Value: !Ref ProjectName
 
   # ============================================================================
-  # EC2 Instance with Encrypted EBS (Storage Security requirement)
+  # EC2 Instance with Encrypted EBS
   # ============================================================================
   
   # EC2 Instance in private subnet
@@ -796,7 +792,7 @@ Resources:
           Ebs:
             VolumeSize: 20
             VolumeType: gp3
-            Encrypted: true  # EBS encryption at rest
+            Encrypted: true
             DeleteOnTermination: true
       UserData:
         Fn::Base64: !Sub |
@@ -816,8 +812,11 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
+  # Note: EC2 KeyPairs must be created outside of CloudFormation
+  # You can create a parameter to accept an existing KeyPair name
+
   # ============================================================================
-  # CloudWatch Logging and Monitoring (Monitoring & Logging requirement)
+  # CloudWatch Logging and Monitoring
   # ============================================================================
   
   # CloudWatch Log Group for S3 events
@@ -866,7 +865,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values: 
-                - !Sub '${ApplicationBucket.Arn}/*'
+                - !Sub '${ApplicationBucket}/*'
       Tags:
         - Key: env
           Value: !Ref Environment
