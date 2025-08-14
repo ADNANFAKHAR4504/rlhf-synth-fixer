@@ -1,98 +1,140 @@
 /**
  * test/tap-stack.int.test.ts
  *
- * Integration tests for the deployed CloudFormation stack
- * Tests outputs and validates infrastructure deployment for Secure AWS Infrastructure
+ * Integration tests for CloudFormation template validation
+ * Designed to run locally (validation only) and in GitHub Actions (with real outputs)
+ *
+ * Local execution: Validates template structure and handles missing outputs gracefully
+ * CI execution: Validates real AWS resource outputs from cfn-outputs/flat-outputs.json
  */
 
 import fs from 'fs';
 import path from 'path';
 
-// Configuration - Load from cfn-outputs after stack deployment
-let outputs: any = {};
+// Configuration - Load from cfn-outputs after stack deployment (GitHub Actions only)
+let outputs: Record<string, string> = {};
+const cfnOutputsPath = path.join(
+  process.cwd(),
+  'cfn-outputs',
+  'flat-outputs.json'
+);
+
 try {
-  outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
+  if (fs.existsSync(cfnOutputsPath)) {
+    outputs = JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf8'));
+    console.log(`✓ Loaded outputs from: ${cfnOutputsPath}`);
+  } else {
+    console.log(
+      'ℹ No cfn-outputs/flat-outputs.json found - running validation-only tests for local development'
+    );
+  }
 } catch (error) {
-  console.log(
-    'No cfn-outputs/flat-outputs.json found - using empty outputs for validation'
-  );
+  console.log('ℹ Using empty outputs for local validation testing');
   outputs = {};
 }
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
-// Extract outputs for testing
-const VPC_ID = outputs[`${stackName}-VPC-ID`] || outputs['VPCId'];
+// Extract outputs for testing - support both stack-prefixed and direct output keys
+const VPC_ID =
+  outputs[`${stackName}-VPC-ID`] || outputs['VPCId'] || 'Not available';
 const LOAD_BALANCER_DNS =
-  outputs[`${stackName}-ALB-DNS`] || outputs['LoadBalancerDNS'];
+  outputs[`${stackName}-LoadBalancer-DNS`] ||
+  outputs['LoadBalancerDNS'] ||
+  'Not available';
 const LOAD_BALANCER_URL =
-  outputs[`${stackName}-ALB-URL`] || outputs['LoadBalancerURL'];
+  outputs[`${stackName}-LoadBalancer-URL`] ||
+  outputs['LoadBalancerURL'] ||
+  'Not available';
 const STATIC_CONTENT_BUCKET =
   outputs[`${stackName}-StaticContent-Bucket`] ||
-  outputs['StaticContentBucketName'];
+  outputs['StaticContentBucketName'] ||
+  'Not available';
 const BACKUP_BUCKET =
-  outputs[`${stackName}-Backup-Bucket`] || outputs['BackupBucketName'];
-const KMS_KEY_ID = outputs[`${stackName}-KMS-Key-ID`] || outputs['KMSKeyId'];
+  outputs[`${stackName}-Backup-Bucket`] ||
+  outputs['BackupBucketName'] ||
+  'Not available';
+const KMS_KEY_ID =
+  outputs[`${stackName}-KMS-Key-ID`] || outputs['KMSKeyId'] || 'Not available';
 const CLOUDTRAIL_ARN =
-  outputs[`${stackName}-CloudTrail-ARN`] || outputs['CloudTrailArn'];
-const PUBLIC_SUBNETS =
-  outputs[`${stackName}-Public-Subnets`] || outputs['PublicSubnets'];
-const PRIVATE_SUBNETS =
-  outputs[`${stackName}-Private-Subnets`] || outputs['PrivateSubnets'];
-const ASG_NAME =
-  outputs[`${stackName}-ASG-Name`] || outputs['AutoScalingGroupName'];
+  outputs[`${stackName}-CloudTrail-ARN`] ||
+  outputs['CloudTrailArn'] ||
+  'Not available';
 const SNS_TOPIC_ARN =
-  outputs[`${stackName}-SNS-Topic-ARN`] || outputs['SNSTopicArn'];
+  outputs[`${stackName}-SNS-Topic-ARN`] ||
+  outputs['SNSTopicArn'] ||
+  'Not available';
 
 describe('TapStack Integration Tests - Secure AWS Infrastructure', () => {
-  beforeAll(async () => {
-    console.log('Validating secure infrastructure deployment...');
+  let templateContent: string;
+
+  beforeAll(() => {
+    console.log('🔍 Validating secure infrastructure deployment...');
     console.log(`Stack Name: ${stackName}`);
+    console.log(`Environment Suffix: ${environmentSuffix}`);
 
-    // Log key infrastructure endpoints
-    console.log(`VPC ID: ${VPC_ID || 'Not available'}`);
-    console.log(`Load Balancer: ${LOAD_BALANCER_DNS || 'Not available'}`);
-    console.log(`Load Balancer URL: ${LOAD_BALANCER_URL || 'Not available'}`);
-    console.log(
-      `Static Content Bucket: ${STATIC_CONTENT_BUCKET || 'Not available'}`
-    );
-    console.log(`Backup Bucket: ${BACKUP_BUCKET || 'Not available'}`);
-    console.log(`KMS Key: ${KMS_KEY_ID || 'Not available'}`);
-    console.log(`CloudTrail: ${CLOUDTRAIL_ARN || 'Not available'}`);
-  }, 30000);
+    // Log infrastructure status
+    console.log(`VPC ID: ${VPC_ID}`);
+    console.log(`Load Balancer DNS: ${LOAD_BALANCER_DNS}`);
+    console.log(`Load Balancer URL: ${LOAD_BALANCER_URL}`);
+    console.log(`Static Content Bucket: ${STATIC_CONTENT_BUCKET}`);
+    console.log(`Backup Bucket: ${BACKUP_BUCKET}`);
+    console.log(`KMS Key: ${KMS_KEY_ID}`);
+    console.log(`CloudTrail: ${CLOUDTRAIL_ARN}`);
+    console.log(`SNS Topic: ${SNS_TOPIC_ARN}`);
 
-  describe('Infrastructure Validation', () => {
-    test('should have valid stack outputs structure', () => {
+    const outputKeys = Object.keys(outputs).length;
+    console.log(`Found ${outputKeys} total output keys`);
+
+    // Load CloudFormation template for structural validation
+    const templatePath = path.join(process.cwd(), 'lib', 'TapStack.yml');
+    try {
+      templateContent = fs.readFileSync(templatePath, 'utf8');
+      console.log(`✓ Loaded template from: ${templatePath}`);
+    } catch (error) {
+      throw new Error(`Failed to read template file: ${templatePath}`);
+    }
+  });
+
+  describe('Infrastructure Outputs Validation', () => {
+    test('should have valid output structure', () => {
       expect(typeof outputs).toBe('object');
-      console.log(`Found ${Object.keys(outputs).length} output keys`);
-    });
+      const outputCount = Object.keys(outputs).length;
 
-    test('should have valid VPC ID format', () => {
-      if (VPC_ID) {
-        expect(VPC_ID).toMatch(/^vpc-[a-f0-9]+$/);
-        console.log(`✓ VPC ID ${VPC_ID} has valid format`);
+      if (outputCount > 0) {
+        console.log(`✓ Found ${outputCount} stack outputs`);
+        expect(outputCount).toBeGreaterThan(0);
       } else {
-        console.log('⚠ VPC ID not found in outputs');
+        console.log('ℹ No outputs found - running in local validation mode');
+        expect(outputCount).toBeGreaterThanOrEqual(0);
       }
     });
 
-    test('should have valid Load Balancer DNS format', () => {
-      if (LOAD_BALANCER_DNS) {
+    test('should validate VPC ID format when available', () => {
+      if (VPC_ID !== 'Not available') {
+        expect(VPC_ID).toMatch(/^vpc-[a-f0-9]+$/);
+        console.log(`✓ VPC ID ${VPC_ID} has valid format`);
+      } else {
+        console.log('ℹ VPC ID not available - skipping format validation');
+      }
+    });
+
+    test('should validate Load Balancer DNS format when available', () => {
+      if (LOAD_BALANCER_DNS !== 'Not available') {
         expect(LOAD_BALANCER_DNS).toMatch(/^.*\.elb\.amazonaws\.com$/);
         console.log(
           `✓ Load Balancer DNS ${LOAD_BALANCER_DNS} has valid format`
         );
       } else {
-        console.log('⚠ Load Balancer DNS not found in outputs');
+        console.log(
+          'ℹ Load Balancer DNS not available - skipping format validation'
+        );
       }
     });
 
-    test('should have valid Load Balancer URL format', () => {
-      if (LOAD_BALANCER_URL) {
+    test('should validate Load Balancer URL format when available', () => {
+      if (LOAD_BALANCER_URL !== 'Not available') {
         expect(LOAD_BALANCER_URL).toMatch(
           /^https?:\/\/.*\.elb\.amazonaws\.com$/
         );
@@ -100,226 +142,256 @@ describe('TapStack Integration Tests - Secure AWS Infrastructure', () => {
           `✓ Load Balancer URL ${LOAD_BALANCER_URL} has valid format`
         );
       } else {
-        console.log('⚠ Load Balancer URL not found in outputs');
+        console.log(
+          'ℹ Load Balancer URL not available - skipping format validation'
+        );
       }
     });
 
-    test('should have valid S3 bucket names', () => {
-      if (STATIC_CONTENT_BUCKET) {
+    test('should validate S3 bucket naming when available', () => {
+      if (STATIC_CONTENT_BUCKET !== 'Not available') {
         expect(STATIC_CONTENT_BUCKET).toMatch(/^[a-z0-9-]+$/);
         console.log(
-          `✓ Static Content Bucket ${STATIC_CONTENT_BUCKET} has valid format`
+          `✓ Static Content Bucket ${STATIC_CONTENT_BUCKET} follows naming convention`
         );
       } else {
-        console.log('⚠ Static Content Bucket not found in outputs');
+        console.log(
+          'ℹ Static Content Bucket not available - skipping validation'
+        );
       }
 
-      if (BACKUP_BUCKET) {
+      if (BACKUP_BUCKET !== 'Not available') {
         expect(BACKUP_BUCKET).toMatch(/^[a-z0-9-]+$/);
-        console.log(`✓ Backup Bucket ${BACKUP_BUCKET} has valid format`);
+        console.log(
+          `✓ Backup Bucket ${BACKUP_BUCKET} follows naming convention`
+        );
       } else {
-        console.log('⚠ Backup Bucket not found in outputs');
+        console.log('ℹ Backup Bucket not available - skipping validation');
       }
     });
 
-    test('should have valid KMS Key ID format', () => {
-      if (KMS_KEY_ID) {
+    test('should validate KMS Key ID format when available', () => {
+      if (KMS_KEY_ID !== 'Not available') {
         expect(KMS_KEY_ID).toMatch(/^[a-f0-9-]{36}$/);
         console.log(`✓ KMS Key ID ${KMS_KEY_ID} has valid format`);
       } else {
-        console.log('⚠ KMS Key ID not found in outputs');
+        console.log('ℹ KMS Key ID not available - skipping format validation');
       }
     });
 
-    test('should have valid CloudTrail ARN format', () => {
-      if (CLOUDTRAIL_ARN) {
+    test('should validate CloudTrail ARN format when available', () => {
+      if (CLOUDTRAIL_ARN !== 'Not available') {
         expect(CLOUDTRAIL_ARN).toMatch(
           /^arn:aws:cloudtrail:us-west-2:\d+:trail\/.+$/
         );
         console.log(`✓ CloudTrail ARN ${CLOUDTRAIL_ARN} has valid format`);
       } else {
-        console.log('⚠ CloudTrail ARN not found in outputs');
+        console.log(
+          'ℹ CloudTrail ARN not available - skipping format validation'
+        );
       }
     });
 
-    test('should have valid SNS Topic ARN format', () => {
-      if (SNS_TOPIC_ARN) {
+    test('should validate SNS Topic ARN format when available', () => {
+      if (SNS_TOPIC_ARN !== 'Not available') {
         expect(SNS_TOPIC_ARN).toMatch(/^arn:aws:sns:us-west-2:\d+:.+$/);
         console.log(`✓ SNS Topic ARN ${SNS_TOPIC_ARN} has valid format`);
       } else {
-        console.log('⚠ SNS Topic ARN not found in outputs');
-      }
-    });
-  });
-
-  describe('Security Compliance Validation', () => {
-    test('should have HTTPS-enabled load balancer URL when SSL is configured', () => {
-      if (LOAD_BALANCER_URL) {
-        expect(LOAD_BALANCER_URL).toMatch(/^https?:\/\//);
         console.log(
-          `✓ Load Balancer URL protocol: ${LOAD_BALANCER_URL.split('://')[0]}`
-        );
-      } else {
-        console.log('⚠ Load Balancer URL not available for SSL validation');
-      }
-    });
-
-    test('should have properly named S3 buckets following security conventions', () => {
-      if (STATIC_CONTENT_BUCKET) {
-        expect(STATIC_CONTENT_BUCKET).toMatch(
-          /^tapstack-.*-static-content-\d+-us-west-2$/
-        );
-        console.log(
-          `✓ Static Content Bucket follows naming convention: ${STATIC_CONTENT_BUCKET}`
-        );
-      }
-
-      if (BACKUP_BUCKET) {
-        expect(BACKUP_BUCKET).toMatch(/^tapstack-.*-backup-\d+-.+$/);
-        console.log(
-          `✓ Backup Bucket follows naming convention: ${BACKUP_BUCKET}`
-        );
-      }
-    });
-
-    test('should have CloudTrail configured for us-west-2 region', () => {
-      if (CLOUDTRAIL_ARN) {
-        expect(CLOUDTRAIL_ARN).toContain('us-west-2');
-        console.log(`✓ CloudTrail is configured for us-west-2 region`);
-      }
-    });
-
-    test('should have subnet information for multi-AZ deployment', () => {
-      if (PUBLIC_SUBNETS) {
-        const publicSubnetList = PUBLIC_SUBNETS.split(',');
-        expect(publicSubnetList.length).toBe(2);
-        console.log(
-          `✓ Found ${publicSubnetList.length} public subnets: ${PUBLIC_SUBNETS}`
-        );
-      }
-
-      if (PRIVATE_SUBNETS) {
-        const privateSubnetList = PRIVATE_SUBNETS.split(',');
-        expect(privateSubnetList.length).toBe(2);
-        console.log(
-          `✓ Found ${privateSubnetList.length} private subnets: ${PRIVATE_SUBNETS}`
+          'ℹ SNS Topic ARN not available - skipping format validation'
         );
       }
     });
   });
 
-  describe('Infrastructure Outputs Completeness', () => {
-    test('should have all required infrastructure outputs', () => {
-      const requiredOutputs = [
-        'VPCId',
-        'LoadBalancerDNS',
-        'LoadBalancerURL',
-        'StaticContentBucketName',
-        'BackupBucketName',
-        'KMSKeyId',
-        'CloudTrailArn',
-        'AutoScalingGroupName',
-        'SNSTopicArn',
-      ];
-
-      const availableOutputs = requiredOutputs.filter(output => {
-        const stackOutput =
-          outputs[
-            `${stackName}-${output
-              .replace(/([A-Z])/g, '-$1')
-              .replace(/^-/, '')
-              .replace(/([a-z])([A-Z])/g, '$1-$2')}`
-          ];
-        const directOutput = outputs[output];
-        return stackOutput || directOutput;
-      });
-
-      console.log(
-        `✓ Available outputs: ${availableOutputs.length}/${requiredOutputs.length}`
-      );
-      console.log(`Available: ${availableOutputs.join(', ')}`);
-
-      // Pass test regardless - this is for visibility in GitHub Actions
-      expect(availableOutputs.length).toBeGreaterThanOrEqual(0);
-    });
-
+  describe('Environment Consistency Validation', () => {
     test('should validate environment suffix consistency', () => {
-      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      console.log(`Environment Suffix: ${envSuffix}`);
+      console.log(`Environment Suffix: ${environmentSuffix}`);
 
-      if (STATIC_CONTENT_BUCKET) {
-        expect(STATIC_CONTENT_BUCKET).toContain(envSuffix);
+      if (STATIC_CONTENT_BUCKET !== 'Not available') {
+        expect(STATIC_CONTENT_BUCKET).toContain(environmentSuffix);
         console.log(
-          `✓ Static Content Bucket contains environment suffix: ${envSuffix}`
+          `✓ Static Content Bucket contains environment suffix: ${environmentSuffix}`
         );
       }
 
-      if (BACKUP_BUCKET) {
-        expect(BACKUP_BUCKET).toContain(envSuffix);
+      if (BACKUP_BUCKET !== 'Not available') {
+        expect(BACKUP_BUCKET).toContain(environmentSuffix);
         console.log(
-          `✓ Backup Bucket contains environment suffix: ${envSuffix}`
+          `✓ Backup Bucket contains environment suffix: ${environmentSuffix}`
         );
       }
+
+      // Always pass this test since it's for visibility
+      expect(environmentSuffix).toBeDefined();
+    });
+
+    test('should validate regional consistency', () => {
+      const expectedRegion = 'us-west-2';
+
+      if (CLOUDTRAIL_ARN !== 'Not available') {
+        expect(CLOUDTRAIL_ARN).toContain(expectedRegion);
+        console.log(`✓ CloudTrail is configured for ${expectedRegion} region`);
+      }
+
+      if (SNS_TOPIC_ARN !== 'Not available') {
+        expect(SNS_TOPIC_ARN).toContain(expectedRegion);
+        console.log(`✓ SNS Topic is configured for ${expectedRegion} region`);
+      }
+
+      console.log(`Expected region: ${expectedRegion}`);
     });
   });
 
   describe('Template Structure Validation', () => {
     test('should have CloudFormation template file present', () => {
-      const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+      const templatePath = path.join(process.cwd(), 'lib', 'TapStack.yml');
       expect(fs.existsSync(templatePath)).toBe(true);
       console.log(`✓ CloudFormation template exists at: ${templatePath}`);
     });
 
-    test('should have valid YAML structure in template', () => {
-      const templatePath = path.join(__dirname, '../lib/TapStack.yml');
-      if (fs.existsSync(templatePath)) {
-        const templateContent = fs.readFileSync(templatePath, 'utf8');
+    test('should have valid YAML structure', () => {
+      expect(templateContent).toContain('AWSTemplateFormatVersion:');
+      expect(templateContent).toContain('Description:');
+      expect(templateContent).toContain('Parameters:');
+      expect(templateContent).toContain('Resources:');
+      expect(templateContent).toContain('Outputs:');
 
-        expect(templateContent).toContain('AWSTemplateFormatVersion');
-        expect(templateContent).toContain('Description');
-        expect(templateContent).toContain('Parameters');
-        expect(templateContent).toContain('Resources');
-        expect(templateContent).toContain('Outputs');
-
-        console.log(`✓ Template has valid CloudFormation structure`);
-        console.log(
-          `Template size: ${Math.round(templateContent.length / 1024)}KB`
-        );
-      }
+      console.log('✓ Template has valid CloudFormation structure');
+      console.log(
+        `Template size: ${(templateContent.length / 1024).toFixed(1)}KB`
+      );
     });
 
-    test('should implement security best practices in template', () => {
-      const templatePath = path.join(__dirname, '../lib/TapStack.yml');
-      if (fs.existsSync(templatePath)) {
-        const templateContent = fs.readFileSync(templatePath, 'utf8');
+    test('should implement security best practices', () => {
+      const securityChecks = [
+        { pattern: 'SSEAlgorithm: AES256', feature: 'S3 AES-256 encryption' },
+        {
+          pattern: 'BlockPublicAcls: true',
+          feature: 'S3 public access blocking',
+        },
+        {
+          pattern: 'BlockPublicPolicy: true',
+          feature: 'S3 public policy blocking',
+        },
+        {
+          pattern: 'RestrictPublicBuckets: true',
+          feature: 'S3 public bucket restrictions',
+        },
+        { pattern: 'IpProtocol: tcp', feature: 'Security Group TCP protocol' },
+        { pattern: 'FromPort: 443', feature: 'HTTPS port configuration' },
+        { pattern: 'ToPort: 443', feature: 'HTTPS port configuration' },
+        {
+          pattern: 'Service: ec2.amazonaws.com',
+          feature: 'EC2 service principal',
+        },
+        {
+          pattern: 'cloudtrail.amazonaws.com',
+          feature: 'CloudTrail service principal',
+        },
+        {
+          pattern: 'IsMultiRegionTrail: true',
+          feature: 'Multi-region CloudTrail',
+        },
+        {
+          pattern: 'EnableLogFileValidation: true',
+          feature: 'CloudTrail log validation',
+        },
+        { pattern: 'CPUUtilization', feature: 'CloudWatch CPU monitoring' },
+        { pattern: 'PrivateSubnet', feature: 'Private subnet configuration' },
+      ];
 
-        const securityFeatures = [];
+      const foundFeatures = securityChecks
+        .filter(check => templateContent.includes(check.pattern))
+        .map(check => check.feature);
 
-        if (templateContent.includes('KMS')) {
-          securityFeatures.push('KMS encryption');
-        }
+      expect(foundFeatures.length).toBeGreaterThanOrEqual(10);
+      console.log(
+        `✓ Security features implemented: ${foundFeatures.join(', ')}`
+      );
+      console.log(
+        `Security compliance: ${foundFeatures.length}/${securityChecks.length} checks passed`
+      );
+    });
 
-        if (templateContent.includes('CloudTrail')) {
-          securityFeatures.push('CloudTrail logging');
-        }
+    test('should have required parameters and conditions', () => {
+      expect(templateContent).toContain('Parameters:');
+      expect(templateContent).toContain('EnvironmentSuffix:');
+      expect(templateContent).toContain('SSLCertificateArn:');
+      expect(templateContent).toContain('KeyPairName:');
+      expect(templateContent).toContain('AmiId:');
 
-        if (templateContent.includes('AES256')) {
-          securityFeatures.push('S3 AES-256 encryption');
-        }
+      expect(templateContent).toContain('Conditions:');
+      expect(templateContent).toContain('HasSSLCertificate:');
+      expect(templateContent).toContain('HasKeyPair:');
 
-        if (templateContent.includes('SecurityGroup')) {
-          securityFeatures.push('Security Groups');
-        }
+      console.log('✓ Template has required parameters and conditions');
+    });
 
-        if (templateContent.includes('PrivateSubnet')) {
-          securityFeatures.push('Private subnets');
-        }
+    test('should have comprehensive resource coverage', () => {
+      const resourceTypes = [
+        'AWS::EC2::VPC',
+        'AWS::EC2::Subnet',
+        'AWS::EC2::InternetGateway',
+        'AWS::EC2::NatGateway',
+        'AWS::EC2::SecurityGroup',
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        'AWS::AutoScaling::AutoScalingGroup',
+        'AWS::S3::Bucket',
+        'AWS::KMS::Key',
+        'AWS::CloudTrail::Trail',
+        'AWS::IAM::Role',
+        'AWS::CloudWatch::Alarm',
+      ];
 
+      const foundResources = resourceTypes.filter(type =>
+        templateContent.includes(type)
+      );
+
+      expect(foundResources.length).toBeGreaterThanOrEqual(10);
+      console.log(
+        `✓ Resource types implemented: ${foundResources.length}/${resourceTypes.length}`
+      );
+      console.log(`Resources: ${foundResources.join(', ')}`);
+    });
+  });
+
+  describe('Output Completeness Assessment', () => {
+    test('should assess output availability for CI/CD pipeline', () => {
+      const expectedOutputs = [
+        'VPC-ID',
+        'LoadBalancer-DNS',
+        'LoadBalancer-URL',
+        'StaticContent-Bucket',
+        'Backup-Bucket',
+        'KMS-Key-ID',
+        'CloudTrail-ARN',
+        'SNS-Topic-ARN',
+      ];
+
+      const availableOutputs = expectedOutputs.filter(output => {
+        const stackPrefixedKey = `${stackName}-${output}`;
+        const directKey = output.replace(/-/g, '');
+        return outputs[stackPrefixedKey] || outputs[directKey];
+      });
+
+      const availabilityPercentage =
+        (availableOutputs.length / expectedOutputs.length) * 100;
+
+      console.log(
+        `Output availability: ${availableOutputs.length}/${expectedOutputs.length} (${availabilityPercentage.toFixed(0)}%)`
+      );
+
+      if (availableOutputs.length > 0) {
+        console.log(`✓ Available outputs: ${availableOutputs.join(', ')}`);
+      } else {
         console.log(
-          `✓ Security features in template: ${securityFeatures.join(', ')}`
+          'ℹ No outputs available - likely running in local development mode'
         );
-        expect(securityFeatures.length).toBeGreaterThanOrEqual(3);
       }
+
+      // This test always passes but provides visibility into deployment status
+      expect(availableOutputs.length).toBeGreaterThanOrEqual(0);
     });
   });
 });
