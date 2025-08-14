@@ -2,7 +2,7 @@
 variable "aws_region" {
   description = "AWS region for provider configuration"
   type        = string
-  default     = "us-east-1"
+  default     = "us-east-2"
 }
 
 variable "environment" {
@@ -21,7 +21,7 @@ variable "vpc_cidrs" {
   description = "CIDR blocks for VPCs in different regions"
   type        = map(string)
   default = {
-    "us-east-1" = "10.0.0.0/16"
+    "us-east-2" = "10.0.0.0/16"
     "us-west-1" = "10.1.0.0/16"
   }
 }
@@ -30,7 +30,7 @@ variable "availability_zones" {
   description = "Availability zones for each region"
   type        = map(list(string))
   default = {
-    "us-east-1" = ["us-east-1a", "us-east-1b"]
+    "us-east-2" = ["us-east-2a", "us-east-2b"]
     "us-west-1" = ["us-west-1a", "us-west-1c"]
   }
 }
@@ -61,8 +61,8 @@ locals {
     ManagedBy   = "Terraform"
     CreatedAt   = timestamp()
   }
-  
-  regions = ["us-east-1", "us-west-1"]
+
+  regions = ["us-east-2", "us-west-1"]
 }
 
 
@@ -124,7 +124,7 @@ resource "aws_kms_alias" "s3_key_alias" {
 
 resource "aws_kms_key" "rds_key_east" {
   provider                = aws.us_east_1
-  description             = "KMS key for RDS encryption in us-east-1"
+  description             = "KMS key for RDS encryption in us-east-2"
   deletion_window_in_days = 7
 
   tags = merge(local.common_tags, {
@@ -145,13 +145,13 @@ resource "aws_kms_key" "rds_key_west" {
 # VPC - US East 1
 resource "aws_vpc" "main_east" {
   provider             = aws.us_east_1
-  cidr_block           = var.vpc_cidrs["us-east-1"]
+  cidr_block           = var.vpc_cidrs["us-east-2"]
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-vpc-us-east-1"
-    Region = "us-east-1"
+    Name   = "${var.project_name}-vpc-us-east-2"
+    Region = "us-east-2"
   })
 }
 
@@ -174,8 +174,8 @@ resource "aws_internet_gateway" "main_east" {
   vpc_id   = aws_vpc.main_east.id
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-igw-us-east-1"
-    Region = "us-east-1"
+    Name   = "${var.project_name}-igw-us-east-2"
+    Region = "us-east-2"
   })
 }
 
@@ -191,16 +191,16 @@ resource "aws_internet_gateway" "main_west" {
 
 # Public Subnets
 resource "aws_subnet" "public_east" {
-  provider                = aws.us_east_1
+  provider                = aws.us_east_2
   vpc_id                  = aws_vpc.main_east.id
-  cidr_block              = cidrsubnet(var.vpc_cidrs["us-east-1"], 8, 1)
-  availability_zone       = var.availability_zones["us-east-1"][0]
+  cidr_block              = cidrsubnet(var.vpc_cidrs["us-east-2"], 8, 1)
+  availability_zone       = var.availability_zones["us-east-2"][0]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-public-subnet-us-east-1"
+    Name   = "${var.project_name}-public-subnet-us-east-2"
     Type   = "Public"
-    Region = "us-east-1"
+    Region = "us-east-2"
   })
 }
 
@@ -219,29 +219,29 @@ resource "aws_subnet" "public_west" {
 }
 
 # Private Subnets
-resource "aws_subnet" "private_east_1" {
-  provider          = aws.us_east_1
+resource "aws_subnet" "private_east_2" {
+  provider          = aws.us_east_2
   vpc_id            = aws_vpc.main_east.id
-  cidr_block        = cidrsubnet(var.vpc_cidrs["us-east-1"], 8, 2)
-  availability_zone = var.availability_zones["us-east-1"][0]
+  cidr_block        = cidrsubnet(var.vpc_cidrs["us-east-2"], 8, 2)
+  availability_zone = var.availability_zones["us-east-2"][0]
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-private-subnet-1-us-east-1"
+    Name   = "${var.project_name}-private-subnet-1-us-east-2"
     Type   = "Private"
-    Region = "us-east-1"
+    Region = "us-east-2"
   })
 }
 
 resource "aws_subnet" "private_east_2" {
   provider          = aws.us_east_1
   vpc_id            = aws_vpc.main_east.id
-  cidr_block        = cidrsubnet(var.vpc_cidrs["us-east-1"], 8, 3)
-  availability_zone = var.availability_zones["us-east-1"][1]
+  cidr_block        = cidrsubnet(var.vpc_cidrs["us-east-2"], 8, 3)
+  availability_zone = var.availability_zones["us-east-2"][1]
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-private-subnet-2-us-east-1"
+    Name   = "${var.project_name}-private-subnet-2-us-east-2"
     Type   = "Private"
-    Region = "us-east-1"
+    Region = "us-east-2"
   })
 }
 
@@ -282,8 +282,8 @@ resource "aws_route_table" "public_east" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-public-rt-us-east-1"
-    Region = "us-east-1"
+    Name   = "${var.project_name}-public-rt-us-east-2"
+    Region = "us-east-2"
   })
 }
 
@@ -318,8 +318,8 @@ resource "aws_route_table_association" "public_west" {
 # Security Groups for EC2
 resource "aws_security_group" "ec2_east" {
   provider    = aws.us_east_1
-  name        = "${var.project_name}-ec2-sg-us-east-1"
-  description = "Security group for EC2 instances in us-east-1"
+  name        = "${var.project_name}-ec2-sg-us-east-2"
+  description = "Security group for EC2 instances in us-east-2"
   vpc_id      = aws_vpc.main_east.id
 
   ingress {
@@ -363,8 +363,8 @@ resource "aws_security_group" "ec2_east" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-ec2-sg-us-east-1"
-    Region = "us-east-1"
+    Name   = "${var.project_name}-ec2-sg-us-east-2"
+    Region = "us-east-2"
   })
 }
 
@@ -505,8 +505,8 @@ resource "aws_instance" "web_east" {
   )
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-web-us-east-1"
-    Region = "us-east-1"
+    Name   = "${var.project_name}-web-us-east-2"
+    Region = "us-east-2"
   })
 }
 
@@ -548,7 +548,7 @@ resource "aws_s3_bucket" "main" {
 
   tags = merge(local.common_tags, {
     Name   = "${var.project_name}-bucket"
-    Region = "us-east-1"
+    Region = "us-east-2"
   })
 }
 
@@ -621,7 +621,7 @@ resource "aws_db_subnet_group" "main_east" {
 
   tags = merge(local.common_tags, {
     Name   = "${var.project_name}-db-subnet-group-east"
-    Region = "us-east-1"
+    Region = "us-east-2"
   })
 }
 
@@ -639,8 +639,8 @@ resource "aws_db_subnet_group" "main_west" {
 # RDS Security Groups
 resource "aws_security_group" "rds_east" {
   provider    = aws.us_east_1
-  name        = "${var.project_name}-rds-sg-us-east-1"
-  description = "Security group for RDS in us-east-1"
+  name        = "${var.project_name}-rds-sg-us-east-2"
+  description = "Security group for RDS in us-east-2"
   vpc_id      = aws_vpc.main_east.id
 
   ingress {
@@ -652,8 +652,8 @@ resource "aws_security_group" "rds_east" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-rds-sg-us-east-1"
-    Region = "us-east-1"
+    Name   = "${var.project_name}-rds-sg-us-east-2"
+    Region = "us-east-2"
   })
 }
 
@@ -681,7 +681,7 @@ resource "aws_security_group" "rds_west" {
 resource "aws_db_instance" "main_east" {
   provider = aws.us_east_1
 
-  identifier     = "${var.project_name}-db-us-east-1"
+  identifier     = "${var.project_name}-db-us-east-2"
   engine         = "postgres"
   engine_version = "15.4"
   instance_class = var.db_instance_class
@@ -708,8 +708,8 @@ resource "aws_db_instance" "main_east" {
   deletion_protection = false
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-db-us-east-1"
-    Region = "us-east-1"
+    Name   = "${var.project_name}-db-us-east-2"
+    Region = "us-east-2"
   })
 }
 
