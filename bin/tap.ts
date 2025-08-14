@@ -39,13 +39,13 @@ targetRegions.forEach(region => {
     tags: defaultTags,
   });
   // Outputs
-  new TerraformOutput(stack, `VpcId`, {
+  new TerraformOutput(stack, 'VpcId', {
     value: stack.vpcId,
   });
-  new TerraformOutput(stack, `AlbDnsName`, {
+  new TerraformOutput(stack, 'AlbDnsName', {
     value: stack.albDnsName,
   });
-  new TerraformOutput(stack, `RdsEndpoint`, {
+  new TerraformOutput(stack, 'RdsEndpoint', {
     value: stack.rdsEndpoint,
   });
 });
