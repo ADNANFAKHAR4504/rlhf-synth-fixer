@@ -65,22 +65,6 @@ locals {
   regions = ["us-east-1", "us-west-1"]
 }
 
-# Terraform Backend Configuration
-terraform {
-  backend "s3" {}
-  
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.1"
-    }
-  }
-  required_version = ">= 1.0"
-}
 
 # Data sources for AMIs
 data "aws_ami" "amazon_linux_east" {
