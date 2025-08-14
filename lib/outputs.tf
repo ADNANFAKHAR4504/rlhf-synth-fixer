@@ -1,6 +1,6 @@
 output "vpc_id" {
-  description = "ID of the VPC"
-  value       = aws_vpc.corp_vpc.id
+  description = "ID of the VPC (existing VPC being used)"
+  value       = local.vpc_id
 }
 
 output "aws_region" {
@@ -136,7 +136,7 @@ output "resource_prefix" {
 output "resources_for_cleanup" {
   description = "List of resources that need to be cleaned up on rollback"
   value = {
-    vpc_id                  = aws_vpc.corp_vpc.id
+    vpc_id                  = local.vpc_id
     security_group_ids      = [aws_security_group.web_sg.id, aws_security_group.db_sg.id]
     s3_bucket_names         = [aws_s3_bucket.corp_bucket.id, aws_s3_bucket.cloudtrail_bucket.id]
     rds_instance_identifier = aws_db_instance.corp_database.identifier

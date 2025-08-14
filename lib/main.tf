@@ -2,6 +2,63 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# Look for existing VPCs that start with "vpc-"
+data "aws_vpcs" "existing" {
+  filter {
+    name   = "tag:Name"
+    values = ["vpc-*"]
+  }
+}
+
+# Get default VPC as fallback
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Use existing VPC or default VPC
+locals {
+  # Use first existing VPC with name starting with "vpc-" if available, otherwise use default VPC
+  vpc_id = length(data.aws_vpcs.existing.ids) > 0 ? data.aws_vpcs.existing.ids[0] : data.aws_vpc.default.id
+}
+
+# Get the selected VPC details
+data "aws_vpc" "selected_vpc" {
+  id = local.vpc_id
+}
+
+# Get existing subnets from the selected VPC
+data "aws_subnets" "existing_public" {
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id]
+  }
+
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["true"]
+  }
+}
+
+data "aws_subnets" "existing_private" {
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id]
+  }
+
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["false"]
+  }
+}
+
+# Get internet gateway for the VPC
+data "aws_internet_gateway" "existing_igw" {
+  filter {
+    name   = "attachment.vpc-id"
+    values = [local.vpc_id]
+  }
+}
+
 # Generate secure random password for RDS
 resource "random_password" "db_password" {
   length  = 16
@@ -30,81 +87,14 @@ resource "aws_secretsmanager_secret_version" "db_password" {
   })
 }
 
-# VPC Configuration
-resource "aws_vpc" "corp_vpc" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = {
-    Name = "${local.full_prefix}vpc"
-  }
-}
-
-# Internet Gateway
-resource "aws_internet_gateway" "corp_igw" {
-  vpc_id = aws_vpc.corp_vpc.id
-
-  tags = {
-    Name = "${local.full_prefix}igw"
-  }
-}
-
-# Public Subnets
-resource "aws_subnet" "public_subnets" {
-  count = length(var.availability_zones)
-
-  vpc_id                  = aws_vpc.corp_vpc.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = var.availability_zones[count.index]
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${local.full_prefix}public-subnet-${count.index + 1}"
-    Type = "Public"
-  }
-}
-
-# Private Subnets
-resource "aws_subnet" "private_subnets" {
-  count = length(var.availability_zones)
-
-  vpc_id            = aws_vpc.corp_vpc.id
-  cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = var.availability_zones[count.index]
-
-  tags = {
-    Name = "${local.full_prefix}private-subnet-${count.index + 1}"
-    Type = "Private"
-  }
-}
-
-# Route Tables
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.corp_vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.corp_igw.id
-  }
-
-  tags = {
-    Name = "${local.full_prefix}public-rt"
-  }
-}
-
-resource "aws_route_table_association" "public_rta" {
-  count = length(aws_subnet.public_subnets)
-
-  subnet_id      = aws_subnet.public_subnets[count.index].id
-  route_table_id = aws_route_table.public_rt.id
-}
+# Note: Using existing VPC and subnets instead of creating new ones
+# This avoids VPC limit exceeded errors
 
 # Security Groups - Only HTTP and HTTPS allowed
 resource "aws_security_group" "web_sg" {
   name_prefix = "${local.full_prefix}web-sg"
   description = "Security group for web servers - HTTP and HTTPS only"
-  vpc_id      = aws_vpc.corp_vpc.id
+  vpc_id      = local.vpc_id
 
   # HTTP ingress
   ingress {
@@ -141,7 +131,7 @@ resource "aws_security_group" "web_sg" {
 resource "aws_security_group" "db_sg" {
   name_prefix = "${local.full_prefix}db-sg"
   description = "Security group for database servers"
-  vpc_id      = aws_vpc.corp_vpc.id
+  vpc_id      = local.vpc_id
 
   # MySQL/Aurora access from web servers only
   ingress {
@@ -521,7 +511,7 @@ resource "aws_instance" "corp_web_server" {
     version = "$Latest"
   }
 
-  subnet_id = aws_subnet.public_subnets[0].id
+  subnet_id = length(data.aws_subnets.existing_public.ids) > 0 ? data.aws_subnets.existing_public.ids[0] : data.aws_subnets.existing_private.ids[0]
 
   tags = {
     Name = "${local.full_prefix}web-server-instance"
@@ -531,7 +521,7 @@ resource "aws_instance" "corp_web_server" {
 # RDS Subnet Group
 resource "aws_db_subnet_group" "corp_db_subnet_group" {
   name       = "${local.full_prefix}db-subnet-group"
-  subnet_ids = aws_subnet.private_subnets[*].id
+  subnet_ids = length(data.aws_subnets.existing_private.ids) > 0 ? data.aws_subnets.existing_private.ids : data.aws_subnets.existing_public.ids
 
   tags = {
     Name = "${local.full_prefix}db-subnet-group"
