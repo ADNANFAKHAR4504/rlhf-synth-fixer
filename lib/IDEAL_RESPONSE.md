@@ -1,13 +1,28 @@
-# Comprehensive Terraform Infrastructure Solution for Scalable Web Application
-
-I'll create a complete Terraform infrastructure solution that meets all your requirements. This solution follows AWS best practices and implements a modular, scalable architecture.
-
 ## Project Structure
 
 ```
 terraform-infrastructure/
-├── main.tf
-├── modules
+├── modules/
+│   ├── vpc/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── README.md
+│   ├── alb/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── README.md
+│   ├── ec2/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── README.md
+│   └── security/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── README.md
 │   ├── ec2_module
 │   │   ├── ec2.tf
 │   │   ├── outputs.tf
@@ -16,19 +31,15 @@ terraform-infrastructure/
 │   ├── env_module
 │   │   ├── env_vars.tf
 │   │   └── outputs.tf
-│   ├── lb_module
-│   │   ├── alb.tf
-│   │   ├── outputs.tf
-│   │   └── vars.tf
-│   ├── securitygroup_module
-│   │   ├── outputs.tf
-│   │   ├── securitygroup.tf
-│   │   └── vars.tf
-│   └── vpc_module
-│       ├── outputs.tf
-│       ├── vars.tf
-│       └── vpc.tf
-└── provider.tf
+├── main.tf
+├── scripts/
+│   ├── deploy.sh
+│   ├── rollback.sh
+│   └── health-check.sh
+├── .github/
+│   └── workflows/
+│       └── terraform-deploy.yml
+└── README.md
 ```
 
 ## Terraform Modules
