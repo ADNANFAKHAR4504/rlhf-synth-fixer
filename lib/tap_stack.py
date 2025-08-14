@@ -499,10 +499,16 @@ class TapStack(pulumi.ComponentResource):
     from pulumi import ResourceOptions
 
     # Get the latest Amazon Linux 2023 AMI ID from SSM
-    ami_param = aws.ssm.get_parameter(
-        name="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+    aws_provider = aws.Provider("aws-provider", region=self.common_tags.get("Region"))
+    ami = aws.ec2.get_ami(
+        most_recent=True,
+        owners=["amazon"],
+        filters=[
+            aws.ec2.GetAmiFilterArgs(
+                name="name", values=["amzn2-ami-hvm-*-x86_64-gp2"])
+        ],
+        opts=pulumi.InvokeOptions(provider=aws_provider),
     )
-
     user_data = """#!/bin/bash
 yum update -y
 yum install -y httpd
@@ -515,7 +521,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
     
     lt = aws.ec2.LaunchTemplate(
         f"{name_prefix}-lt",
-        image_id=ami_param.value,
+        image_id=ami.id,
         instance_type="t3.micro",
         vpc_security_group_ids=[instance_sg],
         user_data=base64.b64encode(user_data.encode("utf-8")).decode("utf-8"),
