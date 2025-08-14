@@ -77,4 +77,119 @@ Successfully implemented a comprehensive CloudFormation template for financial s
 - **Stack Dependencies**: Can be integrated with existing infrastructure stacks
 - **Update Safety**: Safe for CloudFormation stack updates
 
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { VpcConstruct } from './constructs/vpc-construct';
+import { KmsConstruct } from './constructs/kms-construct';
+import { SecurityConstruct } from './constructs/security-construct';
+import { DynamoDbConstruct } from './constructs/dynamodb-construct';
+
+export interface TapStackProps extends cdk.StackProps {
+  environmentSuffix: string;
+  region: string;
+}
+
+export class TapStack extends cdk.Stack {
+  public readonly vpcId: string;
+  public readonly kmsKeyId: string;
+  public readonly securityGroupId: string;
+  public readonly dynamoDbTableName: string;
+  public readonly dynamoDbTableArn: string;
+  public readonly environmentSuffix: string;
+
+  constructor(scope: Construct, id: string, props: TapStackProps) {
+    super(scope, id, props);
+
+    const { environmentSuffix, region } = props;
+
+    // Common tags for all resources
+    const commonTags = {
+      Environment: environmentSuffix,
+      Project: 'TAP-Stack',
+      Owner: 'Financial-Services',
+      Compliance: 'Required',
+      DataClassification: 'Confidential'
+    };
+
+    // Apply tags to the stack
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(this).add(key, value);
+    });
+
+    // VPC Infrastructure
+    const vpcConstruct = new VpcConstruct(this, 'VpcConstruct', {
+      environmentSuffix,
+      region,
+      tags: commonTags
+    });
+
+    // KMS Key Management
+    const kmsConstruct = new KmsConstruct(this, 'KmsConstruct', {
+      environmentSuffix,
+      tags: commonTags
+    });
+
+    // Security Groups
+    const securityConstruct = new SecurityConstruct(this, 'SecurityConstruct', {
+      vpc: vpcConstruct.vpc,
+      environmentSuffix,
+      tags: commonTags
+    });
+
+    // DynamoDB Table
+    const dynamoDbConstruct = new DynamoDbConstruct(this, 'DynamoDbConstruct', {
+      kmsKey: kmsConstruct.kmsKey,
+      environmentSuffix,
+      tags: commonTags
+    });
+
+    // Store outputs
+    this.vpcId = vpcConstruct.vpc.vpcId;
+    this.kmsKeyId = kmsConstruct.kmsKey.keyId;
+    this.securityGroupId = securityConstruct.lambdaSecurityGroup.securityGroupId;
+    this.dynamoDbTableName = dynamoDbConstruct.table.tableName;
+    this.dynamoDbTableArn = dynamoDbConstruct.table.tableArn;
+    this.environmentSuffix = environmentSuffix;
+
+    // CloudFormation Outputs
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpcId,
+      description: 'VPC ID for service integration',
+      exportName: `TapStack-VpcId-${environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'KmsKeyId', {
+      value: this.kmsKeyId,
+      description: 'KMS Key ID for encryption operations',
+      exportName: `TapStack-KmsKeyId-${environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'SecurityGroupId', {
+      value: this.securityGroupId,
+      description: 'Security Group ID for Lambda deployment',
+      exportName: `TapStack-SecurityGroupId-${environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDbTableName', {
+      value: this.dynamoDbTableName,
+      description: 'DynamoDB table name for application configuration',
+      exportName: `TapStack-DynamoDbTableName-${environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDbTableArn', {
+      value: this.dynamoDbTableArn,
+      description: 'DynamoDB table ARN for IAM policies',
+      exportName: `TapStack-DynamoDbTableArn-${environmentSuffix}`
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: this.environmentSuffix,
+      description: 'Environment suffix for deployment validation',
+      exportName: `TapStack-EnvironmentSuffix-${environmentSuffix}`
+    });
+  }
+}
+
+
+
 This implementation provides enterprise-grade security infrastructure suitable for financial services workloads with full compliance and operational requirements met.
