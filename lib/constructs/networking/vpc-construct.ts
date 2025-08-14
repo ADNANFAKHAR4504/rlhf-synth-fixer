@@ -51,7 +51,7 @@ export class VpcConstruct extends Construct {
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-VPCFlowLogs`,
       {
-        logGroupName: `/aws/vpc/${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-flowlogs-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+        logGroupName: `/aws/vpc/${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-flowlogs-${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}`,
         retention: logs.RetentionDays.ONE_YEAR, // Long retention for compliance
       }
     );
