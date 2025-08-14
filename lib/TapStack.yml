@@ -421,7 +421,12 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                Resource: !Sub '${LogsBucket}/*'
+                Resource: !Sub '${LogsBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !GetAtt LogsBucket.Arn
       Tags:
         - Key: Name
           Value: WebApp-EC2-Role
