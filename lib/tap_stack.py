@@ -557,7 +557,7 @@ def create_rds(
   rds_instance = aws.rds.Instance(
       "corp-rds-instance",
       engine="postgres",
-      engine_version="15.8",
+      engine_version="15.12",  
       instance_class="db.t3.medium",
       allocated_storage=20,
       db_subnet_group_name=subnet_group.name,
