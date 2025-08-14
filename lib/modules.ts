@@ -37,6 +37,7 @@ export class NetworkModule extends Construct {
   public readonly vpc: Vpc;
   public readonly publicSubnet: Subnet;
   public readonly privateSubnet: Subnet;
+  public readonly privateSubnet2: Subnet; // Added second private subnet
   public readonly ec2SecurityGroup: SecurityGroup;
   public readonly rdsSecurityGroup: SecurityGroup;
 
@@ -60,12 +61,20 @@ export class NetworkModule extends Construct {
       tags: { ...props.tags, Name: 'tap-public-subnet' },
     });
 
-    // Private subnet
+    // Private subnet 1
     this.privateSubnet = new Subnet(this, 'PrivateSubnet', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.2.0/24',
       availabilityZone: 'us-west-2b',
-      tags: { ...props.tags, Name: 'tap-private-subnet' },
+      tags: { ...props.tags, Name: 'tap-private-subnet-1' },
+    });
+
+    // FIX: Add a second private subnet in a different AZ for RDS high availability
+    this.privateSubnet2 = new Subnet(this, 'PrivateSubnet2', {
+      vpcId: this.vpc.id,
+      cidrBlock: '10.0.3.0/24',
+      availabilityZone: 'us-west-2c',
+      tags: { ...props.tags, Name: 'tap-private-subnet-2' },
     });
 
     // Internet Gateway
@@ -106,8 +115,14 @@ export class NetworkModule extends Construct {
       tags: { ...props.tags, Name: 'tap-private-rt' },
     });
 
-    new RouteTableAssociation(this, 'PrivateSubnetRouteTableAssociation', {
+    // Associate both private subnets with the private route table
+    new RouteTableAssociation(this, 'PrivateSubnet1RouteTableAssociation', {
       subnetId: this.privateSubnet.id,
+      routeTableId: privateRouteTable.id,
+    });
+
+    new RouteTableAssociation(this, 'PrivateSubnet2RouteTableAssociation', {
+      subnetId: this.privateSubnet2.id,
       routeTableId: privateRouteTable.id,
     });
 
@@ -116,13 +131,12 @@ export class NetworkModule extends Construct {
       name: 'tap-ec2-sg',
       vpcId: this.vpc.id,
       description: 'Allow SSH from office IP only',
-      // IMPORTANT: Replace the placeholder with your actual IP address
       ingress: [
         {
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
-          cidrBlocks: ['104.28.230.191/32'],
+          cidrBlocks: ['106.213.80.43/32'],
         },
       ],
       egress: [
@@ -189,7 +203,7 @@ export class ComputeModule extends Construct {
 // ---------------- Database Module ----------------
 export interface DatabaseModuleProps {
   awsProvider: AwsProvider;
-  subnetIds: string[];
+  subnetIds: string[]; // Expects an array of subnet IDs
   securityGroupId: string;
   tags: { [key: string]: string };
 }
@@ -225,9 +239,8 @@ export class DatabaseModule extends Construct {
 
     // Create DB subnet group
     const dbSubnetGroup = new DbSubnetGroup(this, 'DbSubnetGroup', {
-      // FIX: Ensure the name is all lowercase to meet AWS requirements
       name: `tap-db-subnet-group-${id.toLowerCase()}`,
-      subnetIds: props.subnetIds,
+      subnetIds: props.subnetIds, // Use the provided array of subnet IDs
       tags: { ...props.tags, Name: 'tap-db-subnet-group' },
     });
 
