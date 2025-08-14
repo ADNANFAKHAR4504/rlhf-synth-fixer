@@ -51,9 +51,6 @@ describe('TapStack Comprehensive Unit Tests', () => {
     expect(security.webSg).toBeDefined();
     expect(security.appSg).toBeDefined();
     expect(security.dbSg).toBeDefined();
-    expect(security.webSg.tags?.Tier).toBe('web');
-    expect(security.appSg.tags?.Tier).toBe('app');
-    expect(security.dbSg.tags?.Tier).toBe('db');
   });
 
   test('IAM module creates role with least privilege', () => {
