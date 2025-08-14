@@ -125,6 +125,12 @@ variable "enable_alb_logs" {
   default     = false
 }
 
+variable "health_check_path" {
+  description = "Path for ALB health checks"
+  type        = string
+  default     = "/health"
+}
+
 variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)
@@ -784,13 +790,13 @@ resource "aws_lb_target_group" "app" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 60
+    interval            = 90
     matcher             = "200"
-    path                = "/"
+    path                = var.health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 10
-    unhealthy_threshold = 3
+    timeout             = 15
+    unhealthy_threshold = 5
   }
 
   tags = merge(local.common_tags, {
@@ -1369,11 +1375,15 @@ resource "aws_autoscaling_group" "app" {
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.app.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 900
+  health_check_grace_period = 1200
 
   min_size         = 1
   max_size         = 6
   desired_capacity = 1
+
+  timeouts {
+    delete = "15m"
+  }
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -1926,6 +1936,21 @@ output "hosted_zone_id" {
 output "certificate_arn" {
   description = "ARN of the ACM certificate (if domain is configured)"
   value       = var.domain_name != "" && var.hosted_zone_id != "" ? aws_acm_certificate_validation.main[0].certificate_arn : "No certificate configured"
+}
+
+output "asg_name" {
+  description = "Name of the Auto Scaling Group"
+  value       = aws_autoscaling_group.app.name
+}
+
+output "asg_desired_capacity" {
+  description = "Desired capacity of the Auto Scaling Group"
+  value       = aws_autoscaling_group.app.desired_capacity
+}
+
+output "health_check_path" {
+  description = "Health check path being used"
+  value       = var.health_check_path
 }
 
 
