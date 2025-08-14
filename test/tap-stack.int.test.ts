@@ -20,7 +20,7 @@ describe('MultiRegionSecurityStack Integration Tests', () => {
     expect(providers.length).toBe(3);
     expect(providers.some((p: any) => p.alias === 'us-east-1')).toBe(true);
     expect(providers.some((p: any) => p.alias === 'us-west-2')).toBe(true);
-    expect(providers.some((p: any) => p.alias === 'us-east-2')).toBe(true);
+    expect(providers.some((p: any) => p.alias === 'eu-central-1')).toBe(true);
   });
 
   it('should create the correct number of networking resources', () => {

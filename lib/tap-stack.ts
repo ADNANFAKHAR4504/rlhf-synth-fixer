@@ -59,14 +59,14 @@ const REGION_CONFIGS: RegionConfig[] = [
     azB: 'us-west-2b',
   },
   {
-    region: 'us-east-2',
+    region: 'eu-central-1',
     vpcCidr: '10.3.0.0/16',
     publicSubnetCidr: '10.3.1.0/24',
     privateSubnetCidr: '10.3.2.0/24',
     dbSubnetACidr: '10.3.3.0/24',
     dbSubnetBCidr: '10.3.4.0/24',
-    azA: 'us-east-2a',
-    azB: 'us-east-2b',
+    azA: 'eu-central-1a',
+    azB: 'eu-central-1b',
   },
 ];
 
