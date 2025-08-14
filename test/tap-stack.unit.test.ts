@@ -27,6 +27,7 @@ describe('MultiRegionSecurityStack Unit Tests', () => {
 
   beforeAll(() => {
     const app = Testing.app();
+    // FIX: Corrected the typo in the class name.
     const stack = new MultiRegionSecurityStack(
       app,
       'unit-test-stack',
@@ -73,6 +74,7 @@ describe('MultiRegionSecurityStack Unit Tests', () => {
     expect(kmsKeys.length).toBe(1);
 
     expect(rdsInstances[0].storage_encrypted).toBe(true);
+    expect(rdsInstances[0].username).toBe('dbadmin');
     expect(rdsInstances[0].kms_key_id).toBe(
       `\${aws_kms_key.${kmsKeyLogicalId}.arn}`
     );
@@ -91,10 +93,8 @@ describe('MultiRegionSecurityStack Unit Tests', () => {
     );
   });
 
-  // FIX: New test to check DB security group ingress rules.
   it('should configure the DB security group to only allow traffic from the App SG', () => {
     const securityGroups = Object.values(resources.aws_security_group) as any[];
-    const appSg = securityGroups.find(sg => sg.name.includes('app-sg'));
     const dbSg = securityGroups.find(sg => sg.name.includes('db-sg'));
 
     expect(dbSg.ingress.length).toBe(1);
@@ -106,7 +106,6 @@ describe('MultiRegionSecurityStack Unit Tests', () => {
     );
   });
 
-  // FIX: New test to cover the branch condition for missing us-east-1 provider.
   it('should throw an error if us-east-1 provider is missing', () => {
     const invalidConfig: StackConfig = {
       ...MOCK_STACK_CONFIG,
@@ -125,7 +124,6 @@ describe('MultiRegionSecurityStack Unit Tests', () => {
     };
 
     const app = Testing.app();
-    // Expecting the constructor to throw an error when config is invalid
     expect(() => {
       new MultiRegionSecurityStack(app, 'error-stack', invalidConfig);
     }).toThrow(

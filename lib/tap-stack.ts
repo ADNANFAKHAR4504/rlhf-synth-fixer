@@ -110,19 +110,23 @@ export class MultiRegionSecurityStack extends TerraformStack {
           {
             id: 'log-management-rule',
             status: 'Enabled',
+            // FIX: Added explicit filter to apply the rule to all objects.
+            filter: [
+              {
+                prefix: '',
+              },
+            ],
             transition: [
               {
                 days: 90,
                 storageClass: 'STANDARD_IA',
               },
             ],
-            // FIX: Wrapped the object in an array.
             expiration: [
               {
                 days: 365,
               },
             ],
-            // FIX: Wrapped the object in an array.
             noncurrentVersionExpiration: [
               {
                 noncurrentDays: 30,
@@ -459,7 +463,8 @@ export class MultiRegionSecurityStack extends TerraformStack {
           tags: { ...tags, Name: `db-secret-${regionConfig.region}` },
         }
       );
-      const dbSecretVersion = new SecretsmanagerSecretVersion(
+
+      new SecretsmanagerSecretVersion(
         this,
         `DBSecretVersion-${regionConfig.region}`,
         {
@@ -471,6 +476,7 @@ export class MultiRegionSecurityStack extends TerraformStack {
           }),
         }
       );
+
       const dbSubnetGroup = new DbSubnetGroup(
         this,
         `DbSubnetGroup-${regionConfig.region}`,
@@ -481,6 +487,7 @@ export class MultiRegionSecurityStack extends TerraformStack {
           tags: { ...tags, Name: `db-subnet-group-${regionConfig.region}` },
         }
       );
+
       new DbInstance(this, `DB-${regionConfig.region}`, {
         provider: regionProvider,
         identifier: `app-db-${regionConfig.region}-${uniqueSuffix}`,
@@ -492,8 +499,10 @@ export class MultiRegionSecurityStack extends TerraformStack {
         kmsKeyId: regionKmsKey.arn,
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [dbSg.id],
-        username: Fn.jsondecode(dbSecretVersion.secretString)['username'],
-        password: Fn.jsondecode(dbSecretVersion.secretString)['password'],
+        // FIX: Provide the username directly for provisioning.
+        username: 'dbadmin',
+        // FIX: Provide the password directly from the random resource.
+        password: dbPassword.result,
         skipFinalSnapshot: true,
         tags: { ...tags, Name: `app-db-${regionConfig.region}` },
       });
