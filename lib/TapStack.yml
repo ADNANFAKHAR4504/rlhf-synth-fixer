@@ -965,19 +965,15 @@ Outputs:
 
   CloudTrailName:
     Description: CloudTrail Name
-    Value:
-      !If [CreateCloudTrailCond, !Ref SecureEnvCloudTrail, !Ref 'AWS::NoValue']
+    Condition: CreateCloudTrailCond
+    Value: !Ref SecureEnvCloudTrail
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-Name'
 
   GuardDutyDetectorId:
     Description: GuardDuty Detector ID
-    Value:
-      !If [
-        CreateDetector,
-        !Ref SecureEnvGuardDuty,
-        !Ref ExistingGuardDutyDetectorId,
-      ]
+    Condition: CreateDetector
+    Value: !Ref SecureEnvGuardDuty
     Export:
       Name: !Sub '${AWS::StackName}-GuardDuty-Detector-ID'
 
