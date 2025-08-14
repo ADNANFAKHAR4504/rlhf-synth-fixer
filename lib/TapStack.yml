@@ -355,7 +355,7 @@ Resources:
   SecureEnvEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub SecureEnv-EC2-Role-${Environment}
+      #RoleName: !Sub SecureEnv-EC2-Role-${Environment}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -614,7 +614,7 @@ Resources:
   SecureEnvConfigRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub SecureEnv-Config-Role-${Environment}
+      #RoleName: !Sub SecureEnv-Config-Role-${Environment}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -745,7 +745,7 @@ Resources:
   SecureEnvFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub SecureEnv-FlowLog-Role-${Environment}
+      #RoleName: !Sub SecureEnv-FlowLog-Role-${Environment}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
