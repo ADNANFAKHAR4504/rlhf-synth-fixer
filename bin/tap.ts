@@ -38,7 +38,6 @@ targetRegions.forEach(region => {
     environmentSuffix,
     tags: defaultTags,
   });
-
   // Outputs
   new TerraformOutput(stack, `VpcId`, {
     value: stack.vpcId,
