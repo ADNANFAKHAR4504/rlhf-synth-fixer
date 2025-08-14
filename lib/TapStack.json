@@ -166,6 +166,13 @@
             "Description": "ID of existing VPC to use",
             "AllowedPattern": "^vpc-[a-f0-9]+$",
             "ConstraintDescription": "Must be a valid VPC ID"
+        },
+        "ExistingInternetGatewayId": {
+            "Type": "String",
+            "Default": "igw-0fcffd108e58e6be9",
+            "Description": "ID of existing Internet Gateway to use",
+            "AllowedPattern": "^igw-[a-f0-9]+$",
+            "ConstraintDescription": "Must be a valid Internet Gateway ID"
         }
     },
     "Conditions": {
@@ -258,42 +265,6 @@
                 },
                 "TargetKeyId": {
                     "Ref": "KMSKey"
-                }
-            }
-        },
-        "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway",
-            "Properties": {
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-IGW"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
-            }
-        },
-        "AttachGateway": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "ExistingVPCId"
-                },
-                "InternetGatewayId": {
-                    "Ref": "InternetGateway"
                 }
             }
         },
@@ -505,14 +476,13 @@
         },
         "DefaultPublicRoute": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "AttachGateway",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "GatewayId": {
-                    "Ref": "InternetGateway"
+                    "Ref": "ExistingInternetGatewayId"
                 }
             }
         },
@@ -1342,7 +1312,7 @@
                     "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-lt"
                 },
                 "LaunchTemplateData": {
-                    "ImageId": "ami-0c02fb55956c7d316",
+                    "ImageId": "ami-097e0672cc4cc5c0e",
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
