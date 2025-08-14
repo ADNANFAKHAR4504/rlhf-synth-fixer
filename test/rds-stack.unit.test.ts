@@ -245,9 +245,6 @@ describe('RdsStack Unit Tests', () => {
         expect.objectContaining({
           enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
           monitoringInterval: 60,
-          performanceInsightsEnabled: true,
-          performanceInsightsKmsKeyId: mockKmsKeyArn,
-          performanceInsightsRetentionPeriod: 7,
         }),
         expect.any(Object)
       );
@@ -371,17 +368,6 @@ describe('RdsStack Unit Tests', () => {
         expect.objectContaining({
           storageEncrypted: true,
           kmsKeyId: mockKmsKeyArn,
-        }),
-        expect.any(Object)
-      );
-    });
-
-    it('should enable Performance Insights encryption', () => {
-      expect(aws.rds.Instance).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          performanceInsightsEnabled: true,
-          performanceInsightsKmsKeyId: mockKmsKeyArn,
         }),
         expect.any(Object)
       );

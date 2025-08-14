@@ -110,10 +110,6 @@ export class RdsStack extends pulumi.ComponentResource {
         monitoringInterval: 60,
         monitoringRoleArn: monitoringRole.arn,
 
-        performanceInsightsEnabled: true,
-        performanceInsightsKmsKeyId: args.rdsKmsKeyArn,
-        performanceInsightsRetentionPeriod: 7, // 7 or 731
-
         tags: {
           Name: `tap-db-${environmentSuffix}`,
           Purpose: 'MainDatabase',
