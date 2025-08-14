@@ -81,10 +81,10 @@ resource "aws_cloudwatch_event_target" "sns_target" {
   arn       = aws_sns_topic.security_notifications.arn
 }
 
-# Security Hub
-resource "aws_securityhub_account" "main" {}
+# Security Hub (use data source since account is already enabled)
+data "aws_securityhub_account" "main" {}
 
 resource "aws_securityhub_standards_subscription" "aws_foundational" {
   standards_arn = "arn:aws:securityhub:${var.aws_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
-  depends_on    = [aws_securityhub_account.main]
+  depends_on    = [data.aws_securityhub_account.main]
 }
