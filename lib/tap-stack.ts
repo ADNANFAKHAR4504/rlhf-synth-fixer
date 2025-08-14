@@ -17,6 +17,7 @@
 
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
+import { TerraformOutput } from 'cdktf'; // <-- add this import at the top
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
@@ -620,5 +621,18 @@ rpm -U ./amazon-cloudwatch-agent.rpm
     this.vpcId = vpc.id;
     this.albDnsName = alb.dnsName;
     this.rdsEndpoint = rdsInstance.endpoint;
+
+    // Terraform Outputs for integration tests
+    new TerraformOutput(this, `VpcId-${region}`, {
+      value: this.vpcId,
+    });
+
+    new TerraformOutput(this, `AlbDnsName-${region}`, {
+      value: this.albDnsName,
+    });
+
+    new TerraformOutput(this, `RdsEndpoint-${region}`, {
+      value: this.rdsEndpoint,
+    });
   }
 }
