@@ -1,40 +1,32 @@
-import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+// tests/unit/unit-tests.ts
+// Simple presence + sanity checks for ../lib/tap_stack.tf
+// No Terraform or CDKTF commands are executed.
 
-describe('Stack Structure', () => {
-  let app: App;
-  let stack: TapStack;
-  let synthesized: string;
+import fs from "fs";
+import path from "path";
 
-  beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
+const STACK_REL = "../lib/tap_stack.tf"; // adjust if your structure differs
+const stackPath = path.resolve(__dirname, STACK_REL);
+
+describe("Terraform single-file stack: tap_stack.tf", () => {
+  test("tap_stack.tf exists", () => {
+    const exists = fs.existsSync(stackPath);
+    if (!exists) {
+      console.error(`[unit] Expected stack at: ${stackPath}`);
+    }
+    expect(exists).toBe(true);
   });
 
-  test('TapStack instantiates successfully via props', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestTapStackWithProps', {
-      environmentSuffix: 'prod',
-      stateBucket: 'custom-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-    });
-    synthesized = Testing.synth(stack);
+  // --- Optional sanity checks (keep lightweight) ---
 
-    // Verify that TapStack instantiates without errors via props
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+  test("does NOT declare provider in tap_stack.tf (provider.tf owns providers)", () => {
+    const content = fs.readFileSync(stackPath, "utf8");
+    expect(content).not.toMatch(/\bprovider\s+"aws"\s*{/);
   });
 
-  test('TapStack uses default values when no props provided', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestTapStackDefault');
-    synthesized = Testing.synth(stack);
-
-    // Verify that TapStack instantiates without errors when no props are provided
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+  test("declares aws_region variable in tap_stack.tf", () => {
+    const content = fs.readFileSync(stackPath, "utf8");
+    expect(content).toMatch(/variable\s+"aws_region"\s*{/);
   });
+
 });
-
-// add more test suites and cases as needed
