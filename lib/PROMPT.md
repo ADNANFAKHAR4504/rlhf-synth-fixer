@@ -1,4 +1,4 @@
-# Project Brief: Secure and Scalable AWS Environment with CDK & TypeScript
+# Secure and Scalable AWS Environment with CDK & TypeScript
 
 This document outlines the requirements for building a secure, scalable AWS cloud environment using AWS CDK and TypeScript. The goal is to create a robust infrastructure suitable for hosting a large-scale web application, following best practices for security, reliability, and maintainability.
 
