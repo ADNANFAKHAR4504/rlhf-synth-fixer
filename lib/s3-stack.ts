@@ -10,6 +10,7 @@ interface S3StackProps {
 }
 
 export class S3Stack extends Construct {
+  public readonly bucketName: string;
   public readonly kmsKeyArn: string;
 
   constructor(scope: Construct, id: string, props?: S3StackProps) {
@@ -30,7 +31,7 @@ export class S3Stack extends Construct {
     this.kmsKeyArn = kmsKey.arn;
 
     // S3 Bucket
-    new S3Bucket(this, 'prodSecureBucket', {
+    const bucket = new S3Bucket(this, 'prodSecureBucket', {
       bucket: `prod-secure-bucket-${environmentSuffix}`,
       serverSideEncryptionConfiguration: {
         rule: {
@@ -47,5 +48,7 @@ export class S3Stack extends Construct {
         Environment: environmentSuffix,
       },
     });
+
+    this.bucketName = bucket.bucket;
   }
 }

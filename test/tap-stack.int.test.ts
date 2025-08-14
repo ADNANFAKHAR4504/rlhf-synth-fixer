@@ -1,6 +1,6 @@
 import { DescribeInstancesCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
-import { GetBucketEncryptionCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetBucketEncryptionCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
@@ -84,7 +84,13 @@ describe('TapStack End-to-End Integration', () => {
 
   test('S3 bucket uses AES-256 encryption', async () => {
     const s3 = new S3Client({ region: process.env.AWS_REGION });
-    const bucketName = 'prod-secure-bucket-inttest'; // Use your naming convention
+    const bucketName = process.env.TEST_S3_BUCKET; // Set this from stack output
+
+    if (!bucketName) throw new Error('TEST_S3_BUCKET env var not set');
+
+    // Check if bucket exists
+    await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
+
     const result = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
     expect(
       result.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm

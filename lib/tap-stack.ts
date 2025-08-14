@@ -2,7 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 // Import resource constructs (not stacks)
@@ -80,6 +80,10 @@ export class TapStack extends TerraformStack {
 
     new KmsStack(this, 'prodKmsStack', {
       environmentSuffix,
+    });
+
+    new TerraformOutput(this, 's3_bucket_name', {
+      value: s3Stack.bucketName, // Make sure S3Stack exposes bucketName
     });
   }
 }
