@@ -59,6 +59,21 @@ export class KMSKey extends pulumi.ComponentResource {
           Action: ['kms:GenerateDataKey', 'kms:Decrypt'],
           Resource: '*',
         },
+        {
+          Sid: 'Allow CloudWatch Logs to encrypt logs',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'logs.amazonaws.com',
+          },
+          Action: [
+            'kms:Encrypt',
+            'kms:Decrypt',
+            'kms:ReEncrypt*',
+            'kms:GenerateDataKey*',
+            'kms:DescribeKey',
+          ],
+          Resource: '*',
+        },
       ],
     }));
 
