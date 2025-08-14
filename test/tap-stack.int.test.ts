@@ -12,8 +12,8 @@ describe('Pulumi Tap Stack Integration Test', () => {
     let outputs: any;
 
     beforeAll(async () => {
-        const projectName = "my-tap-stack";
-        const stackName = "dev";
+        const projectName = "TapStack";
+        const stackName = "TapStackpr1230";
         const workDir = path.join(__dirname, "..");
         
         // Use the correct ProgramArgs type for the function call
