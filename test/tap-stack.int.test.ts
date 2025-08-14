@@ -1,36 +1,36 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-} from '@aws-sdk/client-ec2';
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+  ListDashboardsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-} from '@aws-sdk/client-s3';
-import {
-  DynamoDBClient,
   DescribeTableCommand,
+  DynamoDBClient,
 } from '@aws-sdk/client-dynamodb';
 import {
-  RDSClient,
-  DescribeDBClustersCommand,
-} from '@aws-sdk/client-rds';
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  CloudWatchClient,
-  ListDashboardsCommand,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBClustersCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -322,13 +322,13 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
 
       // Check for Lambda error alarm
       const lambdaAlarm = response.MetricAlarms?.find(a =>
-        a.AlarmName?.includes('lambda-high-error-rate')
+        a.AlarmName?.includes('lambda-high-error-rate') && a.AlarmName?.includes('us-east-1')
       );
       expect(lambdaAlarm).toBeDefined();
 
       // Check for ALB response time alarm
       const albAlarm = response.MetricAlarms?.find(a =>
-        a.AlarmName?.includes('alb-high-response-time')
+        a.AlarmName?.includes('alb-high-response-time') && a.AlarmName?.includes('us-east-1')
       );
       expect(albAlarm).toBeDefined();
     });
