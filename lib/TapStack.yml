@@ -4,8 +4,16 @@ Description: 'Highly available web application with ALB, ASG, and HTTPS redirect
 Parameters:
   DomainName:
     Type: String
-    Description: Domain name for the SSL certificate
-    Default: example.com
+    Description: Domain name for the SSL certificate (leave empty to skip HTTPS)
+    Default: ''
+
+  EnableSSL:
+    Type: String
+    Description: Enable SSL/HTTPS support (requires valid domain and DNS access)
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
 
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
@@ -16,6 +24,11 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: Latest Amazon Linux 2 AMI ID
+
+Conditions:
+  CreateSSLCertificate: !And
+    - !Equals [!Ref EnableSSL, 'true']
+    - !Not [!Equals [!Ref DomainName, '']]
 
 Resources:
   # VPC and Networking
@@ -306,9 +319,10 @@ Resources:
             Action: s3:GetBucketAcl
             Resource: !Ref LogsBucket
 
-  # SSL Certificate
+  # SSL Certificate (Optional)
   SSLCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: CreateSSLCertificate
     Properties:
       DomainName: !Ref DomainName
       SubjectAlternativeNames:
@@ -372,9 +386,10 @@ Resources:
         - Key: App
           Value: WebApp
 
-  # HTTPS Listener
+  # HTTPS Listener (Optional)
   ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: CreateSSLCertificate
     Properties:
       DefaultActions:
         - Type: forward
@@ -385,16 +400,20 @@ Resources:
       Certificates:
         - CertificateArn: !Ref SSLCertificate
 
-  # HTTP Listener (redirects to HTTPS)
+  # HTTP Listener (redirects to HTTPS if SSL enabled, otherwise serves traffic)
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
+        - !If
+          - CreateSSLCertificate
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: 443
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -616,7 +635,10 @@ Resources:
 Outputs:
   LoadBalancerURL:
     Description: URL of the Application Load Balancer
-    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+    Value: !If
+      - CreateSSLCertificate
+      - !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+      - !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancerURL'
 
@@ -633,8 +655,8 @@ Outputs:
       Name: !Sub '${AWS::StackName}-LogsBucketName'
 
   SSLCertificateArn:
-    Description: ARN of the SSL certificate
-    Value: !Ref SSLCertificate
+    Description: ARN of the SSL certificate (if created)
+    Value: !If [CreateSSLCertificate, !Ref SSLCertificate, 'SSL not enabled']
     Export:
       Name: !Sub '${AWS::StackName}-SSLCertificateArn'
 
@@ -653,3 +675,10 @@ Outputs:
         - !Select [2, !GetAZs '']
     Export:
       Name: !Sub '${AWS::StackName}-AvailabilityZones'
+
+  SSLInstructions:
+    Description: Instructions for SSL setup
+    Value: !If
+      - CreateSSLCertificate
+      - 'SSL enabled - Add DNS validation records to your domain to complete certificate validation'
+      - "SSL disabled - Change EnableSSL to 'true' and provide a valid DomainName to enable HTTPS"
