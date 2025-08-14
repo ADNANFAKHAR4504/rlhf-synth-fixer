@@ -1,7 +1,3 @@
-Here’s the Claude Sonnet-compatible prompt for your Terraform environment:
-
----
-
 You are a Senior AWS Solutions Architect and Terraform Expert tasked with designing a production-ready AWS environment using Terraform v0.12 or later.
 
 Environment:
