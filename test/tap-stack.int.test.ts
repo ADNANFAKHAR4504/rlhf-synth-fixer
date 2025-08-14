@@ -6,75 +6,95 @@ import * as util from 'util';
 const exec = util.promisify(childProcess.exec);
 
 describe('TAP Stack Integration Tests', () => {
-  let outputs: any;
+  let outputs: Record<string, any> = {};
 
   beforeAll(async () => {
     try {
-      // Try to get outputs from both possible sources
-      const outputsPath = path.join(__dirname, '..', 'cdktf.out', 'stacks', 'tap-stack', 'cdk.tf.json');
+      // Try to get outputs from synthesized JSON
+      const stacksPath = path.join(__dirname, '..', 'cdktf.out', 'stacks');
       
-      if (fs.existsSync(outputsPath)) {
-        const tfOutput = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-        outputs = tfOutput.output || {};
-      } else {
-        // Fallback to cdktf CLI output
-        const { stdout } = await exec('cdktf output --json');
-        outputs = JSON.parse(stdout);
+      if (fs.existsSync(stacksPath)) {
+        const stackDirs = fs.readdirSync(stacksPath);
+        for (const stackDir of stackDirs) {
+          const outputPath = path.join(stacksPath, stackDir, 'cdk.tf.json');
+          if (fs.existsSync(outputPath)) {
+            const tfConfig = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+            if (tfConfig.output) {
+              outputs = { ...outputs, ...tfConfig.output };
+            }
+          }
+        }
+      }
+
+      // If no outputs found in files, try CLI
+      if (Object.keys(outputs).length === 0) {
+        try {
+          const { stdout } = await exec('cdktf output --json');
+          outputs = JSON.parse(stdout);
+        } catch (cliError) {
+          console.warn('Failed to get outputs via CLI:', cliError);
+        }
       }
     } catch (error) {
-      console.warn('Failed to get outputs:', error);
-      outputs = null;
+      console.warn('Error getting outputs:', error);
     }
   });
 
   describe('Infrastructure Deployment Validation', () => {
-    test('should have deployment outputs available', async () => {
+    test('should have deployment outputs available', () => {
       expect(outputs).toBeDefined();
-      expect(typeof outputs).toBe('object');
+      expect(Object.keys(outputs).length).toBeGreaterThan(0);
     });
 
-    test('should have VPC IDs in outputs', async () => {
-      const vpcValues = Object.values(outputs)
-        .filter((output: any) => output.value && typeof output.value === 'string')
-        .map((output: any) => output.value);
+    test('should have VPC IDs in outputs', () => {
+      const vpcOutputs = Object.entries(outputs)
+        .filter(([key]) => key.includes('VpcId'))
+        .map(([, value]) => value?.value);
       
-      expect(vpcValues.some((value: string) => value.startsWith('vpc-'))).toBe(true);
+      expect(vpcOutputs.length).toBeGreaterThan(0);
+      vpcOutputs.forEach(vpcId => {
+        expect(vpcId).toMatch(/^vpc-/);
+      });
     });
 
-    test('should have ALB DNS names in outputs', async () => {
-      const albValues = Object.values(outputs)
-        .filter((output: any) => output.value && typeof output.value === 'string')
-        .map((output: any) => output.value);
+    test('should have ALB DNS names in outputs', () => {
+      const albOutputs = Object.entries(outputs)
+        .filter(([key]) => key.includes('AlbDnsName'))
+        .map(([, value]) => value?.value);
       
-      expect(albValues.some((value: string) => value.includes('elb.amazonaws.com'))).toBe(true);
+      expect(albOutputs.length).toBeGreaterThan(0);
+      albOutputs.forEach(dnsName => {
+        expect(dnsName).toContain('elb.amazonaws.com');
+      });
     });
 
-    test('should have RDS endpoints in outputs', async () => {
-      const rdsValues = Object.values(outputs)
-        .filter((output: any) => output.value && typeof output.value === 'string')
-        .map((output: any) => output.value);
+    test('should have RDS endpoints in outputs', () => {
+      const rdsOutputs = Object.entries(outputs)
+        .filter(([key]) => key.includes('RdsEndpoint'))
+        .map(([, value]) => value?.value);
       
-      expect(rdsValues.some((value: string) => value.includes('rds.amazonaws.com'))).toBe(true);
+      expect(rdsOutputs.length).toBeGreaterThan(0);
+      rdsOutputs.forEach(endpoint => {
+        expect(endpoint).toContain('rds.amazonaws.com');
+      });
     });
   });
 
   describe('Multi-region Deployment', () => {
-    test('should have resources in us-east-1 region', async () => {
-      const regionValues = Object.values(outputs)
-        .filter((output: any) => output.value && typeof output.value === 'string')
-        .map((output: any) => output.value);
+    test('should have resources in us-east-1 region', () => {
+      const regionOutputs = Object.entries(outputs)
+        .filter(([key]) => key.includes('us-east-1'))
+        .map(([, value]) => value?.value);
       
-      // This is a simple check - you might need a more specific check
-      expect(regionValues.length).toBeGreaterThan(0);
+      expect(regionOutputs.length).toBeGreaterThan(0);
     });
 
-    test('should have resources in us-west-2 region', async () => {
-      const regionValues = Object.values(outputs)
-        .filter((output: any) => output.value && typeof output.value === 'string')
-        .map((output: any) => output.value);
+    test('should have resources in us-west-2 region', () => {
+      const regionOutputs = Object.entries(outputs)
+        .filter(([key]) => key.includes('us-west-2'))
+        .map(([, value]) => value?.value);
       
-      // This is a simple check - you might need a more specific check
-      expect(regionValues.length).toBeGreaterThan(0);
+      expect(regionOutputs.length).toBeGreaterThan(0);
     });
   });
 });
