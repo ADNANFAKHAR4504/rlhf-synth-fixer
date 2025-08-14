@@ -43,7 +43,7 @@ You are an AWS Cloud Engineer specializing in secure, high-scale **serverless** 
 ## Summary
 
 Deliver an AWS CDK (TypeScript) project that:
-- Runs in **us-west-1**, tags all resources with **Environment: Production**.
+- Runs in **us-west-2**, tags all resources with **Environment: Production**.
 - Provides a **serverless stack**: API Gateway → Lambda (in VPC) → S3 & DynamoDB (on-demand).
 - Restricts S3 access to the **same VPC** via **Gateway VPC Endpoint** and bucket policy.
 - Uses **DynamoDB on-demand** capacity.
