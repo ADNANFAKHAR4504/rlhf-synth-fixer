@@ -286,7 +286,6 @@ Resources:
   EC2ApplicationRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-ec2-application-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -324,7 +323,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-ec2-instance-profile'
       Roles:
         - !Ref EC2ApplicationRole
 
@@ -332,7 +330,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-lambda-execution-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -370,7 +367,6 @@ Resources:
   CloudWatchEventsRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-cloudwatch-events-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
