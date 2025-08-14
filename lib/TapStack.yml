@@ -53,10 +53,6 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt S3DataProcessor.Arn
       Tags:
         - Key: Environment
           Value: Production
