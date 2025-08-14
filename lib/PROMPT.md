@@ -25,3 +25,12 @@ Your Terraform configuration needs to handle these things:
 Give us a complete Terraform HCL file (or files). It should be neat, **well-commented**, and definitely **not have any hardcoded secrets**. The big test: it needs to pass `terraform plan` and `terraform apply` without any warnings or failures, showing it meets all these security rules.
 
 Good luck!
+
+├── main.tf
+├── MODEL_FAILURES.md
+├── MODEL_RESPONSE.md
+├── outputs.tf
+├── PROMPT.md
+├── provider.tf
+
+above is my directory structure can you help me fill contents into main.tf, outputs.tf, provider.tf
