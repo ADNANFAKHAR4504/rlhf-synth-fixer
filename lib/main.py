@@ -87,7 +87,7 @@ def deploy_infrastructure():
     # Setup CloudTrail
     setup_cloudtrail(
       region=region,
-      s3_bucket_name=s3_bucket.bucket,
+      s3_bucket_name=s3_bucket.id,
       tags=common_tags,
       provider=provider
     )

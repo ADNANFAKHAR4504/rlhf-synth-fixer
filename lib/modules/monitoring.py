@@ -2,13 +2,13 @@
 Monitoring module for CloudTrail setup
 """
 
+from typing import Dict, Optional, List
 import pulumi
 import pulumi_aws as aws
-from typing import Dict
 
 
-def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output, tags: Dict,
-                     provider: aws.Provider) -> aws.cloudtrail.Trail:
+def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output[str], tags: Dict, provider: aws.Provider,
+                     depends_on: Optional[List[pulumi.Resource]] = None) -> aws.cloudtrail.Trail:
   """Setup CloudTrail for auditing and compliance"""
 
   # Create CloudWatch Log Group for CloudTrail
@@ -87,7 +87,7 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output, tags: Dict,
     tags=tags,
     opts=pulumi.ResourceOptions(
       provider=provider,
-      depends_on=[log_group, cloudtrail_role]  # Ensure role is created first
+      depends_on=[log_group, cloudtrail_role] + (depends_on or []) # Ensure role is created first
     )
   )
 
