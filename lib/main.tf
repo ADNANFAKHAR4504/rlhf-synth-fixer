@@ -9,7 +9,7 @@ resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags = merge(local.common_tags, { Name = "${var.name_prefix}-vpc" })
+  tags                 = merge(local.common_tags, { Name = "${var.name_prefix}-vpc" })
 }
 
 data "aws_availability_zones" "available" {
@@ -144,9 +144,9 @@ resource "aws_kms_key" "s3" {
 # S3 Buckets (logs + data)
 # -----------------------------
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.name_prefix}-logs-${random_id.suffix.hex}"
+  bucket        = "${var.name_prefix}-logs-${random_id.suffix.hex}"
   force_destroy = true
-  tags   = merge(local.common_tags, { Name = "${var.name_prefix}-logs" })
+  tags          = merge(local.common_tags, { Name = "${var.name_prefix}-logs" })
 }
 
 resource "aws_s3_bucket_ownership_controls" "logs" {
@@ -209,14 +209,64 @@ resource "aws_s3_bucket_public_access_block" "data" {
 }
 
 resource "aws_s3_bucket_logging" "data_to_logs" {
-  bucket = aws_s3_bucket.data.id
+  bucket        = aws_s3_bucket.data.id
   target_bucket = aws_s3_bucket.logs.id
   target_prefix = "s3-access/"
 }
 
-# -----------------------------
-# CloudTrail (management events)
-# -----------------------------
+data "aws_caller_identity" "current" {}
+
+# Recommended: build the trail ARN once so we can scope the policy
+# If you already have a local for this, reuse it.
+locals {
+  trail_arn = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.name_prefix}-trail"
+}
+
+data "aws_partition" "current" {}
+
+resource "aws_s3_bucket_policy" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      # Allow CloudTrail to check the bucket ACL
+      {
+        Sid       = "AWSCloudTrailAclCheck",
+        Effect    = "Allow",
+        Principal = { Service = "cloudtrail.amazonaws.com" },
+        Action    = "s3:GetBucketAcl",
+        Resource  = "arn:${data.aws_partition.current.partition}:s3:::${aws_s3_bucket.logs.bucket}",
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          },
+          StringLike = {
+            "aws:SourceArn" = local.trail_arn
+          }
+        }
+      },
+      # Allow CloudTrail to put log files with the required ACL
+      {
+        Sid       = "AWSCloudTrailWrite",
+        Effect    = "Allow",
+        Principal = { Service = "cloudtrail.amazonaws.com" },
+        Action    = "s3:PutObject",
+        Resource  = "arn:${data.aws_partition.current.partition}:s3:::${aws_s3_bucket.logs.bucket}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"      = "bucket-owner-full-control",
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          },
+          StringLike = {
+            "aws:SourceArn" = local.trail_arn
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Make sure the trail waits for the policy to exist
 resource "aws_cloudtrail" "this" {
   name                          = "${var.name_prefix}-trail"
   s3_bucket_name                = aws_s3_bucket.logs.bucket
@@ -224,28 +274,90 @@ resource "aws_cloudtrail" "this" {
   is_multi_region_trail         = true
   enable_log_file_validation    = true
   tags                          = local.common_tags
-  depends_on = [aws_s3_bucket_public_access_block.logs]
+
+  depends_on = [
+    aws_s3_bucket_public_access_block.logs,
+    aws_s3_bucket_policy.logs
+  ]
 }
+
+# # -----------------------------
+# # CloudTrail (management events)
+# # -----------------------------
+# resource "aws_cloudtrail" "this" {
+#   name                          = "${var.name_prefix}-trail"
+#   s3_bucket_name                = aws_s3_bucket.logs.bucket
+#   include_global_service_events = true
+#   is_multi_region_trail         = true
+#   enable_log_file_validation    = true
+#   tags                          = local.common_tags
+#   depends_on                    = [aws_s3_bucket_public_access_block.logs]
+# }
 
 # -----------------------------
 # AWS Config (lightweight)
 # -----------------------------
+
+resource "aws_iam_policy" "aws_config_role_policy" {
+  name        = "AWS_ConfigRole"
+  description = "Permissions required for AWS Config to record and deliver configuration changes."
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "ConfigBucketAccess"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetBucketAcl"
+        ]
+        Resource = [
+          "arn:aws:s3:::${aws_s3_bucket.logs.id}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+          "arn:aws:s3:::${aws_s3_bucket.logs.id}"
+        ]
+      },
+      {
+        Sid    = "ConfigPublishToSNS"
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:your-config-topic"
+      },
+      {
+        Sid    = "ConfigStreamToDeliveryChannel"
+        Effect = "Allow"
+        Action = [
+          "config:Put*",
+          "config:Get*",
+          "config:List*",
+          "config:Describe*"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# data "aws_caller_identity" "current" {}
+
 resource "aws_iam_role" "config" {
   name = "${var.name_prefix}-config-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "config.amazonaws.com" },
-      Action   = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = local.common_tags
 }
 
-resource "aws_iam_role_policy_attachment" "config" {
+resource "aws_iam_role_policy_attachment" "config_role_attach" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+  policy_arn = aws_iam_policy.aws_config_role_policy.arn
 }
 
 resource "aws_config_configuration_recorder" "this" {
@@ -253,9 +365,9 @@ resource "aws_config_configuration_recorder" "this" {
   role_arn = aws_iam_role.config.arn
 
   recording_group {
-    all_supported = false
+    all_supported                 = false
     include_global_resource_types = false
-    resource_types = ["AWS::EC2::VPC", "AWS::EC2::Subnet"]
+    resource_types                = ["AWS::EC2::VPC", "AWS::EC2::Subnet"]
   }
 }
 
@@ -306,15 +418,15 @@ resource "aws_iam_user_policy" "least_priv" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "ReadOwnAccessKeys",
-        Effect = "Allow",
-        Action = ["iam:ListAccessKeys", "iam:GetUser"],
+        Sid      = "ReadOwnAccessKeys",
+        Effect   = "Allow",
+        Action   = ["iam:ListAccessKeys", "iam:GetUser"],
         Resource = "*"
       },
       {
-        Sid    = "DenyWithoutMFA",
-        Effect = "Deny",
-        Action = "*",
+        Sid      = "DenyWithoutMFA",
+        Effect   = "Deny",
+        Action   = "*",
         Resource = "*",
         Condition = {
           "BoolIfExists" = { "aws:MultiFactorAuthPresent" = "false" }
