@@ -127,12 +127,12 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Resource: '*',
               Condition: {
                 StringLike: {
-                  'ec2:ResourceTag/Environment': ['prod*', 'production*'],
+                  'ec2:ResourceTag/Environment': 'prod*'
                 },
-                BoolIfExists: {
-                  'aws:MultiFactorAuthPresent': 'false',
-                },
-              },
+                Bool: {
+                  'aws:MultiFactorAuthPresent': 'false'
+                }
+              }
             },
             {
               Sid: 'RequireBusinessHoursForCriticalOperations',
@@ -140,13 +140,13 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Action: ['ec2:TerminateInstances'],
               Resource: '*',
               Condition: {
-                StringLike: {
-                  'ec2:ResourceTag/CriticalSystem': ['true', 'yes'],
+                StringEquals: {
+                  'ec2:ResourceTag/CriticalSystem': 'true'
                 },
                 DateNotBetween: {
-                  'aws:CurrentTime': ['08:00Z', '18:00Z'],
-                },
-              },
+                  'aws:CurrentTime': ['08:00Z', '18:00Z']
+                }
+              }
             },
             {
               Sid: 'AllowStopInstancesWithConditions',
@@ -155,14 +155,14 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Resource: '*',
               Condition: {
                 StringNotLike: {
-                  'ec2:ResourceTag/Environment': ['prod*', 'production*'],
+                  'ec2:ResourceTag/Environment': 'prod*'
                 },
                 StringEquals: {
-                  'aws:RequestedRegion': 'us-east-1',
-                },
-              },
-            },
-          ],
+                  'aws:RequestedRegion': 'us-east-1'
+                }
+              }
+            }
+          ]
         }),
         tags,
       },

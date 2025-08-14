@@ -250,17 +250,15 @@ describe('Security Modules Unit Tests', () => {
       expect(prodStatement).toBeDefined();
       expect(prodStatement.Effect).toBe('Deny');
       expect(prodStatement.Action).toContain('ec2:TerminateInstances');
-      expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toContain('prod*');
-      expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toContain('production*');
-      expect(prodStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
+      expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toBe('prod*');
+      expect(prodStatement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('false');
       
       // Validate critical system time-based protection
       const criticalStatement = policyDoc.Statement.find((s: any) => s.Sid === 'RequireBusinessHoursForCriticalOperations');
       expect(criticalStatement).toBeDefined();
       expect(criticalStatement.Effect).toBe('Deny');
       expect(criticalStatement.Action).toContain('ec2:TerminateInstances');
-      expect(criticalStatement.Condition.StringLike['ec2:ResourceTag/CriticalSystem']).toContain('true');
-      expect(criticalStatement.Condition.StringLike['ec2:ResourceTag/CriticalSystem']).toContain('yes');
+      expect(criticalStatement.Condition.StringEquals['ec2:ResourceTag/CriticalSystem']).toBe('true');
       expect(criticalStatement.Condition.DateNotBetween['aws:CurrentTime']).toEqual(['08:00Z', '18:00Z']);
       
       // Validate allow statement for non-production instances
@@ -268,8 +266,7 @@ describe('Security Modules Unit Tests', () => {
       expect(allowStatement).toBeDefined();
       expect(allowStatement.Effect).toBe('Allow');
       expect(allowStatement.Action).toContain('ec2:StopInstances');
-      expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toContain('prod*');
-      expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toContain('production*');
+      expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toBe('prod*');
       expect(allowStatement.Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
     });
 
@@ -1022,8 +1019,8 @@ describe('Security Modules Unit Tests', () => {
         
         expect(prodStatement.Effect).toBe('Deny');
         expect(prodStatement.Action).toContain('ec2:TerminateInstances');
-        expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toContain('prod*');
-        expect(prodStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
+        expect(prodStatement.Condition.StringLike['ec2:ResourceTag/Environment']).toBe('prod*');
+        expect(prodStatement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('false');
       });
 
       it('should deny critical system termination outside business hours', () => {
@@ -1038,7 +1035,7 @@ describe('Security Modules Unit Tests', () => {
         
         expect(criticalStatement.Effect).toBe('Deny');
         expect(criticalStatement.Action).toContain('ec2:TerminateInstances');
-        expect(criticalStatement.Condition.StringLike['ec2:ResourceTag/CriticalSystem']).toContain('true');
+        expect(criticalStatement.Condition.StringEquals['ec2:ResourceTag/CriticalSystem']).toBe('true');
         expect(criticalStatement.Condition.DateNotBetween['aws:CurrentTime']).toEqual(['08:00Z', '18:00Z']);
       });
 
@@ -1054,7 +1051,7 @@ describe('Security Modules Unit Tests', () => {
         
         expect(allowStatement.Effect).toBe('Allow');
         expect(allowStatement.Action).toContain('ec2:StopInstances');
-        expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toContain('prod*');
+        expect(allowStatement.Condition.StringNotLike['ec2:ResourceTag/Environment']).toBe('prod*');
         expect(allowStatement.Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
       });
     });
