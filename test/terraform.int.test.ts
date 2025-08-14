@@ -38,7 +38,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('S3 Bucket Integration Tests', () => {
     test('should have deployed S3 bucket with correct configuration', async () => {
-      if (!deploymentOutputs.S3BucketName) {
+      if (!deploymentOutputs.s3_bucket_name) {
         console.warn('S3 bucket name not found in outputs, skipping test');
         return;
       }
@@ -46,13 +46,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
       try {
         // Check if bucket exists
         const headCommand = new HeadBucketCommand({
-          Bucket: deploymentOutputs.S3BucketName
+          Bucket: deploymentOutputs.s3_bucket_name
         });
         await s3Client.send(headCommand);
 
         // Check bucket encryption
         const encryptionCommand = new GetBucketEncryptionCommand({
-          Bucket: deploymentOutputs.S3BucketName
+          Bucket: deploymentOutputs.s3_bucket_name
         });
         const encryptionResponse = await s3Client.send(encryptionCommand);
         
@@ -67,14 +67,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('should have bucket policy that denies insecure transport', async () => {
-      if (!deploymentOutputs.S3BucketName) {
+      if (!deploymentOutputs.s3_bucket_name) {
         console.warn('S3 bucket name not found in outputs, skipping test');
         return;
       }
 
       try {
         const policyCommand = new GetBucketPolicyCommand({
-          Bucket: deploymentOutputs.S3BucketName
+          Bucket: deploymentOutputs.s3_bucket_name
         });
         const policyResponse = await s3Client.send(policyCommand);
         
@@ -97,14 +97,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('KMS Key Integration Tests', () => {
     test('should have KMS key with proper configuration', async () => {
-      if (!deploymentOutputs.KMSKeyId) {
+      if (!deploymentOutputs.kms_key_id) {
         console.warn('KMS key ID not found in outputs, skipping test');
         return;
       }
 
       try {
         const keyCommand = new DescribeKeyCommand({
-          KeyId: deploymentOutputs.KMSKeyId
+          KeyId: deploymentOutputs.kms_key_id
         });
         const keyResponse = await kmsClient.send(keyCommand);
         
@@ -120,14 +120,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('CloudTrail Integration Tests', () => {
     test('should have CloudTrail configured properly', async () => {
-      if (!deploymentOutputs.CloudTrailName) {
+      if (!deploymentOutputs.cloudtrail_name) {
         console.warn('CloudTrail name not found in outputs, skipping test');
         return;
       }
 
       try {
         const trailCommand = new DescribeTrailsCommand({
-          trailNameList: [deploymentOutputs.CloudTrailName]
+          trailNameList: [deploymentOutputs.cloudtrail_name]
         });
         const trailResponse = await cloudtrailClient.send(trailCommand);
         
@@ -147,14 +147,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Integration Tests', () => {
     test('should have CloudWatch alarms configured', async () => {
-      if (!deploymentOutputs.CloudWatchAlarmName) {
+      if (!deploymentOutputs.cloudwatch_alarm_name) {
         console.warn('CloudWatch alarm name not found in outputs, skipping test');
         return;
       }
 
       try {
         const alarmCommand = new DescribeAlarmsCommand({
-          AlarmNames: [deploymentOutputs.CloudWatchAlarmName]
+          AlarmNames: [deploymentOutputs.cloudwatch_alarm_name]
         });
         const alarmResponse = await cloudwatchClient.send(alarmCommand);
         
@@ -173,7 +173,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('SNS Integration Tests', () => {
     test('should have SNS topic configured', async () => {
-      if (!deploymentOutputs.SNSTopicArn) {
+      if (!deploymentOutputs.sns_topic_arn) {
         console.warn('SNS topic ARN not found in outputs, skipping test');
         return;
       }
@@ -183,7 +183,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const topicsResponse = await snsClient.send(topicsCommand);
         
         const topic = topicsResponse.Topics?.find(
-          t => t.TopicArn === deploymentOutputs.SNSTopicArn
+          t => t.TopicArn === deploymentOutputs.sns_topic_arn
         );
         
         expect(topic).toBeDefined();
@@ -196,7 +196,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('IAM Integration Tests', () => {
     test('should have IAM roles configured with proper permissions', async () => {
-      if (!deploymentOutputs.LogWriterRoleName || !deploymentOutputs.LogReaderRoleName) {
+      if (!deploymentOutputs.log_writer_role_name || !deploymentOutputs.log_reader_role_name) {
         console.warn('IAM role names not found in outputs, skipping test');
         return;
       }
@@ -204,7 +204,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       try {
         // Test log writer role
         const writerRoleCommand = new GetRoleCommand({
-          RoleName: deploymentOutputs.LogWriterRoleName
+          RoleName: deploymentOutputs.log_writer_role_name
         });
         const writerRoleResponse = await iamClient.send(writerRoleCommand);
         
@@ -223,7 +223,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
         // Test log reader role
         const readerRoleCommand = new GetRoleCommand({
-          RoleName: deploymentOutputs.LogReaderRoleName
+          RoleName: deploymentOutputs.log_reader_role_name
         });
         const readerRoleResponse = await iamClient.send(readerRoleCommand);
         
@@ -239,13 +239,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('should have comprehensive security logging pipeline', async () => {
       // This test verifies that all components work together
       const requiredComponents = [
-        'S3BucketName',
-        'KMSKeyId', 
-        'CloudTrailName',
-        'CloudWatchAlarmName',
-        'SNSTopicArn',
-        'LogWriterRoleName',
-        'LogReaderRoleName'
+        's3_bucket_name',
+        'kms_key_id', 
+        'cloudtrail_name',
+        'cloudwatch_alarm_name',
+        'sns_topic_arn',
+        'log_writer_role_name',
+        'log_reader_role_name'
       ];
 
       const missingComponents = requiredComponents.filter(
@@ -261,13 +261,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
       }
 
       // If all components are present, verify they exist and are properly configured
-      expect(deploymentOutputs.S3BucketName).toBeDefined();
-      expect(deploymentOutputs.KMSKeyId).toBeDefined();
-      expect(deploymentOutputs.CloudTrailName).toBeDefined();
-      expect(deploymentOutputs.CloudWatchAlarmName).toBeDefined();
-      expect(deploymentOutputs.SNSTopicArn).toBeDefined();
-      expect(deploymentOutputs.LogWriterRoleName).toBeDefined();
-      expect(deploymentOutputs.LogReaderRoleName).toBeDefined();
+      expect(deploymentOutputs.s3_bucket_name).toBeDefined();
+      expect(deploymentOutputs.kms_key_id).toBeDefined();
+      expect(deploymentOutputs.cloudtrail_name).toBeDefined();
+      expect(deploymentOutputs.cloudwatch_alarm_name).toBeDefined();
+      expect(deploymentOutputs.sns_topic_arn).toBeDefined();
+      expect(deploymentOutputs.log_writer_role_name).toBeDefined();
+      expect(deploymentOutputs.log_reader_role_name).toBeDefined();
     });
 
     test('should demonstrate resource interconnectivity', async () => {
@@ -278,15 +278,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
       }
 
       // S3 bucket should be referenced by CloudTrail
-      if (deploymentOutputs.S3BucketName && deploymentOutputs.CloudTrailName) {
+      if (deploymentOutputs.s3_bucket_name && deploymentOutputs.cloudtrail_name) {
         try {
           const trailCommand = new DescribeTrailsCommand({
-            trailNameList: [deploymentOutputs.CloudTrailName]
+            trailNameList: [deploymentOutputs.cloudtrail_name]
           });
           const trailResponse = await cloudtrailClient.send(trailCommand);
           
           const trail = trailResponse.trailList![0];
-          expect(trail.S3BucketName).toBe(deploymentOutputs.S3BucketName);
+          expect(trail.S3BucketName).toBe(deploymentOutputs.s3_bucket_name);
         } catch (error) {
           console.warn('Resource connectivity test failed:', error);
         }
@@ -300,11 +300,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('should meet SOC2 and PCI-DSS compliance requirements', async () => {
       // Test encryption, access controls, audit trails, and monitoring
       const complianceChecks = {
-        encryptionAtRest: !!deploymentOutputs.KMSKeyId,
-        auditTrail: !!deploymentOutputs.CloudTrailName,
-        monitoring: !!deploymentOutputs.CloudWatchAlarmName,
-        accessControl: !!deploymentOutputs.LogWriterRoleName && !!deploymentOutputs.LogReaderRoleName,
-        alerting: !!deploymentOutputs.SNSTopicArn
+        encryptionAtRest: !!deploymentOutputs.kms_key_id,
+        auditTrail: !!deploymentOutputs.cloudtrail_name,
+        monitoring: !!deploymentOutputs.cloudwatch_alarm_name,
+        accessControl: !!deploymentOutputs.log_writer_role_name && !!deploymentOutputs.log_reader_role_name,
+        alerting: !!deploymentOutputs.sns_topic_arn
       };
 
       // For full compliance, all checks should pass
