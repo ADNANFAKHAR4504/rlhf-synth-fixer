@@ -315,8 +315,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
         const roleResponse = await iamClient.send(roleCommand);
         expect(roleResponse.Role?.RoleName).toBe(roleName);
         
-        // Check assume role policy
-        const assumeRolePolicy = JSON.parse(roleResponse.Role!.AssumeRolePolicyDocument!);
+        // Check assume role policy (decode URL-encoded JSON first)
+        const decodedPolicy = decodeURIComponent(roleResponse.Role!.AssumeRolePolicyDocument!);
+        const assumeRolePolicy = JSON.parse(decodedPolicy);
         expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
       } catch (error) {
         throw new Error(`Lambda execution role check failed: ${error}`);
@@ -343,8 +344,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
         const roleResponse = await iamClient.send(roleCommand);
         expect(roleResponse.Role?.RoleName).toBe(roleName);
         
-        // Check assume role policy
-        const assumeRolePolicy = JSON.parse(roleResponse.Role!.AssumeRolePolicyDocument!);
+        // Check assume role policy (decode URL-encoded JSON first)
+        const decodedPolicy = decodeURIComponent(roleResponse.Role!.AssumeRolePolicyDocument!);
+        const assumeRolePolicy = JSON.parse(decodedPolicy);
         expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('monitoring.rds.amazonaws.com');
       } catch (error) {
         throw new Error(`RDS monitoring role check failed: ${error}`);
