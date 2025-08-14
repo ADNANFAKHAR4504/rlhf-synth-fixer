@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';
 import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
 import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
 import { ConfigServiceClient, DescribeConfigurationRecordersCommand, DescribeConfigRulesCommand } from '@aws-sdk/client-config-service';
@@ -53,8 +53,21 @@ describe('AWS Infrastructure Integration Tests', () => {
       
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      
+      // Check DNS attributes separately
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsHostnames'
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsSupport'
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('Public subnets exist and are configured correctly', async () => {
