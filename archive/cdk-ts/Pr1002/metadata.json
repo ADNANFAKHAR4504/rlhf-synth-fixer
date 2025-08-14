@@ -11,5 +11,11 @@
     "Network Configuration",
     "General Infrastructure Tooling QA",
     "IaC Optimization"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
 }
