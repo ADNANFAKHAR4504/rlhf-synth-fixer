@@ -1,3 +1,4 @@
+// int-tests.ts
 import fs from "fs";
 import path from "path";
 import {
@@ -9,7 +10,7 @@ import {
   IpPermission,
 } from "@aws-sdk/client-ec2";
 
-/** ===================== Config & Outputs ===================== */
+/** ===================== Types & Outputs Loader ===================== */
 
 type TFVal<T> = { sensitive: boolean; type: unknown; value: T };
 
@@ -25,7 +26,9 @@ type OutputsFile = {
 };
 
 function loadOutputs() {
-  const file = process.env.OUTPUTS_FILE || path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+  const file =
+    process.env.OUTPUTS_FILE ||
+    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
   if (!fs.existsSync(file)) throw new Error(`Outputs file not found at ${file}`);
 
   const raw = JSON.parse(fs.readFileSync(file, "utf8")) as OutputsFile;
@@ -44,26 +47,24 @@ function loadOutputs() {
     sgId: req("security_group_id") as string,
     sgName: (raw.security_group_name?.value ?? "") as string,
     sgArn: (raw.security_group_arn?.value ?? "") as string,
-    declaredIngress: (raw.ingress_rules?.value ?? []) as Array<{
-      cidrs: string[];
-      from_port: number;
-      protocol: string;
-      to_port: number;
-    }>,
+    declaredIngress:
+      (raw.ingress_rules?.value ?? []) as Array<{
+        cidrs: string[];
+        from_port: number;
+        protocol: string;
+        to_port: number;
+      }>,
   };
 }
 
 const OUT = loadOutputs();
 
-const REGION =
-  process.env.AWS_REGION ||
-  process.env.AWS_DEFAULT_REGION ||
-  // Use region from SG ARN if present, fall back to us-west-2 (your outputs show us-west-2)
-  (OUT.sgArn.match(/:ec2:([a-z0-9-]+):/)?.[1] ?? "us-west-2");
+/** ===================== AWS SDK Setup (forced region) ===================== */
 
+const REGION = "us-west-2"; // hard-pinned per your requirement
 const ec2 = new EC2Client({ region: REGION });
 
-/** ===================== Utilities ===================== */
+/** ===================== Test Utilities ===================== */
 
 jest.setTimeout(180_000);
 
@@ -84,17 +85,14 @@ async function retry<T>(fn: () => Promise<T>, attempts = 7, baseMs = 600): Promi
 function hasWorldCidr(p: IpPermission, cidr = "0.0.0.0/0") {
   return (p.IpRanges || []).some((r) => r.CidrIp === cidr);
 }
-
 function portMatches(p: IpPermission, port: number) {
   if (p.FromPort === undefined || p.ToPort === undefined) return false;
   return p.FromPort <= port && port <= p.ToPort;
 }
-
 function isTcp(p: IpPermission) {
   return p.IpProtocol === "tcp";
 }
 
-/** Find one route table associated to the given subnet */
 async function getRouteTableForSubnet(subnetId: string) {
   const out = await ec2.send(
     new DescribeRouteTablesCommand({
@@ -106,7 +104,14 @@ async function getRouteTableForSubnet(subnetId: string) {
 
 /** ===================== Tests ===================== */
 
-describe("LIVE: Terraform outputs exist and basic shape is correct", () => {
+describe("Region sanity", () => {
+  test("Outputs align with us-west-2 (if ARN present)", () => {
+    const arnRegion = OUT.sgArn?.match(/:ec2:([a-z0-9-]+):/)?.[1];
+    if (arnRegion) expect(arnRegion).toBe("us-west-2");
+  });
+});
+
+describe("LIVE: Outputs exist and basic shape is correct", () => {
   test("Non-empty IDs present", () => {
     expect(OUT.vpcId).toMatch(/^vpc-/);
     expect(OUT.subnetId).toMatch(/^subnet-/);
@@ -116,17 +121,19 @@ describe("LIVE: Terraform outputs exist and basic shape is correct", () => {
 
 describe("LIVE: VPC & Subnet posture", () => {
   test("VPC exists and is available", async () => {
-    const resp = await retry(() => ec2.send(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] })));
+    const resp = await retry(() =>
+      ec2.send(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] }))
+    );
     expect(resp.Vpcs?.length).toBe(1);
-    expect(resp.Vpcs?.[0]?.VpcId).toBe(OUT.vpcId);
-    // State may be undefined; if present assert it's 'available'
-    if (resp.Vpcs?.[0]?.State) {
-      expect(resp.Vpcs?.[0]?.State).toBe("available");
-    }
+    const v = resp.Vpcs![0]!;
+    expect(v.VpcId).toBe(OUT.vpcId);
+    if (v.State) expect(v.State).toBe("available");
   });
 
-  test("Subnet exists, is in the same VPC, and is available", async () => {
-    const resp = await retry(() => ec2.send(new DescribeSubnetsCommand({ SubnetIds: [OUT.subnetId] })));
+  test("Subnet exists, is in same VPC, and is available", async () => {
+    const resp = await retry(() =>
+      ec2.send(new DescribeSubnetsCommand({ SubnetIds: [OUT.subnetId] }))
+    );
     expect(resp.Subnets?.length).toBe(1);
     const s = resp.Subnets![0]!;
     expect(s.SubnetId).toBe(OUT.subnetId);
@@ -134,11 +141,14 @@ describe("LIVE: VPC & Subnet posture", () => {
     if (s.State) expect(s.State).toBe("available");
   });
 
-  test("Subnet has a route table association (sanity check)", async () => {
+  test("Subnet has a route table association (sanity)", async () => {
     const rt = await retry(() => getRouteTableForSubnet(OUT.subnetId));
     expect(rt?.RouteTableId).toBeDefined();
-    // Optional: if a default route exists, it should point to an IGW or NAT (public/private classification)
-    const defaultRoute = (rt?.Routes || []).find((r) => r.DestinationCidrBlock === "0.0.0.0/0");
+
+    // Optional: if a default route exists, ensure it points to IGW or NAT
+    const defaultRoute = (rt?.Routes || []).find(
+      (r) => r.DestinationCidrBlock === "0.0.0.0/0"
+    );
     if (defaultRoute) {
       const viaIgw = !!defaultRoute.GatewayId && defaultRoute.GatewayId.startsWith("igw-");
       const viaNat = !!defaultRoute.NatGatewayId && defaultRoute.NatGatewayId.startsWith("nat-");
@@ -148,7 +158,9 @@ describe("LIVE: VPC & Subnet posture", () => {
 });
 
 describe("LIVE: Security Group posture", () => {
-  let sg = undefined as Awaited<ReturnType<typeof fetchSg>> | undefined;
+  let sg:
+    | Awaited<ReturnType<typeof fetchSg>>
+    | undefined;
 
   async function fetchSg() {
     const resp = await ec2.send(
@@ -161,22 +173,20 @@ describe("LIVE: Security Group posture", () => {
     sg = await retry(fetchSg);
   });
 
-  test("SG exists, is in the expected VPC, and ID matches", async () => {
+  test("SG exists, in expected VPC, and ID matches", () => {
     expect(sg?.GroupId).toBe(OUT.sgId);
     expect(sg?.VpcId).toBe(OUT.vpcId);
   });
 
-  test("SG name matches when EXPECT_SG_NAME or output name provided", async () => {
-    const expected = process.env.EXPECT_SG_NAME || OUT.sgName || "";
-    if (expected) {
-      expect(sg?.GroupName).toBe(expected);
+  test("SG name matches output when provided", () => {
+    if (OUT.sgName) {
+      expect(sg?.GroupName).toBe(OUT.sgName);
     } else {
-      // No expectation provided — just ensure it exists.
       expect(sg?.GroupName).toBeTruthy();
     }
   });
 
-  test("Ingress allows 80 and 443 from 0.0.0.0/0", async () => {
+  test("Ingress allows ports 80 and 443 from 0.0.0.0/0", () => {
     const perms = sg?.IpPermissions || [];
     const http = perms.find((p) => isTcp(p) && portMatches(p, 80) && hasWorldCidr(p));
     const https = perms.find((p) => isTcp(p) && portMatches(p, 443) && hasWorldCidr(p));
@@ -184,33 +194,30 @@ describe("LIVE: Security Group posture", () => {
     expect(https).toBeTruthy();
   });
 
-  test("Ingress does NOT allow SSH (22) from 0.0.0.0/0", async () => {
+  test("Ingress does NOT allow SSH (22) from 0.0.0.0/0", () => {
     const perms = sg?.IpPermissions || [];
-    const openSshToWorld = perms.find((p) => isTcp(p) && portMatches(p, 22) && hasWorldCidr(p));
+    const openSshToWorld = perms.find(
+      (p) => isTcp(p) && portMatches(p, 22) && hasWorldCidr(p)
+    );
     expect(openSshToWorld).toBeUndefined();
   });
 
-  test("Egress is present and likely open (protocol -1 to 0.0.0.0/0)", async () => {
-    const perms = sg?.IpPermissionsEgress || [];
-    const openAll = perms.find(
-      (p) =>
-        (p.IpProtocol === "-1" || p.IpProtocol === "all") &&
-        hasWorldCidr(p)
-    );
-    // Many setups keep open egress; assert at least one egress rule exists.
-    expect(perms.length).toBeGreaterThan(0);
+  test("Egress exists (common default is allow-all)", () => {
+    const egress = sg?.IpPermissionsEgress || [];
+    expect(egress.length).toBeGreaterThan(0);
     // If you require full egress, uncomment:
+    // const openAll = egress.find((p) => (p.IpProtocol === "-1" || p.IpProtocol === "all") && hasWorldCidr(p));
     // expect(openAll).toBeTruthy();
   });
 
-  test("Declared Terraform ingress rules (if provided) are reflected in AWS", async () => {
-    if (!OUT.declaredIngress.length) {
-      // Skip when not provided in outputs
+  test("Declared Terraform ingress_rules are reflected in AWS (if provided)", () => {
+    const declared = OUT.declaredIngress || [];
+    if (!declared.length) {
       expect(true).toBe(true);
       return;
     }
     const perms = sg?.IpPermissions || [];
-    for (const rule of OUT.declaredIngress) {
+    for (const rule of declared) {
       const hit = perms.find(
         (p) =>
           p.IpProtocol === rule.protocol &&
