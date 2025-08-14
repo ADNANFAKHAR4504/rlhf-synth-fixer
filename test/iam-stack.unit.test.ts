@@ -18,6 +18,12 @@ jest.mock('@pulumi/aws', () => ({
       arn: `arn:aws:iam::123456789012:instance-profile/${args.name}`,
     })),
   },
+  getRegion: jest.fn().mockReturnValue({
+    name: 'us-east-1',
+  }),
+  getCallerIdentity: jest.fn().mockReturnValue({
+    accountId: '123456789012',
+  }),
 }));
 
 jest.mock('@pulumi/pulumi', () => ({
@@ -25,6 +31,21 @@ jest.mock('@pulumi/pulumi', () => ({
     constructor(type: string, name: string, args: any, opts?: any) {}
     registerOutputs(outputs: any) {}
   },
+  all: jest.fn().mockImplementation((inputs) => ({
+    apply: jest.fn().mockImplementation((fn) => {
+      // Mock the apply function to return a mock policy string
+      return JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents', 'logs:DescribeLogStreams'],
+            Resource: 'arn:aws:logs:us-east-1:123456789012:log-group:/aws/ec2/tap/*',
+          },
+        ],
+      });
+    }),
+  })),
 }));
 
 import * as aws from '@pulumi/aws';
@@ -80,7 +101,7 @@ describe('IamStack Unit Tests', () => {
       expect(aws.iam.RolePolicy).toHaveBeenCalledWith(
         'tap-ec2-logging-policy-test',
         expect.objectContaining({
-          policy: expect.stringContaining('logs:CreateLogGroup'),
+          policy: expect.any(String), // Now a resolved string with region/account
         }),
         expect.objectContaining({ parent: expect.any(Object) })
       );
@@ -168,10 +189,24 @@ describe('IamStack Unit Tests', () => {
       expect(aws.iam.RolePolicy).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          policy: expect.stringMatching(/logs:(CreateLogGroup|CreateLogStream|PutLogEvents|DescribeLogStreams)/),
+          policy: expect.stringContaining('arn:aws:logs:us-east-1:123456789012:log-group:/aws/ec2/tap/*'), // Now includes specific region/account
         }),
         expect.any(Object)
       );
+    });
+
+    it('should use specific region and account ID in logging policy for better security', () => {
+      // Verify that aws.getRegion and aws.getCallerIdentity are called for security
+      expect(aws.getRegion).toHaveBeenCalled();
+      expect(aws.getCallerIdentity).toHaveBeenCalled();
+      
+      // Verify the policy contains specific region and account ID instead of wildcards
+      const policyCall = (aws.iam.RolePolicy as unknown as jest.Mock).mock.calls.find(
+        call => call[0].includes('logging-policy')
+      );
+      expect(policyCall).toBeDefined();
+      expect(policyCall[1].policy).toContain('arn:aws:logs:us-east-1:123456789012:log-group:/aws/ec2/tap/*');
+      expect(policyCall[1].policy).not.toContain('arn:aws:logs:*:*:log-group:/aws/ec2/tap/*');
     });
 
     it('should only attach necessary managed policies', () => {

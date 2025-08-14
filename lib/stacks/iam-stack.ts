@@ -50,26 +50,34 @@ export class IamStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // EC2 logging policy - FIXED: Restricted to specific log groups
+    // Get current AWS account ID and region for more specific IAM policies
+    const currentRegion = aws.getRegion();
+    const currentIdentity = aws.getCallerIdentity();
+
+    // EC2 logging policy - FIXED: Restricted to specific log groups with account and region
     new aws.iam.RolePolicy(
       `tap-ec2-logging-policy-${environmentSuffix}`,
       {
         role: ec2Role.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogStreams',
+        policy: pulumi
+          .all([currentRegion, currentIdentity])
+          .apply(([region, identity]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                    'logs:DescribeLogStreams',
+                  ],
+                  Resource: `arn:aws:logs:${region.name}:${identity.accountId}:log-group:/aws/ec2/tap/*`,
+                },
               ],
-              Resource: 'arn:aws:logs:*:*:log-group:/aws/ec2/tap/*',
-            },
-          ],
-        }),
+            })
+          ),
       },
       { parent: this }
     );
