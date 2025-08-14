@@ -27,5 +27,11 @@
     "Subnets",
     "Security Groups",
     "Launch Template"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
 }
