@@ -45,7 +45,9 @@ export class ConfigConstruct extends Construct {
         assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
         description: 'IAM role for AWS Config service',
         managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSConfigRole'
+          ),
         ],
         inlinePolicies: {
           [`${SecurityConfig.RESOURCE_PREFIX}-Config-Policy`]:
@@ -107,8 +109,8 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    // Security-related Config rules
-    new config.ManagedRule(
+    // Security-related Config rules - create after recorder and delivery channel
+    const s3BucketPublicReadProhibited = new config.ManagedRule(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-S3BucketPublicReadProhibited`,
       {
@@ -118,7 +120,7 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    new config.ManagedRule(
+    const s3BucketPublicWriteProhibited = new config.ManagedRule(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-S3BucketPublicWriteProhibited`,
       {
@@ -128,7 +130,7 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    new config.ManagedRule(
+    const rdsStorageEncrypted = new config.ManagedRule(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-RDSStorageEncrypted`,
       {
@@ -137,7 +139,7 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    new config.ManagedRule(
+    const iamPasswordPolicy = new config.ManagedRule(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-IAMPasswordPolicy`,
       {
@@ -146,7 +148,7 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    new config.ManagedRule(
+    const rootAccountMFAEnabled = new config.ManagedRule(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-RootAccountMFAEnabled`,
       {
@@ -155,7 +157,7 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    new config.ManagedRule(
+    const cloudTrailEnabled = new config.ManagedRule(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-CloudTrailEnabled`,
       {
@@ -164,7 +166,7 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    new config.ManagedRule(
+    const vpcDefaultSecurityGroupClosed = new config.ManagedRule(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-VPCDefaultSecurityGroupClosed`,
       {
@@ -174,7 +176,29 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    // Dependencies
+    // Set up dependencies - rules depend on recorder and delivery channel
+    s3BucketPublicReadProhibited.node.addDependency(configRecorder);
+    s3BucketPublicReadProhibited.node.addDependency(deliveryChannel);
+
+    s3BucketPublicWriteProhibited.node.addDependency(configRecorder);
+    s3BucketPublicWriteProhibited.node.addDependency(deliveryChannel);
+
+    rdsStorageEncrypted.node.addDependency(configRecorder);
+    rdsStorageEncrypted.node.addDependency(deliveryChannel);
+
+    iamPasswordPolicy.node.addDependency(configRecorder);
+    iamPasswordPolicy.node.addDependency(deliveryChannel);
+
+    rootAccountMFAEnabled.node.addDependency(configRecorder);
+    rootAccountMFAEnabled.node.addDependency(deliveryChannel);
+
+    cloudTrailEnabled.node.addDependency(configRecorder);
+    cloudTrailEnabled.node.addDependency(deliveryChannel);
+
+    vpcDefaultSecurityGroupClosed.node.addDependency(configRecorder);
+    vpcDefaultSecurityGroupClosed.node.addDependency(deliveryChannel);
+
+    // Delivery channel depends on recorder
     deliveryChannel.addDependency(configRecorder);
   }
 }
