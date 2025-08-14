@@ -31,31 +31,88 @@ class TestTapStackLiveInfrastructure(unittest.TestCase):
   @classmethod
   def _get_pulumi_outputs(cls):
     """Get outputs from LIVE deployed Pulumi stack - NO SKIPPING ALLOWED."""
+    import os
+    
+    # Build stack name using CI/CD environment variables
+    # CI/CD uses: ${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}
+    pulumi_org = os.environ.get('PULUMI_ORG', 'turinggpt')
+    environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+    
+    # Construct the full stack name as used in CI/CD
+    stack_name = f"{pulumi_org}/TapStack/TapStack{environment_suffix}"
+    
+    # For local testing, allow override with PULUMI_STACK_NAME
+    if 'PULUMI_STACK_NAME' in os.environ:
+      stack_name = os.environ['PULUMI_STACK_NAME']
+    
+    # Ensure we're in the correct directory (project root)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
+    # Prepare environment with necessary Pulumi variables
+    env = os.environ.copy()
+    if 'PULUMI_CONFIG_PASSPHRASE' in os.environ:
+      env['PULUMI_CONFIG_PASSPHRASE'] = os.environ['PULUMI_CONFIG_PASSPHRASE']
+    
+    # Add Pulumi backend URL if provided (needed for CI/CD)
+    if 'PULUMI_BACKEND_URL' in os.environ:
+      env['PULUMI_BACKEND_URL'] = os.environ['PULUMI_BACKEND_URL']
+    
     try:
-      result = subprocess.run(
-        ['pulumi', 'stack', 'output', '--json'],
+      # Login to Pulumi backend if URL is provided (for CI/CD)
+      if 'PULUMI_BACKEND_URL' in env:
+        login_result = subprocess.run(
+          ['pulumi', 'login', env['PULUMI_BACKEND_URL']],
+          capture_output=True,
+          text=True,
+          cwd=project_root,
+          env=env
+        )
+      
+      # Select the stack to ensure correct context
+      select_result = subprocess.run(
+        ['pulumi', 'stack', 'select', stack_name],
         capture_output=True,
         text=True,
-        check=True
+        cwd=project_root,
+        env=env
+      )
+      
+      # Get the outputs from the selected stack with explicit stack parameter
+      result = subprocess.run(
+        ['pulumi', 'stack', 'output', '--json', '--stack', stack_name],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=project_root,
+        env=env
       )
       outputs = json.loads(result.stdout)
       
       # Integration tests MUST run against live infrastructure
       if not outputs:
         raise AssertionError(
-          "LIVE INTEGRATION TEST FAILURE: No Pulumi stack outputs found. "
+          f"LIVE INTEGRATION TEST FAILURE: No Pulumi stack outputs found. "
+          f"Stack: {stack_name}, Working Directory: {project_root}\n"
+          f"Environment: PULUMI_ORG={pulumi_org}, ENVIRONMENT_SUFFIX={environment_suffix}\n"
           "Deploy infrastructure first with 'pulumi up' before running integration tests."
         )
       
       return outputs
     except subprocess.CalledProcessError as e:
-      raise AssertionError(
+      # Provide detailed error information for debugging
+      error_msg = (
         f"LIVE INTEGRATION TEST FAILURE: Cannot get Pulumi outputs (exit {e.returncode}). "
+        f"Stack: {stack_name}, Working Directory: {project_root}\n"
+        f"Environment: PULUMI_ORG={pulumi_org}, ENVIRONMENT_SUFFIX={environment_suffix}\n"
+        f"Error output: {e.stderr if hasattr(e, 'stderr') and e.stderr else 'No error output'}\n"
         "Deploy infrastructure first with 'pulumi up' before running integration tests."
-      ) from e
+      )
+      raise AssertionError(error_msg) from e
     except (json.JSONDecodeError, FileNotFoundError) as e:
       raise AssertionError(
         f"LIVE INTEGRATION TEST FAILURE: Invalid Pulumi outputs - {e}. "
+        f"Stack: {stack_name}, Working Directory: {project_root}\n"
+        f"Environment: PULUMI_ORG={pulumi_org}, ENVIRONMENT_SUFFIX={environment_suffix}\n"
         "Ensure infrastructure is properly deployed."
       ) from e
 
