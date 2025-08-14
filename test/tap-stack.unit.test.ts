@@ -149,7 +149,7 @@ describe('TapStack Unit Tests', () => {
             expect.anything(),
             'Ec2Module',
             expect.objectContaining({
-                sshKeyName: 'my-keypair', // Check the fallback value
+                sshKeyName: 'your-dev-key', // Check the fallback value
             })
         );
     });

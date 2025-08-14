@@ -54,7 +54,7 @@ export class TapStack extends TerraformStack {
     const ec2Module = new Ec2Module(this, 'Ec2Module', {
       vpcId: vpcModule.vpcId,
       publicSubnetIds: vpcModule.publicSubnetIds,
-      sshKeyName: props?.sshKeyName || 'my-keypair', // Replace with actual key name
+      sshKeyName: props?.sshKeyName || 'your-dev-key', // Replace with actual key name
     });
 
     // --- Stack Outputs (as required by prompt) ---
