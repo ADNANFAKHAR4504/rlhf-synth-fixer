@@ -38,7 +38,8 @@ class TapStackArgs:
   TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
   Args:
-      environment_suffix (Optional[str]): Suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+      environment_suffix (Optional[str]): Suffix for identifying
+      the deployment environment (e.g., 'dev', 'prod').
       tags (Optional[dict]): Default tags to apply to resources.
   """
 
@@ -494,7 +495,6 @@ class TapStack(pulumi.ComponentResource):
   ) -> Dict[str, object]:
     tags = {**self.common_tags, **self.tags, **extra_tags}
 
-    import pulumi
     import pulumi_aws as aws
     from pulumi import ResourceOptions
 

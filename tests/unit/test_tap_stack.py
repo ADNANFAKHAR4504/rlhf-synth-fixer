@@ -69,11 +69,6 @@ def _fake_export(key, val):
     FAKE_EXPORTS[key] = val
 
 
-def _fake_register_outputs(self, d):
-  # no-op in tests
-  pass
-
-
 # Build fake `pulumi` module
 pulumi_fake = types.ModuleType("pulumi")
 pulumi_fake.export = _fake_export
@@ -275,6 +270,8 @@ class _Param:
 
 def _get_parameter(name: str, region: str):
   # Return a plausible AMI id
+  if name and region:
+    print(f"Fetching parameter {name} in region {region}")
   return _Param("ami-0123456789abcdef0")
 
 
