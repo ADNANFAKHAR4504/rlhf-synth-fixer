@@ -130,17 +130,16 @@ resource "aws_backup_plan" "main" {
   })
 }
 
-# Backup Selection for S3 buckets and secrets
+# Backup Selection for S3 buckets (Secrets Manager not supported by AWS Backup)
 resource "aws_backup_selection" "critical_resources" {
   iam_role_arn = aws_iam_role.backup_role.arn
   name         = "${var.project_name}-critical-resources-${local.name_suffix}"
   plan_id      = aws_backup_plan.main.id
 
-  # Backup all S3 buckets created by this project
+  # Backup only S3 buckets (AWS Backup doesn't support Secrets Manager)
   resources = [
     aws_s3_bucket.cloudtrail_logs.arn,
-    aws_s3_bucket.access_logs.arn,
-    aws_secretsmanager_secret.app_secret.arn
+    aws_s3_bucket.access_logs.arn
   ]
 
   # Backup selection with tags
