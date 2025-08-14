@@ -14,15 +14,20 @@ from unittest.mock import Mock, patch
 import boto3
 import pulumi
 import pytest
+from moto import mock_aws
 
 from lib.tap_stack import TapStack, TapStackArgs
 
+class TestMocks(pulumi.runtime.Mocks):
+  def call(self, args):
+    return {"id": args.name + "_id", "state": args.inputs}
+  
+  def new_resource(self, args):
+    return [args.name + "_id", dict(args.inputs, **{"id": args.name + "_id"})]
+
 # Configure Pulumi for integration testing
 pulumi.runtime.set_mocks(
-  mocks=pulumi.runtime.Mocks(
-    call=lambda args: {"id": args.name + "_id", "state": args.inputs},
-    new_resource=lambda args: [args.name + "_id", dict(args.inputs, **{"id": args.name + "_id"})]
-  ),
+  mocks=TestMocks(),
   preview=False
 )
 
@@ -268,7 +273,7 @@ class TestAPIGatewayIntegration:
 class TestDynamoDBIntegration:
   """Test DynamoDB integration and data operations."""
   
-  @mock_dynamodb
+  @mock_aws
   def test_dynamodb_table_operations(self):
     """Test DynamoDB table CRUD operations."""
     # Create mock DynamoDB table
@@ -330,7 +335,7 @@ class TestDynamoDBIntegration:
     assert expected_gsi_config['IndexName'] == 'timestamp-index'
     assert expected_gsi_config['Projection']['ProjectionType'] == 'ALL'
   
-  @mock_dynamodb
+  @mock_aws
   def test_dynamodb_stream_configuration(self):
     """Test DynamoDB stream configuration."""
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -357,7 +362,7 @@ class TestDynamoDBIntegration:
 class TestS3Integration:
   """Test S3 integration and cross-region replication."""
   
-  @mock_s3
+  @mock_aws
   def test_s3_bucket_operations(self):
     """Test S3 bucket operations."""
     s3_client = boto3.client('s3', region_name='us-east-1')
@@ -427,7 +432,7 @@ class TestS3Integration:
 class TestLambdaIntegration:
   """Test Lambda function integration and execution."""
   
-  @mock_lambda
+  @mock_aws
   def test_lambda_function_creation(self):
     """Test Lambda function creation and configuration."""
     lambda_client = boto3.client('lambda', region_name='us-east-1')
@@ -569,7 +574,7 @@ class TestMigrationIntegration:
     assert expected_status_response['status'] == 'in_progress'
     assert expected_status_response['progress'] == 75
   
-  @mock_dynamodb
+  @mock_aws
   def test_migration_state_persistence(self):
     """Test migration state persistence in DynamoDB."""
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -599,7 +604,7 @@ class TestMigrationIntegration:
 class TestMonitoringIntegration:
   """Test monitoring and observability integration."""
   
-  @mock_cloudwatch
+  @mock_aws
   def test_cloudwatch_dashboard_creation(self):
     """Test CloudWatch dashboard creation."""
     cloudwatch = boto3.client('cloudwatch', region_name='us-east-1')
@@ -624,7 +629,7 @@ class TestMonitoringIntegration:
     assert len(dashboard_body["widgets"]) == 1
     assert dashboard_body["widgets"][0]["properties"]["title"] == "Lambda Metrics"
   
-  @mock_cloudwatch
+  @mock_aws
   def test_cloudwatch_alarms_creation(self):
     """Test CloudWatch alarms creation."""
     cloudwatch = boto3.client('cloudwatch', region_name='us-east-1')
