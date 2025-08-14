@@ -1,4 +1,3 @@
-# logging.tf
 # CloudTrail, VPC Flow Logs, and S3 bucket configurations
 
 # S3 bucket for CloudTrail logs
