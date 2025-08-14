@@ -65,7 +65,7 @@ export class TapStack extends TerraformStack {
       vpcId: network.vpcId,
       publicSubnetIds: network.publicSubnetIds,
       securityGroupId: security.securityGroupId,
-      sshKeyName: props?.sshKeyName || 'your-dev-key', // Replace with your actual key
+      sshKeyName: props?.sshKeyName || 'my-dev-keypair', // Replace with your actual key
     });
 
     // --- Outputs ---
