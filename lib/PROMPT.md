@@ -1,26 +1,34 @@
-You are an expert Prompt Engineer with 10 years of experience. Your task is to create prompts for AI so that the AI will generate a response (IAC code).
+```md
+# Terraform Infrastructure as Code (IAC) Prompt for AWS Security Best Practices
 
-Help me write a prompt for creating Infrastructure as Code (IAC) in CDKTF. Please make sure that the provided data should remain intact and it should not change in any way.
+## Objective:
+You are tasked with securing an AWS cloud environment using CDKTF. The goal is to implement security best practices that are critical for a secure and compliant infrastructure.
 
-**Constraints:**
-- Use Terraform version 1.0.0 or greater.
-- Ensure all security groups are configured with specified inbound and outbound rules.
-- The configuration must support multiple environments using workspaces.
-- Integrate AWS IAM roles and policies to adhere to the principle of least privilege.
-- Use Terraform modules to encapsulate reusable components.
-- Implement a logging mechanism for auditing configuration changes.
+## Constraints:
+- **IAM Roles**: Use IAM roles to manage permissions exclusively without using inline IAM policies.
+- **Encryption**: Ensure all data stored in S3 buckets is encrypted using AES-256 encryption.
+- **VPC Network Isolation**: Implement VPC network isolation for all resources, including private subnet usage.
+- **Lambda Trigger Security**: Ensure all Lambda functions are triggered by IAM-authenticated sources only.
+- **RDS Logging and Encryption**: Implement logging for all actions on RDS databases and ensure logs are encrypted.
+- **EC2 Security Groups**: All EC2 instances must be provisioned with a security group that restricts all inbound traffic except SSH on port 22 from a specified IP range.
+- **KMS Key Management**: Use AWS KMS for key management and ensure key rotation is enabled automatically.
 
-**Environment:**
-Create a Terraform HCL configuration that implements a secure cloud infrastructure. The requirements are as follows:
-1. Define and deploy Security Groups with strict inbound and outbound rules in AWS across multiple regions using AWS VPC.
-2. Utilize Terraform workspaces to manage multiple environments (development, staging, production) with isolated settings.
-3. Implement AWS IAM policies and roles to restrict access in line with the principle of least privilege. These roles should be assigned to specific EC2 instances depending on the workspace.
-4. Use Terraform modules to define reusable components for security groups and IAM configurations.
-5. Include detailed resource tagging for cost monitoring and organization.
-6. Ensure all configuration changes are logged for audit purposes.
+## Environment:
+You have been tasked with securing an AWS cloud environment using Terraform. Write a Terraform configuration in HCL that meets the following security best practices:
 
-**Expected output:**  
-The solution should include well-commented HCL files with correct implementations of all required security groups, IAM roles, workspace configurations, and necessary modules. Passing tests must validate the deployment in multiple environments and regions, ensuring all security constraints are met without errors.
+1. Manage permissions using IAM roles exclusively, avoiding inline policies.
+2. All data stored in S3 buckets should be encrypted using AES-256 encryption protocols.
+3. Ensure network isolation by implementing a VPC with private subnets for all resources.
+4. Restrict Lambda function triggers to IAM-authenticated sources only to enhance security.
+5. Enable and encrypt logging for every action performed on RDS databases to maintain an audit trail.
+6. Limit EC2 instance access by configuring security groups to allow SSH access exclusively through port 22 to a predefined IP range.
+7. Utilize AWS KMS for all key management tasks and configure key rotation to occur automatically.
 
-**Proposed Statement:**  
-The infrastructure environment consists of multiple AWS accounts distinguished by Terraform workspaces. Resources must be deployed in the us-east-1 and us-west-2 regions, using standard naming conventions with environment-specific prefixes (e.g., dev-, prod-). Each workspace should have its own state file, and backend configurations must be set up for remote state management. Security groups should allow traffic only from known IP ranges, and all ports should be closed by default. IAM roles should have permissions limited to the minimum required actions and resources.
+## Expected Output:
+Your solution must be a valid Terraform configuration file named `secure_infrastructure.tf`. Ensure that all configurations align with the security requirements specified. Upon running `terraform apply`, the infrastructure must comply with these constraints and pass a security audit check by AWS Trusted Advisor.
+
+## Proposed Statement:
+- AWS account with multiple regions, utilizing Terraform for Infrastructure as Code management.
+- Adhere to naming conventions where all resources are prefixed with `prod-`.
+- Assume VPC IDs and subnets are predefined based on a CIDR range compatible with your region.
+```
