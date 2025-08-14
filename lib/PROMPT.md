@@ -41,4 +41,4 @@ Design a Terraform configuration to deploy a **secure AWS infrastructure** in th
   - Logs all VPC traffic via **VPC Flow Logs**.
   - Restricts AWS Management Console access by **IP address range**.
 
-Note: all the resources to be created in main.tf file itself. Also, include s3 backend and dynamo db for state lock
+Note: all the resources to be created in main.tf file itself.
