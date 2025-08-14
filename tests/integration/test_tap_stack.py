@@ -17,22 +17,22 @@ class TestLiveIntegration(unittest.TestCase):
 
     from lib.tap_stack import TapStack, TapStackArgs
 
-    # def pulumi_program():
-    #
-    #   environment_suffix = 'test'
-    #   TapStack(
-    #     name="pulumi-infra",
-    #     args=TapStackArgs(environment_suffix=environment_suffix),
-    #   )
+    def pulumi_program():
 
-    stack = auto.select_stack(
+      environment_suffix = 'test'
+      TapStack(
+        name="pulumi-infra",
+        args=TapStackArgs(environment_suffix=environment_suffix),
+      )
+
+    stack = auto.create_or_select_stack(
       stack_name=cls.stack_name,
       project_name=cls.project_name,
-      work_dir=os.path.join(os.path.dirname(__file__), "..")
+      program=pulumi_program
     )
 
-    # print("Deploying Pulumi stack...")
-    # stack.up()
+    print("Deploying Pulumi stack...")
+    stack.up()
 
     cls.outputs = stack.outputs()
     print(f"Outputs: {cls.outputs}")
