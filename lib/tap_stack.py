@@ -9,10 +9,11 @@ import pulumi_aws as aws
 
 config = pulumi.Config()
 
+# Configuration constants
 ENVIRONMENT = config.get("environment") or "dev"
 AWS_REGION = "us-west-1"
 INSTANCE_TYPE = "t3.micro"
-PROJECT_NAME = "dswa-v8"
+PROJECT_NAME = "dswa-v9"
 
 DEPLOYMENT_ID = str(int(time.time()))[-4:]
 
@@ -144,8 +145,11 @@ def get_vpc_with_fallback():
     pulumi.log.info("Creating completely new independent VPC infrastructure...")
     pulumi.log.info("This deployment will NOT depend on any existing resources")
     
+    # Use unique VPC name to avoid state conflicts with old deployments
+    unique_vpc_name = f"{PROJECT_NAME}-vpc-{DEPLOYMENT_ID}"
+    
     new_vpc = aws.ec2.Vpc(
-      get_resource_name("vpc"),
+      unique_vpc_name,  # Completely unique name to avoid state conflicts
       cidr_block="10.0.0.0/16",
       instance_tenancy="default",
       enable_dns_hostnames=True,
@@ -157,12 +161,14 @@ def get_vpc_with_fallback():
         "Project": PROJECT_NAME,
         "ManagedBy": "Pulumi-IaC",
         "DeploymentType": "Completely-Independent",
-        "Strategy": "New-Resources-Only"
+        "Strategy": "New-Resources-Only",
+        "StateManagement": "Clean-Deployment"
       },
       opts=pulumi.ResourceOptions(
         provider=aws_provider, 
-        protect=False,
-        retain_on_delete=False
+        protect=False,  # Don't protect to allow clean state management
+        retain_on_delete=True,  # Retain VPC to prevent deletion conflicts
+        delete_before_replace=False  # Prevent deletion conflicts during updates
       )
     )
     
@@ -197,9 +203,13 @@ def get_vpc_with_fallback():
         # Use the first available VPC to avoid quota issues
         vpc_id = existing_vpcs.ids[0]
         pulumi.log.info(f"Using existing VPC: {vpc_id}")
+        
+        # Use unique name for fallback VPC reference to avoid state conflicts
+        fallback_vpc_name = f"{PROJECT_NAME}-fallback-vpc-{DEPLOYMENT_ID}"
+        
         return (
           aws.ec2.Vpc.get(
-            get_resource_name("vpc"), 
+            fallback_vpc_name,  # Unique name for fallback VPC reference
             vpc_id,
             opts=pulumi.ResourceOptions(
               provider=aws_provider,
@@ -225,11 +235,20 @@ def get_vpc_with_fallback():
         opts=pulumi.InvokeOptions(provider=aws_provider)
       )
       pulumi.log.info(f"Using default VPC: {default_vpc.id}")
+      
+      # Use unique name for default VPC reference to avoid state conflicts
+      default_vpc_name = f"{PROJECT_NAME}-default-vpc-{DEPLOYMENT_ID}"
+      
       return (
         aws.ec2.Vpc.get(
-          "default-vpc", 
+          default_vpc_name,  # Unique name for default VPC reference
           default_vpc.id, 
-          opts=pulumi.ResourceOptions(provider=aws_provider)
+          opts=pulumi.ResourceOptions(
+            provider=aws_provider,
+            protect=True,  # Protect from deletion
+            retain_on_delete=True,  # Keep VPC to avoid dependency issues
+            ignore_changes=["*"]  # Ignore all changes to prevent conflicts
+          )
         ),
         default_vpc.id
       )
