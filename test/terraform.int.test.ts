@@ -14,42 +14,46 @@ const OUTPUTS_PATH = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json")
 
 // Mock AWS SDK responses
 jest.mock('aws-sdk', () => {
+  const mockEC2 = {
+    describeVpcs: jest.fn().mockReturnValue({
+      promise: jest.fn().mockResolvedValue({
+        Vpcs: [{
+          CidrBlock: '10.0.0.0/16',
+          EnableDnsSupport: true,
+          EnableDnsHostnames: true
+        }]
+      })
+    }),
+    describeSubnets: jest.fn().mockReturnValue({
+      promise: jest.fn().mockResolvedValue({
+        Subnets: [
+          { 
+            MapPublicIpOnLaunch: true, 
+            Tags: [{ Key: 'Tier', Value: 'public' }] 
+          },
+          { 
+            MapPublicIpOnLaunch: false, 
+            Tags: [{ Key: 'Tier', Value: 'private' }] 
+          }
+        ]
+      })
+    })
+  };
+
+  const mockELBv2 = {
+    describeLoadBalancers: jest.fn().mockReturnValue({
+      promise: jest.fn().mockResolvedValue({
+        LoadBalancers: [{
+          Scheme: 'internet-facing',
+          Type: 'application'
+        }]
+      })
+    })
+  };
+
   return {
-    EC2: jest.fn(() => ({
-      describeVpcs: jest.fn().mockReturnValue({
-        promise: jest.fn().mockResolvedValue({
-          Vpcs: [{
-            CidrBlock: '10.0.0.0/16',
-            EnableDnsSupport: true,
-            EnableDnsHostnames: true
-          }]
-        })
-      }),
-      describeSubnets: jest.fn().mockReturnValue({
-        promise: jest.fn().mockResolvedValue({
-          Subnets: [
-            { 
-              MapPublicIpOnLaunch: true, 
-              Tags: [{ Key: 'Tier', Value: 'public' }] 
-            },
-            { 
-              MapPublicIpOnLaunch: false, 
-              Tags: [{ Key: 'Tier', Value: 'private' }] 
-            }
-          ]
-        })
-      })
-    })),
-    ELBv2: jest.fn(() => ({
-      describeLoadBalancers: jest.fn().mockReturnValue({
-        promise: jest.fn().mockResolvedValue({
-          LoadBalancers: [{
-            Scheme: 'internet-facing',
-            Type: 'application'
-          }]
-        })
-      })
-    }))
+    EC2: jest.fn(() => mockEC2),
+    ELBv2: jest.fn(() => mockELBv2)
   };
 });
 
@@ -92,11 +96,13 @@ describe('TAP Stack Integration Tests', () => {
   describe('Load Balancer Validation', () => {
     test('ALB DNS name exists', () => {
       expect(outputs.alb_dns_name?.value).toBeDefined();
+      expect(typeof outputs.alb_dns_name?.value).toBe('string');
       expect(outputs.alb_dns_name?.value).toContain('elb.amazonaws.com');
     });
 
     test('Target group ARN exists', () => {
       expect(outputs.target_group_arn?.value).toBeDefined();
+      expect(typeof outputs.target_group_arn?.value).toBe('string');
       expect(outputs.target_group_arn?.value).toContain('targetgroup');
     });
   });
@@ -104,6 +110,7 @@ describe('TAP Stack Integration Tests', () => {
   describe('Auto Scaling Validation', () => {
     test('ASG name exists', () => {
       expect(outputs.asg_name?.value).toBeDefined();
+      expect(typeof outputs.asg_name?.value).toBe('string');
       expect(outputs.asg_name?.value).toContain('asg');
     });
   });
@@ -111,16 +118,19 @@ describe('TAP Stack Integration Tests', () => {
   describe('Security Group Validation', () => {
     test('ALB Security Group exists', () => {
       expect(outputs.alb_sg_id?.value).toBeDefined();
+      expect(typeof outputs.alb_sg_id?.value).toBe('string');
     });
 
     test('EC2 Security Group exists', () => {
       expect(outputs.ec2_sg_id?.value).toBeDefined();
+      expect(typeof outputs.ec2_sg_id?.value).toBe('string');
     });
   });
 
   describe('ACM Certificate Validation', () => {
     test('ACM certificate ARN exists', () => {
       expect(outputs.acm_certificate_arn?.value).toBeDefined();
+      expect(typeof outputs.acm_certificate_arn?.value).toBe('string');
       expect(outputs.acm_certificate_arn?.value).toContain('certificate');
     });
   });
@@ -128,10 +138,12 @@ describe('TAP Stack Integration Tests', () => {
   describe('CloudWatch Alarms Validation', () => {
     test('High CPU alarm exists', () => {
       expect(outputs.high_cpu_alarm_arn?.value).toBeDefined();
+      expect(typeof outputs.high_cpu_alarm_arn?.value).toBe('string');
     });
 
     test('Unhealthy hosts alarm exists', () => {
       expect(outputs.unhealthy_hosts_alarm_arn?.value).toBeDefined();
+      expect(typeof outputs.unhealthy_hosts_alarm_arn?.value).toBe('string');
     });
   });
 
@@ -143,12 +155,12 @@ describe('TAP Stack Integration Tests', () => {
 
     test('Validates empty outputs', () => {
       const emptyOutputs: TerraformOutputs = {};
-      expect(Object.keys(emptyOutputs).toHaveLength(0));
+      expect(Object.keys(emptyOutputs).toHaveLength(0);
     });
 
     test('Validates malformed outputs', () => {
-      const malformed = { vpc_id: {} };
-      expect((malformed as TerraformOutputs).vpc_id?.value).toBeUndefined();
+      const malformed = { vpc_id: {} } as unknown as TerraformOutputs;
+      expect(malformed.vpc_id?.value).toBeUndefined();
     });
   });
 });
