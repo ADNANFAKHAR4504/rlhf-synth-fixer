@@ -198,15 +198,12 @@ class TestHelpers(unittest.TestCase):
     self.assertEqual(cluster.name, "cluster")
 
   @patch("lib.tap_stack.aws.iam.RolePolicy", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.LaunchTemplate", return_value=MagicMock(
-      id="lt-123", latest_version="1"))
   @patch("lib.tap_stack.aws.iam.RolePolicyAttachment",
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock())
   @patch("lib.tap_stack.aws.eks.NodeGroup")
   def test_create_eks_node_group(self, mock_ng_class, _mock_role,
-                                 _mock_role_policy, _mock_launch_template, 
-                                 _mock_role_policy_custom, *_):
+                                 _mock_role_policy, _mock_role_policy_custom, *_):
     """Ensure create_eks_node_group provisions a node group with correct scaling configuration."""
     mock_provider = MagicMock()
     mock_ng_instance = MagicMock()
@@ -216,9 +213,12 @@ class TestHelpers(unittest.TestCase):
     # Mock cluster with Output-like behavior
     cluster = MagicMock()
     cluster_name_output = MagicMock()
-    cluster_name_output.apply = MagicMock(side_effect=lambda func: MagicMock(apply=lambda f: f(func("eks-cluster"))))
+    cluster_name_output.apply = MagicMock(
+        side_effect=lambda func: MagicMock(
+            apply=lambda f: f(
+                func("eks-cluster"))))
     cluster.name = cluster_name_output
-    
+
     public_subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
     eks_node_sg = MagicMock(id="sg-123")
     tags = {"Environment": "Production"}
@@ -232,16 +232,18 @@ class TestHelpers(unittest.TestCase):
     self.assertEqual(ng.node_group_name, "nodes")
 
   @patch("lib.tap_stack.aws.s3.BucketPublicAccessBlock", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.s3.Bucket", return_value=MagicMock(id="bucket-123"))
+  @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2",
+         return_value=MagicMock())
+  @patch("lib.tap_stack.aws.s3.Bucket",
+         return_value=MagicMock(id="bucket-123"))
   def test_create_s3_buckets(self, mock_bucket, *_):
     """Ensure create_s3_buckets creates encrypted S3 buckets."""
     mock_provider = MagicMock()
     kms_key = MagicMock(arn="kms-arn-123")
     tags = {"Environment": "Production"}
-    
+
     buckets = create_s3_buckets(kms_key, tags, mock_provider)
-    
+
     self.assertIn("app_bucket", buckets)
     self.assertEqual(buckets["app_bucket"], mock_bucket.return_value)
 
@@ -252,9 +254,9 @@ class TestHelpers(unittest.TestCase):
     alb = MagicMock(arn_suffix="alb-suffix")
     rds_instance = MagicMock(id="rds-123")
     tags = {"Environment": "Production"}
-    
+
     create_cloudwatch_alarms(alb, rds_instance, tags, mock_provider)
-    
+
     # Should create 2 alarms (ALB and RDS)
     self.assertEqual(mock_alarm.call_count, 2)
 
@@ -380,7 +382,8 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.create_alb",
          return_value=(MagicMock(dns_name="alb", arn_suffix="alb-suffix"),
                        MagicMock(arn="tg"), MagicMock()))
-  @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock(node_group_name="nodegroup"))
+  @patch("lib.tap_stack.create_eks_node_group",
+         return_value=MagicMock(node_group_name="nodegroup"))
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
   @patch("lib.tap_stack.create_s3_buckets",
@@ -417,7 +420,8 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.create_alb",
          return_value=(MagicMock(dns_name="alb", arn_suffix="alb-suffix"),
                        MagicMock(arn="tg"), MagicMock()))
-  @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock(node_group_name="nodegroup"))
+  @patch("lib.tap_stack.create_eks_node_group",
+         return_value=MagicMock(node_group_name="nodegroup"))
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
   @patch("lib.tap_stack.create_s3_buckets",
@@ -458,7 +462,8 @@ class TestTapStack(unittest.TestCase):
   @patch("lib.tap_stack.create_alb",
          return_value=(MagicMock(dns_name="alb", arn_suffix="alb-suffix"),
                        MagicMock(arn="tg"), MagicMock()))
-  @patch("lib.tap_stack.create_eks_node_group", return_value=MagicMock(node_group_name="nodegroup"))
+  @patch("lib.tap_stack.create_eks_node_group",
+         return_value=MagicMock(node_group_name="nodegroup"))
   @patch("lib.tap_stack.create_eks_cluster",
          return_value=MagicMock(name="eks", endpoint="endpoint"))
   @patch("lib.tap_stack.create_s3_buckets",
