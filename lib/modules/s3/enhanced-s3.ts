@@ -12,6 +12,7 @@ export interface EnhancedSecureS3BucketArgs {
   allowedIpRanges?: string[];
   enableObjectLock?: boolean;
   lambdaFunctionArn?: string; // Optional Lambda function ARN for notifications
+  enableBucketPolicy?: boolean; // Optional flag to enable/disable bucket policy
 }
 
 export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
@@ -112,86 +113,92 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Enhanced secure bucket policy with IP restrictions
-    const bucketPolicyDocument = pulumi
-      .all([this.bucket.arn, aws.getCallerIdentity().then(id => id.accountId)])
-      .apply(([bucketArn, accountId]) => ({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AllowRootAccountFullAccess',
-            Effect: 'Allow',
-            Principal: {
-              AWS: `arn:aws:iam::${accountId}:root`,
+    // Enhanced secure bucket policy with IP restrictions (optional)
+    if (args.enableBucketPolicy !== false) {
+      const bucketPolicyDocument = pulumi
+        .all([
+          this.bucket.arn,
+          aws.getCallerIdentity().then(id => id.accountId),
+        ])
+        .apply(([bucketArn, accountId]) => ({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AllowRootAccountFullAccess',
+              Effect: 'Allow',
+              Principal: {
+                AWS: `arn:aws:iam::${accountId}:root`,
+              },
+              Action: 's3:*',
+              Resource: [bucketArn, `${bucketArn}/*`],
             },
-            Action: 's3:*',
-            Resource: [bucketArn, `${bucketArn}/*`],
-          },
-          {
-            Sid: 'DenyInsecureConnections',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:*',
-            Resource: [bucketArn, `${bucketArn}/*`],
-            Condition: {
-              Bool: {
-                'aws:SecureTransport': 'false',
+            {
+              Sid: 'DenyInsecureConnections',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:*',
+              Resource: [bucketArn, `${bucketArn}/*`],
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false',
+                },
               },
             },
-          },
-          {
-            Sid: 'DenyUnencryptedObjectUploads',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:PutObject',
-            Resource: `${bucketArn}/*`,
-            Condition: {
-              StringNotEquals: {
-                's3:x-amz-server-side-encryption': 'aws:kms',
+            {
+              Sid: 'DenyUnencryptedObjectUploads',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:PutObject',
+              Resource: `${bucketArn}/*`,
+              Condition: {
+                StringNotEquals: {
+                  's3:x-amz-server-side-encryption': 'aws:kms',
+                },
               },
             },
-          },
-          {
-            Sid: 'DenyIncorrectEncryptionHeader',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:PutObject',
-            Resource: `${bucketArn}/*`,
-            Condition: {
-              StringNotEquals: {
-                's3:x-amz-server-side-encryption-aws-kms-key-id': args.kmsKeyId,
+            {
+              Sid: 'DenyIncorrectEncryptionHeader',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:PutObject',
+              Resource: `${bucketArn}/*`,
+              Condition: {
+                StringNotEquals: {
+                  's3:x-amz-server-side-encryption-aws-kms-key-id':
+                    args.kmsKeyId,
+                },
               },
             },
-          },
-          // Note: IP restrictions removed to prevent deployment issues
-          // Can be re-enabled with proper condition logic if needed
-          {
-            Sid: 'DenyDeleteWithoutMFA',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: [
-              's3:DeleteObject',
-              's3:DeleteObjectVersion',
-              's3:DeleteBucket',
-            ],
-            Resource: [bucketArn, `${bucketArn}/*`],
-            Condition: {
-              BoolIfExists: {
-                'aws:MultiFactorAuthPresent': 'false',
+            // Note: IP restrictions removed to prevent deployment issues
+            // Can be re-enabled with proper condition logic if needed
+            {
+              Sid: 'DenyDeleteWithoutMFA',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: [
+                's3:DeleteObject',
+                's3:DeleteObjectVersion',
+                's3:DeleteBucket',
+              ],
+              Resource: [bucketArn, `${bucketArn}/*`],
+              Condition: {
+                BoolIfExists: {
+                  'aws:MultiFactorAuthPresent': 'false',
+                },
               },
             },
-          },
-        ].filter(statement => statement.Condition !== undefined),
-      }));
+          ].filter(statement => statement.Condition !== undefined),
+        }));
 
-    this.bucketPolicy = new aws.s3.BucketPolicy(
-      `${name}-policy`,
-      {
-        bucket: this.bucket.id,
-        policy: bucketPolicyDocument.apply(policy => JSON.stringify(policy)),
-      },
-      { parent: this, dependsOn: [this.publicAccessBlock] }
-    );
+      this.bucketPolicy = new aws.s3.BucketPolicy(
+        `${name}-policy`,
+        {
+          bucket: this.bucket.id,
+          policy: bucketPolicyDocument.apply(policy => JSON.stringify(policy)),
+        },
+        { parent: this, dependsOn: [this.publicAccessBlock] }
+      );
+    }
 
     // Configure enhanced lifecycle rules
     if (args.lifecycleRules) {

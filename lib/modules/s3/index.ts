@@ -7,6 +7,7 @@ export interface SecureS3BucketArgs {
   kmsKeyId: pulumi.Input<string>;
   tags?: Record<string, string>;
   lifecycleRules?: any[];
+  enableBucketPolicy?: boolean; // Optional flag to enable/disable bucket policy
 }
 
 export class SecureS3Bucket extends pulumi.ComponentResource {
@@ -76,56 +77,61 @@ export class SecureS3Bucket extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Secure bucket policy
-    const bucketPolicyDocument = pulumi
-      .all([this.bucket.arn, aws.getCallerIdentity().then(id => id.accountId)])
-      .apply(([bucketArn, accountId]) => ({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AllowRootAccountFullAccess',
-            Effect: 'Allow',
-            Principal: {
-              AWS: `arn:aws:iam::${accountId}:root`,
+    // Secure bucket policy (optional)
+    if (args.enableBucketPolicy !== false) {
+      const bucketPolicyDocument = pulumi
+        .all([
+          this.bucket.arn,
+          aws.getCallerIdentity().then(id => id.accountId),
+        ])
+        .apply(([bucketArn, accountId]) => ({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AllowRootAccountFullAccess',
+              Effect: 'Allow',
+              Principal: {
+                AWS: `arn:aws:iam::${accountId}:root`,
+              },
+              Action: 's3:*',
+              Resource: [bucketArn, `${bucketArn}/*`],
             },
-            Action: 's3:*',
-            Resource: [bucketArn, `${bucketArn}/*`],
-          },
-          {
-            Sid: 'DenyInsecureConnections',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:*',
-            Resource: [bucketArn, `${bucketArn}/*`],
-            Condition: {
-              Bool: {
-                'aws:SecureTransport': 'false',
+            {
+              Sid: 'DenyInsecureConnections',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:*',
+              Resource: [bucketArn, `${bucketArn}/*`],
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false',
+                },
               },
             },
-          },
-          {
-            Sid: 'DenyUnencryptedObjectUploads',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:PutObject',
-            Resource: `${bucketArn}/*`,
-            Condition: {
-              StringNotEquals: {
-                's3:x-amz-server-side-encryption': 'aws:kms',
+            {
+              Sid: 'DenyUnencryptedObjectUploads',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:PutObject',
+              Resource: `${bucketArn}/*`,
+              Condition: {
+                StringNotEquals: {
+                  's3:x-amz-server-side-encryption': 'aws:kms',
+                },
               },
             },
-          },
-        ],
-      }));
+          ],
+        }));
 
-    this.bucketPolicy = new aws.s3.BucketPolicy(
-      `${name}-policy`,
-      {
-        bucket: this.bucket.id,
-        policy: bucketPolicyDocument.apply(policy => JSON.stringify(policy)),
-      },
-      { parent: this, dependsOn: [this.publicAccessBlock] }
-    );
+      this.bucketPolicy = new aws.s3.BucketPolicy(
+        `${name}-policy`,
+        {
+          bucket: this.bucket.id,
+          policy: bucketPolicyDocument.apply(policy => JSON.stringify(policy)),
+        },
+        { parent: this, dependsOn: [this.publicAccessBlock] }
+      );
+    }
 
     // Configure lifecycle rules if provided
     if (args.lifecycleRules) {

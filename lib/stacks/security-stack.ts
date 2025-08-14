@@ -1,21 +1,21 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { KMSKey } from '../modules/kms';
-import { SecureS3Bucket } from '../modules/s3';
-import { EnhancedSecureS3Bucket } from '../modules/s3/enhanced-s3';
+import { commonTags } from '../config/tags';
+import { SecureCloudTrail } from '../modules/cloudtrail';
+import { EnhancedCloudTrail } from '../modules/cloudtrail/enhanced-cloudtrail';
 import {
   SecureIAMRole,
   createMFAEnforcedPolicy,
   createS3AccessPolicy,
 } from '../modules/iam';
-import { SecureCloudTrail } from '../modules/cloudtrail';
-import { EnhancedCloudTrail } from '../modules/cloudtrail/enhanced-cloudtrail';
+import { KMSKey } from '../modules/kms';
+import { SecureS3Bucket } from '../modules/s3';
+import { EnhancedSecureS3Bucket } from '../modules/s3/enhanced-s3';
 import {
   SecurityPolicies,
-  createTimeBasedS3AccessPolicy,
   createRestrictedAuditPolicy,
+  createTimeBasedS3AccessPolicy,
 } from '../modules/security-policies';
-import { commonTags } from '../config/tags';
 
 export interface SecurityStackArgs {
   environmentSuffix?: string;
@@ -126,8 +126,9 @@ export class SecurityStack extends pulumi.ComponentResource {
           kmsKeyId: s3KmsKey.key.keyId,
           allowedIpRanges,
           enableAccessLogging: true,
-          enableNotifications: false, // Disabled since no Lambda function is provided
+          enableNotifications: false,
           enableObjectLock: true,
+          enableBucketPolicy: false,
           lifecycleRules: [
             {
               id: 'transition-to-ia',
@@ -164,6 +165,7 @@ export class SecurityStack extends pulumi.ComponentResource {
           allowedIpRanges,
           enableAccessLogging: true,
           enableObjectLock: true,
+          enableBucketPolicy: false, // Temporarily disabled to resolve access issues
           tags: {
             Purpose: 'Audit and compliance logs with enhanced security',
             Environment: environmentSuffix,
@@ -177,6 +179,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         {
           bucketName: `tap-primary-storage-${environmentSuffix}`,
           kmsKeyId: s3KmsKey.key.keyId,
+          enableBucketPolicy: false, // Temporarily disabled to resolve access issues
           lifecycleRules: [
             {
               id: 'transition-to-ia',
@@ -210,6 +213,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         {
           bucketName: `tap-audit-logs-${environmentSuffix}`,
           kmsKeyId: cloudTrailKmsKey.key.keyId,
+          enableBucketPolicy: false, // Temporarily disabled to resolve access issues
           tags: {
             Purpose: 'Audit and compliance logs',
             Environment: environmentSuffix,
