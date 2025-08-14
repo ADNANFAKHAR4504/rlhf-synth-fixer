@@ -1,7 +1,8 @@
 # KMS Key for S3 encryption
 resource "aws_kms_key" "s3_key" {
   description             = "KMS key for S3 bucket encryption"
-  deletion_window_in_days = 7
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-s3-key"
@@ -16,7 +17,8 @@ resource "aws_kms_alias" "s3_key_alias" {
 # KMS Key for RDS encryption
 resource "aws_kms_key" "rds_key" {
   description             = "KMS key for RDS encryption"
-  deletion_window_in_days = 7
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-rds-key"
@@ -31,7 +33,8 @@ resource "aws_kms_alias" "rds_key_alias" {
 # KMS Key for EBS encryption
 resource "aws_kms_key" "ebs_key" {
   description             = "KMS key for EBS volume encryption"
-  deletion_window_in_days = 7
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-ebs-key"
