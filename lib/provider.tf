@@ -11,7 +11,7 @@ terraform {
   }
 
   # Local backend for development/testing
-  backend "s3" {}
+  backend "local" {}
 }
 
 # Primary AWS provider for general resources

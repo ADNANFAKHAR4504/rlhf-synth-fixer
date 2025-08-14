@@ -247,14 +247,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(content).toContain('multi_az            = var.enable_multi_az_db');
     });
 
-    test('auto scaling is configured', () => {
+    test('bastion instance is configured', () => {
       const mainTfPath = path.join(libPath, 'main.tf');
       const content = fs.readFileSync(mainTfPath, 'utf8');
 
-      expect(content).toContain('resource "aws_autoscaling_group" "app"');
-      expect(content).toContain('min_size         = 1');
-      expect(content).toContain('max_size         = 6');
-      expect(content).toContain('desired_capacity = 2');
+      expect(content).toContain('resource "aws_instance" "bastion"');
+      expect(content).toContain('instance_type = "t4g.micro"');
+      expect(content).toContain('encrypted             = true');
+      expect(content).toContain('iam_instance_profile = aws_iam_instance_profile.bastion.name');
     });
   });
 
@@ -265,8 +265,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       expect(content).toContain('resource "aws_cloudwatch_metric_alarm"');
       expect(content).toContain('alb-5xx-errors');
-      expect(content).toContain('asg-high-cpu');
       expect(content).toContain('rds-high-cpu');
+      expect(content).toContain('rds-low-storage');
     });
 
     test('CloudTrail is enabled', () => {
