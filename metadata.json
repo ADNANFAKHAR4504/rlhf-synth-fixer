@@ -1,0 +1,17 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "trainr840",
+  "team": "synth",
+  "startedAt": "2025-08-14T14:49:15+00:00",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration", 
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "Performance Optimization"
+  ]
+}
