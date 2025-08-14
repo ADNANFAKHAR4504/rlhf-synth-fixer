@@ -75,7 +75,7 @@ class TapStack(ComponentResource):
             f"{self.name_prefix}-kms-key",
             description=f"KMS key for {self.name_prefix} encryption",
             enable_key_rotation=True,
-            policy=current.account_id.apply(lambda account_id: json.dumps({
+            policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -92,19 +92,19 @@ class TapStack(ComponentResource):
                         "Resource": "*",
                         "Condition": {
                             "StringEquals": {
-                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{current_region}:{account_id}:*"
+                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{current_region}:{current.account_id}:*"
                             }
                         }
                     },
                     {
                         "Sid": "AllowAccountRoot",
                         "Effect": "Allow",
-                        "Principal": {"AWS": f"arn:aws:iam::{account_id}:root"},
+                        "Principal": {"AWS": f"arn:aws:iam::{current.account_id}:root"},
                         "Action": "kms:*",
                         "Resource": "*"
                     }
                 ]
-            })),
+            }),
             tags={
                 "Name": f"{self.name_prefix}-kms-key",
                 "Environment": self.environment_suffix,
@@ -987,11 +987,12 @@ usermod -a -G docker ec2-user
             opts=ResourceOptions(parent=self)
         )
         
-        # CloudWatch Log Group - Remove KMS encryption to avoid permission issues
+        # CloudWatch Log Group - using KMS encryption now that policy is fixed
         self.log_group = aws.cloudwatch.LogGroup(
             f"{self.name_prefix}-log-group",
             name=f"/ecs/{self.name_prefix}",
             retention_in_days=14,
+            kms_key_id=self.kms_key.arn,
             tags={
                 "Name": f"{self.name_prefix}-log-group",
                 "Environment": self.environment_suffix,
