@@ -234,7 +234,7 @@ describe('TapStack Integration Tests', () => {
             new GetFunctionCommand({ FunctionName: functionName })
           );
 
-          expect(lambdaFunction.Configuration?.Runtime).toBe('python3.9');
+          expect(lambdaFunction.Configuration?.Runtime).toBe('python3.8');
           expect(lambdaFunction.Configuration?.Timeout).toBe(30);
           expect(lambdaFunction.Configuration?.MemorySize).toBe(256);
           expect(lambdaFunction.Configuration?.KMSKeyArn).toBeDefined();

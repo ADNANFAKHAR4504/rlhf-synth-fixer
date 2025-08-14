@@ -1,4 +1,5 @@
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
+import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
 import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
 import { ApiGatewayIntegrationResponse } from '@cdktf/provider-aws/lib/api-gateway-integration-response';
 import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
@@ -179,52 +180,6 @@ export class TapStack extends TerraformStack {
         'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
     });
 
-    // Custom IAM policy for DynamoDB and KMS access
-    const lambdaCustomPolicy = new IamPolicy(this, 'lambda-custom-policy', {
-      name: `ecommerce-lambda-custom-policy-${uniqueSuffix}`,
-      description: 'Custom policy for ecommerce Lambda functions',
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'dynamodb:GetItem',
-              'dynamodb:PutItem',
-              'dynamodb:UpdateItem',
-              'dynamodb:DeleteItem',
-              'dynamodb:Query',
-              'dynamodb:Scan',
-            ],
-            Resource: [
-              `arn:aws:dynamodb:us-east-1:${current.accountId}:table/ecommerce-products`,
-              `arn:aws:dynamodb:us-east-1:${current.accountId}:table/ecommerce-orders`,
-              `arn:aws:dynamodb:us-east-1:${current.accountId}:table/ecommerce-users`,
-              `arn:aws:dynamodb:us-east-1:${current.accountId}:table/ecommerce-products/index/*`,
-              `arn:aws:dynamodb:us-east-1:${current.accountId}:table/ecommerce-orders/index/*`,
-              `arn:aws:dynamodb:us-east-1:${current.accountId}:table/ecommerce-users/index/*`,
-            ],
-          },
-          {
-            Effect: 'Allow',
-            Action: ['kms:Decrypt', 'kms:DescribeKey'],
-            Resource: lambdaKmsKey.arn,
-          },
-          {
-            Effect: 'Allow',
-            Action: ['s3:GetObject', 's3:PutObject'],
-            Resource: `arn:aws:s3:::ecommerce-static-assets-${current.accountId}-${uniqueSuffix}/*`,
-          },
-        ],
-      }),
-      tags: commonTags,
-    });
-
-    new IamRolePolicyAttachment(this, 'lambda-custom-policy-attachment', {
-      role: lambdaRole.name,
-      policyArn: lambdaCustomPolicy.arn,
-    });
-
     // DynamoDB Tables
     const productsTable = new DynamodbTable(this, 'products-table', {
       name: `ecommerce-products-${uniqueSuffix}`,
@@ -296,6 +251,52 @@ export class TapStack extends TerraformStack {
         },
       ],
       tags: commonTags,
+    });
+
+    // Custom IAM policy for DynamoDB and KMS access
+    const lambdaCustomPolicy = new IamPolicy(this, 'lambda-custom-policy', {
+      name: `ecommerce-lambda-custom-policy-${uniqueSuffix}`,
+      description: 'Custom policy for ecommerce Lambda functions',
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'dynamodb:GetItem',
+              'dynamodb:PutItem',
+              'dynamodb:UpdateItem',
+              'dynamodb:DeleteItem',
+              'dynamodb:Query',
+              'dynamodb:Scan',
+            ],
+            Resource: [
+              productsTable.arn,
+              ordersTable.arn,
+              usersTable.arn,
+              `${productsTable.arn}/index/*`,
+              `${ordersTable.arn}/index/*`,
+              `${usersTable.arn}/index/*`,
+            ],
+          },
+          {
+            Effect: 'Allow',
+            Action: ['kms:Decrypt', 'kms:DescribeKey'],
+            Resource: lambdaKmsKey.arn,
+          },
+          {
+            Effect: 'Allow',
+            Action: ['s3:GetObject', 's3:PutObject'],
+            Resource: `arn:aws:s3:::ecommerce-static-assets-${current.accountId}-${uniqueSuffix}/*`,
+          },
+        ],
+      }),
+      tags: commonTags,
+    });
+
+    new IamRolePolicyAttachment(this, 'lambda-custom-policy-attachment', {
+      role: lambdaRole.name,
+      policyArn: lambdaCustomPolicy.arn,
     });
 
     // Auto-scaling for DynamoDB tables
@@ -388,7 +389,7 @@ def handler(event, context):
       functionName: `ecommerce-product-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
       handler: 'product-service.handler',
-      runtime: 'python3.9',
+      runtime: 'python3.8',
       filename: productServiceAsset.path,
       sourceCodeHash: productServiceAsset.assetHash,
       timeout: 30,
@@ -435,7 +436,7 @@ def handler(event, context):
       functionName: `ecommerce-order-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
       handler: 'order-service.handler',
-      runtime: 'python3.9',
+      runtime: 'python3.8',
       filename: orderServiceAsset.path,
       sourceCodeHash: orderServiceAsset.assetHash,
       timeout: 30,
@@ -479,7 +480,7 @@ def handler(event, context):
       functionName: `ecommerce-user-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
       handler: 'user-service.handler',
-      runtime: 'python3.9',
+      runtime: 'python3.8',
       filename: userServiceAsset.path,
       sourceCodeHash: userServiceAsset.assetHash,
       timeout: 30,
@@ -629,12 +630,22 @@ def handler(event, context):
     });
 
     // API Gateway Deployment
-    new ApiGatewayDeployment(this, 'api-deployment', {
+    const apiDeployment = new ApiGatewayDeployment(this, 'api-deployment', {
       restApiId: api.id,
       dependsOn: [...integrations, ...methods],
       triggers: {
         redeployment: Date.now().toString(),
       },
+    });
+
+    // API Gateway Stage
+    new ApiGatewayStage(this, 'api-stage', {
+      restApiId: api.id,
+      deploymentId: apiDeployment.id,
+      stageName: 'prod',
+      description: 'Production stage for e-commerce API',
+      tags: commonTags,
+      xrayTracingEnabled: true,
     });
 
     // Outputs
