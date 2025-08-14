@@ -17,7 +17,6 @@ INFRA REQUIREMENTS (exact)
 - Launch a single EC2 instance (t2.micro default, overridable via variables).
 - Create an S3 bucket for application data with **versioning enabled**.
 - Create an IAM role / instance profile for EC2 that grants the EC2 instance read/write permissions to the S3 bucket.
-- Create a Security Group that allows inbound SSH (port 22) from a configurable CIDR (variable `ssh_cidr`, default `0.0.0.0/0` for tests but warn and encourage a tighter CIDR).
 - Apply tags to all resources: at minimum `Environment` and `Owner` (values passed in via variables).
 - Use Terraform remote state backend that stores state in S3 **and** uses DynamoDB for state locking (provide configuration via variables for bucket name, key/prefix, and DynamoDB table).
 - All defaults must be overridable via input variables (AMI lookup filters, instance type, ssh cidr, bucket name, environment, owner, tags map, region, instance key name, etc.).
