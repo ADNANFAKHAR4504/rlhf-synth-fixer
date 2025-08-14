@@ -1072,13 +1072,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID:
-                !If [
-                  UseExistingKMSCond,
-                  !Ref ExistingKMSKeyArn,
-                  !Ref SecureEnvKMSKey,
-                ]
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
