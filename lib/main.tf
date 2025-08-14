@@ -677,6 +677,43 @@ resource "aws_acm_certificate" "main" {
   })
 }
 
+# Route53 Hosted Zone for DNS validation
+resource "aws_route53_zone" "main" {
+  name = "example.com"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-zone"
+  })
+}
+
+# Route53 DNS validation records
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.main.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = aws_route53_zone.main.zone_id
+}
+
+# ACM Certificate validation
+resource "aws_acm_certificate_validation" "main" {
+  certificate_arn         = aws_acm_certificate.main.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+
+  timeouts {
+    create = "5m"
+  }
+}
+
 # =============================================================================
 # APPLICATION LOAD BALANCER
 # =============================================================================
@@ -733,7 +770,7 @@ resource "aws_lb_listener" "https" {
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate.main.arn
+  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
 
   default_action {
     type             = "forward"
@@ -766,6 +803,9 @@ resource "aws_lb_listener" "http" {
   })
 }
 
+# Data source for ELB service account
+data "aws_elb_service_account" "main" {}
+
 # S3 bucket policy for ALB access logs
 resource "aws_s3_bucket_policy" "logs_alb" {
   bucket = aws_s3_bucket.logs.id
@@ -776,10 +816,23 @@ resource "aws_s3_bucket_policy" "logs_alb" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::797873946194:root" # ELB service account for us-west-2
+          AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.logs.arn}/alb-logs/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
       }
     ]
   })
@@ -1065,9 +1118,15 @@ resource "aws_iam_role_policy" "cloudtrail_logs" {
   })
 }
 
-# AWS Config Service Role
-resource "aws_iam_service_linked_role" "config" {
-  aws_service_name = "config.amazonaws.com"
+# AWS Config Service Role - Use existing service-linked role
+# Import if needed: terraform import aws_iam_service_linked_role.config arn:aws:iam::ACCOUNT_ID:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig
+# resource "aws_iam_service_linked_role" "config" {
+#   aws_service_name = "config.amazonaws.com"
+# }
+
+# Data source for existing AWS Config service-linked role
+data "aws_iam_role" "config_service_role" {
+  name = "AWSServiceRoleForConfig"
 }
 
 # =============================================================================
@@ -1109,6 +1168,12 @@ resource "aws_db_parameter_group" "main" {
   })
 }
 
+# Data source for available RDS engine versions
+data "aws_rds_engine_version" "postgres" {
+  engine             = var.db_engine
+  preferred_versions = ["15.4", "15.3", "15.2", "15.1", "15"]
+}
+
 # RDS Instance
 resource "aws_db_instance" "main" {
   identifier            = "${local.name_prefix}-postgres"
@@ -1120,7 +1185,7 @@ resource "aws_db_instance" "main" {
 
   db_name        = "appdb"
   engine         = var.db_engine
-  engine_version = var.db_version
+  engine_version = data.aws_rds_engine_version.postgres.version
   instance_class = "db.t4g.micro"
 
   username                      = "postgres"
@@ -1211,7 +1276,7 @@ resource "aws_launch_template" "app" {
     }
   }
 
-  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
+  user_data_base64 = base64encode(templatefile("${path.module}/user-data.sh", {
     db_endpoint = aws_db_instance.main.endpoint
   }))
 
@@ -1310,7 +1375,7 @@ resource "aws_instance" "bastion" {
     delete_on_termination = true
   }
 
-  user_data = base64encode(templatefile("${path.module}/bastion-user-data.sh", {}))
+  user_data_base64 = base64encode(templatefile("${path.module}/bastion-user-data.sh", {}))
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-bastion"
@@ -1336,6 +1401,9 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 # CLOUDTRAIL
 # =============================================================================
 
+# If CloudTrail limit exceeded, import existing trail:
+# terraform import aws_cloudtrail.main <existing-trail-name>
+# Or comment out this resource if using existing CloudTrail
 resource "aws_cloudtrail" "main" {
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
 
@@ -1408,7 +1476,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 # Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
   name     = "${local.name_prefix}-config-recorder"
-  role_arn = aws_iam_service_linked_role.config.arn
+  role_arn = data.aws_iam_role.config_service_role.arn
 
   recording_group {
     all_supported                 = true
@@ -1419,6 +1487,9 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 # Config Delivery Channel
+# If AWS Config delivery channel limit exceeded, import existing channel:
+# terraform import aws_config_delivery_channel.main <existing-delivery-channel-name>
+# Or comment out this resource if using existing delivery channel
 resource "aws_config_delivery_channel" "main" {
   name           = "${local.name_prefix}-config-delivery-channel"
   s3_bucket_name = aws_s3_bucket.logs.bucket
