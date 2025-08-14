@@ -1,39 +1,43 @@
-# Secure Web Application Infrastructure Requirements
+# Help with CloudFormation for our web app
 
-I need help building a secure CloudFormation template for our production web application. After some previous security incidents, management is really focused on getting this infrastructure deployment right from day one. The security team has given me a pretty detailed list of requirements that we need to meet.
+Hey, so I'm trying to build this CloudFormation template for our production web app and honestly, it's been kind of a nightmare. Management is breathing down my neck after we had some security issues a few months back, and now they want everything locked down tight.
 
-## Project Overview
+The security team gave me this massive list of things we need to do, and I'm worried I'm going to miss something important. They're being really picky about this deployment.
 
-We're deploying a web application that needs to be both scalable and secure. The application will run on EC2 instances, but security has made it clear that these instances cannot be directly accessible from the internet. All traffic must flow through a load balancer, and we can only accept HTTPS connections.
+## What we're building
 
-## Security Requirements
+It's a web application that needs to scale when we get traffic spikes. The app will live on EC2 instances, but security says NO public access to those instances whatsoever. Everything has to go through a load balancer and we can only do HTTPS - no more HTTP allowed.
 
-The security team has been very specific about what they need to see in this deployment:
+## Security stuff they want
 
-For data protection, all static content goes into S3 buckets with AES-256 encryption enabled. Public buckets are absolutely not allowed - we learned that lesson during our last security audit. The EC2 instances themselves must be placed in private subnets without any public IP addresses.
+So the security folks have been pretty clear about what they need:
 
-From an access control perspective, we need IAM roles that follow the principle of least privilege. No more broad permissions that give access to everything. Security groups should be configured to only allow HTTPS traffic on port 443, and only from our approved IP ranges. They also want MFA requirements implemented for sensitive resource access.
+All our static files need to go in S3 with encryption turned on (AES-256). And absolutely no public buckets - we got burned on that during our last audit and it was embarrassing. The EC2 instances have to be in private subnets with no public IPs at all.
 
-For monitoring and compliance, we need CloudTrail configured to log all API activity. The compliance team requires this for their audits. We also need AWS Config running for continuous monitoring of resource configurations. Automated backups to a separate region are required for disaster recovery purposes. CloudWatch alarms should alert us when CPU utilization gets too high.
+For permissions, they want IAM roles that don't give access to everything under the sun. Our current setup is apparently way too permissive and the compliance people hate it. Security groups should only allow HTTPS on 443, and only from our office IPs. Oh, and they want MFA for anything sensitive.
 
-Additional protection requirements include AWS Shield for DDoS protection (we had an incident last year) and an Application Load Balancer to distribute traffic across multiple instances.
+They also need CloudTrail logging everything for audits - compliance team is always asking for logs. AWS Config needs to be running too for monitoring configurations. We need automated backups going to a different region in case something goes wrong. And CloudWatch alarms when CPU gets high.
 
-## Deployment Specifications
+One more thing - we need AWS Shield because we got hit with a DDoS attack last year and it was a mess. Plus an Application Load Balancer to spread traffic around.
 
-The entire infrastructure needs to be deployed in the us-west-2 region across two availability zones. All resources must be tagged with 'Environment:Production' for cost tracking and resource management.
+## Where to deploy
 
-## Template Requirements
+Everything goes in us-west-2, spread across two availability zones. All resources need the 'Environment:Production' tag so finance can track costs.
 
-I need a complete CloudFormation template written in YAML format that meets these criteria:
+## What I need
 
-The template must deploy successfully without errors. I've spent too much time debugging broken templates in the past. It should follow AWS best practices so we don't get flagged during the next security review. The code needs to be maintainable since other team members will need to work with it. The template must pass validation using AWS CloudFormation Designer.
+I need a working CloudFormation template in YAML that actually deploys without breaking. I've wasted too many hours debugging templates that look right but fail when you try to use them.
 
-The template should include proper parameter definitions with validation, clear resource naming conventions, and useful outputs that we can reference in other systems.
+It needs to follow AWS best practices so we don't get dinged in the next security review. And it has to be maintainable because other people on the team will need to work with it later.
 
-## Additional Considerations
+The template should validate properly in CloudFormation Designer - I've been caught off guard by validation errors before.
 
-It would be helpful if the template includes comments explaining the security configurations. I need to present this to the architecture review board, and they always have detailed questions about our security implementation.
+Would be great to have proper parameters with validation, sensible resource names, and outputs we can actually use in other places.
 
-The template absolutely must follow the principle of least privilege for all IAM policies. We've been called out before for overly permissive policies during compliance audits.
+## Other stuff
 
-Given the tight timeline, I want to make sure we get the security aspects correct upfront rather than having to fix issues after deployment.
+If you could add comments explaining the security bits, that would help a lot. I have to present this to the architecture review board next week and they always drill down into the security details.
+
+The IAM policies absolutely have to follow least privilege - we've gotten called out multiple times for being too permissive during audits and I don't want to deal with that again.
+
+I'm under a tight deadline here so I really want to get the security right the first time instead of having to go back and fix things after we deploy.
