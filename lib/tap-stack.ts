@@ -794,7 +794,7 @@ exports.handler = tracer.captureLambdaHandler(async (event, context) => {
           'service-role/AWSLambdaBasicExecutionRole'
         ),
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'CloudWatchSyntheticsExecutionRolePolicy'
+          'CloudWatchSyntheticsFullAccess'
         ),
       ],
     });
