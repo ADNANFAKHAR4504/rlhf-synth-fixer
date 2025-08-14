@@ -5,10 +5,10 @@ import { S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 
 // AWS clients
-const cloudFormationClient = new CloudFormationClient({ region: 'ap-southeast-4' });
-const ec2Client = new EC2Client({ region: 'ap-southeast-4' });
-const s3Client = new S3Client({ region: 'ap-southeast-4' });
-const cloudTrailClient = new CloudTrailClient({ region: 'ap-southeast-4' });
+const cloudFormationClient = new CloudFormationClient({ region: 'af-south-1' });
+const ec2Client = new EC2Client({ region: 'af-south-1' });
+const s3Client = new S3Client({ region: 'af-south-1' });
+const cloudTrailClient = new CloudTrailClient({ region: 'af-south-1' });
 
 // Read the CloudFormation template content
 const templateContent = fs.readFileSync('lib/TapStack.yml', 'utf8');
@@ -34,8 +34,8 @@ describe('TapStack Integration Tests', () => {
             VPCId: 'vpc-1234567890abcdef0',
             PublicSubnets: 'subnet-1234567890abcdef1,subnet-1234567890abcdef2',
             PrivateSubnets: 'subnet-1234567890abcdef3,subnet-1234567890abcdef4',
-            ApplicationLoadBalancerDNS: 'securewebapp-production-alb-1234567890.ap-southeast-4.elb.amazonaws.com',
-            DatabaseEndpoint: 'securewebapp-production-db.1234567890.ap-southeast-4.rds.amazonaws.com',
+            ApplicationLoadBalancerDNS: 'securewebapp-production-alb-1234567890.af-south-1.elb.amazonaws.com',
+            DatabaseEndpoint: 'securewebapp-production-db.1234567890.af-south-1.rds.amazonaws.com',
             DatabasePort: '3306',
             S3BucketName: 'securewebapp-1234567890-production-appdata',
             CloudTrailName: 'securewebapp-production-trail',
@@ -51,8 +51,8 @@ describe('TapStack Integration Tests', () => {
           VPCId: 'vpc-1234567890abcdef0',
           PublicSubnets: 'subnet-1234567890abcdef1,subnet-1234567890abcdef2',
           PrivateSubnets: 'subnet-1234567890abcdef3,subnet-1234567890abcdef4',
-          ApplicationLoadBalancerDNS: 'securewebapp-production-alb-1234567890.ap-southeast-4.elb.amazonaws.com',
-          DatabaseEndpoint: 'securewebapp-production-db.1234567890.ap-southeast-4.rds.amazonaws.com',
+          ApplicationLoadBalancerDNS: 'securewebapp-production-alb-1234567890.af-south-1.elb.amazonaws.com',
+          DatabaseEndpoint: 'securewebapp-production-db.1234567890.af-south-1.rds.amazonaws.com',
           DatabasePort: '3306',
           S3BucketName: 'securewebapp-1234567890-production-appdata',
           CloudTrailName: 'securewebapp-production-trail',
