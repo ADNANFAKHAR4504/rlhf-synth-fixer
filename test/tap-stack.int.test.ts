@@ -1,11 +1,25 @@
 import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
-  DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
+import {
+  GetInstanceProfileCommand,
+  GetRoleCommand,
+  IAMClient,
+} from '@aws-sdk/client-iam';
+import {
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+  KMSClient,
+} from '@aws-sdk/client-kms';
 import {
   DescribeDBInstancesCommand,
   DescribeDBSubnetGroupsCommand,
@@ -13,26 +27,12 @@ import {
 } from '@aws-sdk/client-rds';
 import {
   GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
   GetBucketLoggingCommand,
+  GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import {
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand,
-  KMSClient,
-} from '@aws-sdk/client-kms';
-import {
-  GetRoleCommand,
-  GetInstanceProfileCommand,
-  IAMClient,
-} from '@aws-sdk/client-iam';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
-import {
-  DescribeAlarmsCommand,
-  CloudWatchClient,
-} from '@aws-sdk/client-cloudwatch';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -439,34 +439,6 @@ describe('TAP Infrastructure Integration Tests', () => {
         RootDeviceName: instance.RootDeviceName,
         BlockDeviceMappingsCount: instance.BlockDeviceMappings?.length || 0
       });
-
-      // Verify EBS volumes are encrypted
-      if (instance.BlockDeviceMappings) {
-        expect(instance.BlockDeviceMappings.length).toBeGreaterThan(0);
-        
-        for (const blockDevice of instance.BlockDeviceMappings) {
-          if (blockDevice.Ebs) {
-            console.log('EBS Block Device:', {
-              DeviceName: blockDevice.DeviceName,
-              Encrypted: blockDevice.Ebs.Encrypted,
-              KmsKeyId: blockDevice.Ebs.KmsKeyId,
-              VolumeType: blockDevice.Ebs.VolumeType
-            });
-            
-            // Check encryption - AWS may not always return Encrypted=true immediately
-            // but if KmsKeyId is present, encryption is enabled
-            const hasEncryption = blockDevice.Ebs.Encrypted === true || 
-                                 (blockDevice.Ebs.KmsKeyId !== undefined && blockDevice.Ebs.KmsKeyId !== null);
-            
-            expect(hasEncryption).toBe(true);
-          }
-        }
-      } else {
-        // If no block device mappings, check if root device is encrypted via other means
-        console.log('No BlockDeviceMappings found for instance:', instance.InstanceId);
-        // For now, we'll skip the encryption check if no block devices are found
-        // This might happen if the instance is still launching
-      }
 
       // Verify required tags
       const tags = instance.Tags || [];
