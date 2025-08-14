@@ -33,8 +33,9 @@ vpc_cidrs = {
   "us-west-2": "10.1.0.0/16"
 }
 
+
 def create_cloudtrail_s3_policy(bucket_name: pulumi.Output, region: str) -> pulumi.Output:
-  """Create S3 bucket policy for CloudTrail - simplified version"""
+  """Create S3 bucket policy for CloudTrail - using official AWS format"""
 
   # Get current AWS account ID
   current = aws.get_caller_identity()
@@ -45,36 +46,33 @@ def create_cloudtrail_s3_policy(bucket_name: pulumi.Output, region: str) -> pulu
       "Version": "2012-10-17",
       "Statement": [
         {{
-          "Sid": "AWSCloudTrailAclCheck",
+          "Sid": "AWSCloudTrailAclCheck20150319",
           "Effect": "Allow",
           "Principal": {{
-              "Service": "cloudtrail.amazonaws.com"
+            "Service": "cloudtrail.amazonaws.com"
           }},
           "Action": "s3:GetBucketAcl",
-          "Resource": "arn:aws:s3:::{args[0]}"
-        }},
-        {{
-          "Sid": "AWSCloudTrailWrite",
-          "Effect": "Allow",
-          "Principal": {{
-              "Service": "cloudtrail.amazonaws.com"
-          }},
-          "Action": "s3:PutObject",
-          "Resource": "arn:aws:s3:::{args[0]}/cloudtrail-logs/{region}/*",
+          "Resource": "arn:aws:s3:::{args[0]}",
           "Condition": {{
-              "StringEquals": {{
-                  "s3:x-amz-acl": "bucket-owner-full-control"
-              }}
+            "StringEquals": {{
+              "aws:SourceArn": "arn:aws:cloudtrail:{region}:{args[1]}:trail/infrastructure-trail-{region}"
+            }}
           }}
         }},
         {{
-          "Sid": "AWSCloudTrailBucketDeliveryRolePolicy",
+          "Sid": "AWSCloudTrailWrite20150319",
           "Effect": "Allow",
           "Principal": {{
-              "Service": "cloudtrail.amazonaws.com"
+            "Service": "cloudtrail.amazonaws.com"
           }},
-          "Action": "s3:ListBucket",
-          "Resource": "arn:aws:s3:::{args[0]}"
+          "Action": "s3:PutObject",
+          "Resource": "arn:aws:s3:::{args[0]}/cloudtrail-logs/{region}/AWSLogs/{args[1]}/*",
+          "Condition": {{
+            "StringEquals": {{
+              "s3:x-amz-acl": "bucket-owner-full-control",
+              "aws:SourceArn": "arn:aws:cloudtrail:{region}:{args[1]}:trail/infrastructure-trail-{region}"
+            }}
+          }}
         }}
       ]
   }}""")
