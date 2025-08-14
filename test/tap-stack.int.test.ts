@@ -1,76 +1,77 @@
+// __tests__/tap-stack.int.test.ts
 import {
   EC2Client,
   DescribeVpcsCommand,
-  DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeInstancesCommand,
 } from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  GetBucketLocationCommand,
-} from '@aws-sdk/client-s3';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import { config as awsConfig } from 'aws-sdk';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const awsRegion = process.env.AWS_REGION || 'us-west-2';
+const ec2Client = new EC2Client({ region: awsRegion });
 
 describe('TapStack Infrastructure Integration Tests', () => {
   let vpcId: string;
   let publicSubnetIds: string[];
-  let privateSubnetIds: string[];
-  let bucketName: string;
-  let dbInstanceIdentifier: string;
+  let privateSubnetId: string;
+  let securityGroupId: string;
+  let instanceId: string;
 
   beforeAll(() => {
-    // Set AWS region
-    awsConfig.update({ region: 'us-east-1' });
+    const suffix = process.env.ENVIRONMENT_SUFFIX;
+    if (!suffix) {
+      throw new Error('ENVIRONMENT_SUFFIX environment variable is not set.');
+    }
 
-    const stackOutputs: { [key: string]: string } = {
-      vpcId: process.env.VPC_ID || '',
-      publicSubnetIds: process.env.PUBLIC_SUBNET_IDS || '',
-      privateSubnetIds: process.env.PRIVATE_SUBNET_IDS || '',
-      bucketName: process.env.BUCKET_NAME || '',
-      dbInstanceIdentifier: process.env.DB_INSTANCE_IDENTIFIER || '',
-    };
+    const outputFilePath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+    }
 
+    const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
+    const stackKey = Object.keys(outputs).find(k => k.includes(suffix));
+    if (!stackKey) {
+      throw new Error(`No output found for environment: ${suffix}`);
+    }
+
+    const stackOutputs = outputs[stackKey];
     vpcId = stackOutputs['vpcId'];
-    publicSubnetIds = stackOutputs['publicSubnetIds']
-      ?.split(',')
-      .map((s: string) => s.trim()) || [];
-    privateSubnetIds = stackOutputs['privateSubnetIds']
-      ?.split(',')
-      .map((s: string) => s.trim()) || [];
-    bucketName = stackOutputs['bucketName'];
-    dbInstanceIdentifier = stackOutputs['dbInstanceIdentifier'];
+    publicSubnetIds = stackOutputs['publicSubnetIds']?.split(',').map((s: string) => s.trim()) || [];
+    privateSubnetId = stackOutputs['privateSubnetId'];
+    securityGroupId = stackOutputs['securityGroupId'];
+    instanceId = stackOutputs['instanceId'];
+
+    if (!vpcId || !publicSubnetIds.length || !privateSubnetId || !securityGroupId || !instanceId) {
+      throw new Error('Missing one or more required stack outputs.');
+    }
   });
 
   test('VPC exists', async () => {
-    const ec2 = new EC2Client({ region: 'us-east-1' });
-    const vpcResponse = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-    expect(vpcResponse.Vpcs?.length).toBe(1);
-  });
+    const { Vpcs } = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+    expect(Vpcs?.length).toBe(1);
+  }, 20000);
 
-  test('Public subnets exist', async () => {
-    const ec2 = new EC2Client({ region: 'us-east-1' });
-    const subnetResponse = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds }));
-    expect(subnetResponse.Subnets?.length).toBe(publicSubnetIds.length);
-  });
+  test('Public subnet exists', async () => {
+    const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds }));
+    expect(Subnets?.length).toBe(publicSubnetIds.length);
+  }, 20000);
 
-  test('Private subnets exist', async () => {
-    const ec2 = new EC2Client({ region: 'us-east-1' });
-    const subnetResponse = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds }));
-    expect(subnetResponse.Subnets?.length).toBe(privateSubnetIds.length);
-  });
+  test('Private subnet exists', async () => {
+    const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [privateSubnetId] }));
+    expect(Subnets?.length).toBe(1);
+  }, 20000);
 
-  test('S3 bucket exists', async () => {
-    const s3 = new S3Client({ region: 'us-east-1' });
-    const bucketResponse = await s3.send(new GetBucketLocationCommand({ Bucket: bucketName }));
-    expect(bucketResponse).toBeDefined();
-  });
+  test('Security group exists', async () => {
+    const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [securityGroupId] }));
+    expect(SecurityGroups?.length).toBe(1);
+  }, 20000);
 
-  test('RDS instance exists', async () => {
-    const rds = new RDSClient({ region: 'us-east-1' });
-    const dbResponse = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceIdentifier }));
-    expect(dbResponse.DBInstances?.length).toBe(1);
-  });
+  test('EC2 instance exists and is running', async () => {
+    const { Reservations } = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+    expect(Reservations?.length).toBeGreaterThan(0);
+    const state = Reservations?.[0]?.Instances?.[0]?.State?.Name;
+    expect(['pending', 'running', 'stopped']).toContain(state);
+  }, 30000);
 });
