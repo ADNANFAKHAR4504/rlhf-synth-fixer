@@ -58,8 +58,7 @@ class IAMRoles(pulumi.ComponentResource):
               "s3:GetObject",
               "s3:GetObjectVersion",
               "s3:GetBucketNotificationConfiguration",
-              "s3:HeadObject",
-              "s3:ListBucket"
+              "s3:HeadObject"
             ],
             "Resource": [f"{arn}/*", arn]
           }

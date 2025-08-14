@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
 import os
-import zipfile
 import pulumi
 import pulumi_aws as aws
 
@@ -10,7 +9,7 @@ class LambdaConfig:
   role_arn: pulumi.Input[str]
   handler: str = "handler.lambda_handler"
   runtime: str = "python3.11"
-  timeout: int = 30
+  timeout: int = 10
   memory_size: int = 128
 
 
@@ -32,7 +31,7 @@ class LambdaFunction(pulumi.ComponentResource):
     lambda_src_dir = os.path.join(pulumi_cwd, "lib", "lambda_code")
 
     if not os.path.exists(lambda_src_dir):
-      pulumi.log.warn(f"Lambda source directory not found: {lambda_src_dir}")
+      raise FileNotFoundError(f"Lambda source directory not found: {lambda_src_dir}")
 
     # Create Lambda function
     self.function = aws.lambda_.Function(

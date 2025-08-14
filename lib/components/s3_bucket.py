@@ -10,7 +10,6 @@ class S3Bucket(pulumi.ComponentResource):
 
   def __init__(self,
                name: str,
-               lambda_function_arn: Optional[pulumi.Input[str]] = None,
                opts: pulumi.ResourceOptions = None):
     super().__init__('custom:aws:S3Bucket', name, {}, opts)
 
@@ -47,9 +46,6 @@ class S3Bucket(pulumi.ComponentResource):
       restrict_public_buckets=True,
       opts=pulumi.ResourceOptions(parent=self)
     )
-
-    # Store lambda function ARN for later use
-    self._lambda_function_arn = lambda_function_arn
 
     # Register outputs
     self.register_outputs({

@@ -63,7 +63,7 @@ class TapStack(pulumi.ComponentResource):
     self.tags = args.tags
 
     # Get current AWS region
-    current_region = aws.get_region()
+    provider = aws.Provider("aws-provider", region="us-west-2")
 
     # Create S3 bucket
     s3_bucket = S3Bucket("serverless-app")
@@ -92,7 +92,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("s3_bucket_arn", s3_bucket.bucket.arn)
     pulumi.export("lambda_function_name", lambda_function.function.name)
     pulumi.export("s3_bucket_name", s3_bucket.bucket.bucket)
-    pulumi.export("region", current_region.name)
+    pulumi.export("region", provider.region)
 
     # Additional useful outputs
     pulumi.export("lambda_role_arn", iam_roles.lambda_role.arn)

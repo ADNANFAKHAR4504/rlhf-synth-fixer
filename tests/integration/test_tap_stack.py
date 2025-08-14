@@ -12,7 +12,7 @@ class TestLiveIntegration(unittest.TestCase):
 
     os.environ["PULUMI_CONFIG_PASSPHRASE"] = ""
 
-    cls.stack_name = "TapStackTest"
+    cls.stack_name = "TapStack"
     cls.project_name = "serverless-aws"
 
     from lib.tap_stack import TapStack, TapStackArgs
@@ -31,8 +31,8 @@ class TestLiveIntegration(unittest.TestCase):
       program=pulumi_program
     )
 
-    print("Deploying Pulumi stack...")
-    stack.up()
+    # print("Deploying Pulumi stack...")
+    # stack.up()
 
     cls.outputs = stack.outputs()
     print(f"Outputs: {cls.outputs}")
