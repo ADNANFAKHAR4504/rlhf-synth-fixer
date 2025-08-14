@@ -209,7 +209,7 @@ export class TapStack extends TerraformStack {
           {
             Effect: 'Allow',
             Action: ['s3:GetObject', 's3:PutObject'],
-            Resource: `arn:aws:s3:::ecommerce-static-assets-${current.accountId}/*`,
+            Resource: `arn:aws:s3:::ecommerce-static-assets-${current.accountId}-${environmentSuffix}/*`,
           },
         ],
       }),
@@ -493,7 +493,7 @@ def handler(event, context):
 
     // S3 Bucket for static hosting
     const staticBucket = new S3Bucket(this, 'static-assets-bucket', {
-      bucket: `ecommerce-static-assets-${current.accountId}`,
+      bucket: `ecommerce-static-assets-${current.accountId}-${environmentSuffix}`,
       tags: commonTags,
     });
 
