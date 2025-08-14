@@ -6,76 +6,46 @@
             "ParameterGroups": [
                 {
                     "Label": {
-                        "default": "Environment Configuration"
+                        "default": "Basic Configuration"
                     },
                     "Parameters": [
-                        "EnvironmentName",
-                        "EnvironmentSuffix"
+                        "EnvironmentSuffix",
+                        "BucketPrefix"
                     ]
                 },
                 {
                     "Label": {
-                        "default": "Security Configuration"
+                        "default": "Security & Storage"
                     },
                     "Parameters": [
-                        "RequireMFA",
-                        "EnableCrossRegionReplication"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "Storage Configuration"
-                    },
-                    "Parameters": [
-                        "S3BucketPrefix",
-                        "GlacierTransitionDays"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "Audit Configuration"
-                    },
-                    "Parameters": [
-                        "CloudTrailBucketPrefix",
-                        "EnableLogFileValidation"
+                        "EnableMFA",
+                        "EnableReplication",
+                        "LifecycleDays"
                     ]
                 }
             ]
         }
     },
     "Parameters": {
-        "EnvironmentName": {
-            "Type": "String",
-            "Default": "Production",
-            "Description": "Environment name (Production, Staging, Development)",
-            "AllowedValues": [
-                "Production",
-                "Staging",
-                "Development"
-            ]
-        },
         "EnvironmentSuffix": {
             "Type": "String",
-            "Default": "prod",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (dev, staging, prod)",
             "AllowedPattern": "^[a-zA-Z0-9]+$",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
+            "ConstraintDescription": "Must contain only alphanumeric characters",
+            "MinLength": 2,
+            "MaxLength": 10
         },
-        "S3BucketPrefix": {
+        "BucketPrefix": {
             "Type": "String",
-            "Default": "secure-data-storage",
-            "Description": "Prefix for S3 bucket names (must be globally unique)",
+            "Default": "secure-data",
+            "Description": "Prefix for S3 bucket names",
             "AllowedPattern": "^[a-z0-9-]+$",
-            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens",
+            "MinLength": 3,
+            "MaxLength": 20
         },
-        "CloudTrailBucketPrefix": {
-            "Type": "String",
-            "Default": "audit-trail-logs",
-            "Description": "Prefix for CloudTrail S3 bucket name",
-            "AllowedPattern": "^[a-z0-9-]+$",
-            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
-        },
-        "RequireMFA": {
+        "EnableMFA": {
             "Type": "String",
             "Default": "true",
             "Description": "Require MFA for sensitive operations",
@@ -84,53 +54,36 @@
                 "false"
             ]
         },
-        "EnableCrossRegionReplication": {
+        "EnableReplication": {
             "Type": "String",
-            "Default": "true",
-            "Description": "Enable cross-region replication for disaster recovery",
+            "Default": "false",
+            "Description": "Enable cross-region replication",
             "AllowedValues": [
                 "true",
                 "false"
             ]
         },
-        "GlacierTransitionDays": {
+        "LifecycleDays": {
             "Type": "Number",
             "Default": 30,
-            "Description": "Days before transitioning objects to Glacier storage",
+            "Description": "Days before transitioning to Glacier",
             "MinValue": 1,
             "MaxValue": 365
-        },
-        "EnableLogFileValidation": {
-            "Type": "String",
-            "Default": "true",
-            "Description": "Enable CloudTrail log file validation",
-            "AllowedValues": [
-                "true",
-                "false"
-            ]
         }
     },
     "Conditions": {
-        "RequireMFACondition": {
+        "MFAEnabled": {
             "Fn::Equals": [
                 {
-                    "Ref": "RequireMFA"
+                    "Ref": "EnableMFA"
                 },
                 "true"
             ]
         },
-        "EnableReplicationCondition": {
+        "ReplicationEnabled": {
             "Fn::Equals": [
                 {
-                    "Ref": "EnableCrossRegionReplication"
-                },
-                "true"
-            ]
-        },
-        "EnableLogValidation": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnableLogFileValidation"
+                    "Ref": "EnableReplication"
                 },
                 "true"
             ]
@@ -178,7 +131,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -203,7 +156,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${CloudTrailBucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "${BucketPrefix}-audit-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -249,7 +202,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -304,7 +257,7 @@
         },
         "S3ReplicationRole": {
             "Type": "AWS::IAM::Role",
-            "Condition": "EnableReplicationCondition",
+            "Condition": "ReplicationEnabled",
             "Properties": {
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -331,7 +284,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}"
+                                        "Fn::Sub": "arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}"
                                     }
                                 },
                                 {
@@ -342,7 +295,7 @@
                                         "s3:GetObjectVersionTagging"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}/*"
                                     }
                                 },
                                 {
@@ -353,7 +306,7 @@
                                         "s3:ReplicateTags"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica/*"
+                                        "Fn::Sub": "arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica/*"
                                     }
                                 },
                                 {
@@ -378,7 +331,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
+                            "Ref": "EnvironmentSuffix"
                         }
                     }
                 ]
@@ -388,7 +341,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -415,7 +368,7 @@
                                 {
                                     "StorageClass": "GLACIER",
                                     "TransitionInDays": {
-                                        "Ref": "GlacierTransitionDays"
+                                        "Ref": "LifecycleDays"
                                     }
                                 }
                             ]
@@ -437,7 +390,7 @@
                 },
                 "ReplicationConfiguration": {
                     "Fn::If": [
-                        "EnableReplicationCondition",
+                        "ReplicationEnabled",
                         {
                             "Role": {
                                 "Fn::GetAtt": [
@@ -487,7 +440,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -503,10 +456,10 @@
         },
         "ReplicationBucket": {
             "Type": "AWS::S3::Bucket",
-            "Condition": "EnableReplicationCondition",
+            "Condition": "ReplicationEnabled",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica"
+                    "Fn::Sub": "${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -533,7 +486,7 @@
                                 {
                                     "StorageClass": "GLACIER",
                                     "TransitionInDays": {
-                                        "Ref": "GlacierTransitionDays"
+                                        "Ref": "LifecycleDays"
                                     }
                                 }
                             ]
@@ -550,7 +503,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -595,7 +548,7 @@
                                 },
                                 {
                                     "Fn::If": [
-                                        "EnableReplicationCondition",
+                                        "ReplicationEnabled",
                                         {
                                             "Fn::GetAtt": [
                                                 "ReplicationBucket",
@@ -625,7 +578,7 @@
                                 },
                                 {
                                     "Fn::If": [
-                                        "EnableReplicationCondition",
+                                        "ReplicationEnabled",
                                         {
                                             "Fn::Sub": "${ReplicationBucket.Arn}/*"
                                         },
@@ -637,7 +590,7 @@
                             ],
                             "Condition": {
                                 "Fn::If": [
-                                    "RequireMFACondition",
+                                    "MFAEnabled",
                                     {
                                         "Bool": {
                                             "aws:MultiFactorAuthPresent": "true"
@@ -665,7 +618,7 @@
                             },
                             "Condition": {
                                 "Fn::If": [
-                                    "RequireMFACondition",
+                                    "MFAEnabled",
                                     {
                                         "Bool": {
                                             "aws:MultiFactorAuthPresent": "true"
@@ -697,7 +650,7 @@
                             "Action": "sts:AssumeRole",
                             "Condition": {
                                 "Fn::If": [
-                                    "RequireMFACondition",
+                                    "MFAEnabled",
                                     {
                                         "Bool": {
                                             "aws:MultiFactorAuthPresent": "true"
@@ -757,7 +710,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
+                            "Ref": "EnvironmentSuffix"
                         }
                     }
                 ]
@@ -775,7 +728,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -798,13 +751,7 @@
                 "IncludeGlobalServiceEvents": true,
                 "IsLogging": true,
                 "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": {
-                    "Fn::If": [
-                        "EnableLogValidation",
-                        true,
-                        false
-                    ]
-                },
+                "EnableLogFileValidation": true,
                 "EventSelectors": [
                     {
                         "ReadWriteType": "All",
@@ -818,7 +765,7 @@
                                     },
                                     {
                                         "Fn::If": [
-                                            "EnableReplicationCondition",
+                                            "ReplicationEnabled",
                                             {
                                                 "Fn::Sub": "${ReplicationBucket.Arn}/"
                                             },
@@ -836,7 +783,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -899,7 +846,7 @@
             }
         },
         "ReplicationBucketName": {
-            "Condition": "EnableReplicationCondition",
+            "Condition": "ReplicationEnabled",
             "Description": "Name of the replication S3 bucket",
             "Value": {
                 "Ref": "ReplicationBucket"
@@ -968,18 +915,7 @@
                 }
             }
         },
-        "EnvironmentName": {
-            "Description": "Environment name used for this deployment",
-            "Value": {
-                "Ref": "EnvironmentName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EnvironmentName"
-                }
-            }
-        },
-        "EnvironmentSuffix": {
+        "EnvironmentSuffixOutput": {
             "Description": "Environment suffix used for this deployment",
             "Value": {
                 "Ref": "EnvironmentSuffix"

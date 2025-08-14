@@ -1,73 +1,43 @@
-# Secure Data Storage CloudFormation Template
-
-Here's a comprehensive CloudFormation template that implements all your security requirements for sensitive data storage:
+I'll help you create a secure CloudFormation template that meets all your requirements. Here's a comprehensive YAML template with proper security configurations:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Secure infrastructure template for sensitive data storage with comprehensive security controls.
-  Implements encryption at rest, least privilege IAM, audit logging, lifecycle management,
-  and cross-region replication for compliance and disaster recovery.
+Description: 'Secure S3 data storage with encryption, access controls, and lifecycle management'
 
-# Parameters for environment customization
 Parameters:
   Environment:
     Type: String
     Default: dev
-    AllowedValues: [dev, staging, prod]
-    Description: Environment name for resource naming and tagging
-    
+    AllowedValues: [dev, test, prod]
+    Description: Environment name for resource tagging and naming
+  
   ProjectName:
     Type: String
     Default: secure-data-storage
-    Description: Project name used for resource naming and tagging
-    
-  ReplicationRegion:
-    Type: String
-    Default: us-east-1
-    Description: Target region for cross-region replication (must be different from deployment region)
-    
+    Description: Project name for resource naming and tagging
+  
   DataRetentionDays:
     Type: Number
-    Default: 2555  # ~7 years for compliance
-    Description: Number of days to retain data before permanent deletion
-    
-  MFAMaxAge:
-    Type: Number
-    Default: 3600  # 1 hour
-    Description: Maximum age in seconds for MFA authentication
-
-# Mappings for environment-specific configurations
-Mappings:
-  EnvironmentConfig:
-    dev:
-      LogRetentionDays: 30
-      BackupRetentionDays: 7
-    staging:
-      LogRetentionDays: 90
-      BackupRetentionDays: 30
-    prod:
-      LogRetentionDays: 365
-      BackupRetentionDays: 90
+    Default: 30
+    MinValue: 1
+    MaxValue: 365
+    Description: Number of days before transitioning data to Glacier
 
 Resources:
-  # KMS Key for S3 encryption - centralized key management
+  # KMS Key for S3 encryption - gives us control over encryption keys
   S3EncryptionKey:
     Type: AWS::KMS::Key
     Properties:
       Description: !Sub 'KMS key for ${ProjectName} S3 bucket encryption in ${Environment}'
       KeyPolicy:
-        Version: '2012-10-17'
         Statement:
-          # Allow root account full access for key management
-          - Sid: Enable root account permissions
+          - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          # Allow S3 service to use the key for encryption/decryption
-          - Sid: Allow S3 service access
+          - Sid: Allow S3 Service
             Effect: Allow
             Principal:
               Service: s3.amazonaws.com
@@ -75,231 +45,99 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
             Resource: '*'
-          # Allow CloudTrail to use the key for log encryption
-          - Sid: Allow CloudTrail access
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-      KeyRotationEnabled: true  # Automatic annual key rotation for security
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-s3-encryption-key'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectName
         - Key: Purpose
-          Value: S3 Encryption
+          Value: S3-Encryption
 
-  # KMS Key Alias for easier reference
+  # KMS Key Alias for easier management
   S3EncryptionKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${Environment}-s3-encryption'
+      AliasName: !Sub 'alias/${ProjectName}-s3-${Environment}'
       TargetKeyId: !Ref S3EncryptionKey
 
-  # Primary S3 bucket for sensitive data storage
-  SensitiveDataBucket:
+  # Main S3 bucket with comprehensive security settings
+  SecureDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-sensitive-data-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-secure-data-${Environment}-${AWS::AccountId}'
       # Encryption configuration - AES-256 with KMS
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref S3EncryptionKey
-            BucketKeyEnabled: true  # Reduces KMS costs
-      # Versioning for data protection and compliance
-      VersioningConfiguration:
-        Status: Enabled
-      # Lifecycle configuration for cost optimization
-      LifecycleConfiguration:
-        Rules:
-          - Id: TransitionToIA
-            Status: Enabled
-            Transition:
-              Days: 30
-              StorageClass: STANDARD_IA
-          - Id: TransitionToGlacier
-            Status: Enabled
-            Transition:
-              Days: 90
-              StorageClass: GLACIER
-          - Id: TransitionToDeepArchive
-            Status: Enabled
-            Transition:
-              Days: 365
-              StorageClass: DEEP_ARCHIVE
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpiration:
-              NoncurrentDays: !FindInMap [EnvironmentConfig, !Ref Environment, BackupRetentionDays]
-          - Id: AbortIncompleteMultipartUploads
-            Status: Enabled
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-      # Public access block - absolutely no public access
+            BucketKeyEnabled: true # Reduces KMS costs
+      # Block all public access - critical for security
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      # Cross-region replication configuration
-      ReplicationConfiguration:
-        Role: !GetAtt S3ReplicationRole.Arn
+      # Versioning for data protection
+      VersioningConfiguration:
+        Status: Enabled
+      # Lifecycle policy for cost optimization
+      LifecycleConfiguration:
         Rules:
-          - Id: ReplicateToSecondaryRegion
+          - Id: TransitionToGlacier
             Status: Enabled
-            Prefix: ''
-            Destination:
-              Bucket: !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-sensitive-data-replica-${AWS::AccountId}'
-              StorageClass: STANDARD_IA
-              EncryptionConfiguration:
-                ReplicaKmsKeyID: !Ref S3EncryptionKey
-      # Notification configuration for security monitoring
+            Transitions:
+              - TransitionInDays: !Ref DataRetentionDays
+                StorageClass: GLACIER
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      # Notification for monitoring (optional)
       NotificationConfiguration:
         CloudWatchConfigurations:
           - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
-          - Event: s3:ObjectRemoved:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
-      # Tags for resource management
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-sensitive-data'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectName
         - Key: DataClassification
           Value: Sensitive
-        - Key: BackupRequired
-          Value: 'true'
 
-  # Replica bucket in different region for disaster recovery
-  SensitiveDataReplicaBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-sensitive-data-replica-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3EncryptionKey
-            BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-sensitive-data-replica'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Purpose
-          Value: Disaster Recovery Replica
-
-  # S3 bucket policy for additional security controls
-  SensitiveDataBucketPolicy:
+  # Bucket policy to enforce secure access
+  SecureDataBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref SensitiveDataBucket
+      Bucket: !Ref SecureDataBucket
       PolicyDocument:
-        Version: '2012-10-17'
         Statement:
-          # Deny all non-SSL requests
+          # Deny any unencrypted uploads
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${SecureDataBucket}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          # Deny insecure transport (force HTTPS)
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SensitiveDataBucket}/*'
-              - !Ref SensitiveDataBucket
+              - !Sub '${SecureDataBucket}/*'
+              - !Ref SecureDataBucket
             Condition:
               Bool:
-                'aws:SecureTransport': 'false'
-          # Deny requests without proper encryption
-          - Sid: DenyUnencryptedObjectUploads
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:PutObject'
-            Resource: !Sub '${SensitiveDataBucket}/*'
-            Condition:
-              StringNotEquals:
-                's3:x-amz-server-side-encryption': 'aws:kms'
-          # Require MFA for delete operations
-          - Sid: RequireMFAForDelete
-            Effect: Deny
-            Principal: '*'
-            Action:
-              - 's3:DeleteObject'
-              - 's3:DeleteObjectVersion'
-            Resource: !Sub '${SensitiveDataBucket}/*'
-            Condition:
-              BoolIfExists:
-                'aws:MultiFactorAuthPresent': 'false'
+                'aws:SecureTransport': false
 
-  # IAM role for S3 cross-region replication
-  S3ReplicationRole:
+  # IAM role for data administrators with MFA requirement
+  DataAdminRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-s3-replication-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3ReplicationPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # Allow reading from source bucket
-              - Effect: Allow
-                Action:
-                  - s3:GetObjectVersionForReplication
-                  - s3:GetObjectVersionAcl
-                Resource: !Sub '${SensitiveDataBucket}/*'
-              # Allow writing to replica bucket
-              - Effect: Allow
-                Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                Resource: !Sub '${SensitiveDataReplicaBucket}/*'
-              # Allow KMS operations for encryption
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                  - kms:GenerateDataKey
-                Resource: !Ref S3EncryptionKey
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-s3-replication-role'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-
-  # IAM role for sensitive data access with MFA requirement
-  SensitiveDataAccessRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-sensitive-data-access-role'
+      RoleName: !Sub '${ProjectName}-data-admin-${Environment}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -308,131 +146,148 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
             Condition:
-              # Require MFA for role assumption
               Bool:
-                'aws:MultiFactorAuthPresent': 'true'
-              # MFA must be recent
+                'aws:MultiFactorAuthPresent': true # MFA required
               NumericLessThan:
-                'aws:MultiFactorAuthAge': !Ref MFAMaxAge
-      Policies:
-        - PolicyName: SensitiveDataAccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # Allow read access to sensitive data bucket
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                  - s3:ListBucket
-                Resource:
-                  - !Ref SensitiveDataBucket
-                  - !Sub '${SensitiveDataBucket}/*'
-              # Allow write access with additional MFA check
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:PutObjectAcl
-                Resource: !Sub '${SensitiveDataBucket}/*'
-                Condition:
-                  Bool:
-                    'aws:MultiFactorAuthPresent': 'true'
-              # Allow KMS operations for decryption
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                  - kms:GenerateDataKey
-                  - kms:DescribeKey
-                Resource: !Ref S3EncryptionKey
+                'aws:MultiFactorAuthAge': 3600 # MFA must be recent (1 hour)
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsReadOnlyAccess
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-sensitive-data-access-role'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectName
 
-  # IAM group for users who need access to sensitive data
-  SensitiveDataUserGroup:
-    Type: AWS::IAM::Group
+  # IAM policy for data administrators - full access with MFA
+  DataAdminPolicy:
+    Type: AWS::IAM::Policy
     Properties:
-      GroupName: !Sub '${ProjectName}-${Environment}-sensitive-data-users'
-      Policies:
-        - PolicyName: AssumeDataAccessRole
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: sts:AssumeRole
-                Resource: !GetAtt SensitiveDataAccessRole.Arn
-                Condition:
-                  Bool:
-                    'aws:MultiFactorAuthPresent': 'true'
+      PolicyName: !Sub '${ProjectName}-data-admin-policy-${Environment}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Full S3 access to the secure bucket
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:RestoreObject
+            Resource:
+              - !Ref SecureDataBucket
+              - !Sub '${SecureDataBucket}/*'
+          # KMS permissions for encryption/decryption
+          - Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:DescribeKey
+            Resource: !GetAtt S3EncryptionKey.Arn
+      Roles:
+        - !Ref DataAdminRole
+
+  # IAM role for read-only access (for applications/analysts)
+  DataReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-data-readonly-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': true # MFA required
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # IAM policy for read-only access
+  DataReadOnlyPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${ProjectName}-data-readonly-policy-${Environment}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Read-only S3 access
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+            Resource:
+              - !Ref SecureDataBucket
+              - !Sub '${SecureDataBucket}/*'
+          # KMS decrypt permissions
+          - Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource: !GetAtt S3EncryptionKey.Arn
+      Roles:
+        - !Ref DataReadOnlyRole
 
   # CloudTrail for audit logging
-  SensitiveDataCloudTrail:
+  DataAccessCloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub '${ProjectName}-${Environment}-sensitive-data-trail'
+      TrailName: !Sub '${ProjectName}-data-access-trail-${Environment}'
       S3BucketName: !Ref CloudTrailLogsBucket
-      S3KeyPrefix: !Sub '${ProjectName}/${Environment}/cloudtrail-logs'
+      S3KeyPrefix: !Sub '${ProjectName}-${Environment}/'
       IncludeGlobalServiceEvents: true
+      IsLogging: true
       IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      # KMS encryption for CloudTrail logs
-      KMSKeyId: !Ref S3EncryptionKey
-      # Event selectors for S3 data events
+      # Focus on data events for our S3 bucket
       EventSelectors:
         - ReadWriteType: All
-          IncludeManagementEvents: true
+          IncludeManagementEvents: false
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                - !Sub '${SensitiveDataBucket}/*'
+                - !Sub '${SecureDataBucket}/*'
             - Type: AWS::S3::Bucket
               Values:
-                - !Ref SensitiveDataBucket
+                - !Ref SecureDataBucket
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-sensitive-data-trail'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectName
 
-  # S3 bucket for CloudTrail logs
+  # Separate bucket for CloudTrail logs
   CloudTrailLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-cloudtrail-logs-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-cloudtrail-logs-${Environment}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3EncryptionKey
-            BucketKeyEnabled: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetentionDays]
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref CloudTrailLogGroup
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90 # Keep logs for 90 days
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-cloudtrail-logs'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectName
+        - Key: Purpose
+          Value: CloudTrail-Logs
 
   # CloudTrail logs bucket policy
   CloudTrailLogsBucketPolicy:
@@ -440,16 +295,13 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailLogsBucket
       PolicyDocument:
-        Version: '2012-10-17'
         Statement:
-          # Allow CloudTrail to check bucket ACL
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !Ref CloudTrailLogsBucket
-          # Allow CloudTrail to write logs
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -459,166 +311,107 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-          # Deny non-SSL requests
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Ref CloudTrailLogsBucket
-              - !Sub '${CloudTrailLogsBucket}/*'
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
 
-  # CloudWatch Log Group for S3 access monitoring
-  S3AccessLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/s3/${ProjectName}/${Environment}/access-logs'
-      RetentionInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetentionDays]
-      KmsKeyId: !GetAtt S3EncryptionKey.Arn
-
-  # CloudWatch Log Group for CloudTrail
-  CloudTrailLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}/${Environment}'
-      RetentionInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetentionDays]
-      KmsKeyId: !GetAtt S3EncryptionKey.Arn
-
-  # CloudWatch Alarm for unauthorized access attempts
-  UnauthorizedAccessAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-${Environment}-unauthorized-access'
-      AlarmDescription: 'Alarm for unauthorized access attempts to sensitive data'
-      MetricName: ErrorCount
-      Namespace: AWS/S3
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: BucketName
-          Value: !Ref SensitiveDataBucket
-      TreatMissingData: notBreaching
-
-# Outputs for reference in other templates or applications
 Outputs:
-  SensitiveDataBucketName:
-    Description: 'Name of the primary sensitive data S3 bucket'
-    Value: !Ref SensitiveDataBucket
+  SecureBucketName:
+    Description: Name of the secure S3 bucket
+    Value: !Ref SecureDataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-SensitiveDataBucket'
+      Name: !Sub '${AWS::StackName}-SecureBucketName'
 
-  SensitiveDataBucketArn:
-    Description: 'ARN of the primary sensitive data S3 bucket'
-    Value: !GetAtt SensitiveDataBucket.Arn
+  SecureBucketArn:
+    Description: ARN of the secure S3 bucket
+    Value: !GetAtt SecureDataBucket.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-SensitiveDataBucketArn'
-
-  ReplicaBucketName:
-    Description: 'Name of the replica S3 bucket for disaster recovery'
-    Value: !Ref SensitiveDataReplicaBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-ReplicaBucket'
+      Name: !Sub '${AWS::StackName}-SecureBucketArn'
 
   KMSKeyId:
-    Description: 'KMS Key ID for S3 encryption'
+    Description: KMS Key ID for S3 encryption
     Value: !Ref S3EncryptionKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKey'
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
 
-  KMSKeyAlias:
-    Description: 'KMS Key Alias for easier reference'
-    Value: !Ref S3EncryptionKeyAlias
+  KMSKeyArn:
+    Description: KMS Key ARN for S3 encryption
+    Value: !GetAtt S3EncryptionKey.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyAlias'
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
 
-  DataAccessRoleArn:
-    Description: 'ARN of the IAM role for accessing sensitive data (requires MFA)'
-    Value: !GetAtt SensitiveDataAccessRole.Arn
+  DataAdminRoleArn:
+    Description: ARN of the data administrator role
+    Value: !GetAtt DataAdminRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-DataAccessRole'
+      Name: !Sub '${AWS::StackName}-DataAdminRoleArn'
+
+  DataReadOnlyRoleArn:
+    Description: ARN of the data read-only role
+    Value: !GetAtt DataReadOnlyRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DataReadOnlyRoleArn'
 
   CloudTrailArn:
-    Description: 'ARN of the CloudTrail for audit logging'
-    Value: !GetAtt SensitiveDataCloudTrail.Arn
+    Description: ARN of the CloudTrail for audit logging
+    Value: !GetAtt DataAccessCloudTrail.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrail'
-
-  S3AccessLogGroupName:
-    Description: 'CloudWatch Log Group name for S3 access monitoring'
-    Value: !Ref S3AccessLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-S3AccessLogGroup'
+      Name: !Sub '${AWS::StackName}-CloudTrailArn'
 ```
 
-## Key Security Features Implemented
+## Key Security Features Explained
 
-### 🔐 **Encryption Everywhere**
-- **KMS-managed keys** with automatic rotation
-- **S3 server-side encryption** using customer-managed KMS keys
-- **CloudTrail log encryption** for audit trail protection
-- **CloudWatch log encryption** for monitoring data
+### **Encryption & Key Management**
+- **KMS encryption**: Uses customer-managed KMS keys instead of S3-managed keys for better control
+- **Bucket key enabled**: Reduces KMS API calls and costs while maintaining security
+- **Enforced encryption**: Bucket policy denies any unencrypted uploads
 
-### 👤 **Least Privilege IAM**
-- **MFA-required role assumption** for sensitive data access
-- **Time-limited MFA sessions** (configurable, default 1 hour)
-- **Separate roles** for different access patterns
-- **Explicit deny policies** for insecure operations
+### **Access Control**
+- **MFA required**: Both IAM roles require multi-factor authentication
+- **Time-limited MFA**: MFA must be used within the last hour
+- **Principle of least privilege**: Separate roles for admin vs read-only access
+- **HTTPS only**: Bucket policy denies any non-HTTPS requests
 
-### 📊 **Comprehensive Audit Logging**
-- **CloudTrail data events** for all S3 operations
-- **Multi-region trail** for complete coverage
-- **Log file validation** for integrity checking
-- **CloudWatch integration** for real-time monitoring
+### **Public Access Prevention**
+- **Complete public access block**: All four settings enabled to prevent accidental exposure
+- **No public ACLs or policies**: Bucket is completely private
 
-### 🚫 **Zero Public Access**
-- **Public Access Block** on all buckets
-- **Bucket policies** denying non-SSL requests
-- **VPC endpoint support** (can be added if needed)
+### **Monitoring & Auditing**
+- **CloudTrail data events**: Logs all access to your S3 bucket objects
+- **Separate audit log storage**: CloudTrail logs stored in dedicated bucket
+- **Multi-region trail**: Captures events from all AWS regions
 
-### 💰 **Cost Optimization**
-- **Intelligent lifecycle policies** (IA → Glacier → Deep Archive)
-- **Automatic cleanup** of incomplete uploads
-- **Version management** with retention policies
-- **S3 Bucket Keys** to reduce KMS costs
-
-### 🌍 **Disaster Recovery**
-- **Cross-region replication** with encryption
-- **Versioning enabled** on all buckets
-- **Configurable retention** periods
+### **Cost Optimization**
+- **Lifecycle management**: Automatically moves data to Glacier after specified days
+- **Cleanup rules**: Removes incomplete multipart uploads after 7 days
+- **Log retention**: CloudTrail logs automatically deleted after 90 days
 
 ## Deployment Instructions
 
-1. **Validate the template:**
-   ```bash
-   aws cloudformation validate-template --template-body file://secure-storage.yaml
-   ```
+1. **Save the template** as `secure-storage.yaml`
 
-2. **Deploy to development:**
-   ```bash
-   aws cloudformation create-stack \
-     --stack-name secure-data-storage-dev \
-     --template-body file://secure-storage.yaml \
-     --parameters ParameterKey=Environment,ParameterValue=dev \
-                  ParameterKey=ProjectName,ParameterValue=your-project \
-     --capabilities CAPABILITY_NAMED_IAM
-   ```
+2. **Deploy using AWS CLI**:
+```bash
+aws cloudformation create-stack \
+  --stack-name secure-data-storage-dev \
+  --template-body file://secure-storage.yaml \
+  --parameters ParameterKey=Environment,ParameterValue=dev \
+               ParameterKey=ProjectName,ParameterValue=your-project \
+  --capabilities CAPABILITY_NAMED_IAM
+```
 
-3. **Monitor deployment:**
-   ```bash
-   aws cloudformation describe-stacks --stack-name secure-data-storage-dev
-   ```
+3. **Or deploy via AWS Console**:
+   - Go to CloudFormation → Create Stack
+   - Upload the template file
+   - Fill in parameters (Environment, ProjectName, etc.)
+   - Check "I acknowledge that AWS CloudFormation might create IAM resources with custom names"
 
-## Compliance Features
+## Usage After Deployment
 
-- ✅ **SOC 2 Type II** ready with comprehensive logging
-- ✅ **GDPR compliant** with data lifecycle management
-- ✅ **HIPAA eligible** with encryption and access controls
-- ✅ **PCI DSS** compatible with network security controls
+**To assume the admin role** (with MFA):
+```bash
+aws sts assume-role \
+  --role-arn "arn:aws:iam::ACCOUNT-ID:role/PROJECT-data-admin-ENVIRONMENT" \
+  --role-session-name "admin-session" \
+  --serial-number "arn:aws:iam::ACCOUNT-ID:mfa/USERNAME" \
+  --token-code "MFA-CODE"
+```
 
-This template provides enterprise-grade security while remaining maintainable and cost-effective. All security decisions are documented in comments, and the modular design makes it easy to extend for additional requirements.
+This template provides enterprise-grade security while remaining maintainable and cost-effective. All resources are properly tagged for cost tracking, and the modular design makes it easy to modify for different environments.

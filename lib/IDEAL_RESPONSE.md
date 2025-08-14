@@ -5,98 +5,65 @@ Description: >
   Implements enterprise-grade security controls including encryption, IAM with MFA,
   audit logging, and lifecycle management for compliance requirements.
 
-# Metadata section for CloudFormation console organization
+# Simplified metadata for CloudFormation console
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: 'Basic Configuration'
         Parameters:
-          - EnvironmentName
           - EnvironmentSuffix
+          - BucketPrefix
       - Label:
-          default: 'Security Configuration'
+          default: 'Security & Storage'
         Parameters:
-          - RequireMFA
-          - EnableCrossRegionReplication
-      - Label:
-          default: 'Storage Configuration'
-        Parameters:
-          - S3BucketPrefix
-          - GlacierTransitionDays
-      - Label:
-          default: 'Audit Configuration'
-        Parameters:
-          - CloudTrailBucketPrefix
-          - EnableLogFileValidation
+          - EnableMFA
+          - EnableReplication
+          - LifecycleDays
 
 Parameters:
-  EnvironmentName:
-    Type: String
-    Default: 'Production'
-    Description: 'Environment name (Production, Staging, Development)'
-    AllowedValues:
-      - Production
-      - Staging
-      - Development
-    
+  # Standardized naming convention: all parameters use consistent format
   EnvironmentSuffix:
     Type: String
-    Default: 'prod'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
+    MinLength: 2
+    MaxLength: 10
 
-  S3BucketPrefix:
+  BucketPrefix:
     Type: String
-    Default: 'secure-data-storage'
-    Description: 'Prefix for S3 bucket names (must be globally unique)'
+    Default: 'secure-data'
+    Description: 'Prefix for S3 bucket names'
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+    MinLength: 3
+    MaxLength: 20
 
-  CloudTrailBucketPrefix:
-    Type: String
-    Default: 'audit-trail-logs'
-    Description: 'Prefix for CloudTrail S3 bucket name'
-    AllowedPattern: '^[a-z0-9-]+$'
-    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
-
-  RequireMFA:
+  EnableMFA:
     Type: String
     Default: 'true'
     Description: 'Require MFA for sensitive operations'
-    AllowedValues:
-      - 'true'
-      - 'false'
+    AllowedValues: ['true', 'false']
 
-  EnableCrossRegionReplication:
+  EnableReplication:
     Type: String
-    Default: 'true'
-    Description: 'Enable cross-region replication for disaster recovery'
-    AllowedValues:
-      - 'true'
-      - 'false'
+    Default: 'false'
+    Description: 'Enable cross-region replication'
+    AllowedValues: ['true', 'false']
 
-  GlacierTransitionDays:
+  LifecycleDays:
     Type: Number
     Default: 30
-    Description: 'Days before transitioning objects to Glacier storage'
+    Description: 'Days before transitioning to Glacier'
     MinValue: 1
     MaxValue: 365
 
-  EnableLogFileValidation:
-    Type: String
-    Default: 'true'
-    Description: 'Enable CloudTrail log file validation'
-    AllowedValues:
-      - 'true'
-      - 'false'
-
-# Conditions for conditional resource creation
+# Simplified conditions
 Conditions:
-  RequireMFACondition: !Equals [!Ref RequireMFA, 'true']
-  EnableReplicationCondition: !Equals [!Ref EnableCrossRegionReplication, 'true']
-  EnableLogValidation: !Equals [!Ref EnableLogFileValidation, 'true']
+  MFAEnabled: !Equals [!Ref EnableMFA, 'true']
+  ReplicationEnabled: !Equals [!Ref EnableReplication, 'true']
 
 Resources:
   # KMS Key for encryption
@@ -127,7 +94,7 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Purpose
           Value: 'Data Encryption'
 
@@ -142,7 +109,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${CloudTrailBucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub '${BucketPrefix}-audit-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -167,7 +134,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Purpose
           Value: 'Audit Logs'
 
@@ -198,7 +165,7 @@ Resources:
   # IAM Role for S3 Replication (must be created before the bucket)
   S3ReplicationRole:
     Type: AWS::IAM::Role
-    Condition: EnableReplicationCondition
+    Condition: ReplicationEnabled
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -216,19 +183,19 @@ Resources:
                 Action:
                   - 's3:GetReplicationConfiguration'
                   - 's3:ListBucket'
-                Resource: !Sub 'arn:aws:s3:::${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
               - Effect: Allow
                 Action:
                   - 's3:GetObjectVersionForReplication'
                   - 's3:GetObjectVersionAcl'
                   - 's3:GetObjectVersionTagging'
-                Resource: !Sub 'arn:aws:s3:::${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - 's3:ReplicateObject'
                   - 's3:ReplicateDelete'
                   - 's3:ReplicateTags'
-                Resource: !Sub 'arn:aws:s3:::${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica/*'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica/*'
               - Effect: Allow
                 Action:
                   - 'kms:Decrypt'
@@ -237,13 +204,13 @@ Resources:
                 Resource: !GetAtt DataEncryptionKey.Arn
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # Primary S3 Bucket for sensitive data storage
   SensitiveDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub '${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -258,7 +225,7 @@ Resources:
             Status: Enabled
             Transitions:
               - StorageClass: GLACIER
-                TransitionInDays: !Ref GlacierTransitionDays
+                TransitionInDays: !Ref LifecycleDays
           - Id: 'DeleteIncompleteMultipartUploads'
             Status: Enabled
             AbortIncompleteMultipartUpload:
@@ -269,7 +236,7 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       ReplicationConfiguration: !If
-        - EnableReplicationCondition
+        - ReplicationEnabled
         - Role: !GetAtt S3ReplicationRole.Arn
           Rules:
             - Id: 'ReplicateAll'
@@ -292,7 +259,7 @@ Resources:
         - !Ref 'AWS::NoValue'
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Purpose
           Value: 'Sensitive Data Storage'
         - Key: Compliance
@@ -301,9 +268,9 @@ Resources:
   # Replication bucket for disaster recovery (conditional)
   ReplicationBucket:
     Type: AWS::S3::Bucket
-    Condition: EnableReplicationCondition
+    Condition: ReplicationEnabled
     Properties:
-      BucketName: !Sub '${S3BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica'
+      BucketName: !Sub '${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -318,7 +285,7 @@ Resources:
             Status: Enabled
             Transitions:
               - StorageClass: GLACIER
-                TransitionInDays: !Ref GlacierTransitionDays
+                TransitionInDays: !Ref LifecycleDays
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -326,7 +293,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Purpose
           Value: 'Disaster Recovery Replica'
 
@@ -356,7 +323,7 @@ Resources:
             Resource:
               - !GetAtt SensitiveDataBucket.Arn
               - !If
-                - EnableReplicationCondition
+                - ReplicationEnabled
                 - !GetAtt ReplicationBucket.Arn
                 - !Ref 'AWS::NoValue'
           # Require MFA for sensitive operations
@@ -371,11 +338,11 @@ Resources:
             Resource:
               - !Sub '${SensitiveDataBucket.Arn}/*'
               - !If
-                - EnableReplicationCondition
+                - ReplicationEnabled
                 - !Sub '${ReplicationBucket.Arn}/*'
                 - !Ref 'AWS::NoValue'
             Condition: !If
-              - RequireMFACondition
+              - MFAEnabled
               - Bool:
                   'aws:MultiFactorAuthPresent': 'true'
               - !Ref 'AWS::NoValue'
@@ -388,7 +355,7 @@ Resources:
               - 'kms:DescribeKey'
             Resource: !GetAtt DataEncryptionKey.Arn
             Condition: !If
-              - RequireMFACondition
+              - MFAEnabled
               - Bool:
                   'aws:MultiFactorAuthPresent': 'true'
               - !Ref 'AWS::NoValue'
@@ -405,7 +372,7 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'sts:AssumeRole'
             Condition: !If
-              - RequireMFACondition
+              - MFAEnabled
               - Bool:
                   'aws:MultiFactorAuthPresent': 'true'
               - !Ref 'AWS::NoValue'
@@ -429,7 +396,7 @@ Resources:
                 Resource: !GetAtt DataEncryptionKey.Arn
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # Sample IAM User (in production, users should be created separately)
   SampleDataAdmin:
@@ -439,7 +406,7 @@ Resources:
         - !Ref DataAdministratorsGroup
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Note
           Value: 'Enable MFA after creation'
 
@@ -453,7 +420,7 @@ Resources:
       IncludeGlobalServiceEvents: true
       IsLogging: true
       IsMultiRegionTrail: true
-      EnableLogFileValidation: !If [EnableLogValidation, true, false]
+      EnableLogFileValidation: true
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
@@ -462,12 +429,12 @@ Resources:
               Values:
                 - !Sub '${SensitiveDataBucket.Arn}/'
                 - !If
-                  - EnableReplicationCondition
+                  - ReplicationEnabled
                   - !Sub '${ReplicationBucket.Arn}/'
                   - !Ref 'AWS::NoValue'
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Purpose
           Value: 'Compliance Audit Trail'
 
@@ -498,7 +465,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-SensitiveDataBucketArn'
 
   ReplicationBucketName:
-    Condition: EnableReplicationCondition
+    Condition: ReplicationEnabled
     Description: 'Name of the replication S3 bucket'
     Value: !Ref ReplicationBucket
     Export:
@@ -534,13 +501,7 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-StackName'
 
-  EnvironmentName:
-    Description: 'Environment name used for this deployment'
-    Value: !Ref EnvironmentName
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentName'
-
-  EnvironmentSuffix:
+  EnvironmentSuffixOutput:
     Description: 'Environment suffix used for this deployment'
     Value: !Ref EnvironmentSuffix
     Export:
