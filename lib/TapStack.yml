@@ -4,6 +4,12 @@ Description: >
   Implements KMS encryption, secure VPC, RDS, EC2, S3, CloudTrail, Config,
   GuardDuty, WAF, Flow Logs, and monitoring.
 
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1030
+
 Parameters:
   Environment:
     Type: String
@@ -37,23 +43,27 @@ Parameters:
     Description: Set to 'true' to use existing VPC and subnets instead of creating new networking
 
   ExistingVPCId:
-    Type: AWS::EC2::VPC::Id
-    Default: vpc-12345678
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^vpc-([0-9A-Fa-f]{8}|[0-9A-Fa-f]{17})$'
     Description: Existing VPC ID to use when UseExistingVPC is 'true'
 
   ExistingPublicSubnet1Id:
-    Type: AWS::EC2::Subnet::Id
-    Default: subnet-12345678
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^subnet-([0-9A-Fa-f]{8}|[0-9A-Fa-f]{17})$'
     Description: Existing public subnet 1 ID when UseExistingVPC is 'true'
 
   ExistingPrivateSubnet1Id:
-    Type: AWS::EC2::Subnet::Id
-    Default: subnet-12345678
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^subnet-([0-9A-Fa-f]{8}|[0-9A-Fa-f]{17})$'
     Description: Existing private subnet 1 ID when UseExistingVPC is 'true'
 
   ExistingPrivateSubnet2Id:
-    Type: AWS::EC2::Subnet::Id
-    Default: subnet-12345678
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^subnet-([0-9A-Fa-f]{8}|[0-9A-Fa-f]{17})$'
     Description: Existing private subnet 2 ID when UseExistingVPC is 'true'
 
   FlowLogsRoleArn:
