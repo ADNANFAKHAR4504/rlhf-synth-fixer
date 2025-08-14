@@ -442,8 +442,11 @@ resource "aws_cloudtrail" "corp_cloudtrail" {
     exclude_management_event_sources = []
 
     data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
+      type = "AWS::S3::Object"
+      values = [
+        "${aws_s3_bucket.corp_bucket.arn}/*",
+        "${aws_s3_bucket.cloudtrail_bucket.arn}/*"
+      ]
     }
   }
 
