@@ -156,7 +156,11 @@ export class TapStack extends pulumi.ComponentResource {
       });
     }
 
-    // Assign the outputs directly from the computed values.
+    // NOTE: The following outputs are now properties of the TapStack class,
+    // which can be accessed from outside the class.
+    // They are also automatically registered with registerOutputs().
+    // We will export them as public readonly properties instead of using pulumi.export.
+
     this.registerOutputs({
       environment: this.environmentSuffix,
       tags: this.tags,
@@ -207,67 +211,18 @@ export class TapStack extends pulumi.ComponentResource {
   }
 }
 
-// ---------------------------------------------------------------------------------------
-// The following section instantiates the TapStack and exports its outputs.
-// This makes the outputs visible in the Pulumi CLI.
-// ---------------------------------------------------------------------------------------
+// Note: In a typical Pulumi program, you would create a single instance of TapStack
+// and export its outputs. The following is just an example of how you might do that.
+// In practice, you would create the stack instance in your main program file (index.ts)
+// and export the outputs there.
 
-// Create a single instance of your TapStack. This is the main entry point of your program.
-const tapStack = new TapStack('tap-stack', {
-  // You can specify your desired environment, regions, and tags here.
-  // The default values from the class constructor will be used if you don't.
-});
+// Example usage:
+// const tapStack = new TapStack('tap-stack', {
+//   environmentSuffix: 'prod',
+//   regions: ['us-east-1', 'us-west-2'],
+//   tags: { Project: 'MyProject' }
+// });
 
-// Explicitly export the outputs from the tapStack instance.
-// The key on the left is the name of the output that will appear in your CLI.
-export const environment = tapStack.environmentSuffix;
-export const regions = tapStack.regions;
-export const tags = tapStack.tags;
-
-// Since the outputs are no longer public properties of the class,
-// we need to access the outputs from the internal registerOutputs call.
-// This is not possible directly from outside the class.
-// A simpler way is to re-compute these outputs outside of the class, which
-// is the best practice for a main Pulumi program file.
-export const primaryRegion = tapStack.regions.apply(regions =>
-  regions.length > 0 ? regions[0] : null
-);
-export const primaryVpcId = tapStack.regions.apply(regions =>
-  regions.length > 0 && tapStack.regionalNetworks[regions[0]]
-    ? tapStack.regionalNetworks[regions[0]].vpcId
-    : null
-);
-export const primaryInstanceIds = tapStack.regions.apply(regions =>
-  regions.length > 0 && tapStack.regionalCompute[regions[0]]
-    ? tapStack.regionalCompute[regions[0]].instanceIds
-    : null
-);
-export const primaryWebServerSgId = tapStack.regions.apply(regions =>
-  regions.length > 0 && tapStack.regionalSecurity[regions[0]]
-    ? tapStack.regionalSecurity[regions[0]].webServerSgId
-    : null
-);
-export const primaryDashboardName = tapStack.regions.apply(regions =>
-  regions.length > 0 && tapStack.regionalMonitoring[regions[0]]
-    ? tapStack.regionalMonitoring[regions[0]].dashboardName
-    : null
-);
-export const allRegionsData = tapStack.regions.apply(regions => {
-  const outputs: { [key: string]: RegionalOutputData } = {};
-  regions.forEach(region => {
-    if (
-      tapStack.regionalNetworks[region] &&
-      tapStack.regionalCompute[region] &&
-      tapStack.regionalSecurity[region] &&
-      tapStack.regionalMonitoring[region]
-    ) {
-      outputs[region] = {
-        vpcId: tapStack.regionalNetworks[region].vpcId,
-        instanceIds: tapStack.regionalCompute[region].instanceIds,
-        securityGroupId: tapStack.regionalSecurity[region].webServerSgId,
-        dashboardName: tapStack.regionalMonitoring[region].dashboardName,
-      };
-    }
-  });
-  return outputs;
-});
+// export const deployedRegions = tapStack.regions;
+// export const environment = tapStack.environmentSuffix;
+// export const primaryRegion = tapStack.regions.apply(regions => regions.length > 0 ? regions[0] : null);
