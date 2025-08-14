@@ -130,6 +130,24 @@ Parameters:
     AllowedPattern: '^$|^subnet-([0-9A-Fa-f]{8}|[0-9A-Fa-f]{17})$'
     Description: Existing private subnet 2 ID when UseExistingVPC is 'true'
 
+  UseExistingNatGateways:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Set to 'true' to reuse existing NAT Gateways instead of creating new ones
+
+  ExistingNatGateway1Id:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^nat-([0-9A-Fa-f]{8}|[0-9A-Fa-f]{17})$'
+    Description: Existing NAT Gateway ID for AZ1 (optional)
+
+  ExistingNatGateway2Id:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^nat-([0-9A-Fa-f]{8}|[0-9A-Fa-f]{17})$'
+    Description: Existing NAT Gateway ID for AZ2 (optional)
+
   FlowLogsRoleArn:
     Type: String
     Default: ''
@@ -158,6 +176,10 @@ Conditions:
   HasFlowLogsRoleArn: !Not [!Equals [!Ref FlowLogsRoleArn, '']]
   FlowLogCreatableCond:
     !Or [!Condition HasFlowLogsRoleArn, !Condition CreateNetworking]
+  UseExistingNatCond: !Equals [!Ref UseExistingNatGateways, 'true']
+  CreateNatCond: !Equals [!Ref UseExistingNatGateways, 'false']
+  CreateNatResourcesCond:
+    !And [!Condition CreateNetworking, !Condition CreateNatCond]
   CreateBastionSGFinalCond: !Equals [!Ref ExistingBastionSGId, '']
   CreateWebSGFinalCond: !Equals [!Ref ExistingWebSGId, '']
   CreateDBSGFinalCond: !Equals [!Ref ExistingDBSGId, '']
@@ -380,7 +402,7 @@ Resources:
       RouteTableId: !Ref SecureEnvPrivateRouteTable2
 
   SecureEnvEIP1:
-    Condition: CreateNetworking
+    Condition: CreateNatResourcesCond
     Type: AWS::EC2::EIP
     DependsOn: SecureEnvVPCGatewayAttachment
     Properties:
@@ -390,7 +412,7 @@ Resources:
           Value: !Sub SecureEnv-EIP-1-${Environment}
 
   SecureEnvEIP2:
-    Condition: CreateNetworking
+    Condition: CreateNatResourcesCond
     Type: AWS::EC2::EIP
     DependsOn: SecureEnvVPCGatewayAttachment
     Properties:
@@ -400,7 +422,7 @@ Resources:
           Value: !Sub SecureEnv-EIP-2-${Environment}
 
   SecureEnvNATGateway1:
-    Condition: CreateNetworking
+    Condition: CreateNatResourcesCond
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt SecureEnvEIP1.AllocationId
@@ -410,7 +432,7 @@ Resources:
           Value: !Sub SecureEnv-NAT-1-${Environment}
 
   SecureEnvNATGateway2:
-    Condition: CreateNetworking
+    Condition: CreateNatResourcesCond
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt SecureEnvEIP2.AllocationId
@@ -425,7 +447,12 @@ Resources:
     Properties:
       RouteTableId: !Ref SecureEnvPrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref SecureEnvNATGateway1
+      NatGatewayId:
+        !If [
+          UseExistingNatCond,
+          !Ref ExistingNatGateway1Id,
+          !Ref SecureEnvNATGateway1,
+        ]
 
   SecureEnvPrivateRoute2:
     Condition: CreateNetworking
@@ -433,7 +460,12 @@ Resources:
     Properties:
       RouteTableId: !Ref SecureEnvPrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref SecureEnvNATGateway2
+      NatGatewayId:
+        !If [
+          UseExistingNatCond,
+          !Ref ExistingNatGateway2Id,
+          !Ref SecureEnvNATGateway2,
+        ]
 
   # =========================
   # Security Groups
