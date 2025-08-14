@@ -142,11 +142,6 @@ chown apache:apache /var/www/html/index.html
           encrypted: true,
           kmsKeyId: args.mainKmsKeyArn,
           deleteOnTermination: true,
-          tags: {
-            Name: `tap-web-server-root-${environmentSuffix}`,
-            VolumeType: 'root',
-            ...tags,
-          },
         },
 
         tags: {
