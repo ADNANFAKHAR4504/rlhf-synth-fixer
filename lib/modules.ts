@@ -155,7 +155,7 @@ export class Ec2Module extends Construct {
     this.securityGroupId = webSg.id;
 
     // --- EC2 Instances ---
-    const amiId = 'ami-0c55b159cbfafe1f0'; // Amazon Linux 2 AMI in us-east-1
+    const amiId = 'ami-08a6efd148b1f7504'; // Amazon Linux 2 AMI in us-east-1
 
     props.publicSubnetIds.forEach((subnetId, index) => {
       new Instance(this, `WebServerInstance-${index}`, {
