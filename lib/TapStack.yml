@@ -611,19 +611,17 @@ Resources:
         - Key: Name
           Value: !Sub 'SSLCert-${Environment}'
 
-  # ============================================================================
+  # =========================================================================
   # 2. ROOT USER MFA - AWS CONFIG RULE
-  # ============================================================================
+  # =========================================================================
   ConfigServiceRole:
     Type: AWS::IAM::ServiceLinkedRole
     Properties:
       AWSServiceName: config.amazonaws.com
 
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub 'ConfigDeliveryChannel-${Environment}'
-      S3BucketName: !Ref ConfigS3Bucket
+  # NOTE: AWS only allows one ConfigurationRecorder and DeliveryChannel per region/account.
+  # Please ensure AWS Config is enabled and a configuration recorder exists before deploying this stack.
+  # The ConfigRule below will attach to the existing recorder.
 
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
@@ -667,15 +665,6 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
 
-  ConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub 'ConfigRecorder-${Environment}'
-      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
   RootUserMFAConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
@@ -684,7 +673,7 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: ROOT_USER_MFA_ENABLED
-    DependsOn: ConfigurationRecorder
+    # No DependsOn: ConfigurationRecorder
 
   # ============================================================================
   # 8. RESTRICT VOLUME CREATION VIA ENCRYPTED AMIS - IAM POLICY
