@@ -707,7 +707,7 @@ resource "aws_db_instance" "app" {
   storage_encrypted     = true
 
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15.11"
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
