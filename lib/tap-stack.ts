@@ -1,30 +1,30 @@
-import { Construct } from 'constructs';
-import { TerraformStack, Fn } from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { RandomProvider } from '@cdktf/provider-random/lib/provider';
-import { Password } from '@cdktf/provider-random/lib/password';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
-import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy'; // FIX: Import S3BucketPolicy
-import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
+import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy'; // FIX: Import S3BucketPolicy
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Password } from '@cdktf/provider-random/lib/password';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
+import { Fn, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface RegionConfig {
   readonly region: string;
@@ -59,14 +59,14 @@ const REGION_CONFIGS: RegionConfig[] = [
     azB: 'us-west-2b',
   },
   {
-    region: 'eu-central-1',
+    region: 'us-east-2',
     vpcCidr: '10.3.0.0/16',
     publicSubnetCidr: '10.3.1.0/24',
     privateSubnetCidr: '10.3.2.0/24',
     dbSubnetACidr: '10.3.3.0/24',
     dbSubnetBCidr: '10.3.4.0/24',
-    azA: 'eu-central-1a',
-    azB: 'eu-central-1b',
+    azA: 'us-east-2a',
+    azB: 'us-east-2b',
   },
 ];
 
