@@ -11,14 +11,12 @@ class TestLiveIntegration(unittest.TestCase):
     """Read outputs from existing Pulumi stack (no deployment)."""
 
     os.environ["PULUMI_CONFIG_PASSPHRASE"] = ""
-
     cls.stack_name = "TapStackTest"
     cls.project_name = "serverless-aws"
 
     from lib.tap_stack import TapStack, TapStackArgs
 
     def pulumi_program():
-
       environment_suffix = 'test'
       TapStack(
         name="pulumi-infra",
