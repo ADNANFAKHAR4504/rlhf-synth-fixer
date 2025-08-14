@@ -63,7 +63,6 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output, tags: Dict,
     opts=pulumi.ResourceOptions(provider=provider)
   )
 
-  # Create CloudTrail
   trail = aws.cloudtrail.Trail(
     f"cloudtrail-{region}",
     name=f"infrastructure-trail-{region}",
@@ -83,7 +82,10 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output, tags: Dict,
       )]
     )],
     tags=tags,
-    opts=pulumi.ResourceOptions(provider=provider)
+    opts=pulumi.ResourceOptions(
+      provider=provider,
+      depends_on=[log_group, cloudtrail_role]  # Ensure role is created first
+    )
   )
 
   return trail
