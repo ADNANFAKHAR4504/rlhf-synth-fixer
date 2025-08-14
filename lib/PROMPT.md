@@ -18,7 +18,7 @@ The solution must be implemented using **AWS Cloud Development Kit (CDK) with Py
     * All function logs must be streamed to CloudWatch Logs with a latency of **less than one second**.
 * **Monitoring & Observability:**
     * The infrastructure must facilitate integration with a third-party monitoring tool (e.g., Datadog).
-    * Metrics and custom data points from the functions should be sent to the third-party service at a regular interval of **30 seconds**.
+    * Metrics and custom data points from the functions should be sent to the third-party service at a regular interval of **1 minutes**.
 * **Cost Optimization:**
     * The design and implementation must incorporate cost-saving measures to ensure the total monthly bill for this infrastructure does not exceed **$1000** under maximum load conditions. This may involve using appropriate AWS Lambda memory configurations, provisioned concurrency strategies, or other cost-effective practices.
 

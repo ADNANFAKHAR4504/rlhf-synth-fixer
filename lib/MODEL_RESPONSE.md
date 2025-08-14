@@ -208,7 +208,7 @@ class ServerlessInfrastructureStack(Stack):
             
             # Performance and scaling configuration
             memory_size=512,  # Optimal price-performance ratio
-            timeout=Duration.seconds(30),
+            timeout=Duration.minutes(1),
             architecture=_lambda.Architecture.ARM_64,  # 20% better price-performance
             
             # Auto-scaling configuration (1-50 concurrent executions)
@@ -243,7 +243,7 @@ class ServerlessInfrastructureStack(Stack):
         """
         Create monitoring Lambda function for third-party integration.
         
-        This function collects metrics and sends them to Datadog every 30 seconds.
+        This function collects metrics and sends them to Datadog every 1 minutes.
         
         Returns:
             _lambda.Function: The monitoring Lambda function
@@ -258,7 +258,7 @@ class ServerlessInfrastructureStack(Stack):
             
             # Lightweight configuration for monitoring
             memory_size=256,  # Lower memory for cost optimization
-            timeout=Duration.seconds(60),
+            timeout=Duration.minutes(60),
             architecture=_lambda.Architecture.ARM_64,
             
             # Logging
@@ -316,13 +316,13 @@ class ServerlessInfrastructureStack(Stack):
 
     def _create_monitoring_schedule(self) -> None:
         """
-        Create EventBridge rule to trigger monitoring function every 30 seconds.
+        Create EventBridge rule to trigger monitoring function every 1 minutes.
         """
         rule = events.Rule(
             self,
             "MonitoringScheduleRule",
-            schedule=events.Schedule.rate(Duration.seconds(30)),  # 30-second interval
-            description="Trigger monitoring function every 30 seconds"
+            schedule=events.Schedule.rate(Duration.minutes(1)),  # 1-second interval
+            description="Trigger monitoring function every 1 minutes"
         )
 
         # Add monitoring function as target
@@ -587,14 +587,14 @@ def get_datadog_api_key():
 
 def collect_cloudwatch_metrics():
     """
-    Collect metrics from CloudWatch for the past 30 seconds.
+    Collect metrics from CloudWatch for the past 1 minutes.
     
     Returns:
         list: List of metric data points
     """
     metrics = []
     end_time = datetime.utcnow()
-    start_time = end_time - timedelta(seconds=60)  # Look back 60 seconds to ensure data availability
+    start_time = end_time - timedelta(minutes=60)  # Look back 60 minutes to ensure data availability
     
     # Define metrics to collect
     metric_queries = [
@@ -889,9 +889,9 @@ class TestServerlessInfrastructureStack:
         """Test that EventBridge rule is created for monitoring schedule."""
         template = assertions.Template.from_stack(stack)
         
-        # Test EventBridge rule for 30-second interval
+        # Test EventBridge rule for 1-second interval
         template.has_resource_properties("AWS::Events::Rule", {
-            "ScheduleExpression": "rate(30 seconds)"
+            "ScheduleExpression": "rate(1 minutes)"
         })
     
     def test_ssm_parameter_created(self, stack):

@@ -11,9 +11,11 @@ from aws_cdk import (
   aws_events as events,
   aws_events_targets as targets,
   aws_ssm as ssm,
+  aws_budgets as budgets,
   RemovalPolicy,
   CfnOutput
 )
+
 from constructs import Construct
 
 
@@ -130,25 +132,37 @@ class TapStack(cdk.Stack):
     return role
 
   def _create_sample_lambda_function(self) -> _lambda.Function:
-    return _lambda.Function(
-      self,
-      "SampleFunction",
-      runtime=_lambda.Runtime.PYTHON_3_9,
-      handler="lambda_function.lambda_handler",
-      code=_lambda.Code.from_inline("def handler(event, context): return 'ok'"),
-      role=self.lambda_execution_role,
-      memory_size=512,
-      timeout=cdk.Duration.minutes(1),
-      architecture=_lambda.Architecture.ARM_64,
-      reserved_concurrent_executions=50,
-      log_group=self.log_group,
-      environment={
-        "LOG_LEVEL": "INFO",
-        "POWERTOOLS_SERVICE_NAME": "sample-service",
-        "POWERTOOLS_METRICS_NAMESPACE": "ServerlessPlatform"
-      },
-      description="Sample serverless function with optimized configuration"
-    )
+      self.sample_function = _lambda.Function(
+          self,
+          "SampleFunction",
+          runtime=_lambda.Runtime.PYTHON_3_9,
+          handler="lambda_function.lambda_handler",
+          code=_lambda.Code.from_inline("def handler(event, context): return 'ok'"),
+          role=self.lambda_execution_role,
+          memory_size=512,
+          timeout=cdk.Duration.minutes(1),
+          architecture=_lambda.Architecture.ARM_64,
+          reserved_concurrent_executions=50,
+          environment={
+              "LOG_LEVEL": "INFO",
+              "POWERTOOLS_SERVICE_NAME": "sample-service",
+              "POWERTOOLS_METRICS_NAMESPACE": "ServerlessPlatform"
+          }
+      )
+
+      # Version + Alias for provisioned concurrency
+      version = self.sample_function.current_version
+      _lambda.Alias(
+          self,
+          "SampleFunctionAlias",
+          alias_name="prod",
+          version=version,
+          provisioned_concurrent_executions=5
+      )
+
+      return self.sample_function
+
+
 
   def _create_monitoring_lambda_function(self) -> _lambda.Function:
     return _lambda.Function(
@@ -237,4 +251,27 @@ class TapStack(cdk.Stack):
       'LogGroupName',
       value=self.log_group.log_group_name,
       description='CloudWatch Log Group name'
+    )
+
+    # Budget alert for $1000/month
+    budget = budgets.CfnBudget(
+        self,
+        "ServerlessBudget",
+        budget={
+            "budgetName": f"ServerlessPlatform-{self.environment_suffix}-Budget",
+            "budgetLimit": {"amount": 1000, "unit": "USD"},
+            "timeUnit": "MONTHLY",
+            "budgetType": "COST"
+        },
+        notifications_with_subscribers=[{
+            "notification": {
+                "notificationType": "FORECASTED",
+                "comparisonOperator": "GREATER_THAN",
+                "threshold": 80  # triggers at 80% usage
+            },
+            "subscribers": [{
+                "subscriptionType": "EMAIL",
+                "address": "admin@company.com"
+            }]
+        }]
     )

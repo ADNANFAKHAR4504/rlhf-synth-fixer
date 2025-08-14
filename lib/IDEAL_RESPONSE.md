@@ -17,7 +17,7 @@ Based on the comprehensive failure mode analysis and infrastructure review, this
 
 **Operational Excellence**
 - Comprehensive failure mode documentation
-- Automated monitoring every 30 seconds
+- Automated monitoring every 1 minute
 - Reserved concurrency limits prevent runaway costs
 - SSM Parameter Store for secure configuration management
 
