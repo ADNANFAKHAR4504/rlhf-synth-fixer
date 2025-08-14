@@ -12,6 +12,7 @@ import os
 from typing import Dict, Any, Optional
 import pulumi
 import pulumi_aws as aws
+import base64
 from pulumi import ComponentResource, ResourceOptions, Output
 
 
@@ -612,65 +613,63 @@ class TapStack(ComponentResource):
         )
     
     def _create_launch_template(self):
-        """Create launch template for Auto Scaling Group."""
-        # Get latest Amazon Linux 2 AMI
-        ami = aws.ec2.get_ami(
-            most_recent=True,
-            owners=["amazon"],
-            filters=[
-                {"name": "name", "values": ["amzn2-ami-hvm-*"]},
-                {"name": "architecture", "values": ["x86_64"]},
-            ]
-        )
-        
-        # User data script
-        user_data = """#!/bin/bash
-yum update -y
-yum install -y amazon-cloudwatch-agent
-yum install -y docker
-systemctl start docker
-systemctl enable docker
-usermod -a -G docker ec2-user
-"""
-        
-        # Get current AWS region
-        current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
-        
-        self.launch_template = aws.ec2.LaunchTemplate(
-            f"{self.name_prefix}-launch-template",
-            name_prefix=f"{self.name_prefix}-lt-",
-            image_id=ami.id,
-            instance_type="c5.large",  # C5 series for compute-intensive tasks
-            vpc_security_group_ids=[self.ec2_sg.id],
-            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-                name=self.ec2_instance_profile.name
-            ),
-            user_data=pulumi.Output.from_input(user_data).apply(
-                lambda ud: aws.ec2.get_launch_template_user_data(ud)["user_data"]
-            ),
-            block_device_mappings=[
-                aws.ec2.LaunchTemplateBlockDeviceMappingArgs(
-                    device_name="/dev/xvda",
-                    ebs=aws.ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
-                        volume_size=20,
-                        volume_type="gp3",
-                        encrypted=True,
-                        kms_key_id=self.kms_key.arn,
-                        delete_on_termination=True,
-                    ),
-                )
-            ],
-            tag_specifications=[
-                aws.ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="instance",
-                    tags={
-                        "Name": f"{self.name_prefix}-instance",
-                        "Environment": self.environment_suffix,
-                    },
-                )
-            ],
-            opts=ResourceOptions(parent=self)
-        )
+      """Create launch template for Auto Scaling Group."""
+      # Get latest Amazon Linux 2 AMI
+      ami = aws.ec2.get_ami(
+          most_recent=True,
+          owners=["amazon"],
+          filters=[
+              {"name": "name", "values": ["amzn2-ami-hvm-*"]},
+              {"name": "architecture", "values": ["x86_64"]},
+          ]
+      )
+      
+      # User data script
+      user_data = """#!/bin/bash
+  yum update -y
+  yum install -y amazon-cloudwatch-agent
+  yum install -y docker
+  systemctl start docker
+  systemctl enable docker
+  usermod -a -G docker ec2-user
+  """
+      
+      self.launch_template = aws.ec2.LaunchTemplate(
+          f"{self.name_prefix}-launch-template",
+          name_prefix=f"{self.name_prefix}-lt-",
+          image_id=ami.id,
+          instance_type="c5.large",  # C5 series for compute-intensive tasks
+          vpc_security_group_ids=[self.ec2_sg.id],
+          iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
+              name=self.ec2_instance_profile.name
+          ),
+          user_data=pulumi.Output.from_input(user_data).apply(
+              lambda ud: base64.b64encode(ud.encode('utf-8')).decode('utf-8')
+          ),
+          block_device_mappings=[
+              aws.ec2.LaunchTemplateBlockDeviceMappingArgs(
+                  device_name="/dev/xvda",
+                  ebs=aws.ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
+                      volume_size=20,
+                      volume_type="gp3",
+                      encrypted=True,
+                      kms_key_id=self.kms_key.arn,
+                      delete_on_termination=True,
+                  ),
+              )
+          ],
+          tag_specifications=[
+              aws.ec2.LaunchTemplateTagSpecificationArgs(
+                  resource_type="instance",
+                  tags={
+                      "Name": f"{self.name_prefix}-instance",
+                      "Environment": self.environment_suffix,
+                  },
+              )
+          ],
+          opts=ResourceOptions(parent=self)
+      )
+
     
     def _create_auto_scaling_group(self):
         """Create Auto Scaling Group for high availability."""
