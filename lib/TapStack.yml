@@ -710,7 +710,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub "${ProjectName}-${EnvironmentSuffix}-lt"
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI in af-south-1
+        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI in ap-south-2
         InstanceType: !Ref InstanceType
         KeyName: !If
           - HasKeyPair
