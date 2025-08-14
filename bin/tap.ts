@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import 'source-map-support/register';
 import { App } from 'cdktf';
+import 'source-map-support/register';
 import { MultiRegionSecurityStack, StackConfig } from '../lib/tap-stack';
 
 // FIX: Define the production configuration that will be passed to the stack.
@@ -32,14 +32,14 @@ const PROD_STACK_CONFIG: StackConfig = {
       azB: 'us-west-2b',
     },
     {
-      region: 'eu-central-1',
+      region: 'us-east-2',
       vpcCidr: '10.3.0.0/16',
       publicSubnetCidr: '10.3.1.0/24',
       privateSubnetCidr: '10.3.2.0/24',
       dbSubnetACidr: '10.3.3.0/24',
       dbSubnetBCidr: '10.3.4.0/24',
-      azA: 'eu-central-1a',
-      azB: 'eu-central-1b',
+      azA: 'us-east-2a',
+      azB: 'us-east-2b',
     },
   ],
 };

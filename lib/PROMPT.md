@@ -4,7 +4,7 @@ You are an **expert DevOps/SRE engineer** skilled in **CDKTF (Cloud Development 
 
 ## **Objective**
 
-Provision AWS resources in **three regions** — `us-east-1`, `us-west-2`, and `eu-central-1` — ensuring strict security controls, zero unnecessary public exposure, centralized logging, and encryption for all stored and transmitted data.
+Provision AWS resources in **three regions** — `us-east-1`, `us-west-2`, and `us-east-2` — ensuring strict security controls, zero unnecessary public exposure, centralized logging, and encryption for all stored and transmitted data.
 
 ---
 

@@ -77,7 +77,7 @@ class SecureMultiRegionStack extends TerraformStack {
       databaseSubnetCidr: "10.1.3.0/24",
     },
     {
-      name: "eu-central-1",
+      name: "us-east-2",
       cidrBlock: "10.2.0.0/16",
       publicSubnetCidr: "10.2.1.0/24",
       privateSubnetCidr: "10.2.2.0/24",
