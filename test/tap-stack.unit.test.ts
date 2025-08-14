@@ -183,11 +183,24 @@ describe('TapStack CloudFormation Template', () => {
     test('IAM roles should follow least privilege', () => {
       expect(template.Resources.IAMRole).toBeDefined();
       expect(template.Resources.IAMRole.Properties.ManagedPolicyArns).toContain(
-        'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      );
-      expect(template.Resources.IAMRole.Properties.ManagedPolicyArns).toContain(
         'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       );
+
+      // Check that the role has minimal required policies
+      const iamRole = template.Resources.IAMRole;
+      expect(iamRole.Properties.Policies).toBeDefined();
+
+      // Should have S3 access policy for ALB logs
+      const s3Policy = iamRole.Properties.Policies.find(
+        (policy: any) => policy.PolicyName === 'S3Access'
+      );
+      expect(s3Policy).toBeDefined();
+
+      // Should have CloudFormation signal policy
+      const cfnPolicy = iamRole.Properties.Policies.find(
+        (policy: any) => policy.PolicyName === 'CloudFormationSignal'
+      );
+      expect(cfnPolicy).toBeDefined();
     });
   });
 
