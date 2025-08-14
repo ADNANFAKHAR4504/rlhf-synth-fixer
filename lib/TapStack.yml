@@ -39,7 +39,7 @@ Resources:
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: application-data-bucket-prod-001-{{resolve:aws:account-id}}-us-east-1
+      BucketName: !Sub 'application-data-bucket-prod-001-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -92,7 +92,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: S3DataProcessor-ExecutionRole-prod
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -137,7 +136,6 @@ Resources:
   MFAEnforcementPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: MFAEnforcementPolicy
       Description: 'Policy that denies all actions if MFA is not present'
       PolicyDocument:
         Version: '2012-10-17'
@@ -163,7 +161,7 @@ Resources:
     DependsOn: LambdaLogGroup
     Properties:
       FunctionName: S3DataProcessor
-      Runtime: python3.8
+      Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 60
@@ -237,6 +235,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
       SourceArn: !GetAtt ApplicationDataBucket.Arn
+      SourceAccount: !Ref AWS::AccountId
 
 Outputs:
   S3BucketName:
