@@ -210,6 +210,9 @@ export class SecureStack extends pulumi.ComponentResource {
       databaseEndpoint: this.databaseEndpoint,
       webInstanceId: this.webInstanceId,
       webInstancePrivateIp: this.webInstancePrivateIp,
+      mainKmsKeyAlias: this.mainKmsKeyAlias,
+      rdsKmsKeyAlias: this.rdsKmsKeyAlias,
+      ec2InstanceProfileName: this.ec2InstanceProfileName,
     });
   }
 }

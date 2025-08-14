@@ -89,6 +89,8 @@ export class KmsStack extends pulumi.ComponentResource {
       mainKeyArn: this.mainKeyArn,
       rdsKeyId: this.rdsKeyId,
       rdsKeyArn: this.rdsKeyArn,
+      mainKeyAlias: this.mainKeyAlias,
+      rdsKeyAlias: this.rdsKeyAlias,
     });
   }
 }

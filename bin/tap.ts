@@ -59,3 +59,7 @@ export const logsBucketName = tapStack.logsBucketName;
 export const databaseEndpoint = tapStack.databaseEndpoint;
 export const webInstanceId = tapStack.webInstanceId;
 export const webInstancePrivateIp = tapStack.webInstancePrivateIp;
+export const stackEnvironmentSuffix = tapStack.environmentSuffix;
+export const mainKmsKeyAlias = tapStack.mainKmsKeyAlias;
+export const rdsKmsKeyAlias = tapStack.rdsKmsKeyAlias;
+export const ec2InstanceProfileName = tapStack.ec2InstanceProfileName;
