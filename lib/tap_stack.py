@@ -499,7 +499,7 @@ class TapStack(pulumi.ComponentResource):
     from pulumi import ResourceOptions
 
     # Get the latest Amazon Linux 2023 AMI ID from SSM
-    aws_provider = aws.Provider("aws-provider", region=self.common_tags.get("Region"))
+    aws_provider = aws.Provider(f"aws-provider-{name_prefix}", region=self.common_tags.get("Region"))
     ami = aws.ec2.get_ami(
         most_recent=True,
         owners=["amazon"],
