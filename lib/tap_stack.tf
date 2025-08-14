@@ -86,15 +86,22 @@ variable "log_retention_days" {
   default     = 30
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming"
+  type        = string
+  default     = "dev"
+}
+
 # =============================================================================
 # Locals
 # =============================================================================
 
 locals {
-  name_prefix = "${var.project}-${var.environment}"
+  name_prefix = "${var.project}-${var.environment}-${var.environment_suffix}"
   common_tags = {
     project     = var.project
     environment = var.environment
+    suffix      = var.environment_suffix
   }
 }
 
@@ -446,7 +453,7 @@ resource "aws_ssm_parameter" "cloudwatch_config" {
   value = jsonencode({
     agent = {
       metrics_collection_interval = 60
-      run_as_user                  = "cwagent"
+      run_as_user                 = "cwagent"
     }
     logs = {
       logs_collected = {
@@ -506,9 +513,18 @@ resource "aws_cloudwatch_log_group" "rds" {
 # =============================================================================
 # User data (inline, single file)
 # =============================================================================
+resource "aws_launch_template" "app" {
+  name_prefix   = "${local.name_prefix}-"
+  image_id      = data.aws_ssm_parameter.amazon_linux_ami.value
+  instance_type = var.instance_type
 
-locals {
-  user_data_script = <<-EOF
+  vpc_security_group_ids = [aws_security_group.app.id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.instance_profile.name
+  }
+
+  user_data = base64encode(<<-EOF
 #!/bin/bash
 yum update -y
 yum install -y nginx
@@ -528,6 +544,7 @@ cat > /usr/share/nginx/html/index.html << 'HTML'
     <p>Instance ID: INSTANCE_ID_PLACEHOLDER</p>
     <p>Environment: ${var.environment}</p>
     <p>Project: ${var.project}</p>
+    <p>Suffix: ${var.environment_suffix}</p>
 </body>
 </html>
 HTML
@@ -548,24 +565,7 @@ aws ssm get-parameter --name "/app/${local.name_prefix}/cloudwatch/config" --reg
 # Start CloudWatch Agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 EOF
-}
-
-# =============================================================================
-# Launch Template (single, uses inline user data)
-# =============================================================================
-
-resource "aws_launch_template" "app" {
-  name_prefix   = "${local.name_prefix}-"
-  image_id      = data.aws_ssm_parameter.amazon_linux_ami.value
-  instance_type = var.instance_type
-
-  vpc_security_group_ids = [aws_security_group.app.id]
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.instance_profile.name
-  }
-
-  user_data = base64encode(local.user_data_script)
+  )
 
   tag_specifications {
     resource_type = "instance"
@@ -588,14 +588,15 @@ resource "aws_launch_template" "app" {
 # =============================================================================
 
 resource "aws_autoscaling_group" "app" {
-  name                        = "${local.name_prefix}-asg"
-  vpc_zone_identifier         = aws_subnet.private[*].id
-  target_group_arns           = [aws_lb_target_group.app.arn]
-  health_check_type           = "ELB"
-  health_check_grace_period   = 300
-  min_size                    = var.asg_min_size
-  max_size                    = var.asg_max_size
-  desired_capacity            = var.asg_desired_capacity
+  name                      = "${local.name_prefix}-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.app.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+
+  min_size         = var.asg_min_size
+  max_size         = var.asg_max_size
+  desired_capacity = var.asg_desired_capacity
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -723,13 +724,15 @@ resource "aws_db_instance" "app" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.app.name
 
-  backup_retention_period      = 7
-  backup_window                = "03:00-04:00"
-  maintenance_window           = "sun:04:00-sun:05:00"
-  auto_minor_version_upgrade   = true
-  deletion_protection          = true
-  skip_final_snapshot          = false
-  final_snapshot_identifier    = "${local.name_prefix}-rds-final-snapshot"
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  auto_minor_version_upgrade = true
+  deletion_protection        = false
+  skip_final_snapshot        = true
+  final_snapshot_identifier  = "${local.name_prefix}-rds-final-snapshot"
+
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
   multi_az                     = true
 
