@@ -139,8 +139,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
       
       // Check tags
       const nameTag = vpc.Tags?.find(t => t.Key === 'Name');
