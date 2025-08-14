@@ -3,6 +3,7 @@
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { Construct } from 'constructs';
+import * as path from 'path';
 
 interface LambdaStackProps {
   environmentSuffix?: string;
@@ -42,7 +43,7 @@ export class LambdaStack extends Construct {
       handler: 'index.handler',
       runtime: 'python3.9',
       timeout: 30,
-      filename: './lib/lambda/function.zip', // <-- Reference the zip in lib/
+      filename: path.resolve(__dirname, 'lambda/function.zip'), // <-- Reference the zip in lib/
       environment: {
         variables: {
           ENVIRONMENT: environmentSuffix,
