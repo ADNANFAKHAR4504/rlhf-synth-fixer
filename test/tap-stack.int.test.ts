@@ -1,27 +1,30 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-
-// Mock data for testing - in real scenario this would come from actual deployment
-const mockOutputs = {
-  VPCId: 'vpc-12345678',
-  PublicSubnet1Id: 'subnet-pub1',
-  PublicSubnet2Id: 'subnet-pub2',
-  PrivateSubnet1Id: 'subnet-priv1',
-  PrivateSubnet2Id: 'subnet-priv2',
-  SSHSecurityGroupId: 'sg-ssh123',
-  InternalSecurityGroupId: 'sg-int456',
-  Instance1Id: 'i-instance1',
-  Instance2Id: 'i-instance2',
-  Instance1PrivateIP: '10.0.10.10',
-  Instance2PrivateIP: '10.0.11.10',
-  NATGatewayId: 'nat-gateway1',
-  StackName: 'ProjectX-Stack-dev',
-  EnvironmentSuffix: 'dev'
-};
+import { execSync } from 'child_process';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `ProjectX-Stack-${environmentSuffix}`;
+const stackName = `TapStack${environmentSuffix}`;
+
+// Function to get actual CloudFormation stack outputs
+function getStackOutputs(): Record<string, string> {
+  try {
+    const command = `aws cloudformation describe-stacks --stack-name ${stackName} --query "Stacks[0].Outputs" --output json`;
+    const result = execSync(command, { encoding: 'utf-8' });
+    const outputs = JSON.parse(result);
+    
+    // Convert AWS CLI output format to key-value pairs
+    const outputMap: Record<string, string> = {};
+    outputs.forEach((output: any) => {
+      outputMap[output.OutputKey] = output.OutputValue;
+    });
+    
+    return outputMap;
+  } catch (error) {
+    throw new Error(`Failed to retrieve stack outputs for ${stackName}: ${error}`);
+  }
+}
+
+// Get actual deployment outputs
+const stackOutputs = getStackOutputs();
 
 describe('ProjectX Infrastructure Integration Tests', () => {
   let outputs: any = {};
@@ -29,18 +32,12 @@ describe('ProjectX Infrastructure Integration Tests', () => {
 
   beforeAll(async () => {
     try {
-      // Try to read actual outputs from deployment
-      if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
-        outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
-        stackExists = true;
-      } else {
-        // Use mock outputs for testing
-        outputs = mockOutputs;
-        console.log('Using mock outputs - stack may not be deployed');
-      }
+      outputs = stackOutputs;
+      stackExists = true;
     } catch (error) {
-      console.log('Failed to load outputs, using mock data:', error);
-      outputs = mockOutputs;
+      console.error('Stack not found or not accessible:', error);
+      stackExists = false;
+      throw new Error(`Integration tests require deployed stack: ${stackName}`);
     }
   }, 30000);
 
@@ -61,6 +58,31 @@ describe('ProjectX Infrastructure Integration Tests', () => {
     test('environment suffix should match expected value', () => {
       expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
       expect(outputs.StackName).toContain(environmentSuffix);
+    });
+
+    test('all resource names should include environment suffix for conflict avoidance', async () => {
+      // Validate that actual resource names include environment suffix
+      const command = `aws cloudformation describe-stack-resources --stack-name ${stackName} --query "StackResources[].{LogicalId:LogicalResourceId,PhysicalId:PhysicalResourceId}" --output json`;
+      const result = execSync(command, { encoding: 'utf-8' });
+      const resources = JSON.parse(result);
+      
+      // Check key resources have environment suffix in their physical names
+      const resourcesWithSuffix = resources.filter((resource: any) => {
+        // These resources should have environment suffix in their names
+        const shouldHaveSuffix = ['ProjectXVPC', 'ProjectXPublicSubnet1', 'ProjectXPrivateSubnet1', 
+                                 'ProjectXSSHSecurityGroup', 'ProjectXInstance1'];
+        return shouldHaveSuffix.includes(resource.LogicalId);
+      });
+
+      // For resources where we control naming, verify suffix is present
+      resourcesWithSuffix.forEach((resource: any) => {
+        if (resource.LogicalId.includes('SecurityGroup')) {
+          // Security groups have names we control
+          const command = `aws ec2 describe-security-groups --group-ids ${resource.PhysicalId} --query "SecurityGroups[0].GroupName" --output text`;
+          const groupName = execSync(command, { encoding: 'utf-8' }).trim();
+          expect(groupName).toContain(environmentSuffix);
+        }
+      });
     });
 
     test('resource IDs should have correct format', () => {
@@ -185,12 +207,10 @@ describe('ProjectX Infrastructure Integration Tests', () => {
   });
 
   describe('Edge Cases and Error Handling', () => {
-    test('should handle missing outputs gracefully', () => {
-      if (!outputs || Object.keys(outputs).length === 0) {
-        expect(mockOutputs).toBeDefined();
-        console.log('Using fallback mock outputs');
-      }
-      expect(true).toBe(true);
+    test('should have valid stack deployment', () => {
+      expect(stackExists).toBe(true);
+      expect(outputs).toBeDefined();
+      expect(Object.keys(outputs).length).toBeGreaterThan(0);
     });
 
     test('should validate critical resources exist', () => {

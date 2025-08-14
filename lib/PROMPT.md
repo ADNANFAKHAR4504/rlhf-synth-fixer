@@ -1,43 +1,22 @@
-# Help with AWS CloudFormation Template
+Our team keeps manually clicking through AWS console to set up environments and it's becoming a nightmare. Everyone does it slightly different and we keep running into weird config issues when things don't match between dev/staging/prod.
 
-Hey, I'm working with a dev team that keeps running into issues with their AWS setups. They've been clicking through the console to create environments, and it's getting messy. Different people set things up differently, and we keep having configuration drift issues.
+I need a CloudFormation template that gives us a standard setup we can reuse. The requirements from the team are pretty straightforward:
 
-## What we're looking for
+Network setup:
+- VPC with 10.0.0.0/16 CIDR in us-east-1
+- Two public subnets in different AZs
+- Two private subnets in different AZs  
+- Internet gateway for public access
+- NAT gateway so private subnets can reach internet
 
-We need a CloudFormation template that sets up a basic but solid environment. Here's what the team wants:
+Compute and security:
+- EC2 instances in private subnets
+- Latest Amazon Linux 2 AMI
+- Security groups allowing SSH only from our office IP
+- Route tables configured so private subnets can get updates through NAT
 
-**Network stuff:**
-- Fresh VPC in us-east-1 with 10.0.0.0/16
-- Two public subnets in different availability zones  
-- Two private subnets also spread across AZs
-- Internet gateway for the public subnets
-- NAT gateway in one of the public subnets so private resources can get out to the internet
+Everything needs ProjectX prefix for tagging and clear naming so people can tell what's what.
 
-**Servers and security:**
-- EC2 instances running in the private subnets (using latest Amazon Linux 2)
-- Security groups that only allow SSH from our office IP
-- Route tables configured properly so everything can talk to each other and reach the internet when needed
+Template should actually deploy without errors and have comments explaining what each resource does. Our team isn't AWS experts so keep it maintainable rather than overly complex.
 
-**Keeping things organized:**
-- Tag everything with 'ProjectX-' so we can track it easily
-- Use clear, descriptive names for resources
-
-## What I need from you
-
-Can you create a YAML CloudFormation template that covers all this? It needs to:
-- Actually work when we deploy it (we'll test it first obviously)
-- Have good comments so the team understands what's happening
-- Follow AWS best practices
-- Be something we can maintain and modify later
-
-The team isn't super advanced with AWS, so simpler is better than clever if that makes sense.
-
-## How to structure your response
-
-Could you give me:
-1. Quick explanation of how you approached the design
-2. The full template with comments
-3. What outputs would be helpful for us
-4. Any heads up about the deployment process
-
-Thanks! This will really help us standardize our infrastructure setup.
+Need the full YAML template, explanation of design choices, useful outputs, and any deployment gotchas to watch out for.
