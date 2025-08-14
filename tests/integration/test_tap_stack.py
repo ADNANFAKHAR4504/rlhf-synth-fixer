@@ -12,7 +12,7 @@ import pytest
 
 @pytest.fixture(scope="session")
 def region() -> str:
-  region_value = os.getenv("AWS_REGION", "us-west-2")
+  region_value = "us-west-2"
   # Ensure we have a valid region - if empty or None, use default
   if not region_value or region_value.strip() == "":
     return "us-west-2"
