@@ -53,9 +53,10 @@ describe('Terraform Configuration Unit Tests', () => {
       });
     });
 
-    test('Lambda function file exists', () => {
-      const lambdaFile = path.join(libPath, 'lambda_function.py');
-      expect(fs.existsSync(lambdaFile)).toBe(true);
+    test('Lambda function configuration exists in terraform', () => {
+      const lambdaContent = readTerraformFile('lambda.tf');
+      expect(lambdaContent).toContain('resource "local_file" "lambda_code"');
+      expect(lambdaContent).toContain('lambda_function.py');
     });
   });
 
