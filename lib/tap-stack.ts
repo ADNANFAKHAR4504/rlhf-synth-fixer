@@ -23,8 +23,16 @@ import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-pub
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketWebsiteConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-website-configuration';
-import { App, TerraformOutput, TerraformStack } from 'cdktf';
+import {
+  App,
+  TerraformOutput,
+  TerraformStack,
+  AssetType,
+  TerraformAsset,
+} from 'cdktf';
 import { Construct } from 'constructs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export class TapStack extends TerraformStack {
   constructor(
@@ -39,6 +47,27 @@ export class TapStack extends TerraformStack {
     }
   ) {
     super(scope, id);
+
+    // Helper method to create Lambda zip assets from inline code
+    // Creates a temporary directory structure and writes the Python code to a file
+    // Returns a TerraformAsset that automatically handles zip creation and hash generation
+    const createLambdaAsset = (
+      serviceName: string,
+      code: string
+    ): TerraformAsset => {
+      const tempDir = path.join(__dirname, '../temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      const codeFile = path.join(tempDir, `${serviceName}.py`);
+      fs.writeFileSync(codeFile, code);
+
+      return new TerraformAsset(this, `${serviceName}-asset`, {
+        path: tempDir,
+        type: AssetType.ARCHIVE,
+      });
+    };
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = props?.awsRegion || 'us-east-1';
@@ -325,13 +354,39 @@ export class TapStack extends TerraformStack {
     });
 
     // Lambda Functions
+    const productServiceCode = `
+import json
+import boto3
+import os
+
+def handler(event, context):
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({
+            "message": "Product Service",
+            "service": "products",
+            "table": os.environ.get("PRODUCTS_TABLE", ""),
+            "path": event.get("path", ""),
+            "method": event.get("httpMethod", "")
+        })
+    }
+`;
+
+    const productServiceAsset = createLambdaAsset(
+      'product-service',
+      productServiceCode
+    );
     const productServiceFunction = new LambdaFunction(this, 'product-service', {
       functionName: 'ecommerce-product-service',
       role: lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'python3.8',
-      filename: 'product-service.zip',
-      sourceCodeHash: 'dummy-hash-product',
+      handler: 'product-service.handler',
+      runtime: 'python3.9',
+      filename: productServiceAsset.path,
+      sourceCodeHash: productServiceAsset.assetHash,
       timeout: 30,
       memorySize: 256,
       environment: {
@@ -345,13 +400,40 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
+    const orderServiceCode = `
+import json
+import boto3
+import os
+
+def handler(event, context):
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({
+            "message": "Order Service",
+            "service": "orders",
+            "orders_table": os.environ.get("ORDERS_TABLE", ""),
+            "products_table": os.environ.get("PRODUCTS_TABLE", ""),
+            "path": event.get("path", ""),
+            "method": event.get("httpMethod", "")
+        })
+    }
+`;
+
+    const orderServiceAsset = createLambdaAsset(
+      'order-service',
+      orderServiceCode
+    );
     const orderServiceFunction = new LambdaFunction(this, 'order-service', {
       functionName: 'ecommerce-order-service',
       role: lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'python3.8',
-      filename: 'order-service.zip',
-      sourceCodeHash: 'dummy-hash-order',
+      handler: 'order-service.handler',
+      runtime: 'python3.9',
+      filename: orderServiceAsset.path,
+      sourceCodeHash: orderServiceAsset.assetHash,
       timeout: 30,
       memorySize: 256,
       environment: {
@@ -366,13 +448,36 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
+    const userServiceCode = `
+import json
+import boto3
+import os
+
+def handler(event, context):
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({
+            "message": "User Service",
+            "service": "users",
+            "table": os.environ.get("USERS_TABLE", ""),
+            "path": event.get("path", ""),
+            "method": event.get("httpMethod", "")
+        })
+    }
+`;
+
+    const userServiceAsset = createLambdaAsset('user-service', userServiceCode);
     const userServiceFunction = new LambdaFunction(this, 'user-service', {
       functionName: 'ecommerce-user-service',
       role: lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'python3.8',
-      filename: 'user-service.zip',
-      sourceCodeHash: 'dummy-hash-user',
+      handler: 'user-service.handler',
+      runtime: 'python3.9',
+      filename: userServiceAsset.path,
+      sourceCodeHash: userServiceAsset.assetHash,
       timeout: 30,
       memorySize: 256,
       environment: {
@@ -506,9 +611,26 @@ export class TapStack extends TerraformStack {
       });
     });
 
+    // Collect all integration and method resources for dependencies
+    // API Gateway deployment requires all methods and integrations to be created first
+    // This ensures proper dependency ordering during Terraform deployment
+    const integrations: ApiGatewayIntegration[] = [];
+    const methods: ApiGatewayMethod[] = [];
+
+    apiResources.forEach(({ path }) => {
+      integrations.push(
+        this.node.findChild(`${path}-integration`) as ApiGatewayIntegration
+      );
+      methods.push(this.node.findChild(`${path}-method`) as ApiGatewayMethod);
+    });
+
     // API Gateway Deployment
     new ApiGatewayDeployment(this, 'api-deployment', {
       restApiId: api.id,
+      dependsOn: [...integrations, ...methods],
+      triggers: {
+        redeployment: Date.now().toString(),
+      },
     });
 
     // Outputs
