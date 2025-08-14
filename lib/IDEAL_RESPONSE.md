@@ -125,6 +125,13 @@ Parameters:
     AllowedPattern: "^$|^[a-zA-Z0-9-]+$"
     ConstraintDescription: "Must be empty or a valid key pair name"
 
+  ExistingCloudTrailName:
+    Type: String
+    Default: ""
+    Description: "Name of existing CloudTrail to use (leave empty to create new CloudTrail)"
+    AllowedPattern: "^$|^[a-zA-Z0-9_-]+$"
+    ConstraintDescription: "Must be empty or a valid CloudTrail name"
+
   VpcCidr:
     Type: String
     Default: "10.0.0.0/16"
@@ -134,6 +141,7 @@ Parameters:
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+  CreateCloudTrail: !Equals [!Ref ExistingCloudTrailName, ""]
 
 Resources:
   # KMS Key for encryption
@@ -452,6 +460,7 @@ Resources:
   # S3 Bucket for CloudTrail logs
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateCloudTrail
     Properties:
       BucketName: !Sub "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-cloudtrail"
       VersioningConfiguration:
@@ -481,6 +490,7 @@ Resources:
   # Bucket Policy for CloudTrail
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: CreateCloudTrail
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
@@ -505,6 +515,7 @@ Resources:
   # CloudTrail for logging
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: CreateCloudTrail
     DependsOn: CloudTrailBucketPolicy
     Properties:
       TrailName: !Sub "${ProjectName}-${EnvironmentSuffix}-trail"
@@ -544,11 +555,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub "${ApplicationBucket}/*"
+                Resource: !Sub "${ApplicationBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref ApplicationBucket
+                Resource: !GetAtt ApplicationBucket.Arn
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${EnvironmentSuffix}-EC2-Role"
@@ -879,7 +890,10 @@ Outputs:
 
   CloudTrailName:
     Description: "CloudTrail name"
-    Value: !Ref CloudTrail
+    Value: !If
+      - CreateCloudTrail
+      - !Ref CloudTrail
+      - !Ref ExistingCloudTrailName
     Export:
       Name: !Sub "${AWS::StackName}-CloudTrailName"
 

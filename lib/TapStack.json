@@ -154,6 +154,13 @@
             "AllowedPattern": "^$|^[a-zA-Z0-9-]+$",
             "ConstraintDescription": "Must be empty or a valid key pair name"
         },
+        "ExistingCloudTrailName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Name of existing CloudTrail to use (leave empty to create new CloudTrail)",
+            "AllowedPattern": "^$|^[a-zA-Z0-9_-]+$",
+            "ConstraintDescription": "Must be empty or a valid CloudTrail name"
+        },
         "VpcCidr": {
             "Type": "String",
             "Default": "10.0.0.0/16",
@@ -173,6 +180,14 @@
                         ""
                     ]
                 }
+            ]
+        },
+        "CreateCloudTrail": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingCloudTrailName"
+                },
+                ""
             ]
         }
     },
@@ -866,6 +881,7 @@
         },
         "CloudTrailBucket": {
             "Type": "AWS::S3::Bucket",
+            "Condition": "CreateCloudTrail",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-cloudtrail"
@@ -921,6 +937,7 @@
         },
         "CloudTrailBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
+            "Condition": "CreateCloudTrail",
             "Properties": {
                 "Bucket": {
                     "Ref": "CloudTrailBucket"
@@ -964,6 +981,7 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "Condition": "CreateCloudTrail",
             "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
@@ -1026,7 +1044,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${ApplicationBucket}/*"
+                                        "Fn::Sub": "${ApplicationBucket.Arn}/*"
                                     }
                                 },
                                 {
@@ -1035,7 +1053,10 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "ApplicationBucket"
+                                        "Fn::GetAtt": [
+                                            "ApplicationBucket",
+                                            "Arn"
+                                        ]
                                     }
                                 }
                             ]
@@ -1667,7 +1688,15 @@
         "CloudTrailName": {
             "Description": "CloudTrail name",
             "Value": {
-                "Ref": "CloudTrail"
+                "Fn::If": [
+                    "CreateCloudTrail",
+                    {
+                        "Ref": "CloudTrail"
+                    },
+                    {
+                        "Ref": "ExistingCloudTrailName"
+                    }
+                ]
             },
             "Export": {
                 "Name": {

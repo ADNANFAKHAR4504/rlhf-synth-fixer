@@ -155,7 +155,7 @@ describe('TapStack Integration Tests', () => {
       expect(templateContent).toContain('Value: !GetAtt ApplicationLoadBalancer.DNSName');
       expect(templateContent).toContain('Value: !GetAtt Database.Endpoint.Address');
       expect(templateContent).toContain('Value: !Ref ApplicationBucket');
-      expect(templateContent).toContain('Value: !Ref CloudTrail');
+      expect(templateContent).toContain('Value: !If');
       expect(templateContent).toContain('Value: !Ref KMSKey');
     });
 
