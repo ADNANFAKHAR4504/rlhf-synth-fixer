@@ -1,27 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure baseline (us-east-1) with KMS, HTTPS-only ALB, CloudTrail, AWS Config, VPC Flow Logs, MFA, S3 SSE+logs, DNSSEC.",
-    "Metadata": {
-        "Version": "1.0.1",
-        "Notes": "Uses existing Route53 zone tap-us-east-1.turing229221.com (Z0457876OLTG958Q3IXN) and existing ISSUED ACM cert arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583. Edit the two CIDRs below if needed (no parameters used).\n"
-    },
-    "Rules": {
-        "EnforceUsEast1": {
-            "Assertions": [
-                {
-                    "Assert": {
-                        "Fn::Equals": [
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "us-east-1"
-                        ]
-                    },
-                    "AssertDescription": "All resources must be deployed in us-east-1."
-                }
-            ]
-        }
-    },
+    "Description": "Secure baseline (us-east-1) with KMS, HTTPS-only ALB, VPC Flow Logs, MFA, S3 SSE+logs, and Route53 DNSSEC with KSK activation wait.",
     "Mappings": {
         "OrgCIDR": {
             "Allowed": {
@@ -46,7 +25,7 @@
         "EncryptionKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
-                "Description": "KMS for S3, EBS, CW Logs, CloudTrail",
+                "Description": "KMS for S3, EBS, CloudWatch Logs",
                 "EnableKeyRotation": true,
                 "KeyPolicy": {
                     "Version": "2012-10-17",
@@ -60,21 +39,6 @@
                                 }
                             },
                             "Action": "kms:*",
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "AllowCloudTrail",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:Decrypt",
-                                "kms:DescribeKey",
-                                "kms:Encrypt",
-                                "kms:GenerateDataKey*",
-                                "kms:ReEncrypt*"
-                            ],
                             "Resource": "*"
                         },
                         {
@@ -95,32 +59,17 @@
                             "Resource": "*"
                         },
                         {
-                            "Sid": "AllowConfig",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:Decrypt",
-                                "kms:DescribeKey",
-                                "kms:Encrypt",
-                                "kms:GenerateDataKey*",
-                                "kms:ReEncrypt*"
-                            ],
-                            "Resource": "*"
-                        },
-                        {
                             "Sid": "AllowS3",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "s3.amazonaws.com"
                             },
                             "Action": [
-                                "kms:Decrypt",
-                                "kms:DescribeKey",
                                 "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
                                 "kms:GenerateDataKey*",
-                                "kms:ReEncrypt*"
+                                "kms:DescribeKey"
                             ],
                             "Resource": "*"
                         }
@@ -434,9 +383,6 @@
         "AccessLogsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-access-logs-${AWS::AccountId}"
-                },
                 "OwnershipControls": {
                     "Rules": [
                         {
@@ -486,9 +432,7 @@
                             },
                             "Condition": {
                                 "StringEquals": {
-                                    "aws:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
                             }
                         }
@@ -499,9 +443,6 @@
         "ApplicationBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-app-${AWS::AccountId}"
-                },
                 "LoggingConfiguration": {
                     "DestinationBucketName": {
                         "Ref": "AccessLogsBucket"
@@ -529,98 +470,9 @@
                 }
             }
         },
-        "CloudTrailBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-cloudtrail-${AWS::AccountId}"
-                },
-                "LoggingConfiguration": {
-                    "DestinationBucketName": {
-                        "Ref": "AccessLogsBucket"
-                    },
-                    "LogFilePrefix": "cloudtrail/"
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "BucketKeyEnabled": true,
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "EncryptionKey"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "CloudTrailBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "CloudTrailBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "CloudTrailBucket",
-                                    "Arn"
-                                ]
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:SourceArn": {
-                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-trail"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control",
-                                    "aws:SourceArn": {
-                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-trail"
-                                    }
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
         "ConfigBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-config-${AWS::AccountId}"
-                },
                 "LoggingConfiguration": {
                     "DestinationBucketName": {
                         "Ref": "AccessLogsBucket"
@@ -737,21 +589,6 @@
                 }
             }
         },
-        "CloudTrailLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/${AWS::StackName}/cloudtrail"
-                },
-                "RetentionInDays": 90,
-                "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "EncryptionKey",
-                        "Arn"
-                    ]
-                }
-            }
-        },
         "VPCFlowLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
@@ -818,106 +655,6 @@
                 ]
             }
         },
-        "CloudTrailRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "CloudTrailToCWLogs",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "${CloudTrailLogGroup.Arn}:*"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "ConfigRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "ConfigDelivery",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetBucketAcl",
-                                        "s3:ListBucket"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "ConfigBucket",
-                                            "Arn"
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": "s3:PutObject",
-                                    "Resource": {
-                                        "Fn::Sub": "${ConfigBucket.Arn}/*"
-                                    },
-                                    "Condition": {
-                                        "StringEquals": {
-                                            "s3:x-amz-acl": "bucket-owner-full-control"
-                                        }
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": "sns:Publish",
-                                    "Resource": {
-                                        "Ref": "ConfigTopic"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
         "VPCFlowLogRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -961,9 +698,6 @@
         "MFAEnforcementPolicy": {
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
-                "ManagedPolicyName": {
-                    "Fn::Sub": "${AWS::StackName}-MFA-Enforcement"
-                },
                 "Description": "Deny non-MFA actions for IAM users (except MFA setup/self-management)",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -986,7 +720,16 @@
                                 "iam:GetUser"
                             ],
                             "Resource": {
-                                "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        "arn:aws:iam::",
+                                        {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                        ":user/${aws:username}"
+                                    ]
+                                ]
                             }
                         },
                         {
@@ -1001,10 +744,28 @@
                             ],
                             "Resource": [
                                 {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:mfa/${!aws:username}"
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "arn:aws:iam::",
+                                            {
+                                                "Ref": "AWS::AccountId"
+                                            },
+                                            ":mfa/${aws:username}"
+                                        ]
+                                    ]
                                 },
                                 {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "arn:aws:iam::",
+                                            {
+                                                "Ref": "AWS::AccountId"
+                                            },
+                                            ":user/${aws:username}"
+                                        ]
+                                    ]
                                 }
                             ]
                         },
@@ -1037,9 +798,6 @@
         "AllUsersGroup": {
             "Type": "AWS::IAM::Group",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${AWS::StackName}-AllUsers"
-                },
                 "ManagedPolicyArns": [
                     {
                         "Ref": "MFAEnforcementPolicy"
@@ -1050,7 +808,7 @@
         "AppInstance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp3}}",
+                "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                 "InstanceType": "t3.micro",
                 "IamInstanceProfile": {
                     "Ref": "EC2InstanceProfile"
@@ -1189,172 +947,6 @@
                 "SslPolicy": "ELBSecurityPolicy-TLS13-1-2-2021-06"
             }
         },
-        "CloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "DependsOn": "CloudTrailBucketPolicy",
-            "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "${AWS::StackName}-trail"
-                },
-                "S3BucketName": {
-                    "Ref": "CloudTrailBucket"
-                },
-                "S3KeyPrefix": "cloudtrail-logs",
-                "IncludeGlobalServiceEvents": true,
-                "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": true,
-                "IsLogging": true,
-                "KMSKeyId": {
-                    "Ref": "EncryptionKey"
-                },
-                "CloudWatchLogsLogGroupArn": {
-                    "Fn::GetAtt": [
-                        "CloudTrailLogGroup",
-                        "Arn"
-                    ]
-                },
-                "CloudWatchLogsRoleArn": {
-                    "Fn::GetAtt": [
-                        "CloudTrailRole",
-                        "Arn"
-                    ]
-                },
-                "EventSelectors": [
-                    {
-                        "ReadWriteType": "All",
-                        "IncludeManagementEvents": true,
-                        "DataResources": [
-                            {
-                                "Type": "AWS::S3::Object",
-                                "Values": [
-                                    {
-                                        "Fn::Sub": "${ApplicationBucket.Arn}/*"
-                                    },
-                                    {
-                                        "Fn::Sub": "${ConfigBucket.Arn}/*"
-                                    },
-                                    {
-                                        "Fn::Sub": "${CloudTrailBucket.Arn}/*"
-                                    },
-                                    {
-                                        "Fn::Sub": "${AccessLogsBucket.Arn}/*"
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        },
-        "ConfigTopic": {
-            "Type": "AWS::SNS::Topic",
-            "Properties": {
-                "TopicName": {
-                    "Fn::Sub": "${AWS::StackName}-config-topic"
-                },
-                "KmsMasterKeyId": {
-                    "Ref": "EncryptionKey"
-                }
-            }
-        },
-        "ConfigurationRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Properties": {
-                "Name": "default",
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigRole",
-                        "Arn"
-                    ]
-                },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                }
-            }
-        },
-        "DeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Properties": {
-                "Name": "default",
-                "S3BucketName": {
-                    "Ref": "ConfigBucket"
-                },
-                "S3KeyPrefix": "config",
-                "SnsTopicARN": {
-                    "Ref": "ConfigTopic"
-                },
-                "ConfigSnapshotDeliveryProperties": {
-                    "DeliveryFrequency": "Daily"
-                }
-            }
-        },
-        "S3BucketLoggingEnabledRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorder",
-            "Properties": {
-                "ConfigRuleName": "s3-bucket-logging-enabled",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "S3_BUCKET_LOGGING_ENABLED"
-                }
-            }
-        },
-        "S3BucketSSEEnabledRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorder",
-            "Properties": {
-                "ConfigRuleName": "s3-bucket-server-side-encryption-enabled",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-                }
-            }
-        },
-        "CloudTrailEnabledRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorder",
-            "Properties": {
-                "ConfigRuleName": "cloud-trail-enabled",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "CLOUD_TRAIL_ENABLED"
-                }
-            }
-        },
-        "VPCFlowLogsEnabledRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorder",
-            "Properties": {
-                "ConfigRuleName": "vpc-flow-logs-enabled",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "VPC_FLOW_LOGS_ENABLED"
-                }
-            }
-        },
-        "IAMUserMFAEnabledRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorder",
-            "Properties": {
-                "ConfigRuleName": "iam-user-mfa-enabled",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "IAM_USER_MFA_ENABLED"
-                }
-            }
-        },
-        "RestrictedSSHRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorder",
-            "Properties": {
-                "ConfigRuleName": "incoming-ssh-disabled",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "INCOMING_SSH_DISABLED"
-                }
-            }
-        },
         "VPCFlowLogs": {
             "Type": "AWS::EC2::FlowLog",
             "Properties": {
@@ -1393,6 +985,99 @@
                 },
                 "Name": "ksk_main",
                 "Status": "ACTIVE"
+            }
+        },
+        "KSKWaiterRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "Route53ReadAndLogs",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "route53:GetDNSSEC"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "KSKWaiterFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Timeout": 300,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "KSKWaiterRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json, time, urllib.request, logging, boto3\nlog = logging.getLogger()\nlog.setLevel(logging.INFO)\nr53 = boto3.client('route53')\ndef respond(event, status, data=None, reason=None):\n    body = {\n        'Status': status,\n        'Reason': reason or 'See CloudWatch Logs for details',\n        'PhysicalResourceId': event.get('PhysicalResourceId', 'KSKWaiter'),\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': data or {}\n    }\n    req = urllib.request.Request(event['ResponseURL'], data=json.dumps(body).encode('utf-8'), method='PUT')\n    req.add_header('content-type', '')\n    urllib.request.urlopen(req).read()\ndef ksk_is_active(hz_id, ksk_name):\n    resp = r53.get_dnssec(HostedZoneId=hz_id)\n    ksk_ok = any(ksk.get('Name') == ksk_name and ksk.get('Status') == 'ACTIVE'\n                 for ksk in resp.get('KeySigningKeys', []))\n    log.info(f\"Checking KSK {ksk_name}: ACTIVE={ksk_ok}\")\n    return ksk_ok\ndef handler(event, context):\n    try:\n        if event['RequestType'] == 'Delete':\n            return respond(event, 'SUCCESS', {'Message': 'Deleted'})\n        props = event['ResourceProperties']\n        hz_id = props['HostedZoneId']\n        ksk_name = props['KSKName']\n        deadline = time.time() + 240  # 4 minutes max wait\n        while time.time() < deadline:\n            if ksk_is_active(hz_id, ksk_name):\n                return respond(event, 'SUCCESS', {'Status': 'ACTIVE'})\n            time.sleep(10)\n        return respond(event, 'FAILED', reason='KSK did not become ACTIVE in time')\n    except Exception as e:\n        log.exception('waiter error')\n        return respond(event, 'FAILED', reason=str(e))\n"
+                }
+            }
+        },
+        "WaitForKSKActive": {
+            "Type": "Custom::WaitForKSKActive",
+            "DependsOn": "KeySigningKey",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "KSKWaiterFunction",
+                        "Arn"
+                    ]
+                },
+                "HostedZoneId": {
+                    "Fn::FindInMap": [
+                        "R53",
+                        "Zone",
+                        "Id"
+                    ]
+                },
+                "KSKName": "ksk_main"
+            }
+        },
+        "DNSSECEnable": {
+            "Type": "AWS::Route53::DNSSEC",
+            "DependsOn": "WaitForKSKActive",
+            "Properties": {
+                "HostedZoneId": {
+                    "Fn::FindInMap": [
+                        "R53",
+                        "Zone",
+                        "Id"
+                    ]
+                }
             }
         },
         "ApexA": {
@@ -1481,7 +1166,7 @@
             }
         },
         "PublicFQDN": {
-            "Description": "Public apex pointing to ALB (matches ACM cert)",
+            "Description": "Public apex pointing to ALB",
             "Value": {
                 "Fn::FindInMap": [
                     "R53",
@@ -1491,7 +1176,7 @@
             }
         },
         "Route53HostedZoneId": {
-            "Description": "Existing public hosted zone used",
+            "Description": "Hosted zone used",
             "Value": {
                 "Fn::FindInMap": [
                     "R53",
