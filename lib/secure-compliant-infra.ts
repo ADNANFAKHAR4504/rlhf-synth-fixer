@@ -429,11 +429,11 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
           vpcId: vpc.id,
           ingress: [
             {
-              description: 'SSH from allowed IP range (203.0.113.0/24 only)',
+              description: 'SSH from allowed IP range',
               fromPort: 22,
               toPort: 22,
               protocol: 'tcp',
-              cidrBlocks: ['203.0.113.0/24'],
+              cidrBlocks: [allowedSshCidr],
             },
             {
               description: 'HTTP',

@@ -421,7 +421,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         `${projectName}-${environment}-ec2-sg-${region}`,
         {
           name: `${projectName}-${environment}-ec2-sg-${region}`,
-          description: 'Security group for EC2 instances with restricted SSH',
+          description: 'Security group for EC2 instances with restricted SSH access via SSM',
           vpcId: vpc.id,
           ingress: [
             {
@@ -524,6 +524,23 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
                 ],
                 Resource: 'arn:aws:logs:*:*:*',
               },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ssm:UpdateInstanceInformation',
+                  'ssmmessages:CreateControlChannel',
+                  'ssmmessages:CreateDataChannel',
+                  'ssmmessages:OpenControlChannel',
+                  'ssmmessages:OpenDataChannel',
+                  'ec2messages:AcknowledgeMessage',
+                  'ec2messages:DeleteMessage',
+                  'ec2messages:FailMessage',
+                  'ec2messages:GetEndpoint',
+                  'ec2messages:GetMessages',
+                  'ec2messages:SendReply',
+                ],
+                Resource: '*',
+              },
             ],
           }),
         },
@@ -555,16 +572,6 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
         )
       );
 
-      const keyPair = new aws.ec2.KeyPair(
-        `${projectName}-${environment}-key-${region}`,
-        {
-          keyName: `${projectName}-${environment}-key-${region}`,
-          publicKey: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7...',
-          tags: commonTags,
-        },
-        { provider, parent: this }
-      );
-
       const ec2Instances = publicSubnets.map(
         (subnet, i) =>
           new aws.ec2.Instance(
@@ -572,7 +579,7 @@ export class SecureCompliantInfra extends pulumi.ComponentResource {
             {
               ami: ami.id,
               instanceType: 't3.micro',
-              keyName: keyPair.keyName,
+              // Removed keyName - using SSM Session Manager instead
               vpcSecurityGroupIds: [ec2SecurityGroup.id],
               subnetId: subnet.id,
               iamInstanceProfile: ec2InstanceProfile.name,
