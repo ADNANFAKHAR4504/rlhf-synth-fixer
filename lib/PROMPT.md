@@ -1,19 +1,40 @@
-# Prompt
+# Infrastructure Security Requirements
 
-Ensure that all IAM roles are created with the least privilege principle in mind. | Use AWS KMS for all data encryption at rest. | All data in transit must be encrypted using TLS 1.2 or higher. | Security groups must be locked down to the minimum required ports and IPs. | No security group should have an allow rule for 0.0.0.0/0 for any port except port 80 and 443. | Implement logging for all AWS services using CloudTrail. | Ensure CloudTrail logs are encrypted using AWS KMS. | Rotate all IAM user passwords every 90 days. | Enforce MFA for all IAM users. | Ensure S3 buckets have server-side encryption using AWS KMS. | Ensure all S3 buckets have versioning enabled. | Apply Terraform's lifecycle policy to prevent accidental deletions of critical resources. | Use Terraform modules to manage complexities and ensure reusability of IAM policies, security groups, and network ACLs.
+We need to build a secure AWS infrastructure using Terraform for our financial services platform. This is a critical system that handles sensitive financial data, so security is our top priority.
 
-**Instructions:**
+## Key Security Requirements
 
-As a DevOps engineer working for a financial services organization, you are tasked with creating a secure AWS infrastructure using Terraform with HCL language. The infrastructure should adhere to best practices for security and compliance. Specifically, you must:
+Our infrastructure must follow these security practices:
 
-1. Configure IAM roles based on the principle of least privilege.
-2. Ensure all data is encrypted both at rest (using AWS KMS) and in transit (using TLS 1.2 or above).
-3. Set up security groups to restrict access to necessary ports and IPs only.
-4. Implement logging and monitoring across all services via AWS CloudTrail
-5. Enforce password rotation every 90 days and use of MFA for all IAM users.
-6. Utilize Terraform modules to manage IAM policies, security groups, and network ACLs efficiently.
+- **IAM Security**: Create IAM roles with minimal required permissions only
+- **Encryption**: Use AWS KMS for encrypting data at rest, and TLS 1.2+ for data in transit
+- **Network Security**: Lock down security groups to specific ports and IP ranges only
+- **Monitoring**: Set up comprehensive logging with CloudTrail across all services
+- **Access Control**: Require MFA for all users and rotate passwords every 90 days
+- **Data Protection**: Enable S3 bucket encryption and versioning for all storage
 
-Expected output: A set of Terraform HCL files that, when applied, deploys an AWS infrastructure complying with the specified security measures. The solution should pass all tests validating the security configurations and resource management practices outlined.
+## What We're Building
 
+You'll be creating Terraform HCL files that deploy a multi-region AWS infrastructure. This needs to handle our financial services workload while meeting strict compliance requirements.
 
-The target infrastructure consists of AWS resources managed through Terraform. Resources are deployed across multiple regions to ensure high availability. The infrastructure must comply with strict security policies suitable for a financial services environment. Naming conventions follow a standard {environment}-{service}-{resource} pattern, e.g., prod-web-server.
+The infrastructure should use a consistent naming pattern like `{environment}-{service}-{resource}` (e.g., `prod-web-server`).
+
+## Your Task
+
+As a DevOps engineer on our team, you need to:
+
+1. Set up IAM roles that follow the principle of least privilege
+2. Configure encryption for all data (both at rest and in transit)
+3. Create security groups with tight access controls
+4. Implement logging and monitoring with CloudTrail
+5. Set up user access controls with MFA and password rotation
+6. Use Terraform modules to organize IAM policies, security groups, and network ACLs
+
+## Important Notes
+
+- No security groups should allow 0.0.0.0/0 access except for ports 80 and 443
+- Use Terraform lifecycle policies to prevent accidental deletion of critical resources
+- All CloudTrail logs must be encrypted with KMS
+- The solution needs to pass our security validation tests
+
+Deliver a complete Terraform configuration that meets these requirements and can be deployed safely in our production environment.
