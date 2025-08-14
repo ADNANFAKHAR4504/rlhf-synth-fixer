@@ -1,11 +1,14 @@
 // lib/ec2-stack.ts
 
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { Construct } from 'constructs';
 
 interface Ec2StackProps {
   environmentSuffix?: string;
   vpcId?: string;
+  subnetId?: string;
+  securityGroupIds?: string[];
 }
 
 export class Ec2Stack extends Construct {
@@ -34,6 +37,15 @@ export class Ec2Stack extends Construct {
       },
     });
 
-    // You can add EC2 instance resource here if needed
+    new Instance(this, 'prodEc2Instance', {
+      ami: 'ami-xxxxxxxx', // Use a valid AMI
+      instanceType: 't3.micro',
+      subnetId: props?.subnetId,
+      vpcSecurityGroupIds: props?.securityGroupIds,
+      tags: {
+        Name: `prod-ec2-instance-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
+    });
   }
 }

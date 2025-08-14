@@ -1,3 +1,6 @@
+import { DescribeInstancesCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetBucketEncryptionCommand, S3Client } from '@aws-sdk/client-s3';
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
@@ -77,5 +80,28 @@ describe('TapStack End-to-End Integration', () => {
     });
     const unusualSynth = Testing.synth(testStack);
     expect(unusualSynth).toContain('!!!');
+  });
+
+  test('S3 bucket uses AES-256 encryption', async () => {
+    const s3 = new S3Client({ region: process.env.AWS_REGION });
+    const bucketName = 'prod-secure-bucket-inttest'; // Use your naming convention
+    const result = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
+    expect(
+      result.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+    ).toBe('AES256');
+  });
+
+  test('EC2 instance exists and is running', async () => {
+    const ec2 = new EC2Client({ region: process.env.AWS_REGION });
+    const result = await ec2.send(new DescribeInstancesCommand({}));
+    const instances = result.Reservations?.flatMap(r => r.Instances) || [];
+    expect(instances.some(i => i && i.State?.Name === 'running')).toBe(true);
+  });
+
+  test('RDS instance is encrypted', async () => {
+    const rds = new RDSClient({ region: process.env.AWS_REGION });
+    const result = await rds.send(new DescribeDBInstancesCommand({}));
+    const dbs = result.DBInstances || [];
+    expect(dbs.some(db => db.StorageEncrypted)).toBe(true);
   });
 });

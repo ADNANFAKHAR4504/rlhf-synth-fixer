@@ -9,6 +9,7 @@ interface RdsStackProps {
   vpcId?: string;
   kmsKeyId?: string;
   subnetIds?: string[];
+  securityGroupIds?: string[];
 }
 
 export class RdsStack extends Construct {
@@ -27,6 +28,9 @@ export class RdsStack extends Construct {
     });
 
     // RDS Instance
+    const dbPassword =
+      process.env.RDS_DB_PASSWORD || 'replace-this-with-secure-password';
+
     new DbInstance(this, 'prodRdsInstance', {
       engine: 'mysql',
       engineVersion: '8.0',
@@ -37,8 +41,9 @@ export class RdsStack extends Construct {
       dbSubnetGroupName: dbSubnetGroup.name,
       dbName: 'proddb',
       username: 'admin',
-      password: 'changeme123!',
+      password: dbPassword, // <-- Use env var or secret
       publiclyAccessible: false,
+      vpcSecurityGroupIds: props?.securityGroupIds || [],
       tags: {
         Name: `prod-rds-instance-${environmentSuffix}`,
         Environment: environmentSuffix,

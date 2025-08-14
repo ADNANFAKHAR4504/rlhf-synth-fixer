@@ -35,8 +35,7 @@ export class S3Stack extends Construct {
       serverSideEncryptionConfiguration: {
         rule: {
           applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'aws:kms',
-            kmsMasterKeyId: kmsKey.id,
+            sseAlgorithm: 'AES256', // <-- Use AES-256
           },
         },
       },

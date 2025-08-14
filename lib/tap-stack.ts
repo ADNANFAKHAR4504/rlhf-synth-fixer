@@ -49,18 +49,25 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Instantiate resource constructs (not stacks)
-    const vpcStack = new VpcStack(this, 'prodVpcStack', {
-      environmentSuffix,
-    });
+    const vpcStack = new VpcStack(this, 'prodVpcStack', { environmentSuffix });
 
     const s3Stack = new S3Stack(this, 'prodS3Stack', {
       environmentSuffix,
       vpcId: vpcStack.vpcId,
     });
 
+    new Ec2Stack(this, 'prodEc2Stack', {
+      environmentSuffix,
+      vpcId: vpcStack.vpcId,
+      subnetId: vpcStack.subnetIds[0],
+      securityGroupIds: [vpcStack.ec2SgId],
+    });
+
     new LambdaStack(this, 'prodLambdaStack', {
       environmentSuffix,
       vpcId: vpcStack.vpcId,
+      subnetIds: vpcStack.subnetIds,
+      securityGroupIds: [vpcStack.lambdaSgId],
     });
 
     new RdsStack(this, 'prodRdsStack', {
@@ -68,11 +75,7 @@ export class TapStack extends TerraformStack {
       vpcId: vpcStack.vpcId,
       kmsKeyId: s3Stack.kmsKeyArn, // <-- Pass ARN, not ID
       subnetIds: vpcStack.subnetIds,
-    });
-
-    new Ec2Stack(this, 'prodEc2Stack', {
-      environmentSuffix,
-      vpcId: vpcStack.vpcId,
+      securityGroupIds: [vpcStack.rdsSgId],
     });
 
     new KmsStack(this, 'prodKmsStack', {

@@ -8,6 +8,8 @@ import * as path from 'path';
 interface LambdaStackProps {
   environmentSuffix?: string;
   vpcId?: string;
+  subnetIds?: string[];
+  securityGroupIds?: string[];
 }
 
 export class LambdaStack extends Construct {
@@ -51,8 +53,8 @@ export class LambdaStack extends Construct {
       },
       vpcConfig: props?.vpcId
         ? {
-            subnetIds: [],
-            securityGroupIds: [],
+            subnetIds: props?.subnetIds || [],
+            securityGroupIds: props?.securityGroupIds || [],
           }
         : undefined,
       tags: {
