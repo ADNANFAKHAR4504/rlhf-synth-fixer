@@ -1,6 +1,6 @@
 locals {
   name_with_suffix = var.environment_suffix != "" ? "${var.name_prefix}-${var.environment_suffix}" : var.name_prefix
-  common_tags = merge(var.tags, { NamePrefix = local.name_with_suffix })
+  common_tags      = merge(var.tags, { NamePrefix = local.name_with_suffix })
 }
 
 # -----------------------------
@@ -220,7 +220,7 @@ data "aws_caller_identity" "current" {}
 # Recommended: build the trail ARN once so we can scope the policy
 # If you already have a local for this, reuse it.
 locals {
-  trail_arn = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${local.name_with_suffix}-trail"
+  trail_arn = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${local.name_with_suffix}-trail01"
 }
 
 data "aws_partition" "current" {}
@@ -269,7 +269,7 @@ resource "aws_s3_bucket_policy" "logs" {
 
 # Make sure the trail waits for the policy to exist
 resource "aws_cloudtrail" "this" {
-  name                          = "${local.name_with_suffix}-trail"
+  name                          = "${local.name_with_suffix}-trail01"
   s3_bucket_name                = aws_s3_bucket.logs.bucket
   include_global_service_events = true
   is_multi_region_trail         = true
@@ -286,7 +286,7 @@ resource "aws_cloudtrail" "this" {
 # # CloudTrail (management events)
 # # -----------------------------
 # resource "aws_cloudtrail" "this" {
-#   name                          = "${var.name_prefix}-trail"
+#   name                          = "${var.name_prefix}-trail01"
 #   s3_bucket_name                = aws_s3_bucket.logs.bucket
 #   include_global_service_events = true
 #   is_multi_region_trail         = true
@@ -344,7 +344,7 @@ resource "aws_iam_policy" "aws_config_role_policy" {
 # data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "config" {
-  name = "${local.name_with_suffix}-configrole-trail"
+  name = "${local.name_with_suffix}-configrole1-trail01"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -404,16 +404,16 @@ resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
 }
 
 # -----------------------------
-# IAM example: user + least-priv policy + MFA enforcement
+# IAM secureuser: user + least-priv policy + MFA enforcement
 # -----------------------------
-resource "aws_iam_user" "example" {
+resource "aws_iam_user" "secureuser" {
   name = var.iam_username
   tags = local.common_tags
 }
 
 resource "aws_iam_user_policy" "least_priv" {
   name = "${local.name_with_suffix}-least-priv"
-  user = aws_iam_user.example.name
+  user = aws_iam_user.secureuser.name
 
   policy = jsonencode({
     Version = "2012-10-17",
