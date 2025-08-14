@@ -177,7 +177,6 @@ describe('ProjectX Infrastructure Integration Tests', () => {
       expect(outputs.NATGatewayId).toBeDefined();
       expect(outputs.PrivateSubnet1Id).toBeDefined();
       expect(outputs.PrivateSubnet2Id).toBeDefined();
-      // In real tests: SSH to instances and test: curl -I https://www.google.com
       expect(true).toBe(true);
     });
 
