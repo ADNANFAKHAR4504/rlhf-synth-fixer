@@ -55,6 +55,22 @@ class TapStack(ComponentResource):
     self.target_region = args.target_region or self.config.get("target_region")
     self.account_id = caller_identity.account_id
     
+    # Create AWS providers for different regions
+    self.source_provider = aws.Provider(
+      f"source-provider-{self.args.environment_suffix}",
+      region=self.source_region,
+      opts=ResourceOptions(parent=self)
+    )
+    
+    if self.target_region and self.target_region != self.source_region:
+      self.target_provider = aws.Provider(
+        f"target-provider-{self.args.environment_suffix}",
+        region=self.target_region,
+        opts=ResourceOptions(parent=self)
+      )
+    else:
+      self.target_provider = self.source_provider
+    
     # Initialize components
     self._create_dlq()  # Create DLQ first so we can reference it in IAM policy
     self._create_iam_roles()
@@ -311,7 +327,6 @@ class TapStack(ComponentResource):
       # Secondary bucket (target region)
       self.secondary_bucket = aws.s3.Bucket(
         f"tap-bucket-{self.args.environment_suffix}-secondary",
-        region=self.target_region,
         versioning=aws.s3.BucketVersioningArgs(enabled=True),
         server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
           rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
@@ -322,7 +337,7 @@ class TapStack(ComponentResource):
             )
           )
         ),
-        opts=ResourceOptions(parent=self)
+        opts=ResourceOptions(parent=self, provider=self.target_provider)
       )
       
       # Configure replication
@@ -379,7 +394,6 @@ class TapStack(ComponentResource):
       self.secondary_dynamodb_table = aws.dynamodb.Table(
         f"tap-table-{self.args.environment_suffix}-secondary",
         name=f"tap-table-{self.args.environment_suffix}",
-        region=self.target_region,
         billing_mode="PAY_PER_REQUEST",
         hash_key="id",
         attributes=[
@@ -397,7 +411,7 @@ class TapStack(ComponentResource):
         server_side_encryption=aws.dynamodb.TableServerSideEncryptionArgs(enabled=True),
         stream_enabled=True,
         stream_view_type="NEW_AND_OLD_IMAGES",
-        opts=ResourceOptions(parent=self)
+        opts=ResourceOptions(parent=self, provider=self.target_provider)
       )
   
   def _create_lambda_functions(self):
