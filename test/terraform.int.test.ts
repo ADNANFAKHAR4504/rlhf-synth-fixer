@@ -208,14 +208,12 @@ beforeAll(async () => {
         })
       );
       rt = (rts.RouteTables || [])[0];
->>>>>>> 4184fdbc9b7ec5595423ea0743c1363cbe058b3a
     }
   } catch {
     STACK_PRESENT = false;
   }
 });
 
-<<<<<<< HEAD
     // Run terraform plan
     const planOut = spawnSync("terraform", ["plan", "-input=false", "-out=tfplan"], {
       cwd: tmpTfDir,
