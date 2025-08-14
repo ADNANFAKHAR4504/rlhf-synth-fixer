@@ -51,26 +51,7 @@ const loadStackOutputs = () => {
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
     return JSON.parse(outputsContent);
   } catch (error) {
-    console.warn(`Could not load stack outputs from file: ${error}`);
-    // Fallback to environment variables or default values for CI/CD
-    return {
-      'pulumi-infra': {
-        primaryBucketName: process.env.PRIMARY_BUCKET_NAME || 'test-primary-bucket',
-        primaryBucketArn: process.env.PRIMARY_BUCKET_ARN || 'arn:aws:s3:::test-primary-bucket',
-        auditBucketName: process.env.AUDIT_BUCKET_NAME || 'test-audit-bucket',
-        auditBucketArn: process.env.AUDIT_BUCKET_ARN || 'arn:aws:s3:::test-audit-bucket',
-        s3KmsKeyId: process.env.S3_KMS_KEY_ID || 'test-s3-key-id',
-        s3KmsKeyArn: process.env.S3_KMS_KEY_ARN || 'arn:aws:kms:us-east-1:123456789012:key/test-s3-key',
-        cloudTrailKmsKeyId: process.env.CLOUDTRAIL_KMS_KEY_ID || 'test-cloudtrail-key-id',
-        cloudTrailKmsKeyArn: process.env.CLOUDTRAIL_KMS_KEY_ARN || 'arn:aws:kms:us-east-1:123456789012:key/test-cloudtrail-key',
-        dataAccessRoleArn: process.env.DATA_ACCESS_ROLE_ARN || 'arn:aws:iam::123456789012:role/test-data-access-role',
-        auditRoleArn: process.env.AUDIT_ROLE_ARN || 'arn:aws:iam::123456789012:role/test-audit-role',
-        cloudTrailArn: process.env.CLOUDTRAIL_ARN || 'arn:aws:cloudtrail:us-east-1:123456789012:trail/test-trail',
-        cloudTrailLogGroupArn: process.env.CLOUDTRAIL_LOG_GROUP_ARN || 'arn:aws:logs:us-east-1:123456789012:log-group:/aws/cloudtrail/test',
-        securityPolicyArn: process.env.SECURITY_POLICY_ARN || 'arn:aws:iam::123456789012:policy/test-security-policy',
-        region: 'us-east-1',
-      },
-    };
+    throw new Error(`Failed to load stack outputs: ${error}`);
   }
 };
 
@@ -162,7 +143,15 @@ describe('Security Stack Integration Tests', () => {
   let accountId: string;
 
   beforeAll(async () => {
+    // Load stack outputs
     stackOutputs = loadStackOutputs();
+
+    // Get the first stack (assuming single stack deployment)
+    const stackName = Object.keys(stackOutputs)[0];
+    if (!stackName) {
+      throw new Error('No stack outputs found');
+    }
+
     clients = initializeClients();
 
     try {
