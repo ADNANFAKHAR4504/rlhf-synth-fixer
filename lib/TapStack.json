@@ -245,31 +245,6 @@
                             }
                         },
                         {
-                            "Sid": "AllowCrossAccountRead",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": "arn:aws:iam::123456789012:role/ExternalDataReaderRole"
-                            },
-                            "Action": [
-                                "s3:GetObject",
-                                "s3:GetObjectVersion",
-                                "s3:ListBucket"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "arn:aws:s3:::${SecureDataBucket}/*"
-                                },
-                                {
-                                    "Fn::Sub": "arn:aws:s3:::${SecureDataBucket}"
-                                }
-                            ],
-                            "Condition": {
-                                "Bool": {
-                                    "aws:SecureTransport": "true"
-                                }
-                            }
-                        },
-                        {
                             "Sid": "AllowAccountAccess",
                             "Effect": "Allow",
                             "Principal": {

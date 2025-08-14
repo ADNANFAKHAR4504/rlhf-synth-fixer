@@ -162,21 +162,21 @@ Resources:
               Bool:
                 'aws:SecureTransport': 'false'
           
-          # Grant cross-account read access to external partner (hardcoded for testing)
-          - Sid: 'AllowCrossAccountRead'
-            Effect: Allow
-            Principal:
-              AWS: 'arn:aws:iam::123456789012:role/ExternalDataReaderRole'
-            Action:
-              - 's3:GetObject'
-              - 's3:GetObjectVersion'
-              - 's3:ListBucket'
-            Resource:
-              - !Sub 'arn:aws:s3:::${SecureDataBucket}/*'
-              - !Sub 'arn:aws:s3:::${SecureDataBucket}'
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'true'
+          # Grant cross-account read access to external partner (commented out - role doesn't exist in test account)
+          # - Sid: 'AllowCrossAccountRead'
+          #   Effect: Allow
+          #   Principal:
+          #     AWS: 'arn:aws:iam::123456789012:role/ExternalDataReaderRole'
+          #   Action:
+          #     - 's3:GetObject'
+          #     - 's3:GetObjectVersion'
+          #     - 's3:ListBucket'
+          #   Resource:
+          #     - !Sub 'arn:aws:s3:::${SecureDataBucket}/*'
+          #     - !Sub 'arn:aws:s3:::${SecureDataBucket}'
+          #   Condition:
+          #     Bool:
+          #       'aws:SecureTransport': 'true'
           
           # Allow current account full access with secure transport
           - Sid: 'AllowAccountAccess'
