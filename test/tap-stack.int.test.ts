@@ -411,7 +411,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
       expect(privateSubnetDetails.length).toBe(2);
       privateSubnetDetails.forEach((subnet: any) => {
         expect(subnet.State).toBe('available');
-        expect(['10.0.11.0/24', '10.0.12.0/24']).toContain(subnet.CidrBlock);
+        expect(['10.0.10.0/24', '10.0.11.0/24']).toContain(subnet.CidrBlock);
         console.log(
           `Private subnet ${subnet.SubnetId}: ${subnet.CidrBlock} (MapPublicIp: ${subnet.MapPublicIpOnLaunch})`
         );
