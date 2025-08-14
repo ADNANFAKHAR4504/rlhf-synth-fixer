@@ -929,75 +929,78 @@ class TapStack(ComponentResource):
 
     
     def _create_fargate_service(self):
-        """Create ECS Fargate service."""
-        # Target Group for Fargate
-        self.fargate_target_group = aws.lb.TargetGroup(
-            f"{self.name_prefix}-fargate-tg",
-            name=f"{self.name_prefix}-fargate-tg",
-            port=80,
-            protocol="HTTP",
-            vpc_id=self.vpc.id,
-            target_type="ip",
-            health_check=aws.lb.TargetGroupHealthCheckArgs(
-                enabled=True,
-                healthy_threshold=2,
-                interval=30,
-                matcher="200",
-                path="/",
-                port="traffic-port",
-                protocol="HTTP",
-                timeout=5,
-                unhealthy_threshold=2,
-            ),
-            tags={
-                "Name": f"{self.name_prefix}-fargate-tg",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ALB Listener Rule for Fargate
-        self.fargate_listener_rule = aws.lb.ListenerRule(
-            f"{self.name_prefix}-fargate-rule",
-            listener_arn=self.alb_listener.arn,
-            priority=100,
-            actions=[aws.lb.ListenerRuleActionArgs(
-                type="forward",
-                target_group_arn=self.fargate_target_group.arn,
-            )],
-            conditions=[aws.lb.ListenerRuleConditionArgs(
-                path_pattern=aws.lb.ListenerRuleConditionPathPatternArgs(
-                    values=["/api/*"]
-                ),
-            )],
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ECS Service
-        self.ecs_service = aws.ecs.Service(
-            f"{self.name_prefix}-service",
-            name=f"{self.name_prefix}-service",
-            cluster=self.ecs_cluster.id,
-            task_definition=self.task_definition.arn,
-            desired_count=2,
-            launch_type="FARGATE",
-            network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
-                subnets=[subnet.id for subnet in self.private_subnets],
-                security_groups=[self.fargate_sg.id],
-                assign_public_ip=False,
-            ),
-            load_balancers=[aws.ecs.ServiceLoadBalancerArgs(
-                target_group_arn=self.fargate_target_group.arn,
-                container_name=f"{self.name_prefix}-container",
-                container_port=80,
-            )],
-            depends_on=[self.alb_listener],
-            tags={
-                "Name": f"{self.name_prefix}-service",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
+      """Create ECS Fargate service."""
+      # Target Group for Fargate
+      self.fargate_target_group = aws.lb.TargetGroup(
+          f"{self.name_prefix}-fargate-tg",
+          name=f"{self.name_prefix}-fargate-tg",
+          port=80,
+          protocol="HTTP",
+          vpc_id=self.vpc.id,
+          target_type="ip",
+          health_check=aws.lb.TargetGroupHealthCheckArgs(
+              enabled=True,
+              healthy_threshold=2,
+              interval=30,
+              matcher="200",
+              path="/",
+              port="traffic-port",
+              protocol="HTTP",
+              timeout=5,
+              unhealthy_threshold=2,
+          ),
+          tags={
+              "Name": f"{self.name_prefix}-fargate-tg",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # ALB Listener Rule for Fargate
+      self.fargate_listener_rule = aws.lb.ListenerRule(
+          f"{self.name_prefix}-fargate-rule",
+          listener_arn=self.alb_listener.arn,
+          priority=100,
+          actions=[aws.lb.ListenerRuleActionArgs(
+              type="forward",
+              target_group_arn=self.fargate_target_group.arn,
+          )],
+          conditions=[aws.lb.ListenerRuleConditionArgs(
+              path_pattern=aws.lb.ListenerRuleConditionPathPatternArgs(
+                  values=["/api/*"]
+              ),
+          )],
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # ECS Service
+      self.ecs_service = aws.ecs.Service(
+          f"{self.name_prefix}-service",
+          name=f"{self.name_prefix}-service",
+          cluster=self.ecs_cluster.id,
+          task_definition=self.task_definition.arn,
+          desired_count=2,
+          launch_type="FARGATE",
+          network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
+              subnets=[subnet.id for subnet in self.private_subnets],
+              security_groups=[self.fargate_sg.id],
+              assign_public_ip=False,
+          ),
+          load_balancers=[aws.ecs.ServiceLoadBalancerArgs(
+              target_group_arn=self.fargate_target_group.arn,
+              container_name=f"{self.name_prefix}-container",
+              container_port=80,
+          )],
+          tags={
+              "Name": f"{self.name_prefix}-service",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(
+              parent=self,
+              depends_on=[self.alb_listener]  # Move depends_on to ResourceOptions
+          )
+      )
+
     
     def _create_cloudwatch_alarms(self):
         """Create CloudWatch alarms for monitoring."""
