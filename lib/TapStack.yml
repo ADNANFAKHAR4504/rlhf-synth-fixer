@@ -176,7 +176,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'VPC-${Environment}'
+          Value: !Sub 'VPC-${AWS::StackName}-${Environment}'
 
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
@@ -230,7 +230,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'PrivateSubnet1-${Environment}'
+          Value: !Sub 'PrivateSubnet1-${AWS::StackName}-${Environment}'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -240,7 +240,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'PrivateSubnet2-${Environment}'
+          Value: !Sub 'PrivateSubnet2-${AWS::StackName}-${Environment}'
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -251,7 +251,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'PublicSubnet1-${Environment}'
+          Value: !Sub 'PublicSubnet1-${AWS::StackName}-${Environment}'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -262,7 +262,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'PublicSubnet2-${Environment}'
+          Value: !Sub 'PublicSubnet2-${AWS::StackName}-${Environment}'
 
   # ============================================================================
   # INTERNET GATEWAY AND ROUTING
@@ -272,7 +272,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'IGW-${Environment}'
+          Value: !Sub 'IGW-${AWS::StackName}-${Environment}'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -286,7 +286,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'PublicRouteTable-${Environment}'
+          Value: !Sub 'PublicRouteTable-${AWS::StackName}-${Environment}'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -340,7 +340,7 @@ Resources:
           Description: 'HTTP outbound'
       Tags:
         - Key: Name
-          Value: !Sub 'WebSecurityGroup-${Environment}'
+          Value: !Sub 'WebSecurityGroup-${AWS::StackName}-${Environment}'
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -355,7 +355,7 @@ Resources:
           Description: 'MySQL access from web security group only'
       Tags:
         - Key: Name
-          Value: !Sub 'DatabaseSecurityGroup-${Environment}'
+          Value: !Sub 'DatabaseSecurityGroup-${AWS::StackName}-${Environment}'
 
   # ============================================================================
   # 11. ELIMINATE DIRECT SSH ACCESS - SSM ROLE FOR EC2
@@ -373,7 +373,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
         - Key: Name
-          Value: !Sub 'EC2SSMRole-${Environment}'
+          Value: !Sub 'EC2SSMRole-${AWS::StackName}-${Environment}'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -416,7 +416,7 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'DBSubnetGroup-${Environment}'
+          Value: !Sub 'DBSubnetGroup-${AWS::StackName}-${Environment}'
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
@@ -440,7 +440,7 @@ Resources:
       DeletionProtection: !If [IsProd, true, false]
       Tags:
         - Key: Name
-          Value: !Sub 'RDSDatabase-${Environment}'
+          Value: !Sub 'RDSDatabase-${AWS::StackName}-${Environment}'
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
 
@@ -460,7 +460,7 @@ Resources:
         - !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'ALB-${Environment}'
+          Value: !Sub 'ALB-${AWS::StackName}-${Environment}'
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -483,7 +483,7 @@ Resources:
           Value: '86400'
       Tags:
         - Key: Name
-          Value: !Sub 'ALBTargetGroup-${Environment}'
+          Value: !Sub 'ALBTargetGroup-${AWS::StackName}-${Environment}'
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
