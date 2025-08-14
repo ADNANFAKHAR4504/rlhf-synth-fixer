@@ -220,6 +220,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
+
       Tags:
         - Key: Name
           Value: MyApp-Data-Bucket
@@ -370,9 +371,15 @@ Resources:
         - Key: Environment
           Value: Production
 
-
-
-
+  # S3 Invoke Lambda Permission - allows S3 to invoke Lambda function
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref S3ProcessorLambda
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:aws:s3:::${S3ApplicationBucket}'
 
   # CloudWatch Log Group for Lambda function
   LambdaLogGroup:

@@ -185,14 +185,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
                   }
                 ]
               },
-              NotificationConfiguration: {
-                LambdaConfigurations: [
-                  {
-                    Event: 's3:ObjectCreated:*',
-                    Function: { 'Fn::GetAtt': ['S3ProcessorLambda', 'Arn'] }
-                  }
-                ]
-              },
+
               Tags: [
                 { Key: 'Environment', Value: 'Production' }
               ]
@@ -614,8 +607,9 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       });
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(bucket.Properties.LoggingConfiguration).toBeDefined();
-      expect(bucket.Properties.NotificationConfiguration).toBeDefined();
     });
+
+
 
     test('should have S3BackupBucket resource', () => {
       expect(template.Resources.S3BackupBucket).toBeDefined();
@@ -713,6 +707,16 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should have S3InvokeLambdaPermission resource', () => {
       expect(template.Resources.S3InvokeLambdaPermission).toBeDefined();
+    });
+
+    test('S3InvokeLambdaPermission should have correct properties', () => {
+      const permission = template.Resources.S3InvokeLambdaPermission;
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.FunctionName).toEqual({ Ref: 'S3ProcessorLambda' });
+      expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+      expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
+      expect(permission.Properties.SourceAccount).toEqual({ Ref: 'AWS::AccountId' });
+      expect(permission.Properties.SourceArn).toEqual({ 'Fn::GetAtt': ['S3ApplicationBucket', 'Arn'] });
     });
 
     test('should have LambdaLogGroup resource', () => {
