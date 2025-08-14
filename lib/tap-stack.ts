@@ -76,18 +76,20 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(logGroup).add('Environment', 'Production');
 
     kmsKey.addToResourcePolicy(
-    new iam.PolicyStatement({
-      principals: [new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`)],
-      actions: [
-        'kms:Encrypt',
-        'kms:Decrypt',
-        'kms:ReEncrypt*',
-        'kms:GenerateDataKey*',
-        'kms:DescribeKey',
-      ],
-      resources: ['*'],
-    })
-  );
+      new iam.PolicyStatement({
+        principals: [
+          new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+        ],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // Application Load Balancer Security Group
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
@@ -624,6 +626,8 @@ exports.handler = tracer.captureLambdaHandler(async (event, context) => {
       );
     void latticeVpcAssociation; // Resource needs to be created but not referenced
 
+    latticeVpcAssociation.addDependency(latticeServiceNetwork);
+
     // VPC Lattice Service for API Function
     const apiLatticeService = new vpclattice.CfnService(
       this,
@@ -855,6 +859,29 @@ exports.handler = async () => {
     });
     cdk.Tags.of(syntheticsCanary).add('Environment', 'Production');
 
+    const resourceGroup = new cdk.CfnResource(
+      this,
+      'AppInsightsResourceGroup',
+      {
+        type: 'AWS::ResourceGroups::Group',
+        properties: {
+          Name: `production-application-resources-${environmentSuffix}`,
+          ResourceQuery: {
+            Type: 'TAG_FILTERS_1_0',
+            Query: {
+              ResourceTypeFilters: ['AWS::AllSupported'],
+              TagFilters: [
+                {
+                  Key: 'Environment',
+                  Values: ['Production'],
+                },
+              ],
+            },
+          },
+        },
+      }
+    );
+
     // Application Signals - Application Insights
     const appInsights = new applicationSignals.CfnApplication(
       this,
@@ -866,6 +893,7 @@ exports.handler = async () => {
       }
     );
     cdk.Tags.of(appInsights).add('Environment', 'Production');
+    appInsights.addDependency(resourceGroup);
 
     // Outputs
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
