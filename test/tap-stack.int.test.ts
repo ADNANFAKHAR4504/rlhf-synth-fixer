@@ -81,9 +81,22 @@ const normalizeUrl = (base: string, path: string = ''): string => {
 
 describe('Serverless API Integration', () => {
   let apiBaseUrl: string;
+  let region: string;
+  let bucketName: string | undefined;
+  let tableName: string | undefined;
+  let s3EndpointId: string | undefined;
+  let ddbEndpointId: string | undefined;
+  let stackName: string;
 
   beforeAll(async () => {
     const outputs = await loadOutputs();
+    region = readRegion();
+    bucketName = outputs.BucketName;
+    tableName = outputs.TableName;
+    s3EndpointId = outputs.S3VpcEndpointId;
+    ddbEndpointId = outputs.DynamoDbVpcEndpointId;
+    const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+    stackName = process.env.STACK_NAME || `TapStack${envSuffix}`;
     apiBaseUrl = (outputs.ApiUrl ||
       outputs.AppApiEndpoint979256A8 ||
       outputs.AppApiEndpoint ||
@@ -118,5 +131,63 @@ describe('Serverless API Integration', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/json/i);
     expect(res.data.ok).toBe(true);
+  });
+
+  test('VPC endpoints exist and are available (S3, DDB)', async () => {
+    const ec2 = new AWS.EC2({ region });
+    const ids = [s3EndpointId, ddbEndpointId].filter(Boolean) as string[];
+    const out = await ec2
+      .describeVpcEndpoints({ VpcEndpointIds: ids })
+      .promise();
+    expect(out.VpcEndpoints?.length).toBe(2);
+    out.VpcEndpoints?.forEach(ep => {
+      expect(ep.VpcEndpointType).toBe('Gateway');
+      expect(ep.State).toBe('available');
+    });
+  });
+
+  test('S3 policy denies PutObject without VPCE', async () => {
+    if (!bucketName) return fail('BucketName output missing');
+    const s3 = new AWS.S3({ region });
+    const key = `it-${Date.now()}.txt`;
+    await expect(
+      s3.putObject({ Bucket: bucketName, Key: key, Body: 'denied' }).promise()
+    ).rejects.toHaveProperty('code', 'AccessDenied');
+  });
+
+  test('DynamoDB table is PAY_PER_REQUEST (on-demand)', async () => {
+    if (!tableName) return fail('TableName output missing');
+    const ddb = new AWS.DynamoDB({ region });
+    const info = await ddb.describeTable({ TableName: tableName }).promise();
+    expect(info.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+  });
+
+  test('Lambda function is configured inside the VPC', async () => {
+    const cf = new AWS.CloudFormation({ region });
+    const lambda = new AWS.Lambda({ region });
+    const resources = await cf
+      .listStackResources({ StackName: stackName })
+      .promise();
+    const lambdaResources = (resources.StackResourceSummaries || []).filter(
+      r => r.ResourceType === 'AWS::Lambda::Function'
+    );
+    let foundVpcConfigured = false;
+    for (const r of lambdaResources) {
+      if (!r.PhysicalResourceId) continue;
+      try {
+        const cfg = await lambda
+          .getFunctionConfiguration({ FunctionName: r.PhysicalResourceId })
+          .promise();
+        const vars = cfg.Environment?.Variables || {};
+        if (vars.BUCKET_NAME === bucketName && vars.TABLE_NAME === tableName) {
+          expect(
+            cfg.VpcConfig?.SubnetIds && cfg.VpcConfig.SubnetIds.length
+          ).toBeGreaterThan(0);
+          foundVpcConfigured = true;
+          break;
+        }
+      } catch {}
+    }
+    expect(foundVpcConfigured).toBe(true);
   });
 });

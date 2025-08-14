@@ -20,7 +20,7 @@ describe('TapStack (unit)', () => {
     template.resourceCountIs('AWS::EC2::VPC', 1);
     template.resourceCountIs('AWS::S3::Bucket', 1);
     template.resourceCountIs('AWS::DynamoDB::Table', 1);
-    template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
+    template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
 
     // There may be additional Lambdas (custom resources). Assert our app Lambda exists.
     const lambdas = template.findResources('AWS::Lambda::Function');
@@ -32,19 +32,15 @@ describe('TapStack (unit)', () => {
     expect(appHandlers.length).toBe(1);
   });
 
-  test('creates VPC endpoints: 2 gateway (S3, DDB) and 1 interface (logs)', () => {
+  test('creates VPC endpoints: 2 gateway (S3, DDB)', () => {
     const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
     const values = Object.values(endpoints);
-    expect(values.length).toBe(3);
+    expect(values.length).toBe(2);
 
     const gatewayEndpoints = values.filter(
       (r: any) => r.Properties.VpcEndpointType === 'Gateway'
     );
-    const interfaceEndpoints = values.filter(
-      (r: any) => r.Properties.VpcEndpointType === 'Interface'
-    );
     expect(gatewayEndpoints.length).toBe(2);
-    expect(interfaceEndpoints.length).toBe(1);
   });
 
   test('S3 bucket: encryption, block public access, SSL-only', () => {
@@ -149,26 +145,14 @@ describe('TapStack (unit)', () => {
     expect(Object.keys(logs).length).toBeGreaterThanOrEqual(2);
   });
 
-  test('API Gateway Rest API with stage logging and metrics', () => {
-    template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
-
-    // Stage with access logs and method settings
-    template.hasResourceProperties(
-      'AWS::ApiGateway::Stage',
-      Match.objectLike({
-        StageName: 'prod',
-        AccessLogSetting: Match.objectLike({
-          DestinationArn: Match.anyValue(),
-          Format: Match.anyValue(),
-        }),
-        MethodSettings: Match.arrayWith([
-          Match.objectLike({
-            DataTraceEnabled: false,
-            LoggingLevel: 'INFO',
-            MetricsEnabled: true,
-          }),
-        ]),
-      })
-    );
+  test('HTTP API (v2) exists with stage access logging configured', () => {
+    template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
+    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+      StageName: 'prod',
+      AccessLogSettings: Match.objectLike({
+        DestinationArn: Match.anyValue(),
+        Format: Match.anyValue(),
+      }),
+    });
   });
 });
