@@ -563,9 +563,6 @@
         "DataAdministratorsGroup": {
             "Type": "AWS::IAM::Group",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-DataAdministrators"
-                },
                 "ManagedPolicyArns": [
                     {
                         "Ref": "DataAdminManagedPolicy"
@@ -576,9 +573,6 @@
         "DataAdminManagedPolicy": {
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
-                "ManagedPolicyName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-DataAdminPolicy"
-                },
                 "Description": "Policy for data administrators with MFA requirements",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -690,9 +684,6 @@
         "ReadOnlyAccessRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-DataReadOnlyRole"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -775,9 +766,6 @@
         "SampleDataAdmin": {
             "Type": "AWS::IAM::User",
             "Properties": {
-                "UserName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-sample-admin"
-                },
                 "Groups": [
                     {
                         "Ref": "DataAdministratorsGroup"

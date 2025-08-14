@@ -333,7 +333,6 @@ Resources:
   DataAdministratorsGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub '${EnvironmentSuffix}-DataAdministrators'
       ManagedPolicyArns:
         - !Ref DataAdminManagedPolicy
 
@@ -341,7 +340,6 @@ Resources:
   DataAdminManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub '${EnvironmentSuffix}-DataAdminPolicy'
       Description: 'Policy for data administrators with MFA requirements'
       PolicyDocument:
         Version: '2012-10-17'
@@ -398,7 +396,6 @@ Resources:
   ReadOnlyAccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-DataReadOnlyRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -437,7 +434,6 @@ Resources:
   SampleDataAdmin:
     Type: AWS::IAM::User
     Properties:
-      UserName: !Sub '${EnvironmentSuffix}-sample-admin'
       Groups:
         - !Ref DataAdministratorsGroup
       Tags:
