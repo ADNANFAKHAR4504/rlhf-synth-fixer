@@ -705,21 +705,19 @@ resource "aws_acm_certificate" "main" {
 
 # Route53 Hosted Zone data source for DNS validation
 data "aws_route53_zone" "main" {
-  count = var.hosted_zone_id != "" ? 1 : 0
+  count   = var.hosted_zone_id != "" ? 1 : 0
   zone_id = var.hosted_zone_id
 }
 
 # Route53 DNS validation records
 resource "aws_route53_record" "cert_validation" {
-  count = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
-
-  for_each = {
+  for_each = var.domain_name != "" && var.hosted_zone_id != "" ? {
     for dvo in aws_acm_certificate.main[0].domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
     }
-  }
+  } : {}
 
   allow_overwrite = true
   name            = each.value.name
@@ -734,7 +732,7 @@ resource "aws_acm_certificate_validation" "main" {
   count = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
 
   certificate_arn         = aws_acm_certificate.main[0].arn
-  validation_record_fqdns = [for record in aws_route53_record.cert_validation[0] : record.fqdn]
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 
   timeouts {
     create = "5m"
@@ -1457,7 +1455,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 # Or comment out this resource if using existing CloudTrail
 resource "aws_cloudtrail" "main" {
   count = var.enable_cloudtrail ? 1 : 0
-  
+
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
 
   name           = "${local.name_prefix}-trail"
@@ -1529,7 +1527,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 # Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
   count = var.enable_config ? 1 : 0
-  
+
   name     = "${local.name_prefix}-config-recorder"
   role_arn = data.aws_iam_role.config_service_role.arn
 
@@ -1547,7 +1545,7 @@ resource "aws_config_configuration_recorder" "main" {
 # Or comment out this resource if using existing delivery channel
 resource "aws_config_delivery_channel" "main" {
   count = var.enable_config ? 1 : 0
-  
+
   name           = "${local.name_prefix}-config-delivery-channel"
   s3_bucket_name = aws_s3_bucket.logs.bucket
   s3_key_prefix  = "config-logs"
@@ -1764,12 +1762,12 @@ output "alb_zone_id" {
 
 output "https_listener_arn" {
   description = "ARN of the HTTPS listener"
-  value       = aws_lb_listener.https.arn
+  value       = var.domain_name != "" && var.hosted_zone_id != "" ? aws_lb_listener.https[0].arn : "No HTTPS listener configured"
 }
 
 output "http_listener_arn" {
   description = "ARN of the HTTP listener"
-  value       = aws_lb_listener.http.arn
+  value       = var.domain_name != "" && var.hosted_zone_id != "" ? aws_lb_listener.http[0].arn : aws_lb_listener.http_fallback[0].arn
 }
 
 # WAF output
@@ -1781,7 +1779,7 @@ output "waf_web_acl_arn" {
 # ACM Certificate output
 output "acm_certificate_arn" {
   description = "ARN of the ACM certificate"
-  value       = aws_acm_certificate.main.arn
+  value       = var.domain_name != "" ? aws_acm_certificate.main[0].arn : "No certificate configured"
 }
 
 # Security Group outputs
@@ -1835,12 +1833,12 @@ output "rds_backup_retention" {
 # CloudTrail outputs
 output "cloudtrail_name" {
   description = "Name of the CloudTrail"
-  value       = aws_cloudtrail.main.name
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : "CloudTrail disabled"
 }
 
 output "cloudtrail_arn" {
   description = "ARN of the CloudTrail"
-  value       = aws_cloudtrail.main.arn
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].arn : "CloudTrail disabled"
 }
 
 # S3 bucket outputs
@@ -1863,12 +1861,12 @@ output "cloudwatch_log_group_name" {
 # AWS Config outputs
 output "config_recorder_name" {
   description = "Name of the AWS Config recorder"
-  value       = aws_config_configuration_recorder.main.name
+  value       = var.enable_config ? aws_config_configuration_recorder.main[0].name : "AWS Config disabled"
 }
 
 output "config_delivery_channel_name" {
   description = "Name of the AWS Config delivery channel"
-  value       = aws_config_delivery_channel.main.name
+  value       = var.enable_config ? aws_config_delivery_channel.main[0].name : "AWS Config disabled"
 }
 
 # KMS outputs
@@ -1914,25 +1912,12 @@ output "hosted_zone_id" {
   value       = var.hosted_zone_id
 }
 
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.main.dns_name
-}
-
 output "certificate_arn" {
   description = "ARN of the ACM certificate (if domain is configured)"
   value       = var.domain_name != "" && var.hosted_zone_id != "" ? aws_acm_certificate_validation.main[0].certificate_arn : "No certificate configured"
 }
 
-output "cloudtrail_name" {
-  description = "Name of the CloudTrail trail (if enabled)"
-  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : "CloudTrail disabled"
-}
 
-output "config_recorder_name" {
-  description = "Name of the AWS Config recorder (if enabled)"
-  value       = var.enable_config ? aws_config_configuration_recorder.main[0].name : "AWS Config disabled"
-}
 
 # =============================================================================
 # RESOURCE INVENTORY & CONSOLE LINKS
