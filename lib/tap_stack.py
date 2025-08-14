@@ -698,15 +698,12 @@ def create_eks_node_group(
       opts=ResourceOptions(provider=provider)
   )
 
-  # Create launch template with security group and user data
-  user_data = cluster.name.apply(lambda name: f"""#!/bin/bash
-/etc/eks/bootstrap.sh {name}
-""")
-
+  # Create launch template with security group - NO USER DATA for simplicity
+  # EKS will handle node bootstrap automatically with managed node groups
+  
   launch_template = aws.ec2.LaunchTemplate(
       "corp-eks-node-launch-template",
       name_prefix="corp-eks-node-",
-      user_data=user_data.apply(lambda ud: ud.encode('utf-8').hex()),
       network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfaceArgs(
           associate_public_ip_address="true",
           delete_on_termination="true",
@@ -722,6 +719,7 @@ def create_eks_node_group(
   )
 
   # Create node group with launch template
+  # EKS Managed Node Groups automatically handle the bootstrap process
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
@@ -734,11 +732,13 @@ def create_eks_node_group(
       scaling_config=aws.eks.NodeGroupScalingConfigArgs(
           desired_size=1, min_size=1, max_size=1  # Minimum for testing
       ),
-      # Use launch template for security group assignment
+      # Use launch template for security group assignment only
       launch_template=aws.eks.NodeGroupLaunchTemplateArgs(
           id=launch_template.id,
           version=launch_template.latest_version,
       ),
+      # EKS Managed Node Groups use EKS-optimized AMI by default
+      ami_type="AL2_x86_64",  # Amazon Linux 2 EKS-optimized AMI
       tags={**tags, "Name": "corp-eks-nodegroup"},
       opts=ResourceOptions(provider=provider)
   )
