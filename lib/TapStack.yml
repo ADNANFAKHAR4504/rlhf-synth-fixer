@@ -36,7 +36,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: "Suffix for resource naming to support multiple deployments"
-    Default: "dev-v1"
+    Default: "dev-v2"
     AllowedPattern: "^[a-zA-Z0-9-]+$"
     ConstraintDescription: "Must contain only alphanumeric characters and hyphens"
 
@@ -49,7 +49,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: "securewebapp-v1"
+    Default: "securewebapp-v2"
     Description: "Project name for resource naming"
     AllowedPattern: "^[a-z0-9-]+$"
     ConstraintDescription: "Must contain only lowercase alphanumeric characters and hyphens"
@@ -408,8 +408,7 @@ Resources:
   ApplicationBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-appdata-v1"
-
+      BucketName: !Sub "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-appdata-v2"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -432,7 +431,7 @@ Resources:
     Type: AWS::S3::Bucket
     Condition: CreateCloudTrail
     Properties:
-      BucketName: !Sub "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-cloudtrail-v1"
+      BucketName: !Sub "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-cloudtrail-v2"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

@@ -54,11 +54,11 @@ describe('TapStack Integration Tests', () => {
           ApplicationLoadBalancerDNS: 'securewebapp-production-alb-1234567890.us-east-1.elb.amazonaws.com',
           DatabaseEndpoint: 'securewebapp-production-db.1234567890.us-east-1.rds.amazonaws.com',
           DatabasePort: '3306',
-          S3BucketName: 'securewebapp-v1-pr1076-v1-718240086340-appdata-v1',
-          CloudTrailName: 'securewebapp-v1-pr1076-v1-trail',
+          S3BucketName: 'securewebapp-v2-pr1076-v2-718240086340-appdata-v2',
+          CloudTrailName: 'securewebapp-v2-pr1076-v2-trail',
           KMSKeyId: '12345678-1234-1234-1234-123456789012',
-          AutoScalingGroupName: 'securewebapp-v1-pr1076-v1-asg',
-          StackName: 'TapStackpr1076-v1'
+          AutoScalingGroupName: 'securewebapp-v2-pr1076-v2-asg',
+          StackName: 'TapStackpr1076-v2'
         };
       }
     } catch (error) {
