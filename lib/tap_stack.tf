@@ -31,7 +31,7 @@ variable "availability_zones" {
   type        = map(list(string))
   default = {
     "us-east-1" = ["us-east-1a", "us-east-1b"]
-    "us-west-1" = ["us-west-1a", "us-west-1b"]
+    "us-west-1" = ["us-west-1a", "us-west-1c"]
   }
 }
 
