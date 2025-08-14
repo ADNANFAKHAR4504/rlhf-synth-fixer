@@ -623,19 +623,10 @@ Resources:
   # =========================
   # AWS Config
   # =========================
-  SecureEnvConfigRole:
-    Type: AWS::IAM::Role
+  ConfigServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
     Properties:
-      # RoleName removed to avoid CAPABILITY_NAMED_IAM requirement
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      AWSServiceName: config.amazonaws.com
 
   SecureEnvConfigBucket:
     Type: AWS::S3::Bucket
@@ -664,9 +655,12 @@ Resources:
 
   SecureEnvConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    DependsOn:
+      - ConfigServiceLinkedRole
+      - SecureEnvDeliveryChannel
     Properties:
       Name: !Sub SecureEnv-Config-Recorder-${Environment}
-      RoleARN: !GetAtt SecureEnvConfigRole.Arn
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -679,6 +673,9 @@ Resources:
 
   SecureEnvConfigRuleS3Encryption:
     Type: AWS::Config::ConfigRule
+    DependsOn:
+      - SecureEnvConfigurationRecorder
+      - SecureEnvDeliveryChannel
     Properties:
       ConfigRuleName: !Sub SecureEnv-S3-Bucket-Encryption-${Environment}
       Source:
@@ -687,6 +684,9 @@ Resources:
 
   SecureEnvConfigRuleRDSEncryption:
     Type: AWS::Config::ConfigRule
+    DependsOn:
+      - SecureEnvConfigurationRecorder
+      - SecureEnvDeliveryChannel
     Properties:
       ConfigRuleName: !Sub SecureEnv-RDS-Encryption-${Environment}
       Source:
@@ -757,19 +757,10 @@ Resources:
   # =========================
   # VPC Flow Logs
   # =========================
-  SecureEnvFlowLogRole:
-    Type: AWS::IAM::Role
+  SecureEnvFlowLogsServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
     Properties:
-      # RoleName removed to avoid CAPABILITY_NAMED_IAM requirement
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: vpc-flow-logs.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/VPCFlowLogs
+      AWSServiceName: vpc-flow-logs.amazonaws.com
 
   SecureEnvFlowLogBucket:
     Type: AWS::S3::Bucket
@@ -804,13 +795,14 @@ Resources:
 
   SecureEnvFlowLog:
     Type: AWS::EC2::FlowLog
+    DependsOn:
+      - SecureEnvFlowLogsServiceLinkedRole
     Properties:
       ResourceId: !Ref SecureEnvVPC
       ResourceType: VPC
       TrafficType: ALL
       LogDestinationType: cloud-watch-logs
       LogGroupName: !Ref SecureEnvVPCFlowLog
-      DeliverLogsPermissionArn: !GetAtt SecureEnvFlowLogRole.Arn
 
 Outputs:
   VPCId:
