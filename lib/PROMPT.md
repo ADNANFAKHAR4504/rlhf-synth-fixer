@@ -1,33 +1,26 @@
-# Terraform Infrastructure Setup: AWS Security Best Practices
+# Infrastructure as Code Setup: [Target Cloud Provider] Resources
 
-## Goal:
-The goal here is to create secure infrastructure on AWS using Terraform, while adhering to security best practices.
+## Overview
+In this task, we are tasked with building infrastructure using CDKTF (Cloud Development Kit for Terraform) for AWS. The goal is to create a modular and secure environment while following best practices. 
 
-## What needs to be done:
-1. Set up IAM roles that manage permissions without using inline policies.
-2. Make sure all data in S3 buckets is encrypted using AES-256 encryption.
-3. Build a secure VPC with private subnets to ensure proper network isolation.
-4. Configure Lambda functions to only trigger from IAM-authenticated sources.
-5. Ensure that all RDS actions are logged and the logs are encrypted.
-6. Set up EC2 security groups that allow SSH only from a specific range of IPs.
-7. Use AWS KMS for key management and configure automatic key rotation.
+## Constraints to Keep in Mind:
+- Use CDKTF constructs for all resources.
+- Code should be modular and reusable to ensure scalability.
+- Sensitive data and configuration should be managed using environment variables.
+- Follow consistent naming conventions for all resources and apply proper tagging.
+- Include comments explaining the rationale behind key sections in the code for future maintainability.
 
-## Work Environment:
-We’ll be using Terraform to implement all of this. Here’s how the setup should look:
+## What the Environment Will Look Like:
+- **Cloud Provider**: The target provider will be AWS
+- **Resources Needed**: The main resources that need to be set up include [e.g., VPC, EC2, S3, IAM roles, Security Groups].
+- **Region and Availability Zones**: The setup will target [us-east-1, e.g., us-west-2], ensuring proper AZ distribution for fault tolerance.
+- **Security**: Define IAM roles for secure access to resources, and configure security groups to control inbound and outbound traffic.
+- **Output**: The final output should include resource identifiers and connection details (e.g., VPC ID, EC2 Instance Public IP, Security Group ID).
 
-1. **IAM Roles**: Manage permissions with roles, not inline policies.
-2. **Encryption**: Encrypt all S3 bucket data using AES-256 encryption.
-3. **VPC**: Set up a VPC with private subnets to keep resources isolated.
-4. **Lambda**: Restrict Lambda function triggers to IAM-authenticated sources only.
-5. **RDS**: Enable logging for all RDS actions and make sure those logs are encrypted.
-6. **EC2 Security Groups**: Limit access to EC2 instances to SSH traffic only, and restrict it to a defined IP range.
-7. **Key Management**: Use AWS KMS for all encryption and ensure key rotation is enabled.
+## Key Requirements:
+- **Modularity**: Ensure that the code is modular so that it can be easily extended or modified for future needs.
+- **Environment Variables**: For all sensitive data (e.g., keys, passwords), use environment variables to maintain security.
+- **Naming and Tagging**: Follow a clear naming convention and include relevant tags for resource tracking and management.
 
-## What you should produce:
-A Terraform configuration file that includes all of the above security measures. Once you apply the configuration, the infrastructure should pass all security checks, including those from AWS Trusted Advisor.
+By the end of this, we should have a fully functional, secure, and scalable infrastructure setup.
 
-## Notes:
-- Stick to the naming conventions, such as prefixing resources with `prod-`.
-- Make sure to handle different AWS regions and workspaces for environment isolation.
-
-This setup should provide a secure foundation for AWS resources while maintaining best practices.
