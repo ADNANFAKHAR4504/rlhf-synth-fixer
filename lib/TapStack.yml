@@ -12,16 +12,13 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
   
-  # Database password (use AWS Secrets Manager for production)
-  DBPassword:
+  # AWS Secrets Manager secret name for database password
+  DBSecretName:
     Type: String
-    Default: YourSecurePassword123
-    NoEcho: true
-    Description: Database administrator password
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must contain only alphanumeric characters
+    Default: production/postgresql/password
+    Description: AWS Secrets Manager secret name for database password
+    AllowedPattern: '^[a-zA-Z0-9/_+=.@-]+$'
+    ConstraintDescription: Must be a valid secret name
 
 Resources:
   # ================================
@@ -206,7 +203,6 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    DependsOn: S3AccessLogsBucket
     Properties:
       BucketName: !Sub 'myapp-data-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
@@ -235,7 +231,6 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    DependsOn: S3AccessLogsBucket
     Properties:
       BucketName: !Sub 'myapp-backup-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
@@ -444,8 +439,8 @@ Resources:
       Engine: postgres
       EngineVersion: '14.18'  # Use stable PostgreSQL version
       MasterUsername: !Ref DBUsername
-      # Use parameter for database password
-      MasterUserPassword: !Ref DBPassword
+      # Use AWS Secrets Manager for database password
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecretName}:SecretString:password}}'
       AllocatedStorage: 100
       StorageType: gp2
       StorageEncrypted: true
