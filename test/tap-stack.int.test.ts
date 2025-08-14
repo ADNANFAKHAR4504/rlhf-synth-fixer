@@ -711,7 +711,6 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
         check();
         console.log(`✓ ${name} - Ready`);
       });
-
       console.log(
         'Complete infrastructure readiness validated - System is operational'
       );
