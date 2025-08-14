@@ -29,6 +29,10 @@ import {
   IAMClient,
 } from '@aws-sdk/client-iam';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
+import {
+  DescribeAlarmsCommand,
+  CloudWatchClient,
+} from '@aws-sdk/client-cloudwatch';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -54,6 +58,7 @@ const initializeClients = () => {
     kms: new KMSClient({ region }),
     iam: new IAMClient({ region }),
     sts: new STSClient({ region }),
+    cloudwatch: new CloudWatchClient({ region }),
   };
 };
 
@@ -342,7 +347,48 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(dbInstance.PubliclyAccessible).toBe(false);
       expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
       expect(dbInstance.MonitoringInterval).toBe(60);
-      // Performance Insights is not enabled in this configuration
+      // CloudWatch Database Insights provides monitoring instead of Performance Insights
+    });
+
+    it('should have CloudWatch alarms for database monitoring', async () => {
+      const environmentSuffix = stackOutputs.stackEnvironmentSuffix || 'dev';
+      
+      // Check for CPU utilization alarm
+      const cpuAlarmResponse = await clients.cloudwatch.send(
+        new DescribeAlarmsCommand({
+          AlarmNames: [`tap-db-cpu-utilization-${environmentSuffix}`],
+        })
+      );
+      
+      expect(cpuAlarmResponse.MetricAlarms).toHaveLength(1);
+      const cpuAlarm = cpuAlarmResponse.MetricAlarms![0];
+      expect(cpuAlarm.MetricName).toBe('CPUUtilization');
+      expect(cpuAlarm.Namespace).toBe('AWS/RDS');
+      expect(cpuAlarm.Threshold).toBe(80);
+      
+      // Check for connections alarm
+      const connectionsAlarmResponse = await clients.cloudwatch.send(
+        new DescribeAlarmsCommand({
+          AlarmNames: [`tap-db-connections-${environmentSuffix}`],
+        })
+      );
+      
+      expect(connectionsAlarmResponse.MetricAlarms).toHaveLength(1);
+      const connectionsAlarm = connectionsAlarmResponse.MetricAlarms![0];
+      expect(connectionsAlarm.MetricName).toBe('DatabaseConnections');
+      expect(connectionsAlarm.Threshold).toBe(40);
+      
+      // Check for storage alarm
+      const storageAlarmResponse = await clients.cloudwatch.send(
+        new DescribeAlarmsCommand({
+          AlarmNames: [`tap-db-free-storage-${environmentSuffix}`],
+        })
+      );
+      
+      expect(storageAlarmResponse.MetricAlarms).toHaveLength(1);
+      const storageAlarm = storageAlarmResponse.MetricAlarms![0];
+      expect(storageAlarm.MetricName).toBe('FreeStorageSpace');
+      expect(storageAlarm.Threshold).toBe(2000000000);
     });
 
     it('should have DB subnet group in private subnets', async () => {

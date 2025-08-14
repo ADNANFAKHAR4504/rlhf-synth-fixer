@@ -22,6 +22,13 @@ jest.mock('@pulumi/aws', () => ({
       id: `mock-attachment-${name}`,
     })),
   },
+  cloudwatch: {
+    MetricAlarm: jest.fn().mockImplementation((name, args) => ({
+      id: `mock-alarm-${name}`,
+      name: args.name,
+      arn: `arn:aws:cloudwatch:us-east-1:123456789012:alarm:${args.name}`,
+    })),
+  },
 }));
 
 jest.mock('@pulumi/pulumi', () => ({
@@ -336,6 +343,111 @@ describe('RdsStack Unit Tests', () => {
         }),
         expect.any(Object)
       );
+    });
+  });
+
+  describe('CloudWatch Database Insights', () => {
+    beforeEach(() => {
+      rdsStack = new RdsStack('test-rds', {
+        environmentSuffix: 'test',
+        privateSubnetIds: mockPrivateSubnetIds,
+        dbSecurityGroupId: mockDbSecurityGroupId,
+        rdsKmsKeyArn: mockKmsKeyArn,
+      });
+    });
+
+    it('should create CPU utilization alarm', () => {
+      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith(
+        'tap-db-cpu-alarm-test',
+        expect.objectContaining({
+          name: 'tap-db-cpu-utilization-test',
+          metricName: 'CPUUtilization',
+          namespace: 'AWS/RDS',
+          threshold: 80,
+          comparisonOperator: 'GreaterThanThreshold',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create database connections alarm', () => {
+      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith(
+        'tap-db-connections-alarm-test',
+        expect.objectContaining({
+          name: 'tap-db-connections-test',
+          metricName: 'DatabaseConnections',
+          namespace: 'AWS/RDS',
+          threshold: 40,
+          comparisonOperator: 'GreaterThanThreshold',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create free storage space alarm', () => {
+      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith(
+        'tap-db-storage-alarm-test',
+        expect.objectContaining({
+          name: 'tap-db-free-storage-test',
+          metricName: 'FreeStorageSpace',
+          namespace: 'AWS/RDS',
+          threshold: 2000000000,
+          comparisonOperator: 'LessThanThreshold',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create read latency alarm', () => {
+      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith(
+        'tap-db-read-latency-alarm-test',
+        expect.objectContaining({
+          name: 'tap-db-read-latency-test',
+          metricName: 'ReadLatency',
+          namespace: 'AWS/RDS',
+          threshold: 0.2,
+          comparisonOperator: 'GreaterThanThreshold',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create write latency alarm', () => {
+      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith(
+        'tap-db-write-latency-alarm-test',
+        expect.objectContaining({
+          name: 'tap-db-write-latency-test',
+          metricName: 'WriteLatency',
+          namespace: 'AWS/RDS',
+          threshold: 0.2,
+          comparisonOperator: 'GreaterThanThreshold',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create all alarms with proper dimensions', () => {
+      const alarmCalls = (aws.cloudwatch.MetricAlarm as unknown as jest.Mock).mock.calls;
+      
+      alarmCalls.forEach(call => {
+        const [name, config] = call;
+        expect(config.dimensions).toHaveProperty('DBInstanceIdentifier');
+        expect(config.dimensions.DBInstanceIdentifier).toBeDefined();
+      });
+    });
+
+    it('should create alarms with appropriate evaluation periods', () => {
+      const alarmCalls = (aws.cloudwatch.MetricAlarm as unknown as jest.Mock).mock.calls;
+      
+      // Most alarms should have 2 evaluation periods, storage alarm should have 1
+      alarmCalls.forEach(call => {
+        const [name, config] = call;
+        if (name.includes('storage')) {
+          expect(config.evaluationPeriods).toBe(1);
+        } else {
+          expect(config.evaluationPeriods).toBe(2);
+        }
+      });
     });
   });
 
