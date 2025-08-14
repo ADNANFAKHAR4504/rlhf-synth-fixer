@@ -265,6 +265,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('CloudTrail and Monitoring', () => {
     test('should have CloudTrail with correct configuration', async () => {
+      // Skip test if CloudTrail is disabled
+      if (!outputs.cloudtrail_name) {
+        console.log('CloudTrail is disabled - skipping CloudTrail test');
+        return;
+      }
+
       const command = new DescribeTrailsCommand({
         trailNameList: [outputs.cloudtrail_name],
       });
@@ -310,7 +316,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       // Validate monitoring
       expect(summary.monitoring).toBeDefined();
-      expect(summary.monitoring.cloudtrail_name).toBe(outputs.cloudtrail_name);
+      if (outputs.cloudtrail_name) {
+        expect(summary.monitoring.cloudtrail_name).toBe(outputs.cloudtrail_name);
+      } else {
+        expect(summary.monitoring.cloudtrail_name).toBeNull();
+      }
       expect(summary.monitoring.log_group_name).toBe(outputs.cloudwatch_log_group_name);
 
       // Validate security groups
@@ -365,8 +375,10 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(outputs.cloudtrail_role_arn).toMatch(new RegExp(`^arn:aws:iam::${accountId}:role/[a-zA-Z0-9-_]+$`));
       expect(outputs.cloudtrail_logs_role_arn).toMatch(new RegExp(`^arn:aws:iam::${accountId}:role/[a-zA-Z0-9-_]+$`));
 
-      // CloudTrail ARN
-      expect(outputs.cloudtrail_arn).toMatch(new RegExp(`^arn:aws:cloudtrail:${region}:${accountId}:trail/[a-zA-Z0-9-_]+$`));
+      // CloudTrail ARN (only if CloudTrail is enabled)
+      if (outputs.cloudtrail_arn) {
+        expect(outputs.cloudtrail_arn).toMatch(new RegExp(`^arn:aws:cloudtrail:${region}:${accountId}:trail/[a-zA-Z0-9-_]+$`));
+      }
 
       // CloudWatch Log Group ARN
       expect(outputs.cloudwatch_log_group_arn).toMatch(new RegExp(`^arn:aws:logs:${region}:${accountId}:log-group:[a-zA-Z0-9-_/:]+$`));

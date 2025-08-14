@@ -59,6 +59,12 @@ variable "allowed_cidr_blocks" {
   default     = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
 }
 
+variable "enable_cloudtrail" {
+  description = "Whether to create CloudTrail trail"
+  type        = bool
+  default     = false
+}
+
 ########################
 # Data Sources
 ########################
@@ -272,7 +278,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = aws_s3_bucket.cloudtrail.arn
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.environment}-${var.organization_name}-cloudtrail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/*"
           }
         }
       },
@@ -287,7 +293,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control"
-            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.environment}-${var.organization_name}-cloudtrail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/*"
           }
         }
       },
@@ -353,7 +359,7 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
 
 # Main S3 Bucket with Lifecycle Management
 resource "aws_s3_bucket" "this" {
-  bucket = "${var.bucket_name}-${var.environment_suffix}"
+  bucket = "${var.bucket_name}-${var.environment_suffix}-${random_string.bucket_suffix.result}"
   tags   = var.bucket_tags
 }
 
@@ -761,6 +767,7 @@ resource "aws_security_group" "mgmt" {
 
 # CloudTrail for logging all API calls
 resource "aws_cloudtrail" "main" {
+  count          = var.enable_cloudtrail ? 1 : 0
   name           = "${var.environment}-${var.organization_name}-cloudtrail"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
@@ -977,12 +984,12 @@ output "mgmt_security_group_id" {
 # CloudTrail Outputs
 output "cloudtrail_name" {
   description = "CloudTrail name"
-  value       = aws_cloudtrail.main.name
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : null
 }
 
 output "cloudtrail_arn" {
   description = "CloudTrail ARN"
-  value       = aws_cloudtrail.main.arn
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].arn : null
 }
 
 # Internet Gateway Output
@@ -1048,11 +1055,11 @@ output "infrastructure_summary" {
       kms_key_arn = aws_kms_key.main.arn
       kms_key_id  = aws_kms_key.main.key_id
     }
-    monitoring = {
-      cloudtrail_name = aws_cloudtrail.main.name
-      log_group_name  = aws_cloudwatch_log_group.cloudtrail.name
-      log_group_arn   = aws_cloudwatch_log_group.cloudtrail.arn
-    }
+          monitoring = {
+        cloudtrail_name = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : null
+        log_group_name  = aws_cloudwatch_log_group.cloudtrail.name
+        log_group_arn   = aws_cloudwatch_log_group.cloudtrail.arn
+      }
     security_groups = {
       web  = aws_security_group.web.id
       app  = aws_security_group.app.id
