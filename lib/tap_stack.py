@@ -757,10 +757,10 @@ class TapStack(TerraformStack):
         # Fix ALB metric dimensions using Terraform expressions and locals
         self.add_override(
             "resource.aws_cloudwatch_metric_alarm.alb-unhealthy.dimensions.LoadBalancer",
-            '${replace(local.alb_arn, "arn:aws:elasticloadbalancing:${data.aws_partition.current.partition == \"aws-cn\" ? \"cn-\" : \"\"}${var.AWS_REGION}:\d+:loadbalancer/", "")}')
+            '${replace(local.alb_arn, "arn:aws:elasticloadbalancing:${data.aws_partition.current.partition == \"aws-cn\" ? \"cn-\" : \"\"}${var.AWS_REGION}:\\d+:loadbalancer/", "")}')
         self.add_override(
             "resource.aws_cloudwatch_metric_alarm.alb-unhealthy.dimensions.TargetGroup",
-            "${replace(local.tg_arn, "arn:aws:elasticloadbalancing:${var.AWS_REGION}:\d+:targetgroup/", "")}")
+            '${replace(local.tg_arn, "arn:aws:elasticloadbalancing:${var.AWS_REGION}:\\d+:targetgroup/", "")}')
 
         if enable_database and rds is not None:
             CloudwatchMetricAlarm(
