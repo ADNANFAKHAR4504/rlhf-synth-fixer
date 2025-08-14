@@ -68,7 +68,7 @@ variable "db_engine" {
 variable "db_version" {
   description = "Database engine version"
   type        = string
-  default     = "15.4"
+  default     = "15.13"
 }
 
 variable "enable_multi_az_db" {
@@ -1171,8 +1171,10 @@ resource "aws_db_parameter_group" "main" {
 # Data source for available RDS engine versions
 data "aws_rds_engine_version" "postgres" {
   engine             = var.db_engine
-  preferred_versions = ["15.4", "15.3", "15.2", "15.1", "15"]
+  preferred_versions = ["15.13", "15.12", "15.10", "15.8", "15.7"]
 }
+
+
 
 # RDS Instance
 resource "aws_db_instance" "main" {
