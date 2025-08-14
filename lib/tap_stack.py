@@ -1007,110 +1007,111 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
         self._create_alarms()
     
     def _create_alarms(self):
-        """Create CloudWatch alarms for monitoring."""
-        
-        # Lambda error alarm
-        aws.cloudwatch.MetricAlarm(
-            f"lambda-errors-{self.args.environment_suffix}",
-            alarm_name=f"TAP-Lambda-Errors-{self.args.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="Errors",
-            namespace="AWS/Lambda",
-            period=300,
-            statistic="Sum",
-            threshold=5,
-            alarm_description="Lambda function errors exceeded threshold",
-            alarm_actions=[],  # Add SNS topic ARN here if needed
-            dimensions={"FunctionName": self.lambda_function.name},
-            treat_missing_data="notBreaching",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Lambda duration alarm
-        aws.cloudwatch.MetricAlarm(
-            f"lambda-duration-{self.args.environment_suffix}",
-            alarm_name=f"TAP-Lambda-Duration-{self.args.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="Duration",
-            namespace="AWS/Lambda",
-            period=300,
-            statistic="Average",
-            threshold=25000,  # 25 seconds
-            alarm_description="Lambda function duration exceeded threshold",
-            dimensions={"FunctionName": self.lambda_function.name},
-            treat_missing_data="notBreaching",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # API Gateway 5XX errors
-        aws.cloudwatch.MetricAlarm(
-            f"api-gateway-5xx-{self.args.environment_suffix}",
-            alarm_name=f"TAP-API-5XX-Errors-{self.args.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="5XXError",
-            namespace="AWS/ApiGateway",
-            period=300,
-            statistic="Sum",
-            threshold=10,
-            alarm_description="API Gateway 5XX errors exceeded threshold",
-            dimensions={"ApiName": self.api.id},
-            treat_missing_data="notBreaching",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # API Gateway latency alarm
-        aws.cloudwatch.MetricAlarm(
-            f"api-gateway-latency-{self.args.environment_suffix}",
-            alarm_name=f"TAP-API-Latency-{self.args.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="Latency",
-            namespace="AWS/ApiGateway",
-            period=300,
-            statistic="Average",
-            threshold=5000,  # 5 seconds
-            alarm_description="API Gateway latency exceeded threshold",
-            dimensions={"ApiName": self.api.id},
-            treat_missing_data="notBreaching",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # DynamoDB throttles
-        aws.cloudwatch.MetricAlarm(
-            f"dynamodb-throttles-{self.args.environment_suffix}",
-            alarm_name=f"TAP-DynamoDB-Throttles-{self.args.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=1,
-            metric_name="ThrottledRequests",
-            namespace="AWS/DynamoDB",
-            period=300,
-            statistic="Sum",
-            threshold=0,
-            alarm_description="DynamoDB throttling events detected",
-            dimensions={"TableName": self.dynamodb_table.name},
-            treat_missing_data="notBreaching",
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # DynamoDB system errors
-        aws.cloudwatch.MetricAlarm(
-            f"dynamodb-errors-{self.args.environment_suffix}",
-            alarm_name=f"TAP-DynamoDB-Errors-{self.args.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="SystemErrors",
-            namespace="AWS/DynamoDB",
-            period=300,
-            statistic="Sum",
-            threshold=5,
-            alarm_description="DynamoDB system errors exceeded threshold",
-            dimensions={"TableName": self.dynamodb_table.name},
-            treat_missing_data="notBreaching",
-            opts=ResourceOptions(parent=self)
-        )
+      """Create CloudWatch alarms for monitoring."""
+      
+      # Lambda error alarm
+      aws.cloudwatch.MetricAlarm(
+          f"lambda-errors-{self.args.environment_suffix}",
+          name=f"TAP-Lambda-Errors-{self.args.environment_suffix}",  # FIXED: Changed from alarm_name to name
+          comparison_operator="GreaterThanThreshold",
+          evaluation_periods=2,
+          metric_name="Errors",
+          namespace="AWS/Lambda",
+          period=300,
+          statistic="Sum",
+          threshold=5,
+          alarm_description="Lambda function errors exceeded threshold",
+          alarm_actions=[],  # Add SNS topic ARN here if needed
+          dimensions={"FunctionName": self.lambda_function.name},
+          treat_missing_data="notBreaching",
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # Lambda duration alarm
+      aws.cloudwatch.MetricAlarm(
+          f"lambda-duration-{self.args.environment_suffix}",
+          name=f"TAP-Lambda-Duration-{self.args.environment_suffix}",  # FIXED: Changed from alarm_name to name
+          comparison_operator="GreaterThanThreshold",
+          evaluation_periods=2,
+          metric_name="Duration",
+          namespace="AWS/Lambda",
+          period=300,
+          statistic="Average",
+          threshold=25000,  # 25 seconds
+          alarm_description="Lambda function duration exceeded threshold",
+          dimensions={"FunctionName": self.lambda_function.name},
+          treat_missing_data="notBreaching",
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # API Gateway 5XX errors
+      aws.cloudwatch.MetricAlarm(
+          f"api-gateway-5xx-{self.args.environment_suffix}",
+          name=f"TAP-API-5XX-Errors-{self.args.environment_suffix}",  # FIXED: Changed from alarm_name to name
+          comparison_operator="GreaterThanThreshold",
+          evaluation_periods=2,
+          metric_name="5XXError",
+          namespace="AWS/ApiGateway",
+          period=300,
+          statistic="Sum",
+          threshold=10,
+          alarm_description="API Gateway 5XX errors exceeded threshold",
+          dimensions={"ApiName": self.api.id},
+          treat_missing_data="notBreaching",
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # API Gateway latency alarm
+      aws.cloudwatch.MetricAlarm(
+          f"api-gateway-latency-{self.args.environment_suffix}",
+          name=f"TAP-API-Latency-{self.args.environment_suffix}",  # FIXED: Changed from alarm_name to name
+          comparison_operator="GreaterThanThreshold",
+          evaluation_periods=2,
+          metric_name="Latency",
+          namespace="AWS/ApiGateway",
+          period=300,
+          statistic="Average",
+          threshold=5000,  # 5 seconds
+          alarm_description="API Gateway latency exceeded threshold",
+          dimensions={"ApiName": self.api.id},
+          treat_missing_data="notBreaching",
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # DynamoDB throttles
+      aws.cloudwatch.MetricAlarm(
+          f"dynamodb-throttles-{self.args.environment_suffix}",
+          name=f"TAP-DynamoDB-Throttles-{self.args.environment_suffix}",  # FIXED: Changed from alarm_name to name
+          comparison_operator="GreaterThanThreshold",
+          evaluation_periods=1,
+          metric_name="ThrottledRequests",
+          namespace="AWS/DynamoDB",
+          period=300,
+          statistic="Sum",
+          threshold=0,
+          alarm_description="DynamoDB throttling events detected",
+          dimensions={"TableName": self.dynamodb_table.name},
+          treat_missing_data="notBreaching",
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # DynamoDB system errors
+      aws.cloudwatch.MetricAlarm(
+          f"dynamodb-errors-{self.args.environment_suffix}",
+          name=f"TAP-DynamoDB-Errors-{self.args.environment_suffix}",  # FIXED: Changed from alarm_name to name
+          comparison_operator="GreaterThanThreshold",
+          evaluation_periods=2,
+          metric_name="SystemErrors",
+          namespace="AWS/DynamoDB",
+          period=300,
+          statistic="Sum",
+          threshold=5,
+          alarm_description="DynamoDB system errors exceeded threshold",
+          dimensions={"TableName": self.dynamodb_table.name},
+          treat_missing_data="notBreaching",
+          opts=ResourceOptions(parent=self)
+      )
+
     
     def _create_migration_resources(self):
         """Create resources for migration management."""
