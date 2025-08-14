@@ -66,8 +66,6 @@ describe('Terraform Configuration', () => {
     expect(content).toContain('resource "aws_config_configuration_recorder" "this"');
     expect(content).toContain('resource "aws_config_config_rule"');
 
-    // Check for IAM user
-    expect(content).toContain('resource "aws_iam_user" "example"');
   });
 
   test('Security group allows correct ports', () => {

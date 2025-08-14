@@ -269,7 +269,7 @@ resource "aws_s3_bucket_policy" "logs" {
 
 # Make sure the trail waits for the policy to exist
 resource "aws_cloudtrail" "this" {
-  name                          = "${local.name_with_suffix}-trail01"
+  name                          = "${local.name_with_suffix}-trail-${random_id.suffix.hex}"
   s3_bucket_name                = aws_s3_bucket.logs.bucket
   include_global_service_events = true
   is_multi_region_trail         = true
@@ -300,7 +300,7 @@ resource "aws_cloudtrail" "this" {
 # -----------------------------
 
 resource "aws_iam_policy" "aws_config_role_policy" {
-  name        = "${local.name_with_suffix}_ConfigRole"
+  name        = "${local.name_with_suffix}_ConfigRole_${random_id.suffix.hex}"
   description = "Permissions required for AWS Config to record and deliver configuration changes."
 
   policy = jsonencode({
@@ -344,7 +344,7 @@ resource "aws_iam_policy" "aws_config_role_policy" {
 # data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "config" {
-  name = "${local.name_with_suffix}-configrole1-trail01"
+  name = "${local.name_with_suffix}-configrole1-trail-${random_id.suffix.hex}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -407,7 +407,7 @@ resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
 # IAM secureuser: user + least-priv policy + MFA enforcement
 # -----------------------------
 resource "aws_iam_user" "secureuser" {
-  name = var.iam_username
+  name = "${var.iam_username}-${random_id.suffix.hex}"
   tags = local.common_tags
 }
 
