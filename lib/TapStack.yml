@@ -623,10 +623,7 @@ Resources:
   # =========================
   # AWS Config
   # =========================
-  ConfigServiceLinkedRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: config.amazonaws.com
+  # Using existing AWS Config service-linked role if present
 
   SecureEnvConfigBucket:
     Type: AWS::S3::Bucket
@@ -656,7 +653,6 @@ Resources:
   SecureEnvConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     DependsOn:
-      - ConfigServiceLinkedRole
       - SecureEnvDeliveryChannel
     Properties:
       Name: !Sub SecureEnv-Config-Recorder-${Environment}
@@ -757,10 +753,7 @@ Resources:
   # =========================
   # VPC Flow Logs
   # =========================
-  SecureEnvFlowLogsServiceLinkedRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: vpc-flow-logs.amazonaws.com
+  # Assume VPC Flow Logs service-linked role exists or the deployer has permission to auto-create it
 
   SecureEnvFlowLogBucket:
     Type: AWS::S3::Bucket
@@ -795,8 +788,6 @@ Resources:
 
   SecureEnvFlowLog:
     Type: AWS::EC2::FlowLog
-    DependsOn:
-      - SecureEnvFlowLogsServiceLinkedRole
     Properties:
       ResourceId: !Ref SecureEnvVPC
       ResourceType: VPC
