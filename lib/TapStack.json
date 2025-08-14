@@ -1912,6 +1912,21 @@
                 }
               ]
             }
+          },
+          {
+            "PolicyName": "CloudFormationSignal",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:SignalResource"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
           }
         ],
         "Tags": [
@@ -2010,7 +2025,7 @@
           },
           "UserData": {
             "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\n"
+              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd aws-cfn-bootstrap\nsystemctl start httpd\nsystemctl enable httpd\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\necho 'OK' > /var/www/html/health\n\n# Signal CloudFormation that instance is ready\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
             }
           },
           "BlockDeviceMappings": [
@@ -2076,12 +2091,12 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "HealthCheckPath": "/",
+        "HealthCheckPath": "/health",
         "HealthCheckProtocol": "HTTP",
-        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckIntervalSeconds": 15,
         "HealthCheckTimeoutSeconds": 5,
         "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 3,
+        "UnhealthyThresholdCount": 2,
         "TargetType": "instance",
         "Tags": [
           {
@@ -2199,6 +2214,12 @@
     },
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "DependsOn": [
+        "NATGateway1",
+        "NATGateway2",
+        "DefaultPrivateRoute1",
+        "DefaultPrivateRoute2"
+      ],
       "Properties": {
         "AutoScalingGroupName": {
           "Fn::Sub": "${Environment}-ASG-${EnvironmentSuffix}"
@@ -2255,7 +2276,7 @@
           }
         ],
         "HealthCheckType": "ELB",
-        "HealthCheckGracePeriod": 300,
+        "HealthCheckGracePeriod": 180,
         "Tags": [
           {
             "Key": "Name",
@@ -2286,6 +2307,35 @@
             "PropagateAtLaunch": true
           }
         ]
+      },
+      "CreationPolicy": {
+        "ResourceSignal": {
+          "Timeout": "PT10M",
+          "Count": {
+            "Fn::FindInMap": [
+              "EnvironmentMap",
+              {
+                "Ref": "Environment"
+              },
+              "DesiredCapacity"
+            ]
+          }
+        }
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": 1,
+          "MaxBatchSize": 1,
+          "PauseTime": "PT5M",
+          "WaitOnResourceSignals": true,
+          "SuspendProcesses": [
+            "HealthCheck",
+            "ReplaceUnhealthy",
+            "AZRebalance",
+            "AlarmNotification",
+            "ScheduledActions"
+          ]
+        }
       }
     },
     "ScalingPolicy": {
