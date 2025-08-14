@@ -5,5 +5,14 @@
   "turn_type": "single",
   "po_id": "291772",
   "team": "2",
-  "startedAt": "2025-08-13T17:04:57.563Z"
+  "startedAt": "2025-08-13T17:04:57.563Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup"
+  ]
 }
