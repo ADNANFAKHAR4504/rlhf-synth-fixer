@@ -86,7 +86,7 @@ def setup_cloudtrail(region: str, s3_bucket_name: pulumi.Output[str], tags: Dict
       include_management_events=True,
       data_resources=[aws.cloudtrail.TrailEventSelectorDataResourceArgs(
         type="AWS::S3::Object",
-        values=["arn:aws:s3:::*/*"]
+        values=[s3_bucket_name.apply(lambda b: f"arn:aws:s3:::{b}/")]
       )]
     )],
     tags=tags,
