@@ -10,7 +10,7 @@ test/ – Contains unit/integration tests validating the infrastructure.
 
 Infrastructure Requirements:
 
-Use CDKTF in TypeScript to provision AWS infrastructure across three regions: us-east-1, eu-west-1, and ap-southeast-2.
+Use CDKTF in TypeScript to provisionn AWS infrastructure across three regions: us-east-1, eu-west-1, and ap-southeast-2.
 
 In each region, set up consistent networking components, including :
 
