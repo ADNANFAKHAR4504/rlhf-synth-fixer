@@ -2587,7 +2587,7 @@
       "Properties": {
         "BucketName": {
           "Fn::Sub": [
-            "${env}-config-bucket-${suffix}-${account}",
+            "v1-${env}-config-bucket-${suffix}-${account}",
             {
               "env": {
                 "Fn::If": [
@@ -2697,7 +2697,7 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/ConfigRole"
+          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
         ],
         "Policies": [
           {
