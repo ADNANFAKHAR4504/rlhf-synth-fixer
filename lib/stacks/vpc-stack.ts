@@ -1,9 +1,3 @@
-/**
- * vpc-stack.ts
- *
- * This module defines the VpcStack component for creating a secure VPC
- * with both public and private subnets, NAT gateways, and proper routing.
- */
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -16,8 +10,8 @@ export interface VpcStackArgs {
 
 export class VpcStack extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
-  public readonly privateSubnetIds: pulumi.Output<string>[];
-  public readonly publicSubnetIds: pulumi.Output<string>[];
+  public readonly privateSubnetIds: pulumi.Output<string[]>;
+  public readonly publicSubnetIds: pulumi.Output<string[]>;
   public readonly internetGatewayId: pulumi.Output<string>;
 
   constructor(name: string, args: VpcStackArgs, opts?: ResourceOptions) {
@@ -27,58 +21,60 @@ export class VpcStack extends pulumi.ComponentResource {
     const vpcCidr = args.vpcCidr || '10.0.0.0/16';
     const tags = args.tags || {};
 
-    // Create VPC
     const vpc = new aws.ec2.Vpc(
       `tap-vpc-${environmentSuffix}`,
       {
         cidrBlock: vpcCidr,
         enableDnsHostnames: true,
         enableDnsSupport: true,
-        tags: {
-          Name: `tap-vpc-${environmentSuffix}`,
-          ...tags,
-        },
+        tags: { Name: `tap-vpc-${environmentSuffix}`, ...tags },
       },
       { parent: this }
     );
 
-    // Create Internet Gateway
-    const internetGateway = new aws.ec2.InternetGateway(
+    const igw = new aws.ec2.InternetGateway(
       `tap-igw-${environmentSuffix}`,
       {
         vpcId: vpc.id,
-        tags: {
-          Name: `tap-igw-${environmentSuffix}`,
-          ...tags,
-        },
+        tags: { Name: `tap-igw-${environmentSuffix}`, ...tags },
       },
       { parent: this }
     );
 
-    // Get availability zones
-    const availabilityZones = aws.getAvailabilityZones({
-      state: 'available',
-    });
+    const publicRt = new aws.ec2.RouteTable(
+      `tap-public-rt-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: { Name: `tap-public-rt-${environmentSuffix}`, ...tags },
+      },
+      { parent: this }
+    );
 
-    // Create subnets in multiple AZs
-    const privateSubnets: aws.ec2.Subnet[] = [];
-    const publicSubnets: aws.ec2.Subnet[] = [];
-    const natGateways: aws.ec2.NatGateway[] = [];
+    new aws.ec2.Route(
+      `tap-public-route-${environmentSuffix}`,
+      {
+        routeTableId: publicRt.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: igw.id,
+      },
+      { parent: this }
+    );
 
-    availabilityZones.then(azs => {
-      const azCount = Math.min(azs.names.length, 3); // Use up to 3 AZs
+    const azs = aws.getAvailabilityZonesOutput({ state: 'available' });
 
-      for (let i = 0; i < azCount; i++) {
-        const az = azs.names[i];
+    const { publicIds, privateIds } = azs.names.apply(names => {
+      const use = names.slice(0, Math.min(names.length, 3));
+      const publicSubnetIds: pulumi.Output<string>[] = [];
+      const privateSubnetIds: pulumi.Output<string>[] = [];
 
-        // Public subnet
-        const publicSubnet = new aws.ec2.Subnet(
+      use.forEach((az, i) => {
+        const pub = new aws.ec2.Subnet(
           `tap-public-subnet-${i}-${environmentSuffix}`,
           {
             vpcId: vpc.id,
             cidrBlock: `10.0.${i * 2 + 1}.0/24`,
             availabilityZone: az,
-            mapPublicIpOnLaunch: false, // Explicitly disable auto-assign public IP
+            mapPublicIpOnLaunch: true,
             tags: {
               Name: `tap-public-subnet-${i}-${environmentSuffix}`,
               Type: 'public',
@@ -88,10 +84,18 @@ export class VpcStack extends pulumi.ComponentResource {
           { parent: this }
         );
 
-        publicSubnets.push(publicSubnet);
+        publicSubnetIds.push(pub.id);
 
-        // Private subnet
-        const privateSubnet = new aws.ec2.Subnet(
+        new aws.ec2.RouteTableAssociation(
+          `tap-public-rta-${i}-${environmentSuffix}`,
+          {
+            subnetId: pub.id,
+            routeTableId: publicRt.id,
+          },
+          { parent: this }
+        );
+
+        const priv = new aws.ec2.Subnet(
           `tap-private-subnet-${i}-${environmentSuffix}`,
           {
             vpcId: vpc.id,
@@ -106,46 +110,32 @@ export class VpcStack extends pulumi.ComponentResource {
           { parent: this }
         );
 
-        privateSubnets.push(privateSubnet);
+        privateSubnetIds.push(priv.id);
 
-        // Elastic IP for NAT Gateway
         const eip = new aws.ec2.Eip(
           `tap-nat-eip-${i}-${environmentSuffix}`,
           {
             domain: 'vpc',
-            tags: {
-              Name: `tap-nat-eip-${i}-${environmentSuffix}`,
-              ...tags,
-            },
+            tags: { Name: `tap-nat-eip-${i}-${environmentSuffix}`, ...tags },
           },
           { parent: this }
         );
 
-        // NAT Gateway
-        const natGateway = new aws.ec2.NatGateway(
+        const nat = new aws.ec2.NatGateway(
           `tap-nat-${i}-${environmentSuffix}`,
           {
             allocationId: eip.id,
-            subnetId: publicSubnet.id,
-            tags: {
-              Name: `tap-nat-${i}-${environmentSuffix}`,
-              ...tags,
-            },
+            subnetId: pub.id,
+            tags: { Name: `tap-nat-${i}-${environmentSuffix}`, ...tags },
           },
           { parent: this }
         );
 
-        natGateways.push(natGateway);
-
-        // Private route table
-        const privateRouteTable = new aws.ec2.RouteTable(
+        const privateRt = new aws.ec2.RouteTable(
           `tap-private-rt-${i}-${environmentSuffix}`,
           {
             vpcId: vpc.id,
-            tags: {
-              Name: `tap-private-rt-${i}-${environmentSuffix}`,
-              ...tags,
-            },
+            tags: { Name: `tap-private-rt-${i}-${environmentSuffix}`, ...tags },
           },
           { parent: this }
         );
@@ -153,9 +143,9 @@ export class VpcStack extends pulumi.ComponentResource {
         new aws.ec2.Route(
           `tap-private-route-${i}-${environmentSuffix}`,
           {
-            routeTableId: privateRouteTable.id,
+            routeTableId: privateRt.id,
             destinationCidrBlock: '0.0.0.0/0',
-            natGatewayId: natGateway.id,
+            natGatewayId: nat.id,
           },
           { parent: this }
         );
@@ -163,59 +153,29 @@ export class VpcStack extends pulumi.ComponentResource {
         new aws.ec2.RouteTableAssociation(
           `tap-private-rta-${i}-${environmentSuffix}`,
           {
-            subnetId: privateSubnet.id,
-            routeTableId: privateRouteTable.id,
+            subnetId: priv.id,
+            routeTableId: privateRt.id,
           },
           { parent: this }
         );
-      }
-    });
+      });
 
-    // Public route table
-    const publicRouteTable = new aws.ec2.RouteTable(
-      `tap-public-rt-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        tags: {
-          Name: `tap-public-rt-${environmentSuffix}`,
-          ...tags,
-        },
-      },
-      { parent: this }
-    );
-
-    new aws.ec2.Route(
-      `tap-public-route-${environmentSuffix}`,
-      {
-        routeTableId: publicRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        gatewayId: internetGateway.id,
-      },
-      { parent: this }
-    );
-
-    // Associate public subnets with public route table
-    publicSubnets.forEach((subnet, i) => {
-      new aws.ec2.RouteTableAssociation(
-        `tap-public-rta-${i}-${environmentSuffix}`,
-        {
-          subnetId: subnet.id,
-          routeTableId: publicRouteTable.id,
-        },
-        { parent: this }
-      );
+      return {
+        publicIds: pulumi.all(publicSubnetIds),
+        privateIds: pulumi.all(privateSubnetIds),
+      };
     });
 
     this.vpcId = vpc.id;
-    this.privateSubnetIds = privateSubnets.map(s => s.id);
-    this.publicSubnetIds = publicSubnets.map(s => s.id);
-    this.internetGatewayId = internetGateway.id;
+    this.internetGatewayId = igw.id;
+    this.publicSubnetIds = publicIds;
+    this.privateSubnetIds = privateIds;
 
     this.registerOutputs({
       vpcId: this.vpcId,
-      privateSubnetIds: this.privateSubnetIds,
-      publicSubnetIds: this.publicSubnetIds,
       internetGatewayId: this.internetGatewayId,
+      publicSubnetIds: this.publicSubnetIds,
+      privateSubnetIds: this.privateSubnetIds,
     });
   }
 }

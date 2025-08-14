@@ -162,7 +162,7 @@ export class TapStack extends pulumi.ComponentResource {
       'tap-ec2',
       {
         environmentSuffix,
-        privateSubnetIds: pulumi.all(vpcStack.privateSubnetIds),
+        privateSubnetIds: vpcStack.privateSubnetIds,
         webSecurityGroupId: securityGroupStack.webSecurityGroupId,
         ec2InstanceProfileName: iamStack.ec2InstanceProfileName,
         mainKmsKeyArn: kmsStack.mainKeyArn,

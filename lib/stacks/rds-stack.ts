@@ -1,9 +1,3 @@
-/**
- * rds-stack.ts
- *
- * This module defines the RDS stack for creating encrypted database instances
- * with automated backups and monitoring.
- */
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -11,7 +5,7 @@ import { ResourceOptions } from '@pulumi/pulumi';
 export interface RdsStackArgs {
   environmentSuffix?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
-  privateSubnetIds: pulumi.Input<string>[];
+  privateSubnetIds: pulumi.Input<pulumi.Input<string>[]>;
   dbSecurityGroupId: pulumi.Input<string>;
   rdsKmsKeyArn: pulumi.Input<string>;
   dbSecretArn: pulumi.Input<string>;
@@ -31,21 +25,27 @@ export class RdsStack extends pulumi.ComponentResource {
     const instanceClass = args.instanceClass || 'db.t3.micro';
     const tags = args.tags || {};
 
-    // Create DB subnet group
+    // Tripwire to catch bad subnet inputs early
+    pulumi.output(args.privateSubnetIds).apply(ids => {
+      if (!ids || ids.length < 2) {
+        throw new Error(
+          `RDS needs at least two private subnets; got ${ids?.length ?? 0}.`
+        );
+      }
+    });
+
+    // Subnet group
     const dbSubnetGroup = new aws.rds.SubnetGroup(
       `tap-db-subnet-group-${environmentSuffix}`,
       {
         name: `tap-db-subnet-group-${environmentSuffix}`,
         subnetIds: args.privateSubnetIds,
-        tags: {
-          Name: `tap-db-subnet-group-${environmentSuffix}`,
-          ...tags,
-        },
+        tags: { Name: `tap-db-subnet-group-${environmentSuffix}`, ...tags },
       },
       { parent: this }
     );
 
-    // Create monitoring role for RDS
+    // Enhanced monitoring role
     const monitoringRole = new aws.iam.Role(
       `tap-rds-monitoring-role-${environmentSuffix}`,
       {
@@ -56,16 +56,11 @@ export class RdsStack extends pulumi.ComponentResource {
             {
               Action: 'sts:AssumeRole',
               Effect: 'Allow',
-              Principal: {
-                Service: 'monitoring.rds.amazonaws.com',
-              },
+              Principal: { Service: 'monitoring.rds.amazonaws.com' },
             },
           ],
         }),
-        tags: {
-          Name: `tap-rds-monitoring-role-${environmentSuffix}`,
-          ...tags,
-        },
+        tags: { Name: `tap-rds-monitoring-role-${environmentSuffix}`, ...tags },
       },
       { parent: this }
     );
@@ -80,14 +75,14 @@ export class RdsStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create RDS instance
+    // DB instance
     const dbInstance = new aws.rds.Instance(
       `tap-db-${environmentSuffix}`,
       {
         identifier: `tap-db-${environmentSuffix}`,
-        instanceClass: instanceClass,
+        instanceClass,
         engine: 'mysql',
-        engineVersion: '8.0',
+        engineVersion: '8.0', // or a pinned patch like '8.0.35'
         allocatedStorage: 20,
         storageType: 'gp3',
         storageEncrypted: true,
@@ -100,10 +95,12 @@ export class RdsStack extends pulumi.ComponentResource {
 
         vpcSecurityGroupIds: [args.dbSecurityGroupId],
         dbSubnetGroupName: dbSubnetGroup.name,
+        publiclyAccessible: false,
 
         backupRetentionPeriod: 7,
         backupWindow: '03:00-04:00',
         maintenanceWindow: 'sun:04:00-sun:05:00',
+        autoMinorVersionUpgrade: true,
 
         skipFinalSnapshot: false,
         finalSnapshotIdentifier: `tap-db-final-snapshot-${environmentSuffix}`,
@@ -115,7 +112,7 @@ export class RdsStack extends pulumi.ComponentResource {
 
         performanceInsightsEnabled: true,
         performanceInsightsKmsKeyId: args.rdsKmsKeyArn,
-        performanceInsightsRetentionPeriod: 7,
+        performanceInsightsRetentionPeriod: 7, // 7 or 731
 
         tags: {
           Name: `tap-db-${environmentSuffix}`,
