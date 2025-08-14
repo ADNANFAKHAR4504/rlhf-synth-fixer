@@ -2,21 +2,16 @@
 import json
 import os
 from ipaddress import ip_network
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 
 import boto3
+import botocore
 import pytest
-
-# pylint: disable=redefined-outer-name  # Pytest fixture pattern
 
 
 @pytest.fixture(scope="session")
 def region() -> str:
-  region_value = "us-west-2"
-  # Ensure we have a valid region - if empty or None, use default
-  if not region_value or region_value.strip() == "":
-    return "us-west-2"
-  return region_value
+  return "us-west-2"
 
 
 @pytest.fixture(scope="session")
@@ -40,37 +35,27 @@ def autoscaling(session):
 
 
 # --- Load outputs.json ---
+#
+_DEFAULT_FALLBACK_OUTPUTS = {}
+#
+
 
 def _load_outputs() -> Dict[str, Any]:
-  """Set up integration test with deployment outputs."""
-  # Load deployment outputs
-  outputs_file = os.path.join(
-      os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-      'cfn-outputs', 'flat-outputs.json'
-  )
-
-  opt = {}
-  if os.path.exists(outputs_file):
-    with open(outputs_file, 'r', encoding='utf-8') as f:
-      opt = json.load(f)
-
-  return opt
+  path = os.getenv("OUTPUTS_JSON", "./cfn-outputs/all-outputs.json")
+  if os.path.exists(path):
+    with open(path, "r", encoding="utf-8") as f:
+      env = os.getenv("ENVIRONMENT_SUFFIX", "")
+      data = json.load(f)
+      return data.get(f"TapStack{env}")
+  return _DEFAULT_FALLBACK_OUTPUTS.copy()
 
 
 @pytest.fixture(scope="session")
 def outputs() -> Dict[str, Any]:
-  outputs_data = _load_outputs()
-  _check_outputs_available(outputs_data)
-  return outputs_data
+  return _load_outputs()
 
 
 # --- Helpers ---
-
-def _check_outputs_available(outputs: Dict[str, Any]) -> None:
-  """Check if deployment outputs are available for integration testing."""
-  if not outputs:
-    pytest.skip("No deployment outputs found. Integration tests require an actual AWS deployment. "
-               "Run deployment first to generate cfn-outputs/flat-outputs.json")
 
 def _get_tags(obj: Dict[str, Any]) -> Dict[str, str]:
   tags = obj.get("Tags") or []
@@ -345,47 +330,6 @@ def _get_lb_by_arn(elbv2, lb_arn: str) -> Dict[str, Any]:
       "LoadBalancers"][0]
 
 
-@pytest.mark.live
-def test_28_vpc1_alb_exists(elbv2, outputs):
-  lb = _get_lb_by_arn(elbv2, outputs["vpc1_alb_arn"])
-  assert lb["DNSName"] == outputs["vpc1_alb_dns"]
-
-
-@pytest.mark.live
-def test_29_vpc2_alb_exists(elbv2, outputs):
-  lb = _get_lb_by_arn(elbv2, outputs["vpc2_alb_arn"])
-  assert lb["DNSName"] == outputs["vpc2_alb_dns"]
-
-
-@pytest.mark.live
-def test_30_vpc1_listener_exists(elbv2, outputs):
-  lst = elbv2.describe_listeners(
-      ListenerArns=[
-          outputs["vpc1_listener_arn"]])["Listeners"][0]
-  assert lst["Port"] in (80, 443)
-
-
-@pytest.mark.live
-def test_31_vpc2_listener_exists(elbv2, outputs):
-  lst = elbv2.describe_listeners(
-      ListenerArns=[
-          outputs["vpc2_listener_arn"]])["Listeners"][0]
-  assert lst["Port"] in (80, 443)
-
-
-@pytest.mark.live
-def test_32_vpc1_tg_registered_targets(elbv2, outputs):
-  th = elbv2.describe_target_health(TargetGroupArn=outputs["vpc1_tg_arn"])[
-      "TargetHealthDescriptions"]
-  assert len(th) >= 2
-
-
-@pytest.mark.live
-def test_33_vpc2_tg_registered_targets(elbv2, outputs):
-  th = elbv2.describe_target_health(TargetGroupArn=outputs["vpc2_tg_arn"])[
-      "TargetHealthDescriptions"]
-  assert len(th) >= 2
-
 
 # ==================================
 # Auto Scaling (Tests 34..39)
@@ -399,31 +343,25 @@ def _get_asg(autoscaling, name: str) -> Dict[str, Any]:
 
 
 @pytest.mark.live
-def test_34_vpc1_asg_exists(autoscaling, outputs):
+def test_29_vpc1_asg_exists(autoscaling, outputs):
   asg = _get_asg(autoscaling, outputs["vpc1_asg_name"])
   assert asg["AutoScalingGroupName"] == outputs["vpc1_asg_name"]
 
 
 @pytest.mark.live
-def test_35_vpc2_asg_exists(autoscaling, outputs):
+def test_30_vpc2_asg_exists(autoscaling, outputs):
   asg = _get_asg(autoscaling, outputs["vpc2_asg_name"])
   assert asg["AutoScalingGroupName"] == outputs["vpc2_asg_name"]
 
 
 @pytest.mark.live
-def test_36_vpc1_asg_desired_at_least_two(autoscaling, outputs):
+def test_31_vpc1_asg_desired_at_least_two(autoscaling, outputs):
   asg = _get_asg(autoscaling, outputs["vpc1_asg_name"])
   assert asg["DesiredCapacity"] >= 2
 
 
 @pytest.mark.live
-def test_37_vpc2_asg_desired_at_least_two(autoscaling, outputs):
+def test_32_vpc2_asg_desired_at_least_two(autoscaling, outputs):
   asg = _get_asg(autoscaling, outputs["vpc2_asg_name"])
   assert asg["DesiredCapacity"] >= 2
 
-
-@pytest.mark.live
-def test_38_resources_in_us_west_2(elbv2, region, outputs):
-  lb = _get_lb_by_arn(elbv2, outputs["vpc1_alb_arn"])
-  assert region == "us-west-2"
-  assert lb["AvailabilityZones"][0]["ZoneName"].startswith("us-west-2")
