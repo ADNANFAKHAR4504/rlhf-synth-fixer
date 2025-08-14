@@ -52,3 +52,4 @@ regions.forEach(awsRegion => {
 // Synthesize the app to generate the Terraform configuration
 app.synth();
 ````
+
