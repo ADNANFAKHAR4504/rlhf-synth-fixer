@@ -47,6 +47,18 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]{0,32}$'
     Description: Optional lowercase suffix to make S3 bucket names unique (e.g., pr1200)
 
+  CreateCloudTrail:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Whether to create CloudTrail resources
+
+  CreateAwsConfig:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Whether to create AWS Config resources
+
   UseExistingVPC:
     Type: String
     AllowedValues: ['true', 'false']
@@ -96,10 +108,11 @@ Parameters:
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
   CreateDetector: !Equals [!Ref CreateGuardDutyDetector, 'true']
-  HasFlowLogsRoleArn: !Not [!Equals [!Ref FlowLogsRoleArn, '']]
   UseExistingNetworking: !Equals [!Ref UseExistingVPC, 'true']
   CreateNetworking: !Equals [!Ref UseExistingVPC, 'false']
   HasNameSuffix: !Not [!Equals [!Ref NameSuffix, '']]
+  CreateCloudTrailCond: !Equals [!Ref CreateCloudTrail, 'true']
+  CreateAwsConfigCond: !Equals [!Ref CreateAwsConfig, 'true']
 
 Resources:
   # =========================
@@ -671,6 +684,7 @@ Resources:
   # CloudTrail
   # =========================
   SecureEnvCloudTrailBucket:
+    Condition: CreateCloudTrailCond
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -701,6 +715,7 @@ Resources:
           Value: SecureEnv-CloudTrail-Bucket
 
   SecureEnvCloudTrail:
+    Condition: CreateCloudTrailCond
     Type: AWS::CloudTrail::Trail
     Properties:
       TrailName: !Sub SecureEnv-CloudTrail-${Environment}
@@ -724,6 +739,7 @@ Resources:
   # Using existing AWS Config service-linked role if present
 
   SecureEnvConfigBucket:
+    Condition: CreateAwsConfigCond
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -752,6 +768,7 @@ Resources:
           Value: SecureEnv-Config-Bucket
 
   SecureEnvConfigurationRecorder:
+    Condition: CreateAwsConfigCond
     Type: AWS::Config::ConfigurationRecorder
     DependsOn:
       - SecureEnvDeliveryChannel
@@ -763,12 +780,14 @@ Resources:
         IncludeGlobalResourceTypes: true
 
   SecureEnvDeliveryChannel:
+    Condition: CreateAwsConfigCond
     Type: AWS::Config::DeliveryChannel
     Properties:
       Name: !Sub SecureEnv-Config-DeliveryChannel-${Environment}
       S3BucketName: !Ref SecureEnvConfigBucket
 
   SecureEnvConfigRuleS3Encryption:
+    Condition: CreateAwsConfigCond
     Type: AWS::Config::ConfigRule
     DependsOn:
       - SecureEnvConfigurationRecorder
@@ -780,6 +799,7 @@ Resources:
         SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
 
   SecureEnvConfigRuleRDSEncryption:
+    Condition: CreateAwsConfigCond
     Type: AWS::Config::ConfigRule
     DependsOn:
       - SecureEnvConfigurationRecorder
@@ -896,17 +916,9 @@ Resources:
       ResourceId: !If [CreateNetworking, !Ref SecureEnvVPC, !Ref ExistingVPCId]
       ResourceType: VPC
       TrafficType: ALL
-      LogDestinationType: !If [HasFlowLogsRoleArn, cloud-watch-logs, s3]
-      LogGroupName:
-        !If [HasFlowLogsRoleArn, !Ref SecureEnvVPCFlowLog, !Ref 'AWS::NoValue']
-      LogDestination:
-        !If [
-          HasFlowLogsRoleArn,
-          !Ref 'AWS::NoValue',
-          !GetAtt SecureEnvFlowLogBucket.Arn,
-        ]
-      DeliverLogsPermissionArn:
-        !If [HasFlowLogsRoleArn, !Ref FlowLogsRoleArn, !Ref 'AWS::NoValue']
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref SecureEnvVPCFlowLog
+      DeliverLogsPermissionArn: !Ref FlowLogsRoleArn
 
 Outputs:
   VPCId:
@@ -953,7 +965,8 @@ Outputs:
 
   CloudTrailName:
     Description: CloudTrail Name
-    Value: !Ref SecureEnvCloudTrail
+    Value:
+      !If [CreateCloudTrailCond, !Ref SecureEnvCloudTrail, !Ref 'AWS::NoValue']
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-Name'
 
