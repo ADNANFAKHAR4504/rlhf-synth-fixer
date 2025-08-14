@@ -106,7 +106,8 @@ class TapStack(TerraformStack):
       vpc_id_value = vpc.id
 
     # Ensure we cover at least two distinct AZs for RDS subnet group requirements
-    azs_for_stack = [f"{region}a", f"{region}b"]
+    # If multiple AZs are available in the region, consider more than two to improve placement chances
+    azs_for_stack = [f"{region}a", f"{region}b", f"{region}c"]
 
     # Choose non-conflicting CIDRs if reusing an existing VPC
     public_cidrs = [f"10.0.{i+1}.0/24" for i in range(2)]
@@ -165,7 +166,7 @@ class TapStack(TerraformStack):
         f"private_{i}",
         vpc_id=vpc_id_value,
         cidr_block=private_cidrs[i],
-        availability_zone=azs_for_stack[i],
+        availability_zone=azs_for_stack[i+1] if len(azs_for_stack) > i+1 else azs_for_stack[i],
         tags={"Name": f"private-{i+1}", "Type": "Private", "Environment": "Production"},
       )
       public_subnets.append(public)
@@ -355,15 +356,15 @@ class TapStack(TerraformStack):
       bucket_name_for_output = existing_bucket_name
     else:
       # Preserve attributes expected by existing tests
-      self.bucket_versioning = {"enabled": True}
-      self.bucket_encryption = {
-        "rule": {
-          "apply_server_side_encryption_by_default": {"sse_algorithm": "AES256"}
-        }
+    self.bucket_versioning = {"enabled": True}
+    self.bucket_encryption = {
+      "rule": {
+        "apply_server_side_encryption_by_default": {"sse_algorithm": "AES256"}
       }
-      self.bucket = S3Bucket(
-        self,
-        "tap_bucket",
+    }
+    self.bucket = S3Bucket(
+      self,
+      "tap_bucket",
             bucket=f"secure-app-bucket-1-{construct_id.lower()}",
             tags={"Environment": "Production", "Name": "secure-app-bucket"},
           )
@@ -485,7 +486,7 @@ class TapStack(TerraformStack):
       engine="postgres",
       instance_class="db.t3.micro",
       allocated_storage=20,
-      storage_type="gp2",
+      storage_type="gp3",
       storage_encrypted=True,
       kms_key_id=rds_kms.arn,
       db_name="securedb",
