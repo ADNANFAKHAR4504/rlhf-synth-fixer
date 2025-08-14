@@ -738,7 +738,7 @@ def create_eks_node_group(
           version=launch_template.latest_version,
       ),
       # EKS Managed Node Groups use EKS-optimized AMI by default
-      ami_type="AL2_x86_64",  # Amazon Linux 2 EKS-optimized AMI
+      ami_type="AL2023_x86_64_STANDARD",  # Amazon Linux 2023 EKS-optimized AMI (supports latest K8s versions)
       tags={**tags, "Name": "corp-eks-nodegroup"},
       opts=ResourceOptions(provider=provider)
   )
