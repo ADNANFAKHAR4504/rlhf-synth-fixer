@@ -25,3 +25,4 @@ All resources must be tagged consistently with Environment, Owner, and CostCente
 The infrastructure should be designed for high availability across multiple AZs and be able to scale up or down based on demand.
 
 Expected deliverable is a CloudFormation JSON template that can deploy this entire infrastructure stack without manual intervention.
+
