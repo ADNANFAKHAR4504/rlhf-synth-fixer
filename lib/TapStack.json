@@ -57,6 +57,9 @@
       "us-east-1": {
         "AMI": "ami-0c02fb55956c7d316"
       },
+      "us-east-2": {
+        "AMI": "ami-0a0ad6b70e61be944"
+      },
       "us-west-2": {
         "AMI": "ami-0841edc20334f9287"
       },
