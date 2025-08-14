@@ -719,8 +719,8 @@ resource "aws_cloudtrail" "main" {
       values = ["${aws_s3_bucket.cloudtrail_logs.arn}/*"]
     }
     data_resource {
-      type   = "AWS::S3::Bucket"
-      values = [aws_s3_bucket.cloudtrail_logs.arn]
+      type   = "AWS::S3::Object"
+      values = ["${aws_s3_bucket.cloudtrail_logs.arn}/*"]
     }
   }
 
