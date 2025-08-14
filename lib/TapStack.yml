@@ -28,7 +28,7 @@ Parameters:
     NoEcho: true
     MinLength: 8
     MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!@#%&*()_+\\-=\\[\\]{}|;:,.<>?]*'
+    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+\-\[\]{}|;:,.<>?]*$'
     Description: Master password for RDS instance (will be stored in AWS Secrets Manager)
 
   VpcCidr:
