@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
@@ -251,6 +251,11 @@ describe('TapStack', () => {
       const buildStage = pipelineResource.Properties.Stages.find((s: any) => s.Name === 'Build');
       
       expect(buildStage).toBeDefined();
+      // TypeScript type guard - after expect().toBeDefined(), we know it's defined
+      if (!buildStage) {
+        throw new Error('buildStage should be defined');
+      }
+      
       expect(buildStage.Actions[0].Name).toBe('BuildApplication');
       expect(buildStage.Actions[0].ActionTypeId.Provider).toBe('CodeBuild');
       expect(buildStage.Actions[0].Configuration.BatchEnabled).toBe('true');
@@ -382,6 +387,11 @@ describe('TapStack', () => {
       
       expect(deployEast).toBeDefined();
       expect(deployWest).toBeDefined();
+      
+      // TypeScript type guards - after expect().toBeDefined(), we know they're defined
+      if (!deployEast || !deployWest) {
+        throw new Error('deployEast and deployWest should be defined');
+      }
       
       // Check that Deploy-East has us-east-1 region
       expect(deployEast.Actions[0].Region).toBe('us-east-1');
@@ -647,6 +657,11 @@ describe('TapStack', () => {
       );
 
       expect(mainBuildProject).toBeDefined();
+      // TypeScript type guard - after expect().toBeDefined(), we know it's defined
+      if (!mainBuildProject) {
+        throw new Error('mainBuildProject should be defined');
+      }
+      
       expect(mainBuildProject.Properties.Source.BuildSpec).toContain('batch');
       expect(mainBuildProject.Properties.Source.BuildSpec).toContain('DEPLOY_REGION');
       expect(mainBuildProject.Properties.Source.BuildSpec).toContain('us-east-1');
@@ -733,13 +748,30 @@ describe('TapStack', () => {
       // Check Deploy-East stage configuration
       const deployEastStage = stages.find((s: any) => s.Name === 'Deploy-East');
       expect(deployEastStage).toBeDefined();
+      
+      // TypeScript type guard - after expect().toBeDefined(), we know it's defined
+      if (!deployEastStage) {
+        throw new Error('deployEastStage should be defined');
+      }
+      
       expect(deployEastStage.Actions).toHaveLength(2); // CreateChangeSet + ExecuteChangeSet
       
       const createChangeSetEast = deployEastStage.Actions.find((a: any) => 
         a.Name === 'CreateChangeSet-East'
       );
       expect(createChangeSetEast).toBeDefined();
+      
+      // TypeScript type guard - after expect().toBeDefined(), we know it's defined
+      if (!createChangeSetEast) {
+        throw new Error('createChangeSetEast should be defined');
+      }
+      
       expect(createChangeSetEast.Configuration).toBeDefined();
+      
+      // TypeScript type guard - after expect().toBeDefined(), we know it's defined
+      if (!createChangeSetEast.Configuration) {
+        throw new Error('createChangeSetEast.Configuration should be defined');
+      }
       
       const eastParams = JSON.parse(createChangeSetEast.Configuration.ParameterOverrides);
       expect(eastParams.Region).toBe('us-east-1');
@@ -748,13 +780,30 @@ describe('TapStack', () => {
       // Check Deploy-West stage configuration
       const deployWestStage = stages.find((s: any) => s.Name === 'Deploy-West');
       expect(deployWestStage).toBeDefined();
+      
+      // TypeScript type guard - after expect().toBeDefined(), we know it's defined
+      if (!deployWestStage) {
+        throw new Error('deployWestStage should be defined');
+      }
+      
       expect(deployWestStage.Actions).toHaveLength(2); // CreateChangeSet + ExecuteChangeSet
       
       const createChangeSetWest = deployWestStage.Actions.find((a: any) => 
         a.Name === 'CreateChangeSet-West'
       );
       expect(createChangeSetWest).toBeDefined();
+      
+      // TypeScript type guard - after expect().toBeDefined(), we know it's defined
+      if (!createChangeSetWest) {
+        throw new Error('createChangeSetWest should be defined');
+      }
+      
       expect(createChangeSetWest.Configuration).toBeDefined();
+      
+      // TypeScript type guard - after expect().toBeDefined(), we know it's defined
+      if (!createChangeSetWest.Configuration) {
+        throw new Error('createChangeSetWest.Configuration should be defined');
+      }
       
       const westParams = JSON.parse(createChangeSetWest.Configuration.ParameterOverrides);
       expect(westParams.Region).toBe('us-west-2');
