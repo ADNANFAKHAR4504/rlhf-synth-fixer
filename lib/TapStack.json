@@ -491,6 +491,51 @@
         ]
       }
     },
+    "HttpdAccessLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": "/aws/ec2/httpd/access",
+        "RetentionInDays": 7,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "HttpdErrorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": "/aws/ec2/httpd/error",
+        "RetentionInDays": 7,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "UserDataLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": "/aws/ec2/user-data",
+        "RetentionInDays": 7,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        }
+      }
+    },
     "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
@@ -2065,7 +2110,7 @@
               },
               "UserData": {
                 "Fn::Base64": {
-                  "Fn::Sub": "#!/bin/bash\n\n# Enable detailed logging\nexec > >(tee /var/log/user-data.log) 2>&1\necho \"Starting user-data script at $(date)\"\n\n# Set error handling\nset -e\n\n# Update system\necho \"Updating system packages...\"\nyum update -y\n\n# Install required packages\necho \"Installing httpd and aws-cfn-bootstrap...\"\nyum install -y httpd aws-cfn-bootstrap\n\n# Start and enable Apache\necho \"Starting Apache...\"\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content\necho \"Creating web content...\"\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\necho 'OK' > /var/www/html/health\n\n# Set proper permissions\nchmod 644 /var/www/html/index.html /var/www/html/health\nchown apache:apache /var/www/html/index.html /var/www/html/health\n\n# Verify Apache is running\necho \"Verifying Apache status...\"\nsystemctl status httpd\n\n# Test health endpoint\necho \"Testing health endpoint...\"\ncurl -f http://localhost/health || echo \"Health endpoint test failed\"\n\necho \"User-data script completed successfully at $(date)\"\n\n# Signal CloudFormation that instance is ready\necho \"Sending signal to CloudFormation...\"\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
+                  "Fn::Sub": "#!/bin/bash -xe\n\n# CloudFormation User Data for Web Server Setup\n# Designed for Amazon Linux 2\n\n# Enable detailed logging\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\necho \"Starting user-data script at $(date)\"\necho \"Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)\"\necho \"Region: ${AWS::Region}\"\necho \"Stack: ${AWS::StackName}\"\n\n# Function to send CloudFormation signal\nsend_cfn_signal() {\n    local exit_code=$1\n    local reason=\"$2\"\n    echo \"Sending CloudFormation signal with exit code: $exit_code\"\n    echo \"Reason: $reason\"\n    \n    /opt/aws/bin/cfn-signal \\\n        --exit-code $exit_code \\\n        --stack \"${AWS::StackName}\" \\\n        --resource \"AutoScalingGroup\" \\\n        --region \"${AWS::Region}\" \\\n        --reason \"$reason\" || true\n}\n\n# Trap for error handling\ntrap 'send_cfn_signal 1 \"User data script failed at line $LINENO\"' ERR\n\n# Update system and install CloudWatch agent\necho \"Updating system packages...\"\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Install and configure httpd\necho \"Installing and configuring Apache HTTP Server...\"\nyum install -y httpd mod_ssl\n\n# Security: Remove default content and server tokens\necho \"Configuring Apache security settings...\"\necho 'ServerTokens Prod' >> /etc/httpd/conf/httpd.conf\necho 'ServerSignature Off' >> /etc/httpd/conf/httpd.conf\necho 'Header always set X-Content-Type-Options nosniff' >> /etc/httpd/conf/httpd.conf\necho 'Header always set X-Frame-Options DENY' >> /etc/httpd/conf/httpd.conf\necho 'Header always set X-XSS-Protection \"1; mode=block\"' >> /etc/httpd/conf/httpd.conf\n\n# Create web content with environment-specific information\necho \"Creating web content...\"\ncat > /var/www/html/index.html << EOF\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>${Environment} Environment</title>\n    <style>\n        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }\n        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }\n        .header { color: #232f3e; border-bottom: 2px solid #ff9900; padding-bottom: 10px; }\n        .info { margin: 20px 0; }\n        .status { color: #008000; font-weight: bold; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1 class=\"header\">Secure Infrastructure - ${Environment} Environment</h1>\n        <div class=\"info\">\n            <h2>Environment Information</h2>\n            <ul>\n                <li><strong>Environment:</strong> ${Environment}</li>\n                <li><strong>Environment Suffix:</strong> ${EnvironmentSuffix}</li>\n                <li><strong>Region:</strong> ${AWS::Region}</li>\n                <li><strong>Instance ID:</strong> <span id=\"instance-id\">Loading...</span></li>\n                <li><strong>Availability Zone:</strong> <span id=\"az\">Loading...</span></li>\n            </ul>\n        </div>\n        <div class=\"status\">✓ Application is running successfully</div>\n    </div>\n    <script>\n        // Fetch instance metadata\n        fetch('/instance-info')\n            .then(response => response.json())\n            .then(data => {\n                document.getElementById('instance-id').textContent = data.instanceId || 'N/A';\n                document.getElementById('az').textContent = data.availabilityZone || 'N/A';\n            })\n            .catch(() => {\n                document.getElementById('instance-id').textContent = 'Unavailable';\n                document.getElementById('az').textContent = 'Unavailable';\n            });\n    </script>\n</body>\n</html>\nEOF\n\n# Create health check endpoint\necho \"OK\" > /var/www/html/health\n\n# Create instance info endpoint\ncat > /var/www/html/instance-info << 'EOF'\n#!/bin/bash\necho \"Content-Type: application/json\"\necho \"\"\necho \"{\"\necho \"  \\\"instanceId\\\": \\\"$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\\\",\"\necho \"  \\\"availabilityZone\\\": \\\"$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)\\\",\"\necho \"  \\\"timestamp\\\": \\\"$(date -Iseconds)\\\"\"\necho \"}\"\nEOF\nchmod +x /var/www/html/instance-info\n\n# Configure CGI for instance-info\necho 'ScriptAlias /instance-info /var/www/html/instance-info' >> /etc/httpd/conf/httpd.conf\n\n# Set proper ownership and permissions\nchown -R apache:apache /var/www/html/\nchmod 644 /var/www/html/index.html\nchmod 644 /var/www/html/health\nchmod 755 /var/www/html/instance-info\n\n# Configure CloudWatch agent\necho \"Configuring CloudWatch agent...\"\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n    \"logs\": {\n        \"logs_collected\": {\n            \"files\": {\n                \"collect_list\": [\n                    {\n                        \"file_path\": \"/var/log/httpd/access_log\",\n                        \"log_group_name\": \"/aws/ec2/httpd/access\",\n                        \"log_stream_name\": \"{instance_id}\"\n                    },\n                    {\n                        \"file_path\": \"/var/log/httpd/error_log\",\n                        \"log_group_name\": \"/aws/ec2/httpd/error\",\n                        \"log_stream_name\": \"{instance_id}\"\n                    },\n                    {\n                        \"file_path\": \"/var/log/user-data.log\",\n                        \"log_group_name\": \"/aws/ec2/user-data\",\n                        \"log_stream_name\": \"{instance_id}\"\n                    }\n                ]\n            }\n        },\n        \"log_stream_name\": \"{instance_id}\"\n    },\n    \"metrics\": {\n        \"namespace\": \"AWS/EC2/Custom\",\n        \"metrics_collected\": {\n            \"cpu\": {\n                \"measurement\": [\n                    \"cpu_usage_idle\",\n                    \"cpu_usage_iowait\",\n                    \"cpu_usage_user\",\n                    \"cpu_usage_system\"\n                ],\n                \"metrics_collection_interval\": 60\n            },\n            \"disk\": {\n                \"measurement\": [\n                    \"used_percent\"\n                ],\n                \"metrics_collection_interval\": 60,\n                \"resources\": [\n                    \"*\"\n                ]\n            },\n            \"mem\": {\n                \"measurement\": [\n                    \"mem_used_percent\"\n                ],\n                \"metrics_collection_interval\": 60\n            }\n        }\n    }\n}\nEOF\n\n# Start and enable services\necho \"Starting services...\"\nsystemctl enable httpd\nsystemctl start httpd\nsystemctl enable amazon-cloudwatch-agent\nsystemctl start amazon-cloudwatch-agent\n\n# Security: Enable and configure firewall\necho \"Configuring security settings...\"\nsystemctl enable firewalld\nsystemctl start firewalld\nfirewall-cmd --permanent --add-service=http\nfirewall-cmd --permanent --add-service=https\nfirewall-cmd --reload\n\n# Wait for services to be ready\necho \"Waiting for services to be ready...\"\nsleep 15\n\n# Verify services are running\necho \"Verifying services...\"\nsystemctl is-active --quiet httpd || { echo \"Apache failed to start\"; exit 1; }\nsystemctl is-active --quiet amazon-cloudwatch-agent || { echo \"CloudWatch agent failed to start\"; exit 1; }\n\n# Test health endpoint\necho \"Testing health endpoint...\"\nfor i in {1..5}; do\n    if curl -f http://localhost/health >/dev/null 2>&1; then\n        echo \"Health check passed\"\n        break\n    fi\n    if [ $i -eq 5 ]; then\n        echo \"Health check failed after 5 attempts\"\n        exit 1\n    fi\n    echo \"Health check attempt $i failed, retrying in 5 seconds...\"\n    sleep 5\ndone\n\n# Test main page\necho \"Testing main application...\"\ncurl -f http://localhost/ >/dev/null 2>&1 || { echo \"Main application test failed\"; exit 1; }\n\necho \"User data script completed successfully at $(date)\"\nsend_cfn_signal 0 \"Instance configuration completed successfully\"\n"
                 }
               },
               "BlockDeviceMappings": [
@@ -2152,7 +2197,7 @@
               },
               "UserData": {
                 "Fn::Base64": {
-                  "Fn::Sub": "#!/bin/bash\n\n# Enable detailed logging\nexec > >(tee /var/log/user-data.log) 2>&1\necho \"Starting user-data script at $(date)\"\n\n# Set error handling\nset -e\n\n# Update system\necho \"Updating system packages...\"\nyum update -y\n\n# Install required packages\necho \"Installing httpd and aws-cfn-bootstrap...\"\nyum install -y httpd aws-cfn-bootstrap\n\n# Start and enable Apache\necho \"Starting Apache...\"\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content\necho \"Creating web content...\"\necho '<h1>Hello from ${Environment} Environment - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\necho 'OK' > /var/www/html/health\n\n# Set proper permissions\nchmod 644 /var/www/html/index.html /var/www/html/health\nchown apache:apache /var/www/html/index.html /var/www/html/health\n\n# Verify Apache is running\necho \"Verifying Apache status...\"\nsystemctl status httpd\n\n# Test health endpoint\necho \"Testing health endpoint...\"\ncurl -f http://localhost/health || echo \"Health endpoint test failed\"\n\necho \"User-data script completed successfully at $(date)\"\n\n# Signal CloudFormation that instance is ready\necho \"Sending signal to CloudFormation...\"\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
+                  "Fn::Sub": "#!/bin/bash -xe\n\n# CloudFormation User Data for Web Server Setup\n# Designed for Amazon Linux 2\n\n# Enable detailed logging\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\necho \"Starting user-data script at $(date)\"\necho \"Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)\"\necho \"Region: ${AWS::Region}\"\necho \"Stack: ${AWS::StackName}\"\n\n# Function to send CloudFormation signal\nsend_cfn_signal() {\n    local exit_code=$1\n    local reason=\"$2\"\n    echo \"Sending CloudFormation signal with exit code: $exit_code\"\n    echo \"Reason: $reason\"\n    \n    /opt/aws/bin/cfn-signal \\\n        --exit-code $exit_code \\\n        --stack \"${AWS::StackName}\" \\\n        --resource \"AutoScalingGroup\" \\\n        --region \"${AWS::Region}\" \\\n        --reason \"$reason\" || true\n}\n\n# Trap for error handling\ntrap 'send_cfn_signal 1 \"User data script failed at line $LINENO\"' ERR\n\n# Update system and install CloudWatch agent\necho \"Updating system packages...\"\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Install and configure httpd\necho \"Installing and configuring Apache HTTP Server...\"\nyum install -y httpd mod_ssl\n\n# Security: Remove default content and server tokens\necho \"Configuring Apache security settings...\"\necho 'ServerTokens Prod' >> /etc/httpd/conf/httpd.conf\necho 'ServerSignature Off' >> /etc/httpd/conf/httpd.conf\necho 'Header always set X-Content-Type-Options nosniff' >> /etc/httpd/conf/httpd.conf\necho 'Header always set X-Frame-Options DENY' >> /etc/httpd/conf/httpd.conf\necho 'Header always set X-XSS-Protection \"1; mode=block\"' >> /etc/httpd/conf/httpd.conf\n\n# Create web content with environment-specific information\necho \"Creating web content...\"\ncat > /var/www/html/index.html << EOF\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>${Environment} Environment</title>\n    <style>\n        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }\n        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }\n        .header { color: #232f3e; border-bottom: 2px solid #ff9900; padding-bottom: 10px; }\n        .info { margin: 20px 0; }\n        .status { color: #008000; font-weight: bold; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1 class=\"header\">Secure Infrastructure - ${Environment} Environment</h1>\n        <div class=\"info\">\n            <h2>Environment Information</h2>\n            <ul>\n                <li><strong>Environment:</strong> ${Environment}</li>\n                <li><strong>Environment Suffix:</strong> ${EnvironmentSuffix}</li>\n                <li><strong>Region:</strong> ${AWS::Region}</li>\n                <li><strong>Instance ID:</strong> <span id=\"instance-id\">Loading...</span></li>\n                <li><strong>Availability Zone:</strong> <span id=\"az\">Loading...</span></li>\n            </ul>\n        </div>\n        <div class=\"status\">✓ Application is running successfully</div>\n    </div>\n    <script>\n        // Fetch instance metadata\n        fetch('/instance-info')\n            .then(response => response.json())\n            .then(data => {\n                document.getElementById('instance-id').textContent = data.instanceId || 'N/A';\n                document.getElementById('az').textContent = data.availabilityZone || 'N/A';\n            })\n            .catch(() => {\n                document.getElementById('instance-id').textContent = 'Unavailable';\n                document.getElementById('az').textContent = 'Unavailable';\n            });\n    </script>\n</body>\n</html>\nEOF\n\n# Create health check endpoint\necho \"OK\" > /var/www/html/health\n\n# Create instance info endpoint\ncat > /var/www/html/instance-info << 'EOF'\n#!/bin/bash\necho \"Content-Type: application/json\"\necho \"\"\necho \"{\"\necho \"  \\\"instanceId\\\": \\\"$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\\\",\"\necho \"  \\\"availabilityZone\\\": \\\"$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)\\\",\"\necho \"  \\\"timestamp\\\": \\\"$(date -Iseconds)\\\"\"\necho \"}\"\nEOF\nchmod +x /var/www/html/instance-info\n\n# Configure CGI for instance-info\necho 'ScriptAlias /instance-info /var/www/html/instance-info' >> /etc/httpd/conf/httpd.conf\n\n# Set proper ownership and permissions\nchown -R apache:apache /var/www/html/\nchmod 644 /var/www/html/index.html\nchmod 644 /var/www/html/health\nchmod 755 /var/www/html/instance-info\n\n# Configure CloudWatch agent\necho \"Configuring CloudWatch agent...\"\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n    \"logs\": {\n        \"logs_collected\": {\n            \"files\": {\n                \"collect_list\": [\n                    {\n                        \"file_path\": \"/var/log/httpd/access_log\",\n                        \"log_group_name\": \"/aws/ec2/httpd/access\",\n                        \"log_stream_name\": \"{instance_id}\"\n                    },\n                    {\n                        \"file_path\": \"/var/log/httpd/error_log\",\n                        \"log_group_name\": \"/aws/ec2/httpd/error\",\n                        \"log_stream_name\": \"{instance_id}\"\n                    },\n                    {\n                        \"file_path\": \"/var/log/user-data.log\",\n                        \"log_group_name\": \"/aws/ec2/user-data\",\n                        \"log_stream_name\": \"{instance_id}\"\n                    }\n                ]\n            }\n        },\n        \"log_stream_name\": \"{instance_id}\"\n    },\n    \"metrics\": {\n        \"namespace\": \"AWS/EC2/Custom\",\n        \"metrics_collected\": {\n            \"cpu\": {\n                \"measurement\": [\n                    \"cpu_usage_idle\",\n                    \"cpu_usage_iowait\",\n                    \"cpu_usage_user\",\n                    \"cpu_usage_system\"\n                ],\n                \"metrics_collection_interval\": 60\n            },\n            \"disk\": {\n                \"measurement\": [\n                    \"used_percent\"\n                ],\n                \"metrics_collection_interval\": 60,\n                \"resources\": [\n                    \"*\"\n                ]\n            },\n            \"mem\": {\n                \"measurement\": [\n                    \"mem_used_percent\"\n                ],\n                \"metrics_collection_interval\": 60\n            }\n        }\n    }\n}\nEOF\n\n# Start and enable services\necho \"Starting services...\"\nsystemctl enable httpd\nsystemctl start httpd\nsystemctl enable amazon-cloudwatch-agent\nsystemctl start amazon-cloudwatch-agent\n\n# Security: Enable and configure firewall\necho \"Configuring security settings...\"\nsystemctl enable firewalld\nsystemctl start firewalld\nfirewall-cmd --permanent --add-service=http\nfirewall-cmd --permanent --add-service=https\nfirewall-cmd --reload\n\n# Wait for services to be ready\necho \"Waiting for services to be ready...\"\nsleep 15\n\n# Verify services are running\necho \"Verifying services...\"\nsystemctl is-active --quiet httpd || { echo \"Apache failed to start\"; exit 1; }\nsystemctl is-active --quiet amazon-cloudwatch-agent || { echo \"CloudWatch agent failed to start\"; exit 1; }\n\n# Test health endpoint\necho \"Testing health endpoint...\"\nfor i in {1..5}; do\n    if curl -f http://localhost/health >/dev/null 2>&1; then\n        echo \"Health check passed\"\n        break\n    fi\n    if [ $i -eq 5 ]; then\n        echo \"Health check failed after 5 attempts\"\n        exit 1\n    fi\n    echo \"Health check attempt $i failed, retrying in 5 seconds...\"\n    sleep 5\ndone\n\n# Test main page\necho \"Testing main application...\"\ncurl -f http://localhost/ >/dev/null 2>&1 || { echo \"Main application test failed\"; exit 1; }\n\necho \"User data script completed successfully at $(date)\"\nsend_cfn_signal 0 \"Instance configuration completed successfully\"\n"
                 }
               },
               "BlockDeviceMappings": [
@@ -2222,10 +2267,10 @@
         },
         "HealthCheckPath": "/health",
         "HealthCheckProtocol": "HTTP",
-        "HealthCheckIntervalSeconds": 30,
-        "HealthCheckTimeoutSeconds": 10,
+        "HealthCheckIntervalSeconds": 60,
+        "HealthCheckTimeoutSeconds": 30,
         "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 3,
+        "UnhealthyThresholdCount": 5,
         "TargetType": "instance",
         "Tags": [
           {
@@ -2405,7 +2450,7 @@
           }
         ],
         "HealthCheckType": "ELB",
-        "HealthCheckGracePeriod": 300,
+        "HealthCheckGracePeriod": 600,
         "Tags": [
           {
             "Key": "Name",
@@ -2439,7 +2484,7 @@
       },
       "CreationPolicy": {
         "ResourceSignal": {
-          "Timeout": "PT10M",
+          "Timeout": "PT15M",
           "Count": {
             "Fn::FindInMap": [
               "EnvironmentMap",
@@ -2453,9 +2498,9 @@
       },
       "UpdatePolicy": {
         "AutoScalingRollingUpdate": {
-          "MinInstancesInService": 1,
+          "MinInstancesInService": 0,
           "MaxBatchSize": 1,
-          "PauseTime": "PT10M",
+          "PauseTime": "PT15M",
           "WaitOnResourceSignals": true,
           "SuspendProcesses": [
             "HealthCheck",
