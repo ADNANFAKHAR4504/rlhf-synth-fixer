@@ -1,8 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, AWS Config (recorder only), VPC Flow Logs, MFA, S3 SSE+logs, DNSSEC.
-
-Metadata:
-  Version: 1.0.4
+Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, Config (recorder only), VPC Flow Logs, MFA, S3 SSE+logs, and Route53 DNSSEC with KSK activation wait.
 
 Mappings:
   OrgCIDR:
@@ -19,7 +16,6 @@ Mappings:
       Arn: "arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583"
 
 Resources:
-
   # ---------------- KMS ----------------
   EncryptionKey:
     Type: AWS::KMS::Key
@@ -395,7 +391,7 @@ Resources:
     Properties:
       ManagedPolicyArns: [ !Ref MFAEnforcementPolicy ]
 
-  # ---------------- EC2 (AL2), EBS encrypted ----------------
+  # ---------------- EC2 (AL2 via SSM), EBS encrypted ----------------
   AppInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -475,7 +471,6 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-      # Delivery Channel is pre-existing in the account/Region; CFN auto-starts when channel exists
 
   # ---------------- VPC Flow Logs ----------------
   VPCFlowLogs:
@@ -488,14 +483,100 @@ Resources:
       LogGroupName: !Ref VPCFlowLogGroup
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
 
-  # ---------------- Route 53 DNSSEC + Records ----------------
+  # ---------------- Route 53 DNSSEC (with KSK wait) ----------------
   KeySigningKey:
     Type: AWS::Route53::KeySigningKey
     Properties:
       HostedZoneId: !FindInMap [R53, Zone, Id]
       KeyManagementServiceArn: !GetAtt DNSSECKey.Arn
-      Name: "ksk_main"
+      Name: "ksk_main"           # must match ^[A-Za-z0-9_]{3,128}$
       Status: ACTIVE
+
+  KSKWaiterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: Route53ReadAndLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [ "route53:GetDNSSEC" ]
+                Resource: "*"
+              - Effect: Allow
+                Action: [ "logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents" ]
+                Resource: "*"
+
+  KSKWaiterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 900
+      Role: !GetAtt KSKWaiterRole.Arn
+      Code:
+        ZipFile: |
+          import json, time, urllib.request, logging, boto3, os
+          log = logging.getLogger()
+          log.setLevel(logging.INFO)
+          r53 = boto3.client('route53')
+          def respond(event, context, status, data=None, reason=None):
+              body = {
+                  'Status': status,
+                  'Reason': reason or ('See CloudWatch Logs for details'),
+                  'PhysicalResourceId': event.get('PhysicalResourceId', 'KSKWaiter'),
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data or {}
+              }
+              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(body).encode('utf-8'), method='PUT')
+              req.add_header('content-type', '')
+              urllib.request.urlopen(req).read()
+          def wait_for_active(hz_id, ksk_name, timeout=900, interval=15):
+              deadline = time.time() + timeout
+              while time.time() < deadline:
+                  resp = r53.get_dnssec(HostedZoneId=hz_id)
+                  status = resp.get('Status')
+                  log.info(f"KSK status: {status}")
+                  if status == 'ACTIVE':
+                      return True
+                  time.sleep(interval)
+              return False
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      return respond(event, context, 'SUCCESS', {'Message': 'Deleted'})
+                  props = event['ResourceProperties']
+                  hz_id = props['HostedZoneId']
+                  ksk_name = props['KSKName']
+                  if wait_for_active(hz_id, ksk_name):
+                      return respond(event, context, 'SUCCESS', {'Status': 'ACTIVE'})
+                  else:
+                      return respond(event, context, 'FAILED', reason='KSK did not become ACTIVE in time')
+              except Exception as e:
+                  log.exception('Error waiting for KSK ACTIVE')
+                  return respond(event, context, 'FAILED', reason=str(e))
+
+  WaitForKSKActive:
+    Type: Custom::WaitForKSKActive
+    DependsOn: KeySigningKey
+    Properties:
+      ServiceToken: !GetAtt KSKWaiterFunction.Arn
+      HostedZoneId: !FindInMap [R53, Zone, Id]
+      KSKName: "ksk_main"
+
+  DNSSECEnable:
+    Type: AWS::Route53::DNSSEC
+    DependsOn: WaitForKSKActive
+    Properties:
+      HostedZoneId: !FindInMap [R53, Zone, Id]
 
   ApexA:
     Type: AWS::Route53::RecordSet
@@ -517,12 +598,6 @@ Resources:
         DNSName: !GetAtt ALB.DNSName
         HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
 
-  # (Optional) Enable DNSSEC signing at the zone level (requires KSK above)
-  DNSSECEnable:
-    Type: AWS::Route53::DNSSEC
-    Properties:
-      HostedZoneId: !FindInMap [R53, Zone, Id]
-
 Outputs:
   VPCId:
     Description: VPC ID
@@ -534,7 +609,7 @@ Outputs:
     Description: Public apex pointing to ALB
     Value: !FindInMap [R53, Zone, ApexFQDN]
   Route53HostedZoneId:
-    Description: Existing public hosted zone used
+    Description: Hosted zone used
     Value: !FindInMap [R53, Zone, Id]
   KMSKeyId:
     Description: General encryption KMS KeyId
