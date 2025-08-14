@@ -1,77 +1,52 @@
+# Web App Infra – CloudFormation Requirements (Shreyas, Aug 2025)
+
 ```yaml
-# CloudFormation Infrastructure Design Challenge
+This is the working brief for building out a CloudFormation template to spin up a secure web app stack in AWS.  
+I’m writing this for myself and anyone else who needs to understand **what** we’re doing and **why**.
 
-## Problem Statement
-Design and implement a production-ready CloudFormation template that creates a secure, scalable web application infrastructure in AWS. The solution must demonstrate enterprise-grade security practices while meeting specific compliance and operational requirements.
+---
 
-## Infrastructure Requirements
+## Region & Scope
+- We’re locking this whole thing to **us-east-1**. No point trying to make it work multi-region right now – we don’t need it and it’ll just complicate everything.
+- Infrastructure will be a **VPC with public and private subnets** across at least 2 AZs.
+- Public layer: ALB. Private layer: EC2 instances (via Auto Scaling).
+- Database layer: RDS, encrypted at rest with KMS.
 
-### Core Components
-- **Web Application Infrastructure**: Deploy a complete web application stack with proper load balancing and auto-scaling capabilities
-- **Security-First Design**: Implement comprehensive security controls following AWS Well-Architected Framework principles
-- **Compliance Ready**: Ensure all components meet enterprise security standards and audit requirements
+---
 
-### Technical Specifications
+## Must-haves
+1. **S3 Access Logging via CloudTrail**  
+   I want *all* S3 bucket access and relevant API calls in CloudTrail so we can prove compliance later.
+2. **Least Privilege IAM**  
+   No `*:*` nonsense. Roles and policies scoped to exactly what they need.
+3. **Tagging**  
+   Every EC2 instance should carry `Environment: Production` automatically.
+4. **RDS encryption**  
+   At rest using AWS KMS (AWS managed key is fine unless we decide on a CMK later).
+5. **ALB for traffic**  
+   Health checks in place, spread across AZs.
 
-#### 1. Regional Configuration
-- **AWS Region**: Deploy exclusively in `us-east-1` region
-- **Multi-AZ Setup**: Ensure high availability across multiple availability zones
+---
 
-#### 2. Security & Compliance Requirements
-- **CloudTrail Integration**: Enable comprehensive logging of all S3 bucket access and API calls
-- **IAM Security**: Implement least-privilege access controls with properly scoped IAM roles and policies
-- **Data Encryption**: Ensure all RDS databases use AWS KMS for encryption at rest
-- **Resource Tagging**: Apply consistent tagging strategy with `Environment:Production` for all EC2 instances
+## Security Expectations
+- Security Groups locked down to only what’s needed (ALB <-> EC2, EC2 <-> RDS).
+- No secrets baked into the template – if user data needs them, we’ll use SSM Parameter Store or Secrets Manager.
+- Default deny where possible.
 
-#### 3. Application Architecture
-- **Load Balancing**: Implement Application Load Balancer (ALB) for traffic distribution and health monitoring
-- **Auto Scaling**: Configure auto-scaling groups for EC2 instances with proper scaling policies
-- **Database Layer**: Deploy RDS instances with encryption, backup, and monitoring capabilities
+---
 
-## Success Criteria
+## Nice-to-haves (but not blocking)
+- ALB access logs to S3.
+- SSM Agent preinstalled on EC2 instances.
+- CloudWatch alarms on key metrics (CPU, disk, DB connections).
 
-### Functional Requirements
-- [ ] Template deploys successfully in us-east-1 region
-- [ ] All S3 bucket access is logged via CloudTrail
-- [ ] IAM roles follow least privilege principle
-- [ ] All EC2 instances tagged with `Environment:Production`
-- [ ] RDS instances encrypted at rest using AWS KMS
-- [ ] Application Load Balancer properly configured and functional
+---
 
-### Quality Standards
-- [ ] CloudFormation template passes AWS CloudFormation linter validation
-- [ ] All resources follow AWS security best practices
-- [ ] Template includes proper error handling and rollback capabilities
-- [ ] Documentation and comments are comprehensive and clear
-- [ ] Resource naming follows consistent conventions
-
-### Security Validation
-- [ ] No hardcoded credentials or sensitive information
-- [ ] All security groups and NACLs properly configured
-- [ ] Encryption enabled for data in transit and at rest
-- [ ] Proper logging and monitoring infrastructure in place
-
-## Deliverables
-
-1. **CloudFormation YAML Template**: Complete, production-ready template that meets all requirements
-2. **Documentation**: Clear explanation of the architecture and security measures implemented
-3. **Validation**: Proof that the template passes CloudFormation linter tests
-4. **Security Review**: Documentation of security controls and compliance measures
-
-## Evaluation Criteria
-
-The solution will be evaluated based on:
-- **Completeness**: All requirements are met and functional
-- **Security**: Implementation of security best practices and compliance measures
-- **Quality**: Clean, maintainable code with proper error handling
-- **Performance**: Efficient resource utilization and scalability considerations
-- **Documentation**: Clear, comprehensive documentation of the solution
-
-## Additional Considerations
-
-- Consider cost optimization strategies while maintaining security requirements
-- Implement proper monitoring and alerting for the infrastructure
-- Plan for disaster recovery and backup strategies
-- Ensure the solution is maintainable and follows infrastructure-as-code best practices
-- Consider future scalability and expansion requirements
+## Done When
+- Stack deploys cleanly in us-east-1.
+- Linter (`cfn-lint`) passes without errors.
+- CloudTrail is actually logging S3 data events.
+- EC2 tags show up as expected.
+- RDS reports as encrypted with KMS.
+- ALB is routing traffic and reporting healthy targets.
 ```
