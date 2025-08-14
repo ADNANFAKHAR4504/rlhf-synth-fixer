@@ -392,7 +392,7 @@ describe('SecurityStack Unit Tests', () => {
           bucketName: 'tap-primary-storage-prod',
           allowedIpRanges: ['172.16.0.0/12'],
           enableAccessLogging: true,
-          enableNotifications: true,
+          enableNotifications: false, // Disabled since no Lambda function is provided
           enableObjectLock: true,
           lifecycleRules: expect.arrayContaining([
             expect.objectContaining({
@@ -497,7 +497,7 @@ describe('SecurityStack Unit Tests', () => {
           bucketName: 'tap-primary-storage-dev',
           allowedIpRanges: ['203.0.113.0/24'],
           enableAccessLogging: true,
-          enableNotifications: true,
+          enableNotifications: false, // Disabled since no Lambda function is provided
           enableObjectLock: true,
           lifecycleRules: expect.arrayContaining([
             expect.objectContaining({
