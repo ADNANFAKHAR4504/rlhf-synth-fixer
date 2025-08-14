@@ -1,43 +1,47 @@
-# **AI Prompt: Secure and Scalable AWS Environment with CDK and TypeScript**
+# Project Brief: Secure and Scalable AWS Environment with CDK & TypeScript
 
-This prompt is designed to instruct an AI model in generating a comprehensive AWS CDK TypeScript program for a secure and scalable cloud environment.
+This document outlines the requirements for building a secure, scalable AWS cloud environment using AWS CDK and TypeScript. The goal is to create a robust infrastructure suitable for hosting a large-scale web application, following best practices for security, reliability, and maintainability.
 
-### **Prompt Details**
+## Project Requirements
 
-- **Problem ID:** cloud-environment-setup_Terraform_HCL_C28M8F5LX9AV
-- **Environment:** Create an expert-level CDK Typescript configuration for AWS that sets up a secure and scalable cloud environment suitable for hosting a large-scale web application.
-- **Constraints Items:**
-  - Use AWS as the cloud provider.
-  - Define all resources in a single CDK Typescript module.
-  - Ensure resources are region-independent to facilitate multi-region deployment.
-  - Implement VPC with public and private subnets, accommodating at least 256 IP addresses per subnet.
-  - Deploy an Application Load Balancer (ALB) spanning all AZs in the specified region.
-  - Implement an Auto Scaling Group (ASG) with a minimum of two EC2 instances.
-  - Use RDS for database management with Multi-AZ deployments enabled.
-  - Enable CloudWatch for logging and monitoring purposes.
-  - Encrypt all in-transit and at-rest data using AWS KMS.
-  - Implement IAM roles for EC2 instances to interact with S3 and RDS without hardcoding credentials.
-  - Deploy an S3 bucket with versioning and access logging enabled.
-  - Enforce security group rules that only allow web traffic on ports 80 and 443\.
-  - Ensure all data resources are defined using the data block for corresponding CDK Typescript workflows.
-- **Proposed Statement:** The target infrastructure environment should enable robust, scalable applications on AWS suitable for production-grade web applications. It must support logging, monitoring, security best practices, and should not be hard-tied to a specific region, making the setup adaptable to different AWS regions as needed.
+- Use AWS as the cloud provider.
+- All resources should be defined in a single CDK TypeScript module for simplicity and maintainability.
+- The setup must be region-independent, so it can be deployed to any AWS region.
+- Networking:
+   - Create a VPC with both public and private subnets.
+   - Each subnet should support at least 256 IP addresses.
+- Application Layer:
+   - Deploy an Application Load Balancer (ALB) spanning all availability zones in the chosen region.
+   - Set up an Auto Scaling Group (ASG) with a minimum of two EC2 instances, placed in private subnets.
+- Database:
+   - Use Amazon RDS with Multi-AZ enabled for high availability.
+- Storage & Logging:
+   - Create an S3 bucket with versioning and access logging enabled.
+   - Enable CloudWatch for logging and monitoring.
+- Security:
+   - Encrypt all data in transit and at rest using AWS KMS.
+   - Implement IAM roles for EC2 instances to interact with S3 and RDS (no hardcoded credentials).
+   - Security groups should only allow inbound web traffic on ports 80 and 443.
 
-### **Requirements (Steps for the AI)**
+## Implementation Notes
 
-1. **CDK Project Structure:** Create a new AWS CDK project using TypeScript. The infrastructure must be defined in a single, well-structured CDK Stack.
-2. **VPC and Networking:**
-   - Provision a new Virtual Private Cloud (VPC) with both public and private subnets.
-   - Ensure each subnet is configured to have a CIDR block large enough to accommodate at least 256 IP addresses.
-   - Do not hardcode the region; the solution must be deployable to any region.
-3. **Security:**
-   - Create a Security Group that enforces firewall rules to allow inbound traffic only on ports 80 (HTTP) and 443 (HTTPS).
-   - Provision an AWS Key Management Service (KMS) Key to be used for data encryption.
-   - Define an IAM role for the EC2 instances with policies that grant the minimum necessary permissions to interact with S3 and RDS.
-4. **Application Layer:**
-   - Deploy an Application Load Balancer (ALB) that spans at least two Availability Zones (AZs) and is configured to use the public subnets.
-   - Create an Auto Scaling Group (ASG) for EC2 instances, placing it in the private subnets.
-   - Configure the ASG with a minimum of two instances.
-   - Attach the ASG to the ALB's target group.
+- Use CDK's high-level constructs or Cfn classes as appropriate.
+- Do not hardcode the AWS region or create SSL certificates in this setup.
+
+## Testing & Validation
+
+- Write unit tests to verify:
+   - VPC and subnet configurations meet the IP address requirements.
+   - Security group rules only allow traffic on ports 80 and 443.
+   - ASG has the correct minimum instance count.
+   - IAM role policies follow least privilege.
+   - S3 bucket is configured with versioning and access logging.
+- Write integration tests to deploy the stack and validate security and availability in a live AWS environment.
+- Aim for 100% code coverage across unit and integration tests.
+
+## Deliverable
+
+The final deliverable should be a well-commented TypeScript CDK script that defines the infrastructure as code, along with a complete test suite. The solution should be idempotent, easy to understand, and ready for production use.
 5. **Data and Logging:**
    - Provision a Multi-AZ Amazon RDS instance in the private subnets.
    - Create an S3 bucket with versioning and server access logging enabled.
