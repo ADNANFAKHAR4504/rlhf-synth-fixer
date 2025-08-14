@@ -178,7 +178,7 @@ export class IamConstruct extends Construct {
 
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName(
-            'service-role/AWSConfigRole'
+            'service-role/AWS_ConfigRole'
           ),
         ],
 

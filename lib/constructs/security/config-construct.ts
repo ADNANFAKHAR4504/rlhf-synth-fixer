@@ -46,7 +46,7 @@ export class ConfigConstruct extends Construct {
         description: 'IAM role for AWS Config service',
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName(
-            'service-role/AWSConfigRole'
+            'service-role/AWS_ConfigRole'
           ),
         ],
         inlinePolicies: {
