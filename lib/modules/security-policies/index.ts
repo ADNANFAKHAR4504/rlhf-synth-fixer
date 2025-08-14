@@ -9,6 +9,7 @@ export interface SecurityPoliciesArgs {
 
 export class SecurityPolicies extends pulumi.ComponentResource {
   public readonly mfaEnforcementPolicy: aws.iam.Policy;
+  public readonly ec2LifecyclePolicy: aws.iam.Policy;
   public readonly s3DenyInsecurePolicy: aws.iam.Policy;
   public readonly cloudTrailProtectionPolicy: aws.iam.Policy;
   public readonly kmsKeyProtectionPolicy: aws.iam.Policy;
@@ -75,9 +76,7 @@ export class SecurityPolicies extends pulumi.ComponentResource {
                 'cloudtrail:StopLogging',
                 'cloudtrail:PutEventSelectors',
                 'cloudtrail:UpdateTrail',
-                // EC2 sensitive actions
-                'ec2:TerminateInstances',
-                'ec2:StopInstances',
+                // EC2 sensitive actions - conditional restrictions
                 'ec2:ModifyInstanceAttribute',
                 'ec2:CreateSecurityGroup',
                 'ec2:DeleteSecurityGroup',
@@ -101,6 +100,65 @@ export class SecurityPolicies extends pulumi.ComponentResource {
               Condition: {
                 StringEquals: {
                   'aws:userid': 'root',
+                },
+              },
+            },
+          ],
+        }),
+        tags,
+      },
+      { parent: this }
+    );
+
+    // Conditional EC2 instance lifecycle policy
+    this.ec2LifecyclePolicy = new aws.iam.Policy(
+      `${name}-ec2-lifecycle`,
+      {
+        name: `EC2LifecyclePolicy-${environmentSuffix}`,
+        description:
+          'Conditional restrictions for EC2 instance lifecycle operations',
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'RequireMFAForProductionInstanceTermination',
+              Effect: 'Deny',
+              Action: ['ec2:TerminateInstances'],
+              Resource: '*',
+              Condition: {
+                'ForAllValues:StringLike': {
+                  'ec2:ResourceTag/Environment': ['prod*', 'production*'],
+                },
+                BoolIfExists: {
+                  'aws:MultiFactorAuthPresent': 'false',
+                },
+              },
+            },
+            {
+              Sid: 'RequireBusinessHoursForCriticalOperations',
+              Effect: 'Deny',
+              Action: ['ec2:TerminateInstances'],
+              Resource: '*',
+              Condition: {
+                'ForAllValues:StringLike': {
+                  'ec2:ResourceTag/CriticalSystem': ['true', 'yes'],
+                },
+                DateNotBetween: {
+                  'aws:CurrentTime': ['08:00Z', '18:00Z'],
+                },
+              },
+            },
+            {
+              Sid: 'AllowStopInstancesWithConditions',
+              Effect: 'Allow',
+              Action: ['ec2:StopInstances'],
+              Resource: '*',
+              Condition: {
+                'ForAllValues:StringNotLike': {
+                  'ec2:ResourceTag/Environment': ['prod*', 'production*'],
+                },
+                StringEquals: {
+                  'aws:RequestedRegion': 'us-east-1',
                 },
               },
             },
@@ -283,6 +341,7 @@ export class SecurityPolicies extends pulumi.ComponentResource {
 
     this.registerOutputs({
       mfaEnforcementPolicyArn: this.mfaEnforcementPolicy.arn,
+      ec2LifecyclePolicyArn: this.ec2LifecyclePolicy.arn,
       s3DenyInsecurePolicyArn: this.s3DenyInsecurePolicy.arn,
       cloudTrailProtectionPolicyArn: this.cloudTrailProtectionPolicy.arn,
       kmsKeyProtectionPolicyArn: this.kmsKeyProtectionPolicy.arn,

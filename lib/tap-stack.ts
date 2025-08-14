@@ -66,13 +66,14 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly dataAccessRoleArn: pulumi.Output<string>;
   public readonly auditRoleArn: pulumi.Output<string>;
 
-  // CloudTrail properties commented out due to testing limitations
-  // public readonly cloudTrailArn: pulumi.Output<string>;
-  // public readonly cloudTrailLogGroupArn: pulumi.Output<string>;
+  // CloudTrail properties
+  public readonly cloudTrailArn: pulumi.Output<string>;
+  public readonly cloudTrailLogGroupArn: pulumi.Output<string>;
 
   // Security Policies
   public readonly securityPolicyArn: pulumi.Output<string>;
   public readonly mfaEnforcementPolicyArn: pulumi.Output<string>;
+  public readonly ec2LifecyclePolicyArn: pulumi.Output<string>;
   public readonly s3SecurityPolicyArn: pulumi.Output<string>;
   public readonly cloudTrailProtectionPolicyArn: pulumi.Output<string>;
   public readonly kmsProtectionPolicyArn: pulumi.Output<string>;
@@ -119,11 +120,12 @@ export class TapStack extends pulumi.ComponentResource {
     this.cloudTrailKmsKeyArn = securityStack.cloudTrailKmsKeyArn;
     this.dataAccessRoleArn = securityStack.dataAccessRoleArn;
     this.auditRoleArn = securityStack.auditRoleArn;
-    // CloudTrail references commented out due to testing limitations
-    // this.cloudTrailArn = securityStack.cloudTrailArn;
-    // this.cloudTrailLogGroupArn = securityStack.cloudTrailLogGroupArn;
+    // CloudTrail references
+    this.cloudTrailArn = securityStack.cloudTrailArn;
+    this.cloudTrailLogGroupArn = securityStack.cloudTrailLogGroupArn;
     this.securityPolicyArn = securityStack.securityPolicyArn;
     this.mfaEnforcementPolicyArn = securityStack.mfaEnforcementPolicyArn;
+    this.ec2LifecyclePolicyArn = securityStack.ec2LifecyclePolicyArn;
     this.s3SecurityPolicyArn = securityStack.s3SecurityPolicyArn;
     this.cloudTrailProtectionPolicyArn =
       securityStack.cloudTrailProtectionPolicyArn;
@@ -142,11 +144,11 @@ export class TapStack extends pulumi.ComponentResource {
       cloudTrailKmsKeyArn: this.cloudTrailKmsKeyArn,
       dataAccessRoleArn: this.dataAccessRoleArn,
       auditRoleArn: this.auditRoleArn,
-      // CloudTrail outputs commented out due to testing limitations
-      // cloudTrailArn: this.cloudTrailArn,
-      // cloudTrailLogGroupArn: this.cloudTrailLogGroupArn,
+      cloudTrailArn: this.cloudTrailArn,
+      cloudTrailLogGroupArn: this.cloudTrailLogGroupArn,
       securityPolicyArn: this.securityPolicyArn,
       mfaEnforcementPolicyArn: this.mfaEnforcementPolicyArn,
+      ec2LifecyclePolicyArn: this.ec2LifecyclePolicyArn,
       s3SecurityPolicyArn: this.s3SecurityPolicyArn,
       cloudTrailProtectionPolicyArn: this.cloudTrailProtectionPolicyArn,
       kmsProtectionPolicyArn: this.kmsProtectionPolicyArn,

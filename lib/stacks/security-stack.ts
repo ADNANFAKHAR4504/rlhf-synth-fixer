@@ -1,8 +1,8 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { commonTags } from '../config/tags';
-// import { SecureCloudTrail } from '../modules/cloudtrail';
-// import { EnhancedCloudTrail } from '../modules/cloudtrail/enhanced-cloudtrail';
+import { SecureCloudTrail } from '../modules/cloudtrail';
+import { EnhancedCloudTrail } from '../modules/cloudtrail/enhanced-cloudtrail';
 import {
   SecureIAMRole,
   createMFAEnforcedPolicy,
@@ -41,13 +41,14 @@ export class SecurityStack extends pulumi.ComponentResource {
   public readonly dataAccessRoleArn: pulumi.Output<string>;
   public readonly auditRoleArn: pulumi.Output<string>;
 
-  // CloudTrail properties commented out due to testing limitations
-  // public readonly cloudTrailArn: pulumi.Output<string>;
-  // public readonly cloudTrailLogGroupArn: pulumi.Output<string>;
+  // CloudTrail properties
+  public readonly cloudTrailArn: pulumi.Output<string>;
+  public readonly cloudTrailLogGroupArn: pulumi.Output<string>;
 
   // Security Policies
   public readonly securityPolicyArn: pulumi.Output<string>;
   public readonly mfaEnforcementPolicyArn: pulumi.Output<string>;
+  public readonly ec2LifecyclePolicyArn: pulumi.Output<string>;
   public readonly s3SecurityPolicyArn: pulumi.Output<string>;
   public readonly cloudTrailProtectionPolicyArn: pulumi.Output<string>;
   public readonly kmsProtectionPolicyArn: pulumi.Output<string>;
@@ -128,7 +129,7 @@ export class SecurityStack extends pulumi.ComponentResource {
           enableAccessLogging: true,
           enableNotifications: false,
           enableObjectLock: true,
-          enableBucketPolicy: false,
+          enableBucketPolicy: true,
           lifecycleRules: [
             {
               id: 'transition-to-ia',
@@ -165,7 +166,7 @@ export class SecurityStack extends pulumi.ComponentResource {
           allowedIpRanges,
           enableAccessLogging: true,
           enableObjectLock: true,
-          enableBucketPolicy: false, // Temporarily disabled to resolve access issues
+          enableBucketPolicy: true,
           tags: {
             Purpose: 'Audit and compliance logs with enhanced security',
             Environment: environmentSuffix,
@@ -179,7 +180,8 @@ export class SecurityStack extends pulumi.ComponentResource {
         {
           bucketName: `tap-primary-storage-${environmentSuffix}`,
           kmsKeyId: s3KmsKey.key.keyId,
-          enableBucketPolicy: false, // Temporarily disabled to resolve access issues
+          enableBucketPolicy: true,
+          enableAccessLogging: true,
           lifecycleRules: [
             {
               id: 'transition-to-ia',
@@ -213,7 +215,8 @@ export class SecurityStack extends pulumi.ComponentResource {
         {
           bucketName: `tap-audit-logs-${environmentSuffix}`,
           kmsKeyId: cloudTrailKmsKey.key.arn,
-          enableBucketPolicy: false, // Temporarily disabled to resolve access issues
+          enableBucketPolicy: true,
+          enableAccessLogging: true,
           tags: {
             Purpose: 'Audit and compliance logs',
             Environment: environmentSuffix,
@@ -346,46 +349,45 @@ export class SecurityStack extends pulumi.ComponentResource {
     );
 
     // Create CloudTrail for comprehensive logging
-    // NOTE: CloudTrail creation commented out due to testing limitations
-    // let cloudTrail: SecureCloudTrail | EnhancedCloudTrail;
+    let cloudTrail: SecureCloudTrail | EnhancedCloudTrail;
 
-    // if (enableEnhancedSecurity) {
-    //   cloudTrail = new EnhancedCloudTrail(
-    //     `tap-security-audit-${environmentSuffix}`,
-    //     {
-    //       trailName: `tap-security-audit-trail-${environmentSuffix}`,
-    //       s3BucketName: auditBucket.bucket.id,
-    //       kmsKeyId: cloudTrailKmsKey.key.arn,
-    //       includeGlobalServiceEvents: true,
-    //       isMultiRegionTrail: true,
-    //       enableLogFileValidation: true,
-    //       enableInsightSelectors: true,
-    //       tags: {
-    //         Purpose:
-    //           'Enhanced security audit and compliance with anomaly detection',
-    //         Environment: environmentSuffix,
-    //       },
-    //     },
-    //     { parent: this, provider }
-    //   );
-    // } else {
-    //   cloudTrail = new SecureCloudTrail(
-    //     `tap-security-audit-${environmentSuffix}`,
-    //     {
-    //       trailName: `tap-security-audit-trail-${environmentSuffix}`,
-    //       s3BucketName: auditBucket.bucket.id,
-    //       kmsKeyId: cloudTrailKmsKey.key.arn,
-    //       includeGlobalServiceEvents: true,
-    //       isMultiRegionTrail: true,
-    //       enableLogFileValidation: true,
-    //       tags: {
-    //         Purpose: 'Security audit and compliance',
-    //         Environment: environmentSuffix,
-    //       },
-    //     },
-    //     { parent: this, provider }
-    //   );
-    // }
+    if (enableEnhancedSecurity) {
+      cloudTrail = new EnhancedCloudTrail(
+        `tap-security-audit-${environmentSuffix}`,
+        {
+          trailName: `tap-security-audit-trail-${environmentSuffix}`,
+          s3BucketName: auditBucket.bucket.id,
+          kmsKeyId: cloudTrailKmsKey.key.arn,
+          includeGlobalServiceEvents: true,
+          isMultiRegionTrail: true,
+          enableLogFileValidation: true,
+          enableInsightSelectors: true,
+          tags: {
+            Purpose:
+              'Enhanced security audit and compliance with anomaly detection',
+            Environment: environmentSuffix,
+          },
+        },
+        { parent: this, provider }
+      );
+    } else {
+      cloudTrail = new SecureCloudTrail(
+        `tap-security-audit-${environmentSuffix}`,
+        {
+          trailName: `tap-security-audit-trail-${environmentSuffix}`,
+          s3BucketName: auditBucket.bucket.id,
+          kmsKeyId: cloudTrailKmsKey.key.arn,
+          includeGlobalServiceEvents: true,
+          isMultiRegionTrail: true,
+          enableLogFileValidation: true,
+          tags: {
+            Purpose: 'Security audit and compliance',
+            Environment: environmentSuffix,
+          },
+        },
+        { parent: this, provider }
+      );
+    }
 
     // Create additional security policies with enhanced controls
     const securityPolicy = new aws.iam.Policy(
@@ -465,11 +467,12 @@ export class SecurityStack extends pulumi.ComponentResource {
     this.cloudTrailKmsKeyArn = cloudTrailKmsKey.key.arn;
     this.dataAccessRoleArn = dataAccessRole.role.arn;
     this.auditRoleArn = auditRole.role.arn;
-    // CloudTrail outputs commented out due to testing limitations
-    // this.cloudTrailArn = cloudTrail.trail.arn;
-    // this.cloudTrailLogGroupArn = cloudTrail.logGroup.arn;
+    // CloudTrail outputs
+    this.cloudTrailArn = cloudTrail.trail.arn;
+    this.cloudTrailLogGroupArn = cloudTrail.logGroup.arn;
     this.securityPolicyArn = securityPolicy.arn;
     this.mfaEnforcementPolicyArn = securityPolicies.mfaEnforcementPolicy.arn;
+    this.ec2LifecyclePolicyArn = securityPolicies.ec2LifecyclePolicy.arn;
     this.s3SecurityPolicyArn = securityPolicies.s3DenyInsecurePolicy.arn;
     this.cloudTrailProtectionPolicyArn =
       securityPolicies.cloudTrailProtectionPolicy.arn;
@@ -488,11 +491,12 @@ export class SecurityStack extends pulumi.ComponentResource {
       cloudTrailKmsKeyArn: this.cloudTrailKmsKeyArn,
       dataAccessRoleArn: this.dataAccessRoleArn,
       auditRoleArn: this.auditRoleArn,
-      // CloudTrail outputs commented out due to testing limitations
-      // cloudTrailArn: this.cloudTrailArn,
-      // cloudTrailLogGroupArn: this.cloudTrailLogGroupArn,
+      // CloudTrail outputs
+      cloudTrailArn: this.cloudTrailArn,
+      cloudTrailLogGroupArn: this.cloudTrailLogGroupArn,
       securityPolicyArn: this.securityPolicyArn,
       mfaEnforcementPolicyArn: this.mfaEnforcementPolicyArn,
+      ec2LifecyclePolicyArn: this.ec2LifecyclePolicyArn,
       s3SecurityPolicyArn: this.s3SecurityPolicyArn,
       cloudTrailProtectionPolicyArn: this.cloudTrailProtectionPolicyArn,
       kmsProtectionPolicyArn: this.kmsProtectionPolicyArn,

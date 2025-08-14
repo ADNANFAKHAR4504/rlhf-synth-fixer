@@ -57,13 +57,14 @@ export const cloudTrailKmsKeyArn = tapStack.cloudTrailKmsKeyArn;
 export const dataAccessRoleArn = tapStack.dataAccessRoleArn;
 export const auditRoleArn = tapStack.auditRoleArn;
 
-// CloudTrail exports commented out due to testing limitations
-// export const cloudTrailArn = tapStack.cloudTrailArn;
-// export const cloudTrailLogGroupArn = tapStack.cloudTrailLogGroupArn;
+// CloudTrail exports
+export const cloudTrailArn = tapStack.cloudTrailArn;
+export const cloudTrailLogGroupArn = tapStack.cloudTrailLogGroupArn;
 
 // Security Policies
 export const securityPolicyArn = tapStack.securityPolicyArn;
 export const mfaEnforcementPolicyArn = tapStack.mfaEnforcementPolicyArn;
+export const ec2LifecyclePolicyArn = tapStack.ec2LifecyclePolicyArn;
 export const s3SecurityPolicyArn = tapStack.s3SecurityPolicyArn;
 export const cloudTrailProtectionPolicyArn =
   tapStack.cloudTrailProtectionPolicyArn;
