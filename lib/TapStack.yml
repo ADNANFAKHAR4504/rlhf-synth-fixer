@@ -434,11 +434,7 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
+      # Note: S3 notification to CloudWatch is configured via Lambda or EventBridge
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -533,6 +529,44 @@ Resources:
                 'aws:RequestedRegion': 'us-east-1'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecretRotationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:DescribeSecret'
+                  - 'secretsmanager:GetSecretValue'
+                  - 'secretsmanager:PutSecretValue'
+                  - 'secretsmanager:UpdateSecretVersionStage'
+                Resource: !Ref APICredentialsSecret
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetRandomPassword'
+                Resource: '*'
+      Tags:
+        - Key: env
+          Value: !Ref Environment
+        - Key: owner
+          Value: !Ref Owner
+        - Key: project
+          Value: !Ref ProjectName
+
+  # RDS Enhanced Monitoring Role
+  RDSMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-rds-monitoring-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -562,14 +596,21 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          # Deny all actions without MFA except for MFA setup actions
           - Effect: Deny
-            Action: '*'
+            NotAction:
+              - 'iam:ChangePassword'
+              - 'iam:CreateVirtualMFADevice'
+              - 'iam:EnableMFADevice'
+              - 'iam:ListMFADevices'
+              - 'iam:ListVirtualMFADevices'
+              - 'iam:ResyncMFADevice'
+              - 'iam:GetUser'
             Resource: '*'
             Condition:
               BoolIfExists:
                 'aws:MultiFactorAuthPresent': 'false'
-              StringNotEquals:
-                'aws:RequestedRegion': 'us-east-1'
+          # Allow MFA setup actions
           - Effect: Allow
             Action:
               - 'iam:ChangePassword'
@@ -578,6 +619,7 @@ Resources:
               - 'iam:ListMFADevices'
               - 'iam:ListVirtualMFADevices'
               - 'iam:ResyncMFADevice'
+              - 'iam:GetUser'
             Resource: '*'
       Users:
         - !Ref ApplicationUser
@@ -625,6 +667,15 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
+  # Secret Rotation Schedule for API credentials
+  APISecretRotationSchedule:
+    Type: AWS::SecretsManager::RotationSchedule
+    Properties:
+      SecretId: !Ref APICredentialsSecret
+      RotationLambdaARN: !GetAtt SecretRotationLambda.Arn
+      RotationRules:
+        AutomaticallyAfterDays: 30  # Rotate every 30 days
+
   # Lambda function for secret rotation
   SecretRotationLambda:
     Type: AWS::Lambda::Function
@@ -657,6 +708,14 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
+  # Permission for Secrets Manager to invoke the rotation Lambda
+  SecretRotationLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecretRotationLambda
+      Action: lambda:InvokeFunction
+      Principal: secretsmanager.amazonaws.com
+
   # ============================================================================
   # RDS Database with Encryption
   # ============================================================================
@@ -681,7 +740,7 @@ Resources:
   # RDS Instance with encryption
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
+    DeletionPolicy: Delete  # Changed from Snapshot to ensure complete cleanup
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
       DBInstanceClass: db.t3.micro
@@ -704,7 +763,7 @@ Resources:
         - general
         - slow-query
       MonitoringInterval: 60
-      MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -723,7 +782,7 @@ Resources:
     Properties:
       ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (us-east-1)
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyPairName  # You'll need to create this separately
+      # KeyName is optional - instance can be accessed via Session Manager
       SubnetId: !Ref PrivateSubnet
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup
@@ -753,17 +812,8 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  KeyPairName:
-    Type: AWS::EC2::KeyPair
-    Properties:
-      KeyName: !Sub '${ProjectName}-keypair-${Environment}'
-      Tags:
-        - Key: env
-          Value: !Ref Environment
-        - Key: owner
-          Value: !Ref Owner
-        - Key: project
-          Value: !Ref ProjectName
+  # Note: EC2 KeyPairs must be created outside of CloudFormation
+  # You can create a parameter to accept an existing KeyPair name
 
   # ============================================================================
   # CloudWatch Logging and Monitoring
@@ -911,4 +961,25 @@ Outputs:
       Name: !Sub '${ProjectName}-logging-bucket-${Environment}'
 
   DatabaseEndpoint:
-    Description
+    Description: 'RDS database endpoint address'
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${ProjectName}-db-endpoint-${Environment}'
+
+  DatabasePort:
+    Description: 'RDS database endpoint port'
+    Value: !GetAtt DatabaseInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${ProjectName}-db-port-${Environment}'
+
+  EC2InstanceId:
+    Description: 'EC2 web server instance ID'
+    Value: !Ref WebServerInstance
+    Export:
+      Name: !Sub '${ProjectName}-ec2-instance-id-${Environment}'
+
+  CloudTrailName:
+    Description: 'CloudTrail trail name'
+    Value: !Ref CloudTrail
+    Export:
+      Name: !Sub '${ProjectName}-cloudtrail-name-${Environment}'
