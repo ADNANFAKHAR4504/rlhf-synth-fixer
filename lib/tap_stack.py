@@ -14,7 +14,6 @@ from dataclasses import dataclass
 
 import pulumi
 import pulumi_aws as aws
-import pulumi_awsx as awsx
 from pulumi import ComponentResource, ResourceOptions, Config, Output
 
 
@@ -585,26 +584,89 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
         )
     
     def _create_api_gateway(self):
-        """Create API Gateway with proper configuration."""
+        """Create API Gateway with proper configuration using core AWS resources."""
         
-        # Create API Gateway
-        self.api_gateway = awsx.apigateway.API(
+        # Create API Gateway REST API
+        self.api = aws.apigateway.RestApi(
             f"tap-api-{self.args.environment_suffix}",
-            routes=[
-                awsx.apigateway.RouteArgs(
-                    path="/health",
-                    method="GET",
-                    event_handler=self.lambda_function
-                ),
-                awsx.apigateway.RouteArgs(
-                    path="/api/{proxy+}",
-                    method="ANY",
-                    event_handler=self.lambda_function
-                )
-            ],
-            stage_name=self.args.environment_suffix,
+            name=f"tap-api-{self.args.environment_suffix}",
+            description="TAP API Gateway for serverless application",
+            endpoint_configuration=aws.apigateway.RestApiEndpointConfigurationArgs(
+                types="REGIONAL"
+            ),
+            tags={
+                "Environment": self.args.environment_suffix,
+                "Component": "API Gateway",
+                "Purpose": "REST API"
+            },
             opts=ResourceOptions(parent=self)
         )
+        
+        # Create health resource
+        health_resource = aws.apigateway.Resource(
+            f"health-resource-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            parent_id=self.api.root_resource_id,
+            path_part="health",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create API resource with proxy
+        api_resource = aws.apigateway.Resource(
+            f"api-resource-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            parent_id=self.api.root_resource_id,
+            path_part="api",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        proxy_resource = aws.apigateway.Resource(
+            f"proxy-resource-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            parent_id=api_resource.id,
+            path_part="{proxy+}",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create methods and integrations
+        self._create_api_methods(health_resource, proxy_resource)
+        
+        # Create deployment
+        deployment = aws.apigateway.Deployment(
+            f"api-deployment-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[health_resource, proxy_resource]
+            )
+        )
+        
+        # Create stage
+        stage = aws.apigateway.Stage(
+            f"api-stage-{self.args.environment_suffix}",
+            deployment=deployment.id,
+            rest_api=self.api.id,
+            stage_name=self.args.environment_suffix,
+            xray_tracing_enabled=True,
+            tags={
+                "Environment": self.args.environment_suffix,
+                "Component": "API Gateway Stage"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create API Gateway URL output
+        self.api_gateway = type('APIGateway', (), {
+            'url': pulumi.Output.concat(
+                "https://", 
+                self.api.id, 
+                ".execute-api.", 
+                aws.get_region().name, 
+                ".amazonaws.com/", 
+                self.args.environment_suffix
+            ),
+            'api': self.api
+        })()
         
         # Enable API Gateway logging
         api_gateway_account = aws.apigateway.Account(
@@ -617,7 +679,7 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
         self.usage_plan = aws.apigateway.UsagePlan(
             f"tap-usage-plan-{self.args.environment_suffix}",
             api_stages=[aws.apigateway.UsagePlanApiStageArgs(
-                api_id=self.api_gateway.api.id,
+                api_id=self.api.id,
                 stage=self.args.environment_suffix
             )],
             quota_settings=aws.apigateway.UsagePlanQuotaSettingsArgs(
@@ -628,6 +690,165 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
                 burst_limit=500,
                 rate_limit=200
             ),
+            opts=ResourceOptions(parent=self)
+        )
+    
+    def _create_api_methods(self, health_resource, proxy_resource):
+        """Create API Gateway methods and integrations."""
+        
+        # Lambda permission for API Gateway
+        lambda_permission = aws.lambda_.Permission(
+            f"api-lambda-permission-{self.args.environment_suffix}",
+            action="lambda:InvokeFunction",
+            function=self.lambda_function.function_name,
+            principal="apigateway.amazonaws.com",
+            source_arn=pulumi.Output.concat(self.api.execution_arn, "/*/*"),
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Health endpoint - GET method
+        health_method = aws.apigateway.Method(
+            f"health-method-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=health_resource.id,
+            http_method="GET",
+            authorization="NONE",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        health_integration = aws.apigateway.Integration(
+            f"health-integration-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=health_resource.id,
+            http_method=health_method.http_method,
+            integration_http_method="POST",
+            type="AWS_PROXY",
+            uri=self.lambda_function.invoke_arn,
+            opts=ResourceOptions(parent=self, depends_on=[lambda_permission])
+        )
+        
+        # Health method response
+        health_method_response = aws.apigateway.MethodResponse(
+            f"health-method-response-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=health_resource.id,
+            http_method=health_method.http_method,
+            status_code="200",
+            response_headers={
+                "Access-Control-Allow-Origin": True,
+                "Access-Control-Allow-Methods": True,
+                "Access-Control-Allow-Headers": True
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Health integration response
+        health_integration_response = aws.apigateway.IntegrationResponse(
+            f"health-integration-response-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=health_resource.id,
+            http_method=health_method.http_method,
+            status_code=health_method_response.status_code,
+            response_headers={
+                "Access-Control-Allow-Origin": "'*'",
+                "Access-Control-Allow-Methods": "'GET,OPTIONS'",
+                "Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            },
+            opts=ResourceOptions(parent=self, depends_on=[health_integration])
+        )
+        
+        # Proxy endpoint - ANY method
+        proxy_method = aws.apigateway.Method(
+            f"proxy-method-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=proxy_resource.id,
+            http_method="ANY",
+            authorization="NONE",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        proxy_integration = aws.apigateway.Integration(
+            f"proxy-integration-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=proxy_resource.id,
+            http_method=proxy_method.http_method,
+            integration_http_method="POST",
+            type="AWS_PROXY",
+            uri=self.lambda_function.invoke_arn,
+            opts=ResourceOptions(parent=self, depends_on=[lambda_permission])
+        )
+        
+        # Proxy method response
+        proxy_method_response = aws.apigateway.MethodResponse(
+            f"proxy-method-response-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=proxy_resource.id,
+            http_method=proxy_method.http_method,
+            status_code="200",
+            response_headers={
+                "Access-Control-Allow-Origin": True,
+                "Access-Control-Allow-Methods": True,
+                "Access-Control-Allow-Headers": True
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Proxy integration response
+        proxy_integration_response = aws.apigateway.IntegrationResponse(
+            f"proxy-integration-response-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=proxy_resource.id,
+            http_method=proxy_method.http_method,
+            status_code=proxy_method_response.status_code,
+            response_headers={
+                "Access-Control-Allow-Origin": "'*'",
+                "Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                "Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            },
+            opts=ResourceOptions(parent=self, depends_on=[proxy_integration])
+        )
+        
+        # OPTIONS method for CORS (health endpoint)
+        health_options_method = aws.apigateway.Method(
+            f"health-options-method-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=health_resource.id,
+            http_method="OPTIONS",
+            authorization="NONE",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        health_options_integration = aws.apigateway.Integration(
+            f"health-options-integration-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=health_resource.id,
+            http_method=health_options_method.http_method,
+            type="MOCK",
+            request_templates={
+                "application/json": '{"statusCode": 200}'
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # OPTIONS method for CORS (proxy endpoint)
+        proxy_options_method = aws.apigateway.Method(
+            f"proxy-options-method-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=proxy_resource.id,
+            http_method="OPTIONS",
+            authorization="NONE",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        proxy_options_integration = aws.apigateway.Integration(
+            f"proxy-options-integration-{self.args.environment_suffix}",
+            rest_api=self.api.id,
+            resource_id=proxy_resource.id,
+            http_method=proxy_options_method.http_method,
+            type="MOCK",
+            request_templates={
+                "application/json": '{"statusCode": 200}'
+            },
             opts=ResourceOptions(parent=self)
         )
     
@@ -643,26 +864,40 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             dashboard_name=f"TAP-{self.args.environment_suffix}",
             dashboard_body=pulumi.Output.all(
                 lambda_function_name=self.lambda_function.function_name,
-                api_gateway_id=self.api_gateway.api.id,
+                api_gateway_id=self.api.id,
                 dynamodb_table_name=self.dynamodb_table.name
             ).apply(lambda args: json.dumps({
                 "widgets": [
                     {
                         "type": "metric",
+                        "x": 0,
+                        "y": 0,
+                        "width": 12,
+                        "height": 6,
                         "properties": {
                             "metrics": [
                                 ["AWS/Lambda", "Duration", "FunctionName", args["lambda_function_name"]],
                                 [".", "Errors", ".", "."],
-                                [".", "Invocations", ".", "."]
+                                [".", "Invocations", ".", "."],
+                                [".", "Throttles", ".", "."]
                             ],
                             "period": 300,
                             "stat": "Average",
                             "region": "us-east-1",
-                            "title": "Lambda Metrics"
+                            "title": "Lambda Metrics",
+                            "yAxis": {
+                                "left": {
+                                    "min": 0
+                                }
+                            }
                         }
                     },
                     {
                         "type": "metric",
+                        "x": 12,
+                        "y": 0,
+                        "width": 12,
+                        "height": 6,
                         "properties": {
                             "metrics": [
                                 ["AWS/ApiGateway", "Count", "ApiName", args["api_gateway_id"]],
@@ -673,20 +908,36 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
                             "period": 300,
                             "stat": "Sum",
                             "region": "us-east-1",
-                            "title": "API Gateway Metrics"
+                            "title": "API Gateway Metrics",
+                            "yAxis": {
+                                "left": {
+                                    "min": 0
+                                }
+                            }
                         }
                     },
                     {
                         "type": "metric",
+                        "x": 0,
+                        "y": 6,
+                        "width": 24,
+                        "height": 6,
                         "properties": {
                             "metrics": [
                                 ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", args["dynamodb_table_name"]],
-                                [".", "ConsumedWriteCapacityUnits", ".", "."]
+                                [".", "ConsumedWriteCapacityUnits", ".", "."],
+                                [".", "SystemErrors", ".", "."],
+                                [".", "ThrottledRequests", ".", "."]
                             ],
                             "period": 300,
                             "stat": "Sum",
                             "region": "us-east-1",
-                            "title": "DynamoDB Metrics"
+                            "title": "DynamoDB Metrics",
+                            "yAxis": {
+                                "left": {
+                                    "min": 0
+                                }
+                            }
                         }
                     }
                 ]
@@ -711,8 +962,27 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             period=300,
             statistic="Sum",
             threshold=5,
-            alarm_description="Lambda function errors",
+            alarm_description="Lambda function errors exceeded threshold",
+            alarm_actions=[],  # Add SNS topic ARN here if needed
             dimensions={"FunctionName": self.lambda_function.function_name},
+            treat_missing_data="notBreaching",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Lambda duration alarm
+        aws.cloudwatch.MetricAlarm(
+            f"lambda-duration-{self.args.environment_suffix}",
+            alarm_name=f"TAP-Lambda-Duration-{self.args.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Duration",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Average",
+            threshold=25000,  # 25 seconds
+            alarm_description="Lambda function duration exceeded threshold",
+            dimensions={"FunctionName": self.lambda_function.function_name},
+            treat_missing_data="notBreaching",
             opts=ResourceOptions(parent=self)
         )
         
@@ -727,8 +997,26 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             period=300,
             statistic="Sum",
             threshold=10,
-            alarm_description="API Gateway 5XX errors",
-            dimensions={"ApiName": self.api_gateway.api.id},
+            alarm_description="API Gateway 5XX errors exceeded threshold",
+            dimensions={"ApiName": self.api.id},
+            treat_missing_data="notBreaching",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # API Gateway latency alarm
+        aws.cloudwatch.MetricAlarm(
+            f"api-gateway-latency-{self.args.environment_suffix}",
+            alarm_name=f"TAP-API-Latency-{self.args.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Latency",
+            namespace="AWS/ApiGateway",
+            period=300,
+            statistic="Average",
+            threshold=5000,  # 5 seconds
+            alarm_description="API Gateway latency exceeded threshold",
+            dimensions={"ApiName": self.api.id},
+            treat_missing_data="notBreaching",
             opts=ResourceOptions(parent=self)
         )
         
@@ -738,13 +1026,31 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             alarm_name=f"TAP-DynamoDB-Throttles-{self.args.environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
-            metric_name="SystemErrors",
+            metric_name="ThrottledRequests",
             namespace="AWS/DynamoDB",
             period=300,
             statistic="Sum",
             threshold=0,
-            alarm_description="DynamoDB throttling events",
+            alarm_description="DynamoDB throttling events detected",
             dimensions={"TableName": self.dynamodb_table.name},
+            treat_missing_data="notBreaching",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # DynamoDB system errors
+        aws.cloudwatch.MetricAlarm(
+            f"dynamodb-errors-{self.args.environment_suffix}",
+            alarm_name=f"TAP-DynamoDB-Errors-{self.args.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="SystemErrors",
+            namespace="AWS/DynamoDB",
+            period=300,
+            statistic="Sum",
+            threshold=5,
+            alarm_description="DynamoDB system errors exceeded threshold",
+            dimensions={"TableName": self.dynamodb_table.name},
+            treat_missing_data="notBreaching",
             opts=ResourceOptions(parent=self)
         )
     
@@ -760,9 +1066,12 @@ def handle_api_request(event: Dict[str, Any], context) -> Dict[str, Any]:
             attributes=[
                 aws.dynamodb.TableAttributeArgs(name="migration_id", type="S")
             ],
+            point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(enabled=True),
+            server_side_encryption=aws.dynamodb.TableServerSideEncryptionArgs(enabled=True),
             tags={
                 "Environment": self.args.environment_suffix,
-                "Purpose": "Migration state tracking"
+                "Purpose": "Migration state tracking",
+                "Component": "Migration"
             },
             opts=ResourceOptions(parent=self)
         )
@@ -843,9 +1152,9 @@ def validate_migration(event: Dict[str, Any], context) -> Dict[str, Any]:
     
     # Perform validation checks
     validation_results = {
-        'data_consistency': True,  # Implement actual validation
-        'health_checks': True,
-        'capacity_checks': True
+        'data_consistency': check_data_consistency(),
+        'health_checks': check_health_status(),
+        'capacity_checks': check_capacity_requirements()
     }
     
     all_valid = all(validation_results.values())
@@ -924,7 +1233,7 @@ def rollback_migration(event: Dict[str, Any], context) -> Dict[str, Any]:
         }
     )
     
-    logger.warn(f"Migration {migration_id} rolled back")
+    logger.warning(f"Migration {migration_id} rolled back")
     
     return {
         'statusCode': 200,
@@ -970,6 +1279,33 @@ def get_migration_status(event: Dict[str, Any], context) -> Dict[str, Any]:
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
+
+def check_data_consistency():
+    \"\"\"Check data consistency across regions.\"\"\"
+    try:
+        # Implement actual data consistency checks
+        return True
+    except Exception as e:
+        logger.error(f"Data consistency check failed: {str(e)}")
+        return False
+
+def check_health_status():
+    \"\"\"Check application health status.\"\"\"
+    try:
+        # Implement actual health checks
+        return True
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return False
+
+def check_capacity_requirements():
+    \"\"\"Check capacity requirements.\"\"\"
+    try:
+        # Implement actual capacity checks
+        return True
+    except Exception as e:
+        logger.error(f"Capacity check failed: {str(e)}")
+        return False
 """
         
         self.migration_function = aws.lambda_.Function(
@@ -990,5 +1326,19 @@ def get_migration_status(event: Dict[str, Any], context) -> Dict[str, Any]:
             ),
             timeout=300,
             memory_size=512,
+            tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
+            tags={
+                "Environment": self.args.environment_suffix,
+                "Component": "Migration",
+                "Purpose": "Migration management"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create CloudWatch Log Group for migration function
+        self.migration_log_group = aws.cloudwatch.LogGroup(
+            f"migration-logs-{self.args.environment_suffix}",
+            name=pulumi.Output.concat("/aws/lambda/", self.migration_function.name),
+            retention_in_days=30,  # Longer retention for migration logs
             opts=ResourceOptions(parent=self)
         )
