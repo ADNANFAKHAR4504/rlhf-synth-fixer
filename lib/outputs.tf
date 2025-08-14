@@ -49,7 +49,7 @@ output "network_acl_ids" {
 
 output "iam_role_names" {
   description = "Names of the IAM roles"
-  value       = [aws_iam_role.ec2_role.name, aws_iam_role.flow_log_role.name]
+  value       = [aws_iam_role.ec2_role.name, aws_iam_role.flow_log_role.name, aws_iam_role.backup_role.name]
 }
 
 output "iam_instance_profile_name" {
@@ -109,4 +109,41 @@ output "private_route_table_ids" {
 output "resource_suffix" {
   description = "Random suffix used for resource naming"
   value       = local.name_suffix
+}
+
+# Monitoring outputs
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for alerts"
+  value       = aws_sns_topic.alerts.arn
+}
+
+output "cloudwatch_dashboard_name" {
+  description = "Name of the CloudWatch dashboard"
+  value       = aws_cloudwatch_dashboard.infrastructure.dashboard_name
+}
+
+output "cloudwatch_alarm_names" {
+  description = "Names of the CloudWatch alarms"
+  value = [
+    aws_cloudwatch_metric_alarm.flow_log_errors.alarm_name,
+    aws_cloudwatch_metric_alarm.cloudtrail_errors.alarm_name,
+    aws_cloudwatch_metric_alarm.s3_access_anomalies.alarm_name,
+    aws_cloudwatch_metric_alarm.kms_key_usage.alarm_name
+  ]
+}
+
+# Backup outputs
+output "backup_vault_name" {
+  description = "Name of the AWS Backup vault"
+  value       = aws_backup_vault.main.name
+}
+
+output "backup_plan_id" {
+  description = "ID of the backup plan"
+  value       = aws_backup_plan.main.id
+}
+
+output "backup_kms_key_id" {
+  description = "ID of the KMS key for backup encryption"
+  value       = aws_kms_key.backup.key_id
 }
