@@ -9,7 +9,7 @@ You are an AWS Cloud Engineer specializing in secure, high-scale **serverless** 
 
 - **AWS CDK Implementation (TypeScript):**  
   - Project structure:
-    - `bin/tap.ts` — CDK app entry point (sets region to `us-west-1`).
+    - `bin/tap.ts` — CDK app entry point (sets region to `us-west-2`).
     - `lib/tap-stack.ts` — Main stack with all resources.
     - `cdk.json` — CDK configuration.
   - Implement a **VPC** with at least two private subnets and appropriate routing for Lambda.
@@ -37,7 +37,7 @@ You are an AWS Cloud Engineer specializing in secure, high-scale **serverless** 
   - **Outputs** (recommended but optional): API invoke URL, S3 bucket name, DynamoDB table name, VPC endpoint IDs.
 
 - **Region & Tagging:**
-  - Deploy all resources in **`us-west-1`**.
+  - Deploy all resources in **`us-west-2`**.
   - Tag **all resources** with `Environment: Production`.
 
 ## Summary
