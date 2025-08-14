@@ -18,6 +18,8 @@ export class KmsStack extends pulumi.ComponentResource {
   public readonly mainKeyArn: pulumi.Output<string>;
   public readonly rdsKeyId: pulumi.Output<string>;
   public readonly rdsKeyArn: pulumi.Output<string>;
+  public readonly mainKeyAlias: pulumi.Output<string>;
+  public readonly rdsKeyAlias: pulumi.Output<string>;
 
   constructor(name: string, args: KmsStackArgs, opts?: ResourceOptions) {
     super('tap:kms:KmsStack', name, args, opts);
@@ -41,7 +43,7 @@ export class KmsStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    new aws.kms.Alias(
+    const mainKeyAlias = new aws.kms.Alias(
       `tap-main-key-alias-${environmentSuffix}`,
       {
         name: `alias/tap-main-${environmentSuffix}`,
@@ -66,7 +68,7 @@ export class KmsStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    new aws.kms.Alias(
+    const rdsKeyAlias = new aws.kms.Alias(
       `tap-rds-key-alias-${environmentSuffix}`,
       {
         name: `alias/tap-rds-${environmentSuffix}`,
@@ -79,6 +81,8 @@ export class KmsStack extends pulumi.ComponentResource {
     this.mainKeyArn = mainKey.arn;
     this.rdsKeyId = rdsKey.keyId;
     this.rdsKeyArn = rdsKey.arn;
+    this.mainKeyAlias = mainKeyAlias.name;
+    this.rdsKeyAlias = rdsKeyAlias.name;
 
     this.registerOutputs({
       mainKeyId: this.mainKeyId,

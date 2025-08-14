@@ -77,6 +77,8 @@ export class SecureStack extends pulumi.ComponentResource {
   public readonly mainKmsKeyId: pulumi.Output<string>;
   public readonly mainKmsKeyArn: pulumi.Output<string>;
   public readonly rdsKmsKeyArn: pulumi.Output<string>;
+  public readonly mainKmsKeyAlias: pulumi.Output<string>;
+  public readonly rdsKmsKeyAlias: pulumi.Output<string>;
 
   // VPC outputs
   public readonly vpcId: pulumi.Output<string>;
@@ -92,6 +94,9 @@ export class SecureStack extends pulumi.ComponentResource {
   // EC2 outputs
   public readonly webInstanceId: pulumi.Output<string>;
   public readonly webInstancePrivateIp: pulumi.Output<string>;
+
+  // IAM outputs
+  public readonly ec2InstanceProfileName: pulumi.Output<string>;
 
   constructor(name: string, args: SecureStackArgs, opts?: ResourceOptions) {
     super('tap:secure:SecureStack', name, {}, opts);
@@ -143,7 +148,7 @@ export class SecureStack extends pulumi.ComponentResource {
 
     // 5. Create security groups
     const securityGroupStack = new SecurityGroupStack(
-      `tap-security-${environmentSuffix}`,
+      `tap-security-group-${environmentSuffix}`,
       {
         environmentSuffix,
         tags,
@@ -186,6 +191,8 @@ export class SecureStack extends pulumi.ComponentResource {
     this.mainKmsKeyId = kmsStack.mainKeyId;
     this.mainKmsKeyArn = kmsStack.mainKeyArn;
     this.rdsKmsKeyArn = kmsStack.rdsKeyArn;
+    this.mainKmsKeyAlias = kmsStack.mainKeyAlias;
+    this.rdsKmsKeyAlias = kmsStack.rdsKeyAlias;
     this.vpcId = vpcStack.vpcId;
     this.privateSubnetIds = vpcStack.privateSubnetIds;
     this.dataBucketName = s3Stack.dataBucketName;
@@ -193,14 +200,11 @@ export class SecureStack extends pulumi.ComponentResource {
     this.databaseEndpoint = rdsStack.dbInstanceEndpoint;
     this.webInstanceId = ec2Stack.instanceId;
     this.webInstancePrivateIp = ec2Stack.privateIp;
+    this.ec2InstanceProfileName = iamStack.ec2InstanceProfileName;
 
     // Register outputs with the component
     this.registerOutputs({
-      mainKmsKeyId: this.mainKmsKeyId,
-      mainKmsKeyArn: this.mainKmsKeyArn,
-      rdsKmsKeyArn: this.rdsKmsKeyArn,
       vpcId: this.vpcId,
-      privateSubnetIds: this.privateSubnetIds,
       dataBucketName: this.dataBucketName,
       logsBucketName: this.logsBucketName,
       databaseEndpoint: this.databaseEndpoint,

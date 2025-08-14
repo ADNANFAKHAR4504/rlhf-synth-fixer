@@ -62,6 +62,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly mainKmsKeyId: pulumi.Output<string>;
   public readonly mainKmsKeyArn: pulumi.Output<string>;
   public readonly rdsKmsKeyArn: pulumi.Output<string>;
+  public readonly mainKmsKeyAlias: pulumi.Output<string>;
+  public readonly rdsKmsKeyAlias: pulumi.Output<string>;
   public readonly vpcId: pulumi.Output<string>;
   public readonly privateSubnetIds: pulumi.Output<string[]>;
   public readonly dataBucketName: pulumi.Output<string>;
@@ -69,6 +71,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly databaseEndpoint: pulumi.Output<string>;
   public readonly webInstanceId: pulumi.Output<string>;
   public readonly webInstancePrivateIp: pulumi.Output<string>;
+  public readonly environmentSuffix: pulumi.Output<string>;
+  public readonly ec2InstanceProfileName: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, {}, opts);
@@ -93,6 +97,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.mainKmsKeyId = secureStack.mainKmsKeyId;
     this.mainKmsKeyArn = secureStack.mainKmsKeyArn;
     this.rdsKmsKeyArn = secureStack.rdsKmsKeyArn;
+    this.mainKmsKeyAlias = secureStack.mainKmsKeyAlias;
+    this.rdsKmsKeyAlias = secureStack.rdsKmsKeyAlias;
     this.vpcId = secureStack.vpcId;
     this.privateSubnetIds = secureStack.privateSubnetIds;
     this.dataBucketName = secureStack.dataBucketName;
@@ -100,19 +106,21 @@ export class TapStack extends pulumi.ComponentResource {
     this.databaseEndpoint = secureStack.databaseEndpoint;
     this.webInstanceId = secureStack.webInstanceId;
     this.webInstancePrivateIp = secureStack.webInstancePrivateIp;
+    this.environmentSuffix = pulumi.output(environmentSuffix);
+    this.ec2InstanceProfileName = secureStack.ec2InstanceProfileName;
 
     // Register outputs with the component
     this.registerOutputs({
-      mainKmsKeyId: this.mainKmsKeyId,
-      mainKmsKeyArn: this.mainKmsKeyArn,
-      rdsKmsKeyArn: this.rdsKmsKeyArn,
       vpcId: this.vpcId,
-      privateSubnetIds: this.privateSubnetIds,
       dataBucketName: this.dataBucketName,
       logsBucketName: this.logsBucketName,
       databaseEndpoint: this.databaseEndpoint,
       webInstanceId: this.webInstanceId,
       webInstancePrivateIp: this.webInstancePrivateIp,
+      environmentSuffix: this.environmentSuffix,
+      mainKmsKeyAlias: this.mainKmsKeyAlias,
+      rdsKmsKeyAlias: this.rdsKmsKeyAlias,
+      ec2InstanceProfileName: this.ec2InstanceProfileName,
     });
   }
 }

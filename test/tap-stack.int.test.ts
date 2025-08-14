@@ -47,6 +47,10 @@ const loadStackOutputs = () => {
       databaseEndpoint: process.env.DATABASE_ENDPOINT,
       webInstanceId: process.env.WEB_INSTANCE_ID,
       webInstancePrivateIp: process.env.WEB_INSTANCE_PRIVATE_IP,
+      environmentSuffix: process.env.ENVIRONMENT_SUFFIX || 'dev',
+      mainKmsKeyAlias: process.env.MAIN_KMS_KEY_ALIAS,
+      rdsKmsKeyAlias: process.env.RDS_KMS_KEY_ALIAS,
+      ec2InstanceProfileName: process.env.EC2_INSTANCE_PROFILE_NAME,
     };
   } catch (error) {
     throw new Error(`Failed to load stack outputs: ${error}`);
@@ -223,7 +227,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       // Get all KMS keys and find TAP-related ones
       const response = await clients.kms.send(
         new DescribeKeyCommand({
-          KeyId: 'alias/tap-main-dev', // Assuming dev environment
+          KeyId: stackOutputs.mainKmsKeyAlias,
         })
       );
 
@@ -380,7 +384,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       // Check instance profile
       const profileResponse = await clients.iam.send(
         new GetInstanceProfileCommand({
-          InstanceProfileName: 'tap-ec2-profile-dev',
+          InstanceProfileName: stackOutputs.ec2InstanceProfileName,
         })
       );
 
@@ -489,7 +493,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       // Verify KMS encryption is used across services
       const kmsResponse = await clients.kms.send(
         new DescribeKeyCommand({
-          KeyId: 'alias/tap-main-dev',
+          KeyId: stackOutputs.mainKmsKeyAlias,
         })
       );
       expect(kmsResponse.KeyMetadata!.KeyState).toBe('Enabled');

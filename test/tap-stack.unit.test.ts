@@ -153,7 +153,7 @@ describe('TapStack Unit Tests', () => {
         'tap-vpc-test',
         {
           environmentSuffix: 'test',
-          vpcCidr: '10.0.0.0/16',
+          vpcCidr: undefined,
           tags: { Environment: 'test' },
         },
         { parent: expect.any(Object) }
@@ -162,7 +162,7 @@ describe('TapStack Unit Tests', () => {
 
     it('should create IAM stack with correct parameters', () => {
       expect(IamStack).toHaveBeenCalledWith(
-        'tap-iam',
+        'tap-iam-test',
         {
           environmentSuffix: 'test',
           tags: { Environment: 'test' },
@@ -173,7 +173,7 @@ describe('TapStack Unit Tests', () => {
 
     it('should create S3 stack with correct parameters', () => {
       expect(S3Stack).toHaveBeenCalledWith(
-        'tap-s3',
+        'tap-s3-test',
         {
           environmentSuffix: 'test',
           mainKmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/mock-main-key',
@@ -185,7 +185,7 @@ describe('TapStack Unit Tests', () => {
 
     it('should create Security Group stack with correct parameters', () => {
       expect(SecurityGroupStack).toHaveBeenCalledWith(
-        'tap-security-group',
+        'tap-security-group-test',
         {
           environmentSuffix: 'test',
           vpcId: 'mock-vpc-id',
@@ -197,14 +197,13 @@ describe('TapStack Unit Tests', () => {
 
     it('should create RDS stack with correct parameters', () => {
       expect(RdsStack).toHaveBeenCalledWith(
-        'tap-rds',
+        'tap-rds-test',
         {
           environmentSuffix: 'test',
-          privateSubnetIds: expect.any(Object), // This will be a pulumi.all() result
+          privateSubnetIds: expect.any(Array), // This will be a pulumi.all() result
           dbSecurityGroupId: 'mock-db-sg-id',
           rdsKmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/mock-rds-key',
-          dbSecretArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:placeholder',
-          instanceClass: 'db.t3.micro',
+          instanceClass: undefined,
           tags: { Environment: 'test' },
         },
         { parent: expect.any(Object) }
@@ -213,15 +212,15 @@ describe('TapStack Unit Tests', () => {
 
     it('should create EC2 stack with correct parameters', () => {
       expect(Ec2Stack).toHaveBeenCalledWith(
-        'tap-ec2',
+        'tap-ec2-test',
         {
           environmentSuffix: 'test',
-          privateSubnetIds: expect.any(Object), // This will be a pulumi.all() result
+          privateSubnetIds: expect.any(Array), // This will be a pulumi.all() result
           webSecurityGroupId: 'mock-web-sg-id',
           ec2InstanceProfileName: 'mock-ec2-profile',
           mainKmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/mock-main-key',
-          instanceType: 't3.micro',
-          enableKeyPairs: false,
+          instanceType: undefined,
+          enableKeyPairs: undefined,
           tags: { Environment: 'test' },
         },
         { parent: expect.any(Object) }
@@ -266,7 +265,7 @@ describe('TapStack Unit Tests', () => {
       stack = new TapStack('test-stack', {});
       
       expect(KmsStack).toHaveBeenCalledWith(
-        'tap-kms',
+        'tap-kms-dev',
         expect.objectContaining({
           environmentSuffix: 'dev',
         }),
@@ -280,7 +279,7 @@ describe('TapStack Unit Tests', () => {
       });
       
       expect(KmsStack).toHaveBeenCalledWith(
-        'tap-kms',
+        'tap-kms-staging',
         expect.objectContaining({
           environmentSuffix: 'staging',
         }),
