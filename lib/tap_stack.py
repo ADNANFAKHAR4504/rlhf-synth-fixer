@@ -854,74 +854,79 @@ class TapStack(ComponentResource):
         )
     
     def _create_fargate_cluster(self):
-        """Create ECS Fargate cluster."""
-        self.ecs_cluster = aws.ecs.Cluster(
-            f"{self.name_prefix}-cluster",
-            name=f"{self.name_prefix}-cluster",
-            settings=[
-                aws.ecs.ClusterSettingArgs(
-                    name="containerInsights",
-                    value="enabled",
-                )
-            ],
-            tags={
-                "Name": f"{self.name_prefix}-cluster",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # CloudWatch Log Group
-        self.log_group = aws.cloudwatch.LogGroup(
-            f"{self.name_prefix}-log-group",
-            name=f"/ecs/{self.name_prefix}",
-            retention_in_days=14,
-            kms_key_id=self.kms_key.arn,
-            tags={
-                "Name": f"{self.name_prefix}-log-group",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Get current AWS region
-        current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
-        
-        # Task Definition
-        self.task_definition = aws.ecs.TaskDefinition(
-            f"{self.name_prefix}-task",
-            family=f"{self.name_prefix}-task",
-            network_mode="awsvpc",
-            requires_compatibilities=["FARGATE"],
-            cpu="256",
-            memory="512",
-            execution_role_arn=self.fargate_execution_role.arn,
-            task_role_arn=self.fargate_task_role.arn,
-            container_definitions=json.dumps([{
-                "name": f"{self.name_prefix}-container",
-                "image": "nginx:latest",
-                "portMappings": [{
-                    "containerPort": 80,
-                    "protocol": "tcp",
-                }],
-                "logConfiguration": {
-                    "logDriver": "awslogs",
-                    "options": {
-                        "awslogs-group": self.log_group.name,
-                        "awslogs-region": current_region,
-                        "awslogs-stream-prefix": "ecs",
-                    },
-                },
-                "environment": [
-                    {"name": "ENVIRONMENT", "value": self.environment_suffix}
-                ],
-            }]),
-            tags={
-                "Name": f"{self.name_prefix}-task",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
+      """Create ECS Fargate cluster."""
+      self.ecs_cluster = aws.ecs.Cluster(
+          f"{self.name_prefix}-cluster",
+          name=f"{self.name_prefix}-cluster",
+          settings=[
+              aws.ecs.ClusterSettingArgs(
+                  name="containerInsights",
+                  value="enabled",
+              )
+          ],
+          tags={
+              "Name": f"{self.name_prefix}-cluster",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # CloudWatch Log Group
+      self.log_group = aws.cloudwatch.LogGroup(
+          f"{self.name_prefix}-log-group",
+          name=f"/ecs/{self.name_prefix}",
+          retention_in_days=14,
+          kms_key_id=self.kms_key.arn,
+          tags={
+              "Name": f"{self.name_prefix}-log-group",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # Get current AWS region
+      current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
+      
+      # Create container definition with proper Output handling
+      def create_container_definition(log_group_name):
+          return json.dumps([{
+              "name": f"{self.name_prefix}-container",
+              "image": "nginx:latest",
+              "portMappings": [{
+                  "containerPort": 80,
+                  "protocol": "tcp",
+              }],
+              "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                      "awslogs-group": log_group_name,
+                      "awslogs-region": current_region,
+                      "awslogs-stream-prefix": "ecs",
+                  },
+              },
+              "environment": [
+                  {"name": "ENVIRONMENT", "value": self.environment_suffix}
+              ],
+          }])
+      
+      # Task Definition
+      self.task_definition = aws.ecs.TaskDefinition(
+          f"{self.name_prefix}-task",
+          family=f"{self.name_prefix}-task",
+          network_mode="awsvpc",
+          requires_compatibilities=["FARGATE"],
+          cpu="256",
+          memory="512",
+          execution_role_arn=self.fargate_execution_role.arn,
+          task_role_arn=self.fargate_task_role.arn,
+          container_definitions=self.log_group.name.apply(create_container_definition),
+          tags={
+              "Name": f"{self.name_prefix}-task",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+
     
     def _create_fargate_service(self):
         """Create ECS Fargate service."""
