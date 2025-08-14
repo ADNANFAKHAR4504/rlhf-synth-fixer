@@ -21,16 +21,16 @@ import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 // Secrets Manager
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 
 // Random password generator
 import { Password as RandomPassword } from '@cdktf/provider-random/lib/password';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 
 // ---------------- Network Module ----------------
 export interface NetworkModuleProps {
   awsProvider: AwsProvider;
   tags: { [key: string]: string };
-  vpcCidrBlock?: string; //
+  vpcCidrBlock?: string;
 }
 
 export class NetworkModule extends Construct {
@@ -167,7 +167,7 @@ export class ComputeModule extends Construct {
     super(scope, id);
 
     this.instance = new Instance(this, 'Ec2Instance', {
-      ami: 'ami-04e08e36e17a21b56',
+      ami: 'ami-04e08e36e17a21b56', // Note: This AMI ID is for us-west-2
       instanceType: 't3.medium',
       subnetId: props.subnetId,
       vpcSecurityGroupIds: [props.securityGroupId],
@@ -200,6 +200,9 @@ export class DatabaseModule extends Construct {
   constructor(scope: Construct, id: string, props: DatabaseModuleProps) {
     super(scope, id);
 
+    // Add Random provider to the construct scope
+    new RandomProvider(this, 'random');
+
     // Create Secrets Manager secret
     this.dbSecret = new SecretsmanagerSecret(this, 'DbSecret', {
       namePrefix: `tap-rds-password-secret-${id}`,
@@ -216,12 +219,7 @@ export class DatabaseModule extends Construct {
     // Store password in Secrets Manager
     new SecretsmanagerSecretVersion(this, 'DbSecretVersion', {
       secretId: this.dbSecret.id,
-      secretString: JSON.stringify({ password: dbPasswordRandom.result }),
-    });
-
-    // Optional data source (read back secret)
-    new DataAwsSecretsmanagerSecretVersion(this, 'DbPasswordValue', {
-      secretId: this.dbSecret.id,
+      secretString: dbPasswordRandom.result,
     });
 
     // Create DB subnet group
