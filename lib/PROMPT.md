@@ -1,23 +1,31 @@
-Refined User Prompt:
+# Infrastructure Request
 
-I need a complete Terraform configuration in a single main.tf file to securely provision AWS S3 buckets and IAM roles for a production environment in the us-east-1 region. The configuration must satisfy these conditions and best practices:
+Hi, I need help creating a Terraform configuration for our production AWS environment. We're setting up secure S3 buckets with proper IAM access controls and want to make sure we follow all the security best practices.
 
-    File Structure & Variables
-        All code (resource definitions, variable declarations, default values, logic, and outputs) must reside in main.tf.
-        I already have a separate provider.tf file with provider configuration, and it uses an aws_region variable for the region value. Ensure main.tf declares and uses this variable properly (do not hard-code the region).
-    Stack Creation
-        The main.tf should provision all resources required for a secure, production-ready stack from scratch. Do not reference or import any pre-existing modules or resources; everything should be created new within this configuration.
-    S3 Bucket Security
-        Every S3 bucket must be encrypted at rest using AES-256 (SSE-S3).
-        Implement bucket policies and configuration to prevent public access and ensure secure permissions.
-    IAM Policy Best Practices
-        Define IAM roles and policies following the principle of least privilege, granting only necessary permissions to access S3 resources.
-        Policies must be tightly scoped and should not allow wildcards or unnecessary actions.
-    Outputs
-        Provide appropriate outputs for key resources (e.g., bucket names, IAM role ARNs) for integration and visibility.
-    Best Practices
-        Follow AWS and Terraform security best practices throughout (e.g., block public access, use resource tags, clearly comment logic).
-        The configuration must be suitable for production and pass standard AWS security unit tests.
+## What I need:
 
-Expected Output:
-A single, well-structured main.tf file that meets all the above requirements and is ready to deploy a secure AWS stack for S3 and IAM using Terraform.
+I need a main.tf file that creates S3 buckets and IAM roles for our project. Everything should be secure and production-ready for the us-east-1 region.
+
+## Requirements:
+
+**File organization:**
+- Put everything in main.tf (I already have provider.tf set up)
+- Use aws_region variable instead of hardcoding the region
+- Create all resources from scratch, don't reference existing stuff
+
+**Security for S3:**
+- Need AES-256 encryption on all buckets
+- Block public access completely
+- Proper bucket policies for security
+
+**IAM setup:**
+- Follow least privilege principle
+- Tight permissions, no wildcards
+- Only give access to what's actually needed
+
+**Other stuff:**
+- Include outputs for bucket names and role ARNs
+- Add proper tags and comments
+- Make sure it would pass security reviews
+
+The goal is to have a single main.tf file that we can deploy safely in production for our S3 and IAM infrastructure. Thanks!
