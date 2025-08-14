@@ -1,91 +1,27 @@
-Prompt: Enterprise-Grade Secure Multi-Region Cloud Infrastructure using AWS CloudFormation (JSON)
-Objective:
-Design and implement a secure, scalable, compliant, and multi-region AWS infrastructure using a single CloudFormation template in JSON format. The setup must follow AWS best practices and enterprise security/compliance standards.
+Project Requirements for AWS Infrastructure Setup
 
-🔧 Core Requirements
-Multi-Region and Multi-Environment Support:
+We need to build a secure AWS infrastructure using CloudFormation JSON templates. This is for a web application that needs to be highly available and secure.
 
-Provision separate VPCs for Development, Test, and Production environments.
+The main goal is to create a complete infrastructure that can handle our application workloads while meeting security and compliance requirements. We're using CloudFormation because it gives us better control over resource management and makes deployments repeatable.
 
-Deploy across multiple AWS regions (e.g., us-east-1, us-west-2).
+Key things we need to implement:
 
-IAM Configuration:
+We need VPCs set up properly with public and private subnets across multiple availability zones. The web servers should go in private subnets and only the load balancer should be internet-facing.
 
-Define IAM roles using AWS Managed Policies where applicable.
+For compute resources, we want EC2 instances in an auto scaling group so they can handle traffic spikes. The instances need to be behind an application load balancer for distributing traffic.
 
+Database requirements include RDS with MySQL, but it must be in private subnets only and encrypted. No public access allowed on the database.
 
-MFA must be enabled for all IAM users.
+Security is critical - we need proper security groups that only allow necessary traffic. All resources should be encrypted where possible. CloudTrail needs to be enabled for auditing.
 
-Ensure roles follow the principle of least privilege.
+For monitoring, we want CloudWatch alarms set up for key metrics and any suspicious activity. AWS Config should track configuration changes.
 
-Monitoring and Logging:
+Storage needs include S3 buckets for logs and other data, but they must have public access blocked and be encrypted.
 
-Enable AWS CloudTrail in all regions to record account activity.
+Everything needs proper IAM roles with minimal permissions. No overly broad policies.
 
-Set up CloudWatch Alarms to monitor and alert on:
+All resources must be tagged consistently with Environment, Owner, and CostCenter tags for proper cost tracking and management.
 
-Unauthorized API calls
+The infrastructure should be designed for high availability across multiple AZs and be able to scale up or down based on demand.
 
-Changes to security groups or IAM configurations
-
-Use AWS Config to enforce compliance and track configuration changes.
-
-Security and Access Controls:
-
-All EC2 instances must:
-
-Launch inside a VPC.
-
-Have public IPs disabled.
-
-Use security groups and NACLs to restrict traffic:
-
-Only open necessary ports.
-
-Ensure RDS is not publicly accessible and enforces SSL-only connections.
-
-Implement AWS WAF with CloudFront for web app protection.
-
-Enable AWS Shield to guard against DDoS attacks.
-
-All S3 buckets must:
-
-Enforce encryption at rest and in transit using AWS KMS.
-
-Deny public access via bucket policies.
-
-Ensure RDS and S3 encryption using KMS-managed keys.
-
-Compliance and Tagging:
-
-Use AWS Config Rules to check for:
-
-Public S3 buckets
-
-Unencrypted RDS
-
-Unrestricted security groups
-
-Enforce tagging for all resources:
-
-Environment, Owner, and CostCenter.
-
-High Availability and Scalability:
-
-Configure Auto Scaling Groups (ASG) for the web tier to handle traffic spikes.
-
-Ensure deployment across multiple Availability Zones (AZs) for HA.
-
-📦 Output Expectations
-Submit a CloudFormation JSON template file named:
-secure_infrastructure_setup.json
-
-The template must:
-
-Be fully deployable without manual intervention.
-
-Comply with AWS Well-Architected Framework security and operational excellence pillars.
-
-Avoid exposing any public endpoints unless explicitly required.
-
-Include descriptive resource names and logical IDs.
+Expected deliverable is a CloudFormation JSON template that can deploy this entire infrastructure stack without manual intervention.
