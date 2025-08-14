@@ -3,7 +3,6 @@ import * as path from 'path';
 
 const LIB_DIR = path.resolve(__dirname, '../lib');
 const MAIN_TF = path.join(LIB_DIR, 'main.tf');
-const VARIABLES_TF = path.join(LIB_DIR, 'variables.tf');
 const PROVIDER_TF = path.join(LIB_DIR, 'provider.tf');
 
 const file = (filePath: string) => fs.readFileSync(filePath, 'utf8');
@@ -17,44 +16,44 @@ describe('Terraform Configuration Structure', () => {
     expect(file(MAIN_TF).length).toBeGreaterThan(500);
   });
 
-  it('variables.tf exists and has content', () => {
-    expect(fs.existsSync(VARIABLES_TF)).toBe(true);
-    expect(file(VARIABLES_TF).length).toBeGreaterThan(100);
-  });
-
   it('provider.tf exists and has content', () => {
     expect(fs.existsSync(PROVIDER_TF)).toBe(true);
     expect(file(PROVIDER_TF).length).toBeGreaterThan(50);
   });
 
   it('has project_name variable with default value', () => {
-    const content = file(VARIABLES_TF);
+    const content = file(MAIN_TF);
     expect(has(content, /variable\s+"project_name"[\s\S]*?default\s*=\s*"myproject"/)).toBe(true);
   });
 
   it('has environment variable with default value', () => {
-    const content = file(VARIABLES_TF);
+    const content = file(MAIN_TF);
     expect(has(content, /variable\s+"environment"[\s\S]*?default\s*=\s*"dev"/)).toBe(true);
   });
 
-  it('has vpc_cidrs variable with map type', () => {
-    const content = file(VARIABLES_TF);
-    expect(has(content, /variable\s+"vpc_cidrs"[\s\S]*?type\s*=\s*map\(string\)/)).toBe(true);
+  it('has vpc_cidr_blocks variable with map type', () => {
+    const content = file(MAIN_TF);
+    expect(has(content, /variable\s+"vpc_cidr_blocks"[\s\S]*?type\s*=\s*map\(string\)/)).toBe(true);
   });
 
   it('has public_subnet_cidrs variable with map of list type', () => {
-    const content = file(VARIABLES_TF);
+    const content = file(MAIN_TF);
     expect(has(content, /variable\s+"public_subnet_cidrs"[\s\S]*?type\s*=\s*map\(list\(string\)\)/)).toBe(true);
   });
 
   it('has private_subnet_cidrs variable with map of list type', () => {
-    const content = file(VARIABLES_TF);
+    const content = file(MAIN_TF);
     expect(has(content, /variable\s+"private_subnet_cidrs"[\s\S]*?type\s*=\s*map\(list\(string\)\)/)).toBe(true);
   });
 
-  it('has tags variable with map type', () => {
-    const content = file(VARIABLES_TF);
-    expect(has(content, /variable\s+"tags"[\s\S]*?type\s*=\s*map\(string\)/)).toBe(true);
+  it('has regions variable with list type', () => {
+    const content = file(MAIN_TF);
+    expect(has(content, /variable\s+"regions"[\s\S]*?type\s*=\s*list\(string\)/)).toBe(true);
+  });
+
+  it('has aws_region variable with default value', () => {
+    const content = file(MAIN_TF);
+    expect(has(content, /variable\s+"aws_region"[\s\S]*?default\s*=\s*"us-east-2"/)).toBe(true);
   });
 
   it('has AWS provider aliases for us-east-2 and us-west-2', () => {
