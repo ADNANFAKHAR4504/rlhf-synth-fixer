@@ -23,8 +23,16 @@ import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-pub
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketWebsiteConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-website-configuration';
-import { App, TerraformOutput, TerraformStack } from 'cdktf';
+import {
+  App,
+  TerraformOutput,
+  TerraformStack,
+  AssetType,
+  TerraformAsset,
+} from 'cdktf';
 import { Construct } from 'constructs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export class TapStack extends TerraformStack {
   constructor(
@@ -40,9 +48,34 @@ export class TapStack extends TerraformStack {
   ) {
     super(scope, id);
 
+    // Helper method to create Lambda zip assets from inline code
+    // Creates a temporary directory structure and writes the Python code to a file
+    // Returns a TerraformAsset that automatically handles zip creation and hash generation
+    const createLambdaAsset = (
+      serviceName: string,
+      code: string
+    ): TerraformAsset => {
+      const tempDir = path.join(__dirname, '../temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      const codeFile = path.join(tempDir, `${serviceName}.py`);
+      fs.writeFileSync(codeFile, code);
+
+      return new TerraformAsset(this, `${serviceName}-asset`, {
+        path: tempDir,
+        type: AssetType.ARCHIVE,
+      });
+    };
+
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = props?.awsRegion || 'us-east-1';
     const defaultTags = props?.defaultTags?.tags || {};
+
+    // Add timestamp for uniqueness in CI/CD environments
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const uniqueSuffix = `${environmentSuffix}-${timestamp}`;
 
     // Common tags for cost allocation
     const commonTags = {
@@ -74,7 +107,7 @@ export class TapStack extends TerraformStack {
     });
 
     new KmsAlias(this, 'lambda-kms-alias', {
-      name: 'alias/ecommerce-lambda-env-vars',
+      name: `alias/ecommerce-lambda-env-vars-${uniqueSuffix}`,
       targetKeyId: lambdaKmsKey.keyId,
     });
 
@@ -86,7 +119,7 @@ export class TapStack extends TerraformStack {
     });
 
     new KmsAlias(this, 's3-kms-alias', {
-      name: 'alias/ecommerce-s3-bucket',
+      name: `alias/ecommerce-s3-bucket-${uniqueSuffix}`,
       targetKeyId: s3KmsKey.keyId,
     });
 
@@ -95,7 +128,7 @@ export class TapStack extends TerraformStack {
       this,
       'product-service-logs',
       {
-        name: '/aws/lambda/ecommerce-product-service',
+        name: `/aws/lambda/ecommerce-product-service-${uniqueSuffix}`,
         retentionInDays: 90,
         tags: commonTags,
       }
@@ -105,7 +138,7 @@ export class TapStack extends TerraformStack {
       this,
       'order-service-logs',
       {
-        name: '/aws/lambda/ecommerce-order-service',
+        name: `/aws/lambda/ecommerce-order-service-${uniqueSuffix}`,
         retentionInDays: 90,
         tags: commonTags,
       }
@@ -115,7 +148,7 @@ export class TapStack extends TerraformStack {
       this,
       'user-service-logs',
       {
-        name: '/aws/lambda/ecommerce-user-service',
+        name: `/aws/lambda/ecommerce-user-service-${uniqueSuffix}`,
         retentionInDays: 90,
         tags: commonTags,
       }
@@ -123,7 +156,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for Lambda functions
     const lambdaRole = new IamRole(this, 'lambda-execution-role', {
-      name: 'ecommerce-lambda-execution-role',
+      name: `ecommerce-lambda-execution-role-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -148,7 +181,7 @@ export class TapStack extends TerraformStack {
 
     // Custom IAM policy for DynamoDB and KMS access
     const lambdaCustomPolicy = new IamPolicy(this, 'lambda-custom-policy', {
-      name: 'ecommerce-lambda-custom-policy',
+      name: `ecommerce-lambda-custom-policy-${uniqueSuffix}`,
       description: 'Custom policy for ecommerce Lambda functions',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -180,7 +213,7 @@ export class TapStack extends TerraformStack {
           {
             Effect: 'Allow',
             Action: ['s3:GetObject', 's3:PutObject'],
-            Resource: `arn:aws:s3:::ecommerce-static-assets-${current.accountId}/*`,
+            Resource: `arn:aws:s3:::ecommerce-static-assets-${current.accountId}-${uniqueSuffix}/*`,
           },
         ],
       }),
@@ -194,7 +227,7 @@ export class TapStack extends TerraformStack {
 
     // DynamoDB Tables
     const productsTable = new DynamodbTable(this, 'products-table', {
-      name: 'ecommerce-products',
+      name: `ecommerce-products-${uniqueSuffix}`,
       billingMode: 'PROVISIONED',
       readCapacity: 5,
       writeCapacity: 5,
@@ -222,7 +255,7 @@ export class TapStack extends TerraformStack {
     });
 
     const ordersTable = new DynamodbTable(this, 'orders-table', {
-      name: 'ecommerce-orders',
+      name: `ecommerce-orders-${uniqueSuffix}`,
       billingMode: 'PROVISIONED',
       readCapacity: 5,
       writeCapacity: 5,
@@ -251,7 +284,7 @@ export class TapStack extends TerraformStack {
     });
 
     const usersTable = new DynamodbTable(this, 'users-table', {
-      name: 'ecommerce-users',
+      name: `ecommerce-users-${uniqueSuffix}`,
       billingMode: 'PROVISIONED',
       readCapacity: 5,
       writeCapacity: 5,
@@ -283,7 +316,7 @@ export class TapStack extends TerraformStack {
       });
 
       new AppautoscalingPolicy(this, `${name}-read-policy`, {
-        name: `DynamoDBReadCapacityUtilization:${readTarget.resourceId}`,
+        name: `DynamoDBReadCapacityUtilization:${readTarget.resourceId}-${uniqueSuffix}`,
         policyType: 'TargetTrackingScaling',
         resourceId: readTarget.resourceId,
         scalableDimension: readTarget.scalableDimension,
@@ -310,7 +343,7 @@ export class TapStack extends TerraformStack {
       );
 
       new AppautoscalingPolicy(this, `${name}-write-policy`, {
-        name: `DynamoDBWriteCapacityUtilization:${writeTarget.resourceId}`,
+        name: `DynamoDBWriteCapacityUtilization:${writeTarget.resourceId}-${uniqueSuffix}`,
         policyType: 'TargetTrackingScaling',
         resourceId: writeTarget.resourceId,
         scalableDimension: writeTarget.scalableDimension,
@@ -325,13 +358,39 @@ export class TapStack extends TerraformStack {
     });
 
     // Lambda Functions
+    const productServiceCode = `
+import json
+import boto3
+import os
+
+def handler(event, context):
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({
+            "message": "Product Service",
+            "service": "products",
+            "table": os.environ.get("PRODUCTS_TABLE", ""),
+            "path": event.get("path", ""),
+            "method": event.get("httpMethod", "")
+        })
+    }
+`;
+
+    const productServiceAsset = createLambdaAsset(
+      'product-service',
+      productServiceCode
+    );
     const productServiceFunction = new LambdaFunction(this, 'product-service', {
-      functionName: 'ecommerce-product-service',
+      functionName: `ecommerce-product-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'python3.8',
-      filename: 'product-service.zip',
-      sourceCodeHash: 'dummy-hash-product',
+      handler: 'product-service.handler',
+      runtime: 'python3.9',
+      filename: productServiceAsset.path,
+      sourceCodeHash: productServiceAsset.assetHash,
       timeout: 30,
       memorySize: 256,
       environment: {
@@ -345,13 +404,40 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
+    const orderServiceCode = `
+import json
+import boto3
+import os
+
+def handler(event, context):
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({
+            "message": "Order Service",
+            "service": "orders",
+            "orders_table": os.environ.get("ORDERS_TABLE", ""),
+            "products_table": os.environ.get("PRODUCTS_TABLE", ""),
+            "path": event.get("path", ""),
+            "method": event.get("httpMethod", "")
+        })
+    }
+`;
+
+    const orderServiceAsset = createLambdaAsset(
+      'order-service',
+      orderServiceCode
+    );
     const orderServiceFunction = new LambdaFunction(this, 'order-service', {
-      functionName: 'ecommerce-order-service',
+      functionName: `ecommerce-order-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'python3.8',
-      filename: 'order-service.zip',
-      sourceCodeHash: 'dummy-hash-order',
+      handler: 'order-service.handler',
+      runtime: 'python3.9',
+      filename: orderServiceAsset.path,
+      sourceCodeHash: orderServiceAsset.assetHash,
       timeout: 30,
       memorySize: 256,
       environment: {
@@ -366,13 +452,36 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
+    const userServiceCode = `
+import json
+import boto3
+import os
+
+def handler(event, context):
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({
+            "message": "User Service",
+            "service": "users",
+            "table": os.environ.get("USERS_TABLE", ""),
+            "path": event.get("path", ""),
+            "method": event.get("httpMethod", "")
+        })
+    }
+`;
+
+    const userServiceAsset = createLambdaAsset('user-service', userServiceCode);
     const userServiceFunction = new LambdaFunction(this, 'user-service', {
-      functionName: 'ecommerce-user-service',
+      functionName: `ecommerce-user-service-${uniqueSuffix}`,
       role: lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'python3.8',
-      filename: 'user-service.zip',
-      sourceCodeHash: 'dummy-hash-user',
+      handler: 'user-service.handler',
+      runtime: 'python3.9',
+      filename: userServiceAsset.path,
+      sourceCodeHash: userServiceAsset.assetHash,
       timeout: 30,
       memorySize: 256,
       environment: {
@@ -388,7 +497,7 @@ export class TapStack extends TerraformStack {
 
     // S3 Bucket for static hosting
     const staticBucket = new S3Bucket(this, 'static-assets-bucket', {
-      bucket: `ecommerce-static-assets-${current.accountId}`,
+      bucket: `ecommerce-static-assets-${current.accountId}-${uniqueSuffix}`,
       tags: commonTags,
     });
 
@@ -440,7 +549,7 @@ export class TapStack extends TerraformStack {
 
     // API Gateway
     const api = new ApiGatewayRestApi(this, 'ecommerce-api', {
-      name: 'ecommerce-api',
+      name: `ecommerce-api-${uniqueSuffix}`,
       description: 'E-commerce serverless API',
       endpointConfiguration: {
         types: ['REGIONAL'],
@@ -506,9 +615,26 @@ export class TapStack extends TerraformStack {
       });
     });
 
+    // Collect all integration and method resources for dependencies
+    // API Gateway deployment requires all methods and integrations to be created first
+    // This ensures proper dependency ordering during Terraform deployment
+    const integrations: ApiGatewayIntegration[] = [];
+    const methods: ApiGatewayMethod[] = [];
+
+    apiResources.forEach(({ path }) => {
+      integrations.push(
+        this.node.findChild(`${path}-integration`) as ApiGatewayIntegration
+      );
+      methods.push(this.node.findChild(`${path}-method`) as ApiGatewayMethod);
+    });
+
     // API Gateway Deployment
     new ApiGatewayDeployment(this, 'api-deployment', {
       restApiId: api.id,
+      dependsOn: [...integrations, ...methods],
+      triggers: {
+        redeployment: Date.now().toString(),
+      },
     });
 
     // Outputs
