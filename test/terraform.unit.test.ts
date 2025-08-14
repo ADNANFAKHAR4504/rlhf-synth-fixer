@@ -166,9 +166,10 @@ describe("Terraform HA/DR Infrastructure Stack", () => {
       expect(stackContent).toMatch(/resource\s+"aws_route53_record"\s+"corp_secondary_record"\s*{/);
     });
 
-    test("health checks use proper insufficient_data_health_status (not Failure)", () => {
-      expect(stackContent).toMatch(/insufficient_data_health_status\s*=\s*"Unhealthy"/);
+    test("health checks do not use insufficient_data_health_status (not valid for basic HTTP checks)", () => {
+      expect(stackContent).not.toMatch(/insufficient_data_health_status\s*=\s*"Unhealthy"/);
       expect(stackContent).not.toMatch(/insufficient_data_health_status\s*=\s*"Failure"/);
+      expect(stackContent).not.toMatch(/insufficient_data_health_status/);
     });
   });
 

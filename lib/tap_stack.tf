@@ -259,13 +259,12 @@ resource "aws_route53_zone" "corp_zone" {
 
 # Health check for primary instance
 resource "aws_route53_health_check" "corp_primary_health_check" {
-  fqdn                            = aws_instance.corp_primary_instance.public_dns
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/health.html"
-  failure_threshold               = 3
-  request_interval                = 30
-  insufficient_data_health_status = "Unhealthy"
+  fqdn              = aws_instance.corp_primary_instance.public_dns
+  port              = 80
+  type              = "HTTP"
+  resource_path     = "/health.html"
+  failure_threshold = 3
+  request_interval  = 30
 
   tags = merge(var.common_tags, {
     Name = "corp-primary-health-check"
@@ -274,13 +273,12 @@ resource "aws_route53_health_check" "corp_primary_health_check" {
 
 # Health check for secondary instance
 resource "aws_route53_health_check" "corp_secondary_health_check" {
-  fqdn                            = aws_instance.corp_secondary_instance.public_dns
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/health.html"
-  failure_threshold               = 3
-  request_interval                = 30
-  insufficient_data_health_status = "Unhealthy"
+  fqdn              = aws_instance.corp_secondary_instance.public_dns
+  port              = 80
+  type              = "HTTP"
+  resource_path     = "/health.html"
+  failure_threshold = 3
+  request_interval  = 30
 
   tags = merge(var.common_tags, {
     Name = "corp-secondary-health-check"
