@@ -1,8 +1,4 @@
 import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
-import {
   CodePipelineClient,
   GetPipelineCommand,
 } from '@aws-sdk/client-codepipeline';
@@ -16,56 +12,22 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
+import fs from 'fs';
 
 const region = process.env.AWS_REGION || 'ap-southeast-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
 
-const cloudformation = new CloudFormationClient({ region });
 const sns = new SNSClient({ region });
 const s3 = new S3Client({ region });
 const lambda = new LambdaClient({ region });
 const codepipeline = new CodePipelineClient({ region });
 
-// Function to get outputs from CloudFormation stack
-async function getStackOutputs(): Promise<Record<string, string>> {
-  try {
-    const response = await cloudformation.send(
-      new DescribeStacksCommand({
-        StackName: stackName,
-      })
-    );
-    const stack = response.Stacks?.[0];
-    if (!stack) {
-      throw new Error(`Stack ${stackName} not found`);
-    }
-    if (
-      stack.StackStatus !== 'CREATE_COMPLETE' &&
-      stack.StackStatus !== 'UPDATE_COMPLETE'
-    ) {
-      throw new Error(
-        `Stack ${stackName} is not in a complete state: ${stack.StackStatus}`
-      );
-    }
-    const outputs: Record<string, string> = {};
-    stack.Outputs?.forEach(output => {
-      if (output.OutputKey && output.OutputValue) {
-        outputs[output.OutputKey] = output.OutputValue;
-      }
-    });
-    return outputs;
-  } catch (error) {
-    throw new Error(`Failed to get stack outputs: ${error}`);
-  }
-}
+// Load outputs from flat-outputs.json
+const outputs: Record<string, string> = JSON.parse(
+  fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
+);
 
 describe('TapStack CI/CD CloudFormation Infrastructure Integration Tests', () => {
-  let outputs: Record<string, string>;
-
-  beforeAll(async () => {
-    outputs = await getStackOutputs();
-  }, 60000);
-
   describe('Stack Outputs', () => {
     test('should have all required outputs', () => {
       const required = [
