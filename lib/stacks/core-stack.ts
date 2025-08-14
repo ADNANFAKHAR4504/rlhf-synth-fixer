@@ -12,7 +12,7 @@ export class CoreStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly dataKey: kms.Key;
   public readonly appSecurityGroup: ec2.SecurityGroup;
-  public readonly appInstanceRole: iam.Role;
+  public readonly appInstanceRole?: iam.Role;
 
   constructor(scope: Construct, id: string, props: CoreStackProps = {}) {
     super(scope, id, props);
@@ -32,9 +32,6 @@ export class CoreStack extends cdk.Stack {
       description: 'Shared app security group',
     });
 
-    this.appInstanceRole = new iam.Role(this, 'AppInstanceRole', {
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'Shared EC2 instance role',
-    });
+    // appInstanceRole will be set from DatabaseStack after creation
   }
 }

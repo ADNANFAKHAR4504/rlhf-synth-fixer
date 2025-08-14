@@ -11,14 +11,21 @@ export interface DatabaseStackProps extends cdk.StackProps {
   vpc: ec2.IVpc;
   dataKey: kms.IKey;
   appSecurityGroup: ec2.ISecurityGroup;
-  appInstanceRole: iam.IRole;
+  appInstanceRole?: iam.IRole;
 }
 
 export class DatabaseStack extends cdk.Stack {
   public readonly dbInstance: rds.DatabaseInstance;
+  public readonly appInstanceRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id, props);
+
+    // Create IAM role for app instances here
+    this.appInstanceRole = new iam.Role(this, 'AppInstanceRole', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      description: 'App EC2 instance role',
+    });
 
     // Use shared resources from CoreStack
     const dbSg = new ec2.SecurityGroup(this, 'DbSg', {
@@ -60,9 +67,9 @@ export class DatabaseStack extends cdk.Stack {
 
     // Grant read access to secret and connect permission to appInstanceRole
     const secret = this.dbInstance.secret as secretsmanager.ISecret;
-    if (secret && props.appInstanceRole) {
-      secret.grantRead(props.appInstanceRole);
-      this.dbInstance.grantConnect(props.appInstanceRole, 'postgres');
+    if (secret && this.appInstanceRole) {
+      secret.grantRead(this.appInstanceRole);
+      this.dbInstance.grantConnect(this.appInstanceRole, 'postgres');
     }
 
     new cdk.CfnOutput(this, 'DbEndpoint', {

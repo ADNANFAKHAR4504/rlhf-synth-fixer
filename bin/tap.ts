@@ -13,13 +13,21 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION,
 };
 
-// CoreStack: VPC, KMS key, app SG, instance role
+// CoreStack: VPC, KMS key, app SG (no instance role)
 const coreStack = new CoreStack(app, 'CoreStack', { env });
 
 // Storage (logs + app data bucket)
 const storageStack = new StorageStack(app, 'StorageStack', {
   env,
   dataKey: coreStack.dataKey,
+});
+
+// Database (RDS Multi-AZ) – needs VPC, KMS, App SG
+const databaseStack = new DatabaseStack(app, 'DatabaseStack', {
+  env,
+  vpc: coreStack.vpc,
+  dataKey: coreStack.dataKey,
+  appSecurityGroup: coreStack.appSecurityGroup,
 });
 
 // Compute (ALB + ASG + IAM role) – needs VPC, KMS key, app bucket, SG, role
@@ -29,19 +37,9 @@ const computeStack = new ComputeStack(app, 'ComputeStack', {
   dataKey: coreStack.dataKey,
   appBucket: storageStack.appBucket,
   appSecurityGroup: coreStack.appSecurityGroup,
-  appInstanceRole: coreStack.appInstanceRole,
+  appInstanceRole: databaseStack.appInstanceRole,
 });
-computeStack.addDependency(coreStack);
-computeStack.addDependency(storageStack);
-
-// Database (RDS Multi-AZ) – needs VPC, KMS, App SG + Instance Role
-const databaseStack = new DatabaseStack(app, 'DatabaseStack', {
-  env,
-  vpc: coreStack.vpc,
-  dataKey: coreStack.dataKey,
-  appSecurityGroup: coreStack.appSecurityGroup,
-  appInstanceRole: coreStack.appInstanceRole,
-});
+// No addDependency needed; resource references are passed via props
 
 // Monitoring (CloudWatch alarms) – needs ALB/ASG/DB references
 const monitoringStack = new MonitoringStack(app, 'MonitoringStack', {
