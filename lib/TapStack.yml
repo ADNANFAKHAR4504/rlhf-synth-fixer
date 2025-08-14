@@ -30,6 +30,11 @@ Parameters:
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
     Description: CIDR block for VPC
 
+  FlowLogsRoleArn:
+    Type: String
+    Default: ''
+    Description: Optional IAM role ARN for VPC Flow Logs to deliver to CloudWatch Logs. Leave empty to use the default service-linked role.
+
   CreateGuardDutyDetector:
     Type: String
     AllowedValues: ['true', 'false']
@@ -55,6 +60,7 @@ Mappings:
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
   CreateDetector: !Equals [!Ref CreateGuardDutyDetector, 'true']
+  HasFlowLogsRoleArn: !Not [!Equals [!Ref FlowLogsRoleArn, '']]
 
 Resources:
   # =========================
@@ -794,6 +800,8 @@ Resources:
       TrafficType: ALL
       LogDestinationType: cloud-watch-logs
       LogGroupName: !Ref SecureEnvVPCFlowLog
+      DeliverLogsPermissionArn:
+        !If [HasFlowLogsRoleArn, !Ref FlowLogsRoleArn, !Ref 'AWS::NoValue']
 
 Outputs:
   VPCId:
