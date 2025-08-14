@@ -336,8 +336,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/database/connection-string'
-      Type: SecureString
-      KeyId: !Ref SSMKMSKey
+      Type: String
       Value: !Sub 'dynamodb://table=${ApplicationName}-${Environment}${EnvironmentSuffix}-data;region=${AWS::Region}'
       Description: !Sub 'Database connection string for ${Environment} environment'
       Tags:
@@ -348,8 +347,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/api/config'
-      Type: SecureString
-      KeyId: !Ref SSMKMSKey
+      Type: String
       Value: !Sub
         - |
           {
@@ -368,8 +366,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/s3/bucket-name'
-      Type: SecureString
-      KeyId: !Ref SSMKMSKey
+      Type: String
       Value: !Ref EnvironmentS3Bucket
       Description: !Sub 'S3 bucket name for ${Environment} environment'
       Tags:
@@ -380,8 +377,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/s3/shared-config-bucket'
-      Type: SecureString
-      KeyId: !Ref SSMKMSKey
+      Type: String
       Value: !Ref SharedConfigBucket
       Description: 'Shared configuration S3 bucket name'
       Tags:
@@ -392,8 +388,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '/${ApplicationName}/${Environment}${EnvironmentSuffix}/secrets/app-key'
-      Type: SecureString
-      KeyId: !Ref SSMKMSKey
+      Type: String
       Value: !Sub 'secret-key-for-${Environment}${EnvironmentSuffix}-${AWS::AccountId}'
       Description: !Sub 'Application secrets for ${Environment} environment'
       Tags:
