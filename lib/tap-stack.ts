@@ -478,15 +478,6 @@ def lambda_handler(event, context):
       })
     );
 
-    // Invoke the function after stack deployment
-    new cdk.CustomResource(this, 'PasswordPolicyCustomResource', {
-      serviceToken: passwordPolicyFunction.functionArn,
-      properties: {
-        // This will trigger the Lambda function during deployment
-        timestamp: new Date().toISOString(),
-      },
-    });
-
     // 11. SNS Topic for security notifications
     const securityTopic = new sns.Topic(this, 'SecurityNotificationsTopic', {
       topicName: `security-alerts-${environmentSuffix}`,
