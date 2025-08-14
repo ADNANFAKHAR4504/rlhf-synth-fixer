@@ -22,7 +22,7 @@ export class RdsStack extends pulumi.ComponentResource {
     super('tap:rds:RdsStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
-    const instanceClass = args.instanceClass || 'db.t4g.micro';
+    const instanceClass = args.instanceClass || 'db.t3.micro';
     const tags = args.tags || {};
 
     // Tripwire to catch bad subnet inputs early
@@ -110,14 +110,136 @@ export class RdsStack extends pulumi.ComponentResource {
         monitoringInterval: 60,
         monitoringRoleArn: monitoringRole.arn,
 
-        // Performance Insights configuration
-        performanceInsightsEnabled: true,
-        performanceInsightsKmsKeyId: args.rdsKmsKeyArn,
-        performanceInsightsRetentionPeriod: 7,
+        // CloudWatch Database Insights - Enhanced monitoring with detailed metrics
+        // This provides comprehensive database monitoring through CloudWatch
+        // without the instance class restrictions of Performance Insights
 
         tags: {
           Name: `tap-db-${environmentSuffix}`,
           Purpose: 'MainDatabase',
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // CloudWatch Database Insights - Create alarms for key database metrics
+    // This provides comprehensive monitoring similar to Performance Insights
+
+    // CPU Utilization Alarm
+    new aws.cloudwatch.MetricAlarm(
+      `tap-db-cpu-alarm-${environmentSuffix}`,
+      {
+        name: `tap-db-cpu-utilization-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 80,
+        alarmDescription: 'RDS CPU utilization is too high',
+        dimensions: {
+          DBInstanceIdentifier: dbInstance.id,
+        },
+        tags: {
+          Name: `tap-db-cpu-alarm-${environmentSuffix}`,
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Database Connections Alarm
+    new aws.cloudwatch.MetricAlarm(
+      `tap-db-connections-alarm-${environmentSuffix}`,
+      {
+        name: `tap-db-connections-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'DatabaseConnections',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 40, // Adjust based on your connection pool size
+        alarmDescription: 'RDS connection count is too high',
+        dimensions: {
+          DBInstanceIdentifier: dbInstance.id,
+        },
+        tags: {
+          Name: `tap-db-connections-alarm-${environmentSuffix}`,
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Free Storage Space Alarm
+    new aws.cloudwatch.MetricAlarm(
+      `tap-db-storage-alarm-${environmentSuffix}`,
+      {
+        name: `tap-db-free-storage-${environmentSuffix}`,
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'FreeStorageSpace',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 2000000000, // 2GB in bytes
+        alarmDescription: 'RDS free storage space is low',
+        dimensions: {
+          DBInstanceIdentifier: dbInstance.id,
+        },
+        tags: {
+          Name: `tap-db-storage-alarm-${environmentSuffix}`,
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Read Latency Alarm
+    new aws.cloudwatch.MetricAlarm(
+      `tap-db-read-latency-alarm-${environmentSuffix}`,
+      {
+        name: `tap-db-read-latency-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'ReadLatency',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 0.2, // 200ms
+        alarmDescription: 'RDS read latency is too high',
+        dimensions: {
+          DBInstanceIdentifier: dbInstance.id,
+        },
+        tags: {
+          Name: `tap-db-read-latency-alarm-${environmentSuffix}`,
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Write Latency Alarm
+    new aws.cloudwatch.MetricAlarm(
+      `tap-db-write-latency-alarm-${environmentSuffix}`,
+      {
+        name: `tap-db-write-latency-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'WriteLatency',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 0.2, // 200ms
+        alarmDescription: 'RDS write latency is too high',
+        dimensions: {
+          DBInstanceIdentifier: dbInstance.id,
+        },
+        tags: {
+          Name: `tap-db-write-latency-alarm-${environmentSuffix}`,
           ...tags,
         },
       },

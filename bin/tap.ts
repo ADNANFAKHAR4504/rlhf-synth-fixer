@@ -29,7 +29,7 @@ const environmentSuffix =
 // Get configuration values with defaults
 const vpcCidr = config.get('vpcCidr') || '10.0.0.0/16';
 const instanceType = config.get('instanceType') || 't3.micro';
-const dbInstanceClass = config.get('dbInstanceClass') || 'db.t4g.micro';
+const dbInstanceClass = config.get('dbInstanceClass') || 'db.t3.micro';
 const enableKeyPairs = config.getBoolean('enableKeyPairs') || false;
 
 // Get metadata from environment variables for tagging purposes.
