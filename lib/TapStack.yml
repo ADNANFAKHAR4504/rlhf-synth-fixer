@@ -365,7 +365,6 @@ Resources:
   ProjectXInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ProjectX-InstanceRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -386,7 +385,6 @@ Resources:
   ProjectXInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'ProjectX-InstanceProfile-${EnvironmentSuffix}'
       Roles:
         - !Ref ProjectXInstanceRole
 

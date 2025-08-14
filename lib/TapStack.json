@@ -671,9 +671,6 @@
         "ProjectXInstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "ProjectX-InstanceRole-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -707,9 +704,6 @@
         "ProjectXInstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "ProjectX-InstanceProfile-${EnvironmentSuffix}"
-                },
                 "Roles": [
                     {
                         "Ref": "ProjectXInstanceRole"
