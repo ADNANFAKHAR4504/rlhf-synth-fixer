@@ -46,6 +46,12 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('VpcId: !Ref ExistingVPCId');
     });
 
+    test('should use existing Internet Gateway', () => {
+      expect(templateContent).toContain('ExistingInternetGatewayId');
+      expect(templateContent).toContain('igw-0fcffd108e58e6be9');
+      expect(templateContent).toContain('GatewayId: !Ref ExistingInternetGatewayId');
+    });
+
     test('should create public subnets', () => {
       expect(templateContent).toContain('PublicSubnet1:');
       expect(templateContent).toContain('PublicSubnet2:');

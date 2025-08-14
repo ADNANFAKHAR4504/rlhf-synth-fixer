@@ -138,6 +138,13 @@ Parameters:
     AllowedPattern: "^vpc-[a-f0-9]+$"
     ConstraintDescription: "Must be a valid VPC ID"
 
+  ExistingInternetGatewayId:
+    Type: String
+    Default: "igw-0fcffd108e58e6be9"
+    Description: "ID of existing Internet Gateway to use"
+    AllowedPattern: "^igw-[a-f0-9]+$"
+    ConstraintDescription: "Must be a valid Internet Gateway ID"
+
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
   CreateCloudTrail: !Equals [!Ref ExistingCloudTrailName, ""]
@@ -184,24 +191,7 @@ Resources:
 
   # VPC and Networking
   # Using existing VPC: !Ref ExistingVPCId
-
-  # Internet Gateway for the existing VPC
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-IGW"
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Project
-          Value: !Ref ProjectName
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref ExistingVPCId
-      InternetGatewayId: !Ref InternetGateway
+  # Using existing Internet Gateway: !Ref ExistingInternetGatewayId
 
   # Public Subnets
   PublicSubnet1:
@@ -276,14 +266,13 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Public route to Internet Gateway
+  # Public route to existing Internet Gateway
   DefaultPublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+      GatewayId: !Ref ExistingInternetGatewayId
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -421,7 +410,7 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-          # S3 Bucket for application data
+  # S3 Bucket for application data
   ApplicationBucket:
     Type: AWS::S3::Bucket
     Properties:
