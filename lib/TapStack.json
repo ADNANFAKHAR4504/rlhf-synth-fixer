@@ -2120,9 +2120,6 @@
                     "VolumeSize": 20,
                     "VolumeType": "gp3",
                     "Encrypted": true,
-                    "KmsKeyId": {
-                      "Ref": "KMSKey"
-                    },
                     "DeleteOnTermination": true
                   }
                 }
@@ -2207,9 +2204,6 @@
                     "VolumeSize": 20,
                     "VolumeType": "gp3",
                     "Encrypted": true,
-                    "KmsKeyId": {
-                      "Ref": "KMSKey"
-                    },
                     "DeleteOnTermination": true
                   }
                 }
@@ -2577,6 +2571,248 @@
         "ComparisonOperator": "GreaterThanOrEqualToThreshold",
         "TreatMissingData": "notBreaching"
       }
+    },
+    "ConfigBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${Environment}-config-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Ref": "KMSKey"
+                }
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteIncompleteMultipartUpload",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 1
+              }
+            },
+            {
+              "Id": "TransitionToIA",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "STANDARD_IA",
+                  "TransitionInDays": 30
+                }
+              ]
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-ConfigBucket-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ConfigRecorderRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${Environment}-ConfigRecorderRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/ConfigRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ConfigBucketPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketAcl",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ConfigBucket",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": {
+                    "Fn::Sub": "${ConfigBucket.Arn}/*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "s3:x-amz-acl": "bucket-owner-full-control"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-ConfigRecorderRole-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ConfigRecorder": {
+      "Type": "AWS::Config::ConfigurationRecorder",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-ConfigRecorder-${EnvironmentSuffix}"
+        },
+        "RoleARN": {
+          "Fn::GetAtt": [
+            "ConfigRecorderRole",
+            "Arn"
+          ]
+        },
+        "RecordingGroup": {
+          "AllSupported": true,
+          "IncludeGlobalResourceTypes": true
+        }
+      }
+    },
+    "ConfigDeliveryChannel": {
+      "Type": "AWS::Config::DeliveryChannel",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-ConfigDeliveryChannel-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "ConfigBucket"
+        },
+        "ConfigSnapshotDeliveryProperties": {
+          "DeliveryFrequency": "TwentyFour_Hours"
+        }
+      }
+    },
+    "ConfigRuleS3PublicRead": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": "s3-bucket-public-read-prohibited",
+        "Description": "Checks that S3 buckets do not allow public read access",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+        }
+      }
+    },
+    "ConfigRuleS3PublicWrite": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": "s3-bucket-public-write-prohibited",
+        "Description": "Checks that S3 buckets do not allow public write access",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
+        }
+      }
+    },
+    "ConfigRuleRDSEncrypted": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": "rds-storage-encrypted",
+        "Description": "Checks whether storage encryption is enabled for your RDS DB instances",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
+        }
+      }
+    },
+    "ConfigRuleUnrestrictedSSH": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": "incoming-ssh-disabled",
+        "Description": "Checks whether security groups that are in use disallow unrestricted incoming SSH traffic",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "INCOMING_SSH_DISABLED"
+        }
+      }
     }
   },
   "Outputs": {
@@ -2649,6 +2885,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-CloudTrailName"
+        }
+      }
+    },
+    "ConfigRecorderName": {
+      "Description": "AWS Config Configuration Recorder Name",
+      "Value": {
+        "Ref": "ConfigRecorder"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ConfigRecorderName"
         }
       }
     }

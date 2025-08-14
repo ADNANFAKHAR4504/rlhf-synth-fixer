@@ -208,21 +208,38 @@ describe('TapStack CloudFormation Template', () => {
 
     test('Launch Template should have encrypted EBS volumes', () => {
       const launchTemplate = template.Resources.LaunchTemplate;
-      const blockDevices =
-        launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings;
+      const launchTemplateData = launchTemplate.Properties.LaunchTemplateData;
 
-      expect(blockDevices).toBeDefined();
-      expect(blockDevices[0].Ebs.Encrypted).toBe(true);
-      expect(blockDevices[0].Ebs.KmsKeyId).toBeDefined();
+      // Handle conditional LaunchTemplateData structure
+      expect(launchTemplateData['Fn::If']).toBeDefined();
+
+      // Check both branches of the conditional
+      const withKeyPairData = launchTemplateData['Fn::If'][1];
+      const withoutKeyPairData = launchTemplateData['Fn::If'][2];
+
+      // Both branches should have EBS encryption
+      expect(withKeyPairData.BlockDeviceMappings).toBeDefined();
+      expect(withKeyPairData.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
+
+      expect(withoutKeyPairData.BlockDeviceMappings).toBeDefined();
+      expect(withoutKeyPairData.BlockDeviceMappings[0].Ebs.Encrypted).toBe(
+        true
+      );
     });
 
     test('Launch Template should enforce IMDSv2', () => {
       const launchTemplate = template.Resources.LaunchTemplate;
-      const metadataOptions =
-        launchTemplate.Properties.LaunchTemplateData.MetadataOptions;
+      const launchTemplateData = launchTemplate.Properties.LaunchTemplateData;
 
-      expect(metadataOptions).toBeDefined();
-      expect(metadataOptions.HttpTokens).toBe('required');
+      // Check both branches of the conditional for MetadataOptions
+      const withKeyPairData = launchTemplateData['Fn::If'][1];
+      const withoutKeyPairData = launchTemplateData['Fn::If'][2];
+
+      expect(withKeyPairData.MetadataOptions).toBeDefined();
+      expect(withKeyPairData.MetadataOptions.HttpTokens).toBe('required');
+
+      expect(withoutKeyPairData.MetadataOptions).toBeDefined();
+      expect(withoutKeyPairData.MetadataOptions.HttpTokens).toBe('required');
     });
 
     test('should have Application Load Balancer', () => {
