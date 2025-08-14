@@ -33,7 +33,6 @@ vpc_cidrs = {
   "us-west-2": "10.1.0.0/16"
 }
 
-
 # def create_cloudtrail_s3_policy(bucket_name: pulumi.Output, region: str) -> pulumi.Output:
 #   """Create S3 bucket policy for CloudTrail - using official AWS format"""
 #
