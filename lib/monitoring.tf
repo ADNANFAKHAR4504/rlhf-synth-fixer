@@ -1,0 +1,197 @@
+# CloudWatch Log Groups
+resource "aws_cloudwatch_log_group" "web_app" {
+  name              = "/aws/ec2/${local.project_prefix}"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_group" "aurora" {
+  name              = "/aws/rds/cluster/${aws_rds_cluster.main.cluster_identifier}/error"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = local.common_tags
+}
+
+# CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "high_cpu" {
+  alarm_name          = "${local.project_prefix}-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.web.name
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "database_cpu" {
+  alarm_name          = "${local.project_prefix}-db-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors RDS cpu utilization"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.main.cluster_identifier
+  }
+
+  tags = local.common_tags
+}
+
+# SNS Topic for Alerts
+resource "aws_sns_topic" "alerts" {
+  name              = "${local.project_prefix}-alerts"
+  kms_master_key_id = aws_kms_key.main.arn
+
+  tags = local.common_tags
+}
+
+# GuardDuty
+resource "aws_guardduty_detector" "main" {
+  enable                       = true
+  finding_publishing_frequency = "FIFTEEN_MINUTES"
+
+  tags = local.common_tags
+}
+
+# Config Configuration Recorder
+resource "aws_config_configuration_recorder_status" "main" {
+  name       = aws_config_configuration_recorder.main.name
+  is_enabled = true
+  depends_on = [aws_config_delivery_channel.main]
+}
+
+resource "aws_config_delivery_channel" "main" {
+  name           = "${local.project_prefix}-config-delivery-channel"
+  s3_bucket_name = aws_s3_bucket.config.bucket
+  s3_key_prefix  = "config"
+
+  snapshot_delivery_properties {
+    delivery_frequency = "TwentyFour_Hours"
+  }
+}
+
+resource "aws_config_configuration_recorder" "main" {
+  name     = "${local.project_prefix}-config-recorder"
+  role_arn = aws_iam_role.config.arn
+
+  recording_group {
+    all_supported                 = true
+    include_global_resource_types = true
+  }
+}
+
+# S3 Bucket for Config
+resource "aws_s3_bucket" "config" {
+  bucket        = "${local.project_prefix}-config-${random_id.bucket_suffix.hex}"
+  force_destroy = true
+
+  tags = local.common_tags
+}
+
+resource "aws_s3_bucket_policy" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.config.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketExistenceCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.config.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+# IAM Role for Config
+resource "aws_iam_role" "config" {
+  name = "${local.project_prefix}-config-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "config" {
+  role       = aws_iam_role.config.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+}
+
+# Shield Advanced (optional - requires subscription)
+# resource "aws_shield_protection" "cloudfront" {
+#   name         = "${var.project_name}-cloudfront-protection"
+#   resource_arn = aws_cloudfront_distribution.main.arn
+# }
+
+# Inspector Assessment Target (latest feature)
+# Note: Commented out as it times out during creation
+# resource "aws_inspector2_enabler" "example" {
+#   account_ids    = [data.aws_caller_identity.current.account_id]
+#   resource_types = ["ECR", "EC2"]
+# }
