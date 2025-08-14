@@ -777,9 +777,6 @@
                 "BucketName": {
                     "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-appdata-v1"
                 },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {

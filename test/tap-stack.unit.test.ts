@@ -108,7 +108,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     test('should create S3 bucket with encryption', () => {
       expect(templateContent).toContain('ApplicationBucket:');
       expect(templateContent).toContain('Type: AWS::S3::Bucket');
-      expect(templateContent).toContain('VersioningConfiguration:');
       expect(templateContent).toContain('BucketEncryption:');
       expect(templateContent).toContain('PublicAccessBlockConfiguration:');
     });

@@ -409,8 +409,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${ProjectName}-${EnvironmentSuffix}-${AWS::AccountId}-appdata-v1"
-      VersioningConfiguration:
-        Status: Enabled
+
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
