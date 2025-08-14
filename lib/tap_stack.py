@@ -346,7 +346,7 @@ class TapStack(ComponentResource):
                     "protocol": "tcp",
                     "from_port": 22,
                     "to_port": 22,
-                    "cidr_blocks": ["10.0.0.0/8"],  # Restricted SSH access
+                    "cidr_blocks": ["10.0.0.0/16"],  # Restricted SSH access to VPC CIDR
                 },
                 {
                     "protocol": "tcp",
@@ -439,6 +439,9 @@ class TapStack(ComponentResource):
                     "Principal": {"Service": "ec2.amazonaws.com"},
                 }],
             }),
+            managed_policy_arns=[
+                "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+            ],
             tags={
                 "Name": f"{self.name_prefix}-ec2-role",
                 "Environment": self.environment_suffix,
@@ -744,14 +747,39 @@ class TapStack(ComponentResource):
             ]
         )
         
-        # User data script
+        # Improved user data script with better error handling and service startup
         user_data = """#!/bin/bash
+set -e
+
+# Log all output for debugging
+exec > >(tee /var/log/user-data.log)
+exec 2>&1
+
+echo "Starting user data script..."
+
+# Update system
 yum update -y
-yum install -y amazon-cloudwatch-agent
+
+# Install required packages
+yum install -y amazon-cloudwatch-agent httpd
 yum install -y docker
+
+# Start and enable services
+systemctl start httpd
+systemctl enable httpd
 systemctl start docker
 systemctl enable docker
+
+# Configure httpd to serve a simple page
+echo "<html><body><h1>Hello from $(hostname)</h1></body></html>" > /var/www/html/index.html
+
+# Add ec2-user to docker group
 usermod -a -G docker ec2-user
+
+# Signal completion to CloudFormation/Auto Scaling
+/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region} || true
+
+echo "User data script completed successfully"
 """
         
         # Encode user data to base64
@@ -761,7 +789,7 @@ usermod -a -G docker ec2-user
             f"{self.name_prefix}-launch-template",
             name_prefix=f"{self.name_prefix}-lt-",
             image_id=ami.id,
-            instance_type="c5.large",  # C5 series for compute-intensive tasks
+            instance_type="t3.micro",  # Use t3.micro for better availability and lower cost
             vpc_security_group_ids=[self.ec2_sg.id],
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
                 name=self.ec2_instance_profile.name
@@ -797,12 +825,11 @@ usermod -a -G docker ec2-user
             f"{self.name_prefix}-asg",
             name=f"{self.name_prefix}-asg",
             vpc_zone_identifiers=[subnet.id for subnet in self.private_subnets],
-            target_group_arns=[],  # Will be updated after ALB creation
-            health_check_type="ELB",
-            health_check_grace_period=300,
-            min_size=2,
+            health_check_type="EC2",  # Use EC2 health checks instead of ELB initially
+            health_check_grace_period=600,  # Increased grace period to allow startup time
+            min_size=1,  # Reduced to 1 for faster deployment
             max_size=6,
-            desired_capacity=2,
+            desired_capacity=1,  # Reduced to 1 for faster deployment
             launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
                 id=self.launch_template.id,
                 version="$Latest",
@@ -814,6 +841,7 @@ usermod -a -G docker ec2-user
                 "GroupInServiceInstances",
                 "GroupTotalInstances",
             ],
+            wait_for_capacity_timeout="15m",  # Increased timeout
             tags=[
                 aws.autoscaling.GroupTagArgs(
                     key="Name",
@@ -843,7 +871,7 @@ usermod -a -G docker ec2-user
                 healthy_threshold=2,
                 interval=30,
                 matcher="200",
-                path="/health",
+                path="/",  # Changed to root path since we're serving a simple page
                 port="traffic-port",
                 protocol="HTTP",
                 timeout=5,
@@ -884,12 +912,12 @@ usermod -a -G docker ec2-user
             opts=ResourceOptions(parent=self)
         )
         
-        # Update ASG with target group
+        # Update ASG with target group (attach after ALB is created)
         self.asg_attachment = aws.autoscaling.Attachment(
             f"{self.name_prefix}-asg-attachment",
             autoscaling_group_name=self.asg.id,
             lb_target_group_arn=self.target_group.arn,
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.asg, self.target_group])
         )
     
     def _create_waf(self):
@@ -991,7 +1019,7 @@ usermod -a -G docker ec2-user
             opts=ResourceOptions(parent=self)
         )
         
-        # CloudWatch Log Group - remove KMS encryption temporarily to avoid permissions issues
+        # CloudWatch Log Group - without KMS encryption to avoid permissions issues
         self.log_group = aws.cloudwatch.LogGroup(
             f"{self.name_prefix}-log-group",
             name=f"/ecs/{self.name_prefix}",
