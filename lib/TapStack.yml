@@ -15,6 +15,14 @@ Parameters:
       - 'true'
       - 'false'
 
+  EnableAccessLogs:
+    Type: String
+    Description: Enable ALB access logs to S3 (requires additional setup time)
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: EC2 Key Pair for SSH access
@@ -29,6 +37,7 @@ Conditions:
   CreateSSLCertificate: !And
     - !Equals [!Ref EnableSSL, 'true']
     - !Not [!Equals [!Ref DomainName, '']]
+  EnableALBAccessLogs: !Equals [!Ref EnableAccessLogs, 'true']
 
 Resources:
   # VPC and Networking
@@ -197,9 +206,10 @@ Resources:
         - Key: App
           Value: WebApp
 
-  # S3 Bucket for Logs
+  # S3 Bucket for Logs (Optional)
   LogsBucket:
     Type: AWS::S3::Bucket
+    Condition: EnableALBAccessLogs
     Properties:
       BucketName: !Sub 'webapp-logs-${AWS::AccountId}-${AWS::Region}'
       LifecycleConfiguration:
@@ -223,15 +233,17 @@ Resources:
         - Key: App
           Value: WebApp
 
-  # Get ELB service account for the current region
+  # Get ELB service account for the current region (Optional)
   ELBServiceAccountMapping:
     Type: AWS::CloudFormation::CustomResource
+    Condition: EnableALBAccessLogs
     Properties:
       ServiceToken: !GetAtt GetELBServiceAccountFunction.Arn
       Region: !Ref AWS::Region
 
   GetELBServiceAccountFunction:
     Type: AWS::Lambda::Function
+    Condition: EnableALBAccessLogs
     Properties:
       Runtime: python3.9
       Handler: index.handler
@@ -277,6 +289,7 @@ Resources:
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
+    Condition: EnableALBAccessLogs
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -290,6 +303,7 @@ Resources:
 
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: EnableALBAccessLogs
     Properties:
       Bucket: !Ref LogsBucket
       PolicyDocument:
@@ -349,13 +363,16 @@ Resources:
         - !Ref PublicSubnet3
       SecurityGroups:
         - !Ref ALBSecurityGroup
-      LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: 'true'
-        - Key: access_logs.s3.bucket
-          Value: !Ref LogsBucket
-        - Key: access_logs.s3.prefix
-          Value: alb-logs
+      LoadBalancerAttributes: !If
+        - EnableALBAccessLogs
+        - - Key: access_logs.s3.enabled
+            Value: 'true'
+          - Key: access_logs.s3.bucket
+            Value: !Ref LogsBucket
+          - Key: access_logs.s3.prefix
+            Value: alb-logs
+        - - Key: access_logs.s3.enabled
+            Value: 'false'
       Tags:
         - Key: Name
           Value: WebApp-ALB
@@ -435,17 +452,24 @@ Resources:
         - PolicyName: S3LogsAccess
           PolicyDocument:
             Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                Resource: !Sub '${LogsBucket.Arn}/*'
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketLocation
-                  - s3:ListBucket
-                Resource: !GetAtt LogsBucket.Arn
+            Statement: !If
+              - EnableALBAccessLogs
+              - - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:GetObject
+                  Resource: !Sub '${LogsBucket.Arn}/*'
+                - Effect: Allow
+                  Action:
+                    - s3:GetBucketLocation
+                    - s3:ListBucket
+                  Resource: !GetAtt LogsBucket.Arn
+              - - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: '*'
       Tags:
         - Key: Name
           Value: WebApp-EC2-Role
@@ -649,8 +673,8 @@ Outputs:
       Name: !Sub '${AWS::StackName}-LoadBalancerDNSName'
 
   LogsBucketName:
-    Description: Name of the S3 bucket for logs
-    Value: !Ref LogsBucket
+    Description: Name of the S3 bucket for logs (if enabled)
+    Value: !If [EnableALBAccessLogs, !Ref LogsBucket, 'Access logs disabled']
     Export:
       Name: !Sub '${AWS::StackName}-LogsBucketName'
 
