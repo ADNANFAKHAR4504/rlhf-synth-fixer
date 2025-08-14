@@ -12,13 +12,16 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
   
-  # AWS Secrets Manager secret name for database password (required for production)
-  DBSecretName:
+  # Database password (use AWS Secrets Manager for production)
+  DBPassword:
     Type: String
-    Default: production/postgresql/password
-    Description: AWS Secrets Manager secret name for database password
-    AllowedPattern: '^[a-zA-Z0-9/_+=.@-]+$'
-    ConstraintDescription: Must be a valid secret name
+    Default: YourSecurePassword123
+    NoEcho: true
+    Description: Database administrator password
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: Must contain only alphanumeric characters
 
 Resources:
   # ================================
@@ -203,6 +206,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    DependsOn: S3AccessLogsBucket
     Properties:
       BucketName: !Sub 'myapp-data-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
@@ -219,11 +223,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      # S3 Event notification for Lambda trigger
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt S3ProcessorLambda.Arn
+
       Tags:
         - Key: Name
           Value: MyApp-Data-Bucket
@@ -235,6 +235,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    DependsOn: S3AccessLogsBucket
     Properties:
       BucketName: !Sub 'myapp-backup-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
@@ -374,15 +375,9 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # Permission for S3 to invoke Lambda function
-  S3InvokeLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref S3ProcessorLambda
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !GetAtt S3ApplicationBucket.Arn
+
+
+
 
   # CloudWatch Log Group for Lambda function
   LambdaLogGroup:
@@ -449,8 +444,8 @@ Resources:
       Engine: postgres
       EngineVersion: '14.18'  # Use stable PostgreSQL version
       MasterUsername: !Ref DBUsername
-      # Use AWS Secrets Manager for secure password management
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecretName}:SecretString:password}}'
+      # Use parameter for database password
+      MasterUserPassword: !Ref DBPassword
       AllocatedStorage: 100
       StorageType: gp2
       StorageEncrypted: true

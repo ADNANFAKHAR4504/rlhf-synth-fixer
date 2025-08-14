@@ -26,10 +26,13 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
             MaxLength: 16,
             AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
           },
-          DBSecretName: {
+          DBPassword: {
             Type: 'String',
-            Description: 'AWS Secrets Manager secret name for database password',
-            AllowedPattern: '^[a-zA-Z0-9/_+=.@-]+$'
+            NoEcho: true,
+            Description: 'Database administrator password',
+            MinLength: 8,
+            MaxLength: 41,
+            AllowedPattern: '[a-zA-Z0-9]*'
           }
         },
         Resources: {
@@ -387,7 +390,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
               Engine: 'postgres',
               EngineVersion: '14.18',
               MasterUsername: { Ref: 'DBUsername' },
-              MasterUserPassword: { 'Fn::Sub': '{{resolve:secretsmanager:${DBSecretName}:SecretString:password}}' },
+              MasterUserPassword: { Ref: 'DBPassword' },
               AllocatedStorage: 100,
               StorageType: 'gp2',
               StorageEncrypted: true,
