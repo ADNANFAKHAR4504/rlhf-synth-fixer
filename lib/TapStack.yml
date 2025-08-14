@@ -614,10 +614,8 @@ Resources:
   # =========================================================================
   # 2. ROOT USER MFA - AWS CONFIG RULE
   # =========================================================================
-  ConfigServiceRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: config.amazonaws.com
+  # NOTE: AWS Config service-linked role (AWSServiceRoleForConfig) must already exist in the account.
+  # CloudFormation cannot create it if it already exists. AWS will use the existing role automatically.
 
   # NOTE: AWS only allows one ConfigurationRecorder and DeliveryChannel per region/account.
   # Please ensure AWS Config is enabled and a configuration recorder exists before deploying this stack.
