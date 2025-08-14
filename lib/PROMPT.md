@@ -1,60 +1,44 @@
-# ✅ Terraform CDK (TypeScript) Project – Secure AWS Web Application Infrastructure
+# AWS Infrastructure Requirements
 
-You are tasked with setting up a **secure AWS environment using Terraform CDK (TypeScript)** to host a web application. Your configuration must **adhere to AWS Security Best Practices v1.0.0** and be modular, readable, and production-ready.
+We need to set up secure AWS infrastructure using Terraform CDK with TypeScript for hosting our web application. The setup should follow AWS security best practices and be ready for production use.
 
----
+## Infrastructure Components
 
-## Security Requirements
+### Network Setup
+- VPC called "secure-network" in us-west-2 region
+- Public subnets for web tier
+- Internet gateway for public access
+- Proper route tables
 
-### VPC
+### Security Configuration
+Security groups should:
+- Allow HTTP (port 80) and HTTPS (port 443) inbound
+- Allow all outbound traffic
 
-- Create a **VPC named `secure-network`** in the `us-west-2` region.
-- Include:
-  - Public Subnets
-  - Internet Gateway
-  - Route Tables
+Network ACLs need to:
+- Follow AWS best practices for public subnet traffic restrictions
 
----
+### Server Configuration
+- EC2 instance in the public subnet
+- Attach the security group we create
+- Instance needs internet access through the IGW
+- Keep IAM permissions minimal - only what's needed
 
-### Network Controls
+### Storage Requirements
+- S3 bucket for application logs
+- Server-side encryption enabled (AES-256 or KMS)
+- EC2 instance should have write-only access to this bucket
 
-- **Security Groups**:
-  - Allow inbound traffic **only on ports 80 (HTTP) and 443 (HTTPS)**.
-  - Allow all outbound traffic.
+### Access Management
+- IAM role for the EC2 instance
+- Policy should only grant s3:PutObject permission to the log bucket
+- Follow least privilege principle
 
-- **Network ACLs** (NACLs):
-  - Restrict traffic in and out of the public subnet following **AWS best practices**.
-
----
-
-### Compute
-
-- Launch an **EC2 instance** in the **public subnet**.
-- Attach the **Security Group** created above.
-- Ensure the instance has **public internet access** (via IGW; NAT not required).
-- Do **not attach unnecessary IAM permissions**.
-
----
-
-### Storage (S3)
-
-- Create an **S3 bucket** for storing **web application logs**.
-- Enable **Server-Side Encryption** (AES-256 or AWS KMS).
-- Restrict **write access** to the EC2 instance only (least privilege).
-
----
-
-### IAM
-
-- Create an **IAM Role** for the EC2 instance.
-- Attach an **IAM Policy** with **minimal access**:
-  - Only `s3:PutObject` to the log bucket.
-
----
-
-### Tagging
-
-All AWS resources must be tagged with:
-
-```hcl
+### Resource Tagging
+Tag all resources with:
 Environment = "Production"
+
+## Implementation Notes
+The code should be modular and easy to understand. Make sure everything follows TypeScript best practices for CDK development.
+
+Let me know if you need clarification on any of these requirements.
