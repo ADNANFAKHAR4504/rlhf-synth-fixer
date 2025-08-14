@@ -501,7 +501,6 @@ class TapStack(pulumi.ComponentResource):
     # Corrected code to get the latest Amazon Linux 2023 AMI
     ami_param = aws.ssm.get_parameter(
         name="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
-        region=self.common_tags.get("Region"),
     )
 
     user_data = """#!/bin/bash
