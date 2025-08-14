@@ -66,8 +66,8 @@ export class TapStack extends TerraformStack {
     new RdsStack(this, 'prodRdsStack', {
       environmentSuffix,
       vpcId: vpcStack.vpcId,
-      kmsKeyId: s3Stack.kmsKeyId,
-      subnetIds: vpcStack.subnetIds, // <-- Add this!
+      kmsKeyId: s3Stack.kmsKeyArn, // <-- Pass ARN, not ID
+      subnetIds: vpcStack.subnetIds,
     });
 
     new Ec2Stack(this, 'prodEc2Stack', {

@@ -33,7 +33,7 @@ export class RdsStack extends Construct {
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageEncrypted: true,
-      kmsKeyId: props?.kmsKeyId,
+      kmsKeyId: props?.kmsKeyId, // This will now be the ARN
       dbSubnetGroupName: dbSubnetGroup.name,
       dbName: 'proddb',
       username: 'admin',
