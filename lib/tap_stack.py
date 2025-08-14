@@ -385,91 +385,135 @@ class TapStack(ComponentResource):
         )
     
     def _create_iam_roles(self):
-        """Create IAM roles with least privilege principle."""
-        # EC2 Instance Role
-        self.ec2_role = aws.iam.Role(
-            f"{self.name_prefix}-ec2-role",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {"Service": "ec2.amazonaws.com"},
-                }],
-            }),
-            tags={
-                "Name": f"{self.name_prefix}-ec2-role",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # EC2 Instance Profile
-        self.ec2_instance_profile = aws.iam.InstanceProfile(
-            f"{self.name_prefix}-ec2-profile",
-            role=self.ec2_role.name,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Fargate Task Execution Role
-        self.fargate_execution_role = aws.iam.Role(
-            f"{self.name_prefix}-fargate-execution-role",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {"Service": "ecs-tasks.amazonaws.com"},
-                }],
-            }),
-            managed_policy_arns=[
-                "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-            ],
-            tags={
-                "Name": f"{self.name_prefix}-fargate-execution-role",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Fargate Task Role
-        self.fargate_task_role = aws.iam.Role(
-            f"{self.name_prefix}-fargate-task-role",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {"Service": "ecs-tasks.amazonaws.com"},
-                }],
-            }),
-            tags={
-                "Name": f"{self.name_prefix}-fargate-task-role",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # CodePipeline Service Role
-        self.codepipeline_role = aws.iam.Role(
-            f"{self.name_prefix}-codepipeline-role",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {"Service": "codepipeline.amazonaws.com"},
-                }],
-            }),
-            managed_policy_arns=[
-                "arn:aws:iam::aws:policy/AWSCodePipelineFullAccess"
-            ],
-            tags={
-                "Name": f"{self.name_prefix}-codepipeline-role",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
+      """Create IAM roles with least privilege principle."""
+      # EC2 Instance Role
+      self.ec2_role = aws.iam.Role(
+          f"{self.name_prefix}-ec2-role",
+          assume_role_policy=json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [{
+                  "Action": "sts:AssumeRole",
+                  "Effect": "Allow",
+                  "Principal": {"Service": "ec2.amazonaws.com"},
+              }],
+          }),
+          tags={
+              "Name": f"{self.name_prefix}-ec2-role",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # EC2 Instance Profile
+      self.ec2_instance_profile = aws.iam.InstanceProfile(
+          f"{self.name_prefix}-ec2-profile",
+          role=self.ec2_role.name,
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # Fargate Task Execution Role
+      self.fargate_execution_role = aws.iam.Role(
+          f"{self.name_prefix}-fargate-execution-role",
+          assume_role_policy=json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [{
+                  "Action": "sts:AssumeRole",
+                  "Effect": "Allow",
+                  "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+              }],
+          }),
+          managed_policy_arns=[
+              "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+          ],
+          tags={
+              "Name": f"{self.name_prefix}-fargate-execution-role",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # Fargate Task Role
+      self.fargate_task_role = aws.iam.Role(
+          f"{self.name_prefix}-fargate-task-role",
+          assume_role_policy=json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [{
+                  "Action": "sts:AssumeRole",
+                  "Effect": "Allow",
+                  "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+              }],
+          }),
+          tags={
+              "Name": f"{self.name_prefix}-fargate-task-role",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # CodePipeline Service Role with correct managed policies
+      self.codepipeline_role = aws.iam.Role(
+          f"{self.name_prefix}-codepipeline-role",
+          assume_role_policy=json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [{
+                  "Action": "sts:AssumeRole",
+                  "Effect": "Allow",
+                  "Principal": {"Service": "codepipeline.amazonaws.com"},
+              }],
+          }),
+          managed_policy_arns=[
+              "arn:aws:iam::aws:policy/AWSCodePipelineServiceRole"
+          ],
+          tags={
+              "Name": f"{self.name_prefix}-codepipeline-role",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # Create additional policy for CodePipeline to access S3 and ECS
+      self.codepipeline_additional_policy = aws.iam.RolePolicy(
+          f"{self.name_prefix}-codepipeline-additional-policy",
+          role=self.codepipeline_role.id,
+          policy=json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "s3:GetBucketVersioning",
+                          "s3:GetObject",
+                          "s3:GetObjectVersion",
+                          "s3:PutObject"
+                      ],
+                      "Resource": [
+                          "arn:aws:s3:::*"
+                      ]
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "ecs:DescribeServices",
+                          "ecs:DescribeTaskDefinition",
+                          "ecs:DescribeTasks",
+                          "ecs:ListTasks",
+                          "ecs:RegisterTaskDefinition",
+                          "ecs:UpdateService"
+                      ],
+                      "Resource": "*"
+                  },
+                  {
+                      "Effect": "Allow",
+                      "Action": [
+                          "iam:PassRole"
+                      ],
+                      "Resource": "*"
+                  }
+              ]
+          }),
+          opts=ResourceOptions(parent=self)
+      )
+
     
     def _create_s3_buckets(self):
         """Create S3 buckets with encryption and versioning."""
