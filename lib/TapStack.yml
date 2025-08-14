@@ -179,6 +179,24 @@ Resources:
   # VPC and Networking
   # Using existing VPC: !Ref ExistingVPCId
 
+  # Internet Gateway for the existing VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${EnvironmentSuffix}-IGW"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ExistingVPCId
+      InternetGatewayId: !Ref InternetGateway
+
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -252,14 +270,14 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Note: Using existing Internet Gateway in the VPC
-  # DefaultPublicRoute:
-  #   Type: AWS::EC2::Route
-  #   DependsOn: AttachGateway
-  #   Properties:
-  #     RouteTableId: !Ref PublicRouteTable
-  #     DestinationCidrBlock: 0.0.0.0/0
-  #     GatewayId: !Ref InternetGateway
+  # Public route to Internet Gateway
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
