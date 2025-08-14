@@ -42,6 +42,7 @@ export class LambdaStack extends Construct {
       handler: 'index.handler',
       runtime: 'python3.9',
       timeout: 30,
+      filename: './lib/lambda/function.zip', // <-- Reference the zip in lib/
       environment: {
         variables: {
           ENVIRONMENT: environmentSuffix,
