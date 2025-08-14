@@ -48,6 +48,16 @@ class TapStack(cdk.Stack):
         or 'dev'
     )
 
+
+    self.log_group = logs.LogGroup(
+      self,
+      'ServerlessLogGroup',
+      log_group_name=f'/aws/lambda/serverless-platform-{self.environment_suffix}',
+      retention=logs.RetentionDays.ONE_WEEK,
+      removal_policy=RemovalPolicy.DESTROY
+    )
+
+    
     # Lambda execution role
     self.lambda_execution_role = self._create_lambda_execution_role()
 
