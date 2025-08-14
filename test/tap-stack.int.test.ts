@@ -49,15 +49,17 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test('DynamoDB table should exist', async () => {
       const tableName = outputs.DynamoDBTableName;
       const result = await dynamodb.describeTable({ TableName: tableName }).promise();
-      expect(result.Table.TableName).toBe(tableName);
-      expect(result.Table.TableStatus).toMatch(/ACTIVE|UPDATING/);
+      expect(result.Table).toBeDefined();
+      expect(result.Table!.TableName).toBe(tableName);
+      expect(result.Table!.TableStatus).toMatch(/ACTIVE|UPDATING/);
     });
 
     test('Lambda function should exist', async () => {
       const functionName = outputs.LambdaFunctionName;
       const result = await lambda.getFunction({ FunctionName: functionName }).promise();
-      expect(result.Configuration.FunctionName).toBe(functionName);
-      expect(result.Configuration.Runtime).toMatch(/python3/);
+      expect(result.Configuration).toBeDefined();
+      expect(result.Configuration!.FunctionName).toBe(functionName);
+      expect(result.Configuration!.Runtime).toMatch(/python3/);
     });
 
     test('Secret should exist and be retrievable', async () => {
@@ -70,15 +72,17 @@ describe('Turn Around Prompt API Integration Tests', () => {
       const kms = new AWS.KMS({ region: 'us-east-1' });
       const keyId = outputs.KMSKeyId;
       const result = await kms.describeKey({ KeyId: keyId }).promise();
-      expect(result.KeyMetadata.KeyId).toBeDefined();
-      expect(result.KeyMetadata.Description).toMatch(/KMS Key for ApplicationDataBucket encryption/);
+      expect(result.KeyMetadata).toBeDefined();
+      expect(result.KeyMetadata!.KeyId).toBeDefined();
+      expect(result.KeyMetadata!.Description).toMatch(/KMS Key for ApplicationDataBucket encryption/);
     });
 
     test('MFA enforcement policy should exist', async () => {
       const iam = new AWS.IAM({ region: 'us-east-1' });
       const policyArn = outputs.MFAEnforcementPolicyArn;
       const result = await iam.getPolicy({ PolicyArn: policyArn }).promise();
-      expect(result.Policy.PolicyName).toBe('MFAEnforcementPolicy');
+      expect(result.Policy).toBeDefined();
+      expect(result.Policy!.PolicyName).toBe('MFAEnforcementPolicy');
     });
   });
 });
