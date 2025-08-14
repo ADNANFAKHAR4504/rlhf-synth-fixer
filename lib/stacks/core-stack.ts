@@ -18,7 +18,7 @@ export class CoreStack extends cdk.Stack {
     super(scope, id, props);
 
     this.vpc = new ec2.Vpc(this, 'AppVpc', {
-      cidr: props.vpcCidr || '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr(props.vpcCidr || '10.0.0.0/16'),
       maxAzs: 2,
     });
 
