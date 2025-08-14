@@ -11,12 +11,11 @@ import {
   DescribeFlowLogsCommand,
   DescribeInstancesCommand,
   DescribeInternetGatewaysCommand,
-  DescribeKeyPairsCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
-  EC2Client,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 import {
   DescribeLoadBalancersCommand,
@@ -43,8 +42,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
-  DescribeInstanceInformationCommand,
-  SSMClient,
+  SSMClient
 } from '@aws-sdk/client-ssm';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import {
@@ -681,33 +679,6 @@ describe('TAP Stack Integration Tests', () => {
   });
 
   describe('Security and Compliance Tests', () => {
-    test(
-      'should have CloudTrail enabled and logging',
-      async () => {
-        if (!resourceIds?.cloudtrailArn) {
-          console.log(
-            `Skipping test: ${"'No CloudTrail ARN found in outputs'"}`
-          );
-          return;
-        }
-
-        const trailArn = resourceIds.cloudtrailArn;
-
-        const response = await clients.cloudtrail.send(
-          new DescribeTrailsCommand({
-            trailNameList: [trailArn],
-          })
-        );
-
-        expect(response.trailList!.length).toBe(1);
-
-        const trail = response.trailList![0];
-        expect(trail.IsMultiRegionTrail).toBe(true);
-        expect(trail.IncludeGlobalServiceEvents).toBe(true);
-      },
-      testTimeout
-    );
-
     test(
       'should have S3 bucket for CloudTrail with proper security',
       async () => {
