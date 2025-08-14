@@ -612,7 +612,7 @@ def create_eks_cluster(
   cluster = aws.eks.Cluster(
       "corp-eks-cluster",
       name="corp-eks-cluster",  # Explicit cluster name
-      version="1.29",  
+      version="1.33",  
       role_arn=eks_role.arn,
       vpc_config=aws.eks.ClusterVpcConfigArgs(
           subnet_ids=subnet_ids,
