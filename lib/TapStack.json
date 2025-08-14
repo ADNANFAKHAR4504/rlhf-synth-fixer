@@ -77,6 +77,27 @@
                                 "kms:GenerateDataKey"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "ArnLike": {
+                                    "kms:EncryptionContext:aws:logs:arn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                                    }
+                                }
+                            }
                         }
                     ]
                 },
@@ -267,7 +288,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
@@ -312,7 +340,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
@@ -356,7 +391,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1c",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
@@ -1355,13 +1397,14 @@
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${ProjectName}-db-${Environment}"
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.43",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
@@ -1449,9 +1492,7 @@
                     }
                 ],
                 "UserData": {
-                    "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n# Configure CloudWatch agent for detailed monitoring\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux\n"
-                    }
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n# Configure CloudWatch agent for detailed monitoring\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux\n"
                 },
                 "Monitoring": true,
                 "Tags": [
@@ -1562,6 +1603,7 @@
                 "KMSKeyId": {
                     "Ref": "S3KMSKey"
                 },
+                "IsLogging": true,
                 "EventSelectors": [
                     {
                         "ReadWriteType": "All",
@@ -1571,7 +1613,10 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${ApplicationBucket}/*"
+                                        "Fn::GetAtt": [
+                                            "ApplicationBucket",
+                                            "Arn"
+                                        ]
                                     }
                                 ]
                             }
