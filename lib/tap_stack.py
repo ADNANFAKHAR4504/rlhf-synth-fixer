@@ -138,7 +138,7 @@ class TapStack(cdk.Stack):
         "SampleFunction",
         runtime=_lambda.Runtime.PYTHON_3_9,
         handler="lambda_function.lambda_handler",
-        code=_lambda.Code.from_inline("def handler(event, context): return 'ok'"),
+        code=_lambda.Code.from_inline("def lambda_handler(event, context): return 'ok'"),
         role=self.lambda_execution_role,
         memory_size=512,
         timeout=cdk.Duration.minutes(1),
