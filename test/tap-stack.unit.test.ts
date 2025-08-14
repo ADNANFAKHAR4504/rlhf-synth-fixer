@@ -290,15 +290,20 @@ describe('TapStack CloudFormation Template', () => {
         expect(httpsRule).toBeDefined();
       });
 
-      test('EC2 security group should allow HTTP from ALB only', () => {
+      test('EC2 security group should allow HTTP from ALB and SSH from CIDR', () => {
         const ec2Sg = template.Resources.EC2SecurityGroup;
         const ingress = ec2Sg.Properties.SecurityGroupIngress;
-        expect(ingress).toHaveLength(1);
+        expect(ingress).toHaveLength(2);
         
         const httpRule = ingress.find((r: any) => r.FromPort === 80);
         expect(httpRule).toBeDefined();
         expect(httpRule.SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
         expect(httpRule.Description).toBe('HTTP access from ALB');
+        
+        const sshRule = ingress.find((r: any) => r.FromPort === 22);
+        expect(sshRule).toBeDefined();
+        expect(sshRule.CidrIp).toEqual({ Ref: 'SSHAccessCidr' });
+        expect(sshRule.Description).toBe('SSH access from defined IP whitelist');
       });
     });
 
@@ -543,7 +548,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(12);
+      expect(parameterCount).toBe(13);
     });
 
     test('should have correct number of outputs', () => {

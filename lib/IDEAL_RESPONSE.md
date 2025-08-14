@@ -13,6 +13,10 @@ Metadata:
           default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
+      - Label:
+          default: "Security Configuration"
+        Parameters:
+          - SSHAccessCidr
 
 Parameters:
   EnvironmentSuffix:
@@ -84,6 +88,13 @@ Parameters:
     Type: String
     Default: admin
     AllowedPattern: "^[a-zA-Z][a-zA-Z0-9]*$"
+
+  SSHAccessCidr:
+    Description: CIDR block allowed for SSH access to EC2 instances
+    Type: String
+    Default: "10.0.0.0/16"
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+    ConstraintDescription: Must be a valid CIDR range
 
 Mappings:
   RegionMap:
@@ -481,6 +492,11 @@ Resources:
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
           Description: HTTP access from ALB
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHAccessCidr
+          Description: SSH access from defined IP whitelist
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
