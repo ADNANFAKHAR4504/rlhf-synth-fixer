@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, AWS Config, VPC Flow Logs, MFA, S3 SSE+logs, DNSSEC.
+Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, AWS Config (recorder only), VPC Flow Logs, MFA, S3 SSE+logs, DNSSEC.
 
 Metadata:
-  Version: 1.0.3
+  Version: 1.0.4
 
 Mappings:
   OrgCIDR:
@@ -196,8 +196,7 @@ Resources:
             Principal: { Service: logging.s3.amazonaws.com }
             Action: s3:PutObject
             Resource: !Sub "${AccessLogsBucket.Arn}/*"
-            Condition:
-              StringEquals: { s3:x-amz-acl: bucket-owner-full-control }
+            Condition: { StringEquals: { s3:x-amz-acl: bucket-owner-full-control } }
 
   ApplicationBucket:
     Type: AWS::S3::Bucket
@@ -305,7 +304,6 @@ Resources:
     Properties:
       Roles: [ !Ref EC2Role ]
 
-  # (Single) AWS Config role — keep this one
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:
@@ -330,9 +328,6 @@ Resources:
                 Resource: !Sub "${ConfigBucket.Arn}/*"
                 Condition:
                   StringEquals: { "s3:x-amz-acl": "bucket-owner-full-control" }
-              - Effect: Allow
-                Action: "sns:Publish"
-                Resource: !Ref ConfigTopic
 
   VPCFlowLogRole:
     Type: AWS::IAM::Role
@@ -404,7 +399,7 @@ Resources:
   AppInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp2}}"
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
       InstanceType: t3.micro
       IamInstanceProfile: !Ref EC2InstanceProfile
       SubnetId: !Ref PublicSubnetA
@@ -472,71 +467,15 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
       SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
 
-# ---------- AWS Config ----------
-  ConfigTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      # KMS optional; remove KmsMasterKeyId if you don't want SNS encryption
-      TopicName: !Sub "${AWS::StackName}-config-topic"
-
+  # ---------------- AWS Config (recorder only; uses existing Delivery Channel) ----------------
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      # Let AWS assign the name "default" (more reliable)
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-      # omit RecordingMode for compatibility
-
-  DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    DependsOn:
-      - ConfigurationRecorder      # ensure recorder exists first
-      - ConfigBucketPolicy         # ensure bucket is writable
-    Properties:
-      # Use the default name implicitly; CFN doesn't require Name
-      S3BucketName: !Ref ConfigBucket
-      S3KeyPrefix: config
-      SnsTopicARN: !Ref ConfigTopic
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-
-  # Create rules only after channel + recorder exist
-  S3BucketLoggingEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: [ConfigurationRecorder, DeliveryChannel]
-    Properties:
-      ConfigRuleName: s3-bucket-logging-enabled
-      Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_LOGGING_ENABLED }
-
-  CloudTrailEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: [ConfigurationRecorder, DeliveryChannel]
-    Properties:
-      ConfigRuleName: cloud-trail-enabled
-      Source: { Owner: AWS, SourceIdentifier: CLOUD_TRAIL_ENABLED }
-
-  VPCFlowLogsEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: [ConfigurationRecorder, DeliveryChannel]
-    Properties:
-      ConfigRuleName: vpc-flow-logs-enabled
-      Source: { Owner: AWS, SourceIdentifier: VPC_FLOW_LOGS_ENABLED }
-
-  IAMUserMFAEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: [ConfigurationRecorder, DeliveryChannel]
-    Properties:
-      ConfigRuleName: iam-user-mfa-enabled
-      Source: { Owner: AWS, SourceIdentifier: IAM_USER_MFA_ENABLED }
-
-  RestrictedSSHRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: [ConfigurationRecorder, DeliveryChannel]
-    Properties:
-      ConfigRuleName: incoming-ssh-disabled
-      Source: { Owner: AWS, SourceIdentifier: INCOMING_SSH_DISABLED }
+      # Delivery Channel is pre-existing in the account/Region; CFN auto-starts when channel exists
 
   # ---------------- VPC Flow Logs ----------------
   VPCFlowLogs:
@@ -577,6 +516,12 @@ Resources:
       AliasTarget:
         DNSName: !GetAtt ALB.DNSName
         HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+
+  # (Optional) Enable DNSSEC signing at the zone level (requires KSK above)
+  DNSSECEnable:
+    Type: AWS::Route53::DNSSEC
+    Properties:
+      HostedZoneId: !FindInMap [R53, Zone, Id]
 
 Outputs:
   VPCId:
