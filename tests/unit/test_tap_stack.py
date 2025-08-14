@@ -5,12 +5,15 @@ Unit tests for the TapStack Pulumi component using moto for AWS mocking
 and Pulumi's testing utilities.
 """
 
+# Standard library imports
 import unittest
 from unittest.mock import patch, MagicMock
+
+# Third-party imports - Pulumi
 import pulumi
 from pulumi import Output
 
-# Import the classes we're testing
+# Local imports - Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Mock the Pulumi runtime before importing TapStack

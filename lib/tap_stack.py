@@ -16,11 +16,44 @@ It creates all required AWS infrastructure including:
 - IAM roles with least privilege
 """
 
+# Standard library imports
 from typing import Optional
 import json
+
+# Third-party imports - Pulumi core
 import pulumi
 from pulumi import ResourceOptions, Output
+
+# Third-party imports - Pulumi AWS provider
 import pulumi_aws as aws
+
+# Module version and compatibility
+__version__ = "1.0.0"
+__python_requires__ = ">=3.8"
+
+# Validate that all required modules are available
+def _validate_dependencies():
+  """Validate that all required dependencies are available."""
+  required_modules = {
+    'pulumi': pulumi,
+    'pulumi_aws': aws,
+    'json': json,
+    'typing': Optional,
+  }
+  
+  missing_modules = []
+  for name, module in required_modules.items():
+    if module is None:
+      missing_modules.append(name)
+  
+  if missing_modules:
+    raise ImportError(
+      f"Missing required modules: {', '.join(missing_modules)}. "
+      "Please ensure all dependencies are installed."
+    )
+
+# Run dependency validation when module is imported
+_validate_dependencies()
 
 
 class TapStackArgs:

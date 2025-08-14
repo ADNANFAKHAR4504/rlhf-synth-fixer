@@ -5,10 +5,15 @@ Integration tests for live deployed TapStack Pulumi infrastructure.
 Tests actual AWS resources created by the Pulumi stack without mocking.
 """
 
+# Standard library imports
 import unittest
 import os
+
+# Third-party imports - AWS SDK
 import boto3
 from botocore.exceptions import ClientError
+
+# Third-party imports - Pulumi
 from pulumi import automation as auto
 
 
