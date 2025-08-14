@@ -8,6 +8,7 @@ Implements a production-ready baseline that satisfies:
 - SG allowing only HTTP/HTTPS from allowed CIDRs
 """
 
+import ipaddress
 import json
 import os
 
@@ -113,15 +114,32 @@ class TapStack(TerraformStack):
     if not vpc_created and boto3 is not None:
       try:
         ec2 = boto3.client("ec2", region_name=region)
-        resp = ec2.describe_subnets(Filters=[{"Name": "vpc-id", "Values": [vpc_id_value]}])
-        used = {s.get("CidrBlock") for s in resp.get("Subnets", [])}
+        used = set()
+        next_token = None
+        while True:
+          if next_token:
+            resp = ec2.describe_subnets(Filters=[{"Name": "vpc-id", "Values": [vpc_id_value]}], NextToken=next_token)
+          else:
+            resp = ec2.describe_subnets(Filters=[{"Name": "vpc-id", "Values": [vpc_id_value]}])
+          for s in resp.get("Subnets", []):
+            cidr = s.get("CidrBlock")
+            if cidr:
+              used.add(cidr)
+          next_token = resp.get("NextToken")
+          if not next_token:
+            break
+
+        used_nets = [ipaddress.ip_network(c, strict=False) for c in used]
         chosen = []
         def next_free():
-          for j in range(1, 250):
-            candidate = f"10.0.{j}.0/24"
-            if candidate not in used and candidate not in chosen:
-              chosen.append(candidate)
-              return candidate
+          for j in range(1, 255):
+            cand = ipaddress.ip_network(f"10.0.{j}.0/24", strict=False)
+            if any(cand.overlaps(u) for u in used_nets):
+              continue
+            if any(cand.overlaps(ipaddress.ip_network(x, strict=False)) for x in chosen):
+              continue
+            chosen.append(str(cand))
+            return str(cand)
           return None
         c1, c2, c3, c4 = next_free(), next_free(), next_free(), next_free()
         if all([c1, c2, c3, c4]):
@@ -325,7 +343,7 @@ class TapStack(TerraformStack):
     existing_bucket_name = os.getenv("EXISTING_S3_BUCKET")
     # Auto-detect by deterministic name if SDK available
     if not existing_bucket_name and boto3 is not None:
-      candidate_bucket = f"secure-app-bucket{construct_id.lower()}"
+      candidate_bucket = f"secure-app-bucket-1-{construct_id.lower()}"
       try:
         s3 = boto3.client("s3", region_name=region)
         s3.head_bucket(Bucket=candidate_bucket)
@@ -375,14 +393,15 @@ class TapStack(TerraformStack):
       )
       bucket_name_for_output = self.bucket.bucket
 
-    # Reuse-or-create: DB subnet group (terraform data source, then validate VPC match)
+    # Reuse-or-create: DB subnet group (terraform data source only when explicit name provided)
     existing_db_subnet_group_name = os.getenv("EXISTING_DB_SUBNET_GROUP_NAME")
-    if not existing_db_subnet_group_name and DataAwsDbSubnetGroup is not None:
+    if existing_db_subnet_group_name and DataAwsDbSubnetGroup is not None:
       try:
-        ds_dbsg = DataAwsDbSubnetGroup(self, "existing_db_subnets", name="db-subnets")
+        ds_dbsg = DataAwsDbSubnetGroup(self, "existing_db_subnets", name=existing_db_subnet_group_name)
         existing_db_subnet_group_name = ds_dbsg.name
       except Exception:
-        pass
+        # If data source fails at synth/apply, we'll fall back to SDK detection/creation below
+        existing_db_subnet_group_name = None
     if existing_db_subnet_group_name and boto3 is not None:
       try:
         rds = boto3.client("rds", region_name=region)
