@@ -133,7 +133,7 @@ export class TapStack extends cdk.Stack {
 
     // Example: Create an S3 bucket
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
-      bucketName: `tap-data-bucket-${environmentSuffix}-${this.account}`,
+      bucketName: `tap-data-bucket-${environmentSuffix}-${this.account}-${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}`,
       versioned: true,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsConstruct.s3Key,
