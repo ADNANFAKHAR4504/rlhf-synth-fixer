@@ -47,6 +47,47 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]{0,32}$'
     Description: Optional lowercase suffix to make S3 bucket names unique (e.g., pr1200)
 
+  ExistingKMSKeyArn:
+    Type: String
+    Default: ''
+    Description: If provided, reuse this KMS Key ARN instead of creating a new one
+
+  ExistingBastionSGId:
+    Type: String
+    Default: ''
+    Description: If provided, reuse this Bastion Security Group ID
+
+  ExistingWebSGId:
+    Type: String
+    Default: ''
+    Description: If provided, reuse this Web Security Group ID
+
+  ExistingDBSGId:
+    Type: String
+    Default: ''
+    Description: If provided, reuse this DB Security Group ID
+
+  ExistingWebInstanceId:
+    Type: String
+    Default: ''
+    Description: If provided, reuse this Web EC2 Instance ID
+
+  ExistingBastionInstanceId:
+    Type: String
+    Default: ''
+    Description: If provided, reuse this Bastion EC2 Instance ID
+
+  UseExistingS3MainBucket:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: Set to 'true' to use an existing main S3 bucket
+
+  ExistingS3MainBucketName:
+    Type: String
+    Default: ''
+    Description: Name of existing main S3 bucket when UseExistingS3MainBucket is 'true'
+
   CreateCloudTrail:
     Type: String
     AllowedValues: ['true', 'false']
@@ -100,10 +141,7 @@ Parameters:
     Default: 'false'
     Description: Whether to create a new GuardDuty detector (set to 'true' only if one does not already exist in this region)
 
-  ExistingGuardDutyDetectorId:
-    Type: String
-    Default: ''
-    Description: If a GuardDuty detector already exists in this account/region, provide its DetectorId here
+  # Removed: ExistingGuardDutyDetectorId (no longer used)
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
@@ -113,12 +151,21 @@ Conditions:
   HasNameSuffix: !Not [!Equals [!Ref NameSuffix, '']]
   CreateCloudTrailCond: !Equals [!Ref CreateCloudTrail, 'true']
   CreateAwsConfigCond: !Equals [!Ref CreateAwsConfig, 'true']
+  UseExistingS3MainBucketCond: !Equals [!Ref UseExistingS3MainBucket, 'true']
+  CreateMainS3BucketCond: !Equals [!Ref UseExistingS3MainBucket, 'false']
+  UseExistingKMSCond: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
+  UseExistingBastionSGCond: !Not [!Equals [!Ref ExistingBastionSGId, '']]
+  UseExistingWebSGCond: !Not [!Equals [!Ref ExistingWebSGId, '']]
+  UseExistingDBSGCond: !Not [!Equals [!Ref ExistingDBSGId, '']]
+  UseExistingWebInstanceCond: !Not [!Equals [!Ref ExistingWebInstanceId, '']]
+  UseExistingBastionInstanceCond: !Not [!Equals [!Ref ExistingBastionInstanceId, '']]
 
 Resources:
   # =========================
   # KMS Key
   # =========================
   SecureEnvKMSKey:
+    Condition: !If [UseExistingKMSCond, !Ref 'AWS::NoValue', 'true']
     Type: AWS::KMS::Key
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -156,6 +203,7 @@ Resources:
       PendingWindowInDays: 7
 
   SecureEnvKMSAlias:
+    Condition: !If [UseExistingKMSCond, !Ref 'AWS::NoValue', 'true']
     Type: AWS::KMS::Alias
     Properties:
       AliasName: alias/SecureEnv-MasterKey
@@ -174,7 +222,7 @@ Resources:
         GenerateStringKey: password
         PasswordLength: 24
         ExcludeCharacters: '"@/\\'
-      KmsKeyId: !Ref SecureEnvKMSKey
+      KmsKeyId: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
 
   # =========================
   # VPC and Networking
@@ -475,7 +523,12 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${SecureEnvS3Bucket}/*'
+                Resource:
+                  !If [
+                    UseExistingS3MainBucketCond,
+                    !Sub 'arn:${AWS::Partition}:s3:::${ExistingS3MainBucketName}/*',
+                    !Sub 'arn:${AWS::Partition}:s3:::${SecureEnvS3Bucket}/*',
+                  ]
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -493,6 +546,7 @@ Resources:
   # S3 Bucket
   # =========================
   SecureEnvS3Bucket:
+    Condition: CreateMainS3BucketCond
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -505,7 +559,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecureEnvKMSKey
+              KMSMasterKeyID: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -525,7 +579,12 @@ Resources:
   SecureEnvS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref SecureEnvS3Bucket
+      Bucket:
+        !If [
+          UseExistingS3MainBucketCond,
+          !Ref ExistingS3MainBucketName,
+          !Ref SecureEnvS3Bucket,
+        ]
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -533,7 +592,12 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: s3:PutObject
-            Resource: !Sub '${SecureEnvS3Bucket}/*'
+            Resource:
+              !If [
+                UseExistingS3MainBucketCond,
+                !Sub 'arn:${AWS::Partition}:s3:::${ExistingS3MainBucketName}/*',
+                !Sub 'arn:${AWS::Partition}:s3:::${SecureEnvS3Bucket}/*',
+              ]
             Condition:
               StringNotEquals:
                 s3:x-amz-server-side-encryption: aws:kms
@@ -541,7 +605,12 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: s3:PutObject
-            Resource: !Sub '${SecureEnvS3Bucket}/*'
+            Resource:
+              !If [
+                UseExistingS3MainBucketCond,
+                !Sub 'arn:${AWS::Partition}:s3:::${ExistingS3MainBucketName}/*',
+                !Sub 'arn:${AWS::Partition}:s3:::${SecureEnvS3Bucket}/*',
+              ]
             Condition:
               StringNotEquals:
                 s3:x-amz-server-side-encryption-aws-kms-key-id: !Ref SecureEnvKMSKey
@@ -583,7 +652,7 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: !Ref SecureEnvKMSKey
+      KmsKeyId: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
       VPCSecurityGroups:
         - !Ref SecureEnvDBSG
       DBSubnetGroupName: !Ref SecureEnvDBSubnetGroup
@@ -620,7 +689,7 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref SecureEnvKMSKey
+              KmsKeyId: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
               DeleteOnTermination: true
         MetadataOptions:
           HttpTokens: required
@@ -670,7 +739,7 @@ Resources:
             VolumeSize: 20
             VolumeType: gp3
             Encrypted: true
-            KmsKeyId: !Ref SecureEnvKMSKey
+              KmsKeyId: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
             DeleteOnTermination: true
       MetadataOptions:
         HttpTokens: required
@@ -697,7 +766,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecureEnvKMSKey
+              KMSMasterKeyID: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -719,7 +788,12 @@ Resources:
     Type: AWS::CloudTrail::Trail
     Properties:
       TrailName: !Sub SecureEnv-CloudTrail-${Environment}
-      S3BucketName: !Ref SecureEnvCloudTrailBucket
+      S3BucketName:
+        !If [
+          UseExistingS3MainBucketCond,
+          !Ref ExistingS3MainBucketName,
+          !Ref SecureEnvCloudTrailBucket,
+        ]
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
@@ -731,7 +805,11 @@ Resources:
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                - !Sub '${SecureEnvS3Bucket}/*'
+                - !If [
+                    UseExistingS3MainBucketCond,
+                    !Sub 'arn:${AWS::Partition}:s3:::${ExistingS3MainBucketName}/*',
+                    !Sub 'arn:${AWS::Partition}:s3:::${SecureEnvS3Bucket}/*',
+                  ]
 
   # =========================
   # AWS Config
@@ -752,7 +830,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecureEnvKMSKey
+              KMSMasterKeyID: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -877,6 +955,7 @@ Resources:
   # Assume VPC Flow Logs service-linked role exists or the deployer has permission to auto-create it
 
   SecureEnvFlowLogBucket:
+    Condition: CreateNetworking
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -889,7 +968,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecureEnvKMSKey
+              KMSMasterKeyID: !If [UseExistingKMSCond, !Ref ExistingKMSKeyArn, !Ref SecureEnvKMSKey]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -941,7 +1020,12 @@ Outputs:
 
   S3BucketName:
     Description: S3 Bucket Name
-    Value: !Ref SecureEnvS3Bucket
+    Value:
+      !If [
+        UseExistingS3MainBucketCond,
+        !Ref ExistingS3MainBucketName,
+        !Ref SecureEnvS3Bucket,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-S3-Bucket-Name'
 
