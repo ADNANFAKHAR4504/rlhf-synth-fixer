@@ -16,6 +16,7 @@ These tests are intentionally hermetic and fast.
 import sys
 import types
 import importlib
+import base64
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
@@ -59,6 +60,11 @@ class _FakeResourceOptions:
     self.provider = kwargs.get("provider")
 
 
+class _FakeInvokeOptions:
+  def __init__(self, **kwargs):
+    self.provider = kwargs.get("provider")
+
+
 # capture exports so we can assert on them
 FAKE_EXPORTS: Dict[str, Any] = {}
 
@@ -76,6 +82,7 @@ pulumi_fake = types.ModuleType("pulumi")
 pulumi_fake.export = _fake_export
 pulumi_fake.Output = _FakeOutput
 pulumi_fake.ResourceOptions = _FakeResourceOptions
+pulumi_fake.InvokeOptions = _FakeInvokeOptions
 pulumi_fake.ComponentResource = _FakeComponentResource
 # Add fake register_outputs method
 def _fake_register_outputs(self, outputs):
@@ -119,6 +126,20 @@ aws_fake.autoscaling = types.SimpleNamespace()
 aws_fake.ssm = types.SimpleNamespace()
 
 # ----- EC2 resources -----
+
+@dataclass  
+class _GetAmiFilterArgs:
+  name: str
+  values: List[str]
+
+
+class _AmiResult:
+  def __init__(self):
+    self.id = "ami-0123456789abcdef0"
+
+
+def _get_ami(**kwargs):
+  return _AmiResult()
 
 
 class _Vpc(_FakeResource):
@@ -191,6 +212,8 @@ aws_fake.ec2.RouteTableAssociation = _Rta
 aws_fake.ec2.SecurityGroup = _Sg
 aws_fake.ec2.SecurityGroupIngressArgs = _SgIngressArgs
 aws_fake.ec2.SecurityGroupEgressArgs = _SgEgressArgs
+aws_fake.ec2.get_ami = _get_ami
+aws_fake.ec2.GetAmiFilterArgs = _GetAmiFilterArgs
 
 # ----- Load Balancer -----
 
