@@ -17,43 +17,47 @@ jest.mock('aws-sdk', () => {
   const mockEC2 = {
     describeVpcs: jest.fn().mockReturnValue({
       promise: jest.fn().mockResolvedValue({
-        Vpcs: [{
-          CidrBlock: '10.0.0.0/16',
-          EnableDnsSupport: true,
-          EnableDnsHostnames: true
-        }]
-      })
+        Vpcs: [
+          {
+            CidrBlock: '10.0.0.0/16',
+            EnableDnsSupport: true,
+            EnableDnsHostnames: true,
+          },
+        ],
+      }),
     }),
     describeSubnets: jest.fn().mockReturnValue({
       promise: jest.fn().mockResolvedValue({
         Subnets: [
-          { 
-            MapPublicIpOnLaunch: true, 
-            Tags: [{ Key: 'Tier', Value: 'public' }] 
+          {
+            MapPublicIpOnLaunch: true,
+            Tags: [{ Key: 'Tier', Value: 'public' }],
           },
-          { 
-            MapPublicIpOnLaunch: false, 
-            Tags: [{ Key: 'Tier', Value: 'private' }] 
-          }
-        ]
-      })
-    })
+          {
+            MapPublicIpOnLaunch: false,
+            Tags: [{ Key: 'Tier', Value: 'private' }],
+          },
+        ],
+      }),
+    }),
   };
 
   const mockELBv2 = {
     describeLoadBalancers: jest.fn().mockReturnValue({
       promise: jest.fn().mockResolvedValue({
-        LoadBalancers: [{
-          Scheme: 'internet-facing',
-          Type: 'application'
-        }]
-      })
-    })
+        LoadBalancers: [
+          {
+            Scheme: 'internet-facing',
+            Type: 'application',
+          },
+        ],
+      }),
+    }),
   };
 
   return {
     EC2: jest.fn(() => mockEC2),
-    ELBv2: jest.fn(() => mockELBv2)
+    ELBv2: jest.fn(() => mockELBv2),
   };
 });
 
@@ -61,7 +65,6 @@ describe('TAP Stack Integration Tests', () => {
   let outputs: TerraformOutputs;
 
   beforeAll(() => {
-    // Load outputs JSON
     const outputsFile = fs.readFileSync(OUTPUTS_PATH, 'utf8');
     outputs = JSON.parse(outputsFile);
   });
@@ -155,7 +158,7 @@ describe('TAP Stack Integration Tests', () => {
 
     test('Validates empty outputs', () => {
       const emptyOutputs: TerraformOutputs = {};
-      expect(Object.keys(emptyOutputs).toHaveLength(0));
+      expect(Object.keys(emptyOutputs)).toHaveLength(0);
     });
 
     test('Validates malformed outputs', () => {
