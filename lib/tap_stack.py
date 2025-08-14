@@ -179,7 +179,7 @@ class TapStack(pulumi.ComponentResource):
     # Create a NAT Gateway for the private subnet
     self.eip = aws.ec2.Eip(
       f"nat-eip-{self.environment_suffix}",
-      vpc=True,
+      domain="vpc",
       tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest",

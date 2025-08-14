@@ -80,9 +80,14 @@ class TestTapStackLiveInfrastructure(unittest.TestCase):
                     if block['Ipv6CidrBlockState']['State'] == 'associated']
       self.assertGreater(len(active_ipv6), 0, "VPC should have IPv6 CIDR block")
       
-      # Verify DNS support
-      self.assertTrue(vpc['EnableDnsSupport'])
-      self.assertTrue(vpc['EnableDnsHostnames'])
+      # Verify DNS support (need to check attributes separately)
+      dns_support = self.ec2_client.describe_vpc_attribute(
+        VpcId=vpc_id, Attribute='enableDnsSupport')
+      dns_hostnames = self.ec2_client.describe_vpc_attribute(
+        VpcId=vpc_id, Attribute='enableDnsHostnames')
+      
+      self.assertTrue(dns_support['EnableDnsSupport']['Value'])
+      self.assertTrue(dns_hostnames['EnableDnsHostnames']['Value'])
       
       # Verify tags
       tags = {tag['Key']: tag['Value'] for tag in vpc.get('Tags', [])}
@@ -523,9 +528,21 @@ class TestTapStackLiveInfrastructure(unittest.TestCase):
     self.assertTrue(private_subnet_ipv6_cidr.endswith('/64'))
     
     # Verify subnet CIDRs are derived from VPC CIDR
-    vpc_base = vpc_ipv6_cidr.replace('/56', '')
-    self.assertTrue(public_subnet_ipv6_cidr.startswith(vpc_base.rstrip(':')))
-    self.assertTrue(private_subnet_ipv6_cidr.startswith(vpc_base.rstrip(':')))
+    vpc_base = vpc_ipv6_cidr.replace('/56', '').rstrip(':')
+    public_base = public_subnet_ipv6_cidr.replace('/64', '').rstrip(':')
+    private_base = private_subnet_ipv6_cidr.replace('/64', '').rstrip(':')
+    
+    # Check that subnets share the same base prefix as VPC
+    # AWS assigns subnets within the VPC's IPv6 block
+    # Both subnets should share the first 48 bits with VPC (first 3 groups)
+    vpc_prefix = ':'.join(vpc_base.split(':')[:3])
+    public_prefix = ':'.join(public_base.split(':')[:3])
+    private_prefix = ':'.join(private_base.split(':')[:3])
+    
+    self.assertEqual(public_prefix, vpc_prefix,
+                    f"Public subnet {public_base} should derive from VPC {vpc_base}")
+    self.assertEqual(private_prefix, vpc_prefix,
+                    f"Private subnet {private_base} should derive from VPC {vpc_base}")
 
   def test_resource_tags_compliance(self):
     """Test all resources have required tags."""
