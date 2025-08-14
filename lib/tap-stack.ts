@@ -91,7 +91,7 @@ export class TapStack extends cdk.Stack {
       vpc: vpc1,
       service: ec2.InterfaceVpcEndpointAwsService.SSM,
       subnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        subnetType: ec2.SubnetType.PUBLIC,
       },
       securityGroups: [vpcEndpointSecurityGroup],
       privateDnsEnabled: true,
@@ -104,7 +104,7 @@ export class TapStack extends cdk.Stack {
         vpc: vpc1,
         service: ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
         subnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PUBLIC,
         },
         securityGroups: [vpcEndpointSecurityGroup],
         privateDnsEnabled: true,
@@ -118,7 +118,7 @@ export class TapStack extends cdk.Stack {
         vpc: vpc1,
         service: ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
         subnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PUBLIC,
         },
         securityGroups: [vpcEndpointSecurityGroup],
         privateDnsEnabled: true,
