@@ -41,7 +41,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         await s3Client.send(command);
         expect(true).toBe(true); // Bucket exists and is accessible
       } catch (error) {
-        fail(`S3 Access Logs Bucket ${bucketName} is not accessible: ${error}`);
+        throw new Error(`S3 Access Logs Bucket ${bucketName} is not accessible: ${error}`);
       }
     });
 
@@ -54,7 +54,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         const response = await s3Client.send(command);
         expect(response.Status).toBe('Enabled');
       } catch (error) {
-        fail(`S3 Application Bucket ${bucketName} versioning check failed: ${error}`);
+        throw new Error(`S3 Application Bucket ${bucketName} versioning check failed: ${error}`);
       }
     });
 
@@ -67,7 +67,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         const response = await s3Client.send(command);
         expect(response.Status).toBe('Enabled');
       } catch (error) {
-        fail(`S3 Backup Bucket ${bucketName} versioning check failed: ${error}`);
+        throw new Error(`S3 Backup Bucket ${bucketName} versioning check failed: ${error}`);
       }
     });
 
@@ -81,7 +81,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         expect(response.LoggingEnabled).toBeDefined();
         expect(response.LoggingEnabled?.TargetBucket).toBe(getOutput('S3AccessLogsBucketName'));
       } catch (error) {
-        fail(`S3 Application Bucket ${bucketName} logging check failed: ${error}`);
+        throw new Error(`S3 Application Bucket ${bucketName} logging check failed: ${error}`);
       }
     });
 
@@ -95,7 +95,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         expect(response.LoggingEnabled).toBeDefined();
         expect(response.LoggingEnabled?.TargetBucket).toBe(getOutput('S3AccessLogsBucketName'));
       } catch (error) {
-        fail(`S3 Backup Bucket ${bucketName} logging check failed: ${error}`);
+        throw new Error(`S3 Backup Bucket ${bucketName} logging check failed: ${error}`);
       }
     });
 
@@ -113,7 +113,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
           expect(response.ServerSideEncryptionConfiguration).toBeDefined();
           expect(response.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
         } catch (error) {
-          fail(`S3 Bucket ${bucketName} encryption check failed: ${error}`);
+          throw new Error(`S3 Bucket ${bucketName} encryption check failed: ${error}`);
         }
       }
     });
@@ -135,7 +135,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
           expect(config?.IgnorePublicAcls).toBe(true);
           expect(config?.RestrictPublicBuckets).toBe(true);
         } catch (error) {
-          fail(`S3 Bucket ${bucketName} public access block check failed: ${error}`);
+          throw new Error(`S3 Bucket ${bucketName} public access block check failed: ${error}`);
         }
       }
     });
@@ -155,7 +155,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         expect(response.Configuration?.Timeout).toBe(300);
         expect(response.Configuration?.MemorySize).toBe(256);
       } catch (error) {
-        fail(`Lambda function ${functionName} check failed: ${error}`);
+        throw new Error(`Lambda function ${functionName} check failed: ${error}`);
       }
     });
 
@@ -170,7 +170,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         expect(envVars?.ENVIRONMENT).toBe('Production');
         expect(envVars?.RDS_ENDPOINT).toBe(getOutput('RDSEndpointURL'));
       } catch (error) {
-        fail(`Lambda function ${functionName} environment variables check failed: ${error}`);
+        throw new Error(`Lambda function ${functionName} environment variables check failed: ${error}`);
       }
     });
 
@@ -197,7 +197,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         const response = await lambdaClient.send(command);
         expect(response.StatusCode).toBe(200);
       } catch (error) {
-        fail(`Lambda function ${functionName} invocation test failed: ${error}`);
+        throw new Error(`Lambda function ${functionName} invocation test failed: ${error}`);
       }
     });
   });
@@ -213,7 +213,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         
         const dbInstance = response.DBInstances![0];
         expect(dbInstance.Engine).toBe('postgres');
-        expect(dbInstance.EngineVersion).toBe('14.9');
+        expect(dbInstance.EngineVersion).toBe('14.18');
         expect(dbInstance.MultiAZ).toBe(true);
         expect(dbInstance.StorageEncrypted).toBe(true);
         expect(dbInstance.DeletionProtection).toBe(true);
@@ -243,7 +243,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         // Note: These properties might not be directly accessible in the response
         // but they are configured in the CloudFormation template
       } catch (error) {
-        fail(`VPC ${vpcId} check failed: ${error}`);
+        throw new Error(`VPC ${vpcId} check failed: ${error}`);
       }
     });
 
@@ -266,7 +266,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         const uniqueAzs = [...new Set(azs)];
         expect(uniqueAzs.length).toBeGreaterThanOrEqual(2);
       } catch (error) {
-        fail(`Private subnets check failed: ${error}`);
+        throw new Error(`Private subnets check failed: ${error}`);
       }
     });
 
@@ -289,41 +289,65 @@ describe('TapStack Infrastructure Integration Tests', () => {
         expect(postgresRule).toBeDefined();
         expect(postgresRule?.IpRanges?.[0]?.CidrIp).toBe('10.0.0.0/16');
       } catch (error) {
-        fail(`RDS Security Group ${securityGroupId} check failed: ${error}`);
+        throw new Error(`RDS Security Group ${securityGroupId} check failed: ${error}`);
       }
     });
   });
 
   describe('IAM Roles', () => {
     test('Lambda execution role should exist with correct permissions', async () => {
-      const roleName = `MyApp-Lambda-Execution-Role-us-west-2`;
+      // Get the Lambda function name to derive the role name
+      const functionName = getOutput('LambdaFunctionName');
+      expect(functionName).toBeTruthy();
       
       try {
-        const command = new GetRoleCommand({ RoleName: roleName });
-        const response = await iamClient.send(command);
-        expect(response.Role?.RoleName).toBe(roleName);
+        // Get the Lambda function to find its execution role
+        const lambdaCommand = new GetFunctionCommand({ FunctionName: functionName });
+        const lambdaResponse = await lambdaClient.send(lambdaCommand);
+        const roleArn = lambdaResponse.Configuration?.Role;
+        expect(roleArn).toBeTruthy();
+        
+        // Extract role name from ARN
+        const roleName = roleArn!.split('/').pop()!;
+        
+        // Get the role details
+        const roleCommand = new GetRoleCommand({ RoleName: roleName });
+        const roleResponse = await iamClient.send(roleCommand);
+        expect(roleResponse.Role?.RoleName).toBe(roleName);
         
         // Check assume role policy
-        const assumeRolePolicy = JSON.parse(response.Role!.AssumeRolePolicyDocument!);
+        const assumeRolePolicy = JSON.parse(roleResponse.Role!.AssumeRolePolicyDocument!);
         expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
       } catch (error) {
-        throw new Error(`Lambda execution role ${roleName} check failed: ${error}`);
+        throw new Error(`Lambda execution role check failed: ${error}`);
       }
     });
 
     test('RDS monitoring role should exist', async () => {
-      const roleName = 'rds-monitoring-role';
+      // Get the RDS instance to find its monitoring role
+      const dbIdentifier = getOutput('RDSEndpointURL')?.split('.')[0];
+      expect(dbIdentifier).toBeTruthy();
       
       try {
-        const command = new GetRoleCommand({ RoleName: roleName });
-        const response = await iamClient.send(command);
-        expect(response.Role?.RoleName).toBe(roleName);
+        // Get the RDS instance to find its monitoring role ARN
+        const rdsCommand = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
+        const rdsResponse = await rdsClient.send(rdsCommand);
+        const monitoringRoleArn = rdsResponse.DBInstances![0].MonitoringRoleArn;
+        expect(monitoringRoleArn).toBeTruthy();
+        
+        // Extract role name from ARN
+        const roleName = monitoringRoleArn!.split('/').pop()!;
+        
+        // Get the role details
+        const roleCommand = new GetRoleCommand({ RoleName: roleName });
+        const roleResponse = await iamClient.send(roleCommand);
+        expect(roleResponse.Role?.RoleName).toBe(roleName);
         
         // Check assume role policy
-        const assumeRolePolicy = JSON.parse(response.Role!.AssumeRolePolicyDocument!);
+        const assumeRolePolicy = JSON.parse(roleResponse.Role!.AssumeRolePolicyDocument!);
         expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('monitoring.rds.amazonaws.com');
       } catch (error) {
-        throw new Error(`RDS monitoring role ${roleName} check failed: ${error}`);
+        throw new Error(`RDS monitoring role check failed: ${error}`);
       }
     });
   });
@@ -342,7 +366,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         expect(response.logGroups![0].logGroupName).toBe(logGroupName);
         expect(response.logGroups![0].retentionInDays).toBe(30);
       } catch (error) {
-        fail(`Lambda log group ${logGroupName} check failed: ${error}`);
+        throw new Error(`Lambda log group ${logGroupName} check failed: ${error}`);
       }
     });
   });
@@ -383,7 +407,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         expect(payload.body).toContain('S3 event processed successfully');
         expect(payload.body).toContain('Production');
       } catch (error) {
-        fail(`S3 to Lambda integration test failed: ${error}`);
+        throw new Error(`S3 to Lambda integration test failed: ${error}`);
       }
     });
 
@@ -401,7 +425,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         const environmentTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
         expect(environmentTag?.Value).toBe('Production');
       } catch (error) {
-        fail(`Resource tagging check failed: ${error}`);
+        throw new Error(`Resource tagging check failed: ${error}`);
       }
     });
   });
@@ -425,7 +449,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
           expect(subnet.MapPublicIpOnLaunch).toBe(false);
         });
       } catch (error) {
-        fail(`RDS subnet security check failed: ${error}`);
+        throw new Error(`RDS subnet security check failed: ${error}`);
       }
     });
 
@@ -450,7 +474,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
           expect(config?.BlockPublicAcls).toBe(true);
           expect(config?.RestrictPublicBuckets).toBe(true);
         } catch (error) {
-          fail(`S3 bucket ${bucketName} security check failed: ${error}`);
+          throw new Error(`S3 bucket ${bucketName} security check failed: ${error}`);
         }
       }
     });
