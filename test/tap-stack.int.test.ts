@@ -24,7 +24,7 @@ const codepipeline = new CodePipelineClient({ region });
 
 // Load outputs from flat-outputs.json
 const outputs: Record<string, string> = JSON.parse(
-  fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
 describe('TapStack CI/CD CloudFormation Infrastructure Integration Tests', () => {
