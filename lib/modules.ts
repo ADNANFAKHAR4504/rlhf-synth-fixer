@@ -116,12 +116,13 @@ export class NetworkModule extends Construct {
       name: 'tap-ec2-sg',
       vpcId: this.vpc.id,
       description: 'Allow SSH from office IP only',
+      // IMPORTANT: Replace the placeholder with your actual IP address
       ingress: [
         {
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
-          cidrBlocks: ['YOUR_OFFICE_IP/32'],
+          cidrBlocks: ['104.28.230.191/32'],
         },
       ],
       egress: [
@@ -224,7 +225,8 @@ export class DatabaseModule extends Construct {
 
     // Create DB subnet group
     const dbSubnetGroup = new DbSubnetGroup(this, 'DbSubnetGroup', {
-      name: `tap-db-subnet-group-${id}`,
+      // FIX: Ensure the name is all lowercase to meet AWS requirements
+      name: `tap-db-subnet-group-${id.toLowerCase()}`,
       subnetIds: props.subnetIds,
       tags: { ...props.tags, Name: 'tap-db-subnet-group' },
     });
