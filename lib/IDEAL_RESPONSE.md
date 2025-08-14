@@ -49,7 +49,7 @@ import { StorageStack } from '../lib/stacks/storage-stack';
 const app = new cdk.App();
 const env = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
-  region: process.env.CDK_DEFAULT_REGION,
+  region: 'us-east-2',
 };
 
 // CoreStack: VPC, KMS key, app SG (no instance role)
