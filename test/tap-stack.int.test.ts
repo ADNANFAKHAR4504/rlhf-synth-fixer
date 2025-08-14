@@ -121,7 +121,7 @@ describe('TapStack CI/CD CloudFormation Infrastructure Integration Tests', () =>
         new GetFunctionConfigurationCommand({ FunctionName: functionName })
       );
       expect(res.FunctionName).toBe(functionName);
-      expect(res.Runtime).toMatch(/python3.9/);
+      expect(res.Runtime).toMatch(/python3.11/);
       expect(res.Handler).toBe('index.lambda_handler');
       expect(res.Timeout).toBeGreaterThanOrEqual(60);
     });
