@@ -32,7 +32,7 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
       this.accessLogsBucket = new aws.s3.Bucket(
         `${name}-access-logs`,
         {
-          bucket: `${args.bucketName}-access-logs`,
+          bucket: args.bucketName ? `${args.bucketName}-access-logs` : undefined,
           forceDestroy: false,
           tags: { ...commonTags, ...args.tags, Purpose: 'Access Logs' },
         },
@@ -65,14 +65,14 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Enable versioning with MFA delete protection
+    // Enable versioning with MFA delete protection (disabled for automation)
     new aws.s3.BucketVersioning(
       `${name}-versioning`,
       {
         bucket: this.bucket.id,
         versioningConfiguration: {
           status: 'Enabled',
-          mfaDelete: 'Enabled', // Require MFA for permanent deletion
+          mfaDelete: 'Disabled', // Disabled for automated deployments
         },
       },
       { parent: this }

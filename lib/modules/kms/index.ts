@@ -19,14 +19,18 @@ export class KMSKey extends pulumi.ComponentResource {
   ) {
     super('custom:security:KMSKey', name, {}, opts);
 
-    const keyPolicy = {
+    // Get account ID first
+    const accountId = aws.getCallerIdentity().then(id => id.accountId);
+
+    // Create key policy using pulumi.all to properly handle the Output
+    const keyPolicy = pulumi.all([accountId]).apply(([accountId]) => ({
       Version: '2012-10-17',
       Statement: [
         {
           Sid: 'Enable IAM User Permissions',
           Effect: 'Allow',
           Principal: {
-            AWS: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then(id => id.accountId)}:root`,
+            AWS: `arn:aws:iam::${accountId}:root`,
           },
           Action: 'kms:*',
           Resource: '*',
@@ -56,14 +60,14 @@ export class KMSKey extends pulumi.ComponentResource {
           Resource: '*',
         },
       ],
-    };
+    }));
 
     this.key = new aws.kms.Key(
       `${name}-key`,
       {
         description: args.description,
         keyUsage: args.keyUsage || 'ENCRYPT_DECRYPT',
-        policy: JSON.stringify(keyPolicy),
+        policy: keyPolicy.apply(policy => JSON.stringify(policy)),
         enableKeyRotation: true,
         deletionWindowInDays: 30,
         tags: { ...commonTags, ...args.tags },

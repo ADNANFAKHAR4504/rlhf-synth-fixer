@@ -76,9 +76,12 @@ export class SecurityStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Get account ID for IAM role policies
+    const accountId = aws.getCallerIdentity().then(id => id.accountId);
+
     // Create enhanced security policies
     const securityPolicies = new SecurityPolicies(
-      'security-policies',
+      `tap-security-policies-${environmentSuffix}`,
       {
         environmentSuffix,
         tags: commonTags,
@@ -117,7 +120,7 @@ export class SecurityStack extends pulumi.ComponentResource {
 
     if (enableEnhancedSecurity) {
       primaryBucket = new EnhancedSecureS3Bucket(
-        'primary-storage',
+        `tap-primary-storage-${environmentSuffix}`,
         {
           bucketName: `tap-primary-storage-${environmentSuffix}`,
           kmsKeyId: s3KmsKey.key.keyId,
@@ -154,7 +157,7 @@ export class SecurityStack extends pulumi.ComponentResource {
       );
 
       auditBucket = new EnhancedSecureS3Bucket(
-        'audit-logs',
+        `tap-audit-logs-${environmentSuffix}`,
         {
           bucketName: `tap-audit-logs-${environmentSuffix}`,
           kmsKeyId: cloudTrailKmsKey.key.keyId,
@@ -170,7 +173,7 @@ export class SecurityStack extends pulumi.ComponentResource {
       );
     } else {
       primaryBucket = new SecureS3Bucket(
-        'primary-storage',
+        `tap-primary-storage-${environmentSuffix}`,
         {
           bucketName: `tap-primary-storage-${environmentSuffix}`,
           kmsKeyId: s3KmsKey.key.keyId,
@@ -203,7 +206,7 @@ export class SecurityStack extends pulumi.ComponentResource {
       );
 
       auditBucket = new SecureS3Bucket(
-        'audit-logs',
+        `tap-audit-logs-${environmentSuffix}`,
         {
           bucketName: `tap-audit-logs-${environmentSuffix}`,
           kmsKeyId: cloudTrailKmsKey.key.keyId,
@@ -218,16 +221,16 @@ export class SecurityStack extends pulumi.ComponentResource {
 
     // Create IAM roles with enhanced least privilege and MFA enforcement
     const dataAccessRole = new SecureIAMRole(
-      'data-access',
+      `tap-data-access-${environmentSuffix}`,
       {
-        assumeRolePolicy: JSON.stringify({
+        assumeRolePolicy: pulumi.all([accountId]).apply(([accountId]) => JSON.stringify({
           Version: '2012-10-17',
           Statement: [
             {
               Action: 'sts:AssumeRole',
               Effect: 'Allow',
               Principal: {
-                AWS: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then(id => id.accountId)}:root`,
+                AWS: `arn:aws:iam::${accountId}:root`,
               },
               Condition: {
                 Bool: {
@@ -242,7 +245,7 @@ export class SecurityStack extends pulumi.ComponentResource {
               },
             },
           ],
-        }),
+        })),
         roleName: `tap-data-access-role-${environmentSuffix}`,
         policies: enableEnhancedSecurity
           ? [
@@ -265,16 +268,16 @@ export class SecurityStack extends pulumi.ComponentResource {
     );
 
     const auditRole = new SecureIAMRole(
-      'audit-access',
+      `tap-audit-access-${environmentSuffix}`,
       {
-        assumeRolePolicy: JSON.stringify({
+        assumeRolePolicy: pulumi.all([accountId]).apply(([accountId]) => JSON.stringify({
           Version: '2012-10-17',
           Statement: [
             {
               Action: 'sts:AssumeRole',
               Effect: 'Allow',
               Principal: {
-                AWS: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then(id => id.accountId)}:root`,
+                AWS: `arn:aws:iam::${accountId}:root`,
               },
               Condition: {
                 Bool: {
@@ -289,7 +292,7 @@ export class SecurityStack extends pulumi.ComponentResource {
               },
             },
           ],
-        }),
+        })),
         roleName: `tap-audit-access-role-${environmentSuffix}`,
         policies: enableEnhancedSecurity
           ? [
@@ -339,7 +342,7 @@ export class SecurityStack extends pulumi.ComponentResource {
 
     if (enableEnhancedSecurity) {
       cloudTrail = new EnhancedCloudTrail(
-        'security-audit',
+        `tap-security-audit-${environmentSuffix}`,
         {
           trailName: `tap-security-audit-trail-${environmentSuffix}`,
           s3BucketName: auditBucket.bucket.id,
@@ -358,7 +361,7 @@ export class SecurityStack extends pulumi.ComponentResource {
       );
     } else {
       cloudTrail = new SecureCloudTrail(
-        'security-audit',
+        `tap-security-audit-${environmentSuffix}`,
         {
           trailName: `tap-security-audit-trail-${environmentSuffix}`,
           s3BucketName: auditBucket.bucket.id,
@@ -377,7 +380,7 @@ export class SecurityStack extends pulumi.ComponentResource {
 
     // Create additional security policies with enhanced controls
     const securityPolicy = new aws.iam.Policy(
-      'security-baseline',
+      `tap-security-baseline-${environmentSuffix}`,
       {
         name: `SecurityBaseline-${environmentSuffix}`,
         description:
