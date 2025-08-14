@@ -1,15 +1,37 @@
+# Variables for environment suffix
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to avoid conflicts"
+  type        = string
+  default     = "dev"
+}
+
+variable "aws_region" {
+  description = "AWS region for deployment"
+  type        = string
+  default     = "us-east-1"
+}
+
+# Generate random suffix for unique resource names
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
 # Local variables for common configuration
 locals {
-  project_name = "secure-infrastructure"
-  vpc_cidr     = "10.0.0.0/16"
-  allowed_cidr = "203.0.113.0/24" # Replace with your actual allowed CIDR
+  project_name       = "secure-infra-${var.environment_suffix}-${random_string.suffix.result}"
+  vpc_cidr           = "10.0.0.0/16"
+  allowed_cidr       = "203.0.113.0/24" # Replace with your actual allowed CIDR
+  environment_suffix = var.environment_suffix
 
   common_tags = {
-    Environment = "production"
-    Owner       = "infrastructure-team"
-    Department  = "engineering"
-    Project     = "secure-infrastructure"
-    ManagedBy   = "terraform"
+    Environment       = "production"
+    Owner             = "infrastructure-team"
+    Department        = "engineering"
+    Project           = "secure-infrastructure"
+    ManagedBy         = "terraform"
+    EnvironmentSuffix = var.environment_suffix
   }
 }
 
@@ -666,7 +688,7 @@ resource "aws_db_instance" "main" {
   # Monitoring and logging
   monitoring_interval             = 60
   monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Security
   deletion_protection = false # Set to true for production
@@ -681,8 +703,11 @@ resource "aws_db_instance" "main" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name           = "${local.project_name}-cloudtrail"
-  s3_bucket_name = aws_s3_bucket.cloudtrail_logs.bucket
+  name                          = "${local.project_name}-cloudtrail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_logging                = true
 
   event_selector {
     read_write_type                  = "All"
@@ -691,7 +716,11 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
+      values = ["${aws_s3_bucket.cloudtrail_logs.arn}/*"]
+    }
+    data_resource {
+      type   = "AWS::S3::Bucket"
+      values = [aws_s3_bucket.cloudtrail_logs.arn]
     }
   }
 

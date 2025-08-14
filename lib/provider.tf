@@ -13,7 +13,7 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-east-2"
+  region = var.aws_region
 
   default_tags {
     tags = {
@@ -25,3 +25,5 @@ provider "aws" {
     }
   }
 }
+
+provider "random" {}
