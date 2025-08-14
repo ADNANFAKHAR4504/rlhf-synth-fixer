@@ -137,7 +137,7 @@ def lambda_handler(event, context):
       new s3n.LambdaDestination(processFunction)
     );
 
-    //Output
+    //Outputs
     new cdk.CfnOutput(this, 'BucketName', {
       value: triggerBucket.bucketName,
       description: 'Name of the S3 bucket that triggers Lambda',
