@@ -42,7 +42,7 @@ def _load_outputs() -> Dict[str, Any]:
   # Load deployment outputs
   outputs_file = os.path.join(
       os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-      'cfn-outputs', 'all-outputs.json'
+      'cfn-outputs', 'flat-outputs.json'
   )
 
   opt = {}
