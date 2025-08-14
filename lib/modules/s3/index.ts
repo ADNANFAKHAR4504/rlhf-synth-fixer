@@ -180,6 +180,29 @@ export class SecureS3Bucket extends pulumi.ComponentResource {
                   Resource: [bucketArn, `${bucketArn}/*`],
                 },
                 {
+                  Sid: 'AllowCloudTrailAclCheck',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
+                },
+                {
+                  Sid: 'AllowCloudTrailWrite',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/*`,
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-acl': 'bucket-owner-full-control',
+                    },
+                  },
+                },
+                {
                   Sid: 'DenyInsecureConnections',
                   Effect: 'Deny',
                   Principal: '*',
@@ -188,18 +211,6 @@ export class SecureS3Bucket extends pulumi.ComponentResource {
                   Condition: {
                     Bool: {
                       'aws:SecureTransport': 'false',
-                    },
-                  },
-                },
-                {
-                  Sid: 'DenyUnencryptedObjectUploads',
-                  Effect: 'Deny',
-                  Principal: '*',
-                  Action: 's3:PutObject',
-                  Resource: `${bucketArn}/*`,
-                  Condition: {
-                    StringNotEquals: {
-                      's3:x-amz-server-side-encryption': 'aws:kms',
                     },
                   },
                 },

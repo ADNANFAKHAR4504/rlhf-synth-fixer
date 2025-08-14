@@ -133,6 +133,29 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
               Resource: [bucketArn, `${bucketArn}/*`],
             },
             {
+              Sid: 'AllowCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: bucketArn,
+            },
+            {
+              Sid: 'AllowCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${bucketArn}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
+              },
+            },
+            {
               Sid: 'DenyInsecureConnections',
               Effect: 'Deny',
               Principal: '*',
@@ -145,33 +168,6 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
               },
             },
             {
-              Sid: 'DenyUnencryptedObjectUploads',
-              Effect: 'Deny',
-              Principal: '*',
-              Action: 's3:PutObject',
-              Resource: `${bucketArn}/*`,
-              Condition: {
-                StringNotEquals: {
-                  's3:x-amz-server-side-encryption': 'aws:kms',
-                },
-              },
-            },
-            {
-              Sid: 'DenyIncorrectEncryptionHeader',
-              Effect: 'Deny',
-              Principal: '*',
-              Action: 's3:PutObject',
-              Resource: `${bucketArn}/*`,
-              Condition: {
-                StringNotEquals: {
-                  's3:x-amz-server-side-encryption-aws-kms-key-id':
-                    args.kmsKeyId,
-                },
-              },
-            },
-            // Note: IP restrictions removed to prevent deployment issues
-            // Can be re-enabled with proper condition logic if needed
-            {
               Sid: 'DenyDeleteWithoutMFA',
               Effect: 'Deny',
               Principal: '*',
@@ -182,12 +178,12 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
               ],
               Resource: [bucketArn, `${bucketArn}/*`],
               Condition: {
-                BoolIfExists: {
+                Bool: {
                   'aws:MultiFactorAuthPresent': 'false',
                 },
               },
             },
-          ].filter(statement => statement.Condition !== undefined),
+          ],
         }));
 
       this.bucketPolicy = new aws.s3.BucketPolicy(
