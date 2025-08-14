@@ -135,9 +135,10 @@ class TestHelpers(unittest.TestCase):
     self.assertEqual(key, mock_key.return_value)
     mock_alias.assert_called_once()
 
+  @patch("lib.tap_stack.aws.ec2.SecurityGroupRule", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.SecurityGroup",
          side_effect=lambda *a, **k: MagicMock(id="sg", **k))
-  def test_create_security_groups(self, _):
+  def test_create_security_groups(self, *_):
     """Ensure create_security_groups returns all required security groups."""
     mock_provider = MagicMock()
     vpc = MagicMock()
@@ -146,7 +147,8 @@ class TestHelpers(unittest.TestCase):
     sgs = create_security_groups(vpc, sample_tags, mock_provider)
     self.assertIn("alb_sg", sgs)
     self.assertIn("db_sg", sgs)
-    self.assertIn("eks_sg", sgs)
+    self.assertIn("eks_cluster_sg", sgs)
+    self.assertIn("eks_node_sg", sgs)
 
   @patch("lib.tap_stack.random.RandomPassword",
          return_value=MagicMock(result="generated-password"))
@@ -184,12 +186,12 @@ class TestHelpers(unittest.TestCase):
     mock_cluster_class.return_value = mock_cluster_instance
 
     subnet_ids = ["subnet1", "subnet2"]
-    eks_sg = MagicMock(id="sg-123")
+    eks_cluster_sg = MagicMock(id="sg-123")
     tags = {"Environment": "Production"}
     cluster = create_eks_cluster(
-        subnet_ids=subnet_ids,
-        eks_sg=eks_sg,
-        tags=tags,
+        subnet_ids=subnet_ids, 
+        eks_cluster_sg=eks_cluster_sg, 
+        tags=tags, 
         provider=mock_provider
     )
     self.assertEqual(cluster.name, "cluster")
@@ -211,12 +213,12 @@ class TestHelpers(unittest.TestCase):
     cluster = MagicMock()
     cluster.name = "eks-cluster"
     public_subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
-    eks_sg = MagicMock(id="sg-123")
+    eks_node_sg = MagicMock(id="sg-123")
     tags = {"Environment": "Production"}
     ng = create_eks_node_group(
         cluster=cluster,
         public_subnets=public_subnets,
-        eks_sg=eks_sg,
+        eks_node_sg=eks_node_sg,
         tags=tags,
         provider=mock_provider
     )
@@ -353,7 +355,7 @@ class TestTapStack(unittest.TestCase):
          return_value=MagicMock(id="rds", endpoint="db"))
   @patch("lib.tap_stack.create_security_groups",
          return_value={"alb_sg": MagicMock(), "db_sg": MagicMock(),
-                       "eks_sg": MagicMock()})
+                       "eks_cluster_sg": MagicMock(), "eks_node_sg": MagicMock()})
   @patch("lib.tap_stack.create_kms_key",
          return_value=MagicMock(id="kms", arn="arn"))
   @patch("lib.tap_stack.SecureVPC",
@@ -390,7 +392,7 @@ class TestTapStack(unittest.TestCase):
          return_value=MagicMock(id="rds", endpoint="db"))
   @patch("lib.tap_stack.create_security_groups",
          return_value={"alb_sg": MagicMock(), "db_sg": MagicMock(),
-                       "eks_sg": MagicMock()})
+                       "eks_cluster_sg": MagicMock(), "eks_node_sg": MagicMock()})
   @patch("lib.tap_stack.create_kms_key",
          return_value=MagicMock(id="kms", arn="arn"))
   @patch("lib.tap_stack.SecureVPC",
@@ -431,7 +433,7 @@ class TestTapStack(unittest.TestCase):
          return_value=MagicMock(id="rds", endpoint="db"))
   @patch("lib.tap_stack.create_security_groups",
          return_value={"alb_sg": MagicMock(), "db_sg": MagicMock(),
-                       "eks_sg": MagicMock()})
+                       "eks_cluster_sg": MagicMock(), "eks_node_sg": MagicMock()})
   @patch("lib.tap_stack.create_kms_key",
          return_value=MagicMock(id="kms", arn="arn"))
   @patch("lib.tap_stack.SecureVPC",
