@@ -17,7 +17,7 @@ variable "bucket_region" {
 # - VPC CIDR: 10.0.0.0/16 with /24 subnets across 2 AZs (us-west-2a, us-west-2b)
 # - Instance types: t4g.micro for bastion, t4g.small for app (Graviton-based)
 # - Database: PostgreSQL 15.4, db.t4g.micro, Multi-AZ enabled
-# - SSL/TLS: Self-signed certificate for demo (replace with real domain)
+# - SSL/TLS: ACM certificate with DNS validation (configure via domain_name and hosted_zone_id variables)
 # - Bastion access: SSH restricted to empty CIDR list by default (SSM preferred)
 # - Log retention: 30 days CloudWatch, 90 days S3 lifecycle to IA
 # - WAF: Standard AWS managed rule sets for common threats
@@ -91,6 +91,30 @@ variable "s3_lifecycle_days" {
 
 variable "allow_public_storage" {
   description = "Allow public access to S3 buckets"
+  type        = bool
+  default     = false
+}
+
+variable "domain_name" {
+  description = "Domain name for the application (e.g., myapp.com)"
+  type        = string
+  default     = ""
+}
+
+variable "hosted_zone_id" {
+  description = "Route53 hosted zone ID for the domain (e.g., Z1234567890ABC)"
+  type        = string
+  default     = ""
+}
+
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail logging"
+  type        = bool
+  default     = false
+}
+
+variable "enable_config" {
+  description = "Enable AWS Config"
   type        = bool
   default     = false
 }
@@ -661,11 +685,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 # =============================================================================
 
 resource "aws_acm_certificate" "main" {
-  domain_name       = "example.com"
+  count = var.domain_name != "" ? 1 : 0
+
+  domain_name       = var.domain_name
   validation_method = "DNS"
 
   subject_alternative_names = [
-    "*.example.com"
+    "*.${var.domain_name}"
   ]
 
   lifecycle {
@@ -677,19 +703,18 @@ resource "aws_acm_certificate" "main" {
   })
 }
 
-# Route53 Hosted Zone for DNS validation
-resource "aws_route53_zone" "main" {
-  name = "example.com"
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-zone"
-  })
+# Route53 Hosted Zone data source for DNS validation
+data "aws_route53_zone" "main" {
+  count = var.hosted_zone_id != "" ? 1 : 0
+  zone_id = var.hosted_zone_id
 }
 
 # Route53 DNS validation records
 resource "aws_route53_record" "cert_validation" {
+  count = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
+
   for_each = {
-    for dvo in aws_acm_certificate.main.domain_validation_options : dvo.domain_name => {
+    for dvo in aws_acm_certificate.main[0].domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
@@ -701,13 +726,15 @@ resource "aws_route53_record" "cert_validation" {
   records         = [each.value.record]
   ttl             = 60
   type            = each.value.type
-  zone_id         = aws_route53_zone.main.zone_id
+  zone_id         = data.aws_route53_zone.main[0].zone_id
 }
 
 # ACM Certificate validation
 resource "aws_acm_certificate_validation" "main" {
-  certificate_arn         = aws_acm_certificate.main.arn
-  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+  count = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
+
+  certificate_arn         = aws_acm_certificate.main[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation[0] : record.fqdn]
 
   timeouts {
     create = "5m"
@@ -766,11 +793,13 @@ resource "aws_lb_target_group" "app" {
 
 # HTTPS Listener
 resource "aws_lb_listener" "https" {
+  count = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
+
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.main[0].certificate_arn
 
   default_action {
     type             = "forward"
@@ -784,6 +813,8 @@ resource "aws_lb_listener" "https" {
 
 # HTTP to HTTPS Redirect
 resource "aws_lb_listener" "http" {
+  count = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
+
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
@@ -800,6 +831,24 @@ resource "aws_lb_listener" "http" {
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-http-listener"
+  })
+}
+
+# HTTP Listener (fallback when no domain is configured)
+resource "aws_lb_listener" "http_fallback" {
+  count = var.domain_name == "" || var.hosted_zone_id == "" ? 1 : 0
+
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-http-fallback-listener"
   })
 }
 
@@ -1311,7 +1360,7 @@ resource "aws_autoscaling_group" "app" {
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.app.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600
 
   min_size         = 1
   max_size         = 6
@@ -1407,6 +1456,8 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 # terraform import aws_cloudtrail.main <existing-trail-name>
 # Or comment out this resource if using existing CloudTrail
 resource "aws_cloudtrail" "main" {
+  count = var.enable_cloudtrail ? 1 : 0
+  
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
 
   name           = "${local.name_prefix}-trail"
@@ -1477,6 +1528,8 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 
 # Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
+  count = var.enable_config ? 1 : 0
+  
   name     = "${local.name_prefix}-config-recorder"
   role_arn = data.aws_iam_role.config_service_role.arn
 
@@ -1493,6 +1546,8 @@ resource "aws_config_configuration_recorder" "main" {
 # terraform import aws_config_delivery_channel.main <existing-delivery-channel-name>
 # Or comment out this resource if using existing delivery channel
 resource "aws_config_delivery_channel" "main" {
+  count = var.enable_config ? 1 : 0
+  
   name           = "${local.name_prefix}-config-delivery-channel"
   s3_bucket_name = aws_s3_bucket.logs.bucket
   s3_key_prefix  = "config-logs"
@@ -1848,6 +1903,37 @@ output "bastion_public_ip" {
   value       = aws_instance.bastion.public_ip
 }
 
+# Domain configuration outputs
+output "domain_name" {
+  description = "Domain name configured for the application"
+  value       = var.domain_name
+}
+
+output "hosted_zone_id" {
+  description = "Route53 hosted zone ID used for DNS"
+  value       = var.hosted_zone_id
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
+}
+
+output "certificate_arn" {
+  description = "ARN of the ACM certificate (if domain is configured)"
+  value       = var.domain_name != "" && var.hosted_zone_id != "" ? aws_acm_certificate_validation.main[0].certificate_arn : "No certificate configured"
+}
+
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail trail (if enabled)"
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : "CloudTrail disabled"
+}
+
+output "config_recorder_name" {
+  description = "Name of the AWS Config recorder (if enabled)"
+  value       = var.enable_config ? aws_config_configuration_recorder.main[0].name : "AWS Config disabled"
+}
+
 # =============================================================================
 # RESOURCE INVENTORY & CONSOLE LINKS
 # =============================================================================
@@ -1891,9 +1977,13 @@ terraform init
 terraform validate
 terraform fmt -check
 
-# Plan and apply
+# Plan and apply (without domain)
 terraform plan -var='bastion_allowed_cidrs=["YOUR_IP/32"]'
 terraform apply -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -auto-approve
+
+# Plan and apply (with domain and optional services)
+terraform plan -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -var='domain_name=myapp.com' -var='hosted_zone_id=Z1234567890ABC' -var='enable_cloudtrail=false' -var='enable_config=false'
+terraform apply -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -var='domain_name=myapp.com' -var='hosted_zone_id=Z1234567890ABC' -var='enable_cloudtrail=false' -var='enable_config=false' -auto-approve
 
 # Access via Session Manager (preferred)
 aws ssm start-session --target BASTION_INSTANCE_ID
