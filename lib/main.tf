@@ -119,6 +119,12 @@ variable "enable_config" {
   default     = false
 }
 
+variable "enable_alb_logs" {
+  description = "Enable ALB access logs to S3"
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)
@@ -752,17 +758,20 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = false
 
-  access_logs {
-    bucket  = aws_s3_bucket.logs.bucket
-    prefix  = "alb-logs"
-    enabled = true
+  dynamic "access_logs" {
+    for_each = var.enable_alb_logs ? [1] : []
+    content {
+      bucket  = aws_s3_bucket.logs.bucket
+      prefix  = "alb-logs"
+      enabled = true
+    }
   }
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
   })
 
-  depends_on = [aws_s3_bucket_policy.logs_alb]
+  depends_on = var.enable_alb_logs ? [aws_s3_bucket_policy.logs_alb] : []
 }
 
 # ALB Target Group
@@ -775,13 +784,13 @@ resource "aws_lb_target_group" "app" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 60
     matcher             = "200"
     path                = "/"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 10
+    unhealthy_threshold = 3
   }
 
   tags = merge(local.common_tags, {
@@ -1358,11 +1367,11 @@ resource "aws_autoscaling_group" "app" {
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.app.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 600
+  health_check_grace_period = 900
 
   min_size         = 1
   max_size         = 6
-  desired_capacity = 2
+  desired_capacity = 1
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -1967,8 +1976,8 @@ terraform plan -var='bastion_allowed_cidrs=["YOUR_IP/32"]'
 terraform apply -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -auto-approve
 
 # Plan and apply (with domain and optional services)
-terraform plan -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -var='domain_name=myapp.com' -var='hosted_zone_id=Z1234567890ABC' -var='enable_cloudtrail=false' -var='enable_config=false'
-terraform apply -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -var='domain_name=myapp.com' -var='hosted_zone_id=Z1234567890ABC' -var='enable_cloudtrail=false' -var='enable_config=false' -auto-approve
+terraform plan -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -var='domain_name=myapp.com' -var='hosted_zone_id=Z1234567890ABC' -var='enable_cloudtrail=false' -var='enable_config=false' -var='enable_alb_logs=false'
+terraform apply -var='bastion_allowed_cidrs=["YOUR_IP/32"]' -var='domain_name=myapp.com' -var='hosted_zone_id=Z1234567890ABC' -var='enable_cloudtrail=false' -var='enable_config=false' -var='enable_alb_logs=false' -auto-approve
 
 # Access via Session Manager (preferred)
 aws ssm start-session --target BASTION_INSTANCE_ID
