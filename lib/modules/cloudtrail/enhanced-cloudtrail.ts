@@ -126,59 +126,11 @@ export class EnhancedCloudTrail extends pulumi.ComponentResource {
             ],
           },
           {
-            name: 'Log all IAM management events',
+            name: 'Log all management events',
             fieldSelectors: [
               {
                 field: 'eventCategory',
                 equals: ['Management'],
-              },
-              {
-                field: 'eventName',
-                equals: [
-                  'CreateRole',
-                  'DeleteRole',
-                  'AttachRolePolicy',
-                  'DetachRolePolicy',
-                  'PutRolePolicy',
-                  'DeleteRolePolicy',
-                  'CreateUser',
-                  'DeleteUser',
-                  'CreateAccessKey',
-                  'DeleteAccessKey',
-                ],
-              },
-            ],
-          },
-          {
-            name: 'Log all KMS key operations',
-            fieldSelectors: [
-              {
-                field: 'eventCategory',
-                equals: ['Management'],
-              },
-              {
-                field: 'resources.type',
-                equals: ['AWS::KMS::Key'],
-              },
-            ],
-          },
-          {
-            name: 'Log security group changes',
-            fieldSelectors: [
-              {
-                field: 'eventCategory',
-                equals: ['Management'],
-              },
-              {
-                field: 'eventName',
-                equals: [
-                  'CreateSecurityGroup',
-                  'DeleteSecurityGroup',
-                  'AuthorizeSecurityGroupIngress',
-                  'AuthorizeSecurityGroupEgress',
-                  'RevokeSecurityGroupIngress',
-                  'RevokeSecurityGroupEgress',
-                ],
               },
             ],
           },
