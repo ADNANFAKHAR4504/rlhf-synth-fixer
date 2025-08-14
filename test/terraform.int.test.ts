@@ -145,7 +145,7 @@ describe('TAP Stack Integration Tests', () => {
       const taggedResources = Object.entries(tfConfig.resource || {})
         .flatMap(([type, resources]: [string, any]) => 
           Object.entries(resources).map(([name, config]: [string, any]) => ({ type, name, config }))
-        .filter(({ config }) => config.tags);
+        .filter(({ config }) => config.tags));
 
       taggedResources.forEach(({ type, name, config }) => {
         expect(config.tags?.Project).toBeDefined();
