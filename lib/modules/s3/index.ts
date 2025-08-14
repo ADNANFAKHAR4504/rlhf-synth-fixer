@@ -130,7 +130,7 @@ export class SecureS3Bucket extends pulumi.ComponentResource {
       );
     }
 
-    // Enable logging
+    // Enable logging (simplified for bucket owner enforced buckets)
     new aws.s3.BucketLogging(
       `${name}-logging`,
       {

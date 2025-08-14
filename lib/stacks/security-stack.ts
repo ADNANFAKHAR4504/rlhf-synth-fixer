@@ -126,7 +126,7 @@ export class SecurityStack extends pulumi.ComponentResource {
           kmsKeyId: s3KmsKey.key.keyId,
           allowedIpRanges,
           enableAccessLogging: true,
-          enableNotifications: true,
+          enableNotifications: false, // Disabled since no Lambda function is provided
           enableObjectLock: true,
           lifecycleRules: [
             {

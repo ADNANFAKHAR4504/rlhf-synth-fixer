@@ -11,6 +11,7 @@ export interface EnhancedSecureS3BucketArgs {
   enableNotifications?: boolean;
   allowedIpRanges?: string[];
   enableObjectLock?: boolean;
+  lambdaFunctionArn?: string; // Optional Lambda function ARN for notifications
 }
 
 export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
@@ -233,15 +234,7 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
           bucket: this.bucket.id,
           targetBucket: this.accessLogsBucket.id,
           targetPrefix: 'access-logs/',
-          targetGrants: [
-            {
-              grantee: {
-                type: 'Group',
-                uri: 'http://acs.amazonaws.com/groups/s3/LogDelivery',
-              },
-              permission: 'WRITE',
-            },
-          ],
+          // Note: targetGrants removed for bucket owner enforced buckets
         },
         { parent: this }
       );
@@ -265,8 +258,8 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
       );
     }
 
-    // Enable notifications for security monitoring
-    if (args.enableNotifications) {
+    // Enable notifications for security monitoring (only if Lambda ARN is provided)
+    if (args.enableNotifications && args.lambdaFunctionArn) {
       this.notification = new aws.s3.BucketNotification(
         `${name}-notification`,
         {
@@ -278,7 +271,7 @@ export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
                 's3:ObjectRemoved:*',
                 's3:ObjectRestore:*',
               ],
-              lambdaFunctionArn: '', // Add Lambda function ARN here
+              lambdaFunctionArn: args.lambdaFunctionArn,
             },
           ],
         },
