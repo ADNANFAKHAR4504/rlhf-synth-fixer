@@ -534,7 +534,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-        - arn:aws:iam::aws:policy/AmazonInspectorScannerPolicy
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -547,6 +546,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
+      PolicyName: !Sub "tap-${EnvironmentSuffix}-s3-access-policy"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -591,7 +591,6 @@ Resources:
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent
-            yum install -y amazon-inspector-agent
 
             # Configure CloudWatch Agent
             cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
