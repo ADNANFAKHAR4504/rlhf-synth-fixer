@@ -2,20 +2,18 @@
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
-// Define required regions
-const regions = ['us-east-1', 'us-west-2'];
+// Use environment variable or default to us-west-2
+const awsRegion = process.env.AWS_REGION || 'us-west-2';
 
 const app = new App();
 
-// Get environment variables or use defaults
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
 const stateBucketRegion =
-  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
+  process.env.TERRAFORM_STATE_BUCKET_REGION || awsRegion;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Default tags for all resources
 const defaultTags = {
   tags: {
     Environment: environmentSuffix,
@@ -24,17 +22,14 @@ const defaultTags = {
   },
 };
 
-// Instantiate TapStack for each region
-regions.forEach(awsRegion => {
-  const stackName = `TapStack${environmentSuffix}-${awsRegion}`;
-  new TapStack(app, stackName, {
-    environmentSuffix: environmentSuffix,
-    stateBucket: stateBucket,
-    stateBucketRegion: stateBucketRegion,
-    awsRegion: awsRegion,
-    defaultTags: defaultTags,
-  });
+// Only create the stack for the selected region
+const stackName = `TapStack${environmentSuffix}-${awsRegion}`;
+new TapStack(app, stackName, {
+  environmentSuffix: environmentSuffix,
+  stateBucket: stateBucket,
+  stateBucketRegion: stateBucketRegion,
+  awsRegion: awsRegion,
+  defaultTags: defaultTags,
 });
 
-// Synthesize the app to generate the Terraform configuration
 app.synth();
