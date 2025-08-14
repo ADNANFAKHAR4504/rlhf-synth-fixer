@@ -58,7 +58,7 @@ describe('TapStack Integration Tests', () => {
     expect(synthesized).toContain('application-data');
     expect(synthesized).toContain('logs');
     expect(synthesized).toContain('AES256');
-    expect(synthesized).toContain('blockPublicAcls');
+    expect(synthesized).toContain('block_public_acls');
   });
 
   test('Resource tags include Owner and CostCenter', () => {
@@ -68,8 +68,8 @@ describe('TapStack Integration Tests', () => {
 
   test('Stack meets minimum resource coverage threshold', () => {
     const resources = [
-      'vpc', 'subnet', 'internet-gateway', 'security-group', 'iam-role',
-      'cloudtrail', 's3-bucket'
+      'vpc', 'subnet', 'internet_gateway', 'security_group', 'iam_role',
+      'cloudtrail', 's3_bucket'
     ];
     const found = resources.filter(r => synthesized.includes(r));
     const coverage = (found.length / resources.length) * 100;
