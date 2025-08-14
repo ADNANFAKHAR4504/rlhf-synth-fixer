@@ -12,7 +12,11 @@ import pytest
 
 @pytest.fixture(scope="session")
 def region() -> str:
-  return os.getenv("AWS_REGION", "us-west-2")
+  region_value = os.getenv("AWS_REGION", "us-west-2")
+  # Ensure we have a valid region - if empty or None, use default
+  if not region_value or region_value.strip() == "":
+    return "us-west-2"
+  return region_value
 
 
 @pytest.fixture(scope="session")
@@ -55,10 +59,18 @@ def _load_outputs() -> Dict[str, Any]:
 
 @pytest.fixture(scope="session")
 def outputs() -> Dict[str, Any]:
-  return _load_outputs()
+  outputs_data = _load_outputs()
+  _check_outputs_available(outputs_data)
+  return outputs_data
 
 
 # --- Helpers ---
+
+def _check_outputs_available(outputs: Dict[str, Any]) -> None:
+  """Check if deployment outputs are available for integration testing."""
+  if not outputs:
+    pytest.skip("No deployment outputs found. Integration tests require an actual AWS deployment. "
+               "Run deployment first to generate cfn-outputs/flat-outputs.json")
 
 def _get_tags(obj: Dict[str, Any]) -> Dict[str, str]:
   tags = obj.get("Tags") or []
