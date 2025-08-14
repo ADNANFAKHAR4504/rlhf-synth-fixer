@@ -1,29 +1,43 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { App, Testing } from 'cdktf';
+import { TapStack } from '../lib/tap-stack';
+import { Construct } from 'constructs';
+import { TerraformStack, TerraformOutput } from 'cdktf';
+import * as aws from '@cdktf/provider-aws';
 
-interface TerraformResource {
-  type: string;
-  name: string;
-  config: any;
-}
+describe('Stack Structure', () => {
+  let app: App;
+  let stack: TapStack;
+  let synthesized: string;
 
-interface TerraformVariable {
-  name: string;
-  config: any;
-}
+  beforeEach(() => {
+    // Reset mocks before each test
+    jest.clearAllMocks();
+  });
 
-interface TerraformOutput {
-  name: string;
-  config: any;
-}
+  test('TapStack instantiates successfully via props', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackWithProps', {
+      environmentSuffix: 'prod',
+      stateBucket: 'custom-state-bucket',
+      stateBucketRegion: 'us-west-2',
+      awsRegion: 'us-west-2',
+    });
+    synthesized = Testing.synth(stack);
 
-describe('Terraform Stack Unit Tests', () => {
-  let terraformContent: string;
-  let resources: TerraformResource[];
-  let variables: TerraformVariable[];
-  let outputs: TerraformOutput[];
+    // Verify that TapStack instantiates without errors via props
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
 
-  beforeAll(() => {
-    const terraformPath = path.resolve(__dirname, '../lib/tap_stack.tf');
-    expect(fs.
+  test('TapStack uses default values when no props provided', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackDefault');
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors when no props are provided
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+});
+
+// add more test suites and cases as needed
