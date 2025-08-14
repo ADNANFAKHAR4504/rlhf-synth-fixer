@@ -854,7 +854,7 @@ exports.handler = async () => {
         `),
         handler: 'index.handler',
       }),
-      runtime: synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_3_9,
+      runtime: synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0,
       role: canaryRole,
     });
     cdk.Tags.of(syntheticsCanary).add('Environment', 'Production');
