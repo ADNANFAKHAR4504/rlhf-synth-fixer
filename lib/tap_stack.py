@@ -113,7 +113,12 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
             cidr_block=f"10.0.{i + 1}.0/24",
             availability_zone=az,
             map_public_ip_on_launch=True,
-            tags={**self.tags, "Name": f"{self.name_prefix}-public-{i + 1}"},
+            tags={
+                **self.tags,
+                "Name": f"{self.name_prefix}-public-{i + 1}",
+                "kubernetes.io/role/elb": "1",  # Required for EKS load balancers
+                "kubernetes.io/cluster/corp-eks-cluster": "shared"  # Required for EKS
+            },
             opts=ResourceOptions(provider=self.provider)
         )
         for i, az in enumerate(self.availability_zones)
@@ -126,7 +131,13 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
             vpc_id=self.vpc.id,
             cidr_block=f"10.0.{(i + 1) * 10}.0/24",
             availability_zone=az,
-            tags={**self.tags, "Name": f"{self.name_prefix}-private-{i + 1}"},
+            tags={
+                **self.tags,
+                "Name": f"{self.name_prefix}-private-{i + 1}",
+                # Required for internal EKS load balancers
+                "kubernetes.io/role/internal-elb": "1",
+                "kubernetes.io/cluster/corp-eks-cluster": "shared"  # Required for EKS
+            },
             opts=ResourceOptions(provider=self.provider)
         )
         for i, az in enumerate(self.availability_zones)
@@ -423,7 +434,7 @@ def create_security_groups(
       ingress=[
           # Allow all traffic from cluster security group
           aws.ec2.SecurityGroupIngressArgs(
-              protocol="-1", from_port=0, to_port=0, 
+              protocol="-1", from_port=0, to_port=0,
               security_groups=[eks_cluster_sg.id],
               description="All traffic from EKS control plane"
           ),
@@ -656,14 +667,51 @@ def create_eks_node_group(
         opts=ResourceOptions(provider=provider)
     )
 
-  # Create launch template with security group
+  # Add custom IAM policy for EKS node operations
+  node_policy = aws.iam.RolePolicy(
+      "corp-eks-node-custom-policy",
+      role=node_role.name,
+      policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Effect": "Allow",
+                  "Action": [
+                      "eks:DescribeCluster",
+                      "eks:ListClusters",
+                      "ec2:DescribeInstances",
+                      "ec2:DescribeRouteTables",
+                      "ec2:DescribeSecurityGroups",
+                      "ec2:DescribeSubnets",
+                      "ec2:DescribeVolumes",
+                      "ec2:DescribeVolumesModifications",
+                      "ec2:DescribeVpcs",
+                      "ecr:GetAuthorizationToken",
+                      "ecr:BatchCheckLayerAvailability",
+                      "ecr:GetDownloadUrlForLayer",
+                      "ecr:BatchGetImage"
+                  ],
+                  "Resource": "*"
+              }
+          ]
+      }),
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Create launch template with security group and user data
+  user_data = cluster.name.apply(lambda name: f"""#!/bin/bash
+/etc/eks/bootstrap.sh {name}
+""")
+
   launch_template = aws.ec2.LaunchTemplate(
       "corp-eks-node-launch-template",
       name_prefix="corp-eks-node-",
+      user_data=user_data.apply(lambda ud: ud.encode('utf-8').hex()),
       network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfaceArgs(
           associate_public_ip_address="true",
           delete_on_termination="true",
           security_groups=[eks_node_sg.id],
+          device_index=0,
       )],
       tag_specifications=[aws.ec2.LaunchTemplateTagSpecificationArgs(
           resource_type="instance",
@@ -677,7 +725,8 @@ def create_eks_node_group(
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
-      node_group_name="corp-eks-cluster-nodegroup1",  # Explicit name pattern
+      # Let Pulumi auto-generate the name to avoid conflicts
+      # This ensures idempotency and prevents "already exists" errors
       node_role_arn=node_role.arn,
       subnet_ids=[s.id for s in public_subnets],
       instance_types=["t3.small"],
@@ -690,7 +739,7 @@ def create_eks_node_group(
           id=launch_template.id,
           version=launch_template.latest_version,
       ),
-      tags={**tags, "Name": "corp-eks-cluster-nodegroup1"},
+      tags={**tags, "Name": "corp-eks-nodegroup"},
       opts=ResourceOptions(provider=provider)
   )
   return node_group
