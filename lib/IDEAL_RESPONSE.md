@@ -62,12 +62,12 @@ Parameters:
 
   PublicSubnetCidrs:
     Type: CommaDelimitedList
-    Default: "10.0.100.0/24,10.0.101.0/24"
+    Default: "10.0.20.0/24,10.0.21.0/24"
     Description: "CIDR blocks for public subnets (comma-separated)"
 
   PrivateSubnetCidrs:
     Type: CommaDelimitedList
-    Default: "10.0.200.0/24,10.0.201.0/24"
+    Default: "10.0.30.0/24,10.0.31.0/24"
     Description: "CIDR blocks for private subnets (comma-separated)"
 
   InstanceType:
@@ -133,7 +133,7 @@ Parameters:
 
   ExistingVPCId:
     Type: String
-    Default: "vpc-012e207a5ad2facf7"
+    Default: "vpc-05ddc543c44b25690"
     Description: "ID of existing VPC to use"
     AllowedPattern: "^vpc-[a-f0-9]+$"
     ConstraintDescription: "Must be a valid VPC ID"

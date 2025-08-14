@@ -42,7 +42,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   describe('VPC and Networking Resources', () => {
     test('should use existing VPC', () => {
       expect(templateContent).toContain('ExistingVPCId');
-      expect(templateContent).toContain('vpc-012e207a5ad2facf7');
+      expect(templateContent).toContain('vpc-05ddc543c44b25690');
       expect(templateContent).toContain('VpcId: !Ref ExistingVPCId');
     });
 
@@ -57,10 +57,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('PrivateSubnet2:');
     });
 
-    test('should use existing VPC', () => {
-      expect(templateContent).toContain('ExistingVPCId');
-      expect(templateContent).toContain('vpc-012e207a5ad2facf7');
-    });
+
 
     test('should have v1 naming convention', () => {
       expect(templateContent).toContain('securewebapp-v1');
