@@ -29,8 +29,8 @@ export class MonitoringConstruct extends Construct {
     });
 
     // ALB Metrics
-    const albRequestCountMetric = alb.metricRequestCount();
-    const albResponseTimeMetric = alb.metricTargetResponseTime();
+    const albRequestCountMetric = alb.metrics.requestCount();
+    const albResponseTimeMetric = alb.metrics.targetResponseTime();
 
     // Lambda Metrics
     const lambdaInvocationsMetric = lambdaFunction.metricInvocations();
