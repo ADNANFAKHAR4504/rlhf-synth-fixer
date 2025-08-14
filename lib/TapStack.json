@@ -104,6 +104,9 @@
         "CodePipelineServiceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-codepipeline-role"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -188,6 +191,9 @@
         "CodeBuildServiceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-codebuild-role"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -242,7 +248,9 @@
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": null,
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-lambda-role"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
