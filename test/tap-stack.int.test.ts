@@ -70,7 +70,14 @@ const hasMinimumOutputs = (): boolean => {
   
   return criticalOutputs.some(key => {
     const value = getOutput(key);
-    return value && value !== '' && !value.includes('mock') && !value.includes('12345');
+    // More specific mock value detection - avoid common mock patterns but allow legitimate PR numbers
+    return value && value !== '' && 
+           !value.includes('mock') && 
+           value !== '12345' && 
+           value !== '123' &&
+           !value.endsWith('-12345') &&
+           !value.startsWith('123-') &&
+           !value.endsWith('-123');
   });
 };
 
@@ -236,7 +243,8 @@ describeIf('TAP Stack Infrastructure Integration Tests', () => {
     test('should have VPC with correct CIDR block and DNS settings', async () => {
       const vpcId = getOutput('VPCId');
       expect(vpcId).toBeDefined();
-      expect(vpcId).not.toContain('vpc-12345');
+      expect(vpcId).not.toEqual('vpc-12345');
+      expect(vpcId).not.toEqual('vpc-123');
 
       const result = await executeTestWithErrorHandling(async () => {
         const response = await retry(() => 
@@ -267,7 +275,7 @@ describeIf('TAP Stack Infrastructure Integration Tests', () => {
         getOutput('PrivateSubnet2Id')
       ];
 
-      expect(subnetIds.every(id => id && !id.includes('subnet-123'))).toBe(true);
+      expect(subnetIds.every(id => id && id !== 'subnet-123' && !id.endsWith('-123'))).toBe(true);
 
       const result = await executeTestWithErrorHandling(async () => {
         const response = await retry(() =>
@@ -304,7 +312,7 @@ describeIf('TAP Stack Infrastructure Integration Tests', () => {
         getOutput('RDSSecurityGroupId')
       ];
 
-      expect(sgIds.every(id => id && !id.includes('sg-123'))).toBe(true);
+      expect(sgIds.every(id => id && id !== 'sg-123' && !id.endsWith('-123'))).toBe(true);
 
       const result = await executeTestWithErrorHandling(async () => {
         const response = await retry(() =>
@@ -662,7 +670,12 @@ describeIf('TAP Stack Infrastructure Integration Tests', () => {
       criticalComponents.forEach(component => {
         expect(component.id).toBeDefined();
         expect(component.id).not.toContain('mock');
-        expect(component.id).not.toContain('123');
+        // More specific mock value detection - avoid exact matches for common mock patterns
+        expect(component.id).not.toMatch(/^.*-123$/); // Ends with -123
+        expect(component.id).not.toMatch(/^123-.*$/); // Starts with 123-
+        expect(component.id).not.toMatch(/^.*-12345$/); // Ends with -12345
+        expect(component.id).not.toEqual('123'); // Exact match 123
+        expect(component.id).not.toEqual('12345'); // Exact match 12345
       });
 
       console.log(`Complete multi-tier architecture validated:`);
