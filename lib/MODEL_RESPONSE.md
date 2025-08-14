@@ -40,18 +40,19 @@ resource "random_id" "bucket_suffix" {
 
 # Check if the bucket already exists
 data "aws_s3_bucket" "existing_bucket" {
-  bucket = "corpsec-secure-logs-${random_id.bucket_suffix.hex}"
+  bucket = "corpsec-secure-logs-${local.environment_suffix}-${random_id.bucket_suffix.hex}"
   count  = var.check_existing_bucket ? 1 : 0
 }
 
 locals {
-  bucket_name = "corpsec-secure-logs-${random_id.bucket_suffix.hex}"
-  account_id  = data.aws_caller_identity.current.account_id
+  environment_suffix = var.environment_suffix != "" ? var.environment_suffix : "dev"
+  bucket_name        = "corpsec-secure-logs-${local.environment_suffix}-${random_id.bucket_suffix.hex}"
+  account_id         = data.aws_caller_identity.current.account_id
 }
 
 # KMS Key for S3 bucket encryption
 resource "aws_kms_key" "log_bucket_key" {
-  description             = "KMS key for corpSec log bucket encryption"
+  description             = "KMS key for corpSec-${local.environment_suffix} log bucket encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -78,17 +79,32 @@ resource "aws_kms_key" "log_bucket_key" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
 
   tags = {
-    Name = "corpSec-log-bucket-key"
+    Name = "corpSec-${local.environment_suffix}-log-bucket-key"
   }
 }
 
 resource "aws_kms_alias" "log_bucket_key_alias" {
-  name          = "alias/corpSec-log-bucket-key"
+  name          = "alias/corpSec-${local.environment_suffix}-log-bucket-key"
   target_key_id = aws_kms_key.log_bucket_key.key_id
 }
 
@@ -97,13 +113,13 @@ resource "aws_s3_bucket" "secure_log_bucket" {
   bucket = local.bucket_name
 
   tags = {
-    Name        = "corpSec-secure-logs"
-    Purpose     = "Security logging and audit trails"
-    Compliance  = "SOC2-PCI-DSS"
+    Name       = "corpSec-${local.environment_suffix}-secure-logs"
+    Purpose    = "Security logging and audit trails"
+    Compliance = "SOC2-PCI-DSS"
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
@@ -146,6 +162,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
     id     = "log_retention_policy"
     status = "Enabled"
 
+    filter {
+      prefix = "logs/"
+    }
+
     noncurrent_version_expiration {
       noncurrent_days = 90
     }
@@ -167,20 +187,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_bucket_lifecycle" {
   }
 }
 
-# S3 Bucket Notification for CloudWatch
+# S3 Bucket Notification for CloudWatch (using EventBridge instead of direct CloudWatch)
 resource "aws_s3_bucket_notification" "log_bucket_notification" {
-  bucket = aws_s3_bucket.secure_log_bucket.id
-
-  cloudwatch_configuration {
-    events = ["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]
-  }
+  bucket      = aws_s3_bucket.secure_log_bucket.id
+  eventbridge = true
 
   depends_on = [aws_s3_bucket_policy.log_bucket_policy]
 }
 
 # IAM Role for Log Writers (requires MFA)
 resource "aws_iam_role" "log_writer_role" {
-  name = "corpSec-log-writer-role"
+  name = "corpSec-${local.environment_suffix}-log-writer-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -204,13 +221,13 @@ resource "aws_iam_role" "log_writer_role" {
   })
 
   tags = {
-    Name = "corpSec-log-writer-role"
+    Name = "corpSec-${local.environment_suffix}-log-writer-role"
   }
 }
 
 # IAM Policy for Log Writers
 resource "aws_iam_policy" "log_writer_policy" {
-  name        = "corpSec-log-writer-policy"
+  name        = "corpSec-${local.environment_suffix}-log-writer-policy"
   description = "Policy for writing logs to secure S3 bucket"
 
   policy = jsonencode({
@@ -250,7 +267,7 @@ resource "aws_iam_role_policy_attachment" "log_writer_attachment" {
 
 # IAM Role for Log Readers (least privilege)
 resource "aws_iam_role" "log_reader_role" {
-  name = "corpSec-log-reader-role"
+  name = "corpSec-${local.environment_suffix}-log-reader-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -271,13 +288,13 @@ resource "aws_iam_role" "log_reader_role" {
   })
 
   tags = {
-    Name = "corpSec-log-reader-role"
+    Name = "corpSec-${local.environment_suffix}-log-reader-role"
   }
 }
 
 # IAM Policy for Log Readers
 resource "aws_iam_policy" "log_reader_policy" {
-  name        = "corpSec-log-reader-policy"
+  name        = "corpSec-${local.environment_suffix}-log-reader-policy"
   description = "Policy for reading logs from secure S3 bucket"
 
   policy = jsonencode({
@@ -344,6 +361,29 @@ resource "aws_s3_bucket_policy" "log_bucket_policy" {
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
+      },
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.secure_log_bucket.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.secure_log_bucket.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
       }
     ]
   })
@@ -351,35 +391,35 @@ resource "aws_s3_bucket_policy" "log_bucket_policy" {
 
 # CloudWatch Log Group for monitoring
 resource "aws_cloudwatch_log_group" "security_alerts" {
-  name              = "/corpSec/security-alerts"
+  name              = "/corpSec-${local.environment_suffix}/security-alerts"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.log_bucket_key.arn
 
   tags = {
-    Name = "corpSec-security-alerts"
+    Name = "corpSec-${local.environment_suffix}-security-alerts"
   }
 }
 
 # CloudWatch Metric Filter for unauthorized access attempts
 resource "aws_cloudwatch_log_metric_filter" "unauthorized_access" {
-  name           = "corpSec-unauthorized-access"
+  name           = "corpSec-${local.environment_suffix}-unauthorized-access"
   log_group_name = aws_cloudwatch_log_group.security_alerts.name
   pattern        = "[timestamp, request_id, event_type=\"ERROR\", event_name=\"AccessDenied\", ...]"
 
   metric_transformation {
     name      = "UnauthorizedAccessAttempts"
-    namespace = "corpSec/Security"
+    namespace = "corpSec-${local.environment_suffix}/Security"
     value     = "1"
   }
 }
 
 # CloudWatch Alarm for unauthorized access
 resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm" {
-  alarm_name          = "corpSec-unauthorized-access-alarm"
+  alarm_name          = "corpSec-${local.environment_suffix}-unauthorized-access-alarm"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "UnauthorizedAccessAttempts"
-  namespace           = "corpSec/Security"
+  namespace           = "corpSec-${local.environment_suffix}/Security"
   period              = "300"
   statistic           = "Sum"
   threshold           = "0"
@@ -387,23 +427,23 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm" {
   alarm_actions       = [aws_sns_topic.security_alerts.arn]
 
   tags = {
-    Name = "corpSec-unauthorized-access-alarm"
+    Name = "corpSec-${local.environment_suffix}-unauthorized-access-alarm"
   }
 }
 
 # SNS Topic for security alerts
 resource "aws_sns_topic" "security_alerts" {
-  name              = "corpSec-security-alerts"
+  name              = "corpSec-${local.environment_suffix}-security-alerts"
   kms_master_key_id = aws_kms_key.log_bucket_key.id
 
   tags = {
-    Name = "corpSec-security-alerts"
+    Name = "corpSec-${local.environment_suffix}-security-alerts"
   }
 }
 
 # CloudTrail for API logging
 resource "aws_cloudtrail" "security_trail" {
-  name           = "corpSec-security-trail"
+  name           = "corpSec-${local.environment_suffix}-security-trail"
   s3_bucket_name = aws_s3_bucket.secure_log_bucket.bucket
   s3_key_prefix  = "cloudtrail-logs/"
 
@@ -424,10 +464,17 @@ resource "aws_cloudtrail" "security_trail" {
   enable_log_file_validation    = true
 
   tags = {
-    Name = "corpSec-security-trail"
+    Name = "corpSec-${local.environment_suffix}-security-trail"
   }
 
   depends_on = [aws_s3_bucket_policy.log_bucket_policy]
+}
+
+# Variable for environment suffix
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+  default     = ""
 }
 
 # Variable for checking existing bucket
@@ -438,26 +485,17 @@ variable "check_existing_bucket" {
 }
 ```
 
-## outputs.tf
-
-```hcl
-# S3 Bucket outputs
-output "log_bucket_name" {
-  description = "Name of the secure log bucket"
+# Outputs for integration testing and other reference
+output "s3_bucket_name" {
+  description = "Name of the secure log S3 bucket"
   value       = aws_s3_bucket.secure_log_bucket.bucket
 }
 
-output "log_bucket_arn" {
-  description = "ARN of the secure log bucket"
+output "s3_bucket_arn" {
+  description = "ARN of the secure log S3 bucket"
   value       = aws_s3_bucket.secure_log_bucket.arn
 }
 
-output "log_bucket_domain_name" {
-  description = "Domain name of the secure log bucket"
-  value       = aws_s3_bucket.secure_log_bucket.bucket_domain_name
-}
-
-# KMS Key outputs
 output "kms_key_id" {
   description = "ID of the KMS key used for encryption"
   value       = aws_kms_key.log_bucket_key.key_id
@@ -468,20 +506,29 @@ output "kms_key_arn" {
   value       = aws_kms_key.log_bucket_key.arn
 }
 
-output "kms_key_alias" {
-  description = "Alias of the KMS key"
-  value       = aws_kms_alias.log_bucket_key_alias.name
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail"
+  value       = aws_cloudtrail.security_trail.name
 }
 
-# IAM Role outputs
-output "log_writer_role_arn" {
-  description = "ARN of the log writer IAM role"
-  value       = aws_iam_role.log_writer_role.arn
+output "cloudtrail_arn" {
+  description = "ARN of the CloudTrail"
+  value       = aws_cloudtrail.security_trail.arn
 }
 
-output "log_reader_role_arn" {
-  description = "ARN of the log reader IAM role"
-  value       = aws_iam_role.log_reader_role.arn
+output "cloudwatch_log_group_name" {
+  description = "Name of the CloudWatch log group"
+  value       = aws_cloudwatch_log_group.security_alerts.name
+}
+
+output "cloudwatch_alarm_name" {
+  description = "Name of the CloudWatch alarm"
+  value       = aws_cloudwatch_metric_alarm.unauthorized_access_alarm.alarm_name
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for security alerts"
+  value       = aws_sns_topic.security_alerts.arn
 }
 
 output "log_writer_role_name" {
@@ -489,78 +536,19 @@ output "log_writer_role_name" {
   value       = aws_iam_role.log_writer_role.name
 }
 
+output "log_writer_role_arn" {
+  description = "ARN of the log writer IAM role"
+  value       = aws_iam_role.log_writer_role.arn
+}
+
 output "log_reader_role_name" {
   description = "Name of the log reader IAM role"
   value       = aws_iam_role.log_reader_role.name
 }
 
-# CloudWatch outputs
-output "cloudwatch_log_group_name" {
-  description = "Name of the CloudWatch log group for security alerts"
-  value       = aws_cloudwatch_log_group.security_alerts.name
-}
-
-output "cloudwatch_log_group_arn" {
-  description = "ARN of the CloudWatch log group for security alerts"
-  value       = aws_cloudwatch_log_group.security_alerts.arn
-}
-
-output "security_alarm_name" {
-  description = "Name of the security CloudWatch alarm"
-  value       = aws_cloudwatch_metric_alarm.unauthorized_access_alarm.alarm_name
-}
-
-# SNS Topic outputs
-output "sns_topic_arn" {
-  description = "ARN of the SNS topic for security alerts"
-  value       = aws_sns_topic.security_alerts.arn
-}
-
-output "sns_topic_name" {
-  description = "Name of the SNS topic for security alerts"
-  value       = aws_sns_topic.security_alerts.name
-}
-
-# CloudTrail outputs
-output "cloudtrail_name" {
-  description = "Name of the CloudTrail for security logging"
-  value       = aws_cloudtrail.security_trail.name
-}
-
-output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail for security logging"
-  value       = aws_cloudtrail.security_trail.arn
-}
-
-# Security Information
-output "security_features_enabled" {
-  description = "List of security features enabled"
-  value = [
-    "S3 Bucket Encryption (KMS)",
-    "S3 Bucket Versioning",
-    "S3 Public Access Block",
-    "MFA Required for IAM Roles",
-    "CloudTrail Logging",
-    "CloudWatch Monitoring",
-    "SNS Security Alerts",
-    "Least Privilege IAM Policies",
-    "Secure Transport Only",
-    "Log File Validation"
-  ]
-}
-
-output "deployment_summary" {
-  description = "Summary of the deployed resources"
-  value = {
-    bucket_name           = aws_s3_bucket.secure_log_bucket.bucket
-    encryption_enabled    = true
-    versioning_enabled    = true
-    mfa_required         = true
-    monitoring_enabled   = true
-    cloudtrail_enabled   = true
-    region               = data.aws_region.current.name
-    account_id           = data.aws_caller_identity.current.account_id
-  }
+output "log_reader_role_arn" {
+  description = "ARN of the log reader IAM role"
+  value       = aws_iam_role.log_reader_role.arn
 }
 ```
 
