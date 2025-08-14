@@ -123,7 +123,7 @@ def create_s3_bucket(region: str, tags: Dict, provider: aws.Provider) -> aws.s3.
   # Create S3 bucket
   bucket = aws.s3.Bucket(
     f"secure-bucket-{region}",
-    bucket=f"secure-infrastructure-bucket-{region}-{pulumi.get_stack()}",
+    bucket=f"secure-infrastructure-bucket-{region}-{pulumi.get_stack()}".lower(),
     tags=tags,
     opts=pulumi.ResourceOptions(provider=provider)
   )
