@@ -32,3 +32,7 @@ output "config_rules" {
     aws_config_config_rule.s3_bucket_server_side_encryption_enabled.name
   ]
 }
+
+output "iam_policy_name" {
+  value = aws_iam_user_policy.least_priv.name
+}

@@ -40,6 +40,12 @@ variable "iam_username" {
   default     = "example.user"
 }
 
+variable "environment_suffix" {
+  description = "Suffix to append to resource names to avoid conflicts between deployments"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Common tags applied to all resources."
   type        = map(string)

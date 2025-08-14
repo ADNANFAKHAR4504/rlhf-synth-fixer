@@ -1,5 +1,6 @@
 locals {
-  common_tags = merge(var.tags, { NamePrefix = var.name_prefix })
+  name_with_suffix = var.environment_suffix != "" ? "${var.name_prefix}-${var.environment_suffix}" : var.name_prefix
+  common_tags = merge(var.tags, { NamePrefix = local.name_with_suffix })
 }
 
 # -----------------------------
@@ -9,7 +10,7 @@ resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags                 = merge(local.common_tags, { Name = "${var.name_prefix}-vpc" })
+  tags                 = merge(local.common_tags, { Name = "${local.name_with_suffix}-vpc" })
 }
 
 data "aws_availability_zones" "available" {
@@ -18,7 +19,7 @@ data "aws_availability_zones" "available" {
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.this.id
-  tags   = merge(local.common_tags, { Name = "${var.name_prefix}-igw" })
+  tags   = merge(local.common_tags, { Name = "${local.name_with_suffix}-igw" })
 }
 
 resource "aws_subnet" "public" {
@@ -31,7 +32,7 @@ resource "aws_subnet" "public" {
   availability_zone       = each.value.az
   map_public_ip_on_launch = true
   tags = merge(local.common_tags, {
-    Name = "${var.name_prefix}-public-${each.key}"
+    Name = "${local.name_with_suffix}-public-${each.key}"
     Tier = "public"
   })
 }
@@ -45,26 +46,26 @@ resource "aws_subnet" "private" {
   cidr_block        = each.value.cidr
   availability_zone = each.value.az
   tags = merge(local.common_tags, {
-    Name = "${var.name_prefix}-private-${each.key}"
+    Name = "${local.name_with_suffix}-private-${each.key}"
     Tier = "private"
   })
 }
 
 resource "aws_eip" "nat" {
   domain = "vpc"
-  tags   = merge(local.common_tags, { Name = "${var.name_prefix}-nat-eip" })
+  tags   = merge(local.common_tags, { Name = "${local.name_with_suffix}-nat-eip" })
 }
 
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
   subnet_id     = values(aws_subnet.public)[0].id
-  tags          = merge(local.common_tags, { Name = "${var.name_prefix}-nat" })
+  tags          = merge(local.common_tags, { Name = "${local.name_with_suffix}-nat" })
   depends_on    = [aws_internet_gateway.igw]
 }
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
-  tags   = merge(local.common_tags, { Name = "${var.name_prefix}-rt-public" })
+  tags   = merge(local.common_tags, { Name = "${local.name_with_suffix}-rt-public" })
 }
 
 resource "aws_route" "public_inet" {
@@ -81,7 +82,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
-  tags   = merge(local.common_tags, { Name = "${var.name_prefix}-rt-private" })
+  tags   = merge(local.common_tags, { Name = "${local.name_with_suffix}-rt-private" })
 }
 
 resource "aws_route" "private_nat" {
@@ -100,7 +101,7 @@ resource "aws_route_table_association" "private" {
 # Security Groups
 # -----------------------------
 resource "aws_security_group" "public_sg" {
-  name        = "${var.name_prefix}-public-sg"
+  name        = "${local.name_with_suffix}-public-sg"
   description = "Allow inbound HTTP/HTTPS, all egress"
   vpc_id      = aws_vpc.this.id
 
@@ -127,7 +128,7 @@ resource "aws_security_group" "public_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.common_tags, { Name = "${var.name_prefix}-public-sg" })
+  tags = merge(local.common_tags, { Name = "${local.name_with_suffix}-public-sg" })
 }
 
 # -----------------------------
@@ -137,16 +138,16 @@ resource "aws_kms_key" "s3" {
   description             = "KMS key for S3 encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-  tags                    = merge(local.common_tags, { Name = "${var.name_prefix}-s3-kms" })
+  tags                    = merge(local.common_tags, { Name = "${local.name_with_suffix}-s3-kms" })
 }
 
 # -----------------------------
 # S3 Buckets (logs + data)
 # -----------------------------
 resource "aws_s3_bucket" "logs" {
-  bucket        = "${var.name_prefix}-logs-${random_id.suffix.hex}"
+  bucket        = "${local.name_with_suffix}-logs-${random_id.suffix.hex}"
   force_destroy = true
-  tags          = merge(local.common_tags, { Name = "${var.name_prefix}-logs" })
+  tags          = merge(local.common_tags, { Name = "${local.name_with_suffix}-logs" })
 }
 
 resource "aws_s3_bucket_ownership_controls" "logs" {
@@ -178,9 +179,9 @@ resource "random_id" "suffix" {
 }
 
 resource "aws_s3_bucket" "data" {
-  bucket        = "${var.name_prefix}-data-${random_id.suffix.hex}"
+  bucket        = "${local.name_with_suffix}-data-${random_id.suffix.hex}"
   force_destroy = true
-  tags          = merge(local.common_tags, { Name = "${var.name_prefix}-data" })
+  tags          = merge(local.common_tags, { Name = "${local.name_with_suffix}-data" })
 }
 
 resource "aws_s3_bucket_ownership_controls" "data" {
@@ -219,7 +220,7 @@ data "aws_caller_identity" "current" {}
 # Recommended: build the trail ARN once so we can scope the policy
 # If you already have a local for this, reuse it.
 locals {
-  trail_arn = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.name_prefix}-trail"
+  trail_arn = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${local.name_with_suffix}-trail"
 }
 
 data "aws_partition" "current" {}
@@ -268,7 +269,7 @@ resource "aws_s3_bucket_policy" "logs" {
 
 # Make sure the trail waits for the policy to exist
 resource "aws_cloudtrail" "this" {
-  name                          = "${var.name_prefix}-trail"
+  name                          = "${local.name_with_suffix}-trail"
   s3_bucket_name                = aws_s3_bucket.logs.bucket
   include_global_service_events = true
   is_multi_region_trail         = true
@@ -299,7 +300,7 @@ resource "aws_cloudtrail" "this" {
 # -----------------------------
 
 resource "aws_iam_policy" "aws_config_role_policy" {
-  name        = "AWS_ConfigRole"
+  name        = "${local.name_with_suffix}_ConfigRole"
   description = "Permissions required for AWS Config to record and deliver configuration changes."
 
   policy = jsonencode({
@@ -343,7 +344,7 @@ resource "aws_iam_policy" "aws_config_role_policy" {
 # data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "config" {
-  name = "${var.name_prefix}-configrole-trail"
+  name = "${local.name_with_suffix}-configrole-trail"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -361,7 +362,7 @@ resource "aws_iam_role_policy_attachment" "config_role_attach" {
 }
 
 resource "aws_config_configuration_recorder" "this" {
-  name     = "${var.name_prefix}-recorder"
+  name     = "${local.name_with_suffix}-recorder"
   role_arn = aws_iam_role.config.arn
 
   recording_group {
@@ -372,7 +373,7 @@ resource "aws_config_configuration_recorder" "this" {
 }
 
 resource "aws_config_delivery_channel" "this" {
-  name           = "${var.name_prefix}-delivery"
+  name           = "${local.name_with_suffix}-delivery"
   s3_bucket_name = aws_s3_bucket.logs.bucket
   depends_on     = [aws_config_configuration_recorder.this]
 }
@@ -385,7 +386,7 @@ resource "aws_config_configuration_recorder_status" "this" {
 
 # A couple of lightweight managed rules
 resource "aws_config_config_rule" "restricted_ssh" {
-  name = "${var.name_prefix}-restricted-ssh"
+  name = "${local.name_with_suffix}-restricted-ssh"
   source {
     owner             = "AWS"
     source_identifier = "INCOMING_SSH_DISABLED"
@@ -394,7 +395,7 @@ resource "aws_config_config_rule" "restricted_ssh" {
 }
 
 resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
-  name = "${var.name_prefix}-s3-sse"
+  name = "${local.name_with_suffix}-s3-sse"
   source {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
@@ -411,7 +412,7 @@ resource "aws_iam_user" "example" {
 }
 
 resource "aws_iam_user_policy" "least_priv" {
-  name = "${var.name_prefix}-least-priv"
+  name = "${local.name_with_suffix}-least-priv"
   user = aws_iam_user.example.name
 
   policy = jsonencode({
