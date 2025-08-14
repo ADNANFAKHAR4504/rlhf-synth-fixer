@@ -10,6 +10,7 @@
                     },
                     "Parameters": [
                         "EnvironmentName",
+                        "EnvironmentSuffix",
                         "AllowedCIDR"
                     ]
                 },
@@ -55,8 +56,12 @@
                 "Development",
                 "Staging",
                 "Production"
-            ],
-            "ConstraintDescription": "Must be Development, Staging, or Production"
+            ]
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for unique resource naming (used by CI/CD)"
         },
         "AllowedCIDR": {
             "Type": "String",
@@ -819,7 +824,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/${EnvironmentName}-application-key"
+                    "Fn::Sub": "alias/${EnvironmentName}-${EnvironmentSuffix}-application-key"
                 },
                 "TargetKeyId": {
                     "Ref": "ApplicationKMSKey"
@@ -830,7 +835,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-static-content-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-static-content-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -899,7 +904,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-backup-${AWS::AccountId}-${BackupRegion}"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-backup-${AWS::AccountId}-${BackupRegion}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -943,7 +948,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-cloudtrail-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1055,7 +1060,7 @@
             "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "${EnvironmentName}-audit-trail"
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-audit-trail"
                 },
                 "S3BucketName": {
                     "Ref": "CloudTrailBucket"
@@ -1356,10 +1361,10 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "${EnvironmentName}-Security-Alerts"
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-Security-Alerts"
                 },
                 "DisplayName": {
-                    "Fn::Sub": "${EnvironmentName} Security and Performance Alerts"
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix} Security and Performance Alerts"
                 },
                 "KmsMasterKeyId": {
                     "Ref": "ApplicationKMSKey"
@@ -1370,7 +1375,7 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "${EnvironmentName}-Launch-Template"
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-Launch-Template"
                 },
                 "LaunchTemplateData": {
                     "ImageId": {

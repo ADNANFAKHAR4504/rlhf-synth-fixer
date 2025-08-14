@@ -68,13 +68,13 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     const requiredParameters = [
       'EnvironmentName',
+      'EnvironmentSuffix',
       'AllowedCIDR',
       'InstanceType',
       'KeyPairName',
       'MinSize',
       'MaxSize',
       'DesiredCapacity',
-      'EnableMFA',
       'BackupRegion',
       'SSLCertificateArn',
       'CPUAlarmThreshold',
@@ -429,6 +429,12 @@ function createMockTemplate(): any {
         Default: 'Production',
         AllowedValues: ['Development', 'Staging', 'Production'],
         Description: 'Environment name for resource tagging and naming',
+      },
+      EnvironmentSuffix: {
+        Type: 'String',
+        Default: 'dev',
+        Description:
+          'Environment suffix for unique resource naming (used by CI/CD)',
       },
       AllowedCIDR: {
         Type: 'String',

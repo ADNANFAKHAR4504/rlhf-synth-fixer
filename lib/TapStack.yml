@@ -13,6 +13,7 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentName
+          - EnvironmentSuffix
           - AllowedCIDR
       - Label:
           default: 'Application Configuration'
@@ -39,7 +40,11 @@ Parameters:
     Default: 'Production'
     Description: 'Environment name for resource tagging and naming'
     AllowedValues: ['Development', 'Staging', 'Production']
-    ConstraintDescription: 'Must be Development, Staging, or Production'
+
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for unique resource naming (used by CI/CD)'
 
   AllowedCIDR:
     Type: String
@@ -469,14 +474,14 @@ Resources:
   ApplicationKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-application-key'
+      AliasName: !Sub 'alias/${EnvironmentName}-${EnvironmentSuffix}-application-key'
       TargetKeyId: !Ref ApplicationKMSKey
 
   # S3 Bucket for static content with AES-256 encryption
   StaticContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-static-content-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::StackName}-${EnvironmentSuffix}-static-content-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -513,7 +518,7 @@ Resources:
   BackupBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-backup-${AWS::AccountId}-${BackupRegion}'
+      BucketName: !Sub '${AWS::StackName}-${EnvironmentSuffix}-backup-${AWS::AccountId}-${BackupRegion}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -537,7 +542,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::StackName}-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -596,7 +601,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${EnvironmentName}-audit-trail'
+      TrailName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-audit-trail'
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -756,15 +761,15 @@ Resources:
   SNSTopicForAlerts:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${EnvironmentName}-Security-Alerts'
-      DisplayName: !Sub '${EnvironmentName} Security and Performance Alerts'
+      TopicName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Security-Alerts'
+      DisplayName: !Sub '${EnvironmentName}-${EnvironmentSuffix} Security and Performance Alerts'
       KmsMasterKeyId: !Ref ApplicationKMSKey
 
   # Launch Template for Auto Scaling Group
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${EnvironmentName}-Launch-Template'
+      LaunchTemplateName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Launch-Template'
       LaunchTemplateData:
         ImageId: !FindInMap [RegionAMIMap, !Ref 'AWS::Region', AmazonLinux2]
         InstanceType: !Ref InstanceType
