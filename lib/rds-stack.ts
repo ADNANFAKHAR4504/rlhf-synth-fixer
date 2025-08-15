@@ -145,6 +145,10 @@ export class RDSStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const rdsKmsKeyArn = pulumi
+      .output(aws.kms.getAlias({ name: 'alias/aws/rds' }))
+      .apply(alias => alias.targetKeyArn);
+
     const rdsInstance = new aws.rds.Instance(
       rdsInstanceName,
       {
@@ -162,7 +166,7 @@ export class RDSStack extends pulumi.ComponentResource {
 
         // Security configurations
         storageEncrypted: true,
-        kmsKeyId: 'alias/aws/rds', // AWS-managed KMS key for RDS
+        kmsKeyId: rdsKmsKeyArn, // AWS-managed KMS key for RDS
 
         // Network and access - use dedicated security group
         dbSubnetGroupName: rdsSubnetGroup.name,
