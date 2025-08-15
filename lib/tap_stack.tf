@@ -9,7 +9,7 @@
 variable "bucket_region" {
   description = "Region for the S3 bucket"
   type        = string
-  default     = "ca-central-1"
+  default     = "eu-west-3"
 }
 
 variable "bucket_name" {
@@ -81,7 +81,7 @@ output "bucket_tags" {
 variable "aws_region" {
   description = "The AWS region to deploy resources"
   type        = string
-  default     = "ca-central-1"
+  default     = "eu-west-3"
 }
 
 variable "allowed_ip_ranges" {
@@ -308,7 +308,7 @@ resource "aws_cloudtrail" "secure_data_trail" {
 
 # IAM role for application access
 resource "aws_iam_role" "app_role" {
-  name = "secure-storage-app-role"
+  name = "secure-storage-app-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -355,13 +355,13 @@ resource "aws_iam_role_policy" "app_s3_policy" {
 
 # IAM instance profile for EC2
 resource "aws_iam_instance_profile" "app_profile" {
-  name = "secure-storage-app-profile"
+  name = "secure-storage-app-profile-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.app_role.name
 }
 
 # SNS topic for IAM change notifications
 resource "aws_sns_topic" "iam_changes" {
-  name = "iam-role-changes"
+  name = "iam-role-changes-${random_id.bucket_suffix.hex}"
 
   tags = merge(local.common_tags, {
     Name = "IAMRoleChangesNotifications"
@@ -377,7 +377,7 @@ resource "aws_sns_topic_subscription" "security_team_email" {
 
 # CloudWatch log group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
-  name              = "/aws/cloudtrail/secure-data-trail"
+  name              = "/aws/cloudtrail/secure-data-trail-${random_id.bucket_suffix.hex}"
   retention_in_days = 90
 
   tags = merge(local.common_tags, {
@@ -387,7 +387,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
 
 # IAM role for CloudTrail to write to CloudWatch Logs
 resource "aws_iam_role" "cloudtrail_logs_role" {
-  name = "CloudTrail-CloudWatchLogs-Role"
+  name = "CloudTrail-CloudWatchLogs-Role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -442,7 +442,7 @@ resource "aws_cloudwatch_log_metric_filter" "iam_changes_filter" {
 
 # CloudWatch alarm for IAM changes
 resource "aws_cloudwatch_metric_alarm" "iam_changes_alarm" {
-  alarm_name          = "IAM-Role-Changes-Alarm"
+  alarm_name          = "IAM-Role-Changes-Alarm-${random_id.bucket_suffix.hex}"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "1"
   metric_name         = "IAMChangesCount"
@@ -461,7 +461,7 @@ resource "aws_cloudwatch_metric_alarm" "iam_changes_alarm" {
 
 # CloudWatch alarm for unauthorized S3 access attempts
 resource "aws_cloudwatch_metric_alarm" "s3_access_denied_alarm" {
-  alarm_name          = "S3-Access-Denied-Alarm"
+  alarm_name          = "S3-Access-Denied-Alarm-${random_id.bucket_suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "4xxError"

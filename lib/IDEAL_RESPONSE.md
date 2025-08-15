@@ -17,7 +17,7 @@
 variable "bucket_region" {
 description = "Region for the S3 bucket"
 type = string
-default = "ca-central-1"
+default = "eu-west-3"
 }
 
 variable "bucket_name" {
@@ -103,7 +103,7 @@ value = aws_s3_bucket.this.tags
 variable "aws_region" {
 description = "The AWS region to deploy resources"
 type = string
-default = "ca-central-1"
+default = "eu-west-3"
 }
 
 variable "allowed_ip_ranges" {
@@ -197,7 +197,7 @@ aws_s3_bucket.secure_storage.arn,
 ]
 Condition = {
 IpAddress = {
-"aws:SourceIp" = var.allowed_ip_ranges
+"aws:SourceIp" = var.allowed*ip_ranges
 }
 Bool = {
 "aws:ViaAWSService" = "false"
@@ -207,7 +207,7 @@ Bool = {
 {
 Sid = "AllowFromSpecificIPs"
 Effect = "Allow"
-Principal = "_"
+Principal = "*"
 Action = [
 "s3:GetObject",
 "s3:PutObject",

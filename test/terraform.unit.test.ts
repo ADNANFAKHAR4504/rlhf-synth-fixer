@@ -29,7 +29,7 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
 
     test('declares aws_region variable with correct default', () => {
       expect(terraformContent).toMatch(/variable\s+"aws_region"\s*{/);
-      expect(terraformContent).toMatch(/default\s*=\s*"ca-central-1"/);
+      expect(terraformContent).toMatch(/default\s*=\s*"eu-west-3"/);
     });
 
     test('declares required variables for security configuration', () => {
@@ -113,7 +113,7 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
         /resource\s+"aws_cloudwatch_log_group"\s+"cloudtrail_log_group"/
       );
       expect(terraformContent).toMatch(
-        /name\s*=\s*"\/aws\/cloudtrail\/secure-data-trail"/
+        /name\s*=\s*"\/aws\/cloudtrail\/secure-data-trail-\$\{random_id\.bucket_suffix\.hex\}"/
       );
     });
 
@@ -132,7 +132,9 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
       expect(terraformContent).toMatch(
         /resource\s+"aws_iam_role"\s+"app_role"/
       );
-      expect(terraformContent).toMatch(/name\s*=\s*"secure-storage-app-role"/);
+      expect(terraformContent).toMatch(
+        /name\s*=\s*"secure-storage-app-role-\$\{random_id\.bucket_suffix\.hex\}"/
+      );
     });
 
     test('implements least privilege IAM policy for S3 access', () => {
@@ -187,7 +189,9 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
       expect(terraformContent).toMatch(
         /resource\s+"aws_sns_topic"\s+"iam_changes"/
       );
-      expect(terraformContent).toMatch(/name\s*=\s*"iam-role-changes"/);
+      expect(terraformContent).toMatch(
+        /name\s*=\s*"iam-role-changes-\$\{random_id\.bucket_suffix\.hex\}"/
+      );
     });
 
     test('creates SNS subscription for security team', () => {
@@ -270,8 +274,8 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
       expect(terraformContent).toMatch(/"s3:GetObject"/);
       expect(terraformContent).toMatch(/"s3:PutObject"/);
       expect(terraformContent).toMatch(/"s3:ListBucket"/);
-      // ca-central-1 region
-      expect(terraformContent).toMatch(/default\s*=\s*"ca-central-1"/);
+      // eu-west-3 region
+      expect(terraformContent).toMatch(/default\s*=\s*"eu-west-3"/);
       // Versioning
       expect(terraformContent).toMatch(/status\s*=\s*"Enabled"/);
       // CloudWatch alarms
