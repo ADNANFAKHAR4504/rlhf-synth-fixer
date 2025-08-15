@@ -4,17 +4,16 @@ import * as path from 'path';
 const LIB_DIR = path.resolve(__dirname, '../lib');
 const TAP_STACK_TF = path.join(LIB_DIR, 'tap_stack.tf');
 
-const file = () => fs.readFileSync(TAP_STACK_TF, 'utf8');
-const has = (re: RegExp) => re.test(file());
-const s = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Load the file content once
+const tf = fs.readFileSync(TAP_STACK_TF, 'utf8');
 
-const tf = fs.readFileSync('tap_stack.tf', 'utf8');
+// Helper to check regex matches in the Terraform file
 const has = (regex: RegExp) => regex.test(tf);
 
 describe('tap_stack.tf static structure', () => {
   it('exists and has sufficient content', () => {
     expect(fs.existsSync(TAP_STACK_TF)).toBe(true);
-    expect(file().length).toBeGreaterThan(500);
+    expect(tf.length).toBeGreaterThan(500);
   });
 
   it('defines AWS provider configurations for multiple regions', () => {
@@ -59,7 +58,7 @@ describe('tap_stack.tf static structure', () => {
   it('applies common tags to resources', () => {
     expect(has(/tags\s*=\s*merge\(local\.common_tags/)).toBe(true);
   });
-  
+
   it('declares required outputs', () => {
     // Loosen check: just ensure at least one output block exists
     const outputMatches = tf.match(/output\s+".+?"/g) || [];
