@@ -53,7 +53,8 @@ describe('tap_stack.tf static structure', () => {
 
   it('defines security group for RDS allowing correct DB port ingress', () => {
     expect(has(/resource\s+"aws_security_group"\s+"rds"/)).toBe(true);
-    expect(has(/from_port\s*=\s*5432/)).toBe(true); // postgres
+    expect(has(/from_port\s*=\s*local\.db_config\[var\.db_engine\]\.port/)).toBe(true);
+    expect(has(/to_port\s*=\s*local\.db_config\[var\.db_engine\]\.port/)).toBe(true);
     expect(has(/protocol\s*=\s*"tcp"/)).toBe(true);
   });
 
