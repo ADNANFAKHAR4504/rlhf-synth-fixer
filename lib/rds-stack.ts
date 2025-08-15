@@ -22,7 +22,9 @@ export class RDSStack extends pulumi.ComponentResource {
     super('tap:rds:RDSStack', name, args, opts);
 
     // RDS Subnet Group
-    const rdsSubnetGroupName = `${args.namePrefix}-rds-subnet-main-${args.environmentSuffix}`;
+    // AWS RDS subnet group names must be lowercase
+    const rdsSubnetGroupName =
+      `${args.namePrefix}-rds-subnet-main-${args.environmentSuffix}`.toLowerCase();
     const rdsSubnetGroup = new aws.rds.SubnetGroup(
       rdsSubnetGroupName,
       {
@@ -47,7 +49,9 @@ export class RDSStack extends pulumi.ComponentResource {
     );
 
     // RDS Parameter Group for security configurations
-    const rdsParameterGroupName = `${args.namePrefix}-rds-params-secure-${args.environmentSuffix}`;
+    // AWS RDS parameter group names must be lowercase and can contain letters, numbers, and hyphens
+    const rdsParameterGroupName =
+      `${args.namePrefix}-rds-params-secure-${args.environmentSuffix}`.toLowerCase();
     const rdsParameterGroup = new aws.rds.ParameterGroup(
       rdsParameterGroupName,
       {
@@ -74,7 +78,9 @@ export class RDSStack extends pulumi.ComponentResource {
     );
 
     // RDS Instance with encryption at rest using AWS-managed KMS key
-    const rdsInstanceName = `${args.namePrefix}-rds-primary-${args.environmentSuffix}`;
+    // AWS RDS instance identifiers must be lowercase
+    const rdsInstanceName =
+      `${args.namePrefix}-rds-primary-${args.environmentSuffix}`.toLowerCase();
 
     // Create a dedicated security group for RDS
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(

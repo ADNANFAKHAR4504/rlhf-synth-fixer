@@ -22,7 +22,9 @@ export class DynamoDBStack extends pulumi.ComponentResource {
     super('tap:dynamodb:DynamoDBStack', name, args, opts);
 
     // DynamoDB Table with comprehensive production configuration
-    const dynamoTableName = `${args.namePrefix}-dynamodb-main-${args.environmentSuffix}`;
+    // DynamoDB table names are case-sensitive but we'll use lowercase for consistency
+    const dynamoTableName =
+      `${args.namePrefix}-dynamodb-main-${args.environmentSuffix}`.toLowerCase();
     const dynamoTable = new aws.dynamodb.Table(
       dynamoTableName,
       {
@@ -64,10 +66,10 @@ export class DynamoDBStack extends pulumi.ComponentResource {
           },
         ],
 
-        // Server-side encryption with AWS-managed KMS key (updated configuration)
+        // Server-side encryption with AWS-managed KMS key
         serverSideEncryption: {
           enabled: true,
-          kmsKeyArn: 'alias/aws/dynamodb', // AWS-managed key for DynamoDB
+          // When enabled without kmsKeyArn, DynamoDB uses the AWS-managed key automatically
         },
 
         // Point-in-time recovery for production resilience
