@@ -236,6 +236,14 @@ resource "aws_lambda_function" "main" {
   # Enable versioning for rollback capability
   publish = true
 
+  # Tags for resource management
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+    Purpose     = "ci-cd-pipeline"
+  }
+
   lifecycle {
     ignore_changes = [
       filename,
