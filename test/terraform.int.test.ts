@@ -322,29 +322,43 @@ describe('LIVE integration: Validate deployed stack from structured outputs (no 
       )
     );
     const sgs = sgRes.SecurityGroups || [];
-    const pub = sgs.find(g =>
-      (g.IpPermissions || []).some(p => portRangeMatch(p, 80))
-    );
+    // Prefer exact name match when resourceId is derivable, else fall back to capability-based selection
+    const expectedPubName = resourceId
+      ? `prod-public-sg-${resourceId}`
+      : undefined;
+    const pub =
+      (expectedPubName && sgs.find(g => g.GroupName === expectedPubName)) ||
+      sgs.find(
+        g =>
+          (g.IpPermissions || []).some(p => portRangeMatch(p, 80)) &&
+          (g.IpPermissions || []).some(p => portRangeMatch(p, 443))
+      );
     expect(pub).toBeTruthy();
     const pubIngress = pub!.IpPermissions || [];
+    const worldV4 = (ranges?: any[]) =>
+      (ranges || []).some(r => r.CidrIp === '0.0.0.0/0');
+    const worldV6 = (ranges?: any[]) =>
+      (ranges || []).some(r => r.CidrIpv6 === '::/0');
     const httpOk = pubIngress.some(
       p =>
-        portRangeMatch(p, 80) &&
-        (p.IpRanges || []).some(r => r.CidrIp === '0.0.0.0/0')
+        portRangeMatch(p, 80) && (worldV4(p.IpRanges) || worldV6(p.Ipv6Ranges))
     );
     const httpsOk = pubIngress.some(
       p =>
-        portRangeMatch(p, 443) &&
-        (p.IpRanges || []).some(r => r.CidrIp === '0.0.0.0/0')
+        portRangeMatch(p, 443) && (worldV4(p.IpRanges) || worldV6(p.Ipv6Ranges))
     );
     const sshWorld = pubIngress.some(
       p =>
-        portRangeMatch(p, 22) &&
-        (p.IpRanges || []).some(r => r.CidrIp === '0.0.0.0/0')
+        portRangeMatch(p, 22) && (worldV4(p.IpRanges) || worldV6(p.Ipv6Ranges))
     );
     expect(httpOk && httpsOk).toBe(true);
     expect(sshWorld).toBe(false);
-    const priv = sgs.find(g => g.GroupId !== pub!.GroupId);
+    const expectedPrivName = resourceId
+      ? `prod-private-sg-${resourceId}`
+      : undefined;
+    const priv =
+      (expectedPrivName && sgs.find(g => g.GroupName === expectedPrivName)) ||
+      sgs.find(g => g.GroupId !== pub!.GroupId);
     if (priv && vpcCidr) {
       const privIngress = priv.IpPermissions || [];
       const allow80 = privIngress.some(
