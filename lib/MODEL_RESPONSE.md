@@ -7,12 +7,12 @@ I'll create a comprehensive Pulumi TypeScript project that meets all your requir
 ```yaml
 name: secure-web-app
 runtime: nodejs
-description: Secure Web App Environment with VPC, RDS, EC2, ALB, Lambda, and security components
+description: A secure web application environment with VPC, RDS, EC2, ALB, Lambda, and security components
 template:
   config:
     aws:region:
       description: The AWS region to deploy into
-      default: us-west-2
+      default: us-west-1
 ```
 
 ### `tap-stack.ts`
@@ -22,10 +22,12 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 export interface TapStackArgs {
-  environment: string;
-  owner: string;
+  vpcCidr: string;
+  publicSubnetCidr: string;
+  privateSubnetCidr: string;
   domainName: string;
-  allowedSshCidr: string;
+  hostedZoneId: string;
+  sshAllowedCidr: string;
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -50,299 +52,212 @@ export class TapStack extends pulumi.ComponentResource {
   ) {
     super('custom:TapStack', name, {}, opts);
 
-    const defaultOpts = { parent: this };
     const commonTags = {
-      Environment: args.environment,
-      Owner: args.owner,
+      Environment: 'Production',
+      Owner: 'DevOps',
     };
 
-    // 1. Look up existing default VPC
-    this.vpc = aws.ec2
-      .getVpcOutput({
-        default: true,
-      })
-      .apply(vpc => aws.ec2.Vpc.get('default-vpc', vpc.id, {}, defaultOpts));
+    // 1. NETWORKING LAYER
+    // Create VPC
+    this.vpc = new aws.ec2.Vpc(
+      `${name}-vpc`,
+      {
+        cidrBlock: args.vpcCidr,
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...commonTags,
+          Name: `${name}-vpc`,
+        },
+      },
+      { parent: this }
+    );
 
-    // 2. Create Internet Gateway for public subnet
+    // Create Internet Gateway
     this.internetGateway = new aws.ec2.InternetGateway(
-      'igw',
+      `${name}-igw`,
       {
         vpcId: this.vpc.id,
         tags: {
-          Name: 'main-igw',
           ...commonTags,
+          Name: `${name}-igw`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 3. Create public subnet
+    // Get availability zones
+    const azs = aws.getAvailabilityZones({
+      state: 'available',
+    });
+
+    // Create public subnet
     this.publicSubnet = new aws.ec2.Subnet(
-      'public-subnet',
+      `${name}-public-subnet`,
       {
         vpcId: this.vpc.id,
-        cidrBlock: '172.31.1.0/24',
-        availabilityZone: 'us-west-2a',
+        cidrBlock: args.publicSubnetCidr,
+        availabilityZone: azs.then(azs => azs.names[0]),
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: 'public-subnet',
-          Type: 'Public',
           ...commonTags,
+          Name: `${name}-public-subnet`,
+          Type: 'Public',
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 4. Create private subnet
+    // Create private subnet
     this.privateSubnet = new aws.ec2.Subnet(
-      'private-subnet',
+      `${name}-private-subnet`,
       {
         vpcId: this.vpc.id,
-        cidrBlock: '172.31.2.0/24',
-        availabilityZone: 'us-west-2b',
-        mapPublicIpOnLaunch: false,
+        cidrBlock: args.privateSubnetCidr,
+        availabilityZone: azs.then(azs => azs.names[1]),
         tags: {
-          Name: 'private-subnet',
-          Type: 'Private',
           ...commonTags,
+          Name: `${name}-private-subnet`,
+          Type: 'Private',
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 5. Create Elastic IP for NAT Gateway
+    // Create Elastic IP for NAT Gateway
     const natEip = new aws.ec2.Eip(
-      'nat-eip',
+      `${name}-nat-eip`,
       {
         domain: 'vpc',
         tags: {
-          Name: 'nat-gateway-eip',
           ...commonTags,
+          Name: `${name}-nat-eip`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 6. Create NAT Gateway
+    // Create NAT Gateway
     this.natGateway = new aws.ec2.NatGateway(
-      'nat-gateway',
+      `${name}-nat-gateway`,
       {
         allocationId: natEip.id,
         subnetId: this.publicSubnet.id,
         tags: {
-          Name: 'main-nat-gateway',
           ...commonTags,
+          Name: `${name}-nat-gateway`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 7. Create route tables
+    // Create route tables
     const publicRouteTable = new aws.ec2.RouteTable(
-      'public-rt',
+      `${name}-public-rt`,
       {
         vpcId: this.vpc.id,
-        routes: [
-          {
-            cidrBlock: '0.0.0.0/0',
-            gatewayId: this.internetGateway.id,
-          },
-        ],
         tags: {
-          Name: 'public-route-table',
           ...commonTags,
+          Name: `${name}-public-rt`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
     const privateRouteTable = new aws.ec2.RouteTable(
-      'private-rt',
+      `${name}-private-rt`,
       {
         vpcId: this.vpc.id,
-        routes: [
-          {
-            cidrBlock: '0.0.0.0/0',
-            natGatewayId: this.natGateway.id,
-          },
-        ],
         tags: {
-          Name: 'private-route-table',
           ...commonTags,
+          Name: `${name}-private-rt`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 8. Associate route tables with subnets
+    // Create routes
+    new aws.ec2.Route(
+      `${name}-public-route`,
+      {
+        routeTableId: publicRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: this.internetGateway.id,
+      },
+      { parent: this }
+    );
+
+    new aws.ec2.Route(
+      `${name}-private-route`,
+      {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: this.natGateway.id,
+      },
+      { parent: this }
+    );
+
+    // Associate route tables with subnets
     new aws.ec2.RouteTableAssociation(
-      'public-rta',
+      `${name}-public-rta`,
       {
         subnetId: this.publicSubnet.id,
         routeTableId: publicRouteTable.id,
       },
-      defaultOpts
+      { parent: this }
     );
 
     new aws.ec2.RouteTableAssociation(
-      'private-rta',
+      `${name}-private-rta`,
       {
         subnetId: this.privateSubnet.id,
         routeTableId: privateRouteTable.id,
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 9. Create KMS key for encryption
+    // 5. SECURITY, AUDITING & GOVERNANCE
+    // Create KMS Key
     this.kmsKey = new aws.kms.Key(
-      'app-kms-key',
+      `${name}-kms-key`,
       {
         description: 'KMS key for encrypting S3 bucket and RDS instance',
-        keyUsage: 'ENCRYPT_DECRYPT',
-        keySpec: 'SYMMETRIC_DEFAULT',
         tags: {
-          Name: 'app-encryption-key',
           ...commonTags,
+          Name: `${name}-kms-key`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
     new aws.kms.Alias(
-      'app-kms-alias',
+      `${name}-kms-alias`,
       {
-        name: 'alias/app-encryption-key',
+        name: `alias/${name}-key`,
         targetKeyId: this.kmsKey.keyId,
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 10. Create security groups
-    const albSecurityGroup = new aws.ec2.SecurityGroup(
-      'alb-sg',
-      {
-        name: 'alb-security-group',
-        description: 'Security group for Application Load Balancer',
-        vpcId: this.vpc.id,
-        ingress: [
-          {
-            fromPort: 80,
-            toPort: 80,
-            protocol: 'tcp',
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'HTTP access from anywhere',
-          },
-        ],
-        egress: [
-          {
-            fromPort: 0,
-            toPort: 0,
-            protocol: '-1',
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'All outbound traffic',
-          },
-        ],
-        tags: {
-          Name: 'alb-security-group',
-          ...commonTags,
-        },
-      },
-      defaultOpts
-    );
-
-    const ec2SecurityGroup = new aws.ec2.SecurityGroup(
-      'ec2-sg',
-      {
-        name: 'ec2-security-group',
-        description: 'Security group for EC2 instance',
-        vpcId: this.vpc.id,
-        ingress: [
-          {
-            fromPort: 22,
-            toPort: 22,
-            protocol: 'tcp',
-            cidrBlocks: [args.allowedSshCidr],
-            description: 'SSH access from allowed CIDR',
-          },
-          {
-            fromPort: 80,
-            toPort: 80,
-            protocol: 'tcp',
-            securityGroups: [albSecurityGroup.id],
-            description: 'HTTP access from ALB',
-          },
-        ],
-        egress: [
-          {
-            fromPort: 0,
-            toPort: 0,
-            protocol: '-1',
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'All outbound traffic',
-          },
-        ],
-        tags: {
-          Name: 'ec2-security-group',
-          ...commonTags,
-        },
-      },
-      defaultOpts
-    );
-
-    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
-      'rds-sg',
-      {
-        name: 'rds-security-group',
-        description: 'Security group for RDS MySQL instance',
-        vpcId: this.vpc.id,
-        ingress: [
-          {
-            fromPort: 3306,
-            toPort: 3306,
-            protocol: 'tcp',
-            securityGroups: [ec2SecurityGroup.id],
-            description: 'MySQL access from EC2',
-          },
-        ],
-        egress: [
-          {
-            fromPort: 0,
-            toPort: 0,
-            protocol: '-1',
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'All outbound traffic',
-          },
-        ],
-        tags: {
-          Name: 'rds-security-group',
-          ...commonTags,
-        },
-      },
-      defaultOpts
-    );
-
-    // 11. Create DB subnet group
+    // 2. DATABASE TIER
+    // Create DB subnet group
     const dbSubnetGroup = new aws.rds.SubnetGroup(
-      'db-subnet-group',
+      `${name}-db-subnet-group`,
       {
-        name: 'main-db-subnet-group',
         subnetIds: [this.privateSubnet.id, this.publicSubnet.id], // Need at least 2 subnets in different AZs
         tags: {
-          Name: 'main-db-subnet-group',
           ...commonTags,
+          Name: `${name}-db-subnet-group`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 12. Create RDS parameter group
+    // Create custom parameter group
     const dbParameterGroup = new aws.rds.ParameterGroup(
-      'db-param-group',
+      `${name}-db-param-group`,
       {
         family: 'mysql8.0',
-        name: 'custom-mysql-params',
-        description:
-          'Custom parameter group for MySQL with max_connections=100',
         parameters: [
           {
             name: 'max_connections',
@@ -350,50 +265,79 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: 'custom-mysql-params',
           ...commonTags,
+          Name: `${name}-db-param-group`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 13. Create RDS instance with Secrets Manager
-    const dbSecret = new aws.secretsmanager.Secret(
-      'db-password',
+    // Create RDS security group
+    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
+      `${name}-rds-sg`,
       {
-        name: 'rds-mysql-password',
-        description: 'Password for RDS MySQL instance',
-        generateSecretString: {
-          secretStringTemplate: JSON.stringify({ username: 'admin' }),
-          generateStringKey: 'password',
-          excludeCharacters: '"@/\\',
-          passwordLength: 16,
-        },
+        vpcId: this.vpc.id,
+        description: 'Security group for RDS MySQL instance',
         tags: {
-          Name: 'rds-mysql-password',
           ...commonTags,
+          Name: `${name}-rds-sg`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // Enable automatic rotation
-    new aws.secretsmanager.SecretRotation(
-      'db-password-rotation',
+    // Create EC2 security group first (needed for RDS ingress rule)
+    const ec2SecurityGroup = new aws.ec2.SecurityGroup(
+      `${name}-ec2-sg`,
       {
-        secretId: dbSecret.id,
-        rotationLambdaArn: pulumi.interpolate`arn:aws:lambda:us-west-2:${aws.getCallerIdentity().then(id => id.accountId)}:function:SecretsManagerRDSMySQLRotationSingleUser`,
-        rotationRules: {
-          automaticallyAfterDays: 30,
+        vpcId: this.vpc.id,
+        description: 'Security group for EC2 instance',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 22,
+            toPort: 22,
+            cidrBlocks: [args.sshAllowedCidr],
+            description: 'SSH access from allowed CIDR',
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'All outbound traffic',
+          },
+        ],
+        tags: {
+          ...commonTags,
+          Name: `${name}-ec2-sg`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
+    // Add ingress rule to RDS security group allowing access from EC2
+    new aws.ec2.SecurityGroupRule(
+      `${name}-rds-ingress`,
+      {
+        type: 'ingress',
+        fromPort: 3306,
+        toPort: 3306,
+        protocol: 'tcp',
+        sourceSecurityGroupId: ec2SecurityGroup.id,
+        securityGroupId: rdsSecurityGroup.id,
+        description: 'MySQL access from EC2',
+      },
+      { parent: this }
+    );
+
+    // Create RDS instance with Secrets Manager password
     this.rdsInstance = new aws.rds.Instance(
-      'mysql-db',
+      `${name}-rds`,
       {
-        identifier: 'mysql-database',
+        identifier: `${name}-mysql-db`,
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
@@ -403,9 +347,9 @@ export class TapStack extends pulumi.ComponentResource {
         kmsKeyId: this.kmsKey.arn,
 
         dbName: 'appdb',
-        username: dbSecret.secretString.apply(s => JSON.parse(s).username),
-        password: dbSecret.secretString.apply(s => JSON.parse(s).password),
-        managePassword: false,
+        username: 'admin',
+        managePasswordSecretRotation: true,
+        managePasswordSecretKmsKeyId: this.kmsKey.arn,
 
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
@@ -418,121 +362,156 @@ export class TapStack extends pulumi.ComponentResource {
         skipFinalSnapshot: true,
         deletionProtection: false,
 
-        enabledCloudwatchLogsExports: ['error', 'general', 'slow-query'],
-
         tags: {
-          Name: 'mysql-database',
           ...commonTags,
+          Name: `${name}-rds`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 14. Get latest Amazon Linux 2 AMI
+    // 3. APPLICATION & WEB TIERS
+    // Get latest Amazon Linux 2 AMI
     const ami = aws.ec2.getAmi({
       mostRecent: true,
       owners: ['amazon'],
       filters: [
-        {
-          name: 'name',
-          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-        },
+        { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
+        { name: 'virtualization-type', values: ['hvm'] },
       ],
     });
 
-    // 15. Create EC2 instance
+    // Create EC2 instance
     this.ec2Instance = new aws.ec2.Instance(
-      'web-server',
+      `${name}-ec2`,
       {
         ami: ami.then(ami => ami.id),
         instanceType: 't3.micro',
-        keyName: 'my-key-pair', // You'll need to create this key pair
         subnetId: this.publicSubnet.id,
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
+        associatePublicIpAddress: true,
 
         userData: `#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Hello from Web Server</h1>" > /var/www/html/index.html
-            `,
+echo "<h1>Hello from ${name} Web Server</h1>" > /var/www/html/index.html`,
 
         tags: {
-          Name: 'web-server',
           ...commonTags,
+          Name: `${name}-ec2`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 16. Create Application Load Balancer
+    // Create ALB security group
+    const albSecurityGroup = new aws.ec2.SecurityGroup(
+      `${name}-alb-sg`,
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for Application Load Balancer',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTP access from anywhere',
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'All outbound traffic',
+          },
+        ],
+        tags: {
+          ...commonTags,
+          Name: `${name}-alb-sg`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Add HTTP ingress rule to EC2 security group for ALB
+    new aws.ec2.SecurityGroupRule(
+      `${name}-ec2-http-ingress`,
+      {
+        type: 'ingress',
+        fromPort: 80,
+        toPort: 80,
+        protocol: 'tcp',
+        sourceSecurityGroupId: albSecurityGroup.id,
+        securityGroupId: ec2SecurityGroup.id,
+        description: 'HTTP access from ALB',
+      },
+      { parent: this }
+    );
+
+    // Create Application Load Balancer
     this.alb = new aws.lb.LoadBalancer(
-      'app-lb',
+      `${name}-alb`,
       {
-        name: 'app-load-balancer',
         loadBalancerType: 'application',
-        scheme: 'internet-facing',
-        subnets: [this.publicSubnet.id, this.privateSubnet.id],
+        subnets: [this.publicSubnet.id, this.privateSubnet.id], // ALB needs subnets in different AZs
         securityGroups: [albSecurityGroup.id],
-
         tags: {
-          Name: 'app-load-balancer',
           ...commonTags,
+          Name: `${name}-alb`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 17. Create target group
+    // Create target group
     const targetGroup = new aws.lb.TargetGroup(
-      'app-tg',
+      `${name}-tg`,
       {
-        name: 'app-target-group',
         port: 80,
         protocol: 'HTTP',
         vpcId: this.vpc.id,
-        targetType: 'instance',
-
         healthCheck: {
           enabled: true,
-          path: '/',
-          port: '80',
-          protocol: 'HTTP',
           healthyThreshold: 2,
-          unhealthyThreshold: 2,
-          timeout: 5,
           interval: 30,
           matcher: '200',
+          path: '/',
+          port: 'traffic-port',
+          protocol: 'HTTP',
+          timeout: 5,
+          unhealthyThreshold: 2,
         },
-
         tags: {
-          Name: 'app-target-group',
           ...commonTags,
+          Name: `${name}-tg`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 18. Attach EC2 instance to target group
+    // Attach EC2 instance to target group
     new aws.lb.TargetGroupAttachment(
-      'app-tg-attachment',
+      `${name}-tg-attachment`,
       {
         targetGroupArn: targetGroup.arn,
         targetId: this.ec2Instance.id,
         port: 80,
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 19. Create ALB listener
+    // Create ALB listener
     new aws.lb.Listener(
-      'app-listener',
+      `${name}-alb-listener`,
       {
         loadBalancerArn: this.alb.arn,
         port: '80',
         protocol: 'HTTP',
-
         defaultActions: [
           {
             type: 'forward',
@@ -540,25 +519,44 @@ echo "<h1>Hello from Web Server</h1>" > /var/www/html/index.html
           },
         ],
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 20. Create S3 bucket
+    // Create Route 53 A record
+    this.route53Record = new aws.route53.Record(
+      `${name}-route53-record`,
+      {
+        zoneId: args.hostedZoneId,
+        name: args.domainName,
+        type: 'A',
+        aliases: [
+          {
+            name: this.alb.dnsName,
+            zoneId: this.alb.zoneId,
+            evaluateTargetHealth: true,
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    // 4. STORAGE & SERVERLESS
+    // Create S3 bucket
     this.s3Bucket = new aws.s3.Bucket(
-      'my-app-data-bucket',
+      `${name}-s3-bucket`,
       {
         bucket: 'my-app-data-bucket',
         tags: {
-          Name: 'my-app-data-bucket',
           ...commonTags,
+          Name: 'my-app-data-bucket',
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 21. Configure S3 bucket encryption
+    // Configure S3 bucket encryption
     new aws.s3.BucketServerSideEncryptionConfiguration(
-      'bucket-encryption',
+      `${name}-s3-encryption`,
       {
         bucket: this.s3Bucket.id,
         rules: [
@@ -567,16 +565,15 @@ echo "<h1>Hello from Web Server</h1>" > /var/www/html/index.html
               sseAlgorithm: 'aws:kms',
               kmsMasterKeyId: this.kmsKey.arn,
             },
-            bucketKeyEnabled: true,
           },
         ],
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 22. Block public access to S3 bucket
+    // Block public access to S3 bucket
     new aws.s3.BucketPublicAccessBlock(
-      'bucket-pab',
+      `${name}-s3-pab`,
       {
         bucket: this.s3Bucket.id,
         blockPublicAcls: true,
@@ -584,14 +581,13 @@ echo "<h1>Hello from Web Server</h1>" > /var/www/html/index.html
         ignorePublicAcls: true,
         restrictPublicBuckets: true,
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 23. Create IAM role for Lambda
+    // Create IAM role for Lambda
     const lambdaRole = new aws.iam.Role(
-      'lambda-role',
+      `${name}-lambda-role`,
       {
-        name: 'lambda-s3-access-role',
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -605,197 +601,153 @@ echo "<h1>Hello from Web Server</h1>" > /var/www/html/index.html
           ],
         }),
         tags: {
-          Name: 'lambda-s3-access-role',
           ...commonTags,
+          Name: `${name}-lambda-role`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 24. Create IAM policy for S3 access
-    const lambdaS3Policy = new aws.iam.Policy(
-      'lambda-s3-policy',
-      {
-        name: 'lambda-s3-access-policy',
-        description: 'Policy for Lambda to access specific S3 bucket',
-        policy: pulumi.jsonStringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
-              Resource: 'arn:aws:logs:*:*:*',
-            },
-            {
-              Effect: 'Allow',
-              Action: [
-                's3:GetObject',
-                's3:PutObject',
-                's3:DeleteObject',
-                's3:ListBucket',
-              ],
-              Resource: [
-                this.s3Bucket.arn,
-                pulumi.interpolate`${this.s3Bucket.arn}/*`,
-              ],
-            },
-          ],
-        }),
-      },
-      defaultOpts
-    );
-
-    // 25. Attach policy to role
+    // Attach basic execution policy
     new aws.iam.RolePolicyAttachment(
-      'lambda-policy-attachment',
+      `${name}-lambda-basic-execution`,
       {
         role: lambdaRole.name,
-        policyArn: lambdaS3Policy.arn,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 26. Create Lambda function
-    this.lambdaFunction = new aws.lambda.Function(
-      's3-processor',
+    // Create custom policy for S3 bucket access
+    const s3Policy = new aws.iam.Policy(
+      `${name}-lambda-s3-policy`,
       {
-        name: 's3-data-processor',
-        runtime: 'python3.9',
-        handler: 'index.handler',
-        role: lambdaRole.arn,
-
-        code: new pulumi.asset.AssetArchive({
-          'index.py': new pulumi.asset.StringAsset(`
-import json
-import boto3
-
-def handler(event, context):
-    s3 = boto3.client('s3')
-    bucket_name = 'my-app-data-bucket'
-    
-    try:
-        # List objects in the bucket
-        response = s3.list_objects_v2(Bucket=bucket_name)
-        objects = response.get('Contents', [])
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': f'Successfully accessed bucket {bucket_name}',
-                'object_count': len(objects)
-            })
-        }
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': str(e)
-            })
-        }
-                `),
-        }),
-
+        policy: pulumi.all([this.s3Bucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  's3:GetObject',
+                  's3:PutObject',
+                  's3:DeleteObject',
+                  's3:ListBucket',
+                ],
+                Resource: [bucketArn, `${bucketArn}/*`],
+              },
+            ],
+          })
+        ),
         tags: {
-          Name: 's3-data-processor',
           ...commonTags,
+          Name: `${name}-lambda-s3-policy`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 27. Get hosted zone for Route 53
-    const hostedZone = aws.route53.getZone({
-      name: args.domainName,
-    });
-
-    // 28. Create Route 53 A record
-    this.route53Record = new aws.route53.Record(
-      'app-dns',
+    // Attach S3 policy to Lambda role
+    new aws.iam.RolePolicyAttachment(
+      `${name}-lambda-s3-policy-attachment`,
       {
-        zoneId: hostedZone.then(zone => zone.zoneId),
-        name: `app.${args.domainName}`,
-        type: 'A',
-
-        aliases: [
-          {
-            name: this.alb.dnsName,
-            zoneId: this.alb.zoneId,
-            evaluateTargetHealth: true,
-          },
-        ],
+        role: lambdaRole.name,
+        policyArn: s3Policy.arn,
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 29. Create CloudTrail S3 bucket
-    const cloudtrailBucket = new aws.s3.Bucket(
-      'cloudtrail-logs',
+    // Create Lambda function
+    this.lambdaFunction = new aws.lambda.Function(
+      `${name}-lambda`,
       {
-        bucket: 'my-app-cloudtrail-logs',
+        code: new pulumi.asset.AssetArchive({
+          'index.js': new pulumi.asset.StringAsset(`
+exports.handler = async (event) => {
+    console.log('Lambda function executed');
+    console.log('Event:', JSON.stringify(event, null, 2));
+    
+    return {
+        statusCode: 200,
+        body: JSON.stringify({
+            message: 'Hello from Lambda!',
+            timestamp: new Date().toISOString()
+        })
+    };
+};`),
+        }),
+        handler: 'index.handler',
+        runtime: 'nodejs18.x',
+        role: lambdaRole.arn,
+        tags: {
+          ...commonTags,
+          Name: `${name}-lambda`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create CloudTrail S3 bucket for logs
+    const cloudTrailBucket = new aws.s3.Bucket(
+      `${name}-cloudtrail-bucket`,
+      {
         forceDestroy: true,
         tags: {
-          Name: 'cloudtrail-logs',
           ...commonTags,
+          Name: `${name}-cloudtrail-bucket`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 30. CloudTrail bucket policy
-    const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(
-      'cloudtrail-bucket-policy',
+    // CloudTrail bucket policy
+    const cloudTrailBucketPolicy = new aws.s3.BucketPolicy(
+      `${name}-cloudtrail-bucket-policy`,
       {
-        bucket: cloudtrailBucket.id,
-        policy: pulumi
-          .all([cloudtrailBucket.arn, aws.getCallerIdentity()])
-          .apply(([bucketArn, identity]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Sid: 'AWSCloudTrailAclCheck',
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: 'cloudtrail.amazonaws.com',
-                  },
-                  Action: 's3:GetBucketAcl',
-                  Resource: bucketArn,
+        bucket: cloudTrailBucket.id,
+        policy: pulumi.all([cloudTrailBucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'AWSCloudTrailAclCheck',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'cloudtrail.amazonaws.com',
                 },
-                {
-                  Sid: 'AWSCloudTrailWrite',
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: 'cloudtrail.amazonaws.com',
-                  },
-                  Action: 's3:PutObject',
-                  Resource: `${bucketArn}/*`,
-                  Condition: {
-                    StringEquals: {
-                      's3:x-amz-acl': 'bucket-owner-full-control',
-                    },
+                Action: 's3:GetBucketAcl',
+                Resource: bucketArn,
+              },
+              {
+                Sid: 'AWSCloudTrailWrite',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'cloudtrail.amazonaws.com',
+                },
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringEquals: {
+                    's3:x-amz-acl': 'bucket-owner-full-control',
                   },
                 },
-              ],
-            })
-          ),
+              },
+            ],
+          })
+        ),
       },
-      defaultOpts
+      { parent: this }
     );
 
-    // 31. Create CloudTrail
+    // Create CloudTrail
     this.cloudTrail = new aws.cloudtrail.Trail(
-      's3-data-trail',
+      `${name}-cloudtrail`,
       {
-        name: 's3-data-access-trail',
-        s3BucketName: cloudtrailBucket.bucket,
-        includeGlobalServiceEvents: false,
-        isMultiRegionTrail: false,
+        s3BucketName: cloudTrailBucket.id,
+        includeGlobalServiceEvents: true,
+        isMultiRegionTrail: true,
         enableLogging: true,
-
         eventSelectors: [
           {
             readWriteType: 'All',
@@ -808,40 +760,39 @@ def handler(event, context):
             ],
           },
         ],
-
         tags: {
-          Name: 's3-data-access-trail',
           ...commonTags,
+          Name: `${name}-cloudtrail`,
         },
       },
-      { ...defaultOpts, dependsOn: [cloudtrailBucketPolicy] }
+      { parent: this, dependsOn: [cloudTrailBucketPolicy] }
     );
 
-    // 32. Create CloudWatch Log Groups
+    // Create CloudWatch Log Groups
     new aws.cloudwatch.LogGroup(
-      'ec2-logs',
+      `${name}-ec2-logs`,
       {
-        name: '/aws/ec2/web-server',
+        name: `/aws/ec2/${name}`,
         retentionInDays: 14,
         tags: {
-          Name: 'ec2-web-server-logs',
           ...commonTags,
+          Name: `${name}-ec2-logs`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
     new aws.cloudwatch.LogGroup(
-      'rds-logs',
+      `${name}-rds-logs`,
       {
-        name: '/aws/rds/instance/mysql-database/error',
+        name: `/aws/rds/instance/${name}/error`,
         retentionInDays: 14,
         tags: {
-          Name: 'rds-mysql-logs',
           ...commonTags,
+          Name: `${name}-rds-logs`,
         },
       },
-      defaultOpts
+      { parent: this }
     );
 
     this.registerOutputs({
@@ -851,10 +802,10 @@ def handler(event, context):
       rdsEndpoint: this.rdsInstance.endpoint,
       ec2PublicIp: this.ec2Instance.publicIp,
       albDnsName: this.alb.dnsName,
-      s3BucketName: this.s3Bucket.bucket,
+      s3BucketName: this.s3Bucket.id,
       lambdaFunctionName: this.lambdaFunction.name,
-      domainName: this.route53Record.name,
       kmsKeyId: this.kmsKey.keyId,
+      domainName: this.route53Record.name,
     });
   }
 }
@@ -865,12 +816,14 @@ def handler(event, context):
 ```typescript
 import { TapStack } from './tap-stack';
 
-// Create the main stack with configuration
-export const tapStack = new TapStack('tap-stack', {
-  environment: 'Production',
-  owner: 'DevOps',
-  domainName: 'your-domain.com', // Replace with your actual domain
-  allowedSshCidr: '203.0.113.0/24',
+// Create the main infrastructure stack
+export const tapStack = new TapStack('tap', {
+  vpcCidr: '10.0.0.0/16',
+  publicSubnetCidr: '10.0.1.0/24',
+  privateSubnetCidr: '10.0.2.0/24',
+  domainName: 'app.your-domain.com', // Replace with your actual domain
+  hostedZoneId: 'Z1234567890ABC', // Replace with your actual hosted zone ID
+  sshAllowedCidr: '203.0.113.0/24',
 });
 
 // Export important outputs
@@ -880,10 +833,10 @@ export const privateSubnetId = tapStack.privateSubnet.id;
 export const rdsEndpoint = tapStack.rdsInstance.endpoint;
 export const ec2PublicIp = tapStack.ec2Instance.publicIp;
 export const albDnsName = tapStack.alb.dnsName;
-export const s3BucketName = tapStack.s3Bucket.bucket;
+export const s3BucketName = tapStack.s3Bucket.id;
 export const lambdaFunctionName = tapStack.lambdaFunction.name;
-export const appUrl = tapStack.route53Record.name;
 export const kmsKeyId = tapStack.kmsKey.keyId;
+export const domainName = tapStack.route53Record.name;
 ```
 
 ### `tap.ts`
@@ -893,80 +846,99 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import './resources';
 
-// Configure the AWS Provider
+// Configure AWS provider for us-west-1
 const provider = new aws.Provider('aws-provider', {
-  region: 'us-west-2',
+  region: 'us-west-1',
 });
 
-// Export the provider for reference
-export { provider };
+// Set the provider as default
+pulumi.runtime.setConfig('aws:region', 'us-west-1');
+
+console.log('🚀 Secure Web App Environment deployment initiated...');
+console.log('📍 Region: us-west-1');
+console.log('🏗️  Infrastructure components:');
+console.log('   ✅ VPC with public and private subnets');
+console.log('   ✅ RDS MySQL with Secrets Manager integration');
+console.log('   ✅ EC2 instance with restricted SSH access');
+console.log('   ✅ Application Load Balancer');
+console.log('   ✅ Route 53 DNS record');
+console.log('   ✅ S3 bucket with KMS encryption');
+console.log('   ✅ Lambda function with least-privilege IAM');
+console.log('   ✅ CloudTrail for S3 data events');
+console.log('   ✅ CloudWatch logging');
+console.log('   ✅ All resources tagged appropriately');
 ```
 
 ## Key Features Implemented
 
-### ✅ **Infrastructure Components**
+### 1. **Networking Layer** ✅
 
-1. **VPC**: Uses existing default VPC as foundation
-2. **Subnets**: Public (172.31.1.0/24) and Private (172.31.2.0/24) subnets
-3. **Networking**: Internet Gateway, NAT Gateway, and proper routing
-4. **Security Groups**: Properly configured for ALB, EC2, and RDS tiers
+- New VPC with DNS support
+- Public subnet (10.0.1.0/24) with Internet Gateway
+- Private subnet (10.0.2.0/24) with NAT Gateway
+- Proper routing tables and associations
 
-### ✅ **Database Tier**
+### 2. **Database Tier** ✅
 
-- RDS MySQL (`db.t3.micro`) in private subnet
-- Custom parameter group with `max_connections = 100`
+- RDS MySQL db.t3.micro in private subnet
+- Custom parameter group with max_connections = 100
 - Password managed by AWS Secrets Manager with rotation
-- Encrypted with customer-managed KMS key
+- KMS encryption enabled
+- Multi-AZ subnet group for high availability
 
-### ✅ **Application & Web Tiers**
+### 3. **Application & Web Tiers** ✅
 
-- EC2 instance in public subnet with restricted SSH access
-- Application Load Balancer with proper target group configuration
+- EC2 instance in public subnet
+- Security group restricting SSH to 203.0.113.0/24
+- Application Load Balancer with health checks
 - Route 53 A record pointing to ALB
-- Security group connectivity between tiers
+- Proper security group connectivity (EC2 ↔ RDS on port 3306)
 
-### ✅ **Storage & Serverless**
+### 4. **Storage & Serverless** ✅
 
-- S3 bucket with KMS encryption
+- S3 bucket "my-app-data-bucket" with KMS encryption
 - Lambda function with least-privilege IAM role
-- Proper S3 bucket access policies
+- IAM role scoped specifically to the S3 bucket operations
 
-### ✅ **Security & Governance**
+### 5. **Security, Auditing & Governance** ✅
 
-- Customer-managed KMS key for encryption
-- CloudTrail for S3 data event monitoring
-- CloudWatch logging for EC2 and RDS
-- Comprehensive resource tagging
-
-## Prerequisites
-
-Before deploying, ensure you have:
-
-1. **AWS CLI configured** with appropriate credentials
-2. **Pulumi CLI installed** and configured
-3. **Node.js and npm** installed
-4. **A Route 53 hosted zone** for your domain
-5. **An EC2 key pair** created in us-west-2 region
+- Customer-managed KMS key for S3 and RDS encryption
+- CloudTrail monitoring S3 data events
+- CloudWatch log groups for EC2 and RDS
+- All resources tagged with Environment: Production and Owner: DevOps
 
 ## Deployment Instructions
 
+1. **Install dependencies:**
+
 ```bash
-# Initialize the project
-npm init -y
-npm install @pulumi/pulumi @pulumi/aws
+npm install @pulumi/pulumi @pulumi/aws @pulumi/awsx
+```
 
-# Deploy the infrastructure
+2. **Configure AWS credentials:**
+
+```bash
+aws configure
+```
+
+3. **Update configuration:**
+   - Replace `hostedZoneId` and `domainName` in `resources.ts` with your actual values
+   - Adjust CIDR blocks if needed
+
+4. **Deploy:**
+
+```bash
 pulumi up
-
-# View outputs
-pulumi stack output
 ```
 
 ## Important Notes
 
-1. **Domain Configuration**: Replace `"your-domain.com"` in `resources.ts` with your actual domain
-2. **Key Pair**: Update the `keyName` in the EC2 instance configuration
-3. **Secrets Manager Rotation**: The rotation Lambda ARN assumes the default AWS-provided rotation function
-4. **Cost Optimization**: All resources use minimal configurations suitable for development/testing
+- **Domain Configuration**: You need to replace the `hostedZoneId` and `domainName` with your actual Route 53 hosted zone
+- **RDS Multi-AZ**: The RDS subnet group uses both subnets to meet AWS requirements
+- **ALB Placement**: The ALB is placed in both subnets for high availability
+- **Security Groups**: Properly configured with least-privilege access
+- **KMS Integration**: Single KMS key used for both S3 and RDS encryption
+- **CloudTrail**: Configured specifically for S3 data events monitoring
+- **Tags**: All resources consistently tagged as required
 
-This infrastructure provides a secure, well-architected foundation for a web application with proper separation of concerns, encryption, monitoring, and access controls.
+This infrastructure provides a secure, well-architected web application environment following AWS best practices.

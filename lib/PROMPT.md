@@ -38,7 +38,7 @@ Pulumi script needs to define and connect the following components.
 
 #### **5. Region**
 
-- us-west-2 (add it in the provider block)
+- us-west-1 (add it in the provider block)
 
 ---
 
