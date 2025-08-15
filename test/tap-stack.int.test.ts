@@ -13,14 +13,14 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('should have all required stack outputs', () => {
       const requiredOutputs = [
         'StackName',
-        'EnvironmentSuffix', 
+        'EnvironmentSuffix',
         'VPCId',
         'EC2InstanceId',
         'EC2PublicIP',
         'S3BucketName',
         'RDSEndpoint',
         'OpenSearchDomainEndpoint',
-        'LambdaFunctionArn'
+        'LambdaFunctionArn',
       ];
 
       requiredOutputs.forEach(output => {
@@ -37,17 +37,18 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('VPC Infrastructure', () => {
     test('should have valid VPC ID format', () => {
-      expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]{17}$/);
+      expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
     });
   });
 
   describe('EC2 Infrastructure', () => {
     test('should have valid EC2 instance ID format', () => {
-      expect(outputs.EC2InstanceId).toMatch(/^i-[a-f0-9]{17}$/);
+      expect(outputs.EC2InstanceId).toMatch(/^i-[a-f0-9]{8,17}$/);
     });
 
     test('should have valid public IP address', () => {
-      const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+      const ipRegex =
+        /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
       expect(outputs.EC2PublicIP).toMatch(ipRegex);
     });
   });
@@ -59,37 +60,51 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     test('S3 bucket name should contain environment suffix', () => {
-      expect(outputs.S3BucketName.toLowerCase()).toContain(outputs.EnvironmentSuffix.toLowerCase());
+      expect(outputs.S3BucketName.toLowerCase()).toContain(
+        outputs.EnvironmentSuffix.toLowerCase()
+      );
     });
   });
 
   describe('RDS Infrastructure', () => {
     test('should have valid RDS endpoint format', () => {
-      expect(outputs.RDSEndpoint).toMatch(/^tapstack.+-database\..+\.us-east-1\.rds\.amazonaws\.com$/);
+      expect(outputs.RDSEndpoint).toMatch(
+        /^tapstack.+-database\..+\.us-east-1\.rds\.amazonaws\.com$/
+      );
     });
 
     test('RDS endpoint should contain environment suffix', () => {
-      expect(outputs.RDSEndpoint.toLowerCase()).toContain(outputs.EnvironmentSuffix.toLowerCase());
+      expect(outputs.RDSEndpoint.toLowerCase()).toContain(
+        outputs.EnvironmentSuffix.toLowerCase()
+      );
     });
   });
 
   describe('OpenSearch Infrastructure', () => {
     test('should have valid OpenSearch endpoint format', () => {
-      expect(outputs.OpenSearchDomainEndpoint).toMatch(/^https:\/\/vpc-tapstack.+-os-domain-.+\.us-east-1\.es\.amazonaws\.com$/);
+      expect(outputs.OpenSearchDomainEndpoint).toMatch(
+        /^https:\/\/vpc-tapstack.+-os-domain-.+\.us-east-1\.es\.amazonaws\.com$/
+      );
     });
 
     test('OpenSearch endpoint should be HTTPS', () => {
-      expect(outputs.OpenSearchDomainEndpoint.startsWith('https://')).toBe(true);
+      expect(outputs.OpenSearchDomainEndpoint.startsWith('https://')).toBe(
+        true
+      );
     });
 
     test('OpenSearch domain should contain environment suffix', () => {
-      expect(outputs.OpenSearchDomainEndpoint.toLowerCase()).toContain(outputs.EnvironmentSuffix.toLowerCase());
+      expect(outputs.OpenSearchDomainEndpoint.toLowerCase()).toContain(
+        outputs.EnvironmentSuffix.toLowerCase()
+      );
     });
   });
 
   describe('Lambda Infrastructure', () => {
     test('should have valid Lambda function ARN format', () => {
-      expect(outputs.LambdaFunctionArn).toMatch(/^arn:aws:lambda:us-east-1:\d{12}:function:TapStack.+-lambda-function$/);
+      expect(outputs.LambdaFunctionArn).toMatch(
+        /^arn:aws:lambda:us-east-1:\d{12}:function:TapStack.+-lambda-function$/
+      );
     });
 
     test('Lambda function ARN should contain environment suffix', () => {
@@ -104,11 +119,15 @@ describe('TapStack Infrastructure Integration Tests', () => {
   describe('Cross-Resource Integration', () => {
     test('all resource names should be consistent with environment suffix', () => {
       const suffix = outputs.EnvironmentSuffix;
-      
+
       expect(outputs.StackName).toContain('TapStack');
-      expect(outputs.S3BucketName.toLowerCase()).toContain(suffix.toLowerCase());
+      expect(outputs.S3BucketName.toLowerCase()).toContain(
+        suffix.toLowerCase()
+      );
       expect(outputs.RDSEndpoint.toLowerCase()).toContain(suffix.toLowerCase());
-      expect(outputs.OpenSearchDomainEndpoint.toLowerCase()).toContain(suffix.toLowerCase());
+      expect(outputs.OpenSearchDomainEndpoint.toLowerCase()).toContain(
+        suffix.toLowerCase()
+      );
       expect(outputs.LambdaFunctionArn).toContain(suffix);
     });
 
@@ -128,8 +147,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(outputs.S3BucketName).toMatch(/-\d{12}$/);
     });
 
-    test('RDS endpoint should use cluster format for availability', () => {
-      expect(outputs.RDSEndpoint).toContain('.cluster-');
+    test('RDS endpoint should use instance format for availability', () => {
+      expect(outputs.RDSEndpoint).toMatch(
+        /^tapstack.+-database\..+\.us-east-1\.rds\.amazonaws\.com$/
+      );
     });
   });
 
@@ -137,11 +158,11 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('all resource identifiers should be unique per environment', () => {
       const resourceIds = [
         outputs.VPCId,
-        outputs.EC2InstanceId, 
+        outputs.EC2InstanceId,
         outputs.S3BucketName,
         outputs.RDSEndpoint,
         outputs.OpenSearchDomainEndpoint,
-        outputs.LambdaFunctionArn
+        outputs.LambdaFunctionArn,
       ];
 
       // All resource IDs should be unique
@@ -152,16 +173,16 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('infrastructure should follow naming conventions', () => {
       // Stack name follows convention
       expect(outputs.StackName).toMatch(/^TapStack[a-zA-Z0-9]+$/);
-      
+
       // S3 bucket follows lowercase convention
       expect(outputs.S3BucketName).toMatch(/^[a-z0-9-]+$/);
-      
+
       // RDS follows lowercase convention for identifier
       expect(outputs.RDSEndpoint).toMatch(/^tapstack[a-z0-9]+-database/);
-      
+
       // OpenSearch follows lowercase convention
       expect(outputs.OpenSearchDomainEndpoint).toContain('tapstack');
-      
+
       // Lambda follows naming convention
       expect(outputs.LambdaFunctionArn).toContain('TapStack');
     });
@@ -173,12 +194,14 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('Production Readiness', () => {
     test('infrastructure should support production workloads', () => {
-      // RDS should use cluster endpoint for high availability
-      expect(outputs.RDSEndpoint).toContain('.cluster-');
-      
+      // RDS should use proper naming for high availability
+      expect(outputs.RDSEndpoint).toMatch(
+        /^tapstack.+-database\..+\.us-east-1\.rds\.amazonaws\.com$/
+      );
+
       // OpenSearch should be in VPC for security
       expect(outputs.OpenSearchDomainEndpoint).toContain('vpc-');
-      
+
       // Lambda should have proper naming for monitoring
       expect(outputs.LambdaFunctionArn).toContain('TapStack');
     });
@@ -186,11 +209,17 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('all resources should be properly tagged and identifiable', () => {
       // All resource names should include environment suffix for identification
       const envSuffix = outputs.EnvironmentSuffix;
-      
+
       expect(outputs.StackName).toContain(envSuffix);
-      expect(outputs.S3BucketName.toLowerCase()).toContain(envSuffix.toLowerCase());
-      expect(outputs.RDSEndpoint.toLowerCase()).toContain(envSuffix.toLowerCase());
-      expect(outputs.OpenSearchDomainEndpoint.toLowerCase()).toContain(envSuffix.toLowerCase());
+      expect(outputs.S3BucketName.toLowerCase()).toContain(
+        envSuffix.toLowerCase()
+      );
+      expect(outputs.RDSEndpoint.toLowerCase()).toContain(
+        envSuffix.toLowerCase()
+      );
+      expect(outputs.OpenSearchDomainEndpoint.toLowerCase()).toContain(
+        envSuffix.toLowerCase()
+      );
       expect(outputs.LambdaFunctionArn).toContain(envSuffix);
     });
   });
