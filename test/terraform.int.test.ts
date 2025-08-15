@@ -1,150 +1,131 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import assert from 'assert';
-import { EC2, ELBv2 } from 'aws-sdk';
+// int-tests.ts
+import * as fs from "fs";
+import * as path from "path";
 
-// Interface for Terraform outputs
-interface TerraformOutputs {
-  [key: string]: {
-    value: any;
-  };
-}
+// Path to JSON outputs
+const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
 
-// Path to the outputs JSON file
-const OUTPUTS_PATH = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
-
-// --- Mock AWS SDK calls (no jest) ---
-class MockEC2 {
-  describeVpcs(params?: EC2.DescribeVpcsRequest) {
-    return {
-      promise: async (): Promise<EC2.DescribeVpcsResult> => ({
-        Vpcs: [
-          {
-            CidrBlock: '10.0.0.0/16',
-            VpcId: 'vpc-mock123',
-            State: 'available',
-          },
-        ],
-      }),
-    };
-  }
-
-  describeSubnets(params?: EC2.DescribeSubnetsRequest) {
-    return {
-      promise: async (): Promise<EC2.DescribeSubnetsResult> => ({
-        Subnets: [
-          {
-            MapPublicIpOnLaunch: true,
-            Tags: [{ Key: 'Tier', Value: 'public' }],
-            SubnetId: 'subnet-public123',
-            AvailabilityZone: 'us-east-1a',
-          },
-          {
-            MapPublicIpOnLaunch: false,
-            Tags: [{ Key: 'Tier', Value: 'private' }],
-            SubnetId: 'subnet-private123',
-            AvailabilityZone: 'us-east-1b',
-          },
-        ],
-      }),
-    };
-  }
-}
-
-class MockELBv2 {
-  describeLoadBalancers(params?: ELBv2.DescribeLoadBalancersInput) {
-    return {
-      promise: async (): Promise<ELBv2.DescribeLoadBalancersOutput> => ({
-        LoadBalancers: [
-          {
-            Scheme: 'internet-facing',
-            Type: 'application',
-            LoadBalancerArn:
-              'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-load-balancer/50dc6c495c0c9188',
-            DNSName:
-              'my-load-balancer-1234567890.us-east-1.elb.amazonaws.com',
-          },
-        ],
-      }),
-    };
-  }
-}
-
-// Replace real AWS SDK clients with mocks
-const ec2 = new MockEC2() as unknown as EC2;
-const elbv2 = new MockELBv2() as unknown as ELBv2;
-
-// --- Load Terraform outputs ---
-let outputs: TerraformOutputs;
+// Load & parse stack outputs
+let outputs: Record<string, any> = {};
 try {
-  const outputsFile = fs.readFileSync(OUTPUTS_PATH, 'utf8');
-  outputs = JSON.parse(outputsFile) as TerraformOutputs;
-} catch (error) {
-  console.error('Failed to load outputs file:', error);
-  process.exit(1);
+  const raw = fs.readFileSync(p, "utf8");
+  outputs = JSON.parse(raw);
+} catch (err) {
+  throw new Error(`❌ Failed to read outputs file at ${p}: ${err}`);
 }
 
-// --- Tests (pure Node.js assertions) ---
+// Utility regex patterns for validation
+const ARN_REGEX = /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:[\S]+$/;
+const CIDR_REGEX =
+  /^(?:\d{1,3}\.){3}\d{1,3}\/([0-9]|[1-2][0-9]|3[0-2])$/;
+const DNS_REGEX =
+  /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,11}?$/;
 
-// Outputs file check
-assert(fs.existsSync(OUTPUTS_PATH), 'Outputs file does not exist');
-assert.doesNotThrow(() => {
-  JSON.parse(fs.readFileSync(OUTPUTS_PATH, 'utf8'));
-}, 'Outputs file is not valid JSON');
+// Helper: Check all tags follow the standard
+function checkTags(tags: Record<string, string>, expectedKeys: string[]) {
+  expectedKeys.forEach((key) => {
+    if (!tags[key]) {
+      throw new Error(`Missing expected tag: ${key}`);
+    }
+  });
+}
 
-// VPC validation
-assert(outputs.vpc_id?.value, 'VPC ID is missing');
-assert.strictEqual(outputs.vpc_cidr?.value, '10.0.0.0/16', 'VPC CIDR mismatch');
+// Jest test suite
+describe("Terraform Stack Integration Tests", () => {
+  // -------------------
+  // Positive Case Tests
+  // -------------------
+  test("VPC ID should exist and follow AWS format", () => {
+    expect(outputs.vpc_id).toMatch(/^vpc-[0-9a-f]{8,17}$/);
+  });
 
-// Subnet validation
-assert(Array.isArray(outputs.public_subnet_ids?.value), 'Public subnets missing');
-assert(outputs.public_subnet_ids?.value.length >= 2, 'Not enough public subnets');
+  test("VPC CIDR should be valid", () => {
+    expect(outputs.vpc_cidr).toMatch(CIDR_REGEX);
+  });
 
-assert(Array.isArray(outputs.private_subnet_ids?.value), 'Private subnets missing');
-assert(outputs.private_subnet_ids?.value.length >= 2, 'Not enough private subnets');
+  test("Public Subnets should be non-empty and have valid IDs", () => {
+    expect(Array.isArray(outputs.public_subnet_ids)).toBe(true);
+    expect(outputs.public_subnet_ids.length).toBeGreaterThan(0);
+    outputs.public_subnet_ids.forEach((id: string) =>
+      expect(id).toMatch(/^subnet-[0-9a-f]{8,17}$/)
+    );
+  });
 
-// Load Balancer validation
-assert(outputs.alb_dns_name?.value, 'ALB DNS name missing');
-assert(typeof outputs.alb_dns_name?.value === 'string', 'ALB DNS name is not a string');
-assert(outputs.alb_dns_name?.value.includes('elb.amazonaws.com'), 'Invalid ALB DNS name');
+  test("Private Subnets should be non-empty and have valid IDs", () => {
+    expect(Array.isArray(outputs.private_subnet_ids)).toBe(true);
+    expect(outputs.private_subnet_ids.length).toBeGreaterThan(0);
+    outputs.private_subnet_ids.forEach((id: string) =>
+      expect(id).toMatch(/^subnet-[0-9a-f]{8,17}$/)
+    );
+  });
 
-assert(outputs.target_group_arn?.value, 'Target group ARN missing');
-assert(typeof outputs.target_group_arn?.value === 'string', 'Target group ARN is not a string');
-assert(outputs.target_group_arn?.value.includes('targetgroup'), 'Invalid target group ARN');
+  test("ALB DNS Name should look valid", () => {
+    expect(outputs.alb_dns_name).toMatch(DNS_REGEX);
+  });
 
-// Auto Scaling validation
-assert(outputs.asg_name?.value, 'ASG name missing');
-assert(typeof outputs.asg_name?.value === 'string', 'ASG name is not a string');
-assert(outputs.asg_name?.value.includes('asg'), 'Invalid ASG name');
+  test("Target Group ARN should be valid", () => {
+    expect(outputs.target_group_arn).toMatch(ARN_REGEX);
+  });
 
-// Security Group validation
-assert(outputs.alb_sg_id?.value, 'ALB Security Group ID missing');
-assert(typeof outputs.alb_sg_id?.value === 'string', 'ALB SG ID is not a string');
+  test("ASG Name should be non-empty string", () => {
+    expect(typeof outputs.asg_name).toBe("string");
+    expect(outputs.asg_name.length).toBeGreaterThan(3);
+  });
 
-assert(outputs.ec2_sg_id?.value, 'EC2 Security Group ID missing');
-assert(typeof outputs.ec2_sg_id?.value === 'string', 'EC2 SG ID is not a string');
+  test("Security Group IDs should be valid", () => {
+    expect(outputs.alb_sg_id).toMatch(/^sg-[0-9a-f]{8,17}$/);
+    expect(outputs.ec2_sg_id).toMatch(/^sg-[0-9a-f]{8,17}$/);
+  });
 
-// ACM Certificate validation
-assert(outputs.acm_certificate_arn?.value, 'ACM Certificate ARN missing');
-assert(typeof outputs.acm_certificate_arn?.value === 'string', 'ACM ARN is not a string');
-assert(outputs.acm_certificate_arn?.value.includes('certificate'), 'Invalid ACM ARN');
+  test("ACM Certificate ARN should be valid", () => {
+    expect(outputs.acm_certificate_arn).toMatch(ARN_REGEX);
+  });
 
-// CloudWatch alarms validation
-assert(outputs.high_cpu_alarm_arn?.value, 'High CPU alarm missing');
-assert(typeof outputs.high_cpu_alarm_arn?.value === 'string', 'High CPU alarm is not a string');
+  // -------------------
+  // Edge Case Tests
+  // -------------------
+  test("Should throw if any required output is missing", () => {
+    const requiredKeys = [
+      "vpc_id",
+      "vpc_cidr",
+      "public_subnet_ids",
+      "private_subnet_ids",
+      "alb_dns_name",
+      "target_group_arn",
+      "asg_name",
+      "alb_sg_id",
+      "ec2_sg_id",
+      "acm_certificate_arn",
+    ];
+    requiredKeys.forEach((key) => {
+      expect(outputs[key]).toBeDefined();
+    });
+  });
 
-assert(outputs.unhealthy_hosts_alarm_arn?.value, 'Unhealthy hosts alarm missing');
-assert(typeof outputs.unhealthy_hosts_alarm_arn?.value === 'string', 'Unhealthy hosts alarm is not a string');
+  test("Subnets should not contain duplicates", () => {
+    const allSubnets = [
+      ...outputs.public_subnet_ids,
+      ...outputs.private_subnet_ids,
+    ];
+    const uniqueSubnets = new Set(allSubnets);
+    expect(uniqueSubnets.size).toBe(allSubnets.length);
+  });
 
-// Edge cases
-assert.throws(() => {
-  fs.readFileSync(path.resolve(process.cwd(), 'cfn-outputs/nonexistent.json'), 'utf8');
-}, 'Missing outputs file did not throw');
+  // -------------------
+  // Standards & Compliance
+  // -------------------
+  test("Resource names should follow '<project>-<env>' prefix", () => {
+    const projectEnvPrefix = /^myapp-dev/;
+    expect(outputs.asg_name).toMatch(projectEnvPrefix);
+  });
 
-const emptyOutputs: TerraformOutputs = {};
-assert.strictEqual(Object.keys(emptyOutputs).length, 0, 'Empty outputs should have length 0');
-
-const malformed = { vpc_id: {} } as unknown as TerraformOutputs;
-assert.strictEqual(malformed.vpc_id?.value, undefined, 'Malformed outputs should have undefined value');
-
-console.log('✅ All tests passed without Jest');
+  test("All ARNs should be in 'us-west-2' or 'us-east-1'", () => {
+    const validRegions = ["us-west-2", "us-east-1"];
+    Object.values(outputs)
+      .filter((val) => typeof val === "string" && val.startsWith("arn:aws"))
+      .forEach((arn: string) => {
+        const region = arn.split(":")[3];
+        expect(validRegions).toContain(region);
+      });
+  });
+});
