@@ -37,7 +37,16 @@ resource "aws_launch_template" "main" {
   user_data = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
-              yum install -y amazon-cloudwatch-agent
+              yum install -y amazon-cloudwatch-agent httpd
+              
+              # Start and enable Apache
+              systemctl start httpd
+              systemctl enable httpd
+              
+              # Create a simple index page
+              echo "<html><body><h1>Hello from SecureTF Instance</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/index.html
+              
+              # Configure CloudWatch agent
               /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
               EOF
   )
@@ -56,17 +65,22 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.resource_prefix}-${var.environment_suffix}-asg"
-  vpc_zone_identifier = aws_subnet.public[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
-  min_size            = 1
-  max_size            = 3
-  desired_capacity    = 2
+  name                      = "${var.resource_prefix}-${var.environment_suffix}-asg"
+  vpc_zone_identifier       = aws_subnet.public[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+  min_size                  = 1
+  max_size                  = 3
+  desired_capacity          = 2
 
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
+  }
+
+  timeouts {
+    update = "15m"
   }
 
   tag {
@@ -100,9 +114,9 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
+    unhealthy_threshold = 3
+    timeout             = 10
+    interval            = 60
     path                = "/"
     matcher             = "200"
   }
