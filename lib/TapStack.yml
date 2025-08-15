@@ -841,6 +841,12 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-SourceBucketName"
 
+  SourceCodeBucketName:
+    Description: "Name of the S3 source code bucket"
+    Value: !Ref SourceCodeBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-SourceCodeBucketName"
+
   ArtifactsBucketName:
     Description: "Name of the S3 artifacts bucket"
     Value: !Ref ArtifactsBucket
@@ -870,6 +876,12 @@ Outputs:
     Value: !GetAtt DeploymentValidationFunction.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ValidationFunctionArn"
+
+  ValidationFunctionName:
+    Description: "Name of the deployment validation Lambda function"
+    Value: !Ref DeploymentValidationFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-ValidationFunctionName"
 
   NotificationTopicArn:
     Description: "ARN of the SNS notification topic"

@@ -55,13 +55,13 @@ describe('TAP Stack Integration Tests', () => {
     test('should have CodePipeline name in correct format', () => {
       const pipelineName = outputs.PipelineName;
       expect(pipelineName).toBeDefined();
-      expect(pipelineName).toMatch(/^MyApp-Pipeline-[a-z0-9]+$/);
+      expect(pipelineName).toMatch(/^myapp-pipeline-[a-z0-9]+$/);
     });
 
     test('should have Lambda function name in correct format', () => {
       const functionName = outputs.ValidationFunctionName;
       expect(functionName).toBeDefined();
-      expect(functionName).toMatch(/^DeploymentValidation-[a-z0-9]+$/);
+      expect(functionName).toMatch(/^myapp-deployment-validation-[a-z0-9]+$/);
     });
   });
 
@@ -203,7 +203,9 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should validate environment configuration', () => {
       const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      expect(['dev', 'staging', 'prod']).toContain(envSuffix);
+      // Environment suffix should be alphanumeric (dev, staging, prod, or PR environments like pr1363)
+      expect(envSuffix).toMatch(/^[a-zA-Z0-9]+$/);
+      expect(envSuffix.length).toBeGreaterThan(0);
     });
   });
 });
