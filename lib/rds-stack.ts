@@ -162,7 +162,7 @@ export class RDSStack extends pulumi.ComponentResource {
 
         // Security configurations
         storageEncrypted: true,
-        kmsKeyId: 'alias/aws/rds', // AWS-managed KMS key for RDS
+        // Using default AWS-managed KMS key for RDS (omitting kmsKeyId uses aws/rds key)
 
         // Network and access - use dedicated security group
         dbSubnetGroupName: rdsSubnetGroup.name,
