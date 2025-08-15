@@ -55,7 +55,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: 'Production-VPC'
+          Value: !Sub 'Production-VPC-${EnvironmentSuffix}'
 
   # Internet Gateway - Provides internet access to public subnets
   InternetGateway:
@@ -63,7 +63,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: 'Production-IGW'
+          Value: !Sub 'Production-IGW-${EnvironmentSuffix}'
 
   # Attach Internet Gateway to VPC
   InternetGatewayAttachment:
@@ -77,68 +77,68 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'Public Subnet 1 (AZ1)'
+          Value: !Sub 'Public Subnet 1 (AZ1)-${EnvironmentSuffix}'
 
   # Public Subnet 2 - Second AZ for high availability
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.2.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'Public Subnet 2 (AZ2)'
+          Value: !Sub 'Public Subnet 2 (AZ2)-${EnvironmentSuffix}'
 
   # Private Subnet 1 - Hosts web servers with outbound internet via NAT
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '10.0.11.0/24'
       Tags:
         - Key: Name
-          Value: 'Private Subnet 1 (AZ1)'
+          Value: !Sub 'Private Subnet 1 (AZ1)-${EnvironmentSuffix}'
 
   # Private Subnet 2 - Second AZ for high availability
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.12.0/24'
       Tags:
         - Key: Name
-          Value: 'Private Subnet 2 (AZ2)'
+          Value: !Sub 'Private Subnet 2 (AZ2)-${EnvironmentSuffix}'
 
   # Database Subnet 1 - Isolated subnet for RDS
   DatabaseSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '10.0.21.0/24'
       Tags:
         - Key: Name
-          Value: 'Database Subnet 1 (AZ1)'
+          Value: !Sub 'Database Subnet 1 (AZ1)-${EnvironmentSuffix}'
 
   # Database Subnet 2 - Second AZ for RDS Multi-AZ deployment
   DatabaseSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.22.0/24'
       Tags:
         - Key: Name
-          Value: 'Database Subnet 2 (AZ2)'
+          Value: !Sub 'Database Subnet 2 (AZ2)-${EnvironmentSuffix}'
 
   # NAT Gateway EIP - Elastic IP for NAT Gateway
   NatGateway1EIP:
@@ -148,7 +148,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: 'NAT Gateway 1 EIP'
+          Value: !Sub 'NAT Gateway 1 EIP-${EnvironmentSuffix}'
 
   # NAT Gateway - Provides outbound internet access for private subnets
   NatGateway1:
@@ -158,7 +158,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: 'NAT Gateway 1'
+          Value: !Sub 'NAT Gateway 1-${EnvironmentSuffix}'
 
   # Public Route Table - Routes traffic to Internet Gateway
   PublicRouteTable:
@@ -167,7 +167,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: 'Public Routes'
+          Value: !Sub 'Public Routes-${EnvironmentSuffix}'
 
   # Default public route - All traffic to Internet Gateway
   DefaultPublicRoute:
@@ -198,7 +198,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: 'Private Routes (AZ1)'
+          Value: !Sub 'Private Routes (AZ1)-${EnvironmentSuffix}'
 
   # Default private route - Outbound traffic to NAT Gateway
   DefaultPrivateRoute1:
@@ -216,7 +216,7 @@ Resources:
       SubnetId: !Ref PrivateSubnet1
 
   PrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTable Association
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateSubnet2
@@ -225,7 +225,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-app-assets-${AWS::AccountId}'
+      BucketName: !Sub '${AWS::StackName}-app-assets-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -242,7 +242,7 @@ Resources:
   EC2S3AccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2-S3-Access-Role'
+      RoleName: !Sub '${AWS::StackName}-EC2-S3-Access-Role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -281,7 +281,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'LoadBalancer-SG'
+      GroupName: !Sub 'LoadBalancer-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -304,13 +304,13 @@ Resources:
           Description: 'Allow all traffic to VPC resources'
       Tags:
         - Key: Name
-          Value: 'LoadBalancer Security Group'
+          Value: !Sub 'LoadBalancer Security Group-${EnvironmentSuffix}'
 
   # Security Group - Web Servers (only accessible via Load Balancer)
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'WebServer-SG'
+      GroupName: !Sub 'WebServer-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for web servers - only accessible via load balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -333,13 +333,13 @@ Resources:
           Description: 'Allow all outbound traffic'
       Tags:
         - Key: Name
-          Value: 'WebServer Security Group'
+          Value: !Sub 'WebServer Security Group-${EnvironmentSuffix}'
 
   # Security Group - Database (only accessible from web servers)
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'Database-SG'
+      GroupName: !Sub 'Database-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for RDS database - only accessible from web servers'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -351,27 +351,27 @@ Resources:
           Description: 'Allow MySQL access from web servers only'
       Tags:
         - Key: Name
-          Value: 'Database Security Group'
+          Value: !Sub 'Database Security Group-${EnvironmentSuffix}'
 
   # DB Subnet Group - Required for RDS deployment across multiple AZs
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${AWS::StackName}-db-subnet-group'
+      DBSubnetGroupName: !Sub '${AWS::StackName}-db-subnet-group-${EnvironmentSuffix}'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref DatabaseSubnet1
         - !Ref DatabaseSubnet2
       Tags:
         - Key: Name
-          Value: 'Database Subnet Group'
+          Value: !Sub 'Database Subnet Group-${EnvironmentSuffix}'
 
   # RDS Instance - MySQL database with encryption at rest enabled
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
       EngineVersion: '8.0.35'
@@ -391,19 +391,19 @@ Resources:
       # Enable Multi-AZ for high availability
       MultiAZ: true
       # Enable monitoring
-      MonitoringInterval: 60
-      MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
-      # Enable deletion protection for production
-      DeletionProtection: true
+      MonitoringInterval: 0
+      # MonitoringRoleArn removed - not needed without monitoring
+      # Deletion protection disabled for QA testing
+      DeletionProtection: false
       Tags:
         - Key: Name
-          Value: 'Production Database'
+          Value: !Sub 'Production Database-${EnvironmentSuffix}'
 
   # Application Load Balancer - Distributes traffic to web servers
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-ALB'
+      Name: !Sub '${AWS::StackName}-ALB-${EnvironmentSuffix}'
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
@@ -414,13 +414,13 @@ Resources:
         - !Ref LoadBalancerSecurityGroup
       Tags:
         - Key: Name
-          Value: 'Application Load Balancer'
+          Value: !Sub 'Application Load Balancer-${EnvironmentSuffix}'
 
   # Target Group - Defines health check and routing for web servers
   WebServerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-WebServers'
+      Name: !Sub '${AWS::StackName}-WebServers-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -434,7 +434,7 @@ Resources:
       UnhealthyThresholdCount: 3
       Tags:
         - Key: Name
-          Value: 'WebServer Target Group'
+          Value: !Sub 'WebServer Target Group-${EnvironmentSuffix}'
 
   # Load Balancer Listener - Routes HTTP traffic to target group
   LoadBalancerListener:
@@ -451,7 +451,7 @@ Resources:
   WebServerLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-WebServer-Template'
+      LaunchTemplateName: !Sub '${AWS::StackName}-WebServer-Template-${EnvironmentSuffix}'
       LaunchTemplateData:
         ImageId: 'ami-0c2d3e23b7b644f5c' # Amazon Linux 2023 AMI in us-west-2
         InstanceType: !Ref InstanceType
@@ -474,13 +474,13 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: 'Production Web Server'
+                Value: !Sub 'Production Web Server-${EnvironmentSuffix}'
 
   # Auto Scaling Group - Manages web server instances across AZs
   WebServerAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${AWS::StackName}-WebServer-ASG'
+      AutoScalingGroupName: !Sub '${AWS::StackName}-WebServer-ASG-${EnvironmentSuffix}'
       LaunchTemplate:
         LaunchTemplateId: !Ref WebServerLaunchTemplate
         Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
@@ -496,7 +496,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: 'Production Web Server'
+          Value: !Sub 'Production Web Server-${EnvironmentSuffix}'
           PropagateAtLaunch: true
 
 Outputs:
