@@ -1,4 +1,4 @@
-# Terraform Multi-Environment Infrastructure Solution
+# Terraform Multi-Environment Infrastructure Solutions
 
 This solution provides a complete, production-ready Terraform implementation that supports multi-environment deployments with workspace management and comprehensive AWS infrastructure.
 
