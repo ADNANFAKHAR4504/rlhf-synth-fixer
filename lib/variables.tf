@@ -1,11 +1,11 @@
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
   
   validation {
-    condition     = var.aws_region == "us-west-2"
-    error_message = "Region must be us-west-2 as per requirements."
+    condition     = contains(["us-east-1", "us-east-2", "us-west-1", "us-west-2"], var.aws_region)
+    error_message = "Region must be a valid US region."
   }
 }
 
@@ -18,7 +18,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "serverless-app"
+  default     = "serverless-app-291262"
 }
 
 variable "owner" {
