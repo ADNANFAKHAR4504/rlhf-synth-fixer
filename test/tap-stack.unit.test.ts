@@ -297,7 +297,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should use SSM parameter for database password', () => {
       const rds = template.Resources.MyAppRDSInstance;
       expect(rds.Properties.MasterUserPassword).toEqual({
-        'Fn::Sub': '{{resolve:ssm:${DBPassword}}}'
+        'Fn::Sub': '{{resolve:ssm-secure:${DBPassword}}}'
       });
     });
   });
