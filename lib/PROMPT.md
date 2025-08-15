@@ -1,30 +1,60 @@
-# Prompt
+Problem Statement
 
-You are an expert AWS Infrastructure Engineer tasked with securing an AWS environment spanning the `us-east-1` and `us-west-2` regions. All resource names must start with `SecureEnv-` and follow a private IP naming convention. The environment must comply with industry standards for security and data protection, and resources are organized under a single AWS account. 
+You are tasked with securing an AWS environment spanning the us-east-1 and us-west-2 regions. All resource names must start with SecureEnv- and follow a private IP naming convention. The environment must comply with industry standards for security and data protection, and resources are organized under a single AWS account.
 
-The stack will include:  
-**S3 buckets**, **RDS databases**, **EC2 instances**, **VPCs/subnets**, **security groups**, **IAM roles**, **AWS WAF**, and **AWS Config**.
+The infrastructure includes:
 
-## Requirements
+S3 buckets
 
-- **KMS Encryption:** Encrypt all S3 data with AWS KMS.  
-- **IAM Least Privilege:** Keep IAM roles limited to the permissions they absolutely need.  
-- **VPC Logging:** Enable VPC logging for monitoring and audits.  
-- **AWS Config:** Track resource changes and keep us compliant.  
-- **CloudTrail Security:** Enable CloudTrail and make sure logs can’t be tampered with.  
-- **MFA:** Require multi-factor authentication for every IAM user.  
-- **AWS WAF:** Block SQL injection and XSS attacks.  
-- **GuardDuty:** Turn on Amazon GuardDuty for threat detection.  
-- **RDS Encryption:** Encrypt RDS databases at rest and in transit.  
-- **Secure VPC Design:** Proper subnetting, routing, and NAT gateways for internet access when needed.  
-- **EC2 Metadata Protection:** Block instance metadata from unauthorized scripts.  
-- **Security Groups:** Limit inbound and outbound traffic to only what’s necessary.  
-- **EBS Encryption:** Encrypt all EBS volumes using KMS.
+RDS databases
 
-## Expected Output
+EC2 instances
 
-A working CloudFormation YAML file named: `secure_configuration.yml`. The template must satisfy all constraints above. It should deploy successfully in the outlined AWS environment.
-```yaml
+VPCs and subnets
+
+Security Groups
+
+IAM roles
+
+AWS WAF setups
+
+AWS Config for compliance tracking
+
+Constraints & Requirements
+
+KMS Encryption: Use AWS Key Management Service (KMS) to encrypt all S3 bucket data.
+
+IAM Least Privilege: Ensure IAM roles follow the principle of least privilege.
+
+VPC Logging: Enable logging for VPCs for monitoring and auditing.
+
+AWS Config: Track all resource changes and maintain compliance.
+
+CloudTrail: Log all account activity; ensure it cannot be tampered with.
+
+MFA: Implement Multi-Factor Authentication for all IAM users.
+
+AWS WAF: Protect web applications against SQL injection and XSS attacks.
+
+GuardDuty: Enable Amazon GuardDuty for threat detection and anomaly monitoring.
+
+RDS Encryption: Ensure all RDS databases are encrypted at rest and in transit.
+
+Secure VPC: Configure VPC with appropriate subnetting, routing, and NAT gateways for Internet access when needed.
+
+EC2 Metadata Protection: Block instance metadata access from scripts.
+
+Security Groups: Control inbound and outbound traffic for instances.
+
+EBS Encryption: Ensure all EBS volumes are encrypted using KMS keys.
+
+Expected Output
+
+A fully functional CloudFormation YAML template named:
+
 secure_configuration.yml
-```
 
+
+The template must satisfy all constraints above.
+
+It should deploy successfully in the outlined AWS environment.
