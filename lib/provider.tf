@@ -13,6 +13,9 @@ terraform {
       version = "~> 2.0"
     }
   }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
