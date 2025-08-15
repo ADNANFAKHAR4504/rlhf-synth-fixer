@@ -1,13 +1,7 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Secure AWS Infrastructure for Production Environment",
+  "Description": "Secure AWS Infrastructure for Production Environment with Session Manager Access",
   "Parameters": {
-    "AllowedSSHCIDR": {
-      "Type": "String",
-      "Default": "10.0.0.0/8",
-      "Description": "CIDR block allowed for SSH access",
-      "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"
-    },
     "InstanceType": {
       "Type": "String",
       "Default": "t3.micro",
@@ -18,11 +12,6 @@
         "t3.medium",
         "t3.large"
       ]
-    },
-    "KeyPairName": {
-      "Type": "AWS::EC2::KeyPair::KeyName",
-      "Description": "Name of an existing EC2 KeyPair for SSH access",
-      "Default": "myapp-keypair"
     },
     "EnvironmentSuffix": {
       "Type": "String",
@@ -38,6 +27,38 @@
       "AllowedValues": [
         "true",
         "false"
+      ]
+    },
+    "EnableSSHAccess": {
+      "Type": "String",
+      "Default": "false",
+      "Description": "Enable SSH access (not recommended - use Session Manager instead)",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "AllowedSSHCIDR": {
+      "Type": "String",
+      "Default": "VPC",
+      "Description": "CIDR block for SSH access - use \"VPC\" for VPC CIDR (10.0.0.0/16), or specify custom CIDR like 192.168.1.0/24"
+    }
+  },
+  "Conditions": {
+    "EnableSSH": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableSSHAccess"
+        },
+        "true"
+      ]
+    },
+    "UseVPCCIDR": {
+      "Fn::Equals": [
+        {
+          "Ref": "AllowedSSHCIDR"
+        },
+        "VPC"
       ]
     }
   },
@@ -210,21 +231,47 @@
           "Fn::Sub": "SecureEC2SG-${EnvironmentSuffix}"
         },
         "GroupDescription": {
-          "Fn::Sub": "Security group for EC2 instances with restricted SSH access - ${EnvironmentSuffix}"
+          "Fn::Sub": "Security group for EC2 instances with Session Manager access - ${EnvironmentSuffix}"
         },
         "VpcId": {
           "Ref": "SecureVPC"
         },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 22,
-            "ToPort": 22,
-            "CidrIp": {
-              "Ref": "AllowedSSHCIDR"
-            }
-          }
-        ],
+        "SecurityGroupIngress": {
+          "Fn::If": [
+            "EnableSSH",
+            [
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 22,
+                "ToPort": 22,
+                "CidrIp": {
+                  "Fn::If": [
+                    "UseVPCCIDR",
+                    {
+                      "Fn::GetAtt": [
+                        "SecureVPC",
+                        "CidrBlock"
+                      ]
+                    },
+                    {
+                      "Ref": "AllowedSSHCIDR"
+                    }
+                  ]
+                },
+                "Description": {
+                  "Fn::If": [
+                    "UseVPCCIDR",
+                    "SSH access from within VPC only",
+                    {
+                      "Fn::Sub": "SSH access from ${AllowedSSHCIDR}"
+                    }
+                  ]
+                }
+              }
+            ],
+            []
+          ]
+        },
         "SecurityGroupEgress": [
           {
             "IpProtocol": -1,
@@ -378,7 +425,8 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
         ],
         "Policies": [
           {
@@ -444,9 +492,6 @@
         "InstanceType": {
           "Ref": "InstanceType"
         },
-        "KeyName": {
-          "Ref": "KeyPairName"
-        },
         "SubnetId": {
           "Ref": "PublicSubnet"
         },
@@ -470,7 +515,9 @@
           }
         ],
         "UserData": {
-          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n"
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
+          }
         },
         "Tags": [
           {
@@ -714,6 +761,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-EC2-PublicIP-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SessionManagerConnectCommand": {
+      "Description": "Command to connect to EC2 instance via Session Manager",
+      "Value": {
+        "Fn::Sub": "aws ssm start-session --target ${SecureEC2Instance} --region ${AWS::Region}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SessionManager-Command-${EnvironmentSuffix}"
         }
       }
     },

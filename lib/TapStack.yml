@@ -1,13 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure AWS Infrastructure for Production Environment'
+Description: 'Secure AWS Infrastructure for Production Environment with Session Manager Access'
 
 Parameters:
-  AllowedSSHCIDR:
-    Type: String
-    Default: '10.0.0.0/8'
-    Description: 'CIDR block allowed for SSH access'
-    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
-
   InstanceType:
     Type: String
     Default: 't3.micro'
@@ -17,11 +11,6 @@ Parameters:
       - t3.small
       - t3.medium
       - t3.large
-
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'Name of an existing EC2 KeyPair for SSH access'
-    Default: myapp-keypair
 
   EnvironmentSuffix:
     Type: String
@@ -38,7 +27,26 @@ Parameters:
       - 'true'
       - 'false'
 
+  # Optional SSH access - defaults to Session Manager only
+  EnableSSHAccess:
+    Type: String
+    Default: 'false'
+    Description: 'Enable SSH access (not recommended - use Session Manager instead)'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  AllowedSSHCIDR:
+    Type: String
+    Default: 'VPC'
+    Description: 'CIDR block for SSH access - use "VPC" for VPC CIDR (10.0.0.0/16), or specify custom CIDR like 192.168.1.0/24'
+
+Conditions:
+  EnableSSH: !Equals [!Ref EnableSSHAccess, 'true']
+  UseVPCCIDR: !Equals [!Ref AllowedSSHCIDR, 'VPC']
+
 Resources:
+  # Core VPC - Isolated network environment
   SecureVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -51,6 +59,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Internet Gateway for public subnet connectivity
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -60,12 +69,14 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Attach IGW to VPC
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref SecureVPC
       InternetGatewayId: !Ref InternetGateway
 
+  # Public subnet for internet-accessible resources
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -79,6 +90,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Private subnet for backend resources
   PrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -91,6 +103,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Route table for public subnet
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -101,6 +114,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Route to internet via IGW
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -109,23 +123,35 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
+  # Associate public subnet with route table
   PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
+  # Security Group - Session Manager primary, SSH optional
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub 'SecureEC2SG-${EnvironmentSuffix}'
-      GroupDescription: !Sub 'Security group for EC2 instances with restricted SSH access - ${EnvironmentSuffix}'
+      GroupDescription: !Sub 'Security group for EC2 instances with Session Manager access - ${EnvironmentSuffix}'
       VpcId: !Ref SecureVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedSSHCIDR
+      # Conditional SSH access - only if enabled
+      SecurityGroupIngress: !If
+        - EnableSSH
+        - - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            CidrIp:
+              !If [UseVPCCIDR, !GetAtt SecureVPC.CidrBlock, !Ref AllowedSSHCIDR]
+            Description:
+              !If [
+                UseVPCCIDR,
+                'SSH access from within VPC only',
+                !Sub 'SSH access from ${AllowedSSHCIDR}',
+              ]
+        - []
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: '0.0.0.0/0'
@@ -135,10 +161,10 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Encrypted S3 bucket with comprehensive security
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      # AWS auto-generates compliant bucket name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -161,10 +187,10 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # S3 access logs storage
   S3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # AWS auto-generates compliant bucket name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -180,10 +206,10 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # CloudTrail logs storage
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # AWS auto-generates compliant bucket name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -199,6 +225,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # IAM role for EC2 with Session Manager and minimal S3 access
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -211,6 +238,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore # Session Manager access
       Policies:
         - PolicyName: !Sub 'MinimalS3Access-${EnvironmentSuffix}'
           PolicyDocument:
@@ -231,18 +259,20 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Instance profile to attach role to EC2
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
         - !Ref EC2Role
 
+  # EC2 instance with Session Manager - NO KeyPair required
   SecureEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyPairName
+      # KeyName removed - Session Manager access only
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
@@ -258,13 +288,16 @@ Resources:
         Fn::Base64: |
           #!/bin/bash
           yum update -y
-          yum install -y amazon-cloudwatch-agent
+          yum install -y amazon-cloudwatch-agent amazon-ssm-agent
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
       Tags:
         - Key: Name
           Value: !Sub 'SecureInstance-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Customer-managed KMS key for encryption
   S3KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -313,12 +346,14 @@ Resources:
         - Key: Purpose
           Value: 'S3 and CloudTrail encryption'
 
+  # KMS key alias for easier reference
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub 'alias/${AWS::StackName}-s3-key-${EnvironmentSuffix}'
       TargetKeyId: !Ref S3KMSKey
 
+  # S3 bucket policy for CloudTrail
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -342,6 +377,7 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
 
+  # CloudTrail for audit logging
   SecureCloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
@@ -385,6 +421,12 @@ Outputs:
     Value: !GetAtt SecureEC2Instance.PublicIp
     Export:
       Name: !Sub '${AWS::StackName}-EC2-PublicIP-${EnvironmentSuffix}'
+
+  SessionManagerConnectCommand:
+    Description: 'Command to connect to EC2 instance via Session Manager'
+    Value: !Sub 'aws ssm start-session --target ${SecureEC2Instance} --region ${AWS::Region}'
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionManager-Command-${EnvironmentSuffix}'
 
   S3BucketName:
     Description: 'S3 Bucket Name for the deployed environment'
