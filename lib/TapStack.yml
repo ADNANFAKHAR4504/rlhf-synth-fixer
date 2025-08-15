@@ -132,6 +132,22 @@ Resources:
         - Key: Name
           Value: !Sub 'Database Subnet 2 (AZ2)-${EnvironmentSuffix}'
 
+  # Database Secret - Stores the RDS master password
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-db-password-${EnvironmentSuffix}'
+      Description: 'Master password for RDS database'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        IncludeSpace: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'Database Secret-${EnvironmentSuffix}'
+
   # NAT Gateway EIP - Elastic IP for NAT Gateway
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -456,7 +472,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-WebServer-Template-${EnvironmentSuffix}'
       LaunchTemplateData:
-        ImageId: 'ami-0c2d3e23b7b644f5c' # Amazon Linux 2023 AMI in us-west-2
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}' # Latest Amazon Linux 2023 AMI
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn

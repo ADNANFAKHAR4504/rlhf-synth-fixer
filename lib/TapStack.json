@@ -236,6 +236,32 @@
                 ]
             }
         },
+        "DatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-db-password-${EnvironmentSuffix}"
+                },
+                "Description": "Master password for RDS database",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\",
+                    "IncludeSpace": false
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "Database Secret-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
         "NatGateway1EIP": {
             "Type": "AWS::EC2::EIP",
             "DependsOn": "InternetGatewayAttachment",
@@ -755,7 +781,7 @@
                     "Fn::Sub": "${AWS::StackName}-WebServer-Template-${EnvironmentSuffix}"
                 },
                 "LaunchTemplateData": {
-                    "ImageId": "ami-0c2d3e23b7b644f5c",
+                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}",
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
