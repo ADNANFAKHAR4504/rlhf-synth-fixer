@@ -33,7 +33,7 @@ import * as path from 'path';
 // Load stack outputs from Pulumi
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../cdn-outputs/stack-outputs.json');
+    const outputsPath = path.join(__dirname, '../cdn-outputs/all-outputs.json');
     if (!fs.existsSync(outputsPath)) {
       throw new Error(`Stack outputs file not found at ${outputsPath}`);
     }
@@ -73,7 +73,7 @@ const extractResourceIds = (outputs: any) => {
   return resourceIds;
 };
 
-describe('TAP Stack Integration Tests', () => {
+describe('Infrastructure Integration Tests', () => {
   let stackOutputs: any;
   let resourceIds: any;
   let clients: ReturnType<typeof initializeClients>;
@@ -206,6 +206,7 @@ describe('TAP Stack Integration Tests', () => {
       expect(policyResponse.Policy).toBeDefined();
     }, testTimeout);
   });
+
   describe('RDS Infrastructure', () => {
     it('should have created RDS instance with correct configuration', async () => {
       const instanceId = resourceIds.rdsInstanceId;

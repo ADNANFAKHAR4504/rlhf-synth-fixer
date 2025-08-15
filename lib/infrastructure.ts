@@ -5,6 +5,7 @@
  * all infrastructure components with consistent naming conventions.
  */
 import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
 import { S3Stack } from './s3-stack';
 import { IAMStack } from './iam-stack';
@@ -38,8 +39,25 @@ export class Infrastructure extends pulumi.ComponentResource {
   constructor(name: string, args: InfrastructureArgs, opts?: ResourceOptions) {
     super('tap:infrastructure:Infrastructure', name, args, opts);
 
-    const region = 'us-east-1';
+    const region = 'ap-south-1';
     const namePrefix = 'corp';
+
+    // Create AWS Provider for the specific region
+    const awsProvider = new aws.Provider(
+      'aws-provider',
+      {
+        region: region,
+        defaultTags: {
+          tags: {
+            Environment: args.environmentSuffix,
+            Project: 'corporate-infrastructure',
+            ManagedBy: 'pulumi',
+            Region: region,
+          },
+        },
+      },
+      { parent: this }
+    );
 
     // Common tags for all resources
     const commonTags = {
@@ -48,7 +66,14 @@ export class Infrastructure extends pulumi.ComponentResource {
       ManagedBy: 'pulumi',
       Owner: 'infrastructure-team',
       CostCenter: 'IT-Operations',
+      Region: region,
       ...args.tags,
+    };
+
+    // Provider options to ensure all resources use the correct region
+    const providerOpts: ResourceOptions = {
+      parent: this,
+      provider: awsProvider,
     };
 
     // --- Instantiate Infrastructure Components ---
@@ -61,7 +86,7 @@ export class Infrastructure extends pulumi.ComponentResource {
         tags: commonTags,
         namePrefix: namePrefix,
       },
-      { parent: this }
+      providerOpts
     );
 
     // IAM Stack - Create IAM role with restricted S3 access
@@ -74,7 +99,7 @@ export class Infrastructure extends pulumi.ComponentResource {
         bucketArn: s3Stack.bucketArn,
         region: region,
       },
-      { parent: this }
+      providerOpts
     );
 
     // RDS Stack - Create encrypted RDS instance
@@ -85,7 +110,7 @@ export class Infrastructure extends pulumi.ComponentResource {
         tags: commonTags,
         namePrefix: namePrefix,
       },
-      { parent: this }
+      providerOpts
     );
 
     // DynamoDB Stack - Create DynamoDB table with comprehensive configuration
@@ -96,7 +121,7 @@ export class Infrastructure extends pulumi.ComponentResource {
         tags: commonTags,
         namePrefix: namePrefix,
       },
-      { parent: this }
+      providerOpts
     );
 
     // --- Expose Outputs from Infrastructure Components ---
