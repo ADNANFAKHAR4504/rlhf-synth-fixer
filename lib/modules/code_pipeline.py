@@ -1,6 +1,7 @@
 """
 CodePipeline for deployment
 """
+import json
 from typing import Dict
 import pulumi_aws as aws
 
@@ -61,10 +62,33 @@ def setup_codepipeline(stack: str) -> Dict:
       }"""
   )
 
+  codebuild_policy = aws.iam.Policy(
+    f"codebuild-policy-{stack}",
+    policy=json.dumps({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "logs:CreateLogGroup",
+            "logs:CreateLogStream",
+            "logs:PutLogEvents",
+            "s3:GetObject",
+            "s3:PutObject",
+            "ecr:GetAuthorizationToken",
+            "ecr:BatchGetImage",
+            "ecr:GetDownloadUrlForLayer"
+          ],
+          "Resource": "*"
+        }
+      ]
+    })
+  )
+
   aws.iam.RolePolicyAttachment(
-    f"codebuild-admin-{stack}",
+    f"codebuild-policy-attach-{stack}",
     role=codebuild_role.name,
-    policy_arn="arn:aws:iam::aws:policy/AdministratorAccess"
+    policy_arn=codebuild_policy.arn
   )
 
   # CodeBuild project for tests

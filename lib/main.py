@@ -85,7 +85,6 @@ def deploy_infrastructure():
   code_pipeline = {}
 
   # Create IAM roles (global resources)
-  print("Creating IAM roles...")
   iam_roles = create_iam_roles(common_tags)
 
   # Create CodePipeline
@@ -93,7 +92,6 @@ def deploy_infrastructure():
 
   # Deploy infrastructure in each region
   for region in regions:
-    print(f"Deploying infrastructure in {region}...")
 
     # Create AWS provider for this region
     provider = aws.Provider(
