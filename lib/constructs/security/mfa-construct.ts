@@ -1,6 +1,6 @@
-import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { Construct } from 'constructs';
 import { SecurityConfig } from '../../config/security-config';
 
 /**
@@ -108,7 +108,7 @@ export class MfaConstruct extends Construct {
       {
         userName: `${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-admin`,
         groups: [this.userGroup],
-        password: cdk.SecretValue.unsafePlainText('ChangeMe123!'), // Should be changed on first login
+        password: cdk.SecretValue.unsafePlainText('ChangeMe123!@#'), // Should be changed on first login
         passwordResetRequired: true,
       }
     );
@@ -119,7 +119,7 @@ export class MfaConstruct extends Construct {
       {
         userName: `${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-developer`,
         groups: [this.userGroup],
-        password: cdk.SecretValue.unsafePlainText('ChangeMe123!'), // Should be changed on first login
+        password: cdk.SecretValue.unsafePlainText('ChangeMe123!@#'), // Should be changed on first login
         passwordResetRequired: true,
       }
     );
