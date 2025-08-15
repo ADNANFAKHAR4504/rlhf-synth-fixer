@@ -17,7 +17,7 @@ We need to build a secure AWS storage system using Terraform. The main goal is t
 - CloudWatch monitoring for IAM changes
 - SNS notifications when roles are modified
 
-**Region:** Deploy everything in eu-west-3
+**Region:** Deploy everything in eu-west-2
 
 ## Security requirements
 

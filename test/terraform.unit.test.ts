@@ -29,7 +29,7 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
 
     test('declares aws_region variable with correct default', () => {
       expect(terraformContent).toMatch(/variable\s+"aws_region"\s*{/);
-      expect(terraformContent).toMatch(/default\s*=\s*"eu-west-3"/);
+      expect(terraformContent).toMatch(/default\s*=\s*"eu-west-2"/);
     });
 
     test('declares required variables for security configuration', () => {
@@ -270,8 +270,8 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
       expect(terraformContent).toMatch(/"s3:GetObject"/);
       expect(terraformContent).toMatch(/"s3:PutObject"/);
       expect(terraformContent).toMatch(/"s3:ListBucket"/);
-      // eu-west-3 region
-      expect(terraformContent).toMatch(/default\s*=\s*"eu-west-3"/);
+      // eu-west-2 region
+      expect(terraformContent).toMatch(/default\s*=\s*"eu-west-2"/);
       // Versioning
       expect(terraformContent).toMatch(/status\s*=\s*"Enabled"/);
       // CloudWatch alarms

@@ -17,7 +17,7 @@
 variable "bucket_region" {
 description = "Region for the S3 bucket"
 type = string
-default = "us-west-2"
+default = "eu-west-2"
 }
 
 variable "bucket_name" {
@@ -103,7 +103,7 @@ value = aws_s3_bucket.this.tags
 variable "aws_region" {
 description = "The AWS region to deploy resources"
 type = string
-default = "eu-west-3"
+default = "eu-west-2"
 }
 
 variable "allowed_ip_ranges" {
