@@ -36,18 +36,35 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
+              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+              echo "Starting user-data script at $(date)"
+              
+              # Update system
               yum update -y
+              
+              # Install packages
               yum install -y amazon-cloudwatch-agent httpd
               
               # Start and enable Apache
               systemctl start httpd
               systemctl enable httpd
               
-              # Create a simple index page
-              echo "<html><body><h1>Hello from SecureTF Instance</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/index.html
+              # Wait for Apache to start
+              sleep 10
               
-              # Configure CloudWatch agent
-              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+              # Create a simple index page
+              echo "<html><body><h1>Hello from SecureTF Instance</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Started at: $(date)</p></body></html>" > /var/www/html/index.html
+              
+              # Ensure Apache is serving content
+              systemctl status httpd
+              curl -I http://localhost/
+              
+              # Configure CloudWatch agent (optional, may fail without config file)
+              if [ -f /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json ]; then
+                /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+              fi
+              
+              echo "User-data script completed at $(date)"
               EOF
   )
 
@@ -68,11 +85,11 @@ resource "aws_autoscaling_group" "main" {
   name                      = "${var.resource_prefix}-${var.environment_suffix}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_type         = "EC2"
+  health_check_grace_period = 600
   min_size                  = 1
   max_size                  = 3
-  desired_capacity          = 2
+  desired_capacity          = 1
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -80,7 +97,7 @@ resource "aws_autoscaling_group" "main" {
   }
 
   timeouts {
-    update = "15m"
+    update = "20m"
   }
 
   tag {
@@ -114,9 +131,9 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 3
-    timeout             = 10
-    interval            = 60
+    unhealthy_threshold = 5
+    timeout             = 15
+    interval            = 90
     path                = "/"
     matcher             = "200"
   }

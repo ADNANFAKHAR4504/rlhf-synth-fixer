@@ -157,7 +157,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
     test('Auto Scaling Group is configured', () => {
       const content = fs.readFileSync(path.join(libPath, 'compute.tf'), 'utf8');
       expect(content).toMatch(/resource\s+"aws_autoscaling_group"/);
-      expect(content).toMatch(/health_check_type\s*=\s*"ELB"/);
+      expect(content).toMatch(/health_check_type\s*=\s*"EC2"/);
     });
 
     test('Load Balancer is configured', () => {
