@@ -739,7 +739,8 @@ class TapStack(ComponentResource):
         )
     
     def _create_launch_template(self):
-      """Create launch template for Auto Scaling Group with proper network config."""
+      """Create launch template for Auto Scaling Group with proper network config and user data."""
+
       # Get latest Amazon Linux 2 AMI
       ami = aws.ec2.get_ami(
           most_recent=True,
@@ -750,59 +751,49 @@ class TapStack(ComponentResource):
           ],
       )
 
-      # Improved user data script with error handling and service startup
-      user_data = """#!/bin/bash
+      # User data script (ensure this never fails fatally)
+      user_data_script = """#!/bin/bash
   set -ex
-  # Log all output for debugging
   exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-
-  echo "Starting user data script..."
-
-  # Update system
   yum update -y
-
-  # Install required packages
   yum install -y amazon-cloudwatch-agent httpd docker
-
-  # Start and enable services
   systemctl start httpd
   systemctl enable httpd
   systemctl start docker
   systemctl enable docker
-
-  # Create a simple index.html to confirm server up
-  echo "<h1>Instance launched successfully</h1>" > /var/www/html/index.html
-
-  # Final success message
+  echo '<h1>Instance launched successfully</h1>' > /var/www/html/index.html
   echo "User data script completed."
   """
+
+      user_data_b64 = base64.b64encode(user_data_script.encode('utf-8')).decode('utf-8')
 
       self.launch_template = aws.ec2.LaunchTemplate(
           f"{self.name_prefix}-launch-template",
           name_prefix=f"{self.name_prefix}-lt-",
           image_id=ami.id,
           instance_type="t3.micro",
-          key_name=None,  # Add if you want to SSH
-          user_data=user_data,
-          network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfacesArgs(
-              associate_public_ip_address=True,  # Important to get public IP on startup for internet access
-              device_index=0,
-              groups=[self.ec2_sg.id],  # EC2 Security Group with proper rules
-          )],
-          iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-              name=self.ec2_instance_profile.name
-          ),
-          tag_specifications=[
-              aws.ec2.LaunchTemplateTagSpecificationArgs(
-                  resource_type="instance",
-                  tags={
-                      "Name": f"{self.name_prefix}-ec2-instance",
-                      "Environment": self.environment_suffix,
-                  },
-              )
-          ],
+          user_data=user_data_b64,
+          vpc_security_group_ids=[self.ec2_sg.id],
+          monitoring={"enabled": True},
+          iam_instance_profile={
+              "name": self.ec2_instance_profile.name
+          },
+          # The next line is what lets you assign a public IP on launch in a launch template in Python!
+          network_interfaces=[{
+              "associatePublicIpAddress": True,
+              "deviceIndex": 0,
+              "securityGroups": [self.ec2_sg.id],
+          }],
+          tag_specifications=[{
+              "resourceType": "instance",
+              "tags": {
+                  "Name": f"{self.name_prefix}-ec2-instance",
+                  "Environment": self.environment_suffix,
+              }
+          }],
           opts=ResourceOptions(parent=self),
       )
+
 
     
     def _create_auto_scaling_group(self):
