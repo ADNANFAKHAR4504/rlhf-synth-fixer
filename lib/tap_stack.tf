@@ -13,7 +13,7 @@ variable "env" {
   default     = "dev"
 }
 
-# Do NOT configure provider here; just declare the var so provider.tf can use it.
+# Do NOT configure the provider here; your provider.tf uses this.
 variable "aws_region" {
   description = "AWS region (used by provider in provider.tf)"
   type        = string
@@ -32,12 +32,6 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
-variable "domain_name" {
-  description = "Root domain for ACM cert and Route53"
-  type        = string
-  default     = "turing.com"
-}
-
 ############################################
 # DATA SOURCES
 ############################################
@@ -45,7 +39,7 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Latest Amazon Linux 2 AMI (HVM x86_64)
+# Latest Amazon Linux 2 AMI (HVM x86_64, gp2)
 data "aws_ami" "al2" {
   most_recent = true
   owners      = ["amazon"]
@@ -57,30 +51,48 @@ data "aws_ami" "al2" {
 }
 
 ############################################
-# LOCALS (names, AZs, subnets, tags)
+# LOCALS (names, AZs, CIDRs, tags, userdata)
 ############################################
 locals {
+  # Base naming
   name_prefix = "${var.project_name}-${var.env}"
 
-  # Use the first two AZs dynamically
+  # Safe names for AWS resources with length limits (ALB/TG <= 32)
+  lb_name  = substr("${local.name_prefix}-alb", 0, 32)
+  tg_name  = substr("${local.name_prefix}-tg", 0, 32)
+  asg_name = substr("${local.name_prefix}-asg", 0, 32)
+
+  # First two AZs dynamically
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
-  # Derive /24s inside the /16 for clarity: 10.0.1.0/24, 10.0.2.0/24, etc.
+  # /24s inside /16
   public_subnet_cidrs = [
-    cidrsubnet(var.vpc_cidr, 8, 1), # 10.0.1.0/24
-    cidrsubnet(var.vpc_cidr, 8, 2), # 10.0.2.0/24
+    cidrsubnet(var.vpc_cidr, 8, 1),   # 10.0.1.0/24
+    cidrsubnet(var.vpc_cidr, 8, 2),   # 10.0.2.0/24
   ]
-
   private_subnet_cidrs = [
     cidrsubnet(var.vpc_cidr, 8, 101), # 10.0.101.0/24
     cidrsubnet(var.vpc_cidr, 8, 102), # 10.0.102.0/24
   ]
 
+  # Consistent tags everywhere
   tags = {
-    Project   = var.project_name
+    Project     = var.project_name
     Environment = var.env
-    ManagedBy = "Terraform"
+    ManagedBy   = "Terraform"
   }
+
+  # User data: install httpd, show instance-id (escape $ for TF)
+  app_user_data = <<-EOT
+    #!/bin/bash
+    set -eux
+    yum update -y
+    yum install -y httpd
+    INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+    echo "<h1>${local.name_prefix} - Instance: $${INSTANCE_ID}</h1>" > /var/www/html/index.html
+    systemctl enable httpd
+    systemctl start httpd
+  EOT
 }
 
 ############################################
@@ -90,14 +102,12 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-
-  tags = merge(local.tags, { Name = "${local.name_prefix}-vpc" })
+  tags                 = merge(local.tags, { Name = "${local.name_prefix}-vpc" })
 }
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-
-  tags = merge(local.tags, { Name = "${local.name_prefix}-igw" })
+  tags   = merge(local.tags, { Name = "${local.name_prefix}-igw" })
 }
 
 # Public subnets (auto-assign public IPs)
@@ -114,7 +124,7 @@ resource "aws_subnet" "public" {
   })
 }
 
-# Private subnets (NO public IPs)
+# Private subnets (no public IPs)
 resource "aws_subnet" "private" {
   count                   = 2
   vpc_id                  = aws_vpc.main.id
@@ -128,25 +138,23 @@ resource "aws_subnet" "private" {
   })
 }
 
-# Elastic IP for NAT
+# Elastic IP for NAT (modern provider arg)
 resource "aws_eip" "nat" {
-  vpc = true
-  tags = merge(local.tags, { Name = "${local.name_prefix}-nat-eip" })
+  domain = "vpc"
+  tags   = merge(local.tags, { Name = "${local.name_prefix}-nat-eip" })
 }
 
 # NAT Gateway in first public subnet
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
-
-  tags = merge(local.tags, { Name = "${local.name_prefix}-nat" })
+  tags          = merge(local.tags, { Name = "${local.name_prefix}-nat" })
 }
 
-# Public route table: route 0.0.0.0/0 -> IGW
+# Public route table -> IGW
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
-  tags = merge(local.tags, { Name = "${local.name_prefix}-public-rt" })
+  tags   = merge(local.tags, { Name = "${local.name_prefix}-public-rt" })
 }
 
 resource "aws_route" "public_default" {
@@ -155,18 +163,16 @@ resource "aws_route" "public_default" {
   gateway_id             = aws_internet_gateway.igw.id
 }
 
-# Associate public route table to public subnets
 resource "aws_route_table_association" "public_assoc" {
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
-# Private route table: route 0.0.0.0/0 -> NAT
+# Private route table -> NAT
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-
-  tags = merge(local.tags, { Name = "${local.name_prefix}-private-rt" })
+  tags   = merge(local.tags, { Name = "${local.name_prefix}-private-rt" })
 }
 
 resource "aws_route" "private_default" {
@@ -175,7 +181,6 @@ resource "aws_route" "private_default" {
   nat_gateway_id         = aws_nat_gateway.nat.id
 }
 
-# Associate private route table to private subnets
 resource "aws_route_table_association" "private_assoc" {
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id
@@ -183,9 +188,9 @@ resource "aws_route_table_association" "private_assoc" {
 }
 
 ############################################
-# SECURITY GROUPS
+# SECURITY GROUPs
 ############################################
-# ALB SG: allow 80/443 from anywhere; all egress
+# ALB SG: allow 80 (and 443 kept open for future TLS, harmless), all egress
 resource "aws_security_group" "alb_sg" {
   name        = "${local.name_prefix}-alb-sg"
   description = "ALB security group"
@@ -200,7 +205,7 @@ resource "aws_security_group" "alb_sg" {
   }
 
   ingress {
-    description = "HTTPS from anywhere"
+    description = "HTTPS from anywhere (unused until TLS is added)"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -244,64 +249,22 @@ resource "aws_security_group" "app_sg" {
 }
 
 ############################################
-# ROUTE53 HOSTED ZONE + ACM (DNS VALIDATION)
-############################################
-# Create a public hosted zone for the domain
-resource "aws_route53_zone" "zone" {
-  name = var.domain_name
-  tags = merge(local.tags, { Name = "${local.name_prefix}-zone" })
-}
-
-# Request an ACM cert in the SAME region as the ALB (not us-east-1-only)
-resource "aws_acm_certificate" "cert" {
-  domain_name       = var.domain_name
-  validation_method = "DNS"
-
-  tags = merge(local.tags, { Name = "${local.name_prefix}-cert" })
-}
-
-# Create DNS validation records in the hosted zone we just created
-resource "aws_route53_record" "cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.cert.domain_validation_options :
-    dvo.domain_name => {
-      name  = dvo.resource_record_name
-      type  = dvo.resource_record_type
-      value = dvo.resource_record_value
-    }
-  }
-
-  zone_id         = aws_route53_zone.zone.zone_id
-  name            = each.value.name
-  type            = each.value.type
-  ttl             = 60
-  records         = [each.value.value]
-  allow_overwrite = true
-}
-
-# Finalize ACM validation
-resource "aws_acm_certificate_validation" "cert_validation" {
-  certificate_arn         = aws_acm_certificate.cert.arn
-  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.value.fqdn]
-}
-
-############################################
-# ALB + TARGET GROUP + LISTENERS
+# ALB + TARGET GROUP + HTTP LISTENER
 ############################################
 resource "aws_lb" "app" {
-  name               = "${local.name_prefix}-alb"
+  name               = local.lb_name
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
   subnets            = [for s in aws_subnet.public : s.id]
-
-  tags = merge(local.tags, { Name = "${local.name_prefix}-alb" })
+  idle_timeout       = 60
+  tags               = merge(local.tags, { Name = "${local.name_prefix}-alb" })
 }
 
 resource "aws_lb_target_group" "app_tg" {
-  name     = "${local.name_prefix}-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name        = local.tg_name
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
   target_type = "instance"
 
   health_check {
@@ -317,30 +280,11 @@ resource "aws_lb_target_group" "app_tg" {
   tags = merge(local.tags, { Name = "${local.name_prefix}-tg" })
 }
 
-# HTTP listener: redirect 80 -> 443
-resource "aws_lb_listener" "http_redirect" {
+# Plain HTTP listener that forwards to the target group
+resource "aws_lb_listener" "http_forward" {
   load_balancer_arn = aws_lb.app.arn
   port              = 80
   protocol          = "HTTP"
-
-  default_action {
-    type = "redirect"
-
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
-  }
-}
-
-# HTTPS listener: terminate TLS and forward to target group
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate_validation.cert_validation.certificate_arn
 
   default_action {
     type             = "forward"
@@ -351,47 +295,30 @@ resource "aws_lb_listener" "https" {
 ############################################
 # COMPUTE: LAUNCH TEMPLATE + AUTO SCALING
 ############################################
-# Simple userdata: install httpd, show instance-id
-locals {
-  app_user_data = <<-EOT
-    #!/bin/bash
-    set -eux
-    yum update -y
-    yum install -y httpd
-    INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-    echo "<h1>${local.name_prefix} - Instance: ${INSTANCE_ID}</h1>" > /var/www/html/index.html
-    systemctl enable httpd
-    systemctl start httpd
-  EOT
-}
-
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.al2.id
   instance_type = var.instance_type
   user_data     = base64encode(local.app_user_data)
 
-  monitoring {
-    enabled = true
-  }
+  monitoring { enabled = true }
 
   vpc_security_group_ids = [aws_security_group.app_sg.id]
 
   tag_specifications {
     resource_type = "instance"
-    tags = merge(local.tags, { Name = "${local.name_prefix}-app" })
+    tags          = merge(local.tags, { Name = "${local.name_prefix}-app" })
   }
-
   tag_specifications {
     resource_type = "volume"
-    tags = merge(local.tags, { Name = "${local.name_prefix}-app-vol" })
+    tags          = merge(local.tags, { Name = "${local.name_prefix}-app-vol" })
   }
 
   tags = merge(local.tags, { Name = "${local.name_prefix}-lt" })
 }
 
 resource "aws_autoscaling_group" "app" {
-  name                      = "${local.name_prefix}-asg"
+  name                      = local.asg_name
   max_size                  = 4
   min_size                  = 2
   desired_capacity          = 2
@@ -421,15 +348,13 @@ resource "aws_autoscaling_group" "app" {
     }
   }
 
-  lifecycle {
-    create_before_destroy = true
-  }
+  lifecycle { create_before_destroy = true }
 }
 
 ############################################
-# SCALING POLICIES (CPU thresholds) + ALARMS
+# SCALING POLICIES + CLOUDWATCH ALARMS
 ############################################
-# Scale OUT if ASG average CPU > 60% for 5 minutes (1x 300s period)
+# Scale OUT if ASG avg CPU > 60% for 5 minutes
 resource "aws_autoscaling_policy" "scale_out" {
   name                   = "${local.name_prefix}-scale-out"
   autoscaling_group_name = aws_autoscaling_group.app.name
@@ -454,12 +379,12 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
     AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 
-  alarm_actions = [aws_autoscaling_policy.scale_out.arn]
+  alarm_actions      = [aws_autoscaling_policy.scale_out.arn]
   treat_missing_data = "notBreaching"
-  tags = merge(local.tags, { Name = "${local.name_prefix}-cpu-high" })
+  tags               = merge(local.tags, { Name = "${local.name_prefix}-cpu-high" })
 }
 
-# Scale IN if ASG average CPU < 20% for 10 minutes (2x 300s periods)
+# Scale IN if ASG avg CPU < 20% for 10 minutes (2x 300s)
 resource "aws_autoscaling_policy" "scale_in" {
   name                   = "${local.name_prefix}-scale-in"
   autoscaling_group_name = aws_autoscaling_group.app.name
@@ -484,9 +409,9 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
     AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 
-  alarm_actions       = [aws_autoscaling_policy.scale_in.arn]
-  treat_missing_data  = "notBreaching"
-  tags = merge(local.tags, { Name = "${local.name_prefix}-cpu-low" })
+  alarm_actions      = [aws_autoscaling_policy.scale_in.arn]
+  treat_missing_data = "notBreaching"
+  tags               = merge(local.tags, { Name = "${local.name_prefix}-cpu-low" })
 }
 
 # Alarm for unhealthy ALB targets
@@ -507,7 +432,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy" {
   }
 
   treat_missing_data = "notBreaching"
-  tags = merge(local.tags, { Name = "${local.name_prefix}-alb-unhealthy" })
+  tags               = merge(local.tags, { Name = "${local.name_prefix}-alb-unhealthy" })
 }
 
 ############################################
@@ -556,14 +481,4 @@ output "alb_sg_id" {
 output "app_sg_id" {
   value       = aws_security_group.app_sg.id
   description = "App/EC2 Security Group ID"
-}
-
-output "acm_certificate_arn" {
-  value       = aws_acm_certificate.cert.arn
-  description = "ACM certificate ARN"
-}
-
-output "route53_zone_id" {
-  value       = aws_route53_zone.zone.zone_id
-  description = "Route53 public hosted zone ID"
 }
