@@ -21,6 +21,61 @@ export class RDSStack extends pulumi.ComponentResource {
   constructor(name: string, args: RDSStackArgs, opts?: ResourceOptions) {
     super('tap:rds:RDSStack', name, args, opts);
 
+    // Create VPC for RDS
+    const vpc = new aws.ec2.Vpc(
+      'rds-vpc',
+      {
+        cidrBlock: '10.0.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...args.tags,
+          Name: `${args.namePrefix}-rds-vpc-${args.environmentSuffix}`,
+          ResourceType: 'VPC',
+          Purpose: 'RDSNetworking',
+        },
+      },
+      { parent: this }
+    );
+
+    // Get available AZs
+    const availabilityZones = aws.getAvailabilityZones({
+      state: 'available',
+    });
+
+    // Create private subnets for RDS in multiple AZs
+    const privateSubnet1 = new aws.ec2.Subnet(
+      'rds-private-subnet-1',
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.1.0/24',
+        availabilityZone: availabilityZones.then(azs => azs.names[0]),
+        tags: {
+          ...args.tags,
+          Name: `${args.namePrefix}-rds-private-subnet-1-${args.environmentSuffix}`,
+          ResourceType: 'Subnet',
+          Purpose: 'RDSPrivate',
+        },
+      },
+      { parent: this }
+    );
+
+    const privateSubnet2 = new aws.ec2.Subnet(
+      'rds-private-subnet-2',
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.2.0/24',
+        availabilityZone: availabilityZones.then(azs => azs.names[1]),
+        tags: {
+          ...args.tags,
+          Name: `${args.namePrefix}-rds-private-subnet-2-${args.environmentSuffix}`,
+          ResourceType: 'Subnet',
+          Purpose: 'RDSPrivate',
+        },
+      },
+      { parent: this }
+    );
+
     // RDS Subnet Group
     // AWS RDS subnet group names must be lowercase
     const rdsSubnetGroupName =
@@ -29,16 +84,7 @@ export class RDSStack extends pulumi.ComponentResource {
       rdsSubnetGroupName,
       {
         name: rdsSubnetGroupName,
-        subnetIds: aws.ec2
-          .getSubnets({
-            filters: [
-              {
-                name: 'default-for-az',
-                values: ['true'],
-              },
-            ],
-          })
-          .then(subnets => subnets.ids),
+        subnetIds: [privateSubnet1.id, privateSubnet2.id],
         tags: {
           ...args.tags,
           ResourceType: 'RDSSubnetGroup',
@@ -88,7 +134,7 @@ export class RDSStack extends pulumi.ComponentResource {
       {
         name: `${rdsInstanceName}-sg`,
         description: 'Security group for RDS instance',
-        vpcId: aws.ec2.getVpc({ default: true }).then(vpc => vpc.id),
+        vpcId: vpc.id,
         ingress: [
           {
             fromPort: 5432,
