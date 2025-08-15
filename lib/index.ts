@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 // Get environment suffix from config or environment variable
 const config = new pulumi.Config();
@@ -169,9 +169,12 @@ const _lambdaCustomPolicy = new aws.iam.RolePolicy(
   {
     role: lambdaRole.id,
     policy: pulumi
-      .all([dbSecret.arn, ...buckets.map(b => b.arn)])
-      .apply(([secretArn, ...bucketArns]) =>
-        JSON.stringify({
+      .all([dbSecret.arn, ...buckets.map(b => b.arn), s3KmsKey.arn])
+      .apply(([secretArn, ...bucketArnsAndKmsArn]) => {
+        // Last element is the KMS ARN
+        const bucketArns = bucketArnsAndKmsArn.slice(0, -1);
+        const kmsArn = bucketArnsAndKmsArn[bucketArnsAndKmsArn.length - 1];
+        return JSON.stringify({
           Version: '2012-10-17',
           Statement: [
             {
@@ -195,11 +198,11 @@ const _lambdaCustomPolicy = new aws.iam.RolePolicy(
             {
               Effect: 'Allow',
               Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
-              Resource: [s3KmsKey.arn],
+              Resource: kmsArn,
             },
           ],
-        })
-      ),
+        });
+      }),
   }
 );
 
