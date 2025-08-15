@@ -465,20 +465,6 @@
                 }
             }
         },
-        "EmergencyAccessRoleArn": {
-            "Description": "ARN of the emergency access role with enhanced MFA requirements",
-            "Value": {
-                "Fn::GetAtt": [
-                    "EmergencyAccessRole",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Ref": "AWS::StackName"
-                }
-            }
-        },
         "SecurityAuditTrailArn": {
             "Description": "ARN of the CloudTrail for security auditing",
             "Value": {
