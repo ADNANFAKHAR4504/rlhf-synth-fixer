@@ -59,8 +59,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
     outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 
     // Initialize AWS clients
-    const primaryRegion = outputs.primary_region || "eu-west-2";
-    const secondaryRegion = outputs.secondary_region || "eu-west-3";
+    const primaryRegion = outputs.primary_region || "us-west-2";
+    const secondaryRegion = outputs.secondary_region || "us-east-2";
 
     primaryEC2 = new EC2Client({ region: primaryRegion });
     secondaryEC2 = new EC2Client({ region: secondaryRegion });

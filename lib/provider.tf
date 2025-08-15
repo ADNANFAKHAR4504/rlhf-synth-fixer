@@ -43,13 +43,13 @@ provider "aws" {
 variable "primary_region" {
   description = "Primary AWS region"
   type        = string
-  default     = "eu-west-2"
+  default     = "us-west-2"
 }
 
 variable "secondary_region" {
   description = "Secondary AWS region for multi-region setup"
   type        = string
-  default     = "eu-west-3"
+  default     = "us-east-2"
 }
 
 variable "environment" {
@@ -67,7 +67,7 @@ variable "environment_suffix" {
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "eu-west-2"
+  default     = "us-west-2"
 }
 
 # Random string for unique resource naming
