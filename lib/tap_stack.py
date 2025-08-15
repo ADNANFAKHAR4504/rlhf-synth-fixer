@@ -760,7 +760,7 @@ class TapStack(pulumi.ComponentResource):
       task_definition=self.task_definition.arn,
       desired_count=2,
       launch_type="FARGATE",
-      deployment_configuration={
+      deployment_configuration_args={
         "maximum_percent": 200,
         "minimum_healthy_percent": 100,
         "deployment_circuit_breaker": {
@@ -768,7 +768,7 @@ class TapStack(pulumi.ComponentResource):
           "rollback": True
         }
       },
-      network_configuration={
+      network_configuration_args={
         "subnets": [subnet.id for subnet in self.private_subnets],
         "security_groups": [self.ecs_sg.id],
         "assign_public_ip": False
