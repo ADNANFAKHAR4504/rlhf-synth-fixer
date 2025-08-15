@@ -18,10 +18,7 @@ terraform {
     }
   }
 
-  # Using local backend for testing
-  backend "local" {
-    path = "../terraform.tfstate"
-  }
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
