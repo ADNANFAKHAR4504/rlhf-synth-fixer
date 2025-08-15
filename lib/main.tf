@@ -14,6 +14,7 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name (e.g., dev, staging, prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = can(regex("^(dev|staging|prod)$", var.environment))
     error_message = "Environment must be dev, staging, or prod."
@@ -37,8 +38,9 @@ variable "trusted_account_ids" {
 variable "log_bucket_name" {
   description = "Name of the S3 bucket for CloudTrail logs"
   type        = string
+  default     = ""  # Will use local.default_log_bucket_name if empty
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.log_bucket_name)) && length(var.log_bucket_name) >= 3 && length(var.log_bucket_name) <= 63
+    condition     = var.log_bucket_name == "" || (can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.log_bucket_name)) && length(var.log_bucket_name) >= 3 && length(var.log_bucket_name) <= 63)
     error_message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, and start/end with alphanumeric characters."
   }
 }
@@ -46,8 +48,9 @@ variable "log_bucket_name" {
 variable "app_s3_bucket_name" {
   description = "Name of the S3 bucket for application uploads"
   type        = string
+  default     = ""  # Will use local.default_app_bucket_name if empty
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.app_s3_bucket_name)) && length(var.app_s3_bucket_name) >= 3 && length(var.app_s3_bucket_name) <= 63
+    condition     = var.app_s3_bucket_name == "" || (can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.app_s3_bucket_name)) && length(var.app_s3_bucket_name) >= 3 && length(var.app_s3_bucket_name) <= 63)
     error_message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, and start/end with alphanumeric characters."
   }
 }
@@ -55,8 +58,9 @@ variable "app_s3_bucket_name" {
 variable "notification_email" {
   description = "Email address for IAM change notifications"
   type        = string
+  default     = ""  # Will use local.default_notification_email if empty
   validation {
-    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
+    condition     = var.notification_email == "" || can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
     error_message = "Must be a valid email address."
   }
 }
@@ -103,6 +107,11 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
   
+  # Use provided values or generate unique defaults
+  log_bucket_name = local.log_bucket_name != "" ? local.log_bucket_name : "iac-cloudtrail-logs-${var.environment}-${random_id.bucket_suffix.hex}"
+  app_bucket_name = local.app_bucket_name != "" ? local.app_bucket_name : "iac-app-uploads-${var.environment}-${random_id.bucket_suffix.hex}"
+  notification_email = local.notification_email != "" ? local.notification_email : "devops@example.com"
+  
   common_tags = merge(var.tags, {
     Environment = var.environment
     ManagedBy   = "Terraform"
@@ -118,6 +127,11 @@ locals {
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 data "aws_region" "current" {}
+
+# Random ID for unique bucket naming
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
 
 
 
@@ -275,8 +289,8 @@ data "aws_iam_policy_document" "audit_policy" {
       "s3:ListBucket"
     ]
     resources = [
-      "arn:${data.aws_partition.current.partition}:s3:::${var.log_bucket_name}",
-      "arn:${data.aws_partition.current.partition}:s3:::${var.log_bucket_name}/*"
+      "arn:${data.aws_partition.current.partition}:s3:::${local.log_bucket_name}",
+      "arn:${data.aws_partition.current.partition}:s3:::${local.log_bucket_name}/*"
     ]
   }
 }
@@ -315,7 +329,7 @@ data "aws_iam_policy_document" "s3_upload_policy" {
       "s3:GetObject",
       "s3:DeleteObject"
     ]
-    resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.app_s3_bucket_name}/*"]
+    resources = ["arn:${data.aws_partition.current.partition}:s3:::${local.app_bucket_name}/*"]
   }
 
   statement {
@@ -325,7 +339,7 @@ data "aws_iam_policy_document" "s3_upload_policy" {
       "s3:ListBucket",
       "s3:GetBucketLocation"
     ]
-    resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.app_s3_bucket_name}"]
+    resources = ["arn:${data.aws_partition.current.partition}:s3:::${local.app_bucket_name}"]
   }
 }
 
@@ -339,8 +353,8 @@ data "aws_iam_policy_document" "cloudtrail_write_policy" {
       "s3:GetBucketAcl"
     ]
     resources = [
-      "arn:${data.aws_partition.current.partition}:s3:::${var.log_bucket_name}",
-      "arn:${data.aws_partition.current.partition}:s3:::${var.log_bucket_name}/*"
+      "arn:${data.aws_partition.current.partition}:s3:::${local.log_bucket_name}",
+      "arn:${data.aws_partition.current.partition}:s3:::${local.log_bucket_name}/*"
     ]
   }
 
@@ -524,7 +538,7 @@ resource "aws_iam_role_policy_attachment" "audit_cloudtrail_attachment" {
 ########################
 
 resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket        = var.log_bucket_name
+  bucket        = local.log_bucket_name
   force_destroy = false
 
   tags = merge(local.common_tags, {
@@ -677,7 +691,7 @@ resource "aws_sns_topic_subscription" "iam_email_notification" {
   count     = var.enable_sns_notifications ? 1 : 0
   topic_arn = aws_sns_topic.iam_notifications[0].arn
   protocol  = "email"
-  endpoint  = var.notification_email
+  endpoint  = local.notification_email
 }
 
 resource "aws_cloudwatch_event_rule" "iam_changes" {

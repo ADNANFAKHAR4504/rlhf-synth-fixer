@@ -230,10 +230,11 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
       expect(allContent).not.toMatch(/secret\s*=\s*"[^"]+"/);
     });
 
-    test('uses variables for sensitive configuration', () => {
-      expect(allContent).toMatch(/local\.account_id/); // Now uses data source
-      expect(allContent).toMatch(/var\.log_bucket_name/);
-      expect(allContent).toMatch(/var\.notification_email/);
+    test('uses locals for sensitive configuration with defaults', () => {
+      expect(allContent).toMatch(/local\.account_id/); // Uses data source
+      expect(allContent).toMatch(/local\.log_bucket_name/); // Uses conditional defaults
+      expect(allContent).toMatch(/local\.notification_email/); // Uses conditional defaults
+      expect(allContent).toMatch(/default\s*=\s*""\s*#.*local/); // Has empty default with local fallback
     });
 
     test('includes proper resource tagging', () => {
