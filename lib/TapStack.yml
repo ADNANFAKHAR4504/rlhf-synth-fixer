@@ -122,7 +122,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
