@@ -421,8 +421,7 @@ export class EC2Module extends Construct {
 yum update -y
 yum install -y awslogs
 
-# Configure CloudWatch Logs
-cat > /etc/awslogs/awslogs.conf << EOF
+cat > /etc/awslogs/awslogs.conf << 'EOF'
 [general]
 state_file = /var/lib/awslogs/agent-state
 
@@ -431,25 +430,10 @@ file = /var/log/messages
 log_group_name = ${config.projectName}-${config.environment}-ec2-logs
 log_stream_name = {instance_id}/messages
 datetime_format = %b %d %H:%M:%S
-
-[/var/log/secure]
-file = /var/log/secure
-log_group_name = ${config.projectName}-${config.environment}-ec2-logs
-log_stream_name = {instance_id}/secure
-datetime_format = %b %d %H:%M:%S
 EOF
-
-# Configure CloudWatch Logs region
-sed -i 's/region = us-east-1/region = us-east-1/g' /etc/awslogs/awscli.conf
-
-# Start and enable CloudWatch Logs
-systemctl start awslogsd
-systemctl enable awslogsd
-
-# Install CloudWatch agent for enhanced monitoring
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
+...
 `;
+
 
     // Create EC2 instance with security best practices
     this.instance = new Instance(this, 'instance', {
@@ -516,7 +500,6 @@ export class RDSModule extends Construct {
     this.dbInstance = new DbInstance(this, 'db-instance', {
       identifier: `${config.projectName}-${config.environment}-db`,
       engine: 'mysql',
-      engineVersion: '8.0',
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
@@ -548,8 +531,8 @@ export class RDSModule extends Construct {
       // Performance and monitoring
       performanceInsightsEnabled: true,
       performanceInsightsRetentionPeriod: 7,
-      monitoringInterval: 60,
-      enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
+      monitoringInterval: 0,
+      enabledCloudwatchLogsExports: ['error', 'general'],
 
       tags: {
         Name: `${config.projectName}-${config.environment}-db`,
