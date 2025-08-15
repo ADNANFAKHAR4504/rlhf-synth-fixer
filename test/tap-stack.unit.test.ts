@@ -64,6 +64,12 @@ jest.mock('@pulumi/aws', () => ({
     })),
   },
   ec2: {
+    Vpc: jest.fn().mockImplementation(() => ({
+      id: pulumi.output('vpc-12345678'),
+    })),
+    Subnet: jest.fn().mockImplementation(() => ({
+      id: pulumi.output('subnet-12345678'),
+    })),
     SecurityGroup: jest.fn().mockImplementation(() => ({
       id: pulumi.output('sg-12345678'),
     })),
@@ -72,6 +78,9 @@ jest.mock('@pulumi/aws', () => ({
       Promise.resolve({ ids: ['subnet-12345678', 'subnet-87654321'] })
     ),
   },
+  getAvailabilityZones: jest.fn().mockReturnValue(
+    Promise.resolve({ names: ['ap-south-1a', 'ap-south-1b', 'ap-south-1c'] })
+  ),
   kms: {
     getAlias: jest.fn().mockReturnValue(Promise.resolve({ 
       targetKeyArn: 'arn:aws:kms:ap-south-1:123456789012:key/12345678-1234-1234-1234-123456789012' 
@@ -427,7 +436,7 @@ describe('TapStack Unit Tests', () => {
         'corp-rds-subnet-main-test',
         {
           name: 'corp-rds-subnet-main-test',
-          subnetIds: expect.any(Promise),
+          subnetIds: expect.any(Array),
           tags: {
             Environment: 'test',
             ResourceType: 'RDSSubnetGroup',
@@ -479,7 +488,7 @@ describe('TapStack Unit Tests', () => {
         {
           name: 'corp-rds-primary-test-sg',
           description: 'Security group for RDS instance',
-          vpcId: expect.any(Promise),
+          vpcId: expect.any(Object),
           ingress: [
             {
               fromPort: 5432,

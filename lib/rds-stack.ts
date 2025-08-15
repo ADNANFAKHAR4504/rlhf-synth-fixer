@@ -39,9 +39,12 @@ export class RDSStack extends pulumi.ComponentResource {
     );
 
     // Get available AZs for the specific region
-    const availabilityZones = aws.getAvailabilityZones({
-      state: 'available',
-    }, { provider: opts?.provider });
+    const availabilityZones = aws.getAvailabilityZones(
+      {
+        state: 'available',
+      },
+      { provider: opts?.provider }
+    );
 
     // Create private subnets for RDS in multiple AZs
     const privateSubnet1 = new aws.ec2.Subnet(

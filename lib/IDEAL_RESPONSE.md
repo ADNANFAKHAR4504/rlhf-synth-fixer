@@ -457,7 +457,7 @@ export class IAMStack extends pulumi.ComponentResource {
 }
 ```
 
-### 3. RDS Stack - Encrypted PostgreSQL Instance
+### 3. RDS Stack - Encrypted PostgreSQL Instance with VPC
 
 ```typescript
 import * as aws from '@pulumi/aws';
@@ -477,22 +477,71 @@ export class RDSStack extends pulumi.ComponentResource {
   constructor(name: string, args: RDSStackArgs, opts?: ResourceOptions) {
     super('tap:rds:RDSStack', name, args, opts);
 
+    // Create VPC for RDS
+    const vpc = new aws.ec2.Vpc(
+      'rds-vpc',
+      {
+        cidrBlock: '10.0.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...args.tags,
+          Name: `${args.namePrefix}-rds-vpc-${args.environmentSuffix}`,
+          ResourceType: 'VPC',
+          Purpose: 'RDSNetworking',
+        },
+      },
+      { parent: this, provider: opts?.provider }
+    );
+
+    // Get available AZs for the specific region
+    const availabilityZones = aws.getAvailabilityZones(
+      {
+        state: 'available',
+      },
+      { provider: opts?.provider }
+    );
+
+    // Create private subnets for RDS in multiple AZs
+    const privateSubnet1 = new aws.ec2.Subnet(
+      'rds-private-subnet-1',
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.1.0/24',
+        availabilityZone: availabilityZones.then(azs => azs.names[0]),
+        tags: {
+          ...args.tags,
+          Name: `${args.namePrefix}-rds-private-subnet-1-${args.environmentSuffix}`,
+          ResourceType: 'Subnet',
+          Purpose: 'RDSPrivate',
+        },
+      },
+      { parent: this, provider: opts?.provider }
+    );
+
+    const privateSubnet2 = new aws.ec2.Subnet(
+      'rds-private-subnet-2',
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.2.0/24',
+        availabilityZone: availabilityZones.then(azs => azs.names[1]),
+        tags: {
+          ...args.tags,
+          Name: `${args.namePrefix}-rds-private-subnet-2-${args.environmentSuffix}`,
+          ResourceType: 'Subnet',
+          Purpose: 'RDSPrivate',
+        },
+      },
+      { parent: this, provider: opts?.provider }
+    );
+
     // RDS Subnet Group
     const rdsSubnetGroupName = `${args.namePrefix}-rds-subnet-main-${args.environmentSuffix}`.toLowerCase();
     const rdsSubnetGroup = new aws.rds.SubnetGroup(
       rdsSubnetGroupName,
       {
         name: rdsSubnetGroupName,
-        subnetIds: aws.ec2
-          .getSubnets({
-            filters: [
-              {
-                name: 'default-for-az',
-                values: ['true'],
-              },
-            ],
-          })
-          .then(subnets => subnets.ids),
+        subnetIds: [privateSubnet1.id, privateSubnet2.id],
         tags: {
           ...args.tags,
           ResourceType: 'RDSSubnetGroup',
@@ -538,7 +587,7 @@ export class RDSStack extends pulumi.ComponentResource {
       {
         name: `${rdsInstanceName}-sg`,
         description: 'Security group for RDS instance',
-        vpcId: aws.ec2.getVpc({ default: true }).then(vpc => vpc.id),
+        vpcId: vpc.id,
         ingress: [
           {
             fromPort: 5432,
@@ -610,7 +659,7 @@ export class RDSStack extends pulumi.ComponentResource {
 
         // Security configurations
         storageEncrypted: true,
-        kmsKeyId: 'alias/aws/rds',
+        // Using default AWS-managed KMS key for RDS (omitting kmsKeyId uses aws/rds key)
 
         // Network and access
         dbSubnetGroupName: rdsSubnetGroup.name,
@@ -766,17 +815,22 @@ export class DynamoDBStack extends pulumi.ComponentResource {
 
 ### Encryption at Rest
 - **S3**: Uses `aws:kms` with AWS-managed key (`alias/aws/s3`)
-- **RDS**: Uses AWS-managed KMS key (`alias/aws/rds`)
+- **RDS**: Uses default AWS-managed KMS key (automatically applied when `storageEncrypted: true`)
 - **DynamoDB**: Uses AWS-managed KMS key (enabled without custom key)
+
+### Network Security
+- **RDS**: Deployed in dedicated VPC with private subnets across multiple AZs
+- **VPC Configuration**: Custom VPC (10.0.0.0/16) with private subnets (10.0.1.0/24, 10.0.2.0/24)
+- **Security Groups**: Dedicated security group for RDS with restricted access (port 5432 from private networks only)
 
 ### Access Control
 - IAM role with least-privilege policy for S3 access only
 - S3 bucket public access completely blocked
-- RDS with dedicated security groups and private access only
+- RDS with dedicated security groups and private access only (not publicly accessible)
 
 ### Production Readiness
 - **S3**: Versioning enabled, public access blocked
-- **RDS**: Backup retention, deletion protection, performance insights, enhanced monitoring
+- **RDS**: Backup retention, deletion protection, performance insights, enhanced monitoring, multi-AZ subnet deployment
 - **DynamoDB**: Point-in-time recovery, deletion protection, provisioned capacity, streams
 
 ### Naming Convention

@@ -33,7 +33,7 @@ import * as path from 'path';
 // Load stack outputs from Pulumi
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../cdn-outputs/stack-outputs.json');
+    const outputsPath = path.join(__dirname, '../cdn-outputs/all-outputs.json');
     if (!fs.existsSync(outputsPath)) {
       throw new Error(`Stack outputs file not found at ${outputsPath}`);
     }

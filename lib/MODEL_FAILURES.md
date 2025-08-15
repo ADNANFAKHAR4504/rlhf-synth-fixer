@@ -191,7 +191,7 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup(
     {
         name: `${rdsInstanceName}-sg`,
         description: 'Security group for RDS instance',
-        vpcId: aws.ec2.getVpc({ default: true }).then(vpc => vpc.id),
+        vpcId: vpc.id, // Using dedicated VPC instead of default
         ingress: [
             {
                 fromPort: 5432,
@@ -378,6 +378,175 @@ const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
 const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
     engine: 'postgres',
     engineVersion: '15.7', // UPDATED: Latest stable version with security patches
+    // ...
+});
+```
+
+## 11. Critical Infrastructure Issue: Missing VPC and Subnet Creation
+
+### What was the issue
+Model relied on default VPC and subnets which may not exist in all regions, causing deployment failures.
+
+### What was the error
+Default VPCs are not guaranteed to exist in all AWS regions and accounts, leading to resource creation failures.
+
+### Code Model Generated
+```typescript
+// RDS Subnet Group relying on default VPC subnets
+const rdsSubnetGroup = new aws.rds.SubnetGroup(rdsSubnetGroupName, {
+    name: rdsSubnetGroupName,
+    subnetIds: [
+        // ISSUE: Assumes default VPC subnets exist
+        aws.ec2.getSubnets({
+            filters: [{
+                name: "default-for-az",
+                values: ["true"]
+            }]
+        }).then(subnets => subnets.ids)
+    ].flat(),
+    // ...
+});
+```
+
+### How we fixed it
+```typescript
+// Create dedicated VPC and subnets for RDS
+const vpc = new aws.ec2.Vpc('rds-vpc', {
+    cidrBlock: '10.0.0.0/16',
+    enableDnsHostnames: true,
+    enableDnsSupport: true,
+    // ...
+});
+
+// Create private subnets in multiple AZs
+const privateSubnet1 = new aws.ec2.Subnet('rds-private-subnet-1', {
+    vpcId: vpc.id,
+    cidrBlock: '10.0.1.0/24',
+    availabilityZone: availabilityZones.then(azs => azs.names[0]),
+    // ...
+});
+
+const privateSubnet2 = new aws.ec2.Subnet('rds-private-subnet-2', {
+    vpcId: vpc.id,
+    cidrBlock: '10.0.2.0/24',
+    availabilityZone: availabilityZones.then(azs => azs.names[1]),
+    // ...
+});
+
+// Use created subnets
+const rdsSubnetGroup = new aws.rds.SubnetGroup(rdsSubnetGroupName, {
+    name: rdsSubnetGroupName,
+    subnetIds: [privateSubnet1.id, privateSubnet2.id],
+    // ...
+});
+```
+
+## 12. Regional Configuration Issue: Wrong Default Region
+
+### What was the issue
+Model used `us-east-1` as the default region instead of the required `ap-south-1` region.
+
+### What was the error
+Deploying to the wrong region can cause compliance issues, latency problems, and violate data residency requirements.
+
+### Code Model Generated
+```typescript
+// Configuration
+const region = "us-east-1"; // WRONG: Should be ap-south-1
+```
+
+### How we fixed it
+```typescript
+// Infrastructure component with correct region
+const region = 'ap-south-1'; // CORRECT: Required region for deployment
+```
+
+## 13. Security Issue: Invalid RDS KMS Key Configuration
+
+### What was the issue
+Model used `kmsKeyId: "alias/aws/rds"` which causes ARN validation errors in Pulumi.
+
+### What was the error
+The alias format is not properly handled by Pulumi's AWS provider, causing deployment failures with ARN validation errors.
+
+### Code Model Generated
+```typescript
+const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
+    // Security configurations
+    storageEncrypted: true,
+    kmsKeyId: "alias/aws/rds", // ISSUE: Causes ARN validation error
+    // ...
+});
+```
+
+### How we fixed it
+```typescript
+const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
+    // Security configurations
+    storageEncrypted: true,
+    // Using default AWS-managed KMS key for RDS (omitting kmsKeyId uses aws/rds key)
+    // ...
+});
+```
+
+## 14. Networking Issue: Improper Subnet Configuration
+
+### What was the issue
+Model used flattened array syntax for subnet IDs which doesn't work correctly with Pulumi's async resource resolution.
+
+### What was the error
+The `.flat()` operation on a Promise-based subnet lookup causes type errors and deployment issues.
+
+### Code Model Generated
+```typescript
+subnetIds: [
+    aws.ec2.getSubnets({
+        filters: [{
+            name: "default-for-az",
+            values: ["true"]
+        }]
+    }).then(subnets => subnets.ids)
+].flat(), // ISSUE: .flat() doesn't work with Promise-based resources
+```
+
+### How we fixed it
+```typescript
+// Direct array of subnet IDs from created resources
+subnetIds: [privateSubnet1.id, privateSubnet2.id],
+```
+
+## 15. Missing Production Feature: No Multi-AZ Deployment Strategy
+
+### What was the issue
+Model didn't implement proper multi-AZ deployment for high availability and fault tolerance.
+
+### What was the error
+Single AZ deployment creates single points of failure and doesn't meet production resilience requirements.
+
+### Code Model Generated
+```typescript
+// No explicit multi-AZ configuration for high availability
+// Relied on default VPC subnets without ensuring multi-AZ distribution
+```
+
+### How we fixed it
+```typescript
+// Explicit multi-AZ subnet creation
+const availabilityZones = aws.getAvailabilityZones({
+    state: 'available',
+}, { provider: opts?.provider });
+
+const privateSubnet1 = new aws.ec2.Subnet('rds-private-subnet-1', {
+    vpcId: vpc.id,
+    cidrBlock: '10.0.1.0/24',
+    availabilityZone: availabilityZones.then(azs => azs.names[0]), // AZ 1
+    // ...
+});
+
+const privateSubnet2 = new aws.ec2.Subnet('rds-private-subnet-2', {
+    vpcId: vpc.id,
+    cidrBlock: '10.0.2.0/24',
+    availabilityZone: availabilityZones.then(azs => azs.names[1]), // AZ 2
     // ...
 });
 ```
