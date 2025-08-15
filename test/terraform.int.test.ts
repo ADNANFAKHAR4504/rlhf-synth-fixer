@@ -14,8 +14,8 @@ const iam = new IAMClient({});
 const outputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
 const outputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
 
-type Env = "dev" | "staging" | "production";
-const environments: Env[] = ["dev", "staging", "production"];
+// Dynamically get envs from vpc_ids keys
+const environments = Object.keys(outputs.vpc_ids || {});
 
 describe("Terraform Integration Tests", () => {
   environments.forEach((env) => {
@@ -24,43 +24,31 @@ describe("Terraform Integration Tests", () => {
       let publicSubnetIds: string[];
       let privateSubnetIds: string[];
       let instanceIds: string[];
+      let iamRoleArn: string;
       let iamRoleName: string;
       let igwId: string;
       let natGwId: string;
       let expectedCidr: string;
 
       beforeAll(() => {
-        if (!outputs.vpc_id?.[env]) {
-          console.warn(`⚠ Skipping ${env} tests: no outputs found for this environment`);
-          return;
-        }
-
-        vpcId = outputs.vpc_id[env];
-        publicSubnetIds = Object.entries(outputs.public_subnet_ids?.value || {})
+        vpcId = outputs.vpc_ids[env];
+        publicSubnetIds = Object.entries(outputs.public_subnet_ids || {})
           .filter(([key]) => key.startsWith(env))
           .map(([, id]) => id as string);
-        privateSubnetIds = Object.entries(outputs.private_subnet_ids?.value || {})
+        privateSubnetIds = Object.entries(outputs.private_subnet_ids || {})
           .filter(([key]) => key.startsWith(env))
           .map(([, id]) => id as string);
-        instanceIds = Object.entries(outputs.ec2_instance_ids?.value || {})
+        instanceIds = Object.entries(outputs.ec2_instance_ids || {})
           .filter(([key]) => key.startsWith(env))
           .map(([, id]) => id as string);
-        iamRoleName = outputs.iam_role_name?.[env] || "";
-        igwId = outputs.internet_gateway_id?.[env] || "";
-        natGwId = outputs.nat_gateway_id?.[env] || "";
-        expectedCidr = outputs.vpc_cidr?.[env] || "";
+        iamRoleArn = outputs.iam_role_arns?.[env] || "";
+        iamRoleName = iamRoleArn.split("/").pop() || "";
+        igwId = outputs.internet_gateway_ids?.[env] || "";
+        natGwId = outputs.nat_gateway_ids?.[env] || "";
+        expectedCidr = outputs.vpc_cidrs?.[env] || "";
       });
 
-      const skipIfNoEnv = () => {
-        if (!outputs.vpc_id?.[env]) {
-          console.warn(`Skipping ${env} test`);
-          return true;
-        }
-        return false;
-      };
-
       it("VPC exists and is available", async () => {
-        if (skipIfNoEnv()) return;
         expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
         const resp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
         expect(resp.Vpcs && resp.Vpcs.length).toBeGreaterThan(0);
@@ -68,21 +56,18 @@ describe("Terraform Integration Tests", () => {
       });
 
       it("Public subnets exist", async () => {
-        if (skipIfNoEnv()) return;
         publicSubnetIds.forEach((s) => expect(s).toMatch(/^subnet-[a-f0-9]+$/));
         const resp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds }));
         expect(resp.Subnets!.length).toBe(publicSubnetIds.length);
       });
 
       it("Private subnets exist", async () => {
-        if (skipIfNoEnv()) return;
         privateSubnetIds.forEach((s) => expect(s).toMatch(/^subnet-[a-f0-9]+$/));
         const resp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds }));
         expect(resp.Subnets!.length).toBe(privateSubnetIds.length);
       });
 
       it("EC2 instances exist", async () => {
-        if (skipIfNoEnv()) return;
         instanceIds.forEach((i) => expect(i).toMatch(/^i-[a-f0-9]+$/));
         const resp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: instanceIds }));
         const allInstances = resp.Reservations?.flatMap((r) => r.Instances || []) || [];
@@ -90,20 +75,17 @@ describe("Terraform Integration Tests", () => {
       });
 
       it("IAM role exists", async () => {
-        if (skipIfNoEnv()) return;
-        if (!iamRoleName) throw new Error("IAM role name missing in outputs");
+        expect(iamRoleName).toBeTruthy();
         const resp = await iam.send(new GetRoleCommand({ RoleName: iamRoleName }));
         expect(resp.Role).toBeDefined();
       });
 
       it("Internet Gateway and NAT Gateway IDs exist", () => {
-        if (skipIfNoEnv()) return;
         expect(igwId).toMatch(/^igw-[a-f0-9]+$/);
         expect(natGwId).toMatch(/^nat-[a-f0-9]+$/);
       });
 
       it("VPC CIDR matches expected", async () => {
-        if (skipIfNoEnv()) return;
         const resp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
         expect(resp.Vpcs![0].CidrBlock).toBe(expectedCidr);
       });
