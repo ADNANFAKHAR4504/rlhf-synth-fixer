@@ -628,9 +628,10 @@ output "sns_topic_arn_usw2" {
 ## Implementation Notes
 
 ### Architecture Overview
+
 This solution implements a **production-ready multi-region serverless architecture** that fully satisfies all PROMPT.md requirements:
 
-- **Multi-region deployment** across us-east-1 and us-west-2 
+- **Multi-region deployment** across us-east-1 and us-west-2
 - **Zero-downtime Lambda deployments** using versioning and aliases
 - **IAM-authenticated API Gateway** endpoints with proper security
 - **KMS encryption** for Lambda environment variables with key rotation
@@ -638,6 +639,7 @@ This solution implements a **production-ready multi-region serverless architectu
 - **Least privilege security** with specific resource-scoped policies
 
 ### Key Security Features
+
 1. **KMS Customer-Managed Keys** - Dedicated encryption keys per region with rotation enabled
 2. **IAM Least Privilege** - Policies scoped to specific resources, no wildcards
 3. **CloudWatch Audit Logging** - Comprehensive access logs for API Gateway stages
@@ -645,6 +647,7 @@ This solution implements a **production-ready multi-region serverless architectu
 5. **Environment Variable Encryption** - All Lambda environment variables encrypted
 
 ### Authentication Usage
+
 The API Gateway endpoints require AWS IAM authentication. To invoke the endpoints, callers must:
 
 - Sign requests with AWS SigV4 using valid AWS credentials
@@ -652,6 +655,7 @@ The API Gateway endpoints require AWS IAM authentication. To invoke the endpoint
 - Use AWS SDK or CLI with proper credentials configured
 
 Example IAM policy for API invocation:
+
 ```json
 {
   "Version": "2012-10-17",
@@ -666,6 +670,7 @@ Example IAM policy for API invocation:
 ```
 
 ### Deployment Features
+
 - **Multi-region consistency** with identical stacks in us-east-1 and us-west-2
 - **Resource dependencies** properly managed with explicit `depends_on` clauses
 - **Terraform module structure** with clear separation of provider and main configuration

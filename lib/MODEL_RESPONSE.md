@@ -22,7 +22,9 @@ provider "aws" {
   region = "us-west-2"
 }
 lib/main.tf
+
 # Variables
+
 variable "aws_region" {
   description = "Default AWS region"
   type        = string
@@ -54,6 +56,7 @@ variable "kms_key_deletion_days" {
 }
 
 # Locals
+
 locals {
   region_suffix = {
     "us-east-1" = "use1"
@@ -74,6 +77,7 @@ locals {
 }
 
 # Data source for Lambda package
+
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "${path.module}/lambda.zip"
@@ -87,7 +91,7 @@ logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
     logger.info("Hello, World! Lambda invoked")
-    
+
     return {
         'statusCode': 200,
         'headers': {
@@ -103,6 +107,7 @@ EOF
 }
 
 # US-East-1 Resources
+
 resource "aws_kms_key" "lambda_env_use1" {
   provider                = aws.use1
   description             = "KMS key for Lambda environment encryption in us-east-1"
@@ -326,6 +331,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors_use1" {
 }
 
 # US-West-2 Resources
+
 resource "aws_kms_key" "lambda_env_usw2" {
   provider                = aws.usw2
   description             = "KMS key for Lambda environment encryption in us-west-2"
@@ -549,6 +555,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors_usw2" {
 }
 
 # Outputs
+
 output "api_endpoint_url_use1" {
   description = "API Gateway endpoint URL for us-east-1"
   value       = "${aws_apigatewayv2_api.main_use1.api_endpoint}/${var.environment}/hello"
