@@ -75,7 +75,10 @@ export class TapStack extends TerraformStack {
 
     const database = new DatabaseModule(this, 'Database', {
       awsProvider: awsProvider,
-      subnetIds: [network.privateSubnet.id],
+      subnetIds: [
+        network.privateSubnet.id,
+        network.privateSubnet2.id, // include second private subnet for Multi-AZ
+      ],
       securityGroupId: network.rdsSecurityGroup.id,
       tags: tags,
     });

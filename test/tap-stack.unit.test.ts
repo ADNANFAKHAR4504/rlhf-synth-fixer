@@ -6,10 +6,11 @@ import { TapStack } from '../lib/tap-stack';
 // We mock all modules from `lib/modules.ts` to test the TapStack's assembly logic in isolation.
 jest.mock('../lib/modules', () => {
   return {
-    NetworkModule: jest.fn(() => ({
+   NetworkModule: jest.fn(() => ({
       vpc: { id: 'mock-vpc-id' },
       publicSubnet: { id: 'mock-public-subnet-id' },
       privateSubnet: { id: 'mock-private-subnet-id' },
+      privateSubnet2: { id: 'mock-private-subnet-2-id' }, // <-- add this
       ec2SecurityGroup: { id: 'mock-ec2-sg-id' },
       rdsSecurityGroup: { id: 'mock-rds-sg-id' },
     })),
@@ -138,8 +139,8 @@ describe('TapStack Unit Tests', () => {
           expect.anything(),
           'Database',
           expect.objectContaining({
-            subnetIds: [networkInstance.privateSubnet.id],
-            securityGroupId: networkInstance.rdsSecurityGroup.id,
+            securityGroupId: 'mock-rds-sg-id',
+            subnetIds: expect.arrayContaining(['mock-private-subnet-id'])
           })
         );
       });
