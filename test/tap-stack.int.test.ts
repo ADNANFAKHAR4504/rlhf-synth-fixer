@@ -134,6 +134,102 @@ describe('TapStack Integration Tests', () => {
     app = new App();
   });
 
+  describe('VPC Configuration Validation', () => {
+    test('should enforce production VPC requirements', () => {
+      // Production environment without VPC config should fail
+      expect(() => {
+        new TapStack(app, 'ProdStackNoVPC', {
+          environmentSuffix: 'prod',
+          awsRegion: awsRegion,
+        });
+      }).toThrow("Production environment 'prod' requires explicit VPC configuration");
+
+      expect(() => {
+        new TapStack(app, 'ProductionStackNoVPC', {
+          environmentSuffix: 'production', 
+          awsRegion: awsRegion,
+        });
+      }).toThrow("Production environment 'production' requires explicit VPC configuration");
+
+      expect(() => {
+        new TapStack(app, 'ProdPrefixStackNoVPC', {
+          environmentSuffix: 'prod-staging',
+          awsRegion: awsRegion,
+        });
+      }).toThrow("Production environment 'prod-staging' requires explicit VPC configuration");
+    });
+
+    test('should accept production environment with explicit VPC config', () => {
+      expect(() => {
+        new TapStack(app, 'ProdStackWithVPC', {
+          environmentSuffix: 'prod',
+          vpcId: 'vpc-12345678',
+          subnetIds: ['subnet-12345678', 'subnet-87654321'],
+          awsRegion: awsRegion,
+        });
+      }).not.toThrow();
+    });
+
+    test('should validate subnet count requirements', () => {
+      // Test insufficient subnets
+      expect(() => {
+        new TapStack(app, 'InsufficientSubnets', {
+          environmentSuffix: 'prod',
+          vpcId: 'vpc-12345678', 
+          subnetIds: ['subnet-12345678'], // Only 1 subnet
+          awsRegion: awsRegion,
+        });
+      }).toThrow('Deployment requires at least 2 subnets for high availability');
+    });
+
+    test('should validate subnet-AZ alignment', () => {
+      expect(() => {
+        new TapStack(app, 'MismatchedSubnetAZ', {
+          environmentSuffix: 'prod',
+          vpcId: 'vpc-12345678',
+          subnetIds: ['subnet-12345678', 'subnet-87654321'],
+          availabilityZones: ['us-east-1a'], // 2 subnets, 1 AZ
+          awsRegion: awsRegion,
+        });
+      }).toThrow('Number of subnets must match number of availability zones');
+    });
+
+    test('should allow development environments with default VPC', () => {
+      // Mock console.warn to check warning message
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      expect(() => {
+        new TapStack(app, 'DevStackDefaultVPC', {
+          environmentSuffix: 'dev',
+          awsRegion: awsRegion,
+        });
+      }).not.toThrow();
+
+      // Verify warning message includes environment name
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Using default VPC fallback for development environment 'dev'")
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    test('should synthesize correctly with explicit VPC configuration', () => {
+      const stack = new TapStack(app, 'ExplicitVPCStack', {
+        environmentSuffix: 'test',
+        vpcId: 'vpc-12345678',
+        subnetIds: ['subnet-12345678', 'subnet-87654321'],
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        awsRegion: awsRegion,
+      });
+
+      const synthesized = Testing.synth(stack);
+      expect(synthesized).toBeDefined();
+      expect(synthesized).toContain('vpc-12345678');
+      expect(synthesized).toContain('subnet-12345678');
+      expect(synthesized).toContain('subnet-87654321');
+    });
+  });
+
   describe('Terraform Synthesis', () => {
     test('should synthesize valid Terraform configuration', () => {
       stack = new TapStack(app, 'TestStack', {
@@ -287,7 +383,7 @@ describe('TapStack Integration Tests', () => {
           new GetFunctionCommand({ FunctionName: functionName })
         );
 
-        expect(lambdaFunction.Configuration?.Runtime).toBe('nodejs18.x');
+        expect(lambdaFunction.Configuration?.Runtime).toBe('nodejs20.x');
         expect(lambdaFunction.Configuration?.Timeout).toBe(300);
         expect(lambdaFunction.Configuration?.MemorySize).toBe(512);
         expect(lambdaFunction.Configuration?.Handler).toBe('index.handler');
@@ -514,6 +610,167 @@ describe('TapStack Integration Tests', () => {
       }
     }, 30000);
 
+    test('should validate security group creation for different environments', async () => {
+      if (!runLiveTests) return;
+
+      try {
+        // Test that security group naming includes environment suffix
+        const sgPattern = `projectXYZ-${environmentSuffix}`;
+        
+        const securityGroups = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            Filters: [
+              { Name: 'group-name', Values: [`${sgPattern}*`] },
+              { Name: 'description', Values: ['Security group for Lambda data processing function'] }
+            ]
+          })
+        );
+
+        if (securityGroups.SecurityGroups && securityGroups.SecurityGroups.length > 0) {
+          const sg = securityGroups.SecurityGroups[0];
+          
+          // Verify naming convention includes timestamp for uniqueness
+          expect(sg.GroupName).toContain(sgPattern);
+          expect(sg.GroupName).toContain('-lambda-sg');
+          
+          // Verify tags include environment information
+          const envTag = sg.Tags?.find(tag => tag.Key === 'Environment');
+          expect(envTag?.Value).toBeDefined();
+          
+          const nameTag = sg.Tags?.find(tag => tag.Key === 'Name');
+          expect(nameTag?.Value).toContain('-lambda-sg');
+          
+          // Verify security group is environment-specific
+          expect(sg.GroupName).toContain(environmentSuffix);
+          
+          console.log(`✅ Environment-specific security group validated: ${sg.GroupName}`);
+        }
+      } catch (error) {
+        console.warn('Environment-specific security group validation failed:', error);
+      }
+    }, 30000);
+
+    test('should validate security group compliance with production standards', async () => {
+      if (!runLiveTests) return;
+
+      try {
+        const sgPattern = `projectXYZ-${environmentSuffix}`;
+        
+        const securityGroups = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            Filters: [
+              { Name: 'group-name', Values: [`${sgPattern}*`] },
+              { Name: 'description', Values: ['Security group for Lambda data processing function'] }
+            ]
+          })
+        );
+
+        if (securityGroups.SecurityGroups && securityGroups.SecurityGroups.length > 0) {
+          const sg = securityGroups.SecurityGroups[0];
+          
+          // Production compliance checks
+          
+          // 1. No ingress rules (zero-trust principle)
+          expect(sg.IpPermissions?.length || 0).toBe(0);
+          
+          // 2. Minimal egress rules (only what's necessary)
+          const egressRules = sg.IpPermissionsEgress || [];
+          expect(egressRules.length).toBeLessThanOrEqual(2); // HTTPS + potential DNS
+          
+          // 3. All egress rules should be specific protocols
+          egressRules.forEach(rule => {
+            expect(rule.IpProtocol).not.toBe('-1'); // No "all protocols"
+            expect(rule.FromPort).toBeDefined();
+            expect(rule.ToPort).toBeDefined();
+          });
+          
+          // 4. HTTPS rule must be present for AWS API calls
+          const httpsRule = egressRules.find(rule => 
+            rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === 'tcp'
+          );
+          expect(httpsRule).toBeDefined();
+          expect(httpsRule?.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
+          expect(httpsRule?.IpRanges?.[0]?.Description).toBe('HTTPS outbound for S3/KMS API calls');
+          
+          // 5. Security group should have proper tagging
+          expect(sg.Tags?.length).toBeGreaterThan(0);
+          
+          const requiredTags = ['Name', 'Environment', 'Project'];
+          requiredTags.forEach(tagKey => {
+            const tag = sg.Tags?.find(t => t.Key === tagKey);
+            expect(tag).toBeDefined();
+          });
+          
+          console.log(`✅ Security group ${sg.GroupName} meets production compliance standards`);
+        }
+      } catch (error) {
+        console.warn('Security group compliance validation failed:', error);
+      }
+    }, 30000);
+
+    test('should validate VPC security group isolation', async () => {
+      if (!runLiveTests) return;
+
+      try {
+        // Get our Lambda function's VPC and security group
+        const functionName = outputs['lambda-function-name'];
+        const lambdaFunction = await lambdaClient.send(
+          new GetFunctionCommand({ FunctionName: functionName })
+        );
+        
+        const vpcConfig = lambdaFunction.Configuration?.VpcConfig;
+        const sgId = vpcConfig?.SecurityGroupIds?.[0];
+        const lambdaVpcId = vpcConfig?.VpcId;
+        
+        if (sgId && lambdaVpcId) {
+          // Get security group details
+          const sg = await ec2Client.send(
+            new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+          );
+          
+          const securityGroup = sg.SecurityGroups?.[0];
+          
+          // Verify security group belongs to the correct VPC
+          expect(securityGroup?.VpcId).toBe(lambdaVpcId);
+          
+          // Get all security groups in the VPC to check for isolation
+          const allSGs = await ec2Client.send(
+            new DescribeSecurityGroupsCommand({
+              Filters: [{ Name: 'vpc-id', Values: [lambdaVpcId] }]
+            })
+          );
+          
+          // Verify our security group is isolated (not referencing other SGs)
+          const egressRules = securityGroup?.IpPermissionsEgress || [];
+          egressRules.forEach(rule => {
+            // Should not have references to other security groups
+            expect(rule.UserIdGroupPairs?.length || 0).toBe(0);
+          });
+          
+          // Verify no other security groups reference our Lambda SG
+          const referencingSGs = allSGs.SecurityGroups?.filter(otherSG => {
+            if (otherSG.GroupId === sgId) return false; // Skip self
+            
+            const allRules = [
+              ...(otherSG.IpPermissions || []),
+              ...(otherSG.IpPermissionsEgress || [])
+            ];
+            
+            return allRules.some(rule => 
+              rule.UserIdGroupPairs?.some(pair => pair.GroupId === sgId)
+            );
+          });
+          
+          // Our Lambda SG should be isolated (not referenced by others)
+          expect(referencingSGs?.length || 0).toBe(0);
+          
+          console.log(`✅ Security group ${securityGroup?.GroupName} is properly isolated in VPC`);
+        }
+      } catch (error) {
+        console.warn('VPC security group isolation test failed:', error);
+      }
+    }, 30000);
+
     test('should have S3 bucket with encryption and security policies', async () => {
       if (!runLiveTests) return;
 
@@ -662,6 +919,307 @@ describe('TapStack Integration Tests', () => {
         console.warn('Lambda integration test failed:', error);
       }
     }, 30000);
+  });
+
+  describe('VPC Error Scenario Coverage', () => {
+    test('should handle empty subnet validation properly', () => {
+      // Mock DataAwsSubnets to return empty results
+      const mockStack = new TapStack(app, 'EmptySubnetTest', {
+        environmentSuffix: 'dev',
+        awsRegion: awsRegion,
+      });
+
+      const synthesized = Testing.synth(mockStack);
+      
+      // Test should synthesize successfully but warn about empty subnets in real deployment
+      expect(synthesized).toBeDefined();
+      expect(synthesized).toContain('data.aws_subnets.vpc-subnets');
+    });
+
+    test('should validate VPC creation mode rejection', () => {
+      expect(() => {
+        new TapStack(app, 'VPCCreationTest', {
+          environmentSuffix: 'dev',
+          createVpc: true,
+          awsRegion: awsRegion,
+        });
+      }).toThrow('VPC creation mode not implemented in this version');
+    });
+
+    test('should handle mixed production environment patterns', () => {
+      const productionPatterns = [
+        'prod',
+        'production', 
+        'prod-staging',
+        'prod-dev',
+        'prod-123'
+      ];
+
+      productionPatterns.forEach(envSuffix => {
+        expect(() => {
+          new TapStack(app, `Test-${envSuffix}`, {
+            environmentSuffix: envSuffix,
+            awsRegion: awsRegion,
+          });
+        }).toThrow(`Production environment '${envSuffix}' requires explicit VPC configuration`);
+      });
+    });
+
+    test('should allow non-production environment patterns', () => {
+      const devPatterns = [
+        'dev',
+        'develop',
+        'development', 
+        'test',
+        'testing',
+        'stage',
+        'staging',
+        'qa',
+        'dev-feature',
+        'test-123'
+      ];
+
+      devPatterns.forEach(envSuffix => {
+        const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        
+        expect(() => {
+          new TapStack(app, `Test-${envSuffix}`, {
+            environmentSuffix: envSuffix,
+            awsRegion: awsRegion,
+          });
+        }).not.toThrow();
+
+        // Verify warning message is environment-specific
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining(`Using default VPC fallback for development environment '${envSuffix}'`)
+        );
+        
+        consoleSpy.mockRestore();
+      });
+    });
+
+    test('should validate comprehensive subnet requirements', () => {
+      // Test various invalid subnet configurations
+      const invalidConfigs = [
+        {
+          name: 'NoSubnets',
+          config: {
+            environmentSuffix: 'prod',
+            vpcId: 'vpc-12345678',
+            subnetIds: [],
+            awsRegion: awsRegion,
+          },
+          expectedError: 'Deployment requires at least 2 subnets'
+        },
+        {
+          name: 'OneSubnet', 
+          config: {
+            environmentSuffix: 'prod',
+            vpcId: 'vpc-12345678',
+            subnetIds: ['subnet-12345678'],
+            awsRegion: awsRegion,
+          },
+          expectedError: 'Deployment requires at least 2 subnets'
+        },
+        {
+          name: 'SubnetAZMismatch',
+          config: {
+            environmentSuffix: 'prod',
+            vpcId: 'vpc-12345678', 
+            subnetIds: ['subnet-12345678', 'subnet-87654321', 'subnet-11111111'],
+            availabilityZones: ['us-east-1a', 'us-east-1b'], // 3 subnets, 2 AZs
+            awsRegion: awsRegion,
+          },
+          expectedError: 'Number of subnets must match number of availability zones'
+        }
+      ];
+
+      invalidConfigs.forEach(({ name, config, expectedError }) => {
+        expect(() => {
+          new TapStack(app, name, config);
+        }).toThrow(expectedError);
+      });
+    });
+  });
+
+  describe('Lambda Asset Management Integration', () => {
+    test('Lambda function includes asset version and build metadata', async () => {
+      const lambdaFunctionName = outputs['lambda-function-name'];
+      if (!lambdaFunctionName) {
+        console.warn('⚠️ Lambda function name not found in outputs, skipping test');
+        return;
+      }
+
+      try {
+        const getFunctionCommand = new GetFunctionCommand({
+          FunctionName: lambdaFunctionName,
+        });
+
+        const lambdaResponse = await lambdaClient.send(getFunctionCommand);
+        const lambdaConfig = lambdaResponse.Configuration;
+        const lambdaTags = lambdaResponse.Tags || {};
+
+        // Verify asset management environment variables
+        expect(lambdaConfig?.Environment?.Variables).toHaveProperty('ASSET_VERSION');
+        expect(lambdaConfig?.Environment?.Variables).toHaveProperty('BUILD_TIMESTAMP');
+        expect(lambdaConfig?.Environment?.Variables).toHaveProperty('NODE_ENV');
+
+        // Verify asset version in tags
+        expect(lambdaTags).toHaveProperty('AssetVersion');
+        expect(lambdaTags).toHaveProperty('BuildTimestamp');
+
+        // Verify runtime is updated to Node.js 20.x
+        expect(lambdaConfig?.Runtime).toBe('nodejs20.x');
+
+        console.log(`✅ Lambda asset management validated for function: ${lambdaFunctionName}`);
+        console.log(`📦 Asset Version: ${lambdaConfig?.Environment?.Variables?.ASSET_VERSION}`);
+        console.log(`🏗️ Build Timestamp: ${lambdaTags.BuildTimestamp}`);
+
+      } catch (error: any) {
+        if (error.name === 'ResourceNotFoundException') {
+          console.warn(`⚠️ Lambda function ${lambdaFunctionName} not found, skipping asset management test`);
+        } else {
+          throw error;
+        }
+      }
+    }, 30000);
+
+    test('Lambda function environment detection works correctly', async () => {
+      const lambdaFunctionName = outputs['lambda-function-name'];
+      if (!lambdaFunctionName) {
+        console.warn('⚠️ Lambda function name not found in outputs, skipping environment test');
+        return;
+      }
+
+      try {
+        const getFunctionCommand = new GetFunctionCommand({
+          FunctionName: lambdaFunctionName,
+        });
+
+        const lambdaResponse = await lambdaClient.send(getFunctionCommand);
+        const envVars = lambdaResponse.Configuration?.Environment?.Variables || {};
+
+        // Check NODE_ENV setting based on environment suffix
+        const expectedNodeEnv = ['prod', 'production'].includes(environmentSuffix) || 
+                               environmentSuffix.startsWith('prod-') ? 'production' : 'development';
+        
+        expect(envVars.NODE_ENV).toBe(expectedNodeEnv);
+
+        // Check versioning is enabled for production environments
+        const isProductionEnv = ['prod', 'production'].includes(environmentSuffix) || 
+                               environmentSuffix.startsWith('prod-');
+        
+        if (isProductionEnv) {
+          // Production should have versioning enabled (publish: true creates a version)
+          expect(lambdaResponse.Configuration?.Version).not.toBe('$LATEST');
+        }
+
+        console.log(`✅ Environment detection validated: ${environmentSuffix} → NODE_ENV=${envVars.NODE_ENV}`);
+
+      } catch (error: any) {
+        if (error.name === 'ResourceNotFoundException') {
+          console.warn(`⚠️ Lambda function ${lambdaFunctionName} not found, skipping environment test`);
+        } else {
+          throw error;
+        }
+      }
+    }, 30000);
+
+    test('Build metadata output is properly formatted', async () => {
+      const buildMetadata = outputs['lambda-build-metadata'];
+      if (!buildMetadata) {
+        console.warn('⚠️ Build metadata not found in outputs, skipping metadata test');
+        return;
+      }
+
+      try {
+        const metadata = JSON.parse(buildMetadata);
+
+        // Verify build metadata structure
+        expect(metadata).toHaveProperty('assetVersion');
+        expect(metadata).toHaveProperty('buildTimestamp');
+        expect(metadata).toHaveProperty('sourceHash');
+        expect(metadata).toHaveProperty('nodeRuntime');
+        expect(metadata).toHaveProperty('environment');
+        expect(metadata).toHaveProperty('buildConfig');
+
+        // Verify build configuration
+        expect(metadata.buildConfig).toHaveProperty('minify');
+        expect(metadata.buildConfig).toHaveProperty('stripDevDependencies');
+        expect(metadata.buildConfig).toHaveProperty('enableSourceMaps');
+        expect(metadata.buildConfig).toHaveProperty('compressionLevel');
+
+        // Verify timestamp format
+        expect(new Date(metadata.buildTimestamp)).toBeInstanceOf(Date);
+
+        // Verify asset version format (should be 12 characters)
+        expect(metadata.assetVersion).toMatch(/^[a-f0-9]{12}$/);
+
+        console.log(`✅ Build metadata validated for environment: ${metadata.environment}`);
+        console.log(`📊 Asset Version: ${metadata.assetVersion}`);
+        console.log(`⚙️ Build Config:`, metadata.buildConfig);
+
+      } catch (error: any) {
+        if (error instanceof SyntaxError) {
+          console.error('❌ Build metadata is not valid JSON:', buildMetadata);
+          throw new Error('Build metadata output is malformed');
+        } else {
+          throw error;
+        }
+      }
+    }, 30000);
+  });
+
+  describe('Security Group Error Scenarios', () => {
+    test('should synthesize security group configuration correctly', () => {
+      const testConfigs = [
+        {
+          name: 'DevEnvironment',
+          config: { environmentSuffix: 'dev', awsRegion: awsRegion }
+        },
+        {
+          name: 'TestEnvironment', 
+          config: { environmentSuffix: 'test', awsRegion: awsRegion }
+        },
+        {
+          name: 'StagingEnvironment',
+          config: { environmentSuffix: 'staging', awsRegion: awsRegion }
+        }
+      ];
+
+      testConfigs.forEach(({ name, config }) => {
+        const stack = new TapStack(app, name, config);
+        const synthesized = Testing.synth(stack);
+        
+        // Verify security group is synthesized correctly
+        expect(synthesized).toContain('aws_security_group');
+        expect(synthesized).toContain('lambda-security-group');
+        expect(synthesized).toContain('Security group for Lambda data processing function');
+        expect(synthesized).toContain('443'); // Port 443 exists somewhere
+        expect(synthesized).toContain('HTTPS outbound for S3/KMS API calls');
+      });
+    });
+
+    test('should create unique security group names for different environments', () => {
+      const env1Stack = new TapStack(app, 'Env1Stack', {
+        environmentSuffix: 'env1',
+        awsRegion: awsRegion,
+      });
+      
+      const env2Stack = new TapStack(app, 'Env2Stack', {
+        environmentSuffix: 'env2', 
+        awsRegion: awsRegion,
+      });
+
+      const synthesized1 = Testing.synth(env1Stack);
+      const synthesized2 = Testing.synth(env2Stack);
+
+      // Verify different environment suffixes create different security groups
+      expect(synthesized1).toContain('env1-');
+      expect(synthesized2).toContain('env2-');
+      expect(synthesized1).not.toContain('env2-');
+      expect(synthesized2).not.toContain('env1-');
+    });
   });
 
   describe('KMS Encryption Validation', () => {

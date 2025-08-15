@@ -64,6 +64,13 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
 
+/**
+ * Serverless Data Processing Stack with fully parameterized VPC configuration.
+ *
+ * Production environments (prod, production, prod-*) require explicit VPC configuration
+ * via vpcId and subnetIds props. Development environments can use default VPC fallback.
+ */
+
 export class TapStack extends TerraformStack {
   constructor(
     scope: Construct,
@@ -115,26 +122,50 @@ export class TapStack extends TerraformStack {
     let vpcId: string;
     let subnetIds: string[];
 
+    // Check for production environment patterns
+    const isProductionEnvironment =
+      environmentSuffix === 'prod' ||
+      environmentSuffix === 'production' ||
+      environmentSuffix.startsWith('prod-');
+
     if (props?.vpcId && props?.subnetIds) {
-      // Production mode: Use explicitly provided VPC and subnets
+      // Explicit VPC mode: Use provided VPC and subnets
       vpcId = props.vpcId;
       subnetIds = props.subnetIds;
 
       // Validate the provided configuration
       if (props.subnetIds.length < 2) {
         throw new Error(
-          'Production deployment requires at least 2 subnets for high availability'
+          'Deployment requires at least 2 subnets for high availability'
+        );
+      }
+
+      // Validate subnet count matches availability zones if provided
+      if (
+        props.availabilityZones &&
+        props.subnetIds.length !== props.availabilityZones.length
+      ) {
+        throw new Error(
+          'Number of subnets must match number of availability zones'
         );
       }
     } else if (props?.createVpc) {
       // Advanced mode: Create a new VPC with the specified configuration
       throw new Error(
-        'VPC creation mode not implemented in this version. Please provide vpcId and subnetIds for production use.'
+        'VPC creation mode not implemented in this version. Please provide vpcId and subnetIds.'
+      );
+    } else if (isProductionEnvironment) {
+      // Production environments must specify explicit VPC configuration
+      throw new Error(
+        `Production environment '${environmentSuffix}' requires explicit VPC configuration. ` +
+          'Please provide vpcId and subnetIds in props for production deployments. ' +
+          'Using default VPC is not allowed in production for security and compliance reasons.'
       );
     } else {
-      // Development/fallback mode: Use default VPC (with warning)
+      // Development/testing mode: Use default VPC with warning
       console.warn(
-        '⚠️  Using default VPC fallback. For production, specify vpcId and subnetIds in props.'
+        `⚠️  Using default VPC fallback for development environment '${environmentSuffix}'. ` +
+          'For production deployments, specify vpcId and subnetIds in props.'
       );
 
       const defaultVpc = new DataAwsVpc(this, 'default-vpc', {
@@ -156,16 +187,12 @@ export class TapStack extends TerraformStack {
         ],
       });
       subnetIds = vpcSubnets.ids;
-    }
 
-    // Validate availability zones if specified
-    if (props?.availabilityZones && props.availabilityZones.length > 0) {
-      if (
-        props.subnetIds &&
-        props.subnetIds.length !== props.availabilityZones.length
-      ) {
+      // Validate that we have sufficient subnets even in development
+      if (subnetIds.length === 0) {
         throw new Error(
-          'Number of subnets must match number of availability zones'
+          'No available subnets found in the default VPC. ' +
+            'Please check your VPC configuration or provide explicit vpcId and subnetIds.'
         );
       }
     }
@@ -573,9 +600,9 @@ interface TapStackProps {
 
 ## Security Enhancements
 
-1. **Production VPC Configuration**: Three deployment modes:
-   - **Production**: Explicit `vpcId` and `subnetIds` with minimum 2 subnets for HA
-   - **Development**: Fallback to default VPC with clear warning
+1. **Production VPC Configuration**: Three deployment modes with automatic environment detection:
+   - **Production**: Automatic detection of production environments (`prod`, `production`, `prod-*`) that require explicit `vpcId` and `subnetIds` with minimum 2 subnets for HA
+   - **Development**: Fallback to default VPC with environment-specific warnings
    - **Advanced**: Placeholder for VPC creation (not implemented)
 
 2. **Enhanced Lambda Asset Management**: 
@@ -584,9 +611,14 @@ interface TapStackProps {
    - Configurable runtime, timeout, memory, and architecture
    - Production versioning support
 
-3. **Dedicated Security Group**: Custom security group with controlled HTTPS egress only
-4. **Restrictive KMS Policy**: Service-specific permissions with ViaService conditions
-5. **Production-Ready Defaults**: Optimized configuration for production environments
+3. **Enhanced Error Handling and Validation**:
+   - Production environment detection and mandatory VPC configuration
+   - Comprehensive subnet validation including empty subnet checks
+   - Clear error messages for compliance and security requirements
+
+4. **Dedicated Security Group**: Custom security group with controlled HTTPS egress only
+5. **Restrictive KMS Policy**: Service-specific permissions with ViaService conditions
+6. **Production-Ready Defaults**: Optimized configuration for production environments
 
 ## Outputs
 

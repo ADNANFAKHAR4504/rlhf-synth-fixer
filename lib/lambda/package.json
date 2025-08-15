@@ -18,8 +18,13 @@
     "test": "node test.js",
     "lint": "eslint index.js",
     "build": "npm install --production",
+    "build:optimized": "node build-optimization.js . ../build",
+    "build:production": "NODE_ENV=production node build-optimization.js . ../build",
     "package": "zip -r lambda-function.zip index.js package.json node_modules/",
-    "clean": "rm -rf node_modules/ lambda-function.zip"
+    "package:optimized": "cd ../build && zip -r ../lambda-function-optimized.zip . -x build-manifest.json",
+    "clean": "rm -rf node_modules/ lambda-function.zip ../build/ ../lambda-function-optimized.zip",
+    "audit:security": "npm audit --audit-level=high",
+    "analyze:bundle": "node -e \"console.log('Bundle analysis:', JSON.stringify(require('./build-manifest.json'), null, 2))\" 2>/dev/null || echo 'Run build:optimized first'"
   },
   "keywords": [
     "lambda",

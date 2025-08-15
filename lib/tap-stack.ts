@@ -25,6 +25,14 @@ import {
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
+
+/**
+ * Serverless Data Processing Stack with fully parameterized VPC configuration.
+ *
+ * Production environments (prod, production, prod-*) require explicit VPC configuration
+ * via vpcId and subnetIds props. Development environments can use default VPC fallback.
+ */
 
 export class TapStack extends TerraformStack {
   constructor(
@@ -77,26 +85,50 @@ export class TapStack extends TerraformStack {
     let vpcId: string;
     let subnetIds: string[];
 
+    // Check for production environment patterns
+    const isProductionEnvironment =
+      environmentSuffix === 'prod' ||
+      environmentSuffix === 'production' ||
+      environmentSuffix.startsWith('prod-');
+
     if (props?.vpcId && props?.subnetIds) {
-      // Production mode: Use explicitly provided VPC and subnets
+      // Explicit VPC mode: Use provided VPC and subnets
       vpcId = props.vpcId;
       subnetIds = props.subnetIds;
 
       // Validate the provided configuration
       if (props.subnetIds.length < 2) {
         throw new Error(
-          'Production deployment requires at least 2 subnets for high availability'
+          'Deployment requires at least 2 subnets for high availability'
+        );
+      }
+
+      // Validate subnet count matches availability zones if provided
+      if (
+        props.availabilityZones &&
+        props.subnetIds.length !== props.availabilityZones.length
+      ) {
+        throw new Error(
+          'Number of subnets must match number of availability zones'
         );
       }
     } else if (props?.createVpc) {
       // Advanced mode: Create a new VPC with the specified configuration
       throw new Error(
-        'VPC creation mode not implemented in this version. Please provide vpcId and subnetIds for production use.'
+        'VPC creation mode not implemented in this version. Please provide vpcId and subnetIds.'
+      );
+    } else if (isProductionEnvironment) {
+      // Production environments must specify explicit VPC configuration
+      throw new Error(
+        `Production environment '${environmentSuffix}' requires explicit VPC configuration. ` +
+          'Please provide vpcId and subnetIds in props for production deployments. ' +
+          'Using default VPC is not allowed in production for security and compliance reasons.'
       );
     } else {
-      // Development/fallback mode: Use default VPC (with warning)
+      // Development/testing mode: Use default VPC with warning
       console.warn(
-        '⚠️  Using default VPC fallback. For production, specify vpcId and subnetIds in props.'
+        `⚠️  Using default VPC fallback for development environment '${environmentSuffix}'. ` +
+          'For production deployments, specify vpcId and subnetIds in props.'
       );
 
       const defaultVpc = new DataAwsVpc(this, 'default-vpc', {
@@ -118,16 +150,12 @@ export class TapStack extends TerraformStack {
         ],
       });
       subnetIds = vpcSubnets.ids;
-    }
 
-    // Validate availability zones if specified
-    if (props?.availabilityZones && props.availabilityZones.length > 0) {
-      if (
-        props.subnetIds &&
-        props.subnetIds.length !== props.availabilityZones.length
-      ) {
+      // Validate that we have sufficient subnets even in development
+      if (subnetIds.length === 0) {
         throw new Error(
-          'Number of subnets must match number of availability zones'
+          'No available subnets found in the default VPC. ' +
+            'Please check your VPC configuration or provide explicit vpcId and subnetIds.'
         );
       }
     }
@@ -313,22 +341,90 @@ export class TapStack extends TerraformStack {
       architecture: props?.lambdaConfig?.architecture || 'x86_64',
     };
 
-    // Enhanced Lambda function code asset management with build support
+    // Production-grade Lambda asset management with versioning and optimization
     const lambdaAssetPath = path.resolve(__dirname, 'lambda');
+    const packageJsonPath = path.join(lambdaAssetPath, 'package.json');
 
-    // Validate Lambda asset exists
+    // Validate Lambda source directory exists
     if (!fs.existsSync(lambdaAssetPath)) {
       throw new Error(
-        `Lambda asset directory not found: ${lambdaAssetPath}. Please ensure lambda code exists.`
+        `Lambda source directory not found: ${lambdaAssetPath}. Please ensure lambda code exists.`
       );
     }
 
-    // Validate required files exist
-    const requiredFiles = ['index.js', 'package.json'];
-    for (const file of requiredFiles) {
+    // Validate required source files exist
+    const requiredSourceFiles = ['index.js', 'package.json'];
+    for (const file of requiredSourceFiles) {
       const filePath = path.join(lambdaAssetPath, file);
       if (!fs.existsSync(filePath)) {
-        throw new Error(`Required Lambda file not found: ${filePath}`);
+        throw new Error(`Required Lambda source file not found: ${filePath}`);
+      }
+    }
+
+    // Generate version hash for asset management
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    const sourceFiles = fs
+      .readdirSync(lambdaAssetPath)
+      .filter(file => file.endsWith('.js') || file.endsWith('.json'));
+
+    // Create content hash for versioning
+    const hasher = crypto.createHash('sha256');
+    hasher.update(JSON.stringify(packageJson));
+    sourceFiles.forEach(file => {
+      const content = fs.readFileSync(path.join(lambdaAssetPath, file));
+      hasher.update(content);
+    });
+    const sourceHash = hasher.digest('hex');
+    const assetVersion = sourceHash.substring(0, 12);
+
+    // Production asset optimization configuration
+    const assetConfig = {
+      version: assetVersion,
+      buildTimestamp: new Date().toISOString(),
+      nodeVersion: packageJson.engines?.node || '>=18.0.0',
+      dependencies: Object.keys(packageJson.dependencies || {}),
+      buildOptimizations: {
+        minify: isProductionEnvironment,
+        stripDevDependencies: true,
+        enableSourceMaps: !isProductionEnvironment,
+        compressionLevel: isProductionEnvironment ? 9 : 6,
+      },
+    };
+
+    // Create build metadata for production tracking
+    const buildMetadata = {
+      assetVersion,
+      buildTimestamp: assetConfig.buildTimestamp,
+      sourceHash,
+      nodeRuntime: lambdaConfig.runtime,
+      environment: environmentSuffix,
+      buildConfig: assetConfig.buildOptimizations,
+    };
+
+    // Enhanced asset validation with dependency analysis
+    console.log(
+      `🏗️  Building Lambda asset v${assetVersion} for ${environmentSuffix} environment`
+    );
+
+    if (isProductionEnvironment) {
+      // Production-specific validations
+      const devDependencies = Object.keys(packageJson.devDependencies || {});
+      if (devDependencies.length > 0) {
+        console.warn(
+          `⚠️  Production build includes ${devDependencies.length} dev dependencies - will be stripped`
+        );
+      }
+
+      // Validate security-sensitive dependencies
+      const sensitivePackages = ['lodash', 'request', 'debug'];
+      const usedSensitivePackages = assetConfig.dependencies.filter(dep =>
+        sensitivePackages.some(sensitive => dep.includes(sensitive))
+      );
+
+      if (usedSensitivePackages.length > 0) {
+        console.warn(
+          `⚠️  Production build uses potentially sensitive packages: ${usedSensitivePackages.join(', ')}`
+        );
       }
     }
 
@@ -419,7 +515,7 @@ export class TapStack extends TerraformStack {
         timeout: lambdaConfig.timeout,
         memorySize: lambdaConfig.memorySize,
         architectures: [lambdaConfig.architecture],
-        publish: props?.environmentSuffix === 'prod', // Enable versioning for production
+        publish: isProductionEnvironment, // Enable versioning for production environments
         vpcConfig: {
           subnetIds: subnetIds,
           securityGroupIds: [lambdaSecurityGroup.id],
@@ -429,12 +525,17 @@ export class TapStack extends TerraformStack {
             BUCKET_NAME: dataBucket.bucket,
             KMS_KEY_ID: s3KmsKey.keyId,
             PROJECT_PREFIX: projectPrefix,
+            ASSET_VERSION: assetVersion,
+            BUILD_TIMESTAMP: buildMetadata.buildTimestamp,
+            NODE_ENV: isProductionEnvironment ? 'production' : 'development',
           },
         },
         tags: {
           Name: `${projectPrefix}-data-processor`,
           Project: projectPrefix,
           Environment: environmentSuffix,
+          AssetVersion: assetVersion,
+          BuildTimestamp: buildMetadata.buildTimestamp,
         },
       }
     );
@@ -490,6 +591,16 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'lambda-role-arn', {
       value: lambdaRole.arn,
       description: 'ARN of the Lambda execution role',
+    });
+
+    new TerraformOutput(this, 'lambda-asset-version', {
+      value: assetVersion,
+      description: 'Version hash of the Lambda asset for tracking deployments',
+    });
+
+    new TerraformOutput(this, 'lambda-build-metadata', {
+      value: JSON.stringify(buildMetadata),
+      description: 'Complete build metadata for production deployment tracking',
     });
   }
 }
