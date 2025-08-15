@@ -78,11 +78,10 @@ class TapStack(pulumi.ComponentResource):
         self.bucket_policies = {}
         self.logging_bucket = None
         
-        # Create centralized logging bucket
+        # Create centralized logging bucket - FIXED: Removed ACL, added object_ownership
         if self.enable_logging:
             self.logging_bucket = s3.Bucket(
                 f'logging-bucket-{self.environment_suffix}',
-                acl='log-delivery-write',
                 versioning=s3.BucketVersioningArgs(enabled=True),
                 server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
                     rule=s3.BucketServerSideEncryptionConfigurationRuleArgs(
@@ -97,6 +96,7 @@ class TapStack(pulumi.ComponentResource):
                     id='log-retention',
                     expiration=s3.BucketLifecycleRuleExpirationArgs(days=90)
                 )],
+                object_ownership='BucketOwnerEnforced',  # FIXED: Use BucketOwnerEnforced instead of ACL
                 tags={
                     'Environment': self.environment_suffix,
                     'Purpose': 'AccessLogging',
@@ -105,7 +105,7 @@ class TapStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
         
-        # Create static website buckets in each region
+        # Create static website buckets in each region - FIXED: Removed ACL, added object_ownership
         for region in self.regions:
             bucket = s3.Bucket(
                 f'static-web-{region}-{self.environment_suffix}',
@@ -122,6 +122,7 @@ class TapStack(pulumi.ComponentResource):
                     index_document='index.html',
                     error_document='error.html'
                 ),
+                object_ownership='BucketOwnerEnforced',  # FIXED: Use BucketOwnerEnforced instead of ACL
                 tags={
                     'Environment': self.environment_suffix,
                     'Region': region,
@@ -175,7 +176,7 @@ class TapStack(pulumi.ComponentResource):
             # Create CloudWatch alarm for monitoring bucket access
             alarm = cloudwatch.MetricAlarm(
                 f'alarm-{region}-{self.environment_suffix}',
-                name=f'high-s3-requests-{region}-{self.environment_suffix}',  # FIXED: Use 'name' instead of 'alarm_name'
+                name=f'high-s3-requests-{region}-{self.environment_suffix}',
                 comparison_operator='GreaterThanThreshold',
                 evaluation_periods=2,
                 metric_name='NumberOfObjects',
