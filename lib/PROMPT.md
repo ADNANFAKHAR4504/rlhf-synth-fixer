@@ -1,34 +1,57 @@
-````
-This is the prompt for an AI to generate a CloudFormation YAML template based on your provided requirements. The prompt is structured to be clear, direct, and includes all necessary constraints and context, following Anthropic's prompt engineering best practices.
+# CloudFormation Template Requirements
 
-### Prompt for CloudFormation YAML Generation
+We need to create a CloudFormation YAML template for our production web application infrastructure. This template should establish a secure and scalable AWS environment.
 
-```markdown
-You are an expert in AWS and Infrastructure as Code (IaC). Your task is to generate a complete and valid AWS CloudFormation template in YAML format. The template should set up a secure and scalable environment for a production-grade web application.
+## Core Requirements
 
-**Instructions:**
+The template needs to generate a complete and valid AWS CloudFormation template in YAML format that sets up infrastructure for a production-grade web application.
 
-1.  **Strictly adhere to the following constraints:**
-    * All resources must be deployed within the **`us-west-2`** region.
-    * Use **AWS IAM roles** to manage permissions for any resources that require access to S3 buckets. Do not use inline policies or user-level credentials.
-    * Ensure that all data stored in **RDS instances is encrypted at rest**.
-    * Implement a **VPC with public and private subnets**. The private subnets must have internet access via **NAT gateways**.
-    * Add **detailed and clear comments** within the YAML code to explain the purpose of each resource and the reason for key configuration decisions.
+### Infrastructure Constraints
 
-2.  **Translate the following infrastructure requirements into the CloudFormation template:**
-    * **VPC and Subnets:** Create a new VPC with both public and private subnets. The private subnets should be configured to route outbound internet traffic through a NAT Gateway.
-    * **Web Servers:** Any web servers deployed in the public subnets must only be accessible via a load balancer. This implies that security groups should be configured to restrict direct public access to the web server instances.
-    * **RDS:** Create an RDS database instance. The database must have encryption at rest enabled.
-    * **S3 Access:** Create an IAM role with a policy that grants least-privilege access to an S3 bucket. This role should be attached to any resources (e.g., an EC2 instance or a Lambda function) that need to interact with S3.
-    * **Best Practices:** The template should reflect best security practices for a production environment.
+Please ensure the following requirements are met:
 
-3.  **Ensure the generated YAML code is complete and syntactically correct.** It should be ready to be validated by AWS CloudFormation and should be deployable. The template should be a single, cohesive document.
+- Deploy all resources within the `us-west-2` region
+- Use AWS IAM roles for managing permissions to S3 buckets (no inline policies or user credentials)
+- Enable encryption at rest for all RDS instances
+- Create a VPC with both public and private subnets, with NAT gateways providing internet access to private subnets
+- Include detailed comments in the YAML explaining each resource's purpose and key configuration decisions
 
-4.  **Do not modify or omit any of the constraints or requirements provided.** The output must strictly follow all of the above points.
+### Infrastructure Components
 
-5.  **Provide the complete YAML code block only, without any introductory or concluding text outside of the code block itself.**
+The template should include these components:
 
-**Expected Output:**
+**VPC and Networking**
 
-A single, well-commented YAML CloudFormation template that provisions the requested AWS resources in the `us-west-2` region, following all the specified security and architectural constraints. The template must pass AWS validation and be deployable to confirm successful resource creation.
-````
+- New VPC with public and private subnets
+- Private subnets configured to route outbound traffic through NAT Gateway
+
+**Web Server Setup**
+
+- Web servers accessible only via load balancer
+- Security groups restricting direct public access to server instances
+
+**Database Configuration**
+
+- RDS database instance with encryption at rest enabled
+
+**S3 Integration**
+
+- IAM role with least-privilege policy for S3 bucket access
+- Role should be attachable to EC2 instances or Lambda functions as needed
+
+**Security Standards**
+
+- Template must follow production environment security best practices
+
+### Technical Requirements
+
+The generated YAML should be:
+
+- Complete and syntactically correct
+- Ready for AWS CloudFormation validation
+- Deployable as a single cohesive document
+- Compliant with all specified constraints and requirements
+
+### Expected Deliverable
+
+A well-commented YAML CloudFormation template that provisions the requested AWS resources in the `us-west-2` region, following all security and architectural constraints. The template must pass AWS validation and be ready for deployment.

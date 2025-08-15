@@ -133,6 +133,22 @@ Resources:
         - Key: Name
           Value: !Sub 'Database Subnet 2 (AZ2)-${EnvironmentSuffix}'
 
+  # Database Secret - Stores the RDS master password
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-db-password-${EnvironmentSuffix}'
+      Description: 'Master password for RDS database'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\'
+        IncludeSpace: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'Database Secret-${EnvironmentSuffix}'
+
   # NAT Gateway EIP - Elastic IP for NAT Gateway
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -217,8 +233,9 @@ Resources:
   # S3 Bucket - Storage for application assets
   S3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::StackName}-app-assets-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'app-assets-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -230,12 +247,21 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
 
   # IAM Role - Grants EC2 instances least-privilege access to S3
   EC2S3AccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2-S3-Access-Role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -274,7 +300,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'LoadBalancer-SG-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-LoadBalancer-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -303,7 +329,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'WebServer-SG-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-WebServer-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for web servers - only accessible via load balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -332,7 +358,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'Database-SG-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-Database-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for RDS database - only accessible from web servers'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -362,13 +388,14 @@ Resources:
   # RDS Instance - MySQL database with encryption at rest enabled
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: DatabaseSecret
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.39'
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password-${EnvironmentSuffix}:SecretString:password}}'
       AllocatedStorage: 20
@@ -447,7 +474,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-WebServer-Template-${EnvironmentSuffix}'
       LaunchTemplateData:
-        ImageId: 'ami-0c2d3e23b7b644f5c' # Amazon Linux 2023 AMI in us-west-2
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}' # Latest Amazon Linux 2023 AMI
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
