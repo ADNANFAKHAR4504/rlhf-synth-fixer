@@ -31,12 +31,14 @@ Mappings:
       VpcCidr: '10.0.0.0/16'
       PrivateSubnetCidr: '10.0.1.0/24'
       PublicSubnetCidr: '10.0.2.0/24'
-      DatabaseSubnetCidr: '10.0.3.0/24'
+      DatabaseSubnet1Cidr: '10.0.3.0/24'
+      DatabaseSubnet2Cidr: '10.0.4.0/24'
     prod:
       VpcCidr: '10.1.0.0/16'
       PrivateSubnetCidr: '10.1.1.0/24'
       PublicSubnetCidr: '10.1.2.0/24'
-      DatabaseSubnetCidr: '10.1.3.0/24'
+      DatabaseSubnet1Cidr: '10.1.3.0/24'
+      DatabaseSubnet2Cidr: '10.1.4.0/24'
 
 Resources:
   # ============================================================================
@@ -64,17 +66,6 @@ Resources:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
             Resource: '*'
-          - Sid: Allow CloudWatch Logs
-            Effect: Allow
-            Principal:
-              Service: !Sub logs.${AWS::Region}.amazonaws.com
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-            Resource: '*'
-            Condition:
-              ArnLike:
-                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -88,6 +79,44 @@ Resources:
     Properties:
       AliasName: !Sub 'alias/${ProjectName}-s3-${Environment}'
       TargetKeyId: !Ref S3KMSKey
+
+  # KMS Key for CloudWatch Logs encryption
+  CloudWatchLogsKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS Key for CloudWatch Logs encryption'
+      KeyPolicy:
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: env
+          Value: !Ref Environment
+        - Key: owner
+          Value: !Ref Owner
+        - Key: project
+          Value: !Ref ProjectName
+
+  CloudWatchLogsKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-logs-${Environment}'
+      TargetKeyId: !Ref CloudWatchLogsKMSKey
 
   # KMS Key for RDS encryption
   RDSKMSKey:
@@ -199,16 +228,32 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # Database Subnet
-  DatabaseSubnet:
+  # Database Subnets - Need 2 in different AZs for RDS
+  DatabaseSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [2, !GetAZs '']
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, DatabaseSubnetCidr]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, DatabaseSubnet1Cidr]
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-db-subnet-${Environment}'
+          Value: !Sub '${ProjectName}-db-subnet-1-${Environment}'
+        - Key: env
+          Value: !Ref Environment
+        - Key: owner
+          Value: !Ref Owner
+        - Key: project
+          Value: !Ref ProjectName
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, DatabaseSubnet2Cidr]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-db-subnet-2-${Environment}'
         - Key: env
           Value: !Ref Environment
         - Key: owner
@@ -307,6 +352,28 @@ Resources:
   # Security Groups - Restrictive by Default
   # ============================================================================
   
+  # Bastion Host Security Group - SSH access only
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for bastion host'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0  # In production, restrict to specific IP ranges
+          Description: 'SSH access'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-bastion-sg-${Environment}'
+        - Key: env
+          Value: !Ref Environment
+        - Key: owner
+          Value: !Ref Owner
+        - Key: project
+          Value: !Ref ProjectName
+
   # Web Server Security Group - Only allows HTTP/HTTPS
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -343,28 +410,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-web-sg-${Environment}'
-        - Key: env
-          Value: !Ref Environment
-        - Key: owner
-          Value: !Ref Owner
-        - Key: project
-          Value: !Ref ProjectName
-
-  # Bastion Host Security Group - SSH access only
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for bastion host'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0  # In production, restrict to specific IP ranges
-          Description: 'SSH access'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-bastion-sg-${Environment}'
         - Key: env
           Value: !Ref Environment
         - Key: owner
@@ -424,6 +469,35 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
+  # CloudTrail S3 Bucket Policy
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LoggingBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LoggingBucket.Arn}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Sid: AWSCloudTrailBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !GetAtt LoggingBucket.Arn
+
   # Main application bucket with encryption and logging
   ApplicationBucket:
     Type: AWS::S3::Bucket
@@ -445,7 +519,6 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      # Note: S3 notification to CloudWatch is configured via Lambda or EventBridge
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -731,15 +804,15 @@ Resources:
   # RDS Database with Encryption
   # ============================================================================
   
-  # Database Subnet Group
+  # Database Subnet Group - Fixed with proper subnets
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub '${ProjectName}-db-subnet-group-${Environment}'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
-        - !Ref DatabaseSubnet
-        - !Ref PrivateSubnet
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -752,12 +825,12 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete # W3011 fix
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.43' # E3691 fix (valid version)
+      EngineVersion: '8.0.43'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -794,7 +867,6 @@ Resources:
     Properties:
       ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (us-east-1)
       InstanceType: !Ref InstanceType
-      # KeyName is optional - instance can be accessed via Session Manager
       SubnetId: !Ref PrivateSubnet
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup
@@ -824,20 +896,17 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # Note: EC2 KeyPairs must be created outside of CloudFormation
-  # You can create a parameter to accept an existing KeyPair name
-
   # ============================================================================
   # CloudWatch Logging and Monitoring
   # ============================================================================
   
-  # CloudWatch Log Group for S3 events
+  # CloudWatch Log Group for S3 events - Fixed with proper KMS key
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/s3/${ProjectName}-${Environment}'
       RetentionInDays: 30
-      KmsKeyId: !GetAtt S3KMSKey.Arn
+      KmsKeyId: !GetAtt CloudWatchLogsKMSKey.Arn
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -846,12 +915,13 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # CloudWatch Log Group for application logs
+  # CloudWatch Log Group for application logs - Fixed with proper KMS key
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/ec2/${ProjectName}-${Environment}'
       RetentionInDays: 30
+      KmsKeyId: !GetAtt CloudWatchLogsKMSKey.Arn
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -860,9 +930,10 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # CloudTrail for audit logging
+  # CloudTrail for audit logging - Fixed with proper dependencies
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: LoggingBucketPolicy
     Properties:
       TrailName: !Sub '${ProjectName}-cloudtrail-${Environment}'
       S3BucketName: !Ref LoggingBucket
@@ -871,14 +942,14 @@ Resources:
       IsMultiRegionTrail: false
       EnableLogFileValidation: true
       KMSKeyId: !Ref S3KMSKey
-      IsLogging: true # E3003 fix
+      IsLogging: true
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !GetAtt ApplicationBucket.Arn # W1020: Remove unnecessary !Sub
+                - !GetAtt ApplicationBucket.Arn
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -891,6 +962,7 @@ Resources:
   # VPC Flow Logs for Network Monitoring
   # ============================================================================
   
+  # Fixed VPC Flow Logs Role
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
     Properties:
@@ -913,13 +985,15 @@ Resources:
                   - logs:PutLogEvents
                   - logs:DescribeLogGroups
                   - logs:DescribeLogStreams
-                Resource: '*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs/${ProjectName}-${Environment}*'
 
+  # VPC Flow Logs Group - Fixed with proper KMS key
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${ProjectName}-${Environment}'
       RetentionInDays: 14
+      KmsKeyId: !GetAtt CloudWatchLogsKMSKey.Arn
 
   VPCFlowLogs:
     Type: AWS::EC2::FlowLog
@@ -961,6 +1035,18 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-public-subnet-id-${Environment}'
 
+  DatabaseSubnet1Id:
+    Description: 'Database subnet 1 ID'
+    Value: !Ref DatabaseSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-db-subnet-1-id-${Environment}'
+
+  DatabaseSubnet2Id:
+    Description: 'Database subnet 2 ID'
+    Value: !Ref DatabaseSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-db-subnet-2-id-${Environment}'
+
   ApplicationBucketName:
     Description: 'S3 bucket name for application data'
     Value: !Ref ApplicationBucket
@@ -996,3 +1082,22 @@ Outputs:
     Value: !Ref CloudTrail
     Export:
       Name: !Sub '${ProjectName}-cloudtrail-name-${Environment}'
+
+  S3KMSKeyId:
+    Description: 'KMS Key ID for S3 encryption'
+    Value: !Ref S3KMSKey
+    Export:
+      Name: !Sub '${ProjectName}-s3-kms-key-${Environment}'
+
+  CloudWatchLogsKMSKeyId:
+    Description: 'KMS Key ID for CloudWatch Logs encryption'
+    Value: !Ref CloudWatchLogsKMSKey
+    Export:
+      Name: !Sub '${ProjectName}-logs-kms-key-${Environment}'
+
+  RDSKMSKeyId:
+    Description: 'KMS Key ID for RDS encryption'
+    Value: !Ref RDSKMSKey
+    Export:
+      Name: !Sub '${ProjectName}-rds-kms-key-${Environment}'
+      

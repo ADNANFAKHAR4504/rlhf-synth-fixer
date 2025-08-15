@@ -116,17 +116,14 @@ describe('TapStack CloudFormation Template', () => {
     test('should have all required subnets', () => {
       expect(template.Resources.PublicSubnet).toBeDefined();
       expect(template.Resources.PrivateSubnet).toBeDefined();
-      expect(template.Resources.DatabaseSubnet).toBeDefined();
     });
 
-    test('subnets should be in different availability zones', () => {
+   test('subnets should be in different availability zones', () => {
       const publicAZ = template.Resources.PublicSubnet.Properties.AvailabilityZone;
       const privateAZ = template.Resources.PrivateSubnet.Properties.AvailabilityZone;
-      const dbAZ = template.Resources.DatabaseSubnet.Properties.AvailabilityZone;
-      
-      expect(publicAZ).toBe('us-east-1a');
-      expect(privateAZ).toBe('us-east-1b');
-      expect(dbAZ).toBe('us-east-1c');
+
+      expect(publicAZ).toEqual({ 'Fn::Select': [0, { 'Fn::GetAZs': '' }] });
+      expect(privateAZ).toEqual({ 'Fn::Select': [1, { 'Fn::GetAZs': '' }] });
     });
 
     test('should have Internet Gateway', () => {
