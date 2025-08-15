@@ -274,7 +274,7 @@ export class TapStack extends TerraformStack {
     });
 
     // S3 Outputs
-    new TerraformOutput(this, 's3_bucket_name', {
+    new TerraformOutput(this, 's3_bucket_name_output', {
       value: s3.bucket.bucket,
       description: 'Name of the S3 bucket',
     });
