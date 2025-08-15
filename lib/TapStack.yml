@@ -30,6 +30,14 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9-]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
 
+  EnableKMSKeyRotation:
+    Type: String
+    Default: 'true'
+    Description: 'Enable automatic KMS key rotation for enhanced security'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
 Resources:
   SecureVPC:
     Type: AWS::EC2::VPC
@@ -260,7 +268,10 @@ Resources:
   S3KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'KMS Key for S3 bucket encryption - ${EnvironmentSuffix}'
+      Description: !Sub 'KMS Key for S3 bucket encryption with automatic rotation - ${EnvironmentSuffix}'
+      EnableKeyRotation: !Ref EnableKMSKeyRotation
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
@@ -277,12 +288,30 @@ Resources:
             Action:
               - kms:Decrypt
               - kms:GenerateDataKey
+              - kms:ReEncrypt*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
+          - Sid: Allow CloudTrail Encryption
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
             Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub 'S3KMSKey-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+        - Key: KeyRotation
+          Value: !Ref EnableKMSKeyRotation
+        - Key: Purpose
+          Value: 'S3 and CloudTrail encryption'
 
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -320,6 +349,7 @@ Resources:
       TrailName: !Sub '${AWS::StackName}-CloudTrail-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs'
+      KMSKeyId: !Ref S3KMSKey
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
@@ -379,6 +409,18 @@ Outputs:
     Value: !Ref S3KMSKey
     Export:
       Name: !Sub '${AWS::StackName}-S3KMSKey-${EnvironmentSuffix}'
+
+  S3KMSKeyArn:
+    Description: 'KMS Key ARN for S3 encryption'
+    Value: !GetAtt S3KMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-S3KMSKey-ARN-${EnvironmentSuffix}'
+
+  KMSKeyRotationStatus:
+    Description: 'KMS Key rotation status'
+    Value: !Ref EnableKMSKeyRotation
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSRotation-${EnvironmentSuffix}'
 
   EC2RoleArn:
     Description: 'EC2 IAM Role ARN for the deployed environment'
