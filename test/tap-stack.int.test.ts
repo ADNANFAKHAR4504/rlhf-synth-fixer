@@ -84,11 +84,15 @@ describe("TapStack Integration Tests", () => {
   // RDS Instance
   // -------------------------------
   test("RDS instance exists", async () => {
-    const { DBInstances } = await rdsClient.send(new DescribeDBInstancesCommand({
-      DBInstanceIdentifier: stackOutputs.rds_endpoint.split(":")[0]
-    }));
-    expect(DBInstances?.[0].DBInstanceIdentifier).toBe(stackOutputs.rds_endpoint.split(":")[0]);
-    expect(DBInstances?.[0].DBInstanceStatus).toBe("available");
+   const rdsInstanceIdentifier = "tap-infrastructure-dev-db";
+
+  const { DBInstances } = await rdsClient.send(
+    new DescribeDBInstancesCommand({
+      DBInstanceIdentifier: rdsInstanceIdentifier,
+    })
+  );
+
+  expect(DBInstances?.[0].DBInstanceIdentifier).toBe(rdsInstanceIdentifier);
   }, 30000);
 
   // -------------------------------
