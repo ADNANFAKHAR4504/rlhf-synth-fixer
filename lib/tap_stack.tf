@@ -20,9 +20,9 @@ data "aws_region" "stack_current" {}
 output "stack_validation" {
   description = "Stack validation information"
   value = {
-    stack_name    = local.stack_info.name
-    account_id    = data.aws_caller_identity.stack_current.account_id
-    region        = data.aws_region.stack_current.name
-    deployed_at   = timestamp()
+    stack_name  = local.stack_info.name
+    account_id  = data.aws_caller_identity.stack_current.account_id
+    region      = data.aws_region.stack_current.name
+    deployed_at = timestamp()
   }
 }

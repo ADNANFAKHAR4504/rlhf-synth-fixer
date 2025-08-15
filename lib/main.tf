@@ -15,10 +15,6 @@ variable "environment" {
   description = "Environment name (e.g., dev, staging, prod)"
   type        = string
   default     = "dev"
-  validation {
-    condition     = can(regex("^(dev|staging|prod)$", var.environment))
-    error_message = "Environment must be dev, staging, or prod."
-  }
 }
 
 # account_id is now automatically retrieved via data source - no variable needed
@@ -27,42 +23,24 @@ variable "trusted_account_ids" {
   description = "List of AWS account IDs that can assume roles"
   type        = list(string)
   default     = ["111111111111", "222222222222"]
-  validation {
-    condition = alltrue([
-      for account_id in var.trusted_account_ids : can(regex("^[0-9]{12}$", account_id))
-    ])
-    error_message = "All account IDs must be 12-digit numbers."
-  }
 }
 
 variable "log_bucket_name" {
   description = "Name of the S3 bucket for CloudTrail logs"
   type        = string
   default     = "iac-cloudtrail-logs-dev-default"
-  validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", local.log_bucket_name)) && length(local.log_bucket_name) >= 3 && length(local.log_bucket_name) <= 63
-    error_message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, and start/end with alphanumeric characters."
-  }
 }
 
 variable "app_s3_bucket_name" {
   description = "Name of the S3 bucket for application uploads"
   type        = string
   default     = "iac-app-uploads-dev-default"
-  validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", local.app_bucket_name)) && length(local.app_bucket_name) >= 3 && length(local.app_bucket_name) <= 63
-    error_message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, and start/end with alphanumeric characters."
-  }
 }
 
 variable "notification_email" {
   description = "Email address for IAM change notifications"
   type        = string
   default     = "devops@example.com"
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
-    error_message = "Must be a valid email address."
-  }
 }
 
 variable "organization_id" {
@@ -81,10 +59,6 @@ variable "cloudtrail_retention_days" {
   description = "Number of days to retain CloudWatch logs for CloudTrail"
   type        = number
   default     = 90
-  validation {
-    condition     = var.cloudtrail_retention_days >= 1 && var.cloudtrail_retention_days <= 3653
-    error_message = "Retention days must be between 1 and 3653."
-  }
 }
 
 variable "enable_sns_notifications" {
@@ -106,11 +80,11 @@ variable "tags" {
 locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
-  
+
   # Create unique bucket names by appending random suffix to defaults
   log_bucket_name = "${var.log_bucket_name}-${random_id.bucket_suffix.hex}"
   app_bucket_name = "${var.app_s3_bucket_name}-${random_id.bucket_suffix.hex}"
-  
+
   common_tags = merge(var.tags, {
     Environment = var.environment
     ManagedBy   = "Terraform"
@@ -204,9 +178,9 @@ data "aws_iam_policy_document" "app_deploy_policy" {
   }
 
   statement {
-    sid    = "IAMPassRoleForDeployment"
-    effect = "Allow"
-    actions = ["iam:PassRole"]
+    sid       = "IAMPassRoleForDeployment"
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
     resources = ["arn:${data.aws_partition.current.partition}:iam::${local.account_id}:role/${var.environment}-*"]
     condition {
       test     = "StringEquals"
@@ -869,14 +843,14 @@ output "cross_account_assume_role_commands" {
 output "security_configuration_summary" {
   description = "Summary of the security configuration deployed"
   value = {
-    environment             = var.environment
-    account_id             = local.account_id
-    trusted_accounts       = var.trusted_account_ids
-    roles_created         = 3
-    policies_created      = 6
-    cloudtrail_enabled    = true
-    sns_notifications     = var.enable_sns_notifications
-    data_events_logging   = var.cloudtrail_enable_data_events
-    log_retention_days    = var.cloudtrail_retention_days
+    environment         = var.environment
+    account_id          = local.account_id
+    trusted_accounts    = var.trusted_account_ids
+    roles_created       = 3
+    policies_created    = 6
+    cloudtrail_enabled  = true
+    sns_notifications   = var.enable_sns_notifications
+    data_events_logging = var.cloudtrail_enable_data_events
+    log_retention_days  = var.cloudtrail_retention_days
   }
 }

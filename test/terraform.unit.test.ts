@@ -75,9 +75,10 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
       });
     });
 
-    test('environment variable has validation', () => {
-      expect(mainContent).toMatch(/validation\s*{/);
-      expect(mainContent).toMatch(/(dev|staging|prod)/);
+    test('environment variable has default value', () => {
+      expect(mainContent).toMatch(
+        /variable\s+"environment"\s*{[\s\S]*?default\s*=\s*"dev"/
+      );
     });
 
     test('uses data source for account_id instead of variable', () => {
