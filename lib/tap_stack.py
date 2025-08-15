@@ -202,72 +202,76 @@ def create_infrastructure(export_outputs=True):
 
   # Security Groups
   public_sg = ec2.SecurityGroup(f"public-sg-{environment}",
-    description="Security group for public subnets",
+    description="Security group for public subnets - Web traffic and SSH access",
     vpc_id=vpc.id,
     ingress=[
       ec2.SecurityGroupIngressArgs(
-        description="SSH - Restricted access based on environment",
+        description="SSH - Environment-aware access control",
         from_port=22,
         to_port=22,
         protocol="tcp",
-        cidr_blocks=ssh_allowed_cidrs  # Environment-aware: VPC CIDR in prod/staging, 0.0.0.0/0 in dev
+        cidr_blocks=ssh_allowed_cidrs  # Secure: VPC CIDR in prod/staging, 0.0.0.0/0 in dev only
       ),
       ec2.SecurityGroupIngressArgs(
-        description="HTTP",
+        description="HTTP - Web traffic",
         from_port=80,
         to_port=80,
         protocol="tcp",
-        cidr_blocks=["0.0.0.0/0"]
+        cidr_blocks=["0.0.0.0/0"]  # Required for web access
       ),
       ec2.SecurityGroupIngressArgs(
-        description="HTTPS",
+        description="HTTPS - Secure web traffic",
         from_port=443,
         to_port=443,
         protocol="tcp",
-        cidr_blocks=["0.0.0.0/0"]
+        cidr_blocks=["0.0.0.0/0"]  # Required for secure web access
       )
     ],
     egress=[
       ec2.SecurityGroupEgressArgs(
+        description="All outbound traffic",
         from_port=0,
         to_port=0,
         protocol="-1",
-        cidr_blocks=["0.0.0.0/0"]
+        cidr_blocks=["0.0.0.0/0"]  # Required for internet access
       )
     ],
     tags={
       "Environment": environment,
       "Team": team,
       "Project": project,
-      "Name": f"public-sg-{environment}"
+      "Name": f"public-sg-{environment}",
+      "SecurityLevel": "Public"
     }
   )
 
   private_sg = ec2.SecurityGroup(f"private-sg-{environment}",
-    description="Security group for private subnets",
+    description="Security group for private subnets - Internal VPC traffic only",
     vpc_id=vpc.id,
     ingress=[
       ec2.SecurityGroupIngressArgs(
-        description="All traffic from VPC",
+        description="All internal VPC traffic - Secure internal communication",
         from_port=0,
         to_port=0,
         protocol="-1",
-        cidr_blocks=[vpc.cidr_block]
+        cidr_blocks=[vpc.cidr_block]  # Secure: Only allows traffic from within the VPC
       )
     ],
     egress=[
       ec2.SecurityGroupEgressArgs(
+        description="All outbound traffic via NAT Gateway",
         from_port=0,
         to_port=0,
         protocol="-1",
-        cidr_blocks=["0.0.0.0/0"]
+        cidr_blocks=["0.0.0.0/0"]  # Required for internet access through NAT Gateway
       )
     ],
     tags={
       "Environment": environment,
       "Team": team,
       "Project": project,
-      "Name": f"private-sg-{environment}"
+      "Name": f"private-sg-{environment}",
+      "SecurityLevel": "Private"
     }
   )
 
