@@ -670,7 +670,7 @@ output "db_secret_arn" {
 
 ## Key Features and Best Practices Implemented:
 
-### 🏗️ **Infrastructure Design**
+### 🏗️ **Infrastructure Designs**
 - **Multi-region setup** with us-east-1 (primary) and us-west-2 (secondary)
 - **VPC with public/private subnets** in each region using 10.0.0.0/16 CIDR
 - **NAT Gateways** for secure outbound internet access from private subnets
