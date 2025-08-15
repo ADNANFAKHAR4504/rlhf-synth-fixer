@@ -15,8 +15,8 @@ interface RegionMap {
 }
 
 const REGION_KEYS: RegionMap = {
-  "us-east-2": "us-east-2",
-  "us-west-1": "us-west-1"
+  "us-east-2": "us_east_2",
+  "us-west-1": "us_west_1"
 };
 
 function loadOutputs(): TerraformOutputs {
