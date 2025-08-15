@@ -10,6 +10,12 @@
             "MaxLength": 16,
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
         },
+        "DBPassword": {
+            "Type": "String",
+            "NoEcho": true,
+            "Default": "/myapp/database/password",
+            "Description": "SSM Parameter Store parameter name containing the database password"
+        },
         "DBPasswordParameterName": {
             "Type": "String",
             "Default": "/myapp/database/password",
@@ -437,7 +443,6 @@
         },
         "PrivateRoute1": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "NATGateway1",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable1"
@@ -450,7 +455,6 @@
         },
         "PrivateRoute2": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "NATGateway2",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable2"
@@ -696,7 +700,6 @@
         },
         "LambdaInvokePermission": {
             "Type": "AWS::Lambda::Permission",
-            "DependsOn": "MyAppS3Bucket",
             "Properties": {
                 "Action": "lambda:InvokeFunction",
                 "FunctionName": {
@@ -791,7 +794,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:ssm:${DBPasswordParameterName}}}"
+                    "Fn::Sub": "{{resolve:ssm:${DBPassword}}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
@@ -885,6 +888,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-LambdaFunction"
+                }
+            }
+        },
+        "DatabasePasswordParameterName": {
+            "Description": "SSM Parameter Store name for database password",
+            "Value": {
+                "Ref": "DBPasswordParameterName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DBPasswordParameterName"
                 }
             }
         }

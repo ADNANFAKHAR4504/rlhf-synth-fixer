@@ -15,12 +15,9 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
-    Default: 'SecurePassword123!'
-    Description: 'Database master password'
-    MinLength: 8
-    MaxLength: 128
-    AllowedPattern: >-
-      ^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$
+    Default: '/myapp/database/password'
+    Description: >-
+      SSM Parameter Store parameter name containing the database password
 
   DBPasswordParameterName:
     Type: String
@@ -36,16 +33,9 @@ Parameters:
     AllowedValues: ['development', 'staging', 'production']
 
 Resources:
-  # SSM Parameter for Database Password
-  DatabasePasswordParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Ref DBPasswordParameterName
-      Type: String
-      Value: !Ref DBPassword
-      Description: 'Database password for MyApp RDS instance'
-      Tags:
-        Environment: !Ref Environment
+  # Note: SSM Parameter /myapp/database/password must exist before deployment
+  # Created via: aws ssm put-parameter --name "/myapp/database/password" \
+  #   --value "SecurePassword123!" --type "SecureString" --region us-west-2
 
   # VPC Configuration
   MyAppVPC:
@@ -452,7 +442,6 @@ Resources:
   # RDS PostgreSQL Instance
   MyAppRDSInstance:
     Type: AWS::RDS::DBInstance
-    DependsOn: DatabasePasswordParameter
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -461,7 +450,7 @@ Resources:
       Engine: postgres
       EngineVersion: '13.15'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:ssm:${DBPasswordParameterName}}}'
+      MasterUserPassword: !Sub '{{resolve:ssm:${DBPassword}}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true

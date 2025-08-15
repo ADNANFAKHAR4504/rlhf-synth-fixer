@@ -45,9 +45,7 @@ describe('TapStack CloudFormation Template', () => {
       const param = template.Parameters.DBPassword;
       expect(param.Type).toBe('String');
       expect(param.NoEcho).toBe(true);
-      expect(param.Default).toBe('SecurePassword123!');
-      expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(128);
+      expect(param.Default).toBe('/myapp/database/password');
     });
 
     test('should have DBPasswordParameterName parameter', () => {
@@ -169,7 +167,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.PrivateRoute2).toBeDefined();
       
       const privateRoute1 = template.Resources.PrivateRoute1;
-      expect(privateRoute1.DependsOn).toBe('NATGateway1');
+      const privateRoute2 = template.Resources.PrivateRoute2;
+      
+      // Routes reference NAT Gateways directly, no explicit DependsOn needed
+      expect(privateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway1' });
+      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway2' });
     });
   });
 
@@ -242,20 +244,17 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.LambdaInvokePermission).toBeDefined();
       const permission = template.Resources.LambdaInvokePermission;
       expect(permission.Type).toBe('AWS::Lambda::Permission');
-      expect(permission.DependsOn).toBe('MyAppS3Bucket');
       expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
       expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
+      expect(permission.Properties.SourceArn).toEqual({ 'Fn::Sub': '${MyAppS3Bucket}/*' });
     });
   });
 
   describe('SSM Parameter', () => {
-    test('should have database password parameter', () => {
-      expect(template.Resources.DatabasePasswordParameter).toBeDefined();
-      const param = template.Resources.DatabasePasswordParameter;
-      expect(param.Type).toBe('AWS::SSM::Parameter');
-      expect(param.Properties.Type).toBe('SecureString');
-      expect(param.Properties.Value).toEqual({ Ref: 'DBPassword' });
-      expect(param.Properties.Name).toEqual({ Ref: 'DBPasswordParameterName' });
+    test('should reference existing SSM parameter', () => {
+      // The template now references an existing SSM parameter instead of creating one
+      expect(template.Parameters.DBPassword.Type).toBe('String');
+      expect(template.Parameters.DBPassword.Default).toBe('/myapp/database/password');
     });
   });
 
@@ -298,13 +297,8 @@ describe('TapStack CloudFormation Template', () => {
     test('should use SSM parameter for database password', () => {
       const rds = template.Resources.MyAppRDSInstance;
       expect(rds.Properties.MasterUserPassword).toEqual({
-        'Fn::Sub': '{{resolve:ssm:${DBPasswordParameterName}}}'
+        'Fn::Sub': '{{resolve:ssm:${DBPassword}}}'
       });
-    });
-
-    test('should depend on SSM parameter', () => {
-      const rds = template.Resources.MyAppRDSInstance;
-      expect(rds.DependsOn).toContain('DatabasePasswordParameter');
     });
   });
 
@@ -449,13 +443,15 @@ describe('TapStack CloudFormation Template', () => {
       const privateRoute1 = template.Resources.PrivateRoute1;
       const privateRoute2 = template.Resources.PrivateRoute2;
       
-      expect(privateRoute1.DependsOn).toBe('NATGateway1');
-      expect(privateRoute2.DependsOn).toBe('NATGateway2');
+      // Routes reference NAT Gateways directly, no explicit DependsOn needed
+      expect(privateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway1' });
+      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway2' });
     });
 
     test('should have proper dependency for Lambda permission', () => {
       const permission = template.Resources.LambdaInvokePermission;
-      expect(permission.DependsOn).toBe('MyAppS3Bucket');
+      // Lambda permission references S3 bucket directly, no explicit DependsOn needed
+      expect(permission.Properties.SourceArn).toEqual({ 'Fn::Sub': '${MyAppS3Bucket}/*' });
     });
   });
 
@@ -481,12 +477,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3); // DBUsername, DBPasswordParameterName, Environment
+      expect(parameterCount).toBe(4); // DBUsername, DBPassword, DBPasswordParameterName, Environment
     });
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(5); // PrimaryS3BucketName, AccessLogsS3BucketName, RDSInstanceEndpoint, VPCId, LambdaFunctionArn
+      expect(outputCount).toBe(6); // PrimaryS3BucketName, AccessLogsS3BucketName, RDSInstanceEndpoint, VPCId, LambdaFunctionArn, DatabasePasswordParameterName
     });
   });
 });
