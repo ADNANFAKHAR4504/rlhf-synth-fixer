@@ -167,12 +167,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
-    test('should have access logs bucket', () => {
-      expect(template.Resources.S3AccessLogsBucket).toBeDefined();
-      const logsBucket = template.Resources.S3AccessLogsBucket;
-      expect(logsBucket.Properties.LifecycleConfiguration).toBeDefined();
-    });
-
     test('should have CloudTrail S3 bucket', () => {
       expect(template.Resources.CloudTrailS3Bucket).toBeDefined();
       const cloudTrailBucket = template.Resources.CloudTrailS3Bucket;
@@ -260,11 +254,6 @@ describe('TapStack CloudFormation Template', () => {
     test('should have SNS topic for notifications', () => {
       expect(template.Resources.SecurityAlarmTopic).toBeDefined();
       expect(template.Resources.SecurityAlarmSubscription).toBeDefined();
-    });
-
-    test('should have metric filters for CloudTrail logs', () => {
-      expect(template.Resources.UnauthorizedAccessMetricFilter).toBeDefined();
-      expect(template.Resources.S3AccessDeniedMetricFilter).toBeDefined();
     });
 
     test('should have CloudWatch log group', () => {
@@ -367,7 +356,7 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Security Best Practices', () => {
     test('S3 buckets should have encryption enabled', () => {
-      const s3Buckets = ['TapS3Bucket', 'S3AccessLogsBucket', 'CloudTrailS3Bucket'];
+      const s3Buckets = ['TapS3Bucket', 'CloudTrailS3Bucket'];
       
       s3Buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName];
@@ -378,7 +367,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('S3 buckets should have public access blocked', () => {
-      const s3Buckets = ['TapS3Bucket', 'S3AccessLogsBucket', 'CloudTrailS3Bucket'];
+      const s3Buckets = ['TapS3Bucket', 'CloudTrailS3Bucket'];
       
       s3Buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName];

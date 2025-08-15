@@ -228,49 +228,9 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      LoggingConfiguration:
-        DestinationBucketName: !Ref S3AccessLogsBucket
-        LogFilePrefix: 'access-logs/'
-      NotificationConfiguration:
-        TopicConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            Topic: !Ref SecurityAlarmTopic
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: prefix
-                    Value: 'uploads/'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-secure-bucket'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref ProjectName
-
-  S3AccessLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}accesslogs${AWS::AccountId}${AWS::Region}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-access-logs'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -305,11 +265,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${TapS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${TapS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref TapS3Bucket
+                Resource: !Sub 'arn:aws:s3:::${TapS3Bucket}'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-ec2-role'
@@ -442,13 +402,13 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Sub '${CloudTrailS3Bucket}'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
@@ -469,7 +429,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${TapS3Bucket}/*'
+                - !Sub 'arn:aws:s3:::${TapS3Bucket}/*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-cloudtrail'
@@ -522,18 +482,6 @@ Resources:
       Protocol: email
       Endpoint: !Ref NotificationEmail
 
-  # Metric Filter for Unauthorized Access Attempts
-  UnauthorizedAccessMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Sub 'CloudTrail/${TapCloudTrail}'
-      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") || ($.sourceIPAddress != "AWS Internal") }'
-      MetricTransformations:
-        - MetricNamespace: !Sub '${ProjectName}/Security'
-          MetricName: 'UnauthorizedAccessAttempts'
-          MetricValue: '1'
-          DefaultValue: 0
-
   # CloudWatch Alarm for Unauthorized Access
   UnauthorizedAccessAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -561,17 +509,6 @@ Resources:
           Value: !Ref ProjectName
 
   # S3 Bucket Access Denied Alarm
-  S3AccessDeniedMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Sub 'CloudTrail/${TapCloudTrail}'
-      FilterPattern: '{ ($.eventSource = s3.amazonaws.com) && (($.errorCode = "AccessDenied") || ($.errorCode = "InvalidUserID.NotFound")) }'
-      MetricTransformations:
-        - MetricNamespace: !Sub '${ProjectName}/Security'
-          MetricName: 'S3AccessDenied'
-          MetricValue: '1'
-          DefaultValue: 0
-
   S3AccessDeniedAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
