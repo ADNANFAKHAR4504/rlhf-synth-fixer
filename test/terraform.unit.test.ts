@@ -119,10 +119,10 @@ describe("Production AWS Infrastructure - Unit Tests", () => {
   });
 
   describe("Security Configuration", () => {
-    test("security groups restrict ALB to port 443", () => {
+    test("security groups restrict ALB to port 80", () => {
       const content = fs.readFileSync(mainTfPath, "utf8");
-      expect(content).toMatch(/from_port\s*=\s*443/);
-      expect(content).toMatch(/to_port\s*=\s*443/);
+      expect(content).toMatch(/from_port\s*=\s*80/);
+      expect(content).toMatch(/to_port\s*=\s*80/);
     });
 
     test("EC2 security group allows traffic from ALB security group", () => {

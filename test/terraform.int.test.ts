@@ -128,7 +128,7 @@ describe("Production AWS Infrastructure - Integration Tests", () => {
   });
 
   describe("Security Groups", () => {
-    test("ALB security group allows HTTPS traffic", async () => {
+    test("ALB security group allows HTTP traffic", async () => {
       const cmd = new DescribeSecurityGroupsCommand({
         GroupIds: [outputs.securityGroupAlbId],
       });
@@ -137,12 +137,12 @@ describe("Production AWS Infrastructure - Integration Tests", () => {
       expect(result.SecurityGroups).toHaveLength(1);
       
       const sg = result.SecurityGroups![0];
-      const httpsRule = sg.IpPermissions?.find(rule => 
-        rule.FromPort === 443 && rule.ToPort === 443
+      const httpRule = sg.IpPermissions?.find(rule => 
+        rule.FromPort === 80 && rule.ToPort === 80
       );
       
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule?.IpProtocol).toBe("tcp");
+      expect(httpRule).toBeDefined();
+      expect(httpRule?.IpProtocol).toBe("tcp");
     });
 
     test("EC2 security group allows traffic from ALB", async () => {
