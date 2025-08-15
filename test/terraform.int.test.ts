@@ -13,6 +13,7 @@ const logs = new AWS.CloudWatchLogs();
 describe('Serverless Infrastructure Integration Tests', () => {
   let projectName: string;
   let randomSuffix: string;
+  let vpcId: string;
 
   beforeAll(async () => {
     // Get the project name and random suffix from Terraform outputs
@@ -25,7 +26,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
       
       // Extract project name from any resource name
       const apiUrl = parsedOutputs.api_gateway_url?.value || '';
-      projectName = 'serverless-app-291262';
+      projectName = 'serverless-app';
+      
+      // Extract VPC ID from outputs
+      vpcId = parsedOutputs.vpc_id?.value || '';
       
       // Extract random suffix from lambda function names
       const lambdaNames = parsedOutputs.lambda_function_names?.value || [];
@@ -35,20 +39,16 @@ describe('Serverless Infrastructure Integration Tests', () => {
       }
     } catch (error) {
       console.warn('Could not get Terraform outputs, using defaults');
-      projectName = 'serverless-app-291262';
+      projectName = 'serverless-app';
       randomSuffix = '';
+      vpcId = '';
     }
   }, 30000);
 
   describe('VPC and Networking', () => {
     test('should have VPC created with correct configuration', async () => {
       const vpcs = await ec2.describeVpcs({
-        Filters: [
-          {
-            Name: 'tag:Project',
-            Values: [projectName]
-          }
-        ]
+        VpcIds: [vpcId]
       }).promise();
 
       expect(vpcs.Vpcs).toHaveLength(1);
@@ -61,8 +61,8 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const subnets = await ec2.describeSubnets({
         Filters: [
           {
-            Name: 'tag:Project',
-            Values: [projectName]
+            Name: 'vpc-id',
+            Values: [vpcId]
           }
         ]
       }).promise();
@@ -82,8 +82,8 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const igws = await ec2.describeInternetGateways({
         Filters: [
           {
-            Name: 'tag:Project',
-            Values: [projectName]
+            Name: 'attachment.vpc-id',
+            Values: [vpcId]
           }
         ]
       }).promise();
@@ -243,8 +243,8 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const securityGroups = await ec2.describeSecurityGroups({
         Filters: [
           {
-            Name: 'tag:Project',
-            Values: [projectName]
+            Name: 'vpc-id',
+            Values: [vpcId]
           },
           {
             Name: 'group-name',
@@ -263,8 +263,8 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const securityGroups = await ec2.describeSecurityGroups({
         Filters: [
           {
-            Name: 'tag:Project',
-            Values: [projectName]
+            Name: 'vpc-id',
+            Values: [vpcId]
           },
           {
             Name: 'group-name',
