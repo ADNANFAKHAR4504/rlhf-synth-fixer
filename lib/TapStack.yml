@@ -15,6 +15,7 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
+    Default: 'SecurePassword123!'
     Description: 'Database master password'
     MinLength: 8
     MaxLength: 128

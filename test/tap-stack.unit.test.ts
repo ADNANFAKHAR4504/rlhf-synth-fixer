@@ -45,6 +45,7 @@ describe('TapStack CloudFormation Template', () => {
       const param = template.Parameters.DBPassword;
       expect(param.Type).toBe('String');
       expect(param.NoEcho).toBe(true);
+      expect(param.Default).toBe('SecurePassword123!');
       expect(param.MinLength).toBe(8);
       expect(param.MaxLength).toBe(128);
     });
