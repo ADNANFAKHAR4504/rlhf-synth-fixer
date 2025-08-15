@@ -11,14 +11,16 @@ def setup_codepipeline() -> Dict:
   source_bucket = aws.s3.Bucket(
     "pipeline-source-bucket",
     bucket_prefix="infra-src-",
-    force_destroy=True,
-    server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-      rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-          sse_algorithm="AES256"
-        )
-      )]
-    ),
+    force_destroy=True
+  )
+
+  aws.s3.BucketServerSideEncryptionConfigurationV2(
+    f"pipeline-source-bucket-encryption",
+    bucket=source_bucket.id,
+    rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+      apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        sse_algorithm="aws:kms"
+      ))]
   )
 
   # Artifact store bucket
