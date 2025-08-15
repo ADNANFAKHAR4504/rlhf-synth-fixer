@@ -25,8 +25,17 @@ function loadOutputs(): StackOutputs {
   const raw = fs.readFileSync(outputsPath, 'utf8');
   const json = JSON.parse(raw);
   // Support either a flat object of outputs, or a nested { outputs: {...} }
-  const outputs = (json.outputs ?? json) as Partial<StackOutputs>;
-  return outputs as StackOutputs;
+  const rawOutputs = (json.outputs ?? json) as Record<string, any>;
+  // Normalize Terraform -json format where each key is an object: { value, type, sensitive }
+  const normalized: Record<string, any> = {};
+  for (const [key, val] of Object.entries(rawOutputs)) {
+    if (val && typeof val === 'object' && 'value' in val) {
+      normalized[key] = (val as any).value;
+    } else {
+      normalized[key] = val;
+    }
+  }
+  return normalized as unknown as StackOutputs;
 }
 
 function assertString(value: unknown, field: string) {
