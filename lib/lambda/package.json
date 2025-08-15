@@ -1,0 +1,32 @@
+{
+  "name": "data-processor-lambda",
+  "version": "1.0.0",
+  "description": "Production Lambda function for serverless data processing",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/client-kms": "^3.400.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.45.0",
+    "@aws-sdk/types": "^3.400.0"
+  },
+  "scripts": {
+    "test": "node test.js",
+    "lint": "eslint index.js",
+    "build": "npm install --production",
+    "package": "zip -r lambda-function.zip index.js package.json node_modules/",
+    "clean": "rm -rf node_modules/ lambda-function.zip"
+  },
+  "keywords": [
+    "lambda",
+    "aws",
+    "serverless",
+    "data-processing"
+  ],
+  "author": "Infrastructure Team",
+  "license": "MIT"
+}

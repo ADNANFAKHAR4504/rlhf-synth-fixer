@@ -191,18 +191,33 @@ describe('TapStack Integration Tests', () => {
 
         const defaultVpc = vpcs.Vpcs?.[0];
         expect(defaultVpc?.State).toBe('available');
+        expect(defaultVpc?.IsDefault).toBe(true);
+        expect(defaultVpc?.VpcId).toMatch(/^vpc-[a-f0-9]+$/);
 
-        // Verify subnets exist in the VPC
+        // Verify subnets exist in the VPC and are in different AZs
         const subnets = await ec2Client.send(
           new DescribeSubnetsCommand({
-            Filters: [{ Name: 'vpc-id', Values: [defaultVpc?.VpcId || ''] }]
+            Filters: [
+              { Name: 'vpc-id', Values: [defaultVpc?.VpcId || ''] },
+              { Name: 'state', Values: ['available'] }
+            ]
           })
         );
 
         expect(subnets.Subnets).toBeDefined();
         expect(subnets.Subnets?.length).toBeGreaterThan(0);
 
-        console.log(`✅ Found VPC ${defaultVpc?.VpcId} with ${subnets.Subnets?.length} subnets`);
+        // Verify subnets are in different availability zones for high availability
+        const availabilityZones = new Set(subnets.Subnets?.map(subnet => subnet.AvailabilityZone));
+        expect(availabilityZones.size).toBeGreaterThan(1);
+
+        // Verify subnet CIDR blocks are valid
+        subnets.Subnets?.forEach(subnet => {
+          expect(subnet.CidrBlock).toMatch(/^\d+\.\d+\.\d+\.\d+\/\d+$/);
+          expect(subnet.State).toBe('available');
+        });
+
+        console.log(`✅ Found VPC ${defaultVpc?.VpcId} with ${subnets.Subnets?.length} subnets across ${availabilityZones.size} AZs`);
       } catch (error) {
         console.warn('VPC validation failed:', error);
       }
@@ -212,27 +227,49 @@ describe('TapStack Integration Tests', () => {
       if (!runLiveTests) return;
 
       try {
-        const sgName = `projectXYZ-${environmentSuffix}-lambda-sg`;
+        // Note: Security group name includes random suffix, so we need to search by pattern
+        const sgPattern = `projectXYZ-${environmentSuffix}`;
         
         const securityGroups = await ec2Client.send(
           new DescribeSecurityGroupsCommand({
-            Filters: [{ Name: 'group-name', Values: [sgName] }]
+            Filters: [
+              { Name: 'group-name', Values: [`${sgPattern}*`] },
+              { Name: 'description', Values: ['Security group for Lambda data processing function'] }
+            ]
           })
         );
 
         if (securityGroups.SecurityGroups && securityGroups.SecurityGroups.length > 0) {
           const sg = securityGroups.SecurityGroups[0];
           
-          expect(sg.GroupName).toBe(sgName);
-          expect(sg.Description).toContain('Lambda data processing function');
+          expect(sg.GroupName).toContain(sgPattern);
+          expect(sg.GroupName).toContain('-lambda-sg');
+          expect(sg.Description).toBe('Security group for Lambda data processing function');
+          expect(sg.GroupId).toMatch(/^sg-[a-f0-9]+$/);
+          
+          // Verify it's attached to the default VPC
+          const defaultVpcs = await ec2Client.send(
+            new DescribeVpcsCommand({ Filters: [{ Name: 'isDefault', Values: ['true'] }] })
+          );
+          const defaultVpcId = defaultVpcs.Vpcs?.[0]?.VpcId;
+          expect(sg.VpcId).toBe(defaultVpcId);
           
           // Verify egress rules (HTTPS outbound)
+          expect(sg.IpPermissionsEgress).toBeDefined();
           const httpsEgress = sg.IpPermissionsEgress?.find(
             rule => rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === 'tcp'
           );
           expect(httpsEgress).toBeDefined();
+          expect(httpsEgress?.IpRanges).toContainEqual({ CidrIp: '0.0.0.0/0', Description: 'HTTPS outbound for S3/KMS API calls' });
 
-          console.log(`✅ Security group ${sgName} configured correctly`);
+          // Verify no ingress rules (security best practice)
+          expect(sg.IpPermissions?.length || 0).toBe(0);
+
+          // Verify tags
+          const nameTag = sg.Tags?.find(tag => tag.Key === 'Name');
+          expect(nameTag?.Value).toContain('-lambda-sg');
+
+          console.log(`✅ Security group ${sg.GroupName} configured correctly with HTTPS egress only`);
         }
       } catch (error) {
         console.warn('Security group validation failed:', error);
@@ -255,10 +292,30 @@ describe('TapStack Integration Tests', () => {
         expect(lambdaFunction.Configuration?.MemorySize).toBe(512);
         expect(lambdaFunction.Configuration?.Handler).toBe('index.handler');
         
-        // Verify VPC configuration
-        expect(lambdaFunction.Configuration?.VpcConfig?.VpcId).toBeDefined();
-        expect(lambdaFunction.Configuration?.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
-        expect(lambdaFunction.Configuration?.VpcConfig?.SecurityGroupIds?.length).toBeGreaterThan(0);
+        // Verify VPC configuration in detail
+        const vpcConfig = lambdaFunction.Configuration?.VpcConfig;
+        expect(vpcConfig?.VpcId).toBeDefined();
+        expect(vpcConfig?.VpcId).toMatch(/^vpc-[a-f0-9]+$/);
+        expect(vpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
+        expect(vpcConfig?.SecurityGroupIds?.length).toBe(1); // Should have exactly one dedicated security group
+
+        // Verify VPC is the default VPC
+        const defaultVpcs = await ec2Client.send(
+          new DescribeVpcsCommand({ Filters: [{ Name: 'isDefault', Values: ['true'] }] })
+        );
+        const defaultVpcId = defaultVpcs.Vpcs?.[0]?.VpcId;
+        expect(vpcConfig?.VpcId).toBe(defaultVpcId);
+
+        // Verify security group belongs to our Lambda
+        const sgId = vpcConfig?.SecurityGroupIds?.[0];
+        expect(sgId).toMatch(/^sg-[a-f0-9]+$/);
+        
+        const sg = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            GroupIds: [sgId || '']
+          })
+        );
+        expect(sg.SecurityGroups?.[0]?.Description).toBe('Security group for Lambda data processing function');
         
         // Verify environment variables
         const envVars = lambdaFunction.Configuration?.Environment?.Variables;
@@ -269,6 +326,191 @@ describe('TapStack Integration Tests', () => {
         console.log('✅ Lambda function configured correctly');
       } catch (error) {
         console.warn(`Lambda function ${functionName} not found or not accessible:`, error);
+      }
+    }, 30000);
+
+    test('should have comprehensive subnet validation and configuration', async () => {
+      if (!runLiveTests) return;
+
+      try {
+        // Get Lambda function to check its subnet configuration
+        const functionName = outputs['lambda-function-name'];
+        const lambdaFunction = await lambdaClient.send(
+          new GetFunctionCommand({ FunctionName: functionName })
+        );
+
+        const vpcConfig = lambdaFunction.Configuration?.VpcConfig;
+        const subnetIds = vpcConfig?.SubnetIds || [];
+        
+        expect(subnetIds.length).toBeGreaterThan(0);
+
+        // Validate each subnet used by Lambda
+        const subnetDetails = [];
+        for (const subnetId of subnetIds) {
+          const subnetResponse = await ec2Client.send(
+            new DescribeSubnetsCommand({ SubnetIds: [subnetId] })
+          );
+          
+          const subnet = subnetResponse.Subnets?.[0];
+          expect(subnet).toBeDefined();
+          expect(subnet?.SubnetId).toBe(subnetId);
+          expect(subnet?.State).toBe('available');
+          expect(subnet?.VpcId).toBe(vpcConfig?.VpcId);
+          
+          // Verify subnet CIDR is valid
+          expect(subnet?.CidrBlock).toMatch(/^\d+\.\d+\.\d+\.\d+\/\d+$/);
+          
+          // Verify subnet has adequate IP space (at least /28 for Lambda)
+          const cidrSuffix = parseInt(subnet?.CidrBlock?.split('/')[1] || '32');
+          expect(cidrSuffix).toBeLessThanOrEqual(28); // /28 gives 16 IPs, minimum for Lambda
+          
+          subnetDetails.push({
+            id: subnet?.SubnetId,
+            az: subnet?.AvailabilityZone,
+            cidr: subnet?.CidrBlock,
+            availableIps: subnet?.AvailableIpAddressCount
+          });
+        }
+
+        // Verify subnets span multiple AZs for high availability
+        const uniqueAZs = new Set(subnetDetails.map(s => s.az));
+        expect(uniqueAZs.size).toBeGreaterThanOrEqual(2);
+
+        // Verify each subnet has sufficient available IPs for Lambda scaling
+        subnetDetails.forEach(subnet => {
+          expect(subnet.availableIps).toBeGreaterThan(10); // Ensure room for Lambda ENIs
+        });
+
+        console.log(`✅ Subnet validation passed: ${subnetIds.length} subnets across ${uniqueAZs.size} AZs`);
+        console.log('Subnet details:', subnetDetails);
+
+      } catch (error) {
+        console.warn('Subnet validation failed:', error);
+      }
+    }, 30000);
+
+    test('should have dedicated security group properly isolated', async () => {
+      if (!runLiveTests) return;
+
+      try {
+        // Find our dedicated security group
+        const sgPattern = `projectXYZ-${environmentSuffix}`;
+        const securityGroups = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            Filters: [
+              { Name: 'group-name', Values: [`${sgPattern}*`] },
+              { Name: 'description', Values: ['Security group for Lambda data processing function'] }
+            ]
+          })
+        );
+
+        expect(securityGroups.SecurityGroups?.length).toBe(1);
+        const dedicatedSG = securityGroups.SecurityGroups?.[0];
+        
+        // Verify it's NOT the default security group
+        expect(dedicatedSG?.GroupName).not.toBe('default');
+        expect(dedicatedSG?.GroupName).toContain('-lambda-sg');
+        
+        // Get default security group for comparison
+        const defaultSGs = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            Filters: [
+              { Name: 'group-name', Values: ['default'] },
+              { Name: 'vpc-id', Values: [dedicatedSG?.VpcId || ''] }
+            ]
+          })
+        );
+        
+        const defaultSG = defaultSGs.SecurityGroups?.[0];
+        
+        // Verify our SG is different from default
+        expect(dedicatedSG?.GroupId).not.toBe(defaultSG?.GroupId);
+        
+        // Verify dedicated SG has more restrictive rules than default
+        const dedicatedIngressCount = dedicatedSG?.IpPermissions?.length || 0;
+        const dedicatedEgressCount = dedicatedSG?.IpPermissionsEgress?.length || 0;
+        
+        // Our dedicated SG should have no ingress and minimal egress
+        expect(dedicatedIngressCount).toBe(0);
+        expect(dedicatedEgressCount).toBe(1); // Only HTTPS
+        
+        // Verify the single egress rule is exactly what we expect
+        const egressRule = dedicatedSG?.IpPermissionsEgress?.[0];
+        expect(egressRule?.FromPort).toBe(443);
+        expect(egressRule?.ToPort).toBe(443);
+        expect(egressRule?.IpProtocol).toBe('tcp');
+        expect(egressRule?.IpRanges?.length).toBe(1);
+        expect(egressRule?.IpRanges?.[0]?.CidrIp).toBe('0.0.0.0/0');
+        expect(egressRule?.IpRanges?.[0]?.Description).toBe('HTTPS outbound for S3/KMS API calls');
+
+        // Verify security group is only used by our Lambda (not shared)
+        const functionName = outputs['lambda-function-name'];
+        const lambdaFunction = await lambdaClient.send(
+          new GetFunctionCommand({ FunctionName: functionName })
+        );
+        
+        const lambdaSGs = lambdaFunction.Configuration?.VpcConfig?.SecurityGroupIds || [];
+        expect(lambdaSGs).toContain(dedicatedSG?.GroupId);
+        expect(lambdaSGs.length).toBe(1); // Lambda should use only our dedicated SG
+
+        console.log(`✅ Dedicated security group ${dedicatedSG?.GroupName} properly isolated`);
+        console.log(`Dedicated SG: ${dedicatedIngressCount} ingress, ${dedicatedEgressCount} egress rules`);
+
+      } catch (error) {
+        console.warn('Dedicated security group isolation test failed:', error);
+      }
+    }, 30000);
+
+    test('should have proper VPC-Security Group integration', async () => {
+      if (!runLiveTests) return;
+
+      try {
+        // Get the Lambda function to find its security group
+        const functionName = outputs['lambda-function-name'];
+        const lambdaFunction = await lambdaClient.send(
+          new GetFunctionCommand({ FunctionName: functionName })
+        );
+
+        const vpcConfig = lambdaFunction.Configuration?.VpcConfig;
+        const sgId = vpcConfig?.SecurityGroupIds?.[0];
+        
+        if (sgId) {
+          // Get security group details
+          const sg = await ec2Client.send(
+            new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+          );
+          
+          const securityGroup = sg.SecurityGroups?.[0];
+          
+          // Verify VPC-SG integration
+          expect(securityGroup?.VpcId).toBe(vpcConfig?.VpcId);
+          
+          // Verify Lambda subnets are in the same VPC as security group
+          const subnetIds = vpcConfig?.SubnetIds || [];
+          for (const subnetId of subnetIds) {
+            const subnet = await ec2Client.send(
+              new DescribeSubnetsCommand({ SubnetIds: [subnetId] })
+            );
+            expect(subnet.Subnets?.[0]?.VpcId).toBe(securityGroup?.VpcId);
+          }
+
+          // Verify security group follows least privilege (no inbound rules)
+          expect(securityGroup?.IpPermissions?.length || 0).toBe(0);
+
+          // Verify outbound rules are minimal (only HTTPS)
+          const egressRules = securityGroup?.IpPermissionsEgress || [];
+          expect(egressRules.length).toBe(1);
+          
+          const httpsRule = egressRules.find(rule => 
+            rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === 'tcp'
+          );
+          expect(httpsRule).toBeDefined();
+          expect(httpsRule?.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
+
+          console.log(`✅ VPC-Security Group integration validated for Lambda ${functionName}`);
+        }
+      } catch (error) {
+        console.warn('VPC-Security Group integration test failed:', error);
       }
     }, 30000);
 

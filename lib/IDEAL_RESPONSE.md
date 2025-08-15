@@ -38,6 +38,8 @@ A comprehensive CDKTF implementation for serverless data processing using AWS se
 ```typescript
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
+import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
+import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
@@ -45,15 +47,13 @@ import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
-import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
-import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketNotification } from '@cdktf/provider-aws/lib/s3-bucket-notification';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import {
   App,
   AssetType,
@@ -63,6 +63,7 @@ import {
 } from 'cdktf';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export class TapStack extends TerraformStack {
   constructor(
@@ -74,6 +75,16 @@ export class TapStack extends TerraformStack {
       stateBucketRegion?: string;
       awsRegion?: string;
       vpcId?: string;
+      subnetIds?: string[];
+      availabilityZones?: string[];
+      createVpc?: boolean;
+      vpcCidr?: string;
+      lambdaConfig?: {
+        runtime?: string;
+        timeout?: number;
+        memorySize?: number;
+        architecture?: string;
+      };
       defaultTags?: { tags: Record<string, string> };
     }
   ) {
@@ -93,25 +104,67 @@ export class TapStack extends TerraformStack {
     // Get environment suffix from props, defaulting to 'dev'
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // Project prefix for consistent naming with random suffix to avoid conflicts
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const projectPrefix = `projectXYZ-${environmentSuffix}-${randomSuffix}`;
+    // Project prefix for consistent naming - deterministic for redeployments
+    const projectPrefix = `projectXYZ-${environmentSuffix}`;
 
-    // VPC Configuration - use data source to get default VPC instead of hardcoded value
-    const defaultVpc = new DataAwsVpc(this, 'default-vpc', {
-      default: true,
-    });
-    const vpcId = props?.vpcId || defaultVpc.id;
+    // VPC Configuration - fully parameterized for production
+    let vpcId: string;
+    let subnetIds: string[];
 
-    // Get subnets for the specified VPC
-    const vpcSubnets = new DataAwsSubnets(this, 'vpc-subnets', {
-      filter: [
-        {
-          name: 'vpc-id',
-          values: [vpcId],
-        },
-      ],
-    });
+    if (props?.vpcId && props?.subnetIds) {
+      // Production mode: Use explicitly provided VPC and subnets
+      vpcId = props.vpcId;
+      subnetIds = props.subnetIds;
+
+      // Validate the provided configuration
+      if (props.subnetIds.length < 2) {
+        throw new Error(
+          'Production deployment requires at least 2 subnets for high availability'
+        );
+      }
+    } else if (props?.createVpc) {
+      // Advanced mode: Create a new VPC with the specified configuration
+      throw new Error(
+        'VPC creation mode not implemented in this version. Please provide vpcId and subnetIds for production use.'
+      );
+    } else {
+      // Development/fallback mode: Use default VPC (with warning)
+      console.warn(
+        '⚠️  Using default VPC fallback. For production, specify vpcId and subnetIds in props.'
+      );
+
+      const defaultVpc = new DataAwsVpc(this, 'default-vpc', {
+        default: true,
+      });
+      vpcId = defaultVpc.id;
+
+      // Get subnets for the default VPC
+      const vpcSubnets = new DataAwsSubnets(this, 'vpc-subnets', {
+        filter: [
+          {
+            name: 'vpc-id',
+            values: [vpcId],
+          },
+          {
+            name: 'state',
+            values: ['available'],
+          },
+        ],
+      });
+      subnetIds = vpcSubnets.ids;
+    }
+
+    // Validate availability zones if specified
+    if (props?.availabilityZones && props.availabilityZones.length > 0) {
+      if (
+        props.subnetIds &&
+        props.subnetIds.length !== props.availabilityZones.length
+      ) {
+        throw new Error(
+          'Number of subnets must match number of availability zones'
+        );
+      }
+    }
 
     // Create dedicated security group for Lambda
     const lambdaSecurityGroup = new SecurityGroup(
@@ -286,9 +339,35 @@ export class TapStack extends TerraformStack {
       }),
     });
 
-    // Lambda function code asset from dedicated asset file
+    // Lambda configuration with production defaults
+    const lambdaConfig = {
+      runtime: props?.lambdaConfig?.runtime || 'nodejs18.x',
+      timeout: props?.lambdaConfig?.timeout || 300,
+      memorySize: props?.lambdaConfig?.memorySize || 512,
+      architecture: props?.lambdaConfig?.architecture || 'x86_64',
+    };
+
+    // Enhanced Lambda function code asset management with build support
+    const lambdaAssetPath = path.resolve(__dirname, 'lambda');
+
+    // Validate Lambda asset exists
+    if (!fs.existsSync(lambdaAssetPath)) {
+      throw new Error(
+        `Lambda asset directory not found: ${lambdaAssetPath}. Please ensure lambda code exists.`
+      );
+    }
+
+    // Validate required files exist
+    const requiredFiles = ['index.js', 'package.json'];
+    for (const file of requiredFiles) {
+      const filePath = path.join(lambdaAssetPath, file);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Required Lambda file not found: ${filePath}`);
+      }
+    }
+
     const lambdaAsset = new TerraformAsset(this, 'lambda-asset', {
-      path: path.resolve(__dirname, 'lambda'),
+      path: lambdaAssetPath,
       type: AssetType.ARCHIVE,
     });
 
@@ -369,12 +448,14 @@ export class TapStack extends TerraformStack {
         filename: lambdaAsset.path,
         sourceCodeHash: lambdaAsset.assetHash,
         handler: 'index.handler',
-        runtime: 'nodejs18.x',
+        runtime: lambdaConfig.runtime,
         role: lambdaRole.arn,
-        timeout: 300,
-        memorySize: 512,
+        timeout: lambdaConfig.timeout,
+        memorySize: lambdaConfig.memorySize,
+        architectures: [lambdaConfig.architecture],
+        publish: props?.environmentSuffix === 'prod', // Enable versioning for production
         vpcConfig: {
-          subnetIds: vpcSubnets.ids,
+          subnetIds: subnetIds,
           securityGroupIds: [lambdaSecurityGroup.id],
         },
         environment: {
@@ -471,21 +552,41 @@ The stack accepts comprehensive props for flexible deployment:
 
 ```typescript
 interface TapStackProps {
-  environmentSuffix?: string;    // Default: 'dev'
-  stateBucket?: string;         // For Terraform state
-  stateBucketRegion?: string;   // State bucket region
-  awsRegion?: string;           // Default: 'us-east-1'
-  vpcId?: string;               // VPC ID (default: 'vpc-0abcd1234')
+  environmentSuffix?: string;        // Default: 'dev'
+  stateBucket?: string;             // For Terraform state
+  stateBucketRegion?: string;       // State bucket region
+  awsRegion?: string;               // Default: 'us-east-1'
+  vpcId?: string;                   // VPC ID for production use
+  subnetIds?: string[];             // Subnet IDs for Lambda deployment
+  availabilityZones?: string[];     // AZ validation for subnets
+  createVpc?: boolean;              // Create new VPC (not implemented)
+  vpcCidr?: string;                 // VPC CIDR block
+  lambdaConfig?: {                  // Lambda configuration
+    runtime?: string;               // Default: 'nodejs18.x'
+    timeout?: number;               // Default: 300s
+    memorySize?: number;            // Default: 512MB
+    architecture?: string;          // Default: 'x86_64'
+  };
   defaultTags?: { tags: Record<string, string> };
 }
 ```
 
 ## Security Enhancements
 
-1. **VPC Parameterization**: Configurable VPC ID for flexible deployment across environments
-2. **Dedicated Security Group**: Custom security group with controlled egress rules instead of default
-3. **Restrictive KMS Policy**: Service-specific permissions with ViaService conditions
-4. **Clean Asset Management**: Lambda code organized in dedicated asset structure
+1. **Production VPC Configuration**: Three deployment modes:
+   - **Production**: Explicit `vpcId` and `subnetIds` with minimum 2 subnets for HA
+   - **Development**: Fallback to default VPC with clear warning
+   - **Advanced**: Placeholder for VPC creation (not implemented)
+
+2. **Enhanced Lambda Asset Management**: 
+   - Comprehensive file validation (`index.js`, `package.json`)
+   - Modern AWS SDK v3 integration
+   - Configurable runtime, timeout, memory, and architecture
+   - Production versioning support
+
+3. **Dedicated Security Group**: Custom security group with controlled HTTPS egress only
+4. **Restrictive KMS Policy**: Service-specific permissions with ViaService conditions
+5. **Production-Ready Defaults**: Optimized configuration for production environments
 
 ## Outputs
 

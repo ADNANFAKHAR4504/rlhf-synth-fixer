@@ -123,7 +123,11 @@ interface TapStackProps {
 **Resolution**: Parameterized VPC ID via props with sensible defaults
 **Enhancement**:
 ```typescript
-const vpcId = props?.vpcId || 'vpc-0abcd1234';
+// VPC Configuration - use data source to get default VPC instead of hardcoded value
+const defaultVpc = new DataAwsVpc(this, 'default-vpc', {
+  default: true,
+});
+const vpcId = props?.vpcId || defaultVpc.id;
 ```
 
 ### 11. Default Security Group Usage
