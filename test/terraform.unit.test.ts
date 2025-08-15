@@ -33,9 +33,12 @@ describe('tap_stack.tf (static unit checks)', () => {
 
   test('has region guard enforcing us-west-2', () => {
     expect(tf).toMatch(/data\s+"aws_region"\s+"current"/);
-    expect(tf).toMatch(
-      /precondition[\s\S]*data\.aws_region\.current\.name\s*==\s*"us-west-2"/
-    );
+    // Accept either deprecated .name or current .id accessor
+    const guardMatches =
+      /precondition[\s\S]*data\.aws_region\.current\.(name|id)\s*==\s*"us-west-2"/.test(
+        tf
+      );
+    expect(guardMatches).toBe(true);
   });
 
   test('S3 data bucket policy enforces TLS and SSE-KMS', () => {

@@ -89,6 +89,25 @@ variable "enable_cloudtrail" {
   default     = true
 }
 
+# Optionally reuse an existing CloudTrail and its bucket to avoid service limits
+variable "reuse_existing_cloudtrail" {
+  description = "If true, reuse an existing CloudTrail instead of creating one"
+  type        = bool
+  default     = false
+}
+
+variable "existing_cloudtrail_arn" {
+  description = "ARN of an existing CloudTrail to reuse when reuse_existing_cloudtrail=true"
+  type        = string
+  default     = ""
+}
+
+variable "existing_cloudtrail_bucket_name" {
+  description = "Name of an existing S3 bucket used by the reused CloudTrail"
+  type        = string
+  default     = ""
+}
+
 ########################
 # Data sources & region guard
 ########################
@@ -335,19 +354,19 @@ resource "aws_instance" "secure" {
 # CloudTrail – logs to trail bucket (no KMS to avoid key-policy coupling)
 ########################
 resource "aws_s3_bucket" "trail" {
-  count  = var.enable_cloudtrail ? 1 : 0
+  count  = var.enable_cloudtrail && !var.reuse_existing_cloudtrail ? 1 : 0
   bucket = var.trail_bucket_name
   tags   = { Environment = "Production" }
 }
 
 resource "aws_s3_bucket_versioning" "trail" {
-  count  = var.enable_cloudtrail ? 1 : 0
+  count  = var.enable_cloudtrail && !var.reuse_existing_cloudtrail ? 1 : 0
   bucket = aws_s3_bucket.trail[0].id
   versioning_configuration { status = "Enabled" }
 }
 
 resource "aws_s3_bucket_public_access_block" "trail" {
-  count                   = var.enable_cloudtrail ? 1 : 0
+  count                   = var.enable_cloudtrail && !var.reuse_existing_cloudtrail ? 1 : 0
   bucket                  = aws_s3_bucket.trail[0].id
   block_public_acls       = true
   block_public_policy     = true
@@ -356,7 +375,7 @@ resource "aws_s3_bucket_public_access_block" "trail" {
 }
 
 resource "aws_s3_bucket_policy" "trail_delivery" {
-  count  = var.enable_cloudtrail ? 1 : 0
+  count  = var.enable_cloudtrail && !var.reuse_existing_cloudtrail ? 1 : 0
   bucket = aws_s3_bucket.trail[0].id
   policy = jsonencode({
     Version = "2012-10-17",
@@ -381,7 +400,7 @@ resource "aws_s3_bucket_policy" "trail_delivery" {
 }
 
 resource "aws_cloudtrail" "audit" {
-  count                         = var.enable_cloudtrail ? 1 : 0
+  count                         = var.enable_cloudtrail && !var.reuse_existing_cloudtrail ? 1 : 0
   name                          = "tap-audit-trail"
   s3_bucket_name                = aws_s3_bucket.trail[0].id
   include_global_service_events = true
@@ -422,9 +441,9 @@ resource "aws_iam_user_policy" "deploy" {
         ],
         Resource = compact([
           aws_s3_bucket.data.arn,
-          (var.enable_cloudtrail && length(aws_s3_bucket.trail) > 0 ? aws_s3_bucket.trail[0].arn : null),
+          (var.enable_cloudtrail && !var.reuse_existing_cloudtrail && length(aws_s3_bucket.trail) > 0 ? aws_s3_bucket.trail[0].arn : null),
           "${aws_s3_bucket.data.arn}/*",
-          (var.enable_cloudtrail && length(aws_s3_bucket.trail) > 0 ? "${aws_s3_bucket.trail[0].arn}/*" : null)
+          (var.enable_cloudtrail && !var.reuse_existing_cloudtrail && length(aws_s3_bucket.trail) > 0 ? "${aws_s3_bucket.trail[0].arn}/*" : null)
         ])
       },
       {
@@ -457,7 +476,11 @@ resource "aws_iam_user_policy" "deploy" {
           "cloudtrail:GetTrailStatus", "cloudtrail:StartLogging", "cloudtrail:StopLogging",
           "cloudtrail:PutEventSelectors", "cloudtrail:GetEventSelectors"
         ],
-        Resource = var.enable_cloudtrail ? (length(aws_cloudtrail.audit) > 0 ? aws_cloudtrail.audit[0].arn : "*") : "*"
+        Resource = var.enable_cloudtrail ? (
+          var.reuse_existing_cloudtrail && var.existing_cloudtrail_arn != "" ? var.existing_cloudtrail_arn : (
+            length(aws_cloudtrail.audit) > 0 ? aws_cloudtrail.audit[0].arn : "*"
+          )
+        ) : "*"
       },
       {
         Sid      = "ReadIdentity",
@@ -479,12 +502,20 @@ output "data_bucket_name" {
 
 output "trail_bucket_name" {
   description = "Trail S3 bucket name"
-  value       = var.enable_cloudtrail && length(aws_s3_bucket.trail) > 0 ? aws_s3_bucket.trail[0].id : ""
+  value = var.enable_cloudtrail ? (
+    var.reuse_existing_cloudtrail && var.existing_cloudtrail_bucket_name != "" ? var.existing_cloudtrail_bucket_name : (
+      length(aws_s3_bucket.trail) > 0 ? aws_s3_bucket.trail[0].id : ""
+    )
+  ) : ""
 }
 
 output "cloudtrail_arn" {
   description = "CloudTrail ARN"
-  value       = var.enable_cloudtrail && length(aws_cloudtrail.audit) > 0 ? aws_cloudtrail.audit[0].arn : ""
+  value = var.enable_cloudtrail ? (
+    var.reuse_existing_cloudtrail && var.existing_cloudtrail_arn != "" ? var.existing_cloudtrail_arn : (
+      length(aws_cloudtrail.audit) > 0 ? aws_cloudtrail.audit[0].arn : ""
+    )
+  ) : ""
 }
 
 output "ec2_instance_id" {
