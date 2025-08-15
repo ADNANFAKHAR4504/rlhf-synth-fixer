@@ -28,6 +28,11 @@ variable "vpc_cidr" {
   type        = string
   default     = "10.0.0.0/16"
 }
+variable "enable_cloudtrail" {
+  description = "Whether to create a CloudTrail trail in this environment"
+  type        = bool
+  default     = false
+}
 
 ########################
 # Data sources
@@ -490,11 +495,11 @@ resource "aws_autoscaling_group" "private" {
 resource "aws_cloudwatch_log_group" "system_logs" {
   name              = local.n.logs
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.main.arn
   tags              = merge(local.common_tags, { Name = local.n.logs })
 }
 
 resource "aws_cloudtrail" "main" {
+  count                         = var.enable_cloudtrail ? 1 : 0
   name                          = local.n.cloudtrail
   s3_bucket_name                = aws_s3_bucket.cloudtrail.bucket
   s3_key_prefix                 = "cloudtrail-logs"
@@ -518,5 +523,5 @@ output "vpc_id" { value = aws_vpc.main.id }
 output "private_subnet_ids" { value = aws_subnet.private[*].id }
 output "public_subnet_ids" { value = aws_subnet.public[*].id }
 output "kms_key_arn" { value = aws_kms_key.main.arn }
-output "cloudtrail_name" { value = aws_cloudtrail.main.name }
+output "cloudtrail_name" { value = try(aws_cloudtrail.main[0].name, null) }
 output "cloudtrail_s3_bucket" { value = aws_s3_bucket.cloudtrail.bucket }
