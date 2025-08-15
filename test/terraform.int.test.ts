@@ -41,7 +41,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       // Check attached policies
       const policies = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
       expect(policies.AttachedPolicies).toBeDefined();
-      expect(policies.AttachedPolicies.length).toBeGreaterThan(0);
+      expect(policies.AttachedPolicies?.length).toBeGreaterThan(0);
     }, testTimeout);
 
     test('Instance profile exists and is associated with role', async () => {
@@ -63,13 +63,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const sg = await ec2.describeSecurityGroups({ GroupIds: [sgId] }).promise();
       
       expect(sg.SecurityGroups).toBeDefined();
-      expect(sg.SecurityGroups.length).toBe(1);
+      expect(sg.SecurityGroups?.length).toBe(1);
       
-      const group = sg.SecurityGroups[0];
+      const group = sg.SecurityGroups?.[0];
+      expect(group).toBeDefined();
       
       // Check ingress rules
-      const httpIngress = group.IpPermissions?.find(rule => rule.FromPort === 80);
-      const httpsIngress = group.IpPermissions?.find(rule => rule.FromPort === 443);
+      const httpIngress = group?.IpPermissions?.find(rule => rule.FromPort === 80);
+      const httpsIngress = group?.IpPermissions?.find(rule => rule.FromPort === 443);
       
       expect(httpIngress).toBeDefined();
       expect(httpsIngress).toBeDefined();
@@ -82,7 +83,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const sg = await ec2.describeSecurityGroups({ GroupIds: [sgId] }).promise();
       
       expect(sg.SecurityGroups).toBeDefined();
-      expect(sg.SecurityGroups.length).toBe(1);
+      expect(sg.SecurityGroups?.length).toBe(1);
     }, testTimeout);
 
     test('Database tier security group exists with restricted access', async () => {
@@ -92,12 +93,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const sg = await ec2.describeSecurityGroups({ GroupIds: [sgId] }).promise();
       
       expect(sg.SecurityGroups).toBeDefined();
-      expect(sg.SecurityGroups.length).toBe(1);
+      expect(sg.SecurityGroups?.length).toBe(1);
       
-      const group = sg.SecurityGroups[0];
+      const group = sg.SecurityGroups?.[0];
+      expect(group).toBeDefined();
       
       // Check that DB only allows access from app and web tiers
-      const dbIngress = group.IpPermissions?.find(rule => rule.FromPort === 3306);
+      const dbIngress = group?.IpPermissions?.find(rule => rule.FromPort === 3306);
       expect(dbIngress).toBeDefined();
       
       // Should only have security group references, not CIDR blocks
