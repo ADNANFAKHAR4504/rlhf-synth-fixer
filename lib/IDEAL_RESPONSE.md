@@ -105,7 +105,7 @@ variable "rds_username" {
   description = "RDS master username"
   type        = string
   sensitive   = true
-  default     = "admin"
+  default     = "dbadmin"
 }
 
 variable "rds_password" {
