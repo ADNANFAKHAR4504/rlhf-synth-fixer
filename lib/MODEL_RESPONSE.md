@@ -1,4 +1,4 @@
-Insert here the Model Response that failedAWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure and compliant AWS environment with S3, RDS, EC2, IAM, VPC, CloudFront, CloudTrail, GuardDuty, and WAF'
 
 Parameters:

@@ -1,4 +1,4 @@
-Insert here the Model Response that failedAWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure and compliant AWS environment with S3, RDS, EC2, IAM, VPC, CloudFront, CloudTrail, GuardDuty, and WAF'
 
 Parameters:
@@ -53,12 +53,6 @@ Parameters:
     Default: admin
     Description: RDS master username
     NoEcho: true
-    
-  DBPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    Description: RDS master password (min 8 characters)
 
 Mappings:
   RegionMap:
@@ -68,7 +62,6 @@ Mappings:
       AMI: ami-0841edc20334f9287  # Amazon Linux 2 AMI
 
 Resources:
-  # ===== VPC AND NETWORKING (Constraint 15: Multi-AZ subnets) =====
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -79,7 +72,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-vpc'
 
-  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -93,7 +85,6 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnets (Multi-AZ)
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -116,7 +107,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-public-subnet-2'
 
-  # Private Subnets (Multi-AZ) - Constraint 4: RDS in private subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -137,7 +127,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-private-subnet-2'
 
-  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -166,7 +155,6 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  # NAT Gateway for private subnets
   NATGatewayEIP:
     Type: AWS::EC2::EIP
     DependsOn: AttachGateway
@@ -209,7 +197,6 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  # ===== SECURITY GROUPS (Constraint 7: Only SSH and HTTP) =====
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -269,7 +256,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-db-sg'
 
-  # ===== S3 BUCKETS (Constraint 1: Server-side encryption) =====
   ApplicationBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -292,7 +278,6 @@ Resources:
             Status: Enabled
             NoncurrentVersionExpirationInDays: 30
 
-  # Constraint 10: CloudTrail logs to encrypted S3
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -335,7 +320,6 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
 
-  # Constraint 3: CloudFront access logging bucket
   CloudFrontLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -356,7 +340,6 @@ Resources:
             Status: Enabled
             ExpirationInDays: 90
 
-  # ===== IAM ROLES AND POLICIES (Constraint 2: Least privilege) =====
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -390,7 +373,6 @@ Resources:
       Roles:
         - !Ref EC2Role
 
-  # Constraint 6: MFA enforcement policy
   MFAEnforcementPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -409,16 +391,14 @@ Resources:
             Action:
               - iam:ChangePassword
               - iam:GetUser
-            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${aws:username}'
+            Resource: '*'
           - Sid: AllowManageOwnMFA
             Effect: Allow
             Action:
               - iam:CreateVirtualMFADevice
               - iam:EnableMFADevice
               - iam:ResyncMFADevice
-            Resource:
-              - !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/${aws:username}'
-              - !Sub 'arn:aws:iam::${AWS::AccountId}:user/${aws:username}'
+            Resource: '*'
           - Sid: DenyAllExceptUnlessSignedInWithMFA
             Effect: Deny
             NotAction:
@@ -434,7 +414,6 @@ Resources:
               BoolIfExists:
                 'aws:MultiFactorAuthPresent': 'false'
 
-  # ===== EC2 INSTANCES (Constraint 13: Encrypted EBS) =====
   WebServerLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -452,7 +431,7 @@ Resources:
             Ebs:
               VolumeSize: 20
               VolumeType: gp3
-              Encrypted: true  # Constraint 13: EBS encryption
+              Encrypted: true
               DeleteOnTermination: true
         UserData:
           Fn::Base64: !Sub |
@@ -474,7 +453,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-web-server'
 
-  # Constraint 5: CloudWatch Alarm for CPU > 80%
   CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -499,7 +477,6 @@ Resources:
       TopicName: !Sub '${ProjectName}-${Environment}-alarms'
       DisplayName: CloudWatch Alarms
 
-  # ===== APPLICATION LOAD BALANCER =====
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -539,7 +516,6 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # ===== AWS WAF (Constraint 11: WAF attached to ALB) =====
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -583,7 +559,6 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
 
-  # ===== RDS DATABASE (Constraints 4, 12, 14: Private subnets, deletion protection, automated backups) =====
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -598,30 +573,30 @@ Resources:
 
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Retain  # Additional protection
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.43'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: '{{resolve:secretsmanager:your-secret-id:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
-      StorageEncrypted: true  # Encryption at rest
+      StorageEncrypted: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
-      BackupRetentionPeriod: 7  # Constraint 14: Automated backups
+      BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      DeletionProtection: true  # Constraint 12: Deletion protection
-      MultiAZ: true  # High availability
+      DeletionProtection: true
+      MultiAZ: true
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-db'
 
-  # ===== CLOUDFRONT (Constraint 3: Access logging enabled) =====
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -642,7 +617,7 @@ Resources:
             Headers: ['*']
         Enabled: true
         Comment: !Sub '${ProjectName}-${Environment} CloudFront Distribution'
-        Logging:  # Constraint 3: Access logging enabled
+        Logging:
           Bucket: !GetAtt CloudFrontLogsBucket.DomainName
           Prefix: cloudfront-logs/
           IncludeCookies: false
@@ -651,7 +626,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-cf'
 
-  # ===== CLOUDTRAIL (Constraint 10: Enabled with encrypted S3) =====
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
@@ -667,7 +641,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-cloudtrail'
 
-  # ===== GUARDDUTY (Constraint 8: Enabled across supported regions) =====
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
     Properties:
@@ -677,7 +650,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-guardduty'
 
-  # ===== LAMBDA FUNCTION (Constraint 9: Explicit timeout) =====
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -698,7 +670,7 @@ Resources:
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 30  # Constraint 9: Explicit timeout
+      Timeout: 30
       Code:
         ZipFile: |
           import json
@@ -772,7 +744,6 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-${Environment}-guardduty-id'
 
-  # Compliance Status Outputs
   ComplianceStatus:
     Description: Compliance constraints satisfied
     Value: |
@@ -794,9 +765,10 @@ Outputs:
 
   SecurityFeatures:
     Description: Security features implemented
-    Value: !Sub |
+    Value: |
       Encryption: S3 (AES256), EBS (encrypted), RDS (encrypted)
       Network: VPC with public/private subnets, NAT Gateway, Security Groups
       Monitoring: CloudTrail, GuardDuty, CloudWatch Alarms
       Protection: WAF, MFA enforcement, Deletion protection
-      Compliance: All 15 constraints satisfied
+      Compliance: All 15 constraints
+      
