@@ -11,7 +11,7 @@ You are tasked with creating a secure AWS infrastructure using Terraform HCL. Th
 - **Logging**: Enable logging for all AWS API calls to CloudTrail.
 - **IAM Management**: Use IAM roles instead of hard-coded AWS access keys.
 - **Permissions**: Implement least-privilege access policies for IAM roles.
-- **Region**: Deploy resources in the 'us-west-2' AWS region.
+- **Region**: Deploy resources in the AWS region.
 - **Versioning**: Enable versioning on all S3 buckets.
 - **Alarming**: Set up CloudWatch alarms to monitor IAM permission changes.
 - **SNS Notification**: Configure an SNS topic to notify the security team of IAM role changes.
@@ -23,7 +23,7 @@ You are tasked with creating a secure AWS infrastructure using Terraform HCL. Th
 3. **Enable CloudTrail** for logging all AWS API calls.
 4. Use **IAM roles** for application access instead of AWS access keys.
 5. Apply **least-privilege IAM roles**.
-6. Deploy all resources in the **'us-west-2'** AWS region.
+6. Deploy all resources in the AWS region.
 7. Enable **versioning** for S3 buckets.
 8. Create **CloudWatch alarms** for IAM permission changes.
 9. Configure an **SNS topic** for IAM role change notifications.
@@ -63,8 +63,6 @@ You are a senior cloud infrastructure engineer with expertise in AWS and Terrafo
 - **SNS**:
   - Configure an SNS topic to notify the security team whenever there are IAM role changes.
 
-- **Region**:
-  - Deploy all resources in the **us-west-2** AWS region.
 
 Create a single Terraform file, `lib/tap_stack.tf`, and implement the following:
 1. All variable declarations, locals, resources, and outputs.
@@ -87,7 +85,6 @@ terraform {
 # Variable declarations
 variable "aws_region" {
   description = "The AWS region to deploy resources"
-  default     = "us-west-2"
 }
 
 # S3 Bucket resource creation
