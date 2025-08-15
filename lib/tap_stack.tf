@@ -299,11 +299,6 @@ resource "aws_cloudtrail" "secure_data_trail" {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.secure_storage.arn}/*"]
     }
-
-    data_resource {
-      type   = "AWS::S3::Bucket"
-      values = [aws_s3_bucket.secure_storage.arn]
-    }
   }
 
   tags = merge(local.common_tags, {

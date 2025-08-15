@@ -197,7 +197,7 @@ aws_s3_bucket.secure_storage.arn,
 ]
 Condition = {
 IpAddressIfExists = {
-"aws:SourceIp" = var.allowed_ip_ranges
+"aws:SourceIp" = var.allowed*ip_ranges
 }
 Bool = {
 "aws:ViaAWSService" = "false"
@@ -207,7 +207,7 @@ Bool = {
 {
 Sid = "AllowFromSpecificIPs"
 Effect = "Allow"
-Principal = "_"
+Principal = "*"
 Action = [
 "s3:GetObject",
 "s3:PutObject",
@@ -334,11 +334,6 @@ exclude_management_event_sources = []
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.secure_storage.arn}/*"]
-    }
-
-    data_resource {
-      type   = "AWS::S3::Bucket"
-      values = [aws_s3_bucket.secure_storage.arn]
     }
 
 }
