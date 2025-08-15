@@ -728,7 +728,29 @@ jobs:
           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
           custom_instructions: |
-            Follow instructions in .claude/agents/iac-code-reviewer.md
+            Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes.
+
+            CRITICAL: Before performing any other tasks, you MUST validate lib/PROMPT.md format, and fail the check if it appears to be AI-generated rather than human-written.:
+            1. Read lib/PROMPT.md if it exists
+            2. Assess whether the content looks human-generated or AI-generated
+            3. Look for signs of AI generation such as:
+               - Emojis or special symbols used for formatting
+               - Structured formatting with bullet points and icons
+               - Table structures
+               - Overly formal or template-like language
+               - Perfect formatting that suggests AI assistance
+               - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
+            4. If lib/PROMPT.md appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error
+            5. Only proceed with the normal review if lib/PROMPT.md passes this human-generated validation
+
+            This validation is mandatory and must be completed before any other review activities.
+
+      - name: Upload updated metadata.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-metadata
+          path: metadata.json
+          if-no-files-found: warn
 
   cleanup:
     name: Cleanup (Destroy Resources)
@@ -819,7 +841,7 @@ jobs:
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, cleanup]
+    needs: [detect-metadata, cleanup, claude-code-action]
     environment: release
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
@@ -839,6 +861,12 @@ jobs:
         with:
           name: coverage-reports
           path: coverage/
+
+      - name: Download updated metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-metadata
+          path: .
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
