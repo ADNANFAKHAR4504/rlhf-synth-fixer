@@ -393,8 +393,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(primaryFinancialAlias!.AliasName).toContain("primary");
       expect(primaryFinancialAlias!.TargetKeyId).toBeDefined();
       
-      // Verify the alias points to our KMS key by checking if the ARN contains the key ID
-      expect(outputs.kms_key_primary_arn).toContain(primaryFinancialAlias!.TargetKeyId!);
+      // Verify the alias points to our KMS key by extracting the key ID from ARN and comparing
+      const primaryKeyIdFromArn = outputs.kms_key_primary_arn.split('/').pop();
+      expect(primaryKeyIdFromArn).toBe(primaryFinancialAlias!.TargetKeyId!);
 
       // Check secondary region aliases
       const secondaryAliasResponse = await secondaryKMS.send(new ListAliasesCommand({}));
@@ -408,8 +409,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(secondaryFinancialAlias!.AliasName).toContain("secondary");
       expect(secondaryFinancialAlias!.TargetKeyId).toBeDefined();
       
-      // Verify the alias points to our KMS key by checking if the ARN contains the key ID
-      expect(outputs.kms_key_secondary_arn).toContain(secondaryFinancialAlias!.TargetKeyId!);
+      // Verify the alias points to our KMS key by extracting the key ID from ARN and comparing
+      const secondaryKeyIdFromArn = outputs.kms_key_secondary_arn.split('/').pop();
+      expect(secondaryKeyIdFromArn).toBe(secondaryFinancialAlias!.TargetKeyId!);
     });
   });
 
