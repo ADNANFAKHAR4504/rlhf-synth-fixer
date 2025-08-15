@@ -1,6 +1,5 @@
 # Serverless Infrastructure Design Challenge
 
-```yaml
 We need to create a complete serverless infrastructure in AWS using CloudFormation (YAML format) with API Gateway and Lambda functions. This isn't just a simple setup - we need enterprise-grade security, monitoring, and scalability.
 
 ## The Requirements (and they're pretty specific!)
@@ -35,4 +34,3 @@ We need to create a complete serverless infrastructure in AWS using CloudFormati
 4. **API Gateway Name**: 'prod-MyAPI'
 5. **Runtime**: Latest Lambda runtime versions for security
 6. **Validation**: Must pass AWS CloudFormation linter and SAM CLI validation
-```
