@@ -67,11 +67,11 @@ cat > /var/www/html/index.html << 'HTML'
 <!DOCTYPE html>
 <html>
 <head>
-    <title>${environment} Environment</title>
+    <title>__ENVIRONMENT__ Environment</title>
 </head>
 <body>
-    <h1>Welcome to ${environment} Environment</h1>
-    <p>This server is running in the ${environment} environment.</p>
+    <h1>Welcome to __ENVIRONMENT__ Environment</h1>
+    <p>This server is running in the __ENVIRONMENT__ environment.</p>
     <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
     <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
 </body>
@@ -554,9 +554,7 @@ resource "aws_instance" "web_servers" {
   vpc_security_group_ids = [aws_security_group.web_sg[each.key].id]
   subnet_id             = aws_subnet.public_subnets["${each.key}-public-0"].id
   iam_instance_profile  = aws_iam_instance_profile.ec2_profile[each.key].name
-
-  user_data = replace(var.user_data_template, "${environment}", each.key)
-
+  user_data = replace(var.user_data_template, "__ENVIRONMENT__", each.key)
   root_block_device {
     volume_type = "gp3"
     volume_size = each.key == "production" ? 20 : 10
