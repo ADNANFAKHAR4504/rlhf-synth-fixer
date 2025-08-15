@@ -6,68 +6,59 @@ Region: All resources must be created in us-east-2. The provider is already conf
 
 Networking:
 
-Create a new VPC with both public and private subnets across two Availability Zones.
+Please Create a new VPC with both public and private subnets across two Availability Zones.
 
-Add appropriate Internet Gateway, NAT Gateway, route tables, and routing for public/private traffic separation.
+Also please Add appropriate Internet Gateway, NAT Gateway, route tables, and routing for public/private traffic separation.
 
 Compute:
 
-Deploy an EC2 Auto Scaling Group (Amazon Linux 2 AMI) in the public subnets, configured for high availability across both AZs.
+Please Deploy an EC2 Auto Scaling Group (Amazon Linux 2 AMI) in the public subnets, configured for high availability across both AZs.
 
-Use a secure Security Group allowing only HTTP (80), HTTPS (443), and SSH (22) from a restricted CIDR (variable-driven).
+Also Use a secure Security Group allowing only HTTP (80), HTTPS (443), and SSH (22) from a restricted CIDR (variable-driven).
 
-Database:
+For Database:
 
-Provision an RDS instance (PostgreSQL or MySQL, variable-driven) in the private subnets with no public access.
+pls Provision an RDS instance (PostgreSQL or MySQL, variable-driven) in the private subnets with no public access.
 
-Enable encryption at rest, backups, and automatic minor version upgrades.
+Also Enable encryption at rest, backups, and automatic minor version upgrades.
 
-IAM:
+For IAM roles:
 
-Create IAM roles for EC2 and RDS with least privilege access, attaching only AWS managed policies required for the use case.
+Could you pls Create an IAM roles for EC2 and RDS with least privilege access, attaching only AWS managed policies required for the use case.
 
-Storage:
+For AWS Storage:
 
-Create an S3 bucket for application data with server-side encryption, versioning enabled, and public access blocked.
+could you pls Create an S3 bucket for application data with server-side encryption, versioning enabled, and public access blocked.
 
-Auditing:
+For Auditing:
 
-Enable AWS CloudTrail to log all API activity, store logs in the S3 bucket with encryption.
+Pls Enable AWS CloudTrail to log all API activity, store logs in the S3 bucket with encryption.
 
-Structure & Best Practices:
-
-No external modules — build all logic inline.
+Pls follow Structure & Best Practices as mentioned below:
 
 All resources must have consistent tags (environment, project, owner).
 
-Variables for configurable items, sensible defaults for ease of deployment.
+Also pls add Variables for configurable items, sensible defaults for ease of deployment.
 
-Follow Terraform best practices (explicit dependencies, naming conventions, secure defaults).
 
-Outputs:
+In Outputs:
 
-Provide non-sensitive outputs: VPC ID, subnet IDs, EC2 ASG name, RDS endpoint, S3 bucket name, CloudTrail ARN.
+Pls Provide non-sensitive outputs: VPC ID, subnet IDs, EC2 ASG name, RDS endpoint, S3 bucket name, CloudTrail ARN.
 
-No secrets or sensitive data in outputs.
+No secrets or sensitive data in outputs should be there in the outputs.
 
-Additional Conditions:
-
-The file must contain:
+Some more Additional Conditions, The tap_stack.yml file must contain:
 
 All variable declarations (including aws_region)
 
-Any locals needed
+Pls add Any locals needed
 
-All resources
-
-All outputs
-
-This is a brand-new stack — nothing points to existing resources.
+Also Pls All resources and all outputs
 
 Ensure configuration passes terraform validate and produces a valid terraform plan in a clean environment.
 
 Use clear inline comments explaining each section for maintainability.
 
-Deliverable:
+Pls deliver one single file for tap_stask.yml:
 
 Output only the complete contents of ./lib/tap_stack.tf (HCL), meeting all above constraints.
