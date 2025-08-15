@@ -89,6 +89,12 @@ variable "use_cmk" {
   default     = false
 }
 
+variable "create_cloudtrail" {
+  description = "Whether to create a CloudTrail trail (set false if account limit reached)"
+  type        = bool
+  default     = false
+}
+
 variable "s3_data_retention_days" {
   description = "S3 data bucket retention in days"
   type        = number
@@ -569,7 +575,6 @@ resource "random_password" "db_password" {
 resource "aws_db_instance" "main" {
   identifier              = "${local.name_prefix}-database"
   engine                  = var.rds_engine
-  engine_version          = var.rds_engine == "postgres" ? "15.4" : "8.0.35"
   instance_class          = var.rds_instance_class
   allocated_storage       = var.rds_allocated_storage
   max_allocated_storage   = var.rds_allocated_storage * 2
@@ -743,6 +748,7 @@ resource "aws_api_gateway_stage" "main" {
 # CloudTrail (multi-region) to logs bucket
 ########################
 resource "aws_cloudtrail" "main" {
+  count                         = var.create_cloudtrail ? 1 : 0
   name                          = "${local.name_prefix}-cloudtrail"
   s3_bucket_name                = aws_s3_bucket.logs.bucket
   s3_key_prefix                 = "cloudtrail"
@@ -779,7 +785,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSConfigRole"
 }
 
 resource "aws_iam_role_policy" "config_s3" {
@@ -849,7 +855,7 @@ resource "aws_config_config_rule" "restricted_ssh" {
   name = "${local.name_prefix}-restricted-ssh"
   source {
     owner             = "AWS"
-    source_identifier = "RESTRICTED_SSH"
+    source_identifier = "INCOMING_SSH_DISABLED"
   }
   depends_on = [aws_config_configuration_recorder_status.main]
 }
