@@ -76,11 +76,46 @@ variable "aws_region" {
   default = "us-west-2"
 }
 
+# Feature toggles
+variable "enable_ec2" {
+  description = "Whether to create EC2-related resources (security group and instance)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_cloudtrail" {
+  description = "Whether to create CloudTrail and its trail bucket/policy"
+  type        = bool
+  default     = true
+}
+
 ########################
 # Data sources & region guard
 ########################
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+
+# Auto-discovery: default VPC and a default subnet if explicit values are not given
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+  # Prefer default subnets; provider supports this EC2 filter
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
+  }
+}
+
+# Auto-discovery: use AWS managed S3 KMS key if none provided
+data "aws_kms_alias" "s3_managed" {
+  name = "alias/aws/s3"
+}
 
 # Region-safe Amazon Linux 2023 as fallback if instance_ami is not set
 data "aws_ami" "al2023" {
@@ -129,12 +164,18 @@ resource "aws_s3_bucket_versioning" "data" {
   }
 }
 
+locals {
+  effective_vpc_id  = var.vpc_id != "vpc-00000000" && var.vpc_id != "" ? var.vpc_id : try(data.aws_vpc.default.id, null)
+  effective_subnet  = var.subnet_id != "subnet-00000000" && var.subnet_id != "" ? var.subnet_id : try(data.aws_subnets.default.ids[0], null)
+  effective_kms_key = coalesce(var.s3_kms_key_arn, data.aws_kms_alias.s3_managed.target_key_arn)
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
   bucket = aws_s3_bucket.data.id
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
-      kms_master_key_id = var.s3_kms_key_arn
+      kms_master_key_id = local.effective_kms_key
     }
     bucket_key_enabled = true
   }
@@ -237,8 +278,9 @@ resource "aws_iam_role_policy" "s3_tag_policy" {
 # Networking + EC2
 ########################
 resource "aws_security_group" "secure_sg" {
+  count       = var.enable_ec2 && local.effective_vpc_id != null ? 1 : 0
   name_prefix = "secure-sg-"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.effective_vpc_id
 
   ingress {
     description = "SSH"
@@ -272,10 +314,11 @@ locals {
 }
 
 resource "aws_instance" "secure" {
+  count                  = var.enable_ec2 && local.effective_subnet != null && local.effective_vpc_id != null ? 1 : 0
   ami                    = local.effective_ami
   instance_type          = var.instance_type
-  subnet_id              = var.subnet_id
-  vpc_security_group_ids = [aws_security_group.secure_sg.id]
+  subnet_id              = local.effective_subnet
+  vpc_security_group_ids = [aws_security_group.secure_sg[0].id]
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -292,17 +335,20 @@ resource "aws_instance" "secure" {
 # CloudTrail – logs to trail bucket (no KMS to avoid key-policy coupling)
 ########################
 resource "aws_s3_bucket" "trail" {
+  count  = var.enable_cloudtrail ? 1 : 0
   bucket = var.trail_bucket_name
   tags   = { Environment = "Production" }
 }
 
 resource "aws_s3_bucket_versioning" "trail" {
-  bucket = aws_s3_bucket.trail.id
+  count  = var.enable_cloudtrail ? 1 : 0
+  bucket = aws_s3_bucket.trail[0].id
   versioning_configuration { status = "Enabled" }
 }
 
 resource "aws_s3_bucket_public_access_block" "trail" {
-  bucket                  = aws_s3_bucket.trail.id
+  count                   = var.enable_cloudtrail ? 1 : 0
+  bucket                  = aws_s3_bucket.trail[0].id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -310,7 +356,8 @@ resource "aws_s3_bucket_public_access_block" "trail" {
 }
 
 resource "aws_s3_bucket_policy" "trail_delivery" {
-  bucket = aws_s3_bucket.trail.id
+  count  = var.enable_cloudtrail ? 1 : 0
+  bucket = aws_s3_bucket.trail[0].id
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -319,14 +366,14 @@ resource "aws_s3_bucket_policy" "trail_delivery" {
         Effect    = "Allow",
         Principal = { Service = "cloudtrail.amazonaws.com" },
         Action    = "s3:GetBucketAcl",
-        Resource  = aws_s3_bucket.trail.arn
+        Resource  = aws_s3_bucket.trail[0].arn
       },
       {
         Sid       = "AWSCloudTrailWrite",
         Effect    = "Allow",
         Principal = { Service = "cloudtrail.amazonaws.com" },
         Action    = "s3:PutObject",
-        Resource  = "${aws_s3_bucket.trail.arn}/*",
+        Resource  = "${aws_s3_bucket.trail[0].arn}/*",
         Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
       }
     ]
@@ -334,8 +381,9 @@ resource "aws_s3_bucket_policy" "trail_delivery" {
 }
 
 resource "aws_cloudtrail" "audit" {
+  count                         = var.enable_cloudtrail ? 1 : 0
   name                          = "tap-audit-trail"
-  s3_bucket_name                = aws_s3_bucket.trail.id
+  s3_bucket_name                = aws_s3_bucket.trail[0].id
   include_global_service_events = true
   is_multi_region_trail         = false
   enable_logging                = true
@@ -409,7 +457,7 @@ resource "aws_iam_user_policy" "deploy" {
           "cloudtrail:GetTrailStatus", "cloudtrail:StartLogging", "cloudtrail:StopLogging",
           "cloudtrail:PutEventSelectors", "cloudtrail:GetEventSelectors"
         ],
-        Resource = aws_cloudtrail.audit.arn
+        Resource = var.enable_cloudtrail ? (length(aws_cloudtrail.audit) > 0 ? aws_cloudtrail.audit[0].arn : "*") : "*"
       },
       {
         Sid      = "ReadIdentity",
@@ -431,22 +479,22 @@ output "data_bucket_name" {
 
 output "trail_bucket_name" {
   description = "Trail S3 bucket name"
-  value       = aws_s3_bucket.trail.id
+  value       = var.enable_cloudtrail && length(aws_s3_bucket.trail) > 0 ? aws_s3_bucket.trail[0].id : ""
 }
 
 output "cloudtrail_arn" {
   description = "CloudTrail ARN"
-  value       = aws_cloudtrail.audit.arn
+  value       = var.enable_cloudtrail && length(aws_cloudtrail.audit) > 0 ? aws_cloudtrail.audit[0].arn : ""
 }
 
 output "ec2_instance_id" {
   description = "EC2 instance ID"
-  value       = aws_instance.secure.id
+  value       = var.enable_ec2 && length(aws_instance.secure) > 0 ? aws_instance.secure[0].id : ""
 }
 
 output "security_group_id" {
   description = "Security group ID"
-  value       = aws_security_group.secure_sg.id
+  value       = var.enable_ec2 && length(aws_security_group.secure_sg) > 0 ? aws_security_group.secure_sg[0].id : ""
 }
 
 output "iam_role_name" {
