@@ -24,14 +24,6 @@
             "MaxLength": 16,
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
         },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Description": "Master password for RDS instance",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9]*"
-        },
         "InstanceType": {
             "Type": "String",
             "Default": "t3.medium",
@@ -621,6 +613,7 @@
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${AWS::StackName}-database-${EnvironmentSuffix}"
@@ -632,13 +625,13 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-db-password-${EnvironmentSuffix}:SecretString:password}}"
                 },
                 "AllocatedStorage": 20,
                 "MaxAllocatedStorage": 100,
                 "StorageEncrypted": true,
                 "KmsKeyId": "alias/aws/rds",
-                "VpcSecurityGroups": [
+                "VPCSecurityGroups": [
                     {
                         "Ref": "DatabaseSecurityGroup"
                     }

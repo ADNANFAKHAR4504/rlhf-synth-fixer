@@ -35,7 +35,6 @@ describe('TapStack CloudFormation Template', () => {
     test('should have all required parameters', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Parameters.DBUsername).toBeDefined();
-      expect(template.Parameters.DBPassword).toBeDefined();
       expect(template.Parameters.InstanceType).toBeDefined();
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
@@ -49,14 +48,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedPattern).toBe('[a-zA-Z][a-zA-Z0-9]*');
     });
 
-    test('DBPassword parameter should have correct properties', () => {
-      const param = template.Parameters.DBPassword;
-      expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(41);
-      expect(param.AllowedPattern).toBe('[a-zA-Z0-9]*');
-    });
 
     test('InstanceType parameter should have correct properties', () => {
       const param = template.Parameters.InstanceType;
@@ -403,7 +394,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('Database should reference correct security group', () => {
       const rds = template.Resources.DatabaseInstance.Properties;
-      expect(rds.VpcSecurityGroups[0].Ref).toBe('DatabaseSecurityGroup');
+      expect(rds.VPCSecurityGroups[0].Ref).toBe('DatabaseSecurityGroup');
     });
 
     test('ALB should reference correct subnets', () => {
@@ -452,8 +443,5 @@ describe('TapStack CloudFormation Template', () => {
       expect(iamRole['Fn::Sub']).toBeDefined();
     });
 
-    test('sensitive parameters should have NoEcho set', () => {
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
-    });
   });
 });

@@ -19,14 +19,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: 'Master password for RDS instance'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-
   # EC2 instance configuration
   InstanceType:
     Type: String
@@ -370,20 +362,21 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
       EngineVersion: '8.0.35'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password-${EnvironmentSuffix}:SecretString:password}}'
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
       # Encryption at rest is mandatory per requirements
       StorageEncrypted: true
       # Use default KMS key for encryption
       KmsKeyId: alias/aws/rds
-      VpcSecurityGroups:
+      VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       # Enable automated backups
