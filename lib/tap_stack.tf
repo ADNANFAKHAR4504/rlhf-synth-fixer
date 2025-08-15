@@ -732,16 +732,54 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_east" {
   tags = local.common_tags
 }
 
-# Route53 Health Checks for failover
+# CloudWatch Alarms for ALB Health Checks (for Route53 failover)
+resource "aws_cloudwatch_metric_alarm" "alb_health_west" {
+  provider            = aws.west
+  alarm_name          = "tap-alb-health-west"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This metric monitors ALB healthy host count in us-west-2"
+  alarm_actions       = []
+  
+  dimensions = {
+    LoadBalancer = aws_lb.west.arn_suffix
+    TargetGroup  = aws_lb_target_group.west.arn_suffix
+  }
+  
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "alb_health_east" {
+  provider            = aws.east
+  alarm_name          = "tap-alb-health-east"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This metric monitors ALB healthy host count in us-east-2"
+  alarm_actions       = []
+  
+  dimensions = {
+    LoadBalancer = aws_lb.east.arn_suffix
+    TargetGroup  = aws_lb_target_group.east.arn_suffix
+  }
+  
+  tags = local.common_tags
+}
+
+# Route53 Health Checks for failover (CloudWatch Alarm-based)
 resource "aws_route53_health_check" "west" {
-  fqdn                            = aws_lb.west.dns_name
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/health"
-  failure_threshold               = "3"
-  request_interval                = "30"
+  type                            = "CLOUDWATCH_METRIC"
+  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.alb_health_west.alarm_name
   cloudwatch_alarm_region         = "us-west-2"
-  cloudwatch_alarm_name           = "tap-alb-health-west"
   insufficient_data_health_status = "Unhealthy"
   
   tags = merge(local.common_tags, {
@@ -750,14 +788,9 @@ resource "aws_route53_health_check" "west" {
 }
 
 resource "aws_route53_health_check" "east" {
-  fqdn                            = aws_lb.east.dns_name
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/health"
-  failure_threshold               = "3"
-  request_interval                = "30"
+  type                            = "CLOUDWATCH_METRIC"
+  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.alb_health_east.alarm_name
   cloudwatch_alarm_region         = "us-east-2"
-  cloudwatch_alarm_name           = "tap-alb-health-east"
   insufficient_data_health_status = "Unhealthy"
   
   tags = merge(local.common_tags, {
