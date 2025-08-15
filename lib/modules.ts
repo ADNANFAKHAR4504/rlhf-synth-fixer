@@ -434,7 +434,6 @@ EOF
 ...
 `;
 
-
     // Create EC2 instance with security best practices
     this.instance = new Instance(this, 'instance', {
       ami: amazonLinuxAmi.id,

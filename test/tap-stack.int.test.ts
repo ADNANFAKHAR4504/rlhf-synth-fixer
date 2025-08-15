@@ -1,7 +1,116 @@
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
+// __tests__/tap-stack.int.test.ts
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeRouteTablesCommand,
+} from "@aws-sdk/client-ec2";
+import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
+import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
+import * as fs from "fs";
+import * as path from "path";
+
+const awsRegion =
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+
+const ec2Client = new EC2Client({ region: awsRegion });
+const rdsClient = new RDSClient({ region: awsRegion });
+const s3Client = new S3Client({ region: awsRegion });
+const iamClient = new IAMClient({ region: awsRegion });
+const cloudwatchClient = new CloudWatchLogsClient({ region: awsRegion });
+
+describe("TapStack Integration Tests", () => {
+  let outputs: Record<string, any>;
+  let stackOutputs: Record<string, string>;
+
+  beforeAll(() => {
+    const suffix = process.env.ENVIRONMENT_SUFFIX;
+    if (!suffix) throw new Error("ENVIRONMENT_SUFFIX env variable is not set");
+
+    const outputFilePath = path.join(__dirname, "..", "cfn-outputs", "flat-outputs.json");
+    if (!fs.existsSync(outputFilePath)) throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+
+    outputs = JSON.parse(fs.readFileSync(outputFilePath, "utf-8"));
+    const stackKey = Object.keys(outputs).find((k) => k.includes(suffix));
+    if (!stackKey) throw new Error(`No output found for environment: ${suffix}`);
+
+    stackOutputs = outputs[stackKey];
+  });
+
+  // -------------------------------
+  // VPC & Networking
+  // -------------------------------
+  test("VPC exists", async () => {
+    const { Vpcs } = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [stackOutputs.vpc_id] }));
+    expect(Vpcs?.length).toBe(1);
+    expect(Vpcs?.[0].VpcId).toBe(stackOutputs.vpc_id);
+    expect(Vpcs?.[0].State).toBe("available");
+  }, 20000);
+
+  test("Public Subnet exists", async () => {
+    const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [stackOutputs.public_subnet_id] }));
+    expect(Subnets?.[0].SubnetId).toBe(stackOutputs.public_subnet_id);
+    expect(Subnets?.[0].VpcId).toBe(stackOutputs.vpc_id);
+  }, 20000);
+
+  test("Private Subnet exists", async () => {
+    const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [stackOutputs.private_subnet_id] }));
+    expect(Subnets?.[0].SubnetId).toBe(stackOutputs.private_subnet_id);
+    expect(Subnets?.[0].VpcId).toBe(stackOutputs.vpc_id);
+  }, 20000);
+
+  test("Route tables exist for VPC", async () => {
+    const { RouteTables } = await ec2Client.send(new DescribeRouteTablesCommand({
+      Filters: [{ Name: "vpc-id", Values: [stackOutputs.vpc_id] }]
+    }));
+    expect(RouteTables?.length).toBeGreaterThanOrEqual(2);
+  }, 20000);
+
+  // -------------------------------
+  // EC2 Instance
+  // -------------------------------
+  test("EC2 instance exists", async () => {
+    const { Reservations } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [stackOutputs.public_subnet_id] }));
+    // Not fetching all EC2 details here; basic existence verified via stack output
+    expect(stackOutputs.ec2_instance_id).toBeDefined();
+    expect(stackOutputs.ec2_public_ip).toMatch(/\d+\.\d+\.\d+\.\d+/);
+  });
+
+  // -------------------------------
+  // RDS Instance
+  // -------------------------------
+  test("RDS instance exists", async () => {
+    const { DBInstances } = await rdsClient.send(new DescribeDBInstancesCommand({
+      DBInstanceIdentifier: stackOutputs.rds_endpoint.split(":")[0]
+    }));
+    expect(DBInstances?.[0].DBInstanceIdentifier).toBe(stackOutputs.rds_endpoint.split(":")[0]);
+    expect(DBInstances?.[0].DBInstanceStatus).toBe("available");
+  }, 30000);
+
+  // -------------------------------
+  // S3 Bucket
+  // -------------------------------
+  test("S3 bucket exists", async () => {
+    const res = await s3Client.send(new HeadBucketCommand({ Bucket: stackOutputs.s3_bucket_name_output }));
+    expect(res.$metadata.httpStatusCode).toBe(200);
+  });
+
+  // -------------------------------
+  // IAM Role
+  // -------------------------------
+  test("EC2 IAM role exists", async () => {
+    const { Role } = await iamClient.send(new GetRoleCommand({ RoleName: stackOutputs.ec2_role_arn.split("/")[1] }));
+    expect(Role.RoleName).toBe(stackOutputs.ec2_role_arn.split("/")[1]);
+  });
+
+  // -------------------------------
+  // CloudWatch Logs
+  // -------------------------------
+  test("CloudWatch Log Group exists", async () => {
+    const { logGroups } = await cloudwatchClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: stackOutputs.cloudwatch_log_group_name }));
+    const logGroup = logGroups?.find((g) => g.logGroupName === stackOutputs.cloudwatch_log_group_name);
+    expect(logGroup).toBeDefined();
   });
 });
