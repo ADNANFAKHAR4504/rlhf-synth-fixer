@@ -1,5 +1,3 @@
-```yaml
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Secure baseline (us-east-1) with KMS, HTTPS-only ALB, VPC Flow Logs, MFA, S3 SSE+logs, and Route53 DNSSEC with KSK activation wait.
 
@@ -590,8 +588,3 @@ Outputs:
   MFAGroupToUse:
     Description: Add IAM users to this group to enforce MFA
     Value: !Ref AllUsersGroup
-
-
-
-
-```
