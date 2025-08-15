@@ -130,7 +130,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'SecureEC2Role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

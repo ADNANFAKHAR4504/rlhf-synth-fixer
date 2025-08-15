@@ -197,14 +197,6 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   });
 
   describe('IAM Resources', () => {
-    test('should have IAM Role for EC2', () => {
-      expect(template.Resources.EC2Role).toBeDefined();
-      expect(template.Resources.EC2Role.Type).toBe('AWS::IAM::Role');
-      expect(
-        template.Resources.EC2Role.Properties.RoleName['Fn::Sub']
-      ).toContain('${EnvironmentSuffix}');
-    });
-
     test('IAM Role should follow least privilege principle', () => {
       const role = template.Resources.EC2Role;
       expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Effect).toBe(
