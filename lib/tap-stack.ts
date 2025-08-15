@@ -233,7 +233,6 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for Lambda execution with least privilege
     const lambdaRole = new IamRole(this, 'lambda-execution-role', {
-      name: `${projectPrefix}-lambda-execution-role-${environmentSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -262,7 +261,6 @@ export class TapStack extends TerraformStack {
 
     // Custom IAM Policy for S3 and KMS access (principle of least privilege)
     const lambdaS3KmsPolicy = new IamPolicy(this, 'lambda-s3-kms-policy', {
-      name: `${projectPrefix}-lambda-s3-kms-policy-${environmentSuffix}`,
       description: 'Policy for Lambda to access S3 bucket and KMS key',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -343,18 +341,27 @@ export class TapStack extends TerraformStack {
     });
 
     // S3 Bucket Notification to trigger Lambda on object creation
-    new S3BucketNotification(this, 'bucket-notification', {
-      bucket: dataBucket.id,
-      lambdaFunction: [
-        {
-          lambdaFunctionArn: dataProcessorLambda.arn,
-          events: ['s3:ObjectCreated:*'],
-          filterPrefix: 'input/',
-          filterSuffix: '.json',
-        },
-      ],
-      dependsOn: [dataProcessorLambda],
-    });
+    // Must depend on the Lambda permission to avoid validation errors
+    const bucketNotification = new S3BucketNotification(
+      this,
+      'bucket-notification',
+      {
+        bucket: dataBucket.id,
+        lambdaFunction: [
+          {
+            lambdaFunctionArn: dataProcessorLambda.arn,
+            events: ['s3:ObjectCreated:*'],
+            filterPrefix: 'input/',
+            filterSuffix: '.json',
+          },
+        ],
+      }
+    );
+
+    // Ensure the Lambda permission is created before the bucket notification
+    bucketNotification.addOverride('depends_on', [
+      'aws_lambda_permission.s3-lambda-permission',
+    ]);
 
     // Terraform Outputs
     new TerraformOutput(this, 'bucket-name', {
