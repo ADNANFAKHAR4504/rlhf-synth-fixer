@@ -12,6 +12,15 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: 'Database master password'
+    MinLength: 8
+    MaxLength: 128
+    AllowedPattern: >-
+      ^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$
+
   DBPasswordParameterName:
     Type: String
     Default: '/myapp/database/password'
@@ -26,6 +35,17 @@ Parameters:
     AllowedValues: ['development', 'staging', 'production']
 
 Resources:
+  # SSM Parameter for Database Password
+  DatabasePasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Ref DBPasswordParameterName
+      Type: String
+      Value: !Ref DBPassword
+      Description: 'Database password for MyApp RDS instance'
+      Tags:
+        Environment: !Ref Environment
+
   # VPC Configuration
   MyAppVPC:
     Type: AWS::EC2::VPC
@@ -227,7 +247,6 @@ Resources:
 
   PrivateRoute1:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway1
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -235,7 +254,6 @@ Resources:
 
   PrivateRoute2:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway2
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -247,7 +265,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: >-
+      BucketName: !Sub >-
         myapp-access-logs-${Environment}-${AWS::AccountId}-${AWS::Region}
       VersioningConfiguration:
         Status: Enabled
@@ -296,7 +314,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: >-
+                Resource: !Sub >-
                   arn:aws:s3:::myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}/*
       Tags:
         - Key: Environment
@@ -363,7 +381,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: >-
+      BucketName: !Sub >-
         myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}
       VersioningConfiguration:
         Status: Enabled
@@ -390,7 +408,6 @@ Resources:
   # Lambda Permission for S3
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
-    DependsOn: MyAppS3Bucket
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref MyAppLambdaFunction
@@ -434,6 +451,7 @@ Resources:
   # RDS PostgreSQL Instance
   MyAppRDSInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: DatabasePasswordParameter
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -490,3 +508,9 @@ Outputs:
     Value: !GetAtt MyAppLambdaFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-LambdaFunction'
+
+  DatabasePasswordParameterName:
+    Description: 'SSM Parameter Store name for database password'
+    Value: !Ref DBPasswordParameterName
+    Export:
+      Name: !Sub '${AWS::StackName}-DBPasswordParameterName'

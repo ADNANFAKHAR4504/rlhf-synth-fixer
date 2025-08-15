@@ -40,6 +40,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedPattern).toBe('[a-zA-Z][a-zA-Z0-9]*');
     });
 
+    test('should have DBPassword parameter', () => {
+      expect(template.Parameters.DBPassword).toBeDefined();
+      const param = template.Parameters.DBPassword;
+      expect(param.Type).toBe('String');
+      expect(param.NoEcho).toBe(true);
+      expect(param.MinLength).toBe(8);
+      expect(param.MaxLength).toBe(128);
+    });
+
     test('should have DBPasswordParameterName parameter', () => {
       expect(template.Parameters.DBPasswordParameterName).toBeDefined();
       const param = template.Parameters.DBPasswordParameterName;
@@ -238,6 +247,17 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('SSM Parameter', () => {
+    test('should have database password parameter', () => {
+      expect(template.Resources.DatabasePasswordParameter).toBeDefined();
+      const param = template.Resources.DatabasePasswordParameter;
+      expect(param.Type).toBe('AWS::SSM::Parameter');
+      expect(param.Properties.Type).toBe('SecureString');
+      expect(param.Properties.Value).toEqual({ Ref: 'DBPassword' });
+      expect(param.Properties.Name).toEqual({ Ref: 'DBPasswordParameterName' });
+    });
+  });
+
   describe('RDS Resources', () => {
     test('should have DB subnet group', () => {
       expect(template.Resources.DBSubnetGroup).toBeDefined();
@@ -280,6 +300,11 @@ describe('TapStack CloudFormation Template', () => {
         'Fn::Sub': '{{resolve:ssm:${DBPasswordParameterName}}}'
       });
     });
+
+    test('should depend on SSM parameter', () => {
+      const rds = template.Resources.MyAppRDSInstance;
+      expect(rds.DependsOn).toContain('DatabasePasswordParameter');
+    });
   });
 
   describe('Resource Naming and Tagging', () => {
@@ -319,7 +344,8 @@ describe('TapStack CloudFormation Template', () => {
         'AccessLogsS3BucketName',
         'RDSInstanceEndpoint',
         'VPCId',
-        'LambdaFunctionArn'
+        'LambdaFunctionArn',
+        'DatabasePasswordParameterName'
       ];
 
       expectedOutputs.forEach(outputName => {
