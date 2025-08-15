@@ -28,13 +28,12 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "aws_account_id" {
-  description = "The AWS Account ID where resources are deployed. Required for secure KMS policy."
-  type        = string
-  # NOTE: Replace with your actual AWS Account ID or pass it in as a variable.
-  # This is used instead of a data source to comply with the prompt's constraints.
-  # default     = "123456789012"
-}
+# -----------------------------------------------------------------------------
+# Data Sources
+#
+# Retrieve current AWS account information dynamically
+# -----------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
 
 # -----------------------------------------------------------------------------
 # Local Values
@@ -74,7 +73,7 @@ resource "aws_kms_key" "s3_key" {
         Sid    = "Enable IAM User Permissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.aws_account_id}:root"
+          AWS = "arn:aws:iam::${local.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -188,7 +187,7 @@ resource "aws_iam_policy" "s3_readonly_policy" {
   description = "Allows read-only access to the ${aws_s3_bucket.storage_bucket.bucket} S3 bucket."
 
   # This policy provides the minimum permissions required to list the bucket and read its objects.
-  # It also grants the necessary permission to decrypt objects using the specific KMS key.
+  # It also grants the necessary permissions to decrypt objects using the specific KMS key.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -205,8 +204,8 @@ resource "aws_iam_policy" "s3_readonly_policy" {
         Resource = "${aws_s3_bucket.storage_bucket.arn}/*"
       },
       {
-        Sid      = "KmsDecrypt"
-        Effect   = "Allow"
+        Sid    = "KmsDecrypt"
+        Effect = "Allow"
         Action = [
           "kms:Decrypt",
           "kms:DescribeKey"

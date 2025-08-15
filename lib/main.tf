@@ -37,7 +37,6 @@ data "aws_caller_identity" "current" {}
 # -----------------------------------------------------------------------------
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
-  account_id  = data.aws_caller_identity.current.account_id
 
   common_tags = {
     Project     = var.project_name
@@ -182,7 +181,7 @@ resource "aws_iam_policy" "s3_readonly_policy" {
   description = "Allows read-only access to the ${aws_s3_bucket.storage_bucket.bucket} S3 bucket."
 
   # This policy provides the minimum permissions required to list the bucket and read its objects.
-  # It also grants the necessary permission to decrypt objects using the specific KMS key.
+  # It also grants the necessary permissions to decrypt objects using the specific KMS key.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -243,9 +242,4 @@ output "kms_key_alias" {
 output "iam_role_arn" {
   description = "The ARN of the IAM role for EC2 read-only access to S3."
   value       = aws_iam_role.ec2_s3_readonly_role.arn
-}
-
-output "aws_account_id" {
-  description = "The AWS account ID where resources are deployed."
-  value       = local.account_id
 }

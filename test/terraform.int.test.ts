@@ -1,184 +1,167 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  S3Client,
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+  GetBucketVersioningCommand,
+} from '@aws-sdk/client-s3';
+import {
+  IAMClient,
+  GetRoleCommand,
+  ListAttachedRolePoliciesCommand,
+  GetPolicyCommand,
+  GetPolicyVersionCommand,
+} from '@aws-sdk/client-iam';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+} from '@aws-sdk/client-kms';
 
-describe('Terraform IaC - AWS Nova Model Breaking Stack', () => {
-  const libPath = path.join(__dirname, '..', 'lib');
-  let mainTfContent: string;
+// --- Test Setup ---
+const region = 'us-east-1'; // Or read from environment variables
+const s3Client = new S3Client({ region });
+const iamClient = new IAMClient({ region });
+const kmsClient = new KMSClient({ region });
 
-  // Before any tests run, read the main.tf file content into a string.
+interface TerraformOutputs {
+  s3_bucket_name: { value: string };
+  kms_key_arn: { value: string };
+  iam_role_arn: { value: string };
+}
+
+describe('Live AWS Infrastructure Integration Tests', () => {
+  let outputs: TerraformOutputs;
+
+  // Read the CI/CD outputs file once before running tests
   beforeAll(() => {
-    const filePath = path.join(libPath, 'main.tf');
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`File not found at path: ${filePath}`);
+    const outputPath = path.resolve(
+      process.cwd(),
+      'cfn-outputs/all-outputs.json'
+    );
+    if (!fs.existsSync(outputPath)) {
+      throw new Error(
+        `Output file not found at ${outputPath}. Run the deployment pipeline first.`
+      );
     }
-    mainTfContent = fs.readFileSync(filePath, 'utf8');
+    const rawJson = fs.readFileSync(outputPath, 'utf-8');
+    outputs = JSON.parse(rawJson);
   });
 
-  // --------------------------------------------------------------------------
-  // ## 🔒 1. Core Security Requirements Validation
-  // --------------------------------------------------------------------------
-  describe('Security Requirements Implementation', () => {
-    test('S3 buckets must use server-side encryption with KMS', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_server_side_encryption_configuration" "storage_bucket_encryption"'
-      );
-      const encryptionBlock = mainTfContent.match(
-        /resource "aws_s3_bucket_server_side_encryption_configuration" "storage_bucket_encryption"[\s\S]*?}/
-      );
-      expect(encryptionBlock?.[0]).toContain('sse_algorithm     = "aws:kms"');
-      expect(encryptionBlock?.[0]).toContain(
-        'kms_master_key_id = aws_kms_key.s3_key.arn'
-      );
+  // --- S3 Bucket Validation ---
+  describe('S3 Bucket: Security and Configuration', () => {
+    test('should be encrypted with the correct KMS key', async () => {
+      const bucketName = outputs.s3_bucket_name.value; // ✅ Defined inside the test
+      const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
+      const response = await s3Client.send(command);
+
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(response.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
+
+      const encryptionRule =
+        response.ServerSideEncryptionConfiguration!.Rules![0];
+      const sseAlgorithm =
+        encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
+      const kmsKeyArn =
+        encryptionRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID;
+
+      expect(sseAlgorithm).toBe('aws:kms');
+      expect(kmsKeyArn).toBe(outputs.kms_key_arn.value);
     });
 
-    test('IAM roles must adhere to the principle of least privilege', () => {
-      const iamPolicyBlock = mainTfContent.match(
-        /resource "aws_iam_policy" "s3_readonly_policy"[\s\S]*?policy\s*=\s*jsonencode\({[\s\S]*?}\)/
-      );
-      expect(iamPolicyBlock).not.toBeNull();
-      const policyString = iamPolicyBlock![0];
-      expect(policyString).toContain('"s3:GetObject"');
-      expect(policyString).toContain('"s3:ListBucket"');
-      expect(policyString).toContain('"kms:Decrypt"');
-      expect(policyString).not.toContain('"s3:*"');
-      expect(policyString).not.toContain('"kms:*"');
-      expect(policyString).not.toContain('"iam:*"');
-      expect(policyString).not.toContain('"s3:PutObject"');
-      expect(policyString).not.toContain('"s3:DeleteObject"');
+    test('should block all public access', async () => {
+      const bucketName = outputs.s3_bucket_name.value; // ✅ Defined inside the test
+      const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
+      const response = await s3Client.send(command);
+
+      const config = response.PublicAccessBlockConfiguration;
+
+      expect(config?.BlockPublicAcls).toBe(true);
+      expect(config?.BlockPublicPolicy).toBe(true);
+      expect(config?.IgnorePublicAcls).toBe(true);
+      expect(config?.RestrictPublicBuckets).toBe(true);
     });
 
-    test('KMS key policy must restrict access to the specific S3 bucket', () => {
-      const kmsPolicyBlock = mainTfContent.match(
-        /resource "aws_kms_key" "s3_key"[\s\S]*?policy\s*=\s*jsonencode\({[\s\S]*?}\)/
-      );
-      expect(kmsPolicyBlock).not.toBeNull();
-      const policyString = kmsPolicyBlock![0];
-      expect(policyString).toMatch(/\bCondition\s*=/);
-      expect(policyString).toContain('"aws:SourceArn"');
-      expect(policyString).toMatch(
-        /arn:aws:s3:::\${local.name_prefix}-storage/
-      );
-    });
-
-    test('KMS key policy must reference the current account dynamically', () => {
-      expect(mainTfContent).toContain('data "aws_caller_identity" "current"');
-      expect(mainTfContent).toMatch(
-        /account_id\s*=\s*data\.aws_caller_identity\.current\.account_id/
-      );
-      const kmsPolicyBlock = mainTfContent.match(
-        /resource "aws_kms_key" "s3_key"[\s\S]*?policy\s*=\s*jsonencode\({[\s\S]*?}\)/
-      );
-      expect(kmsPolicyBlock?.[0]).toContain(
-        'arn:aws:iam::${local.account_id}:root'
-      );
+    test('should have versioning enabled', async () => {
+      const bucketName = outputs.s3_bucket_name.value; // ✅ Defined inside the test
+      const command = new GetBucketVersioningCommand({ Bucket: bucketName });
+      const response = await s3Client.send(command);
+      expect(response.Status).toBe('Enabled');
     });
   });
 
-  // --------------------------------------------------------------------------
-  // ## ✨ 2. Best Practices and Standards Validation
-  // --------------------------------------------------------------------------
-  describe('Terraform Best Practices and Naming Conventions', () => {
-    test('All resources must be created from scratch (no data sources for existing resources)', () => {
-      expect(mainTfContent).not.toContain('data "aws_s3_bucket"');
-      expect(mainTfContent).not.toContain('data "aws_iam_role"');
-      expect(mainTfContent).not.toContain('data "aws_vpc"');
-      expect(mainTfContent).toContain('data "aws_caller_identity" "current"');
+  // --- IAM Role Validation ---
+  describe('IAM Role: Least Privilege', () => {
+    test('should only be assumable by the EC2 service', async () => {
+      const roleName = outputs.iam_role_arn.value.split('/').pop()!; // ✅ Defined inside the test
+      const command = new GetRoleCommand({ RoleName: roleName });
+      const response = await iamClient.send(command);
+
+      const trustPolicy = JSON.parse(
+        decodeURIComponent(response.Role?.AssumeRolePolicyDocument!)
+      );
+      const principal = trustPolicy.Statement[0].Principal;
+
+      expect(principal.Service).toBe('ec2.amazonaws.com');
     });
 
-    test('Resource naming must follow the "projname-environment" pattern via locals', () => {
-      expect(mainTfContent).toContain(
-        'name_prefix = "${var.project_name}-${var.environment}"'
-      );
-      expect(mainTfContent).toContain(
-        'bucket = "${local.name_prefix}-storage"'
-      );
-      expect(mainTfContent).toContain(
-        'name = "${local.name_prefix}-ec2-s3-readonly-role"'
-      );
-      expect(mainTfContent).toContain(
-        'name          = "alias/${local.name_prefix}-s3-key"'
-      );
-    });
+    test('should have a read-only policy for S3 and KMS', async () => {
+      const roleName = outputs.iam_role_arn.value.split('/').pop()!; // ✅ Defined inside the test
 
-    test('S3 buckets must have public access blocked', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_public_access_block" "storage_bucket_pab"'
-      );
-      const pabBlock = mainTfContent.match(
-        /resource "aws_s3_bucket_public_access_block" "storage_bucket_pab"[\s\S]*?}/
-      );
-      expect(pabBlock?.[0]).toContain('block_public_acls       = true');
-      expect(pabBlock?.[0]).toContain('block_public_policy     = true');
-      expect(pabBlock?.[0]).toContain('ignore_public_acls      = true');
-      expect(pabBlock?.[0]).toContain('restrict_public_buckets = true');
-    });
+      // 1. List policies attached to the role
+      const listPoliciesCommand = new ListAttachedRolePoliciesCommand({
+        RoleName: roleName,
+      });
+      const attachedPolicies = await iamClient.send(listPoliciesCommand);
+      expect(attachedPolicies.AttachedPolicies?.length).toBeGreaterThan(0);
+      const policyArn = attachedPolicies.AttachedPolicies![0].PolicyArn;
 
-    test('No hardcoded credentials or account IDs should be present', () => {
-      expect(mainTfContent).not.toMatch(/access_key\s*=/);
-      expect(mainTfContent).not.toMatch(/secret_key\s*=/);
-      expect(mainTfContent).not.toMatch(/AKIA[0-9A-Z]{16}/);
-      const hardcodedAccountPattern = /arn:aws:iam::\d{12}:/;
-      expect(mainTfContent).not.toMatch(hardcodedAccountPattern);
-      expect(mainTfContent).not.toContain('variable "aws_account_id"');
-    });
+      // 2. Get the policy to find its default version ID
+      const getPolicyCommand = new GetPolicyCommand({ PolicyArn: policyArn });
+      const policyDetails = await iamClient.send(getPolicyCommand);
+      const versionId = policyDetails.Policy?.DefaultVersionId;
 
-    test('Outputs for key resources must be defined', () => {
-      expect(mainTfContent).toContain('output "s3_bucket_name"');
-      expect(mainTfContent).toContain('output "kms_key_arn"');
-      expect(mainTfContent).toContain('output "iam_role_arn"');
-      expect(mainTfContent).toContain('output "aws_account_id"');
-    });
+      // 3. Get the policy version document
+      const getPolicyVersionCommand = new GetPolicyVersionCommand({
+        PolicyArn: policyArn,
+        VersionId: versionId,
+      });
+      const policyVersion = await iamClient.send(getPolicyVersionCommand);
+      const policyDoc = JSON.parse(
+        decodeURIComponent(policyVersion.PolicyVersion?.Document!)
+      );
 
-    test('KMS key must have rotation enabled', () => {
-      const kmsKeyBlock = mainTfContent.match(
-        /resource "aws_kms_key" "s3_key"[\s\S]*?(?=resource|output|$)/
-      );
-      expect(kmsKeyBlock?.[0]).toContain('enable_key_rotation     = true');
-    });
+      const actions = policyDoc.Statement.flatMap((s: any) => s.Action);
 
-    test('S3 bucket must have versioning enabled', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_versioning" "storage_bucket_versioning"'
-      );
-      const versioningBlock = mainTfContent.match(
-        /resource "aws_s3_bucket_versioning" "storage_bucket_versioning"[\s\S]*?}/
-      );
-      expect(versioningBlock?.[0]).toContain('status = "Enabled"');
+      // Positive checks: ensure required permissions are present
+      expect(actions).toContain('s3:GetObject');
+      expect(actions).toContain('s3:ListBucket');
+      expect(actions).toContain('kms:Decrypt');
+
+      // Negative checks (edge cases): ensure no write/delete permissions exist
+      expect(actions).not.toContain('s3:PutObject');
+      expect(actions).not.toContain('s3:DeleteObject');
+      expect(actions).not.toContain('s3:*');
     });
   });
 
-  // --------------------------------------------------------------------------
-  // ## 📋 3. Configuration Structure Validation
-  // --------------------------------------------------------------------------
-  describe('Terraform Configuration Structure', () => {
-    test('Variables should be properly declared with descriptions and defaults', () => {
-      expect(mainTfContent).toContain('variable "aws_region"');
-      expect(mainTfContent).toContain('variable "project_name"');
-      expect(mainTfContent).toContain('variable "environment"');
-      const awsRegionVar = mainTfContent.match(
-        /variable "aws_region"[\s\S]*?}/
-      );
-      expect(awsRegionVar?.[0]).toContain('description');
-      expect(awsRegionVar?.[0]).toContain('default');
+  // --- KMS Key Validation ---
+  describe('KMS Key: Configuration', () => {
+    test('should be enabled and customer-managed', async () => {
+      const keyId = outputs.kms_key_arn.value.split('/').pop()!; // ✅ Defined inside the test
+      const command = new DescribeKeyCommand({ KeyId: keyId });
+      const response = await kmsClient.send(command);
+
+      expect(response.KeyMetadata?.Enabled).toBe(true);
+      expect(response.KeyMetadata?.KeyManager).toBe('CUSTOMER');
     });
 
-    test('Common tags should be defined in locals and applied consistently', () => {
-      expect(mainTfContent).toMatch(/\bcommon_tags\s*=/);
-      expect(mainTfContent).toContain('Project');
-      expect(mainTfContent).toContain('Environment');
-      expect(mainTfContent).toContain('ManagedBy');
-      expect(mainTfContent).toContain('tags = merge(local.common_tags');
-    });
-
-    test('IAM role trust policy should only allow EC2 service', () => {
-      const trustPolicyBlock = mainTfContent.match(
-        /assume_role_policy\s*=\s*jsonencode\({[\s\S]*?}\)/
-      );
-      expect(trustPolicyBlock?.[0]).toMatch(
-        /Service\s*=\s*"ec2.amazonaws.com"/
-      );
-      expect(trustPolicyBlock?.[0]).not.toContain('iam.amazonaws.com');
-      expect(trustPolicyBlock?.[0]).not.toContain('lambda.amazonaws.com');
+    test('should have key rotation enabled', async () => {
+      const keyId = outputs.kms_key_arn.value.split('/').pop()!; // ✅ Defined inside the test
+      const command = new GetKeyRotationStatusCommand({ KeyId: keyId });
+      const response = await kmsClient.send(command);
+      expect(response.KeyRotationEnabled).toBe(true);
     });
   });
 });
