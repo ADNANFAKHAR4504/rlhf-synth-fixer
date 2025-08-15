@@ -129,8 +129,10 @@ describe("Outputs file validation", () => {
 
   test("RDS port is present and is a number", () => {
     expect(OUT.rdsPort).toBeDefined();
-    expect(typeof OUT.rdsPort).toBe("string");
-    expect(parseInt(OUT.rdsPort)).toBe(5432);
+    // Convert to string if it's a number (some JSON parsers might convert "5432" to 5432)
+    const rdsPortStr = String(OUT.rdsPort);
+    expect(typeof rdsPortStr).toBe("string");
+    expect(parseInt(rdsPortStr)).toBe(5432);
   });
 
   test("Auto Scaling Group name is present", () => {
