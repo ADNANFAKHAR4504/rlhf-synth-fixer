@@ -9,25 +9,8 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentSuffix
-      - Label:
-          default: 'Database Configuration'
-        Parameters:
-          - DBUsername
-          - DBPassword
-      - Label:
-          default: 'Compute Configuration'
-        Parameters:
-          - InstanceType
 
 Parameters:
-  # Environment configuration
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-
   # Database configuration parameters
   DBUsername:
     Type: String
@@ -36,14 +19,6 @@ Parameters:
     MinLength: 1
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: 'Master password for RDS instance'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
 
   # EC2 instance configuration
   InstanceType:
@@ -55,6 +30,13 @@ Parameters:
       - t3.small
       - t3.medium
       - t3.large
+
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
 
 Resources:
   # VPC - Main network container for all resources
@@ -381,29 +363,31 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
       EngineVersion: '8.0.35'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password-${EnvironmentSuffix}:SecretString:password}}'
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
       # Encryption at rest is mandatory per requirements
       StorageEncrypted: true
       # Use default KMS key for encryption
       KmsKeyId: alias/aws/rds
-      VpcSecurityGroups:
+      VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       # Enable automated backups
       BackupRetentionPeriod: 7
       # Enable Multi-AZ for high availability
       MultiAZ: true
-      # Monitoring disabled for QA/testing environments
+      # Enable monitoring
       MonitoringInterval: 0
-      # Deletion protection disabled for QA environments
+      # MonitoringRoleArn removed - not needed without monitoring
+      # Deletion protection disabled for QA testing
       DeletionProtection: false
       Tags:
         - Key: Name
@@ -545,14 +529,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-EC2-Role-ARN'
 
-  # Stack Name
   StackName:
     Description: 'Name of this CloudFormation stack'
     Value: !Ref AWS::StackName
     Export:
       Name: !Sub '${AWS::StackName}-StackName'
 
-  # Environment Suffix
   EnvironmentSuffix:
     Description: 'Environment suffix used for this deployment'
     Value: !Ref EnvironmentSuffix

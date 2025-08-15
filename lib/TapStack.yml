@@ -234,7 +234,6 @@ Resources:
   EC2S3AccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2-S3-Access-Role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -367,7 +366,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password-${EnvironmentSuffix}:SecretString:password}}'
       AllocatedStorage: 20
