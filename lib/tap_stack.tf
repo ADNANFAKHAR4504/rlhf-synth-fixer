@@ -519,6 +519,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "logs_lifecycle"
     status = "Enabled"
+    filter {
+      prefix = ""
+    }
     expiration { days = var.s3_logs_retention_days }
     noncurrent_version_expiration { noncurrent_days = 30 }
   }
@@ -529,6 +532,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
   rule {
     id     = "data_lifecycle"
     status = "Enabled"
+    filter {
+      prefix = ""
+    }
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -707,7 +713,6 @@ resource "aws_api_gateway_integration_response" "health_200" {
 
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
-  stage_name  = var.environment
   depends_on  = [aws_api_gateway_method.health_get, aws_api_gateway_integration.health_mock]
   lifecycle { create_before_destroy = true }
 }
