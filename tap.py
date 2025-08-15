@@ -2,7 +2,7 @@
 """
 Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
 
-This module defines the core Pulumi stack and instantiates the TapStack with appropriate
+This module defines the core Pulumi stack and instantiates the infrastructure with appropriate
 configuration based on the deployment environment. It handles environment-specific settings,
 tagging, and deployment configuration for AWS resources.
 
@@ -11,7 +11,7 @@ different deployment environments (development, staging, production, etc.).
 """
 import os
 from pulumi import Config
-from lib.tap_stack import TapStack, TapStackArgs
+from lib.tap_stack import create_infrastructure
 
 # Initialize Pulumi configuration
 config = Config()
@@ -23,14 +23,8 @@ STACK_NAME = f"TapStack{environment_suffix}"
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
-# Create a resource options object with default tags
-default_tags = {
-    'Environment': environment_suffix,
-    'Repository': repository_name,
-    'Author': commit_author,
-}
+# Set environment variables for the infrastructure
+os.environ['PULUMI_CONFIG_PASSPHRASE'] = ''
 
-stack = TapStack(
-    name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
-)
+# Create the infrastructure
+create_infrastructure()
