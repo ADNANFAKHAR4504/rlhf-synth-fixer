@@ -368,7 +368,7 @@
                                         "s3:GetObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${ArtifactsBucket}/*"
+                                        "Fn::Sub": "${ArtifactsBucket.Arn}/*"
                                     }
                                 }
                             ]
