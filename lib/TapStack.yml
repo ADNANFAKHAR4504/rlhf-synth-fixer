@@ -142,7 +142,7 @@ Resources:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: '"@/\\'
         IncludeSpace: false
       Tags:
         - Key: Name
@@ -387,13 +387,14 @@ Resources:
   # RDS Instance - MySQL database with encryption at rest enabled
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: DatabaseSecret
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.43'
+      EngineVersion: '8.0.39'
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password-${EnvironmentSuffix}:SecretString:password}}'
       AllocatedStorage: 20

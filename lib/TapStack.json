@@ -654,6 +654,7 @@
         },
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "DependsOn": "DatabaseSecret",
             "DeletionPolicy": "Snapshot",
             "UpdateReplacePolicy": "Snapshot",
             "Properties": {
@@ -662,7 +663,7 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.43",
+                "EngineVersion": "8.0.39",
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },
