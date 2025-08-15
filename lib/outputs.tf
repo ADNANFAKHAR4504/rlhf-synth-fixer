@@ -67,6 +67,11 @@ output "cloudtrail_s3_bucket_arn" {
   value       = aws_s3_bucket.cloudtrail_logs.arn
 }
 
+output "cloudtrail_s3_bucket" {
+  description = "Name of the CloudTrail S3 bucket (for integration tests)"
+  value       = aws_s3_bucket.cloudtrail_logs.bucket
+}
+
 # Compute Outputs
 output "launch_template_id" {
   description = "ID of the launch template"
