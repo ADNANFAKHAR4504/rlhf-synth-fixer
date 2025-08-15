@@ -41,6 +41,11 @@ def create_infrastructure(export_outputs=True):
   if environment == 'prod' and '0.0.0.0/0' in ssh_allowed_cidrs:
     # Replace 0.0.0.0/0 with VPC CIDR in production
     ssh_allowed_cidrs = [cidr if cidr != '0.0.0.0/0' else '10.0.0.0/16' for cidr in ssh_allowed_cidrs]
+  
+  # Security validation: Ensure we have valid CIDR blocks
+  if not ssh_allowed_cidrs or len(ssh_allowed_cidrs) == 0:
+    # Fallback to VPC CIDR if no valid CIDRs provided
+    ssh_allowed_cidrs = ['10.0.0.0/16']
 
   # Get availability zones
   azs = get_availability_zones(state="available")
@@ -254,7 +259,7 @@ def create_infrastructure(export_outputs=True):
         from_port=0,
         to_port=0,
         protocol="-1",
-        cidr_blocks=[vpc.cidr_block]  # Secure: Only allows traffic from within the VPC
+        cidr_blocks=[vpc.cidr_block]  # SECURE: VPC CIDR reference - only internal traffic allowed
       )
     ],
     egress=[
