@@ -334,6 +334,12 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${ApplicationName}-validation-${EnvironmentSuffix}"
       RetentionInDays: 30
 
+  PipelineTriggerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ApplicationName}-pipeline-trigger-${EnvironmentSuffix}"
+      RetentionInDays: 30
+
   # ==========================================
   # CODEBUILD PROJECT
   # ==========================================
@@ -687,12 +693,104 @@ Resources:
                 - Name: BuildOutput
               RunOrder: 1
 
-  # EventBridge Rule for triggering CodePipeline (using CloudWatch Events)
+  # Lambda function to trigger the pipeline
+  PipelineTriggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ApplicationName}-pipeline-trigger-${EnvironmentSuffix}"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt PipelineTriggerRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          PIPELINE_NAME: !Ref CodePipelinePipeline
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          def lambda_handler(event, context):
+              """
+              Triggers CodePipeline when S3 object is created
+              """
+              print(f"Received event: {json.dumps(event)}")
+              
+              codepipeline = boto3.client('codepipeline')
+              pipeline_name = os.environ['PIPELINE_NAME']
+              
+              try:
+                  # Extract S3 event details
+                  if 'detail' in event and 'bucket' in event['detail']:
+                      bucket_name = event['detail']['bucket']['name'][0] if isinstance(event['detail']['bucket']['name'], list) else event['detail']['bucket']['name']
+                      object_key = event['detail']['object']['key'][0] if isinstance(event['detail']['object']['key'], list) else event['detail']['object']['key']
+                      
+                      print(f"S3 object created: s3://{bucket_name}/{object_key}")
+                      
+                      # Start pipeline execution
+                      response = codepipeline.start_pipeline_execution(
+                          name=pipeline_name
+                      )
+                      
+                      execution_id = response['pipelineExecutionId']
+                      print(f"Started pipeline execution: {execution_id}")
+                      
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'message': 'Pipeline triggered successfully',
+                              'executionId': execution_id,
+                              'pipelineName': pipeline_name
+                          })
+                      }
+                  else:
+                      print("No S3 event details found in the event")
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'message': 'Invalid event format'})
+                      }
+                      
+              except Exception as e:
+                  print(f"Error triggering pipeline: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'message': 'Failed to trigger pipeline',
+                          'error': str(e)
+                      })
+                  }
+
+  # IAM Role for Pipeline Trigger Lambda
+  PipelineTriggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PipelineTriggerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:StartPipelineExecution
+                  - codepipeline:GetPipelineState
+                Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
+
+  # EventBridge Rule for triggering Lambda (instead of CodePipeline directly)
   PipelineTriggerRule:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${ApplicationName}-pipeline-trigger-${EnvironmentSuffix}"
-      Description: "Triggers the pipeline when new code is uploaded to S3"
+      Description: "Triggers Lambda when new code is uploaded to S3"
       State: ENABLED
       EventPattern:
         source:
@@ -707,30 +805,17 @@ Resources:
             key:
               - "source.zip"
       Targets:
-        - Arn: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
-          Id: PipelineTarget
-          RoleArn: !GetAtt EventBridgeRole.Arn
+        - Arn: !GetAtt PipelineTriggerFunction.Arn
+          Id: PipelineTriggerTarget
 
-  # EventBridge Role for triggering CodePipeline
-  EventBridgeRole:
-    Type: AWS::IAM::Role
+  # Permission for EventBridge to invoke the Lambda function
+  PipelineTriggerPermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: EventBridgePipelinePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - codepipeline:StartPipelineExecution
-                Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
+      FunctionName: !Ref PipelineTriggerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PipelineTriggerRule.Arn
 
   # ==========================================
   # SYSTEMS MANAGER PARAMETERS FOR CONFIGURATION
@@ -773,6 +858,12 @@ Outputs:
     Value: !Ref CodeDeployApplication
     Export:
       Name: !Sub "${AWS::StackName}-CodeDeployApplicationName"
+
+  PipelineTriggerFunctionArn:
+    Description: "ARN of the pipeline trigger Lambda function"
+    Value: !GetAtt PipelineTriggerFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PipelineTriggerFunctionArn"
 
   ValidationFunctionArn:
     Description: "ARN of the deployment validation Lambda function"
