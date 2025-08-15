@@ -739,85 +739,71 @@ class TapStack(ComponentResource):
         )
     
     def _create_launch_template(self):
-        """Create launch template for Auto Scaling Group."""
-        # Get latest Amazon Linux 2 AMI
-        ami = aws.ec2.get_ami(
-            most_recent=True,
-            owners=["amazon"],
-            filters=[
-                {"name": "name", "values": ["amzn2-ami-hvm-*"]},
-                {"name": "architecture", "values": ["x86_64"]},
-            ]
-        )
-        
-        # Improved user data script with better error handling and service startup
-        user_data = """#!/bin/bash
-set -e
+      """Create launch template for Auto Scaling Group with proper network config."""
+      # Get latest Amazon Linux 2 AMI
+      ami = aws.ec2.get_ami(
+          most_recent=True,
+          owners=["amazon"],
+          filters=[
+              {"name": "name", "values": ["amzn2-ami-hvm-*"]},
+              {"name": "architecture", "values": ["x86_64"]},
+          ],
+      )
 
-# Log all output for debugging
-exec > >(tee /var/log/user-data.log)
-exec 2>&1
+      # Improved user data script with error handling and service startup
+      user_data = """#!/bin/bash
+  set -ex
+  # Log all output for debugging
+  exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-echo "Starting user data script..."
+  echo "Starting user data script..."
 
-# Update system
-yum update -y
+  # Update system
+  yum update -y
 
-# Install required packages
-yum install -y amazon-cloudwatch-agent httpd
-yum install -y docker
+  # Install required packages
+  yum install -y amazon-cloudwatch-agent httpd docker
 
-# Start and enable services
-systemctl start httpd
-systemctl enable httpd
-systemctl start docker
-systemctl enable docker
+  # Start and enable services
+  systemctl start httpd
+  systemctl enable httpd
+  systemctl start docker
+  systemctl enable docker
 
-# Configure httpd to serve a simple page
-echo "<html><body><h1>Hello from $(hostname)</h1></body></html>" > /var/www/html/index.html
+  # Create a simple index.html to confirm server up
+  echo "<h1>Instance launched successfully</h1>" > /var/www/html/index.html
 
-# Add ec2-user to docker group
-usermod -a -G docker ec2-user
+  # Final success message
+  echo "User data script completed."
+  """
 
-echo "User data script completed successfully"
-"""
-        
-        # Encode user data to base64
-        user_data_b64 = base64.b64encode(user_data.encode('utf-8')).decode('utf-8')
-        
-        self.launch_template = aws.ec2.LaunchTemplate(
-            f"{self.name_prefix}-launch-template",
-            name_prefix=f"{self.name_prefix}-lt-",
-            image_id=ami.id,
-            instance_type="t3.micro",  # Use t3.micro for better availability and lower cost
-            vpc_security_group_ids=[self.ec2_sg.id],
-            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-                name=self.ec2_instance_profile.name
-            ),
-            user_data=user_data_b64,
-            block_device_mappings=[
-                aws.ec2.LaunchTemplateBlockDeviceMappingArgs(
-                    device_name="/dev/xvda",
-                    ebs=aws.ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
-                        volume_size=20,
-                        volume_type="gp3",
-                        encrypted=True,
-                        kms_key_id=self.kms_key.arn,
-                        delete_on_termination=True,
-                    ),
-                )
-            ],
-            tag_specifications=[
-                aws.ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="instance",
-                    tags={
-                        "Name": f"{self.name_prefix}-instance",
-                        "Environment": self.environment_suffix,
-                    },
-                )
-            ],
-            opts=ResourceOptions(parent=self)
-        )
+      self.launch_template = aws.ec2.LaunchTemplate(
+          f"{self.name_prefix}-launch-template",
+          name_prefix=f"{self.name_prefix}-lt-",
+          image_id=ami.id,
+          instance_type="t3.micro",
+          key_name=None,  # Add if you want to SSH
+          user_data=user_data,
+          network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfacesArgs(
+              associate_public_ip_address=True,  # Important to get public IP on startup for internet access
+              device_index=0,
+              groups=[self.ec2_sg.id],  # EC2 Security Group with proper rules
+          )],
+          iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
+              name=self.ec2_instance_profile.name
+          ),
+          tag_specifications=[
+              aws.ec2.LaunchTemplateTagSpecificationArgs(
+                  resource_type="instance",
+                  tags={
+                      "Name": f"{self.name_prefix}-ec2-instance",
+                      "Environment": self.environment_suffix,
+                  },
+              )
+          ],
+          opts=ResourceOptions(parent=self),
+      )
+
     
     def _create_auto_scaling_group(self):
         """Create Auto Scaling Group for high availability."""
