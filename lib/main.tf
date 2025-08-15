@@ -8,6 +8,11 @@ data "aws_availability_zones" "available" {
   }
 }
 
+# Random ID for unique resource naming
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 # Random password for RDS
 resource "random_password" "db_password" {
   length  = 16
@@ -141,10 +146,11 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-# RDS Aurora Cluster (Multi-AZ)
+# RDS Aurora Serverless v2 Cluster (Multi-AZ)
 resource "aws_rds_cluster" "main" {
   cluster_identifier      = "${var.project_name}-aurora-cluster"
   engine                  = "aurora-mysql"
+  engine_mode             = "provisioned"
   engine_version          = "8.0.mysql_aurora.3.07.1"
   database_name           = "serverlessdb"
   master_username         = var.db_username
@@ -158,28 +164,41 @@ resource "aws_rds_cluster" "main" {
   skip_final_snapshot = true
   deletion_protection = false
 
+  serverlessv2_scaling_configuration {
+    max_capacity = 1
+    min_capacity = 0.5
+  }
+
   tags = {
-    Name = "${var.project_name}-aurora-cluster"
+    Name        = "${var.project_name}-aurora-cluster"
+    Environment = var.environment
+    Project     = var.project_name
+    Owner       = var.owner
+    CostCenter  = var.cost_center
   }
 }
 
-# RDS Aurora Instances (3 AZs for high availability)
+# RDS Aurora Serverless v2 Instance (Single instance for serverless workload)
 resource "aws_rds_cluster_instance" "cluster_instances" {
-  count              = 3
+  count              = 1
   identifier         = "${var.project_name}-aurora-${count.index + 1}"
   cluster_identifier = aws_rds_cluster.main.id
-  instance_class     = "db.r6g.large"
+  instance_class     = "db.serverless"
   engine             = aws_rds_cluster.main.engine
   engine_version     = aws_rds_cluster.main.engine_version
 
   tags = {
-    Name = "${var.project_name}-aurora-instance-${count.index + 1}"
+    Name        = "${var.project_name}-aurora-instance-${count.index + 1}"
+    Environment = var.environment
+    Project     = var.project_name
+    Owner       = var.owner
+    CostCenter  = var.cost_center
   }
 }
 
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_role" {
-  name = "${var.project_name}-lambda-role"
+  name = "${var.project_name}-lambda-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -201,7 +220,7 @@ resource "aws_iam_role" "lambda_role" {
 
 # IAM Policy for Lambda
 resource "aws_iam_policy" "lambda_policy" {
-  name        = "${var.project_name}-lambda-policy"
+  name        = "${var.project_name}-lambda-policy-${random_id.suffix.hex}"
   description = "IAM policy for Lambda function"
 
   policy = jsonencode({
@@ -250,7 +269,7 @@ resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
 # Lambda Function 1 - Health Check
 resource "aws_lambda_function" "health_check" {
   filename         = "health_check.zip"
-  function_name    = "${var.project_name}-health-check"
+  function_name    = "${var.project_name}-health-check-${random_id.suffix.hex}"
   role            = aws_iam_role.lambda_role.arn
   handler         = "index.handler"
   runtime         = "python3.9"
@@ -282,7 +301,7 @@ resource "aws_lambda_function" "health_check" {
 # Lambda Function 2 - Data Processor
 resource "aws_lambda_function" "data_processor" {
   filename         = "data_processor.zip"
-  function_name    = "${var.project_name}-data-processor"
+  function_name    = "${var.project_name}-data-processor-${random_id.suffix.hex}"
   role            = aws_iam_role.lambda_role.arn
   handler         = "index.handler"
   runtime         = "python3.9"
@@ -359,7 +378,7 @@ EOF
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "health_check" {
-  name              = "/aws/lambda/${var.project_name}-health-check"
+  name              = "/aws/lambda/${var.project_name}-health-check-${random_id.suffix.hex}"
   retention_in_days = 14
 
   tags = {
@@ -368,7 +387,7 @@ resource "aws_cloudwatch_log_group" "health_check" {
 }
 
 resource "aws_cloudwatch_log_group" "data_processor" {
-  name              = "/aws/lambda/${var.project_name}-data-processor"
+  name              = "/aws/lambda/${var.project_name}-data-processor-${random_id.suffix.hex}"
   retention_in_days = 14
 
   tags = {
