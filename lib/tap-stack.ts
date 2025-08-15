@@ -8,7 +8,7 @@ import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
-import { DataAwsSecurityGroups } from '@cdktf/provider-aws/lib/data-aws-security-groups';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketNotification } from '@cdktf/provider-aws/lib/s3-bucket-notification';
@@ -23,7 +23,6 @@ import {
   TerraformStack,
 } from 'cdktf';
 import { Construct } from 'constructs';
-import * as fs from 'fs';
 import * as path from 'path';
 
 export class TapStack extends TerraformStack {
@@ -35,6 +34,7 @@ export class TapStack extends TerraformStack {
       stateBucket?: string;
       stateBucketRegion?: string;
       awsRegion?: string;
+      vpcId?: string;
       defaultTags?: { tags: Record<string, string> };
     }
   ) {
@@ -51,8 +51,14 @@ export class TapStack extends TerraformStack {
     const current = new DataAwsCallerIdentity(this, 'current');
     const currentRegion = new DataAwsRegion(this, 'current-region');
 
-    // VPC Configuration as per requirements
-    const vpcId = 'vpc-0abcd1234';
+    // Get environment suffix from props, defaulting to 'dev'
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+
+    // Project prefix for consistent naming as per requirements
+    const projectPrefix = `projectXYZ-${environmentSuffix}`;
+
+    // VPC Configuration - parameterized for flexibility
+    const vpcId = props?.vpcId || 'vpc-0abcd1234';
 
     // Get subnets for the specified VPC
     const vpcSubnets = new DataAwsSubnets(this, 'vpc-subnets', {
@@ -64,29 +70,30 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // Get default security group for the VPC
-    const vpcSecurityGroups = new DataAwsSecurityGroups(
+    // Create dedicated security group for Lambda
+    const lambdaSecurityGroup = new SecurityGroup(
       this,
-      'vpc-security-groups',
+      'lambda-security-group',
       {
-        filter: [
+        name: `${projectPrefix}-lambda-sg`,
+        description: 'Security group for Lambda data processing function',
+        vpcId: vpcId,
+        egress: [
           {
-            name: 'vpc-id',
-            values: [vpcId],
-          },
-          {
-            name: 'group-name',
-            values: ['default'],
+            fromPort: 443,
+            toPort: 443,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTPS outbound for S3/KMS API calls',
           },
         ],
+        tags: {
+          Name: `${projectPrefix}-lambda-sg`,
+          Project: projectPrefix,
+          Environment: environmentSuffix,
+        },
       }
     );
-
-    // Get environment suffix from props, defaulting to 'dev'
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-
-    // Project prefix for consistent naming as per requirements
-    const projectPrefix = `projectXYZ-${environmentSuffix}`;
 
     // KMS Key for S3 encryption at rest
     const s3KmsKey = new KmsKey(this, 's3-kms-key', {
@@ -96,22 +103,59 @@ export class TapStack extends TerraformStack {
         Version: '2012-10-17',
         Statement: [
           {
-            Sid: 'Enable IAM User Permissions',
+            Sid: 'Enable Key Management',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${current.accountId}:root`,
+              AWS: [
+                `arn:aws:iam::${current.accountId}:root`,
+                // Restrict to specific roles if needed
+              ],
             },
-            Action: 'kms:*',
+            Action: [
+              'kms:Create*',
+              'kms:Describe*',
+              'kms:Enable*',
+              'kms:List*',
+              'kms:Put*',
+              'kms:Update*',
+              'kms:Revoke*',
+              'kms:Disable*',
+              'kms:Get*',
+              'kms:Delete*',
+              'kms:TagResource',
+              'kms:UntagResource',
+              'kms:ScheduleKeyDeletion',
+              'kms:CancelKeyDeletion',
+            ],
             Resource: '*',
           },
           {
-            Sid: 'Allow S3 Service',
+            Sid: 'Allow S3 Service Access',
             Effect: 'Allow',
             Principal: {
               Service: 's3.amazonaws.com',
             },
             Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
             Resource: '*',
+            Condition: {
+              StringEquals: {
+                'kms:ViaService': `s3.${awsRegion}.amazonaws.com`,
+              },
+            },
+          },
+          {
+            Sid: 'Allow Lambda Service Access',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com',
+            },
+            Action: ['kms:Decrypt'],
+            Resource: '*',
+            Condition: {
+              StringEquals: {
+                'kms:ViaService': `s3.${awsRegion}.amazonaws.com`,
+              },
+            },
           },
         ],
       }),
@@ -199,35 +243,9 @@ export class TapStack extends TerraformStack {
       }),
     });
 
-    // Lambda function inline code - create a temporary file
-    const lambdaCode = `exports.handler = async (event) => {
-    console.log('Data processing event:', JSON.stringify(event, null, 2));
-    
-    // Basic data processing logic
-    const response = {
-        statusCode: 200,
-        body: JSON.stringify({
-            message: 'Data processed successfully',
-            bucketName: process.env.BUCKET_NAME,
-            kmsKeyId: process.env.KMS_KEY_ID,
-            projectPrefix: process.env.PROJECT_PREFIX,
-            processedAt: new Date().toISOString()
-        })
-    };
-    
-    return response;
-};`;
-
-    // Create a temporary directory and file for the Lambda code
-    const tempDir = path.resolve(__dirname, '.temp-lambda');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir);
-    }
-    fs.writeFileSync(path.join(tempDir, 'index.js'), lambdaCode);
-
-    // Lambda function code asset from temporary directory
+    // Lambda function code asset from dedicated asset file
     const lambdaAsset = new TerraformAsset(this, 'lambda-asset', {
-      path: tempDir,
+      path: path.resolve(__dirname, 'lambda'),
       type: AssetType.ARCHIVE,
     });
 
@@ -314,7 +332,7 @@ export class TapStack extends TerraformStack {
         memorySize: 512,
         vpcConfig: {
           subnetIds: vpcSubnets.ids,
-          securityGroupIds: vpcSecurityGroups.ids,
+          securityGroupIds: [lambdaSecurityGroup.id],
         },
         environment: {
           variables: {
