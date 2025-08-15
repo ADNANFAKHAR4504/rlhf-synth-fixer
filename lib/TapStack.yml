@@ -160,11 +160,13 @@ Mappings:
   # AMI mapping for different regions (Amazon Linux 2)
   RegionMap:
     us-east-1:
-      AMI: ami-0abcdef1234567890
+      AMI: ami-0c02fb55956c7d316
     us-west-2:
-      AMI: ami-0abcdef1234567890
+      AMI: ami-0892d3c7ee96c0bf7
     eu-west-1:
-      AMI: ami-0abcdef1234567890
+      AMI: ami-0a0c8eebcdd6dcbd0
+    ap-south-1:
+      AMI: ami-0cda377a1b884a1bc
     # Add more regions as needed
 
 Resources:

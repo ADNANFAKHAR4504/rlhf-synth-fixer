@@ -210,6 +210,7 @@ describe('TapStack CloudFormation Template', () => {
         const templateContent = fs.readFileSync(templatePath, 'utf8');
         expect(templateContent).toContain('RegionMap:');
         expect(templateContent).toContain('us-east-1:');
+        expect(templateContent).toContain('ap-south-1:');
         expect(templateContent).toContain('AMI:');
       }
     });
