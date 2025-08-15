@@ -17,7 +17,7 @@ variable "env" {
 variable "aws_region" {
   description = "AWS region (used by provider in provider.tf)"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
 variable "vpc_cidr" {
