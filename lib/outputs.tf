@@ -2,7 +2,7 @@
 
 output "vpc_id" {
   description = "VPC ID"
-  value       = data.aws_vpc.existing.id
+  value       = data.aws_vpc.default.id
 }
 
 output "load_balancer_dns" {

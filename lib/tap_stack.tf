@@ -16,26 +16,20 @@ data "aws_ami" "amazon_linux" {
 
 data "aws_caller_identity" "current" {}
 
-# Use existing VPC instead of creating new one to avoid VPC limit
-data "aws_vpcs" "existing" {
-  tags = {
-    Name = "*default*"
-  }
+# Use existing default VPC instead of creating new one to avoid VPC limit
+data "aws_vpc" "default" {
+  default = true
 }
 
-data "aws_vpc" "existing" {
-  id = data.aws_vpcs.existing.ids[0]
-}
-
-# Get existing subnets from the VPC
+# Get existing subnets from the default VPC
 data "aws_subnets" "existing_public" {
   filter {
     name   = "vpc-id"
-    values = [data.aws_vpc.existing.id]
+    values = [data.aws_vpc.default.id]
   }
   filter {
-    name   = "state"
-    values = ["available"]
+    name   = "default-for-az"
+    values = ["true"]
   }
 }
 
@@ -64,7 +58,7 @@ data "aws_subnet" "existing_public" {
 data "aws_internet_gateway" "existing" {
   filter {
     name   = "attachment.vpc-id"
-    values = [data.aws_vpc.existing.id]
+    values = [data.aws_vpc.default.id]
   }
 }
 
@@ -184,7 +178,7 @@ data "aws_internet_gateway" "existing" {
 resource "aws_security_group" "alb" {
   name        = "${var.app_name}-${var.environment_suffix}-alb-sg-${random_id.suffix.hex}"
   description = "Security group for ALB"
-  vpc_id      = data.aws_vpc.existing.id
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
     from_port   = 80
@@ -216,7 +210,7 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "web" {
   name        = "${var.app_name}-${var.environment_suffix}-web-sg-${random_id.suffix.hex}"
   description = "Security group for web servers"
-  vpc_id      = data.aws_vpc.existing.id
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
     from_port       = 80
@@ -229,7 +223,7 @@ resource "aws_security_group" "web" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.existing.cidr_block]
+    cidr_blocks = [data.aws_vpc.default.cidr_block]
   }
 
   egress {
@@ -248,7 +242,7 @@ resource "aws_security_group" "web" {
 resource "aws_security_group" "database" {
   name        = "${var.app_name}-${var.environment_suffix}-db-sg-${random_id.suffix.hex}"
   description = "Security group for RDS database"
-  vpc_id      = data.aws_vpc.existing.id
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
     from_port       = 3306
@@ -289,7 +283,7 @@ resource "aws_lb_target_group" "main" {
   name     = "${var.app_name}-${var.environment_suffix}-tg-${random_id.suffix.hex}"
   port     = 80
   protocol = "HTTP"
-  vpc_id   = data.aws_vpc.existing.id
+  vpc_id   = data.aws_vpc.default.id
 
   health_check {
     enabled             = true
