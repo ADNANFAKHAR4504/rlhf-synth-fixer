@@ -1,4 +1,4 @@
-# Terraform Infrastructure as Code (IAC) Prompt for AWS Security Best Practices
+# CDKTF Infrastructure as Code (IAC) Prompt for AWS Security Best Practices
 
 ## Objective:
 You are tasked with securing an AWS cloud environment using CDKTF. The goal is to implement security best practices that are critical for a secure and compliant infrastructure.
