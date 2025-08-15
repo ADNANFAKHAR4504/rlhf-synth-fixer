@@ -132,9 +132,11 @@ The main.tf file contains the complete infrastructure implementation with:
 - **VPC and Networking**: Complete VPC setup with public/private subnets across multiple AZs
 - **NAT Gateways**: One per AZ for high availability
 - **Security Groups**: Separate groups for ALB and EC2 with restrictive rules
-- **Application Load Balancer**: Configured for HTTP and HTTPS traffic
+- **Application Load Balancer**: Configured for HTTP traffic (HTTPS removed for test environment)
 - **Auto Scaling Group**: With health checks and proper scaling configuration
-- **S3 Buckets**: Separate buckets for data and logs with versioning and encryption
+- **S3 Buckets**: Separate buckets for data and logs with versioning, encryption, and intelligent lifecycle policies
+- **Enhanced Security**: IMDSv2 enforcement on EC2 instances
+- **CloudWatch Monitoring**: Comprehensive alarms for ALB target health, ASG instance health, and response time monitoring
 
 ### `outputs.tf`
 ```hcl
@@ -212,14 +214,26 @@ output "elastic_ip_addresses" {
   value       = aws_eip.prod_nat_eips[*].public_ip
 }
 
-output "certificate_arn" {
-  description = "ARN of the ACM certificate"
-  value       = aws_acm_certificate.prod_cert.arn
-}
+# Certificate removed for test environment - no HTTPS listener configured
 
 output "environment_suffix" {
   description = "Environment suffix used for resource naming"
   value       = var.environment_suffix
+}
+
+output "cloudwatch_alarm_alb_target_health" {
+  description = "CloudWatch alarm for ALB target health"
+  value       = aws_cloudwatch_metric_alarm.alb_target_health.arn
+}
+
+output "cloudwatch_alarm_asg_instance_health" {
+  description = "CloudWatch alarm for ASG instance health"
+  value       = aws_cloudwatch_metric_alarm.asg_instance_health.arn
+}
+
+output "cloudwatch_alarm_alb_response_time" {
+  description = "CloudWatch alarm for ALB response time"
+  value       = aws_cloudwatch_metric_alarm.alb_response_time.arn
 }
 ```
 
@@ -229,16 +243,16 @@ output "environment_suffix" {
 - **VPC with Multi-AZ Architecture**: Deployed across multiple availability zones for high availability
 - **Public and Private Subnets**: Proper network segmentation with public subnets for load balancers and private subnets for EC2 instances
 - **NAT Gateways**: One per availability zone for redundancy and high availability
-- **Application Load Balancer**: Configured for both HTTP and HTTPS traffic
+- **Application Load Balancer**: Configured for HTTP traffic (HTTPS removed for test environment)
 - **Auto Scaling Group**: Ensures application availability and scalability
-- **S3 Buckets**: Separate buckets for application data and logs with versioning enabled
+- **S3 Buckets**: Separate buckets for application data and logs with versioning enabled and intelligent lifecycle policies for cost optimization
 
 ### ✅ Security Best Practices
 - **Security Groups**: Restrictive ingress rules following least privilege principle
 - **Private Subnets**: EC2 instances deployed in private subnets, not directly accessible from internet
 - **S3 Bucket Security**: Public access blocked, server-side encryption enabled
 - **SSH Access**: Restricted to VPC CIDR only
-- **TLS 1.2+**: Secure SSL policy for HTTPS listener
+- **IMDSv2 Enforcement**: Enhanced security for EC2 instance metadata service to prevent SSRF attacks
 
 ### ✅ High Availability & Scalability
 - **Multi-AZ Deployment**: Resources spread across multiple availability zones
@@ -246,12 +260,19 @@ output "environment_suffix" {
 - **Health Checks**: ELB health checks for automatic instance replacement
 - **Redundant NAT Gateways**: One per AZ to avoid single point of failure
 
+### ✅ Monitoring & Observability
+- **CloudWatch Alarms**: Three comprehensive alarms for proactive monitoring:
+  - ALB Target Health: Monitors healthy target count
+  - ASG Instance Health: Monitors in-service instance count
+  - ALB Response Time: Monitors average response time performance
+- **Cost Optimization**: Intelligent S3 lifecycle policies for automatic storage tiering
+
 ### ✅ Requirements Compliance
 - **Region**: All resources deployed in us-east-1
 - **Naming Convention**: All resources use "prod-" prefix
 - **Environment Tagging**: Consistent Environment = Production tag
 - **S3 Versioning**: Enabled to prevent accidental data loss
-- **HTTP/HTTPS Support**: Both protocols configured on the load balancer
+- **HTTP Support**: HTTP protocol configured on the load balancer (HTTPS removed for test environment)
 - **Environment Suffix**: Supports multiple deployments without conflicts
 
 ### ✅ Maintainability
@@ -284,7 +305,7 @@ terraform apply tfplan
 
 4. **Access the application**:
 - Use the load balancer DNS from outputs
-- Both HTTP and HTTPS endpoints available
+- HTTP endpoint available (HTTPS removed for test environment)
 
 5. **Destroy resources** (when no longer needed):
 ```bash
