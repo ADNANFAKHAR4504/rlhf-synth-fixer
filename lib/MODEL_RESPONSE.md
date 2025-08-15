@@ -19,10 +19,15 @@ export class TapStack extends cdk.Stack {
 
     // Common tags for all resources
     const commonTags = {
-      Owner: 'DevOps Team',
-      Purpose: '3-Tier Web Application'
+      Owner: 'TapStack',
+      Purpose: '3-tier-web-application'
     };
 
+    // Apply tags to the stack
+    cdk.Tags.of(this).add('Owner', commonTags.Owner);
+    cdk.Tags.of(this).add('Purpose', commonTags.Purpose);
+
+    // 1. NETWORKING LAYER
     // Create VPC with public and private subnets across 2 AZs
     const vpc = new ec2.Vpc(this, 'TapVpc', {
       maxAzs: 2,
@@ -30,94 +35,77 @@ export class TapStack extends cdk.Stack {
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: 'PublicSubnet',
+          name: 'Public',
           subnetType: ec2.SubnetType.PUBLIC,
         },
         {
           cidrMask: 24,
-          name: 'PrivateSubnet',
+          name: 'Private',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,
-          name: 'DatabaseSubnet',
+          name: 'Database',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         }
       ],
-      natGateways: 2,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
     });
 
-    // Apply tags to VPC
-    cdk.Tags.of(vpc).add('Owner', commonTags.Owner);
-    cdk.Tags.of(vpc).add('Purpose', commonTags.Purpose);
-
-    // Security Group for ALB - Allow HTTP/HTTPS from internet
-    const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
+    // 2. SECURITY GROUPS
+    // Load Balancer Security Group - allows HTTP/HTTPS from internet
+    const elbSecurityGroup = new ec2.SecurityGroup(this, 'ELBSecurityGroup', {
       vpc,
       description: 'Security group for Application Load Balancer',
       allowAllOutbound: true,
     });
-
-    albSecurityGroup.addIngressRule(
+    
+    elbSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'Allow HTTP traffic from internet'
     );
-
-    albSecurityGroup.addIngressRule(
+    
+    elbSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(443),
       'Allow HTTPS traffic from internet'
     );
 
-    cdk.Tags.of(albSecurityGroup).add('Owner', commonTags.Owner);
-    cdk.Tags.of(albSecurityGroup).add('Purpose', commonTags.Purpose);
-
-    // Security Group for EC2 - Allow traffic only from ALB
-    const ec2SecurityGroup = new ec2.SecurityGroup(this, 'Ec2SecurityGroup', {
+    // EC2 Security Group - allows traffic from ELB only
+    const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc,
       description: 'Security group for EC2 instances',
       allowAllOutbound: true,
     });
-
+    
     ec2SecurityGroup.addIngressRule(
-      albSecurityGroup,
+      elbSecurityGroup,
       ec2.Port.tcp(80),
-      'Allow HTTP traffic from ALB'
+      'Allow HTTP traffic from Load Balancer'
     );
 
-    cdk.Tags.of(ec2SecurityGroup).add('Owner', commonTags.Owner);
-    cdk.Tags.of(ec2SecurityGroup).add('Purpose', commonTags.Purpose);
-
-    // Security Group for RDS - Allow traffic only from EC2
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
+    // RDS Security Group - allows traffic from EC2 only
+    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RDSSecurityGroup', {
       vpc,
       description: 'Security group for RDS database',
       allowAllOutbound: false,
     });
-
+    
     rdsSecurityGroup.addIngressRule(
       ec2SecurityGroup,
       ec2.Port.tcp(3306),
-      'Allow MySQL traffic from EC2'
+      'Allow MySQL traffic from EC2 instances'
     );
 
-    cdk.Tags.of(rdsSecurityGroup).add('Owner', commonTags.Owner);
-    cdk.Tags.of(rdsSecurityGroup).add('Purpose', commonTags.Purpose);
-
+    // 3. DATABASE TIER
     // KMS Key for RDS encryption
-    const rdsKmsKey = new kms.Key(this, 'RdsKmsKey', {
-      description: 'KMS key for RDS encryption',
+    const rdsKmsKey = new kms.Key(this, 'RDSKMSKey', {
+      description: 'KMS Key for RDS encryption',
       enableKeyRotation: true,
     });
 
-    cdk.Tags.of(rdsKmsKey).add('Owner', commonTags.Owner);
-    cdk.Tags.of(rdsKmsKey).add('Purpose', commonTags.Purpose);
-
     // RDS Subnet Group
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DbSubnetGroup', {
+    const dbSubnetGroup = new rds.SubnetGroup(this, 'DBSubnetGroup', {
       vpc,
       description: 'Subnet group for RDS database',
       vpcSubnets: {
@@ -125,70 +113,54 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    cdk.Tags.of(dbSubnetGroup).add('Owner', commonTags.Owner);
-    cdk.Tags.of(dbSubnetGroup).add('Purpose', commonTags.Purpose);
-
     // RDS Instance
     const database = new rds.DatabaseInstance(this, 'TapDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_0,
       }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc,
-      subnetGroup: dbSubnetGroup,
       securityGroups: [rdsSecurityGroup],
+      subnetGroup: dbSubnetGroup,
       multiAz: true,
       storageEncrypted: true,
       storageEncryptionKey: rdsKmsKey,
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
+      deletionProtection: false, // Set to true for production
       databaseName: 'tapdb',
-      credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: 'tap-db-credentials',
-      }),
-      publiclyAccessible: false,
+      credentials: rds.Credentials.fromGeneratedSecret('admin'),
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
     });
 
-    cdk.Tags.of(database).add('Owner', commonTags.Owner);
-    cdk.Tags.of(database).add('Purpose', commonTags.Purpose);
-
+    // 4. APPLICATION TIER
     // IAM Role for EC2 instances
-    const ec2Role = new iam.Role(this, 'Ec2Role', {
+    const ec2Role = new iam.Role(this, 'EC2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
       ],
     });
 
-    cdk.Tags.of(ec2Role).add('Owner', commonTags.Owner);
-    cdk.Tags.of(ec2Role).add('Purpose', commonTags.Purpose);
-
-    // User Data script for EC2 instances
+    // User data script for EC2 instances
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       'yum update -y',
       'yum install -y httpd',
       'systemctl start httpd',
       'systemctl enable httpd',
-      'echo "<h1>Hello from TAP Application Server</h1>" > /var/www/html/index.html',
-      'yum install -y amazon-cloudwatch-agent',
+      'echo "<h1>TapStack Application Server</h1>" > /var/www/html/index.html',
+      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html'
     );
 
-    // Launch Template for Auto Scaling Group
+    // Launch Template
     const launchTemplate = new ec2.LaunchTemplate(this, 'TapLaunchTemplate', {
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       securityGroup: ec2SecurityGroup,
       role: ec2Role,
       userData,
-      keyName: undefined, // No key pair for production security
     });
-
-    cdk.Tags.of(launchTemplate).add('Owner', commonTags.Owner);
-    cdk.Tags.of(launchTemplate).add('Purpose', commonTags.Purpose);
 
     // Auto Scaling Group
     const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
@@ -200,75 +172,62 @@ export class TapStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
-      healthCheckType: autoscaling.HealthCheckType.ELB,
-      healthCheckGracePeriod: cdk.Duration.seconds(300),
+      healthCheck: autoscaling.HealthCheck.elb({
+        grace: cdk.Duration.minutes(5),
+      }),
     });
 
-    cdk.Tags.of(autoScalingGroup).add('Owner', commonTags.Owner);
-    cdk.Tags.of(autoScalingGroup).add('Purpose', commonTags.Purpose);
-
     // Application Load Balancer
-    const alb = new elbv2.ApplicationLoadBalancer(this, 'TapAlb', {
+    const loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'TapLoadBalancer', {
       vpc,
       internetFacing: true,
-      securityGroup: albSecurityGroup,
+      securityGroup: elbSecurityGroup,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
     });
-
-    cdk.Tags.of(alb).add('Owner', commonTags.Owner);
-    cdk.Tags.of(alb).add('Purpose', commonTags.Purpose);
 
     // Target Group
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TapTargetGroup', {
       vpc,
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      targetType: elbv2.TargetType.INSTANCE,
-      healthCheckPath: '/',
-      healthCheckIntervalSeconds: 30,
-      healthyThresholdCount: 2,
-      unhealthyThresholdCount: 5,
+      targets: [autoScalingGroup],
+      healthCheck: {
+        enabled: true,
+        path: '/',
+        protocol: elbv2.Protocol.HTTP,
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+        timeout: cdk.Duration.seconds(5),
+        interval: cdk.Duration.seconds(30),
+      },
     });
 
-    cdk.Tags.of(targetGroup).add('Owner', commonTags.Owner);
-    cdk.Tags.of(targetGroup).add('Purpose', commonTags.Purpose);
-
-    // Add Auto Scaling Group to Target Group
-    autoScalingGroup.attachToApplicationTargetGroup(targetGroup);
-
-    // ALB Listener
-    const listener = alb.addListener('TapListener', {
+    // Listener
+    const listener = loadBalancer.addListener('TapListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [targetGroup],
     });
 
+    // 5. MONITORING & AUTO SCALING
     // CloudWatch Alarms for Auto Scaling
-    const cpuHighAlarm = new cloudwatch.Alarm(this, 'CpuHighAlarm', {
+    const scaleUpAlarm = new cloudwatch.Alarm(this, 'ScaleUpAlarm', {
       metric: autoScalingGroup.metricCpuUtilization(),
       threshold: 70,
       evaluationPeriods: 2,
-      datapointsToAlarm: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    const cpuLowAlarm = new cloudwatch.Alarm(this, 'CpuLowAlarm', {
+    const scaleDownAlarm = new cloudwatch.Alarm(this, 'ScaleDownAlarm', {
       metric: autoScalingGroup.metricCpuUtilization(),
       threshold: 30,
       evaluationPeriods: 2,
-      datapointsToAlarm: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
     });
 
-    cdk.Tags.of(cpuHighAlarm).add('Owner', commonTags.Owner);
-    cdk.Tags.of(cpuHighAlarm).add('Purpose', commonTags.Purpose);
-    cdk.Tags.of(cpuLowAlarm).add('Owner', commonTags.Owner);
-    cdk.Tags.of(cpuLowAlarm).add('Purpose', commonTags.Purpose);
-
-    // Auto Scaling Policies
+    // Scaling Policies
     const scaleUpPolicy = autoScalingGroup.scaleOnMetric('ScaleUpPolicy', {
       metric: autoScalingGroup.metricCpuUtilization(),
       scalingSteps: [
@@ -286,106 +245,115 @@ export class TapStack extends cdk.Stack {
       adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
     });
 
+    // 6. FRONTEND TIER
     // S3 Bucket for static content
-    const staticContentBucket = new s3.Bucket(this, 'TapStaticContentBucket', {
+    const websiteBucket = new s3.Bucket(this, 'TapWebsiteBucket', {
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
-      autoDeleteObjects: true, // For demo purposes
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
+      autoDeleteObjects: true, // Use false for production
     });
 
-    cdk.Tags.of(staticContentBucket).add('Owner', commonTags.Owner);
-    cdk.Tags.of(staticContentBucket).add('Purpose', commonTags.Purpose);
-
     // Origin Access Identity for CloudFront
-    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'TapOai', {
-      comment: 'OAI for TAP static content',
+    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'TapOAI', {
+      comment: 'OAI for TapStack website bucket',
     });
 
     // Grant CloudFront access to S3 bucket
-    staticContentBucket.grantRead(originAccessIdentity);
+    websiteBucket.grantRead(originAccessIdentity);
 
     // CloudFront Distribution
     const distribution = new cloudfront.Distribution(this, 'TapDistribution', {
       defaultBehavior: {
-        origin: new origins.S3Origin(staticContentBucket, {
+        origin: new origins.S3Origin(websiteBucket, {
           originAccessIdentity,
         }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       },
+      defaultRootObject: 'index.html',
+      errorResponses: [
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+        },
+      ],
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
-      enabled: true,
-      comment: 'TAP Application CloudFront Distribution',
     });
 
-    cdk.Tags.of(distribution).add('Owner', commonTags.Owner);
-    cdk.Tags.of(distribution).add('Purpose', commonTags.Purpose);
-
+    // 7. DNS
     // Route 53 Hosted Zone
-    const hostedZone = new route53.HostedZone(this, 'TapHostedZone', {
-      zoneName: 'tap-app.example.com',
-      comment: 'Hosted zone for TAP application',
+    const hostedZone = new route53.PublicHostedZone(this, 'TapHostedZone', {
+      zoneName: 'tapstack.example.com', // Replace with your actual domain
     });
 
-    cdk.Tags.of(hostedZone).add('Owner', commonTags.Owner);
-    cdk.Tags.of(hostedZone).add('Purpose', commonTags.Purpose);
-
-    // Route 53 A Record pointing to ALB
+    // A Record pointing to Load Balancer
     new route53.ARecord(this, 'TapARecord', {
       zone: hostedZone,
       recordName: 'api',
-      target: route53.RecordTarget.fromAlias(new targets.LoadBalancerTarget(alb)),
-      ttl: cdk.Duration.seconds(300),
+      target: route53.RecordTarget.fromAlias(
+        new targets.LoadBalancerTarget(loadBalancer)
+      ),
     });
 
-    // Route 53 AAAA Record pointing to ALB (IPv6)
-    new route53.AaaaRecord(this, 'TapAaaaRecord', {
+    // AAAA Record pointing to Load Balancer
+    new route53.AaaaRecord(this, 'TapAAAARecord', {
       zone: hostedZone,
       recordName: 'api',
-      target: route53.RecordTarget.fromAlias(new targets.LoadBalancerTarget(alb)),
-      ttl: cdk.Duration.seconds(300),
+      target: route53.RecordTarget.fromAlias(
+        new targets.LoadBalancerTarget(loadBalancer)
+      ),
     });
 
-    // Route 53 A Record pointing to CloudFront
-    new route53.ARecord(this, 'TapCloudfrontARecord', {
+    // A Record pointing to CloudFront
+    new route53.ARecord(this, 'TapWebsiteARecord', {
       zone: hostedZone,
       recordName: 'www',
-      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
-      ttl: cdk.Duration.seconds(300),
+      target: route53.RecordTarget.fromAlias(
+        new targets.CloudFrontTarget(distribution)
+      ),
     });
 
-    // Outputs
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
-      description: 'VPC ID',
+    // AAAA Record pointing to CloudFront
+    new route53.AaaaRecord(this, 'TapWebsiteAAAARecord', {
+      zone: hostedZone,
+      recordName: 'www',
+      target: route53.RecordTarget.fromAlias(
+        new targets.CloudFrontTarget(distribution)
+      ),
     });
 
-    new cdk.CfnOutput(this, 'LoadBalancerDnsName', {
-      value: alb.loadBalancerDnsName,
-      description: 'Application Load Balancer DNS Name',
+    // 8. OUTPUTS
+    new cdk.CfnOutput(this, 'LoadBalancerDNS', {
+      value: loadBalancer.loadBalancerDnsName,
+      description: 'DNS name of the Application Load Balancer',
     });
 
     new cdk.CfnOutput(this, 'CloudFrontDomainName', {
       value: distribution.distributionDomainName,
-      description: 'CloudFront Distribution Domain Name',
+      description: 'Domain name of the CloudFront distribution',
+    });
+
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: websiteBucket.bucketName,
+      description: 'Name of the S3 bucket for static content',
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
-      description: 'RDS Database Endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'S3BucketName', {
-      value: staticContentBucket.bucketName,
-      description: 'S3 Bucket Name for Static Content',
+      description: 'RDS database endpoint',
     });
 
     new cdk.CfnOutput(this, 'HostedZoneId', {
       value: hostedZone.hostedZoneId,
       description: 'Route 53 Hosted Zone ID',
+    });
+
+    new cdk.CfnOutput(this, 'NameServers', {
+      value: cdk.Fn.join(', ', hostedZone.hostedZoneNameServers || []),
+      description: 'Name servers for the hosted zone',
     });
   }
 }
@@ -394,7 +362,6 @@ export class TapStack extends cdk.Stack {
 const app = new cdk.App();
 new TapStack(app, 'TapStack', {
   env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-east-1',
   },
 });
