@@ -12,13 +12,6 @@ locals {
   }
 }
 
-variable "db_password" {
-  description = "Password for the RDS PostgreSQL database."
-  type        = string
-  sensitive   = true
-  # In a real-world scenario, this would be sourced from a secure secrets manager.
-}
-
 variable "vpc_cidrs" {
   description = "CIDR blocks for the VPCs in each region."
   type        = map(string)
