@@ -6,7 +6,8 @@ Parameters:
     Type: String
     Default: 'dev'
     AllowedValues: ['dev', 'test', 'prod']
-    Description: 'Environment type for resource naming and configuration'
+    Description: 'Environment type for resource naming and configuration (must be lowercase)'
+    AllowedPattern: '^[a-z]+$'  # Enforce lowercase for Environment
   
   VpcCidr:
     Type: String
@@ -79,14 +80,14 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}-${Environment}'
+      LogGroupName: !Sub '/aws/cloudtrail/tapstackpr1271-${Environment}'
       RetentionInDays: 365
 
   CloudTrailLogStream:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      LogStreamName: !Sub '${AWS::AccountId}_CloudTrail_${AWS::Region}_${AWS::StackName}-${Environment}'
+      LogStreamName: !Sub '${AWS::AccountId}_CloudTrail_${AWS::Region}_tapstackpr1271-${Environment}'
 
   CloudTrailLogsRole:
     Type: AWS::IAM::Role
@@ -111,7 +112,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'cloudtrail-logs-${AWS::StackName}-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'cloudtrail-logs-tapstackpr1271-${Environment}-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -176,7 +177,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'VPC-${AWS::StackName}-${Environment}'
+          Value: !Sub 'VPC-tapstackpr1271-${Environment}'
 
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
@@ -203,7 +204,7 @@ Resources:
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}-${Environment}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/tapstackpr1271-${Environment}'
       RetentionInDays: 30
 
   VPCFlowLogs:
@@ -230,7 +231,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'PrivateSubnet1-${AWS::StackName}-${Environment}'
+          Value: !Sub 'PrivateSubnet1-tapstackpr1271-${Environment}'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -240,7 +241,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'PrivateSubnet2-${AWS::StackName}-${Environment}'
+          Value: !Sub 'PrivateSubnet2-tapstackpr1271-${Environment}'
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -251,7 +252,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'PublicSubnet1-${AWS::StackName}-${Environment}'
+          Value: !Sub 'PublicSubnet1-tapstackpr1271-${Environment}'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -262,7 +263,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'PublicSubnet2-${AWS::StackName}-${Environment}'
+          Value: !Sub 'PublicSubnet2-tapstackpr1271-${Environment}'
 
   # ============================================================================
   # INTERNET GATEWAY AND ROUTING
@@ -272,7 +273,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'IGW-${AWS::StackName}-${Environment}'
+          Value: !Sub 'IGW-tapstackpr1271-${Environment}'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -286,7 +287,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'PublicRouteTable-${AWS::StackName}-${Environment}'
+          Value: !Sub 'PublicRouteTable-tapstackpr1271-${Environment}'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -340,7 +341,7 @@ Resources:
           Description: 'HTTP outbound'
       Tags:
         - Key: Name
-          Value: !Sub 'WebSecurityGroup-${AWS::StackName}-${Environment}'
+          Value: !Sub 'WebSecurityGroup-tapstackpr1271-${Environment}'
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -355,7 +356,7 @@ Resources:
           Description: 'MySQL access from web security group only'
       Tags:
         - Key: Name
-          Value: !Sub 'DatabaseSecurityGroup-${AWS::StackName}-${Environment}'
+          Value: !Sub 'DatabaseSecurityGroup-tapstackpr1271-${Environment}'
 
   # ============================================================================
   # 11. ELIMINATE DIRECT SSH ACCESS - SSM ROLE FOR EC2
@@ -373,7 +374,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
         - Key: Name
-          Value: !Sub 'EC2SSMRole-${AWS::StackName}-${Environment}'
+          Value: !Sub 'EC2SSMRole-tapstackpr1271-${Environment}'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -416,7 +417,7 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'DBSubnetGroup-${AWS::StackName}-${Environment}'
+          Value: !Sub 'DBSubnetGroup-tapstackpr1271-${Environment}'
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
@@ -440,7 +441,7 @@ Resources:
       DeletionProtection: !If [IsProd, true, false]
       Tags:
         - Key: Name
-          Value: !Sub 'RDSDatabase-${AWS::StackName}-${Environment}'
+          Value: !Sub 'RDSDatabase-tapstackpr1271-${Environment}'
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
 
@@ -460,7 +461,7 @@ Resources:
         - !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'ALB-${AWS::StackName}-${Environment}'
+          Value: !Sub 'ALB-tapstackpr1271-${Environment}'
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -483,7 +484,7 @@ Resources:
           Value: '86400'
       Tags:
         - Key: Name
-          Value: !Sub 'ALBTargetGroup-${AWS::StackName}-${Environment}'
+          Value: !Sub 'ALBTargetGroup-tapstackpr1271-${Environment}'
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -548,7 +549,7 @@ Resources:
         MetricName: !Sub 'WebACL-${AWS::StackName}-${Environment}'
       Tags:
         - Key: Name
-          Value: !Sub 'WebACL-${AWS::StackName}-${Environment}'
+          Value: !Sub 'WebACL-tapstackpr1271-${Environment}'
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -600,7 +601,7 @@ Resources:
         WebACLId: !GetAtt WebACL.Arn
       Tags:
         - Key: Name
-          Value: !Sub 'CloudFront-${AWS::StackName}-${Environment}'
+          Value: !Sub 'CloudFront-tapstackpr1271-${Environment}'
 
   SSLCertificate:
     Type: AWS::CertificateManager::Certificate
@@ -609,7 +610,7 @@ Resources:
       ValidationMethod: DNS
       Tags:
         - Key: Name
-          Value: !Sub 'SSLCert-${AWS::StackName}-${Environment}'
+          Value: !Sub 'SSLCert-tapstackpr1271-${Environment}'
 
   # =========================================================================
   # 2. ROOT USER MFA - AWS CONFIG RULE
@@ -621,6 +622,7 @@ Resources:
   # Please ensure AWS Config is enabled and a configuration recorder exists before deploying this stack.
   # The ConfigRule below will attach to the existing recorder.
 
+  # IMPORTANT: S3 bucket names must be lowercase. Ensure your stack name and environment are lowercase.
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
