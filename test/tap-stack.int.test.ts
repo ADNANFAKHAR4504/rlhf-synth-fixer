@@ -9,47 +9,40 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 import {
   ConfigServiceClient,
+  DescribeConfigRulesCommand,
   DescribeConfigurationRecordersCommand,
   DescribeDeliveryChannelsCommand,
-  DescribeConfigRulesCommand,
 } from '@aws-sdk/client-config-service';
 import {
   DescribeTableCommand,
   DynamoDBClient,
 } from '@aws-sdk/client-dynamodb';
 import {
-  DescribeFlowLogsCommand,
-  DescribeInstancesCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcEndpointsCommand,
   DescribeVpcsCommand,
-  EC2Client,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 import {
-  GuardDutyClient,
   GetDetectorCommand,
-  ListDetectorsCommand,
+  GuardDutyClient
 } from '@aws-sdk/client-guardduty';
 import {
-  GetRolePolicyCommand,
-  IAMClient,
-  ListRolePoliciesCommand,
-  ListRolesCommand,
   GetRoleCommand,
+  IAMClient,
+  ListRolePoliciesCommand
 } from '@aws-sdk/client-iam';
-import { DescribeKeyCommand, KMSClient, ListKeysCommand } from '@aws-sdk/client-kms';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
   GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
   HeadBucketCommand,
-  ListBucketsCommand,
-  S3Client,
-  GetBucketLifecycleConfigurationCommand,
+  S3Client
 } from '@aws-sdk/client-s3';
 import {
   ListTopicsCommand,
@@ -61,7 +54,7 @@ import * as path from 'path';
 
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../pulumi-outputs/all-outputs.json');
+    const outputsPath = path.join(__dirname, '../cdn-outputs/flat-outputs.json');
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
     return JSON.parse(outputsContent);
   } catch (error) {

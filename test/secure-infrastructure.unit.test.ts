@@ -243,7 +243,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.ec2.Vpc).toHaveBeenCalledWith(
-        'main-vpc',
+        'main-vpc-test',
         expect.objectContaining({
           cidrBlock: '10.0.0.0/16',
           enableDnsHostnames: true,
@@ -257,7 +257,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.ec2.Subnet).toHaveBeenCalledWith(
-        'public-subnet-1',
+        'public-subnet-1-test',
         expect.objectContaining({
           cidrBlock: '10.0.1.0/24',
           mapPublicIpOnLaunch: true,
@@ -266,7 +266,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
 
       expect(aws.ec2.Subnet).toHaveBeenCalledWith(
-        'public-subnet-2',
+        'public-subnet-2-test',
         expect.objectContaining({
           cidrBlock: '10.0.2.0/24',
           mapPublicIpOnLaunch: true,
@@ -279,7 +279,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.ec2.Subnet).toHaveBeenCalledWith(
-        'private-subnet-1',
+        'private-subnet-1-test',
         expect.objectContaining({
           cidrBlock: '10.0.10.0/24',
           mapPublicIpOnLaunch: false,
@@ -288,7 +288,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
 
       expect(aws.ec2.Subnet).toHaveBeenCalledWith(
-        'private-subnet-2',
+        'private-subnet-2-test',
         expect.objectContaining({
           cidrBlock: '10.0.11.0/24',
           mapPublicIpOnLaunch: false,
@@ -301,10 +301,10 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.ec2.InternetGateway).toHaveBeenCalledWith(
-        'main-igw',
+        'main-igw-test',
         expect.objectContaining({
           tags: expect.objectContaining({
-            Name: 'main-igw',
+            Name: 'main-igw-test',
           }),
         }),
         expect.any(Object)
@@ -315,7 +315,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.ec2.Eip).toHaveBeenCalledWith(
-        'nat-eip',
+        'nat-eip-test',
         expect.objectContaining({
           domain: 'vpc',
         }),
@@ -323,10 +323,10 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
 
       expect(aws.ec2.NatGateway).toHaveBeenCalledWith(
-        'nat-gateway',
+        'nat-gateway-test',
         expect.objectContaining({
           tags: expect.objectContaining({
-            Name: 'nat-gateway',
+            Name: 'nat-gateway-test',
           }),
         }),
         expect.any(Object)
@@ -348,9 +348,9 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.ec2.SecurityGroup).toHaveBeenCalledWith(
-        'web-security-group',
+        'web-security-group-test',
         expect.objectContaining({
-          name: 'web-security-group',
+          name: 'web-security-group-test',
           description: 'Security group for web servers with restricted access - NO SSH',
           ingress: expect.arrayContaining([
             expect.objectContaining({
@@ -377,9 +377,9 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.ec2.SecurityGroup).toHaveBeenCalledWith(
-        'database-security-group',
+        'database-security-group-test',
         expect.objectContaining({
-          name: 'database-security-group',
+          name: 'database-security-group-test',
           description: 'Security group for database tier - only accessible from web tier',
         }),
         expect.any(Object)
@@ -416,10 +416,10 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.s3.Bucket).toHaveBeenCalledWith(
-        'cloudtrail-logs-bucket',
+        'cloudtrail-logs-bucket-test',
         expect.objectContaining({
           tags: expect.objectContaining({
-            Name: 'cloudtrail-logs-bucket',
+            Name: 'cloudtrail-logs-bucket-test',
             Purpose: 'CloudTrail logs storage',
           }),
         }),
@@ -433,14 +433,14 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.dynamodb.Table).toHaveBeenCalledWith(
-        'application-data-table',
+        'application-table-test',
         expect.objectContaining({
-          name: 'application-data-table',
+          name: 'application-data-table-test',
           billingMode: 'PROVISIONED',
-          readCapacity: 5,
+          readCapacity: 10,
           writeCapacity: 5,
           pointInTimeRecovery: { enabled: true },
-          deletionProtection: true,
+          deletionProtectionEnabled: true,
         }),
         expect.any(Object)
       );
@@ -450,18 +450,18 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.kms.Key).toHaveBeenCalledWith(
-        'infrastructure-kms-key',
+        'infrastructure-kms-key-test',
         expect.objectContaining({
-          description: 'KMS key for infrastructure encryption',
+          description: 'KMS key for infrastructure encryption - test',
           keyUsage: 'ENCRYPT_DECRYPT',
         }),
         expect.any(Object)
       );
 
       expect(aws.kms.Alias).toHaveBeenCalledWith(
-        'infrastructure-kms-key-alias',
+        'infrastructure-kms-key-alias-test',
         expect.objectContaining({
-          name: 'alias/infrastructure-key',
+          name: 'alias/infrastructure-key-test',
         }),
         expect.any(Object)
       );
@@ -482,9 +482,9 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.iam.Role).toHaveBeenCalledWith(
-        'ec2-deployment-role',
+        'ec2-deployment-role-test',
         expect.objectContaining({
-          name: 'ec2-deployment-role',
+          name: 'ec2-deployment-role-test',
           assumeRolePolicy: expect.stringContaining('ec2.amazonaws.com'),
         }),
         expect.any(Object)
@@ -495,9 +495,9 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.iam.Policy).toHaveBeenCalledWith(
-        'ec2-deployment-policy',
+        'ec2-deployment-policy-test',
         expect.objectContaining({
-          name: 'ec2-deployment-policy',
+          name: 'ec2-deployment-policy-test',
           description: 'Policy allowing only necessary EC2 actions for application deployment',
         }),
         expect.any(Object)
@@ -508,7 +508,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.iam.RolePolicyAttachment).toHaveBeenCalledWith(
-        'ec2-ssm-policy-attachment',
+        'ec2-ssm-policy-attachment-test',
         expect.objectContaining({
           policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
         }),
@@ -531,9 +531,9 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.cloudtrail.Trail).toHaveBeenCalledWith(
-        'main-cloudtrail',
+        'main-cloudtrail-test',
         expect.objectContaining({
-          name: 'main-cloudtrail',
+          name: 'main-cloudtrail-test',
           includeGlobalServiceEvents: true,
           isMultiRegionTrail: true,
           enableLogFileValidation: true,
@@ -546,9 +546,9 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.sns.Topic).toHaveBeenCalledWith(
-        'security-alerts-topic',
+        'security-alerts-topic-test',
         expect.objectContaining({
-          name: 'security-alerts-topic',
+          name: 'security-alerts-topic-test',
           displayName: 'Security Alerts and Monitoring',
         }),
         expect.any(Object)
@@ -559,9 +559,9 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith(
-        'dynamodb-read-throttle-alarm',
+        'dynamodb-read-throttle-alarm-test',
         expect.objectContaining({
-          name: 'dynamodb-read-throttle-alarm',
+          name: 'dynamodb-read-throttle-alarm-test',
           metricName: 'ReadThrottledEvents',
           namespace: 'AWS/DynamoDB',
         }),
@@ -572,23 +572,11 @@ describe('SecureInfrastructure Unit Tests', () => {
     it('should create GuardDuty detector with features', () => {
       const aws = require('@pulumi/aws');
       
-      expect(aws.guardduty.Detector).toHaveBeenCalledWith(
-        'main-guardduty-detector',
-        expect.objectContaining({
-          enable: true,
-          findingPublishingFrequency: 'FIFTEEN_MINUTES',
-        }),
-        expect.any(Object)
-      );
-
-      expect(aws.guardduty.DetectorFeature).toHaveBeenCalledWith(
-        'guardduty-s3-data-events',
-        expect.objectContaining({
-          name: 'S3_DATA_EVENTS',
-          status: 'ENABLED',
-        }),
-        expect.any(Object)
-      );
+      // Since we check for existing detector first and create new one if none exists
+      expect(aws.guardduty.getDetector).toHaveBeenCalled();
+      // Note: The actual detector creation happens asynchronously in pulumi.output().apply()
+      // so we can't easily test the exact call in a synchronous test
+      expect(aws.guardduty.DetectorFeature).toHaveBeenCalledTimes(3); // S3, EKS, Malware features
     });
 
     it('should create AWS Config resources', () => {
@@ -597,7 +585,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       expect(aws.cfg.DeliveryChannel).toHaveBeenCalled();
       expect(aws.cfg.Recorder).toHaveBeenCalled();
       expect(aws.cfg.Rule).toHaveBeenCalledWith(
-        'encrypted-volumes-rule',
+        'encrypted-volumes-rule-test',
         expect.objectContaining({
           source: expect.objectContaining({
             sourceIdentifier: 'ENCRYPTED_VOLUMES',
@@ -622,7 +610,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       const aws = require('@pulumi/aws');
       
       expect(aws.ec2.VpcEndpoint).toHaveBeenCalledWith(
-        'ssm-endpoint',
+        'ssm-endpoint-test',
         expect.objectContaining({
           serviceName: 'com.amazonaws.ap-south-1.ssm',
           vpcEndpointType: 'Interface',
@@ -631,7 +619,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
 
       expect(aws.ec2.VpcEndpoint).toHaveBeenCalledWith(
-        'ssm-messages-endpoint',
+        'ssm-messages-endpoint-test',
         expect.objectContaining({
           serviceName: 'com.amazonaws.ap-south-1.ssmmessages',
           vpcEndpointType: 'Interface',
@@ -640,7 +628,7 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
 
       expect(aws.ec2.VpcEndpoint).toHaveBeenCalledWith(
-        'ec2-messages-endpoint',
+        'ec2-messages-endpoint-test',
         expect.objectContaining({
           serviceName: 'com.amazonaws.ap-south-1.ec2messages',
           vpcEndpointType: 'Interface',

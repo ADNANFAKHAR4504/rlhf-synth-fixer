@@ -75,9 +75,9 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environment: environment,
         tags: {
-          ...tags,
           ManagedBy: 'Pulumi',
           Component: 'SecureInfrastructure',
+          ...tags, // Custom tags override defaults
         },
       },
       { parent: this }

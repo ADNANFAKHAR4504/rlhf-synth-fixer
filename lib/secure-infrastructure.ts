@@ -1141,7 +1141,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       `config-role-policy-${args.environment}`,
       {
         role: configRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/AWSConfigRole',
+        policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
       },
       { provider, parent: this }
     );
@@ -1309,7 +1309,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     this.kmsKeyArn = kmsKey.arn;
     this.cloudtrailArn = cloudTrail.arn;
     this.s3BucketName = cloudtrailBucket.bucket;
-    this.availableAZs = pulumi.output(availabilityZones).apply(az => az.names);
+    this.availableAZs = pulumi.output(availabilityZones.then(az => az.names));
     this.snsTopicArn = securityAlertsTopic.arn;
     this.guardDutyDetectorId = guardDutyDetector.id;
     this.configDeliveryChannelName = configDeliveryChannel.name;
