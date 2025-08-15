@@ -2,6 +2,7 @@
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeInstancesCommand,
   DescribeSubnetsCommand,
   DescribeRouteTablesCommand,
 } from "@aws-sdk/client-ec2";
@@ -72,10 +73,11 @@ describe("TapStack Integration Tests", () => {
   // EC2 Instance
   // -------------------------------
   test("EC2 instance exists", async () => {
-    const { Reservations } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [stackOutputs.public_subnet_id] }));
-    // Not fetching all EC2 details here; basic existence verified via stack output
-    expect(stackOutputs.ec2_instance_id).toBeDefined();
-    expect(stackOutputs.ec2_public_ip).toMatch(/\d+\.\d+\.\d+\.\d+/);
+    const { Reservations } = await ec2Client.send(
+      new DescribeInstancesCommand({ InstanceIds: [stackOutputs.ec2_instance_id] })
+    );
+    expect(Reservations?.length).toBeGreaterThan(0);
+    expect(Reservations?.[0].Instances?.[0].InstanceId).toBe(stackOutputs.ec2_instance_id);
   });
 
   // -------------------------------
@@ -101,8 +103,11 @@ describe("TapStack Integration Tests", () => {
   // IAM Role
   // -------------------------------
   test("EC2 IAM role exists", async () => {
-    const { Role } = await iamClient.send(new GetRoleCommand({ RoleName: stackOutputs.ec2_role_arn.split("/")[1] }));
-    expect(Role.RoleName).toBe(stackOutputs.ec2_role_arn.split("/")[1]);
+    const { Role } = await iamClient.send(
+      new GetRoleCommand({ RoleName: stackOutputs.ec2_role_arn.split("/")[1] })
+    );
+    expect(Role).toBeDefined();
+    expect(Role!.RoleName).toBe(stackOutputs.ec2_role_arn.split("/")[1]);
   });
 
   // -------------------------------
