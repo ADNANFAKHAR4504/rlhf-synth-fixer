@@ -1,57 +1,56 @@
-# CloudFormation Template Requirements
+# Infrastructure Requirements for Web App
 
-We need to create a CloudFormation YAML template for our production web application infrastructure. This template should establish a secure and scalable AWS environment.
+We're building out a new web application and need some solid infrastructure behind it. Here's what we're thinking for the CloudFormation setup.
 
-## Core Requirements
+## What we need
 
-The template needs to generate a complete and valid AWS CloudFormation template in YAML format that sets up infrastructure for a production-grade web application.
+Building a production web app that can handle real traffic. Need something reliable that won't fall over when we actually launch this thing.
 
-### Infrastructure Constraints
+The plan is to use CloudFormation YAML since that's what the rest of the team knows. Should be something we can actually deploy without too much headache.
 
-Please ensure the following requirements are met:
+## Regional stuff
 
-- Deploy all resources within the `us-west-2` region
-- Use AWS IAM roles for managing permissions to S3 buckets (no inline policies or user credentials)
-- Enable encryption at rest for all RDS instances
-- Create a VPC with both public and private subnets, with NAT gateways providing internet access to private subnets
-- Include detailed comments in the YAML explaining each resource's purpose and key configuration decisions
+Everything goes in us-west-2 - that's where our other infrastructure lives anyway so makes sense to keep it all together.
 
-### Infrastructure Components
+## Network architecture
 
-The template should include these components:
+For networking we want:
+- New VPC (don't want to mess with the existing one)
+- Both public and private subnets - web stuff in private for security
+- NAT gateways so private subnets can still get out to the internet for updates and whatnot
+- Load balancer sitting in front of everything so users never hit the servers directly
 
-**VPC and Networking**
+## Database requirements  
 
-- New VPC with public and private subnets
-- Private subnets configured to route outbound traffic through NAT Gateway
+Database needs to be solid:
+- RDS instance with encryption turned on (compliance requirement, can't negotiate on this one)
+- Should probably be MySQL since that's what the app is built for
+- Multi-AZ would be good for availability
 
-**Web Server Setup**
+## S3 and permissions
 
-- Web servers accessible only via load balancer
-- Security groups restricting direct public access to server instances
+Need an S3 bucket for storing application assets, logs, maybe some user uploads later.
 
-**Database Configuration**
+For permissions - use IAM roles for everything. No hardcoded keys anywhere, learned that lesson the hard way on the last project. Keep it least privilege, only give access to what's actually needed.
 
-- RDS database instance with encryption at rest enabled
+## Security considerations
 
-**S3 Integration**
+Security is important:
+- Encryption at rest for database
+- Security groups that actually make sense
+- No unnecessary ports open
+- Follow the usual AWS security best practices
 
-- IAM role with least-privilege policy for S3 bucket access
-- Role should be attachable to EC2 instances or Lambda functions as needed
+## Documentation
 
-**Security Standards**
+Please add comments in the CloudFormation template so we can understand what's going on 6 months from now when something breaks at 2am. Explain not just what each resource does but why we made certain configuration choices.
 
-- Template must follow production environment security best practices
+## What we want
 
-### Technical Requirements
+Single CloudFormation YAML file that:
+- Validates properly (no syntax errors or missing references)
+- Actually deploys without errors
+- Sets up everything we need for the web app
+- Can be torn down cleanly for testing
 
-The generated YAML should be:
-
-- Complete and syntactically correct
-- Ready for AWS CloudFormation validation
-- Deployable as a single cohesive document
-- Compliant with all specified constraints and requirements
-
-### Expected Deliverable
-
-A well-commented YAML CloudFormation template that provisions the requested AWS resources in the `us-west-2` region, following all security and architectural constraints. The template must pass AWS validation and be ready for deployment.
+This is going to be our production infrastructure so it needs to work reliably. We'll be running multiple environments (dev, staging, prod) so keep that in mind.
