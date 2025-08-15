@@ -58,6 +58,21 @@ describe("Terraform Infrastructure Integration Tests", () => {
 
     outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 
+    // Parse stringified arrays in the outputs (common issue with deployment output flattening)
+    for (const [key, value] of Object.entries(outputs)) {
+      if (typeof value === 'string' && key.includes('subnet_ids')) {
+        try {
+          // Try to parse as JSON array if it looks like a stringified array
+          if (value.startsWith('[') && value.endsWith(']')) {
+            outputs[key] = JSON.parse(value as string);
+          }
+        } catch (error) {
+          // If parsing fails, keep the original value and let validation catch it
+          console.warn(`Warning: Could not parse ${key} as JSON array: ${error}`);
+        }
+      }
+    }
+
     // Validate outputs contain expected values and are properly formatted
     const requiredOutputs = [
       'vpc_primary_id', 'vpc_secondary_id', 
