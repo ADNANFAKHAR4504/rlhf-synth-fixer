@@ -97,11 +97,10 @@ variable "environment_suffix" {
 # =============================================================================
 
 locals {
-  # Avoid duplicate -dev-dev when suffix equals environment (or empty)
   computed_suffix = var.environment_suffix != "" && var.environment_suffix != var.environment ? "-${var.environment_suffix}" : ""
   name_prefix     = "${var.project}-${var.environment}${local.computed_suffix}"
 
-  # Enforce 32-char limits where AWS requires short names
+  # 32-char caps for these names
   alb_name = substr("${local.name_prefix}-alb", 0, 32)
   tg_name  = substr("${local.name_prefix}-tg", 0, 32)
 
@@ -345,71 +344,6 @@ resource "aws_security_group" "rds" {
   lifecycle {
     create_before_destroy = true
   }
-}
-
-# =============================================================================
-# IAM
-# =============================================================================
-
-resource "aws_iam_role" "instance_role" {
-  name = "${local.name_prefix}-instance-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
-  role       = aws_iam_role.instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_role_policy_attachment" "cloudwatch_agent_server_policy" {
-  role       = aws_iam_role.instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-}
-
-resource "aws_iam_role_policy" "ssm_parameter_access" {
-  name = "${local.name_prefix}-ssm-parameter-access"
-  role = aws_iam_role.instance_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter",
-          "ssm:GetParameters",
-          "ssm:GetParametersByPath"
-        ]
-        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/app/${local.name_prefix}/*"
-      },
-      {
-        Effect = "Allow"
-        Action = ["kms:Decrypt"]
-        Resource = data.aws_kms_key.ssm.arn
-      }
-    ]
-  })
-}
-
-resource "aws_iam_instance_profile" "instance_profile" {
-  name = "${local.name_prefix}-instance-profile"
-  role = aws_iam_role.instance_role.name
-
-  tags = local.common_tags
 }
 
 # =============================================================================
@@ -716,7 +650,7 @@ resource "aws_db_instance" "app" {
   storage_encrypted     = true
 
   engine         = "postgres"
-  engine_version = "17.3"  # hardcoded for us-west-2
+  engine_version = "15.14"  # <- use numeric minor; console shows as 15.14.R1
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
@@ -730,7 +664,7 @@ resource "aws_db_instance" "app" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  auto_minor_version_upgrade = true
+  auto_minor_version_upgrade = true   # will move to 15.14.Rx patch automatically
   deletion_protection        = false
   skip_final_snapshot        = true
   final_snapshot_identifier  = "${local.name_prefix}-rds-final-snapshot"
