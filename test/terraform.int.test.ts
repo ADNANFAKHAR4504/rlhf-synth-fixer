@@ -42,6 +42,21 @@ import {
 
 const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
 
+// Helper function to unwrap Terraform output values
+function unwrapTerraformOutputs(rawOutputs: any): any {
+  const unwrapped: any = {};
+  for (const [key, value] of Object.entries(rawOutputs)) {
+    // If value is an object with a 'value' property (Terraform format), unwrap it
+    if (value && typeof value === 'object' && 'value' in value) {
+      unwrapped[key] = (value as any).value;
+    } else {
+      // Otherwise, use the value as-is (mock data format)
+      unwrapped[key] = value;
+    }
+  }
+  return unwrapped;
+}
+
 describe("Terraform Infrastructure Integration Tests", () => {
   let outputs: any;
   let apiGatewayClientUse1: ApiGatewayV2Client;
@@ -62,7 +77,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
   beforeAll(async () => {
     try {
       const outputsContent = fs.readFileSync(outputsPath, "utf8");
-      outputs = JSON.parse(outputsContent);
+      const rawOutputs = JSON.parse(outputsContent);
+      // Unwrap Terraform outputs to get plain string values
+      outputs = unwrapTerraformOutputs(rawOutputs);
 
       // Initialize clients for both regions
       apiGatewayClientUse1 = new ApiGatewayV2Client({ region: "us-east-1" });
