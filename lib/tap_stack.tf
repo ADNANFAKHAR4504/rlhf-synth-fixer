@@ -452,6 +452,73 @@ resource "aws_cloudwatch_log_group" "rds" {
 }
 
 # =============================================================================
+# IAM (for EC2 to use SSM + CloudWatch + SSM Parameter/KMS decrypt)
+# =============================================================================
+
+resource "aws_iam_role" "instance_role" {
+  name = "${local.name_prefix}-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = { Service = "ec2.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# Allow SSM agent + Session Manager
+resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
+  role       = aws_iam_role.instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# Allow CloudWatch Agent to push logs/metrics
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent_server_policy" {
+  role       = aws_iam_role.instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+# Read app parameters from SSM (and decrypt with AWS managed SSM KMS key)
+resource "aws_iam_role_policy" "ssm_parameter_access" {
+  name = "${local.name_prefix}-ssm-parameter-access"
+  role = aws_iam_role.instance_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadAppParameters"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/app/${local.name_prefix}/*"
+      },
+      {
+        Sid    = "KmsDecryptForParameters"
+        Effect = "Allow"
+        Action = ["kms:Decrypt"]
+        Resource = data.aws_kms_key.ssm.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "instance_profile" {
+  name = "${local.name_prefix}-instance-profile"
+  role = aws_iam_role.instance_role.name
+  tags = local.common_tags
+}
+
+# =============================================================================
 # User data (inline, single file)
 # =============================================================================
 
