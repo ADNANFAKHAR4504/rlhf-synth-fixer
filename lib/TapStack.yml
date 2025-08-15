@@ -162,7 +162,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'SecureEC2InstanceProfile-${EnvironmentSuffix}'
       Roles:
         - !Ref EC2Role
 
