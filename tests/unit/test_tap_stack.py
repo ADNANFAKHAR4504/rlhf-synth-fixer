@@ -1,219 +1,313 @@
 """
 test_tap_stack.py
 
-Unit tests for the TapStack Pulumi component using moto for AWS mocking
-and Pulumi's testing utilities.
+Unit tests for the single-file Pulumi infrastructure script.
+Tests the infrastructure configuration and resource creation.
 """
 
 import unittest
 from unittest.mock import Mock, patch
-from lib.tap_stack import TapStack, TapStackArgs
+import sys
+import os
+
+# Add the lib directory to the path so we can import tap_stack
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
+
+# Import the function to test
+from tap_stack import create_infrastructure
 
 
-class TestTapStackArgs(unittest.TestCase):
-  """Test cases for TapStackArgs configuration class."""
+class TestTapStackConfiguration(unittest.TestCase):
+  """Test cases for configuration and setup."""
 
-  def test_tap_stack_args_default_values(self):
-    """Test TapStackArgs with default values."""
-    args = TapStackArgs()
-    
-    self.assertEqual(args.environment_suffix, 'dev')
-    self.assertEqual(args.tags, {})
-
-  def test_tap_stack_args_custom_values(self):
-    """Test TapStackArgs with custom values."""
-    custom_tags = {'Team': 'platform', 'Project': 'tap'}
-    args = TapStackArgs(environment_suffix='prod', tags=custom_tags)
-    
-    self.assertEqual(args.environment_suffix, 'prod')
-    self.assertEqual(args.tags, custom_tags)
-
-  def test_tap_stack_args_none_tags(self):
-    """Test TapStackArgs with None tags."""
-    args = TapStackArgs(environment_suffix='test', tags=None)
-    
-    self.assertEqual(args.environment_suffix, 'test')
-    self.assertEqual(args.tags, {})
-
-
-class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack Pulumi component."""
-
-  def setUp(self):
-    """Set up test fixtures."""
-    self.mock_pulumi = Mock()
-    self.mock_ec2 = Mock()
-    self.mock_get_availability_zones = Mock()
-    
-    # Mock the availability zones response
-    mock_azs = Mock()
-    mock_azs.names = ['us-east-1a', 'us-east-1b', 'us-east-1c']
-    self.mock_get_availability_zones.return_value = mock_azs
-
-  @patch('lib.tap_stack.ec2')
-  @patch('lib.tap_stack.get_availability_zones')
-  @patch('lib.tap_stack.Config')
-  def test_tap_stack_initialization(self, mock_config, mock_get_azs, mock_ec2):
-    """Test TapStack initialization with basic configuration."""
-    # Mock config
+  @patch('tap_stack.get_availability_zones')
+  @patch('tap_stack.ec2')
+  @patch('tap_stack.Config')
+  def test_configuration_defaults(self, mock_config, mock_ec2, mock_get_azs):
+    """Test that configuration uses proper defaults."""
+    # Mock the config
     mock_config_instance = Mock()
     mock_config_instance.get.side_effect = lambda key, default=None: {
+      'environment': 'dev',
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
     mock_config.return_value = mock_config_instance
-    
+
     # Mock availability zones
     mock_azs_response = Mock()
     mock_azs_response.names = ['us-east-1a', 'us-east-1b']
     mock_get_azs.return_value = mock_azs_response
-    
-    # Mock EC2 resources
+
+    # Mock all resources
+    mock_resource = Mock()
+    mock_resource.id = 'resource-test-id'
+    mock_ec2.Vpc.return_value = mock_resource
+    mock_ec2.InternetGateway.return_value = mock_resource
+    mock_ec2.Subnet.return_value = mock_resource
+    mock_ec2.Eip.return_value = mock_resource
+    mock_ec2.NatGateway.return_value = mock_resource
+    mock_ec2.RouteTable.return_value = mock_resource
+    mock_ec2.RouteTableAssociation.return_value = mock_resource
+    mock_ec2.SecurityGroup.return_value = mock_resource
+
+    # Call the function
+    result = create_infrastructure(export_outputs=False)
+
+    # Verify the configuration is set correctly by checking resource calls
+    vpc_call = mock_ec2.Vpc.call_args
+    self.assertIn('vpc-dev', vpc_call[0][0])  # Name contains environment
+    self.assertEqual(vpc_call[1]['tags']['Environment'], 'dev')
+    self.assertEqual(vpc_call[1]['tags']['Team'], 'platform')
+    self.assertEqual(vpc_call[1]['tags']['Project'], 'tap')
+
+  @patch('tap_stack.get_availability_zones')
+  @patch('tap_stack.ec2')
+  @patch('tap_stack.Config')
+  def test_configuration_custom_values(self, mock_config, mock_ec2, mock_get_azs):
+    """Test that configuration accepts custom values."""
+    # Mock the config with custom values
+    mock_config_instance = Mock()
+    mock_config_instance.get.side_effect = lambda key, default=None: {
+      'environment': 'prod',
+      'team': 'devops',
+      'project': 'myapp'
+    }.get(key, default)
+    mock_config.return_value = mock_config_instance
+
+    # Mock availability zones
+    mock_azs_response = Mock()
+    mock_azs_response.names = ['us-east-1a', 'us-east-1b']
+    mock_get_azs.return_value = mock_azs_response
+
+    # Mock all resources
+    mock_resource = Mock()
+    mock_resource.id = 'resource-test-id'
+    mock_ec2.Vpc.return_value = mock_resource
+    mock_ec2.InternetGateway.return_value = mock_resource
+    mock_ec2.Subnet.return_value = mock_resource
+    mock_ec2.Eip.return_value = mock_resource
+    mock_ec2.NatGateway.return_value = mock_resource
+    mock_ec2.RouteTable.return_value = mock_resource
+    mock_ec2.RouteTableAssociation.return_value = mock_resource
+    mock_ec2.SecurityGroup.return_value = mock_resource
+
+    # Call the function
+    result = create_infrastructure(export_outputs=False)
+
+    # Verify the configuration is set correctly
+    vpc_call = mock_ec2.Vpc.call_args
+    self.assertIn('vpc-prod', vpc_call[0][0])  # Name contains environment
+    self.assertEqual(vpc_call[1]['tags']['Environment'], 'prod')
+    self.assertEqual(vpc_call[1]['tags']['Team'], 'devops')
+    self.assertEqual(vpc_call[1]['tags']['Project'], 'myapp')
+
+
+class TestTapStackResources(unittest.TestCase):
+  """Test cases for resource creation and configuration."""
+
+  @patch('tap_stack.get_availability_zones')
+  @patch('tap_stack.ec2')
+  @patch('tap_stack.Config')
+  def test_vpc_creation(self, mock_config, mock_ec2, mock_get_azs):
+    """Test VPC creation with proper configuration."""
+    # Mock configuration
+    mock_config_instance = Mock()
+    mock_config_instance.get.side_effect = lambda key, default=None: {
+      'environment': 'test',
+      'team': 'platform',
+      'project': 'tap'
+    }.get(key, default)
+    mock_config.return_value = mock_config_instance
+
+    # Mock availability zones
+    mock_azs_response = Mock()
+    mock_azs_response.names = ['us-east-1a', 'us-east-1b']
+    mock_get_azs.return_value = mock_azs_response
+
+    # Mock VPC
     mock_vpc = Mock()
-    mock_vpc.id = 'vpc-12345'
+    mock_vpc.id = 'vpc-test-id'
     mock_vpc.cidr_block = '10.0.0.0/16'
     mock_ec2.Vpc.return_value = mock_vpc
-    
-    mock_igw = Mock()
-    mock_igw.id = 'igw-12345'
-    mock_ec2.InternetGateway.return_value = mock_igw
-    
-    mock_subnet = Mock()
-    mock_subnet.id = 'subnet-12345'
-    mock_ec2.Subnet.return_value = mock_subnet
-    
-    mock_eip = Mock()
-    mock_eip.id = 'eip-12345'
-    mock_ec2.Eip.return_value = mock_eip
-    
-    mock_nat = Mock()
-    mock_nat.id = 'nat-12345'
-    mock_ec2.NatGateway.return_value = mock_nat
-    
-    mock_rt = Mock()
-    mock_ec2.RouteTable.return_value = mock_rt
-    
-    mock_rta = Mock()
-    mock_ec2.RouteTableAssociation.return_value = mock_rta
-    
-    mock_sg = Mock()
-    mock_sg.id = 'sg-12345'
-    mock_ec2.SecurityGroup.return_value = mock_sg
-    
-    # Create TapStack instance
-    args = TapStackArgs(environment_suffix='test', tags={'Test': 'true'})
-    stack = TapStack('test-stack', args)
-    
-    # Verify the stack was created
-    self.assertIsInstance(stack, TapStack)
-    self.assertEqual(stack.environment_suffix, 'test')
-    self.assertEqual(stack.tags, {'Test': 'true'})
-    
-    # Verify VPC was created
+
+    # Mock other resources
+    mock_resource = Mock()
+    mock_ec2.InternetGateway.return_value = mock_resource
+    mock_ec2.Subnet.return_value = mock_resource
+    mock_ec2.Eip.return_value = mock_resource
+    mock_ec2.NatGateway.return_value = mock_resource
+    mock_ec2.RouteTable.return_value = mock_resource
+    mock_ec2.RouteTableAssociation.return_value = mock_resource
+    mock_ec2.SecurityGroup.return_value = mock_resource
+
+    # Call the function
+    result = create_infrastructure(export_outputs=False)
+
+    # Verify VPC was created with correct parameters
     mock_ec2.Vpc.assert_called_once()
-    vpc_call_args = mock_ec2.Vpc.call_args
-    self.assertIn('tap-vpc-test', vpc_call_args[0][0])
-    self.assertEqual(vpc_call_args[1]['cidr_block'], '10.0.0.0/16')
-    
-    # Verify Internet Gateway was created
-    mock_ec2.InternetGateway.assert_called_once()
-    
-    # Verify subnets were created (2 public + 2 private)
-    self.assertEqual(mock_ec2.Subnet.call_count, 4)
-    
-    # Verify NAT Gateway was created
-    mock_ec2.NatGateway.assert_called_once()
-    
-    # Verify route tables were created
-    self.assertEqual(mock_ec2.RouteTable.call_count, 2)
-    
-    # Verify security groups were created
-    self.assertEqual(mock_ec2.SecurityGroup.call_count, 2)
+    call_args = mock_ec2.Vpc.call_args
+    self.assertIn('vpc-test', call_args[0][0])  # Name contains environment
+    self.assertEqual(call_args[1]['cidr_block'], '10.0.0.0/16')
+    self.assertTrue(call_args[1]['enable_dns_hostnames'])
+    self.assertTrue(call_args[1]['enable_dns_support'])
 
-  @patch('lib.tap_stack.ec2')
-  @patch('lib.tap_stack.get_availability_zones')
-  @patch('lib.tap_stack.Config')
-  def test_tap_stack_outputs(self, mock_config, mock_get_azs, mock_ec2):
-    """Test that TapStack registers the correct outputs."""
-    # Mock config
+  @patch('tap_stack.get_availability_zones')
+  @patch('tap_stack.ec2')
+  @patch('tap_stack.Config')
+  def test_subnet_creation(self, mock_config, mock_ec2, mock_get_azs):
+    """Test subnet creation across availability zones."""
+    # Mock configuration
     mock_config_instance = Mock()
     mock_config_instance.get.side_effect = lambda key, default=None: {
+      'environment': 'test',
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
     mock_config.return_value = mock_config_instance
-    
+
     # Mock availability zones
     mock_azs_response = Mock()
     mock_azs_response.names = ['us-east-1a', 'us-east-1b']
     mock_get_azs.return_value = mock_azs_response
-    
-    # Mock EC2 resources with specific IDs
+
+    # Mock resources
     mock_vpc = Mock()
-    mock_vpc.id = 'vpc-test123'
+    mock_vpc.id = 'vpc-test-id'
+    mock_ec2.Vpc.return_value = mock_vpc
+
+    mock_subnet = Mock()
+    mock_subnet.id = 'subnet-test-id'
+    mock_ec2.Subnet.return_value = mock_subnet
+
+    # Mock other resources
+    mock_resource = Mock()
+    mock_ec2.InternetGateway.return_value = mock_resource
+    mock_ec2.Eip.return_value = mock_resource
+    mock_ec2.NatGateway.return_value = mock_resource
+    mock_ec2.RouteTable.return_value = mock_resource
+    mock_ec2.RouteTableAssociation.return_value = mock_resource
+    mock_ec2.SecurityGroup.return_value = mock_resource
+
+    # Call the function
+    result = create_infrastructure(export_outputs=False)
+
+    # Verify subnets were created
+    self.assertEqual(mock_ec2.Subnet.call_count, 4)  # 2 public + 2 private
+
+    # Check that public subnets have map_public_ip_on_launch=True
+    public_subnet_calls = [call for call in mock_ec2.Subnet.call_args_list 
+                          if 'public-subnet' in call[0][0]]
+    for call in public_subnet_calls:
+      self.assertTrue(call[1]['map_public_ip_on_launch'])
+
+    # Check that private subnets have map_public_ip_on_launch=False
+    private_subnet_calls = [call for call in mock_ec2.Subnet.call_args_list 
+                           if 'private-subnet' in call[0][0]]
+    for call in private_subnet_calls:
+      self.assertFalse(call[1]['map_public_ip_on_launch'])
+
+  @patch('tap_stack.get_availability_zones')
+  @patch('tap_stack.ec2')
+  @patch('tap_stack.Config')
+  def test_security_group_creation(self, mock_config, mock_ec2, mock_get_azs):
+    """Test security group creation with proper rules."""
+    # Mock configuration
+    mock_config_instance = Mock()
+    mock_config_instance.get.side_effect = lambda key, default=None: {
+      'environment': 'test',
+      'team': 'platform',
+      'project': 'tap'
+    }.get(key, default)
+    mock_config.return_value = mock_config_instance
+
+    # Mock availability zones
+    mock_azs_response = Mock()
+    mock_azs_response.names = ['us-east-1a', 'us-east-1b']
+    mock_get_azs.return_value = mock_azs_response
+
+    # Mock resources
+    mock_vpc = Mock()
+    mock_vpc.id = 'vpc-test-id'
     mock_vpc.cidr_block = '10.0.0.0/16'
     mock_ec2.Vpc.return_value = mock_vpc
-    
-    mock_igw = Mock()
-    mock_igw.id = 'igw-test123'
-    mock_ec2.InternetGateway.return_value = mock_igw
-    
-    mock_subnet = Mock()
-    mock_subnet.id = 'subnet-test123'
-    mock_ec2.Subnet.return_value = mock_subnet
-    
-    mock_eip = Mock()
-    mock_eip.id = 'eip-test123'
-    mock_ec2.Eip.return_value = mock_eip
-    
-    mock_nat = Mock()
-    mock_nat.id = 'nat-test123'
-    mock_ec2.NatGateway.return_value = mock_nat
-    
-    mock_rt = Mock()
-    mock_ec2.RouteTable.return_value = mock_rt
-    
-    mock_rta = Mock()
-    mock_ec2.RouteTableAssociation.return_value = mock_rta
-    
-    mock_sg = Mock()
-    mock_sg.id = 'sg-test123'
-    mock_ec2.SecurityGroup.return_value = mock_sg
-    
-    # Create TapStack instance
-    args = TapStackArgs(environment_suffix='test')
-    stack = TapStack('test-stack', args)
-    
-    # Verify outputs are registered
-    self.assertIsNotNone(stack.vpc)
-    self.assertIsNotNone(stack.public_subnets)
-    self.assertIsNotNone(stack.private_subnets)
-    self.assertIsNotNone(stack.public_sg)
-    self.assertIsNotNone(stack.private_sg)
-    self.assertIsNotNone(stack.igw)
-    self.assertIsNotNone(stack.nat_gateway)
 
-  def test_tap_stack_resource_naming(self):
-    """Test that resources are named correctly with environment suffix."""
-    # This test verifies the naming convention used in the TapStack
-    env_suffix = 'prod'
-    expected_patterns = [
-      f'tap-vpc-{env_suffix}',
-      f'tap-igw-{env_suffix}',
-      f'tap-public-subnet-1-{env_suffix}',
-      f'tap-private-subnet-1-{env_suffix}',
-      f'tap-nat-eip-{env_suffix}',
-      f'tap-nat-gateway-{env_suffix}',
-      f'tap-public-rt-{env_suffix}',
-      f'tap-private-rt-{env_suffix}',
-      f'tap-public-sg-{env_suffix}',
-      f'tap-private-sg-{env_suffix}'
-    ]
-    
-    # Verify naming patterns are consistent
-    for pattern in expected_patterns:
-      self.assertIn(env_suffix, pattern)
-      self.assertTrue(pattern.startswith('tap-'))
+    mock_subnet = Mock()
+    mock_subnet.id = 'subnet-test-id'
+    mock_ec2.Subnet.return_value = mock_subnet
+
+    mock_sg = Mock()
+    mock_sg.id = 'sg-test-id'
+    mock_ec2.SecurityGroup.return_value = mock_sg
+
+    # Mock other resources
+    mock_resource = Mock()
+    mock_ec2.InternetGateway.return_value = mock_resource
+    mock_ec2.Eip.return_value = mock_resource
+    mock_ec2.NatGateway.return_value = mock_resource
+    mock_ec2.RouteTable.return_value = mock_resource
+    mock_ec2.RouteTableAssociation.return_value = mock_resource
+
+    # Call the function
+    result = create_infrastructure(export_outputs=False)
+
+    # Verify security groups were created
+    self.assertEqual(mock_ec2.SecurityGroup.call_count, 2)  # public + private
+
+    # Check public security group has SSH, HTTP, HTTPS rules
+    public_sg_call = [call for call in mock_ec2.SecurityGroup.call_args_list 
+                     if 'public-sg' in call[0][0]][0]
+    ingress_rules = public_sg_call[1]['ingress']
+    # Since we're using SecurityGroupIngressArgs objects, we need to check the call arguments
+    self.assertEqual(len(ingress_rules), 3)  # SSH, HTTP, HTTPS
+
+  @patch('tap_stack.get_availability_zones')
+  @patch('tap_stack.ec2')
+  @patch('tap_stack.Config')
+  def test_resource_tagging(self, mock_config, mock_ec2, mock_get_azs):
+    """Test that all resources have proper tagging."""
+    # Mock configuration
+    mock_config_instance = Mock()
+    mock_config_instance.get.side_effect = lambda key, default=None: {
+      'environment': 'test',
+      'team': 'platform',
+      'project': 'tap'
+    }.get(key, default)
+    mock_config.return_value = mock_config_instance
+
+    # Mock availability zones
+    mock_azs_response = Mock()
+    mock_azs_response.names = ['us-east-1a', 'us-east-1b']
+    mock_get_azs.return_value = mock_azs_response
+
+    # Mock all resources
+    mock_resource = Mock()
+    mock_resource.id = 'resource-test-id'
+    mock_ec2.Vpc.return_value = mock_resource
+    mock_ec2.InternetGateway.return_value = mock_resource
+    mock_ec2.Subnet.return_value = mock_resource
+    mock_ec2.Eip.return_value = mock_resource
+    mock_ec2.NatGateway.return_value = mock_resource
+    mock_ec2.RouteTable.return_value = mock_resource
+    mock_ec2.RouteTableAssociation.return_value = mock_resource
+    mock_ec2.SecurityGroup.return_value = mock_resource
+
+    # Call the function
+    result = create_infrastructure(export_outputs=False)
+
+    # Verify all resources have proper tags
+    for call in mock_ec2.Vpc.call_args_list + mock_ec2.InternetGateway.call_args_list + \
+                mock_ec2.Subnet.call_args_list + mock_ec2.Eip.call_args_list + \
+                mock_ec2.NatGateway.call_args_list + mock_ec2.RouteTable.call_args_list + \
+                mock_ec2.SecurityGroup.call_args_list:
+      tags = call[1]['tags']
+      self.assertIn('Environment', tags)
+      self.assertIn('Team', tags)
+      self.assertIn('Project', tags)
+      self.assertIn('Name', tags)
+      self.assertEqual(tags['Environment'], 'test')
+      self.assertEqual(tags['Team'], 'platform')
+      self.assertEqual(tags['Project'], 'tap')
 
 
 if __name__ == '__main__':
