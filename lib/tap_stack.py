@@ -11,9 +11,7 @@ import json
 
 @dataclass
 class TapStackArgs:
-    """
-    Configuration arguments for TAP stack deployment.
-    """
+    """Configuration arguments for TAP stack deployment."""
     environment_suffix: str
     domain_name: str = None
     hosted_zone_id: str = None
@@ -21,9 +19,7 @@ class TapStackArgs:
     cost_optimization: bool = False
 
 class TapStack(pulumi.ComponentResource):
-    """
-    Multi-region static website deployment stack with enterprise security features.
-    """
+    """Multi-region static website deployment stack with enterprise security features."""
     
     def __init__(self, name: str, args: TapStackArgs, opts: ResourceOptions = None):
         super().__init__('custom:resource:TapStack', name, {}, opts)
@@ -33,38 +29,25 @@ class TapStack(pulumi.ComponentResource):
         self.hosted_zone_id = args.hosted_zone_id
         self.enable_logging = args.enable_logging
         self.cost_optimization = args.cost_optimization
-        
-        # Define deployment regions
         self.regions = ['us-west-2', 'us-east-1']
         
-        # Create KMS key for S3 bucket encryption
+        # Create all resources
         self._create_kms_resources()
-        
-        # Create S3 buckets with versioning, encryption
         self._create_s3_resources()
         
-        # Create CloudWatch resources for monitoring
         if self.enable_logging:
             self._create_cloudwatch_resources()
         
-        # Create CloudFront distribution
         self._create_cloudfront_resources()
-        
-        # Create WAF for security
         self._create_waf_resources()
         
-        # Create ACM certificate for TLS
         if self.domain_name:
             self._create_acm_resources()
         
-        # Create Route53 DNS records
         if self.domain_name and self.hosted_zone_id:
             self._create_route53_resources()
         
-        # Create IAM resources with least privilege
         self._create_iam_resources()
-        
-        # Register stack outputs
         self._register_outputs()
 
     def _create_kms_resources(self):
@@ -145,7 +128,7 @@ class TapStack(pulumi.ComponentResource):
                     'Purpose': 'StaticWebsite',
                     'ManagedBy': 'Pulumi'
                 },
-                force_destroy=True,  # For easier cleanup in non-prod environments
+                force_destroy=True,
                 opts=ResourceOptions(parent=self)
             )
             
@@ -192,7 +175,7 @@ class TapStack(pulumi.ComponentResource):
             # Create CloudWatch alarm for monitoring bucket access
             alarm = cloudwatch.MetricAlarm(
                 f'alarm-{region}-{self.environment_suffix}',
-                alarm_name=f'high-s3-requests-{region}-{self.environment_suffix}',
+                name=f'high-s3-requests-{region}-{self.environment_suffix}',  # FIXED: Use 'name' instead of 'alarm_name'
                 comparison_operator='GreaterThanThreshold',
                 evaluation_periods=2,
                 metric_name='NumberOfObjects',
