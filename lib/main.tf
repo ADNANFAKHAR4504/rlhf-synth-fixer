@@ -220,7 +220,8 @@ data "aws_caller_identity" "current" {}
 # Recommended: build the trail ARN once so we can scope the policy
 # If you already have a local for this, reuse it.
 locals {
-  trail_arn = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${local.name_with_suffix}-trail01"
+  trail_name = "${local.name_with_suffix}-trail-${random_id.suffix.hex}"
+  trail_arn  = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${local.trail_name}"
 }
 
 data "aws_partition" "current" {}
