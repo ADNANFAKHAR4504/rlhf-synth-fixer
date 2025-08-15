@@ -103,6 +103,7 @@ describe("Static validation of ../lib/tap_stack.tf (no terraform runtime)", () =
       "app_max_size",
       "app_min_size",
       "allowed_ssh_cidrs",
+      "environment_suffix",
     ];
     for (const v of mustVars) {
       const vb = extractFirstBlock(hcl, new RegExp(`variable\\s+"${v}"\\s*`,"g"));
@@ -160,7 +161,7 @@ describe("Static validation of ../lib/tap_stack.tf (no terraform runtime)", () =
     expect(l0).toMatch(/enable_detailed_monitoring\s*=\s*local\.is_production/);
     expect(l0).toMatch(/enable_bucket_versioning\s*=\s*local\.is_production/);
     expect(l0).toMatch(/enable_nat_gateway\s*=\s*local\.is_production/);
-    expect(l0).toMatch(/name_prefix\s*=\s*"\$\{var\.project_name\}-\$\{var\.environment\}"/);
+    expect(l0).toMatch(/name_prefix\s*=\s*"\$\{var\.project_name\}-\$\{var\.environment\}-\$\{var\.environment_suffix\}"/);
     expect(l0).toMatch(/azs\s*=\s*slice\(data\.aws_availability_zones\.available\.names,\s*0,\s*2\)/);
     // environment-specific resource configurations
     expect(l0).toMatch(/rds_instance_class\s*=\s*local\.is_production/);
@@ -254,7 +255,7 @@ describe("Static validation of ../lib/tap_stack.tf (no terraform runtime)", () =
     expect(rds!).toMatch(/vpc_security_group_ids\s*=\s*\[aws_security_group\.rds\.id\]/);
     expect(rds!).toMatch(/db_subnet_group_name\s*=\s*aws_db_subnet_group\.main\.name/);
     expect(rds!).toMatch(/backup_retention_period\s*=\s*local\.is_production/);
-    expect(rds!).toMatch(/deletion_protection\s*=\s*local\.is_production/);
+    expect(rds!).toMatch(/deletion_protection\s*=\s*false/);
   });
 
   /** ===================== APPLICATION LOAD BALANCER ===================== */
@@ -264,7 +265,7 @@ describe("Static validation of ../lib/tap_stack.tf (no terraform runtime)", () =
     expect(alb!).toMatch(/load_balancer_type\s*=\s*"application"/);
     expect(alb!).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
     expect(alb!).toMatch(/subnets\s*=\s*\[for k in sort\(keys\(aws_subnet\.public\)\) : aws_subnet\.public\[k\]\.id\]/);
-    expect(alb!).toMatch(/enable_deletion_protection\s*=\s*local\.is_production/);
+    expect(alb!).toMatch(/enable_deletion_protection\s*=\s*false/);
 
     const targetGroup = extractFirstBlock(hcl, /resource\s+"aws_lb_target_group"\s+"main"\s*/g);
     expect(targetGroup).toBeTruthy();
@@ -417,10 +418,10 @@ describe("Static validation of ../lib/tap_stack.tf (no terraform runtime)", () =
     // RDS configurations
     const rds = extractFirstBlock(hcl, /resource\s+"aws_db_instance"\s+"main"\s*/g);
     expect(rds!).toMatch(/backup_retention_period\s*=\s*local\.is_production\s*\?\s*7\s*:\s*1/);
-    expect(rds!).toMatch(/deletion_protection\s*=\s*local\.is_production/);
+    expect(rds!).toMatch(/deletion_protection\s*=\s*false/);
 
     // ALB configurations
     const alb = extractFirstBlock(hcl, /resource\s+"aws_lb"\s+"main"\s*/g);
-    expect(alb!).toMatch(/enable_deletion_protection\s*=\s*local\.is_production/);
+    expect(alb!).toMatch(/enable_deletion_protection\s*=\s*false/);
   });
 });

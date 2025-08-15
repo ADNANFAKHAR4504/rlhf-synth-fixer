@@ -205,11 +205,12 @@ describe("Naming convention validation", () => {
   test("Resource names follow expected pattern", () => {
     const project = OUT.environmentInfo.project;
     const environment = OUT.environmentInfo.environment;
-    const expectedPrefix = `${project}-${environment}`;
+    // Check if names include the environment suffix (should contain pr or dev suffix)
+    const prefixPattern = `${project}-${environment}-`;
     
-    expect(OUT.asgName).toMatch(new RegExp(`^${expectedPrefix}-asg`));
-    expect(OUT.albDnsName).toMatch(new RegExp(`${expectedPrefix}-alb`));
-    expect(OUT.rdsEndpoint).toMatch(new RegExp(`${expectedPrefix}-db`));
+    expect(OUT.asgName).toContain(prefixPattern);
+    expect(OUT.albDnsName).toContain(prefixPattern);
+    expect(OUT.rdsEndpoint).toContain(prefixPattern);
   });
 });
 

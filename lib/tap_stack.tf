@@ -141,6 +141,12 @@ variable "allowed_ssh_cidrs" {
   }
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming"
+  type        = string
+  default     = "dev"
+}
+
 ########################
 # Data Sources
 ########################
@@ -189,8 +195,8 @@ locals {
   # Availability zones
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
-  # Naming conventions
-  name_prefix = "${var.project_name}-${var.environment}"
+  # Naming conventions with environment suffix
+  name_prefix = "${var.project_name}-${var.environment}-${var.environment_suffix}"
 
   # Environment-specific resource configurations
   rds_instance_class   = local.is_production ? "db.r5.large" : var.rds_instance_class
@@ -460,10 +466,10 @@ resource "aws_db_instance" "main" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  skip_final_snapshot       = false
+  skip_final_snapshot       = true # Skip final snapshot for easier cleanup
   final_snapshot_identifier = "${local.name_prefix}-final-snapshot"
 
-  deletion_protection = local.is_production
+  deletion_protection = false # Always allow deletion for testing
 
   tags = {
     Name = "${local.name_prefix}-db"
@@ -481,7 +487,7 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = [for k in sort(keys(aws_subnet.public)) : aws_subnet.public[k].id]
 
-  enable_deletion_protection = local.is_production
+  enable_deletion_protection = false # Always allow deletion for testing
 
   tags = {
     Name = "${local.name_prefix}-alb"
