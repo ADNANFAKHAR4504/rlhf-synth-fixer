@@ -43,8 +43,8 @@ resource "aws_kms_key" "financial_app_primary" {
         ]
         Resource = "arn:aws:kms:${var.primary_region}:${data.aws_caller_identity.current.account_id}:key/*"
         Condition = {
-          ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/primary"
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}*"
           }
           StringEquals = {
             "aws:PrincipalAccount" = data.aws_caller_identity.current.account_id
@@ -98,8 +98,8 @@ resource "aws_kms_key" "financial_app_secondary" {
         ]
         Resource = "arn:aws:kms:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:key/*"
         Condition = {
-          ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/secondary"
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}*"
           }
           StringEquals = {
             "aws:PrincipalAccount" = data.aws_caller_identity.current.account_id
