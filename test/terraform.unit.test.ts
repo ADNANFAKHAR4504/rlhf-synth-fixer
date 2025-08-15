@@ -83,7 +83,12 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
   describe("Locals", () => {
     test("defines name_prefix with environment suffix", () => {
-      expect(stackContent).toMatch(/name_prefix\s*=\s*"\$\{var\.project\}-\$\{var\.environment\}-\$\{var\.environment_suffix\}"/);
+      // Accept either the old direct concatenation OR the new computed_suffix form
+      const direct = /name_prefix\s*=\s*"\$\{var\.project\}-\$\{var\.environment\}-\$\{var\.environment_suffix\}"/;
+      const computed =
+        /computed_suffix[\s\S]*name_prefix\s*=\s*"\$\{var\.project\}-\$\{var\.environment\}\$\{local\.computed_suffix\}"/;
+
+      expect(direct.test(stackContent) || computed.test(stackContent)).toBe(true);
     });
 
     test("defines common_tags", () => {
@@ -91,7 +96,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/project\s*=\s*var\.project/);
       expect(stackContent).toMatch(/environment\s*=\s*var\.environment/);
     });
-  });
+});
+
 
   describe("VPC and Networking", () => {
     test("creates VPC with correct configuration", () => {
