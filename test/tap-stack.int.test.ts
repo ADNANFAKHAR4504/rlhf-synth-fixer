@@ -88,7 +88,10 @@ describe('TapStack Integration Tests', () => {
           expect(error.response.headers['access-control-allow-origin']).toBeDefined();
         } else {
           // For mock endpoints, we expect network errors (no response headers)
+          // Check for common network error codes
           expect(error.code).toBeDefined();
+          // The error should be a network-related error (ENOTFOUND, ECONNREFUSED, etc.)
+          expect(['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET']).toContain(error.code);
         }
       }
     });
