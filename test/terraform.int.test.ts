@@ -3,7 +3,7 @@ import * as AWS from 'aws-sdk';
 import fetch from 'node-fetch';
 
 // Configure AWS SDK
-AWS.config.update({ region: 'us-east-1' });
+AWS.config.update({ region: 'us-west-2' });
 const ec2 = new AWS.EC2();
 const rds = new AWS.RDS();
 const lambda = new AWS.Lambda();
@@ -75,7 +75,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
         // Try to get VPC ID from existing VPCs with our project tag
         try {
           const AWS = require('aws-sdk');
-          AWS.config.update({ region: 'us-east-1' });
+          AWS.config.update({ region: 'us-west-2' });
           const ec2 = new AWS.EC2();
           
           const vpcs = await ec2.describeVpcs({
