@@ -561,6 +561,9 @@ class TestTapStack(unittest.TestCase):
       mock.cloudfront_access_identity_path = MagicMock()
       mock.domain_name = MagicMock()
       mock.iam_arn = MagicMock()
+      mock.resource_id = MagicMock()
+      mock.scalable_dimension = MagicMock()
+      mock.service_namespace = MagicMock()
       # Add Resource attributes for Pulumi
       mock._name = "mock-resource"
       mock._type = "mock:resource:Resource"
