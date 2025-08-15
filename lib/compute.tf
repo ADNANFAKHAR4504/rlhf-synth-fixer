@@ -17,9 +17,8 @@ resource "aws_launch_template" "main" {
     device_name = "/dev/xvda"
     ebs {
       volume_type           = "gp3"
-      volume_size           = 20
-      encrypted             = true
-      kms_key_id            = aws_kms_key.main.arn
+      volume_size           = 8
+      encrypted             = false
       delete_on_termination = true
     }
   }
@@ -36,35 +35,11 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-              echo "Starting user-data script at $(date)"
-              
-              # Update system
               yum update -y
-              
-              # Install packages
-              yum install -y amazon-cloudwatch-agent httpd
-              
-              # Start and enable Apache
+              yum install -y httpd
               systemctl start httpd
               systemctl enable httpd
-              
-              # Wait for Apache to start
-              sleep 10
-              
-              # Create a simple index page
-              echo "<html><body><h1>Hello from SecureTF Instance</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Started at: $(date)</p></body></html>" > /var/www/html/index.html
-              
-              # Ensure Apache is serving content
-              systemctl status httpd
-              curl -I http://localhost/
-              
-              # Configure CloudWatch agent (optional, may fail without config file)
-              if [ -f /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json ]; then
-                /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-              fi
-              
-              echo "User-data script completed at $(date)"
+              echo "<html><body><h1>Hello from SecureTF</h1></body></html>" > /var/www/html/index.html
               EOF
   )
 
@@ -84,9 +59,9 @@ resource "aws_launch_template" "main" {
 resource "aws_autoscaling_group" "main" {
   name                      = "${var.resource_prefix}-${var.environment_suffix}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "EC2"
-  health_check_grace_period = 600
+  health_check_grace_period = 300
+  wait_for_capacity_timeout = "15m"
   min_size                  = 1
   max_size                  = 3
   desired_capacity          = 1
@@ -105,6 +80,18 @@ resource "aws_autoscaling_group" "main" {
     value               = "${var.resource_prefix}-${var.environment_suffix}-asg"
     propagate_at_launch = false
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Attach target group after ASG is healthy
+resource "aws_autoscaling_attachment" "main" {
+  autoscaling_group_name = aws_autoscaling_group.main.id
+  lb_target_group_arn    = aws_lb_target_group.main.arn
+
+  depends_on = [aws_autoscaling_group.main]
 }
 
 # Application Load Balancer
