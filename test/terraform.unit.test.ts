@@ -1,10 +1,10 @@
 // Comprehensive unit tests for Terraform infrastructure
-// Tests lib/main.tf without executing Terraform commands (static validation only)
+// Tests lib/tap_stack.tf without executing Terraform commands (static validation only)
 
 import fs from "fs";
 import path from "path";
 
-const MAIN_TF_REL = "../lib/main.tf";
+const MAIN_TF_REL = "../lib/tap_stack.tf";
 const PROVIDER_TF_REL = "../lib/provider.tf";
 const mainTfPath = path.resolve(__dirname, MAIN_TF_REL);
 const providerTfPath = path.resolve(__dirname, PROVIDER_TF_REL);
