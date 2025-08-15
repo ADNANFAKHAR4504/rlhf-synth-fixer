@@ -46,6 +46,16 @@ QA expert that ensures IaC meets quality standards and requirements.
   - "Access Control"
   - "Performance Optimization"
   - (... feel free to add more labels if none of the above applies.)
+- Add `training_quality` to `metadata.json` from `lib/PROMPT.md` , `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
+  - This metric should reflect the potential training quality that this data will achieved when used for trainging the model
+  that generated the MODEL_RESPONSE.
+  - It should be a number between 0 and 10 where:
+    - 0 means no improved on the model at all.
+    - 1 means that the improvement is minimal.
+    - ...
+    - 10 means that the data will increase the model's knowledge substantially on the specific domain of the task.
+- Add `aws_services` to `metadata.json`, extracting from `lib/IDEAL_RESPONSE.md` a list of strings of AWS Services
+used in the task.
 
 ### Phase 2: Compliance Analysis
 
