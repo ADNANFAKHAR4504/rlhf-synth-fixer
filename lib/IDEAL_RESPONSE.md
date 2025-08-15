@@ -186,7 +186,7 @@ export interface SecureS3BucketArgs {
 
 export class SecureS3Bucket extends pulumi.ComponentResource {
   public readonly bucket: aws.s3.Bucket;
-  public readonly bucketPolicy: aws.s3.BucketPolicy;
+  public readonly bucketPolicy?: aws.s3.BucketPolicy;
   public readonly publicAccessBlock: aws.s3.BucketPublicAccessBlock;
   public readonly accessLogsBucket?: aws.s3.Bucket;
 
