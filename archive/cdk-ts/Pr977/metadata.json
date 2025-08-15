@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr639",
+  "team": "synth",
+  "startedAt": "2025-08-12T02:52:52+01:00",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "olaoluwa-turing",
+  "dockerS3Location": ""
+}

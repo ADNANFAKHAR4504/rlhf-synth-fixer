@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-.coverage
-cov.json
-node_modules/
-=======
 # Compiled JavaScript files (but keep config files)
 /bin/*.js
 /lib/*.js
@@ -25,6 +20,7 @@ cdk.out/
 
 # IDE/Editor files
 .vscode/settings.local.json
+.claude/settings.local.json
 .idea/
 *.swp
 *.swo
@@ -89,21 +85,18 @@ imports/*
 cdktf.out
 cdktf.log
 *terraform.*.tfstate*
-.genpackage-lock.json
 .gen
+bin/.terraform.lock.hcl
+.genpackage-lock.json
 .gen/providers/*
-
 
 __pycache__/
 .pulumi/
-# CDK build output
-cdk.out/
 
 tasks-status.md
 worktree/
 bin/.terraform.lock.hcl
 bin/tfplan
 
-
 build
->>>>>>> 76d494e9c4a018680114ed2ed2896ea888b416ca
+tasks.csv
