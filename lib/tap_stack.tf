@@ -21,7 +21,7 @@ data "aws_vpc" "default" {
   default = true
 }
 
-# Get existing subnets from the default VPC
+# Get existing subnets from the default VPC, filtering for supported AZs
 data "aws_subnets" "existing_public" {
   filter {
     name   = "vpc-id"
@@ -30,6 +30,10 @@ data "aws_subnets" "existing_public" {
   filter {
     name   = "default-for-az"
     values = ["true"]
+  }
+  filter {
+    name   = "availability-zone"
+    values = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
   }
 }
 
