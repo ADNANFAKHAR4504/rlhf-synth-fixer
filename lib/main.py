@@ -88,6 +88,9 @@ def deploy_infrastructure():
   print("Creating IAM roles...")
   iam_roles = create_iam_roles(common_tags)
 
+  # Create CodePipeline
+  code_pipeline = setup_codepipeline(pulumi.get_stack().lower())
+
   # Deploy infrastructure in each region
   for region in regions:
     print(f"Deploying infrastructure in {region}...")
@@ -148,8 +151,6 @@ def deploy_infrastructure():
       tags=common_tags,
       provider=provider
     )
-
-    code_pipeline = setup_codepipeline(pulumi.get_stack().lower())
 
     # Ensure CloudTrail waits for S3 bucket policy
     pulumi.Output.all(bucket_policy.id, cloudtrail.name).apply(
