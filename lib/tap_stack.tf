@@ -9,17 +9,17 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name (production, staging, development)"
   type        = string
-  default     = "newenv20250815"
+  default     = "cleanstate20250815"
   validation {
-    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815"], var.environment)
-    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815."
+    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815", "cleanstate20250815"], var.environment)
+    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815, cleanstate20250815."
   }
 }
 
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "unique-project-20250815"
+  default     = "cleanstart-project-v2"
 }
 
 variable "vpc_cidr" {
@@ -87,6 +87,13 @@ data "aws_availability_zones" "available" {
 resource "random_password" "db_password" {
   length  = 16
   special = true
+}
+
+# Random suffix for unique resource names
+resource "random_string" "unique_suffix" {
+  length  = 8
+  upper   = false
+  special = false
 }
 
 # KMS Key for encryption
@@ -378,7 +385,7 @@ resource "aws_security_group" "database" {
 
 # S3 Buckets
 resource "aws_s3_bucket" "main" {
-  bucket = "${local.name_prefix}-main-bucket-${random_id.bucket_suffix.hex}"
+  bucket = "${local.name_prefix}-main-bucket-${random_string.unique_suffix.result}"
 
   # Force delete bucket even if not empty
   force_destroy = true
@@ -387,7 +394,7 @@ resource "aws_s3_bucket" "main" {
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${local.name_prefix}-cloudtrail-${random_id.bucket_suffix.hex}"
+  bucket = "${local.name_prefix}-cloudtrail-${random_string.unique_suffix.result}"
 
   # Force delete bucket even if not empty
   force_destroy = true
