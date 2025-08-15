@@ -1,88 +1,65 @@
-# Prompt
+# AWS Nova Model Breaking – Pulumi CI/CD Setup
 
-You are tasked with setting up a **Continuous Integration and Continuous Deployment (CI/CD)** pipeline entirely within AWS for a **serverless application** using **Pulumi in Python**.  
-The pipeline must provision both **infrastructure** and **application deployment resources** securely and scalably, relying **only on AWS native services**.
+This project establishes a complete CI/CD pipeline for a serverless application deployed **entirely within AWS** using Pulumi and Python.
 
----
-
-## **Specific Requirements**
-
-### **Implementation**
-
-- Use the **Pulumi Python SDK** for all infrastructure as code.
-- Define **all resources** in a **single Pulumi Python file**.
+No GitHubb, no external services – only AWS services working natively.
 
 ---
 
-### **Provisioned AWS Resources**
+## What It Does
 
-1. **S3 Buckets**
-   - One for **build artifacts**.
-   - One for **application logs**.
-   - Must have:
-     - **Server-side encryption** with **AWS KMS** (CMK).
-     - **Bucket ownership controls** set to `BucketOwnerEnforced`.
-     - **Versioning enabled**.
+AWS has everything needed to build, deploy and run the application.
 
-2. **AWS KMS CMK**
-   - Customer-managed key.
-   - **Rotation enabled**.
-   - Used for S3 bucket encryption.
-
-3. **Lambda Function (Main Application)**
-   - With **alias** for zero-downtime deployments.
-   - No separate log processor Lambda.
-
-4. **API Gateway REST API**
-   - Exposes the Lambda function.
-
-5. **AWS CodeBuild Project**
-   - Builds the application.
-
-6. **AWS CodePipeline**
-   - Orchestrates CI/CD.
-   - Uses **CodeCommit** as the source stage (**lookup or fallback** if missing).
-   - Integrates with CodeDeploy for deployments.
-
-7. **AWS CodeDeploy**
-   - Application and deployment group for **Lambda traffic shifting** and **rollback**.
-
-8. **CloudWatch**
-   - Alarms and log groups for monitoring.
+The pipeline deploys the infrastructure (S3, Lambda, API Gateway, etc.) and the deployment process (CodeBuild, CodePipeline, CodeDeploy) all in a single step.
 
 ---
 
-### **Security & Best Practices**
+### Key components
 
-- **Isolated environment deployments** via configurable `ENVIRONMENT_SUFFIX`.
-- **IAM roles** with **minimal permissions** and explicit **policy attachments**.
-- **Tags applied** to all resources:
-  - `Environment` → from `ENVIRONMENT_SUFFIX`
-  - `Department` → `Engineering` (default)
-  - `Project` → `AWS Nova Model Breaking`
-- **Only AWS native services**:
-  - CodeCommit, CodePipeline, CodeBuild, S3, Lambda, API Gateway, CloudWatch, KMS.
+- **S3 buckets** -- one for build artifacts and another one for application logs..
+  Both of them are protected with a KMS CMK, versioning enabled, and bucket ownership set to `BucketOwnerEnforced`.
 
----
+- **KMS key** – customer-managed key with rotation enabled. It is used for all buckets’ encryption.
 
-### **Naming Conventions**
+- **Lambda function** – the application itself. It is deployed with an alias for zero-downtime releases.
 
-- **Project-specific prefixes**:
-  - `nova-*` → Main application components.
-  - `corp-*` → Shared buckets and keys.
-- Naming scheme must ensure **global uniqueness** per environment.
+- **API Gateway REST API** – integrated with the Lambda.
 
----
+- **CodeCommit** – serves as an empty repository for the source stage of the pipeline. It is used as a fallback to placeholder values to ensure the rest of the pipeline works.
 
-## **Constraints**
+- **CodeBuild project** – responsible for compiling and packaging the application.
 
-- **All resources** must be defined in **a single Pulumi Python file**.
-- **No external CI/CD services** (e.g., GitHub Actions).
-- **Zero downtime deployments** via Lambda alias routing + AWS CodeDeploy.
-- **Rollbacks** supported via CodePipeline + CodeDeploy.
-- Resource names and structures may **vary per environment** for uniqueness.
+- **CodePipeline** – brings it all together.
+  Comprised of:
+  - Source from CodeCommit
+
+  - Build with CodeBuild
+
+  - Deploy with CodeDeploy
+
+- **CodeDeploy** – handles Lambda traffic shifting and automatic rollback on failure.
+- **CloudWatch** – logs, alarms, and metrics.
 
 ---
 
-**Project Name:**  
-`IaC - AWS Nova Model Breaking`
+### Security notes
+
+- Everything runs in isolated environments (suffix set via `ENVIRONMENT_SUFFIX`).
+- IAM roles are locked down to the minimum needed.
+- No public buckets, no wide-open policies.
+- Tags go on _everything_:
+  - `Environment` (from ENVIRONMENT_SUFFIX)
+  - `Department` (defaults to Engineering)
+  - `Project` (always `AWS Nova Model Breaking`)
+
+### Naming style
+
+We follow a mix of `nova-*` for app components and `corp-*` for shared/global stuff like log buckets or KMS keys.  
+Keeps things unique across environments without resorting to random strings.
+
+### Constraints worth noting
+
+- All defined in a **single Pulumi Python file** – no multi-file modules here.
+- Only AWS-native services are allowed. That means no GitHub Actions, no CircleCI, no S3 buckets in some random region.
+- Zero downtime is a must – handled by Lambda aliases + CodeDeploy routing.
+- Rollbacks are built-in thanks to CodeDeploy integration.
