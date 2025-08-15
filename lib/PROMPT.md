@@ -13,7 +13,7 @@ You are tasked with securing an AWS cloud environment using CDKTF. The goal is t
 - **KMS Key Management**: Use AWS KMS for key management and ensure key rotation is enabled automatically.
 
 ## Environment:
-You have been tasked with securing an AWS cloud environment using Terraform. Write a Terraform configuration in HCL that meets the following security best practices:
+You have been tasked with securing an AWS cloud environment using CDKTF. Write a Typescript configuration that meets the following security best practices:
 
 1. Manage permissions using IAM roles exclusively, avoiding inline policies.
 2. All data stored in S3 buckets should be encrypted using AES-256 encryption protocols.
@@ -24,7 +24,7 @@ You have been tasked with securing an AWS cloud environment using Terraform. Wri
 7. Utilize AWS KMS for all key management tasks and configure key rotation to occur automatically.
 
 ## Expected Output:
-Your solution must be a valid Terraform configuration file named `secure_infrastructure.tf`. Ensure that all configurations align with the security requirements specified. Upon running `terraform apply`, the infrastructure must comply with these constraints and pass a security audit check by AWS Trusted Advisor.
+Your solution must be a valid CDKTF configuration file named `secure_infrastructure.ts`. Ensure that all configurations align with the security requirements specified. Upon running `terraform apply`, the infrastructure must comply with these constraints and pass a security audit check by AWS Trusted Advisor.
 
 ## Proposed Statement:
 - AWS account with multiple regions, utilizing Terraform for Infrastructure as Code management.
