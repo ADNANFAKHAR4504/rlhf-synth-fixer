@@ -531,18 +531,6 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # EC2 INSTANCES
 # ============================================================================
 
-# Key pair for EC2 instances (you may want to create this separately)
-resource "aws_key_pair" "environment_key" {
-  for_each = var.environments
-
-  key_name   = "key-${each.key}"
-  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7S..." # Replace with your actual public key
-
-  tags = merge(var.common_tags, {
-    Name        = "key-${each.key}"
-    Environment = each.key
-  })
-}
 
 # EC2 instances in public subnets
 resource "aws_instance" "web_servers" {
@@ -550,7 +538,6 @@ resource "aws_instance" "web_servers" {
 
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = each.value.instance_type
-  key_name              = aws_key_pair.environment_key[each.key].key_name
   vpc_security_group_ids = [aws_security_group.web_sg[each.key].id]
   subnet_id             = aws_subnet.public_subnets["${each.key}-public-0"].id
   iam_instance_profile  = aws_iam_instance_profile.ec2_profile[each.key].name
