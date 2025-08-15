@@ -116,7 +116,6 @@ Resources:
   TapSecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-tap-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -137,7 +136,7 @@ Resources:
             NoncurrentVersionExpirationInDays: 7
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-tap-secure-bucket'
+          Value: !Sub '${Environment}-tap-secure-bucket-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -382,12 +381,12 @@ Resources:
   TapCloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-tap-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref TapS3KMSKey
+            BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -397,7 +396,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-tap-cloudtrail-bucket'
+          Value: !Sub '${Environment}-tap-cloudtrail-bucket-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
