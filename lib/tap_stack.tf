@@ -131,7 +131,6 @@ data "aws_caller_identity" "current" {}
 resource "random_password" "rds" {
   length           = 16
   special          = true
-  # Exclude '/', '@', '"', and space per RDS constraints
   override_special = "!#$%&*+-=?^_{|}~"
 }
 
@@ -163,7 +162,6 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
   })
 }
 
-# --- KMS KEY with inline key policy ---
 resource "aws_kms_key" "general" {
   description             = "General purpose KMS key for prod environment ${local.env_suffix}"
   deletion_window_in_days = 7
@@ -216,8 +214,6 @@ resource "aws_kms_alias" "general" {
   name          = "alias/prod-general-${local.env_suffix}"
   target_key_id = aws_kms_key.general.key_id
 }
-
-# ---------------- VPC & Subnets ----------------
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -339,8 +335,6 @@ resource "aws_route_table_association" "db" {
   subnet_id      = aws_subnet.db[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
-
-# ---------------- NACLs ----------------
 
 resource "aws_network_acl" "public" {
   vpc_id     = aws_vpc.main.id
@@ -480,8 +474,6 @@ resource "aws_network_acl" "private" {
   tags = merge(local.common_tags, { Name = "prod-private-nacl-${local.env_suffix}" })
 }
 
-# ---------------- Security Groups ----------------
-
 resource "aws_security_group" "bastion" {
   name        = "prod-bastion-sg-${local.env_suffix}"
   description = "Security group for bastion host"
@@ -497,9 +489,24 @@ resource "aws_security_group" "bastion" {
     }
   }
 
-  egress { from_port = 22  to_port = 22  protocol = "tcp" cidr_blocks = [var.vpc_cidr] }
-  egress { from_port = 443 to_port = 443 protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
-  egress { from_port = 80  to_port = 80  protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
+  egress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = merge(local.common_tags, { Name = "prod-bastion-sg-${local.env_suffix}" })
 }
@@ -519,7 +526,6 @@ resource "aws_security_group" "app" {
     }
   }
 
-  # SSH only from bastion SG
   ingress {
     from_port       = 22
     to_port         = 22
@@ -527,9 +533,24 @@ resource "aws_security_group" "app" {
     security_groups = [aws_security_group.bastion.id]
   }
 
-  egress { from_port = 443 to_port = 443 protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
-  egress { from_port = 80  to_port = 80  protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
-  egress { from_port = 5432 to_port = 5432 protocol = "tcp" cidr_blocks = [var.vpc_cidr] }
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
 
   tags = merge(local.common_tags, { Name = "prod-app-sg-${local.env_suffix}" })
 }
@@ -554,12 +575,15 @@ resource "aws_security_group" "lambda" {
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.main.id
 
-  egress { from_port = 443 to_port = 443 protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = merge(local.common_tags, { Name = "prod-lambda-sg-${local.env_suffix}" })
 }
-
-# ---------------- S3 Logs Bucket ----------------
 
 resource "aws_s3_bucket" "logs" {
   bucket        = "prod-logs-${local.env_suffix}-${random_id.bucket_suffix.hex}"
@@ -581,7 +605,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
 
 resource "aws_s3_bucket_versioning" "logs" {
   bucket = aws_s3_bucket.logs.id
-  versioning_configuration { status = "Enabled" }
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
@@ -594,12 +620,14 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 
 resource "aws_s3_bucket_ownership_controls" "logs" {
   bucket = aws_s3_bucket.logs.id
-  rule { object_ownership = "BucketOwnerPreferred" }
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
 }
 
 resource "aws_s3_bucket_acl" "logs" {
-  bucket = aws_s3_bucket.logs.id
-  acl    = "log-delivery-write"
+  bucket     = aws_s3_bucket.logs.id
+  acl        = "log-delivery-write"
   depends_on = [aws_s3_bucket_ownership_controls.logs]
 }
 
@@ -649,8 +677,6 @@ resource "aws_s3_bucket_logging" "logs" {
   target_bucket = aws_s3_bucket.logs.id
   target_prefix = "access-logs/"
 }
-
-# ---------------- IAM (Roles & Inline Policies via separate resources) ----------------
 
 resource "aws_iam_role" "ec2_app" {
   name = "prod-ec2-app-role-${local.env_suffix}"
@@ -790,8 +816,6 @@ resource "aws_sns_topic" "security_alerts" {
   tags = merge(local.common_tags, { Name = "prod-security-alerts-${local.env_suffix}" })
 }
 
-# ---------------- Bastion EC2 ----------------
-
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.bastion_instance_type
@@ -827,8 +851,6 @@ resource "aws_instance" "bastion" {
   tags = merge(local.common_tags, { Name = "prod-bastion-${local.env_suffix}" })
 }
 
-# ---------------- App Launch Template & ASG ----------------
-
 resource "aws_launch_template" "app" {
   name_prefix   = "prod-app-${local.env_suffix}-"
   image_id      = data.aws_ami.amazon_linux.id
@@ -850,7 +872,6 @@ resource "aws_launch_template" "app" {
     }
   }
 
-  # Launch templates require base64-encoded user data
   user_data = base64encode(<<-EOF
     #!/bin/bash
     set -xe
@@ -895,7 +916,9 @@ resource "aws_launch_template" "app" {
     http_tokens   = "required"
   }
 
-  monitoring { enabled = true }
+  monitoring {
+    enabled = true
+  }
 
   tag_specifications {
     resource_type = "instance"
@@ -959,7 +982,6 @@ resource "aws_autoscaling_group" "app" {
   max_size         = var.asg_max_size
   desired_capacity = var.asg_desired_capacity
 
-  # Do not block 'apply' waiting for capacity to be InService
   wait_for_capacity_timeout = "0"
 
   launch_template {
@@ -968,7 +990,11 @@ resource "aws_autoscaling_group" "app" {
   }
 
   enabled_metrics = [
-    "GroupMinSize","GroupMaxSize","GroupDesiredCapacity","GroupInServiceInstances","GroupTotalInstances"
+    "GroupMinSize",
+    "GroupMaxSize",
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+    "GroupTotalInstances"
   ]
 
   tag {
@@ -1054,8 +1080,6 @@ resource "aws_cloudwatch_metric_alarm" "cpu_critical" {
   tags = merge(local.common_tags, { Name = "prod-app-cpu-critical-${local.env_suffix}" })
 }
 
-# ---------------- RDS (no engine_version to avoid region mismatch) ----------------
-
 resource "aws_db_subnet_group" "main" {
   name       = "prod-db-subnet-group-${local.env_suffix}"
   subnet_ids = aws_subnet.db[*].id
@@ -1064,13 +1088,13 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier           = "prod-db-${local.env_suffix}"
-  engine               = "postgres"
-  instance_class       = var.rds_instance_class
-  allocated_storage    = var.rds_allocated_storage
-  storage_encrypted    = true
-  kms_key_id           = aws_kms_key.general.arn
-  publicly_accessible  = false
+  identifier          = "prod-db-${local.env_suffix}"
+  engine              = "postgres"
+  instance_class      = var.rds_instance_class
+  allocated_storage   = var.rds_allocated_storage
+  storage_encrypted   = true
+  kms_key_id          = aws_kms_key.general.arn
+  publicly_accessible = false
 
   db_name  = "proddb"
   username = var.rds_username
@@ -1091,8 +1115,6 @@ resource "aws_db_instance" "main" {
   tags = merge(local.common_tags, { Name = "prod-db-${local.env_suffix}" })
 }
 
-# ---------------- CloudWatch Logs & EventBridge ----------------
-
 resource "aws_cloudwatch_log_group" "security_events" {
   name              = "/prod/security-events-${local.env_suffix}"
   retention_in_days = 7
@@ -1101,7 +1123,6 @@ resource "aws_cloudwatch_log_group" "security_events" {
   tags = merge(local.common_tags, { Name = "prod-security-events-log-group-${local.env_suffix}" })
 }
 
-# Account policy to allow EventBridge to write to CW Logs
 resource "aws_cloudwatch_log_resource_policy" "events_to_logs" {
   policy_name     = "prod-events-to-logs-${local.env_suffix}"
   policy_document = jsonencode({
@@ -1230,8 +1251,6 @@ resource "aws_lambda_permission" "allow_periodic" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.periodic_compliance.arn
 }
-
-# ---------------- Outputs ----------------
 
 output "vpc_id" {
   value       = aws_vpc.main.id
