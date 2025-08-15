@@ -15,14 +15,14 @@ describe("Terraform Integration Tests", () => {
     test("No outputs file found - skipping integration tests", () => {
       console.warn(`⚠️ No outputs file found at ${outputPath}`);
     });
-    return; // ✅ Allowed here because it's inside describe()
+    return; //Allowed here because it's inside describe()
   }
 
   try {
     outputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
   } catch (err) {
     test("Outputs JSON parsing", () => {
-      throw new Error(`❌ Failed to parse outputs file: ${err}`);
+      throw new Error('Failed to parse outputs file: ${err}`);
     });
     return;
   }
@@ -30,7 +30,7 @@ describe("Terraform Integration Tests", () => {
   const regions = outputs.regions || {};
   if (Object.keys(regions).length === 0) {
     test("No regions found in outputs file", () => {
-      console.warn(`⚠️ No 'regions' key found in outputs JSON`);
+      console.warn(`No 'regions' key found in outputs JSON`);
     });
     return;
   }

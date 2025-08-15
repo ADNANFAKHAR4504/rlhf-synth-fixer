@@ -28,9 +28,9 @@ Restrict outbound traffic to only these protocols.
 
 Create an S3 bucket in us-east-1 with versioning enabled.
 
-Restrict access to only the EC2 instances.
+Also keep Restrict access to only the EC2 instances.
 
-Ensure encryption is enabled (data at rest).
+Also pls Ensure encryption is enabled (data at rest).
 
 4. RDS PostgreSQL:
 
@@ -70,11 +70,17 @@ Maintain clarity in naming conventions.
 
 Ensure cross-region dependencies are properly handled.
 
-Here are my requireemnts: I need proper user prompt for above use case based on below conditions: 1. I want to put complete code in tap_stack.tf file which must have all variables declarations, existing values and logic and outputs as well. I already have provider.tf file which has providewr information. 2. I am using aws_region variable to pass region value in provider.tf file so manage this variable declaration accordingly in tap_stack.tf 3. I need tap_stack.tf in a way, it should create all modules instead of pointing anything to existing one. I am going to create brand new stack 4. Terraform logic should match what exactly is needed and with best practices
+Here are my requireemnts:
+1. I want to put complete code in tap_stack.tf file which must have all variables declarations, existing values and logic and outputs as well. I already have provider.tf file which has providewr information. 
+2. I am using aws_region variable to pass region value in provider.tf file so manage this variable declaration accordingly in tap_stack.tf 
+3. I need tap_stack.tf in a way, it should create all modules instead of pointing anything to existing one. I am going to create brand new stack 
+4. Terraform logic should match what exactly is needed and with best practices
 
 Generate a single-file Terraform configuration at ./lib/tap_stack.tf that includes:
 - All variable declarations (including `aws_region` for provider.tf), locals, resources, and outputs.
 - Build all resources directly (no external modules). This is a brand-new stack.
 - Follow best practices: least-privilege IAM, encryption where applicable, secure security groups, consistent tagging.
 - Emit useful outputs for CI/CD and tests (no secrets).
-If multiple environments/regions are needed, provider aliases are defined in provider.tf and referenced in tap_stack.tf.
+
+- If multiple environments/regions are needed, provider aliases are defined in provider.tf and referenced in tap_stack.tf.
+
