@@ -61,3 +61,10 @@ This document lists the issues in the `MODEL_RESPONSE.md` file that were fixed i
 ## **15. Missing CloudWatch Agent Installation**
 - **Issue**: The `LaunchTemplate` in `MODEL_RESPONSE.md` does not include the installation and configuration of the CloudWatch Agent.
 - **Fix**: Added the necessary commands to install and configure the CloudWatch Agent in the `UserData` section of the `LaunchTemplate` in
+
+### **16. Incorrect Dynamic Reference Syntax
+- **Issue**: E1029 Found an embedded parameter "${ProjectName}" outside of an "Fn::Sub" at Resources/Database/Properties/MasterUserPassword
+- **Fix**: Corrected syntax** to use `!Sub` function:
+  ```yaml
+  MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProjectName}/database/${Environment}:SecretString:password}}'
+  ```

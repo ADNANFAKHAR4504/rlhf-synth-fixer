@@ -59,14 +59,11 @@ Parameters:
     Type: String
     Default: 'dbadmin'
     Description: 'Database master username'
-  
-  DBPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    Default: 'YourSecurePassword123'
-    Description: 'Database master password (8-41 characters)'
+
+  AvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: "List of Availability Zones"
+    Default: "us-east-1a,us-east-1b"
 
 Mappings:
   RegionMap:
@@ -111,7 +108,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !Ref AvailabilityZones]
       CidrBlock: !Ref PublicSubnet1Cidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -126,7 +123,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !Ref AvailabilityZones]
       CidrBlock: !Ref PublicSubnet2Cidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -142,7 +139,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !Ref AvailabilityZones]
       CidrBlock: !Ref PrivateSubnet1Cidr
       Tags:
         - Key: Name
@@ -156,7 +153,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !Ref AvailabilityZones]
       CidrBlock: !Ref PrivateSubnet2Cidr
       Tags:
         - Key: Name
@@ -636,6 +633,25 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
+  # Database Secret in Secrets Manager
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Project}/database/${Environment}'
+      Description: !Sub 'Database credentials for ${Project} ${Environment} environment'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-Database-Secret-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+
   # RDS PostgreSQL Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -645,14 +661,14 @@ Resources:
       Engine: postgres
       EngineVersion: '15.7'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
       MultiAZ: true
-      DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
       DeletionProtection: false
       Tags:

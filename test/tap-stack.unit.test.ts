@@ -26,7 +26,7 @@ describe("TapStack CloudFormation Template", () => {
 
   describe("Parameters", () => {
     test("should define required parameters", () => {
-      const required = ["Project", "Environment", "DBUsername", "DBPassword"];
+      const required = ["Project", "Environment", "DBUsername"];
       required.forEach(param => expect(template.Parameters[param]).toBeDefined());
     });
 
@@ -35,9 +35,10 @@ describe("TapStack CloudFormation Template", () => {
       expect(p.Type).toBe("String");
     });
 
-    test("DBPassword parameter should be NoEcho", () => {
-      const p = template.Parameters.DBPassword;
-      expect(p.NoEcho).toBe(true);
+    test("should create a Secrets Manager secret", () => {
+      const secret = Object.values(template.Resources).find(
+      (r: any) => r.Type === "AWS::SecretsManager::Secret");
+      expect(secret).toBeDefined();
     });
   });
 

@@ -68,13 +68,10 @@
             "Default": "dbadmin",
             "Description": "Database master username"
         },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 41,
-            "Default": "YourSecurePassword123",
-            "Description": "Database master password (8-41 characters)"
+        "AvailabilityZones": {
+            "Type": "List<AWS::EC2::AvailabilityZone::Name>",
+            "Description": "List of Availability Zones",
+            "Default": "us-east-1a,us-east-1b"
         }
     },
     "Mappings": {
@@ -157,7 +154,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "AvailabilityZones"
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Ref": "PublicSubnet1Cidr"
                 },
@@ -190,7 +194,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "AvailabilityZones"
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Ref": "PublicSubnet2Cidr"
                 },
@@ -223,7 +234,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "AvailabilityZones"
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Ref": "PrivateSubnet1Cidr"
                 },
@@ -255,7 +273,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "AvailabilityZones"
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Ref": "PrivateSubnet2Cidr"
                 },
@@ -1144,6 +1169,45 @@
                 ]
             }
         },
+        "DatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Project}/database/${Environment}"
+                },
+                "Description": {
+                    "Fn::Sub": "Database credentials for ${Project} ${Environment} environment"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-Database-Secret-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
@@ -1159,20 +1223,20 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
                 "MultiAZ": true,
-                "DBSubnetGroupName": {
-                    "Ref": "DBSubnetGroup"
-                },
                 "VPCSecurityGroups": [
                     {
                         "Ref": "DatabaseSecurityGroup"
                     }
                 ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
                 "BackupRetentionPeriod": 7,
                 "DeletionProtection": false,
                 "Tags": [
