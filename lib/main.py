@@ -6,6 +6,8 @@ Implements secure VPCs, networking, monitoring, and compliance
 import pulumi
 import pulumi_aws as aws
 from typing import Dict
+
+from lib.modules.code_pipeline import setup_codepipeline
 from lib.modules.vpc import create_vpc_infrastructure
 from lib.modules.security import create_security_groups, create_s3_bucket
 from lib.modules.monitoring import setup_cloudtrail
@@ -32,6 +34,7 @@ vpc_cidrs = {
   "us-east-1": "10.0.0.0/16",
   "us-west-2": "10.1.0.0/16"
 }
+
 
 def create_cloudtrail_s3_policy(bucket_name: pulumi.Output, account_id: str,
                                 prefix: str) -> pulumi.Output:
@@ -79,6 +82,7 @@ def deploy_infrastructure():
   security_groups = {}
   iam_roles = {}
   s3_buckets = {}
+  code_pipeline = {}
 
   # Create IAM roles (global resources)
   print("Creating IAM roles...")
@@ -145,16 +149,18 @@ def deploy_infrastructure():
       provider=provider
     )
 
+    code_pipeline = setup_codepipeline()
+
     # Ensure CloudTrail waits for S3 bucket policy
     pulumi.Output.all(bucket_policy.id, cloudtrail.name).apply(
       lambda args: print(f"CloudTrail {args[1]} created with S3 policy {args[0]}")
     )
 
   # Export important resource information
-  export_outputs(vpcs, security_groups, iam_roles, s3_buckets)
+  export_outputs(vpcs, security_groups, iam_roles, s3_buckets, code_pipeline)
 
 
-def export_outputs(vpcs: Dict, security_groups: Dict, iam_roles: Dict, s3_buckets: Dict):
+def export_outputs(vpcs: Dict, security_groups: Dict, iam_roles: Dict, s3_buckets: Dict, code_pipeline: Dict):
   """Export important resource information as stack outputs"""
 
   for region in regions:
@@ -179,3 +185,6 @@ def export_outputs(vpcs: Dict, security_groups: Dict, iam_roles: Dict, s3_bucket
   # IAM role outputs
   pulumi.export("ec2_role_arn", iam_roles["ec2_role"].arn)
   pulumi.export("lambda_role_arn", iam_roles["lambda_role"].arn)
+  pulumi.export("pipeline_name", code_pipeline["pipeline_name"])
+  pulumi.export("pipeline_source_bucket", code_pipeline["pipeline_source_bucket"])
+  pulumi.export("pipeline_artifact_bucket", code_pipeline["pipeline_artifact_bucket"])
