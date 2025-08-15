@@ -1,3 +1,17 @@
+terraform {
+  required_version = ">= 1.0.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = ">= 2.4.0"
+    }
+  }
+}
+
 variable "environment_suffix" {
   type        = string
   default     = "dev"
@@ -128,12 +142,6 @@ data "aws_ami" "amazon_linux" {
 
 data "aws_caller_identity" "current" {}
 
-# Prefer Postgres 15.*, then 16.*, then 14.* in the target region
-data "aws_rds_engine_version" "pg" {
-  engine             = "postgres"
-  preferred_versions = ["15.*", "16.*", "14.*"]
-}
-
 resource "random_password" "rds" {
   length  = 16
   special = true
@@ -177,34 +185,34 @@ resource "aws_kms_key" "general" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid     = "EnableIAMUserPermissions",
-        Effect  = "Allow",
+        Sid      = "EnableIAMUserPermissions",
+        Effect   = "Allow",
         Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" },
-        Action  = "kms:*",
+        Action   = "kms:*",
         Resource = "*"
       },
       {
-        Sid     = "AllowCloudWatchLogs",
-        Effect  = "Allow",
+        Sid      = "AllowCloudWatchLogs",
+        Effect   = "Allow",
         Principal = { Service = "logs.${var.aws_region}.amazonaws.com" },
-        Action  = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:CreateGrant","kms:DescribeKey"],
+        Action   = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:CreateGrant","kms:DescribeKey"],
         Resource = "*",
         Condition = {
           ArnLike = { "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*" }
         }
       },
       {
-        Sid     = "AllowRDS",
-        Effect  = "Allow",
+        Sid      = "AllowRDS",
+        Effect   = "Allow",
         Principal = { Service = "rds.amazonaws.com" },
-        Action  = ["kms:Decrypt","kms:GenerateDataKey","kms:CreateGrant","kms:DescribeKey"],
+        Action   = ["kms:Decrypt","kms:GenerateDataKey","kms:CreateGrant","kms:DescribeKey"],
         Resource = "*"
       },
       {
-        Sid     = "AllowSNS",
-        Effect  = "Allow",
+        Sid      = "AllowSNS",
+        Effect   = "Allow",
         Principal = { Service = "sns.amazonaws.com" },
-        Action  = ["kms:Decrypt","kms:GenerateDataKey*","kms:CreateGrant","kms:DescribeKey"],
+        Action   = ["kms:Decrypt","kms:GenerateDataKey*","kms:CreateGrant","kms:DescribeKey"],
         Resource = "*",
         Condition = { StringEquals = { "aws:SourceAccount" = "${data.aws_caller_identity.current.account_id}" } }
       }
@@ -1010,7 +1018,7 @@ resource "aws_lb_target_group" "app" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
     interval            = 30
-    port                = "443"
+    port                = 443
     protocol            = "TCP"
   }
 
@@ -1023,7 +1031,7 @@ resource "aws_lb_target_group" "app" {
 
 resource "aws_lb_listener" "app" {
   load_balancer_arn = aws_lb.app.arn
-  port              = "443"
+  port              = 443
   protocol          = "TCP"
 
   default_action {
@@ -1166,7 +1174,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   identifier           = "prod-db-${local.env_suffix}"
   engine               = "postgres"
-  engine_version       = data.aws_rds_engine_version.pg.version
+  # Omit engine_version to avoid region-specific version conflicts
   instance_class       = var.rds_instance_class
   allocated_storage    = var.rds_allocated_storage
   storage_encrypted    = true
@@ -1204,7 +1212,7 @@ resource "aws_cloudwatch_log_group" "security_events" {
   })
 }
 
-# Allow EventBridge to write to the CloudWatch Logs group (account-level policy)
+# Allow EventBridge to put logs (account-level policy avoids circular refs)
 resource "aws_cloudwatch_log_resource_policy" "events_to_logs" {
   policy_name     = "prod-events-to-logs-${local.env_suffix}"
   policy_document = jsonencode({
@@ -1291,7 +1299,7 @@ resource "aws_cloudwatch_event_rule" "security_changes" {
   description = "Capture security group changes"
 
   event_pattern = jsonencode({
-    source       = ["aws.ec2"],
+    source        = ["aws.ec2"],
     "detail-type" = ["AWS API Call via CloudTrail"],
     detail = {
       eventSource = ["ec2.amazonaws.com"],
