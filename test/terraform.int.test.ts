@@ -32,7 +32,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
   const runWithAuthCheck = async (testName: string, testFn: () => Promise<void>): Promise<void> => {
     try {
       await testFn();
-    } catch (error) {
+    } catch (error: any) {
       if (isAuthError(error)) {
         console.warn(`${testName} skipped: Auth/credential issue -`, error.message);
         return; // Skip test
@@ -86,12 +86,12 @@ describe('Serverless Infrastructure Integration Tests', () => {
             vpcId = vpcs.Vpcs[0].VpcId;
             console.log('Fallback - Found VPC ID:', vpcId);
           }
-        } catch (fallbackError) {
+        } catch (fallbackError: any) {
           console.warn('AWS fallback also failed:', fallbackError.message);
         }
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.warn('Could not get Terraform outputs:', error.message);
       projectName = 'serverless-app';
       randomSuffix = '';
@@ -343,7 +343,8 @@ describe('Serverless Infrastructure Integration Tests', () => {
             logGroupNamePrefix: `/aws/lambda/${projectName}-data-processor`
           }).promise();
           
-          if (fallbackHealthLogs.logGroups?.length > 0 && fallbackProcessLogs.logGroups?.length > 0) {
+          if (fallbackHealthLogs.logGroups && fallbackHealthLogs.logGroups.length > 0 && 
+              fallbackProcessLogs.logGroups && fallbackProcessLogs.logGroups.length > 0) {
             expect(fallbackHealthLogs.logGroups.length).toBeGreaterThan(0);
             expect(fallbackProcessLogs.logGroups.length).toBeGreaterThan(0);
             return;
@@ -354,7 +355,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
         expect(processLogs.logGroups).toHaveLength(1);
         expect(healthLogs.logGroups![0].retentionInDays).toBe(14);
         expect(processLogs.logGroups![0].retentionInDays).toBe(14);
-      } catch (error) {
+      } catch (error: any) {
         console.warn('CloudWatch logs test failed:', error.message);
         // Skip the test if CloudWatch logs are not accessible
         return;
