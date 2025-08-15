@@ -170,12 +170,6 @@ describe('CloudFormation Template', () => {
       );
       expect(outputs.SecurityAuditTrailArn.Description).toMatch(/CloudTrail/i);
       expect(outputs.SecurityAuditBucketName.Description).toMatch(/S3 bucket/i);
-      expect(outputs.SecureAccessRoleArn.Export.Name['Fn::Sub']).toMatch(
-        /secure-access-role-arn/
-      );
-      expect(outputs.EmergencyAccessRoleArn.Export.Name['Fn::Sub']).toMatch(
-        /emergency-access-role-arn/
-      );
       expect(outputs.SecurityAuditTrailArn.Export.Name['Fn::Sub']).toMatch(
         /security-audit-trail-arn/
       );

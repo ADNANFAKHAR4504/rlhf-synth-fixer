@@ -461,7 +461,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${DeploymentEnv}-secure-access-role-arn"
+                    "Ref": "AWS::StackName"
                 }
             }
         },
@@ -475,7 +475,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${DeploymentEnv}-emergency-access-role-arn"
+                    "Ref": "AWS::StackName"
                 }
             }
         },

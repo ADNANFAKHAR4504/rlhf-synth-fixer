@@ -300,13 +300,13 @@ Outputs:
     Description: 'ARN of the secure access role with MFA enforcement'
     Value: !GetAtt SecureAccessRole.Arn
     Export:
-      Name: !Sub '${DeploymentEnv}-secure-access-role-arn'
+      Name: !Ref AWS::StackName
 
   EmergencyAccessRoleArn:
     Description: 'ARN of the emergency access role with enhanced MFA requirements'
     Value: !GetAtt EmergencyAccessRole.Arn
     Export:
-      Name: !Sub '${DeploymentEnv}-emergency-access-role-arn'
+      Name: !Ref AWS::StackName
 
   SecurityAuditTrailArn:
     Description: 'ARN of the CloudTrail for security auditing'
