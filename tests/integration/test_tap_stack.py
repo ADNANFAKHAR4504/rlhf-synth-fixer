@@ -1,301 +1,385 @@
 """
-Simple integration tests using pytest-mock
-Tests infrastructure logic without external dependencies
+Integration tests for secure multi-region infrastructure
+Tests actual AWS resource creation and configuration
 """
 
-import pytest
-from unittest.mock import Mock, patch
-import json
+import unittest
 import boto3
-
-# Mock AWS responses for testing
-MOCK_VPC_RESPONSE = {
-  'Vpc': {
-    'VpcId': 'vpc-12345678',
-    'State': 'available',
-    'CidrBlock': '10.0.0.0/16',
-    'Tags': [
-      {'Key': 'Name', 'Value': 'test-vpc'},
-      {'Key': 'Environment', 'Value': 'test'}
-    ]
-  }
-}
-
-MOCK_SUBNET_RESPONSE = {
-  'Subnet': {
-    'SubnetId': 'subnet-12345678',
-    'VpcId': 'vpc-12345678',
-    'CidrBlock': '10.0.1.0/24',
-    'AvailabilityZone': 'us-east-1a',
-    'State': 'available'
-  }
-}
-
-MOCK_IGW_RESPONSE = {
-  'InternetGateway': {
-    'InternetGatewayId': 'igw-12345678',
-    'State': 'available',
-    'Attachments': [
-      {'VpcId': 'vpc-12345678', 'State': 'attached'}
-    ]
-  }
-}
+import json
+import time
+from botocore.exceptions import ClientError, NoCredentialsError
 
 
-class TestInfrastructureDeployment:
-  """Test infrastructure deployment workflow"""
+class TestTapStackIntegration(unittest.TestCase):
+  """Integration tests with live AWS resources"""
 
-  @patch('boto3.client')
-  def test_vpc_creation_workflow(self, mock_boto_client):
-    """Test complete VPC creation workflow"""
-    # Mock EC2 client
-    mock_ec2 = Mock()
-    mock_boto_client.return_value = mock_ec2
+  @classmethod
+  def setUpClass(cls):
+    """Set up class-level fixtures"""
+    cls.regions = ['us-east-1', 'us-west-2']
+    cls.test_prefix = f'tap-test-{int(time.time())}'
 
-    # Mock VPC creation
-    mock_ec2.create_vpc.return_value = MOCK_VPC_RESPONSE
-    mock_ec2.describe_vpcs.return_value = {'Vpcs': [MOCK_VPC_RESPONSE['Vpc']]}
+    # Initialize AWS clients
+    try:
+      cls.aws_clients = {}
+      for region in cls.regions:
+        cls.aws_clients[region] = {
+          'ec2': boto3.client('ec2', region_name=region),
+          's3': boto3.client('s3', region_name=region),
+          'cloudtrail': boto3.client('cloudtrail', region_name=region),
+          'iam': boto3.client('iam', region_name=region),
+          'sts': boto3.client('sts', region_name=region)
+        }
+    except NoCredentialsError:
+      raise unittest.SkipTest("AWS credentials not configured for integration tests")
 
-    # Mock subnet creation
-    mock_ec2.create_subnet.return_value = MOCK_SUBNET_RESPONSE
-    mock_ec2.describe_subnets.return_value = {'Subnets': [MOCK_SUBNET_RESPONSE['Subnet']]}
+  def setUp(self):
+    """Set up per-test fixtures"""
+    self.cleanup_resources = []
 
-    # Simulate infrastructure creation
-    regions = ["us-east-1", "us-west-2"]
-    vpc_cidrs = {
-      "us-east-1": "10.0.0.0/16",
-      "us-west-2": "10.1.0.0/16"
-    }
+  def tearDown(self):
+    """Clean up test resources"""
+    print(f"\n🧹 Cleaning up test resources...")
+    for cleanup_func in self.cleanup_resources:
+      try:
+        cleanup_func()
+      except Exception as e:
+        print(f"Warning: Failed to clean up resource: {e}")
 
-    created_vpcs = {}
+  def test_aws_connectivity_all_regions(self):
+    """Test AWS connectivity in all target regions"""
+    for region in self.regions:
+      with self.subTest(region=region):
+        try:
+          ec2_client = self.aws_clients[region]['ec2']
+          response = ec2_client.describe_regions()
+          self.assertIn('Regions', response)
 
-    for region in regions:
-      # Create regional EC2 client
-      ec2_client = boto3.client('ec2', region_name=region)
+          # Verify our target region is available
+          available_regions = [r['RegionName'] for r in response['Regions']]
+          self.assertIn(region, available_regions)
 
-      # Create VPC
+        except ClientError as e:
+          self.fail(f"Failed to connect to AWS in {region}: {e}")
+
+  def test_vpc_infrastructure_creation(self):
+    """Test VPC creation with subnets and internet gateway"""
+    test_region = 'us-east-1'
+    ec2_client = self.aws_clients[test_region]['ec2']
+    vpc_cidr = '10.100.0.0/16'
+
+    try:
+      # Create VPC (mimicking vpc.py module)
       vpc_response = ec2_client.create_vpc(
-        CidrBlock=vpc_cidrs[region],
+        CidrBlock=vpc_cidr,
+        EnableDnsHostnames=True,
+        EnableDnsSupport=True,
         TagSpecifications=[{
           'ResourceType': 'vpc',
           'Tags': [
-            {'Key': 'Name', 'Value': f'test-vpc-{region}'},
-            {'Key': 'Environment', 'Value': 'test'}
+            {'Key': 'Name', 'Value': f'{self.test_prefix}-vpc'},
+            {'Key': 'Environment', 'Value': 'test'},
+            {'Key': 'Owner', 'Value': 'integration-test'},
+            {'Key': 'Project', 'Value': 'secure-infrastructure'}
           ]
         }]
       )
 
       vpc_id = vpc_response['Vpc']['VpcId']
-      created_vpcs[region] = vpc_id
-
-      # Create subnets
-      public_subnet = ec2_client.create_subnet(
-        VpcId=vpc_id,
-        CidrBlock=f"10.{0 if region == 'us-east-1' else 1}.1.0/24",
-        AvailabilityZone=f"{region}a"
+      self.cleanup_resources.append(
+        lambda: self._cleanup_vpc(vpc_id, ec2_client)
       )
 
-      private_subnet = ec2_client.create_subnet(
-        VpcId=vpc_id,
-        CidrBlock=f"10.{0 if region == 'us-east-1' else 1}.11.0/24",
-        AvailabilityZone=f"{region}b"
+      # Wait for VPC to be available
+      waiter = ec2_client.get_waiter('vpc_available')
+      waiter.wait(VpcIds=[vpc_id], WaiterConfig={'Delay': 2, 'MaxAttempts': 30})
+
+      # Create Internet Gateway
+      igw_response = ec2_client.create_internet_gateway(
+        TagSpecifications=[{
+          'ResourceType': 'internet-gateway',
+          'Tags': [{'Key': 'Name', 'Value': f'{self.test_prefix}-igw'}]
+        }]
+      )
+      igw_id = igw_response['InternetGateway']['InternetGatewayId']
+
+      # Attach IGW to VPC
+      ec2_client.attach_internet_gateway(
+        InternetGatewayId=igw_id,
+        VpcId=vpc_id
       )
 
-    # Verify calls were made correctly
-    assert mock_ec2.create_vpc.call_count == 2
-    assert mock_ec2.create_subnet.call_count == 4
-
-    # Verify CIDR blocks were used correctly
-    vpc_calls = mock_ec2.create_vpc.call_args_list
-    assert vpc_calls[0][1]['CidrBlock'] in ['10.0.0.0/16', '10.1.0.0/16']
-    assert vpc_calls[1][1]['CidrBlock'] in ['10.0.0.0/16', '10.1.0.0/16']
-
-  @patch('boto3.client')
-  def test_security_group_configuration(self, mock_boto_client):
-    """Test security group creation and rule configuration"""
-    mock_ec2 = Mock()
-    mock_boto_client.return_value = mock_ec2
-
-    # Mock security group responses
-    mock_ec2.create_security_group.side_effect = [
-      {'GroupId': 'sg-web123'},
-      {'GroupId': 'sg-app123'},
-      {'GroupId': 'sg-db123'}
-    ]
-
-    mock_ec2.describe_security_groups.return_value = {
-      'SecurityGroups': [
-        {
-          'GroupId': 'sg-web123',
-          'IpPermissions': [
-            {'FromPort': 80, 'ToPort': 80, 'IpProtocol': 'tcp'},
-            {'FromPort': 443, 'ToPort': 443, 'IpProtocol': 'tcp'}
+      # Create public subnet
+      subnet_response = ec2_client.create_subnet(
+        VpcId=vpc_id,
+        CidrBlock='10.100.0.0/24',
+        TagSpecifications=[{
+          'ResourceType': 'subnet',
+          'Tags': [
+            {'Key': 'Name', 'Value': f'{self.test_prefix}-public-subnet'},
+            {'Key': 'Type', 'Value': 'Public'}
           ]
-        }
-      ]
-    }
+        }]
+      )
+      subnet_id = subnet_response['Subnet']['SubnetId']
 
-    # Simulate security group creation
-    vpc_id = 'vpc-12345678'
+      # Validate VPC configuration
+      vpc_details = ec2_client.describe_vpcs(VpcIds=[vpc_id])['Vpcs'][0]
+      self.assertEqual(vpc_details['CidrBlock'], vpc_cidr)
+      self.assertEqual(vpc_details['State'], 'available')
+      self.assertTrue(vpc_details['EnableDnsHostnames'])
+      self.assertTrue(vpc_details['EnableDnsSupport'])
 
-    # Create web tier security group
-    web_sg = mock_ec2.create_security_group(
-      GroupName='web-tier-sg',
-      Description='Web tier security group',
-      VpcId=vpc_id
-    )
+      # Validate tags
+      tags = {tag['Key']: tag['Value'] for tag in vpc_details.get('Tags', [])}
+      self.assertIn('Environment', tags)
+      self.assertIn('Project', tags)
 
-    # Create app tier security group
-    app_sg = mock_ec2.create_security_group(
-      GroupName='app-tier-sg',
-      Description='Application tier security group',
-      VpcId=vpc_id
-    )
+      # Validate subnet
+      subnet_details = ec2_client.describe_subnets(SubnetIds=[subnet_id])['Subnets'][0]
+      self.assertEqual(subnet_details['VpcId'], vpc_id)
+      self.assertEqual(subnet_details['CidrBlock'], '10.100.0.0/24')
 
-    # Create database tier security group
-    db_sg = mock_ec2.create_security_group(
-      GroupName='db-tier-sg',
-      Description='Database tier security group',
-      VpcId=vpc_id
-    )
+      print(f"✅ VPC infrastructure validated: {vpc_id}")
 
-    # Configure web tier rules
-    mock_ec2.authorize_security_group_ingress(
-      GroupId=web_sg['GroupId'],
-      IpPermissions=[
-        {
-          'IpProtocol': 'tcp',
-          'FromPort': 80,
-          'ToPort': 80,
-          'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
-        },
-        {
-          'IpProtocol': 'tcp',
-          'FromPort': 443,
-          'ToPort': 443,
-          'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
-        }
-      ]
-    )
+    except ClientError as e:
+      self.fail(f"VPC infrastructure creation test failed: {e}")
 
-    # Configure app tier rules (only from web tier)
-    mock_ec2.authorize_security_group_ingress(
-      GroupId=app_sg['GroupId'],
-      IpPermissions=[
-        {
+  def test_security_groups_with_tiered_access(self):
+    """Test security group creation with proper tier separation"""
+    test_region = 'us-east-1'
+    ec2_client = self.aws_clients[test_region]['ec2']
+
+    try:
+      # Create VPC first
+      vpc_response = ec2_client.create_vpc(CidrBlock='10.101.0.0/16')
+      vpc_id = vpc_response['Vpc']['VpcId']
+      self.cleanup_resources.append(
+        lambda: self._cleanup_vpc(vpc_id, ec2_client)
+      )
+
+      # Wait for VPC
+      waiter = ec2_client.get_waiter('vpc_available')
+      waiter.wait(VpcIds=[vpc_id], WaiterConfig={'Delay': 2, 'MaxAttempts': 30})
+
+      # Create web tier security group (mimicking security.py)
+      web_sg_response = ec2_client.create_security_group(
+        GroupName=f'{self.test_prefix}-web-sg',
+        Description='Web tier security group',
+        VpcId=vpc_id,
+        TagSpecifications=[{
+          'ResourceType': 'security-group',
+          'Tags': [
+            {'Key': 'Name', 'Value': f'{self.test_prefix}-web-sg'},
+            {'Key': 'Tier', 'Value': 'Web'}
+          ]
+        }]
+      )
+      web_sg_id = web_sg_response['GroupId']
+
+      # Add web tier rules (HTTP/HTTPS)
+      ec2_client.authorize_security_group_ingress(
+        GroupId=web_sg_id,
+        IpPermissions=[
+          {
+            'IpProtocol': 'tcp',
+            'FromPort': 80,
+            'ToPort': 80,
+            'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+          },
+          {
+            'IpProtocol': 'tcp',
+            'FromPort': 443,
+            'ToPort': 443,
+            'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+          }
+        ]
+      )
+
+      # Create app tier security group
+      app_sg_response = ec2_client.create_security_group(
+        GroupName=f'{self.test_prefix}-app-sg',
+        Description='App tier security group',
+        VpcId=vpc_id,
+        TagSpecifications=[{
+          'ResourceType': 'security-group',
+          'Tags': [
+            {'Key': 'Name', 'Value': f'{self.test_prefix}-app-sg'},
+            {'Key': 'Tier', 'Value': 'Application'}
+          ]
+        }]
+      )
+      app_sg_id = app_sg_response['GroupId']
+
+      # Add app tier rule (only from web tier)
+      ec2_client.authorize_security_group_ingress(
+        GroupId=app_sg_id,
+        IpPermissions=[{
           'IpProtocol': 'tcp',
           'FromPort': 8080,
           'ToPort': 8080,
-          'UserIdGroupPairs': [{'GroupId': web_sg['GroupId']}]
-        }
-      ]
-    )
+          'UserIdGroupPairs': [{'GroupId': web_sg_id}]
+        }]
+      )
 
-    # Verify security groups were created
-    assert mock_ec2.create_security_group.call_count == 3
-    assert mock_ec2.authorize_security_group_ingress.call_count == 2
+      # Validate security groups
+      web_sg_details = ec2_client.describe_security_groups(GroupIds=[web_sg_id])['SecurityGroups'][0]
+      app_sg_details = ec2_client.describe_security_groups(GroupIds=[app_sg_id])['SecurityGroups'][0]
 
-    # Verify web tier allows HTTP/HTTPS from internet
-    web_ingress_call = mock_ec2.authorize_security_group_ingress.call_args_list[0]
-    web_permissions = web_ingress_call[1]['IpPermissions']
+      # Validate web tier allows HTTP/HTTPS from anywhere
+      web_rules = web_sg_details['IpPermissions']
+      http_rule = next((rule for rule in web_rules if rule['FromPort'] == 80), None)
+      https_rule = next((rule for rule in web_rules if rule['FromPort'] == 443), None)
 
-    ports = [perm['FromPort'] for perm in web_permissions]
-    assert 80 in ports
-    assert 443 in ports
+      self.assertIsNotNone(http_rule)
+      self.assertIsNotNone(https_rule)
+      self.assertEqual(http_rule['IpRanges'][0]['CidrIp'], '0.0.0.0/0')
 
-    # Verify app tier only allows access from web tier
-    app_ingress_call = mock_ec2.authorize_security_group_ingress.call_args_list[1]
-    app_permissions = app_ingress_call[1]['IpPermissions']
-    assert app_permissions[0]['UserIdGroupPairs'][0]['GroupId'] == 'sg-web123'
+      # Validate app tier only allows from web tier
+      app_rules = app_sg_details['IpPermissions']
+      app_rule = next((rule for rule in app_rules if rule['FromPort'] == 8080), None)
 
-  @patch('boto3.client')
-  def test_s3_bucket_and_cloudtrail_setup(self, mock_boto_client):
-    """Test S3 bucket creation and CloudTrail configuration"""
-    mock_s3 = Mock()
-    mock_cloudtrail = Mock()
+      self.assertIsNotNone(app_rule)
+      self.assertEqual(app_rule['UserIdGroupPairs'][0]['GroupId'], web_sg_id)
 
-    def client_side_effect(service_name):
-      if service_name == 's3':
-        return mock_s3
-      elif service_name == 'cloudtrail':
-        return mock_cloudtrail
-      return Mock()
+      print(f"✅ Security groups validated: Web({web_sg_id}), App({app_sg_id})")
 
-    mock_boto_client.side_effect = client_side_effect
+    except ClientError as e:
+      self.fail(f"Security group test failed: {e}")
 
-    # Mock S3 responses
-    mock_s3.create_bucket.return_value = {'Location': '/test-bucket'}
-    mock_s3.get_bucket_encryption.return_value = {
-      'ServerSideEncryptionConfiguration': {
-        'Rules': [
-          {
-            'ApplyServerSideEncryptionByDefault': {
-              'SSEAlgorithm': 'AES256'
-            }
-          }
-        ]
-      }
-    }
+  def test_s3_bucket_with_encryption_and_ssl_policy(self):
+    """Test S3 bucket creation with encryption and SSL enforcement"""
+    bucket_name = f'{self.test_prefix}-secure-bucket'
+    s3_client = self.aws_clients['us-east-1']['s3']
 
-    # Mock CloudTrail responses
-    mock_cloudtrail.create_trail.return_value = {
-      'Name': 'test-trail',
-      'S3BucketName': 'test-cloudtrail-bucket'
-    }
+    try:
+      # Create S3 bucket (mimicking security.py)
+      s3_client.create_bucket(Bucket=bucket_name)
+      self.cleanup_resources.append(
+        lambda: self._cleanup_s3_bucket(bucket_name, s3_client)
+      )
 
-    mock_cloudtrail.describe_trails.return_value = {
-      'trailList': [
-        {
-          'Name': 'test-trail',
-          'S3BucketName': 'test-cloudtrail-bucket',
-          'IncludeGlobalServiceEvents': True,
-          'LogFileValidationEnabled': True
-        }
-      ]
-    }
+      # Enable versioning
+      s3_client.put_bucket_versioning(
+        Bucket=bucket_name,
+        VersioningConfiguration={'Status': 'Enabled'}
+      )
 
-    # Simulate infrastructure setup
-    regions = ['us-east-1', 'us-west-2']
-
-    for region in regions:
-      bucket_name = f'cloudtrail-bucket-{region}'
-
-      # Create S3 client and bucket
-      s3_client = boto3.client('s3', region_name=region)
-
-      if region != 'us-east-1':
-        s3_client.create_bucket(
-          Bucket=bucket_name,
-          CreateBucketConfiguration={'LocationConstraint': region}
-        )
-      else:
-        s3_client.create_bucket(Bucket=bucket_name)
-
-      # Enable encryption
+      # Enable server-side encryption (AES256)
       s3_client.put_bucket_encryption(
         Bucket=bucket_name,
         ServerSideEncryptionConfiguration={
-          'Rules': [
-            {
-              'ApplyServerSideEncryptionByDefault': {
-                'SSEAlgorithm': 'AES256'
-              }
+          'Rules': [{
+            'ApplyServerSideEncryptionByDefault': {
+              'SSEAlgorithm': 'AES256'
             }
-          ]
+          }]
         }
       )
 
-      # Create CloudTrail policy
-      policy = {
+      # Block public access
+      s3_client.put_public_access_block(
+        Bucket=bucket_name,
+        PublicAccessBlockConfiguration={
+          'BlockPublicAcls': True,
+          'IgnorePublicAcls': True,
+          'BlockPublicPolicy': True,
+          'RestrictPublicBuckets': True
+        }
+      )
+
+      # Apply SSL enforcement policy
+      bucket_policy = {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Sid": "DenyInsecureConnections",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            f"arn:aws:s3:::{bucket_name}/*",
+            f"arn:aws:s3:::{bucket_name}"
+          ],
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "false"
+            }
+          }
+        }]
+      }
+
+      s3_client.put_bucket_policy(
+        Bucket=bucket_name,
+        Policy=json.dumps(bucket_policy)
+      )
+
+      # Validate bucket configuration
+
+      # Check versioning
+      versioning = s3_client.get_bucket_versioning(Bucket=bucket_name)
+      self.assertEqual(versioning['Status'], 'Enabled')
+
+      # Check encryption
+      encryption = s3_client.get_bucket_encryption(Bucket=bucket_name)
+      encryption_rule = encryption['ServerSideEncryptionConfiguration']['Rules'][0]
+      self.assertEqual(
+        encryption_rule['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'],
+        'AES256'
+      )
+
+      # Check public access block
+      public_access = s3_client.get_public_access_block(Bucket=bucket_name)
+      pab_config = public_access['PublicAccessBlockConfiguration']
+      self.assertTrue(pab_config['BlockPublicAcls'])
+      self.assertTrue(pab_config['BlockPublicPolicy'])
+
+      # Check SSL enforcement policy
+      policy_response = s3_client.get_bucket_policy(Bucket=bucket_name)
+      policy = json.loads(policy_response['Policy'])
+      statement = policy['Statement'][0]
+
+      self.assertEqual(statement['Effect'], 'Deny')
+      self.assertIn('aws:SecureTransport', statement['Condition']['Bool'])
+      self.assertEqual(statement['Condition']['Bool']['aws:SecureTransport'], 'false')
+
+      print(f"✅ S3 bucket validated: {bucket_name}")
+
+    except ClientError as e:
+      self.fail(f"S3 bucket test failed: {e}")
+
+  def test_cloudtrail_setup_with_s3_integration(self):
+    """Test CloudTrail creation with S3 bucket integration"""
+    test_region = 'us-east-1'
+    cloudtrail_client = self.aws_clients[test_region]['cloudtrail']
+    s3_client = self.aws_clients[test_region]['s3']
+
+    trail_name = f'{self.test_prefix}-trail'
+    bucket_name = f'{self.test_prefix}-cloudtrail-bucket'
+
+    try:
+      # Create S3 bucket for CloudTrail
+      s3_client.create_bucket(Bucket=bucket_name)
+      self.cleanup_resources.append(
+        lambda: self._cleanup_s3_bucket(bucket_name, s3_client)
+      )
+
+      # Get account ID for bucket policy
+      sts_client = self.aws_clients[test_region]['sts']
+      account_id = sts_client.get_caller_identity()['Account']
+
+      # Create bucket policy for CloudTrail (mimicking main.py logic)
+      bucket_policy = {
         "Version": "2012-10-17",
         "Statement": [
           {
+            "Sid": "AWSCloudTrailAclCheck",
             "Effect": "Allow",
             "Principal": {"Service": "cloudtrail.amazonaws.com"},
             "Action": "s3:GetBucketAcl",
             "Resource": f"arn:aws:s3:::{bucket_name}"
           },
           {
+            "Sid": "AWSCloudTrailWrite",
             "Effect": "Allow",
             "Principal": {"Service": "cloudtrail.amazonaws.com"},
             "Action": "s3:PutObject",
@@ -311,286 +395,336 @@ class TestInfrastructureDeployment:
 
       s3_client.put_bucket_policy(
         Bucket=bucket_name,
-        Policy=json.dumps(policy)
+        Policy=json.dumps(bucket_policy)
       )
 
-      # Create CloudTrail
-      cloudtrail_client = boto3.client('cloudtrail', region_name=region)
-      cloudtrail_client.create_trail(
-        Name=f'main-trail-{region}',
+      # Create CloudTrail (mimicking monitoring.py)
+      trail_response = cloudtrail_client.create_trail(
+        Name=trail_name,
         S3BucketName=bucket_name,
-        S3KeyPrefix=f'cloudtrail-logs/{region}',
+        S3KeyPrefix='cloudtrail-logs',
         IncludeGlobalServiceEvents=True,
-        EnableLogFileValidation=True
+        IsMultiRegionTrail=False,  # Region-specific as per your implementation
+        EnableLogFileValidation=True,
+        TagsList=[
+          {'Key': 'Environment', 'Value': 'test'},
+          {'Key': 'Project', 'Value': 'secure-infrastructure'}
+        ]
       )
 
-    # Verify S3 operations
-    assert mock_s3.create_bucket.call_count == 2
-    assert mock_s3.put_bucket_encryption.call_count == 2
-    assert mock_s3.put_bucket_policy.call_count == 2
+      self.cleanup_resources.append(
+        lambda: cloudtrail_client.delete_trail(Name=trail_name)
+      )
 
-    # Verify CloudTrail operations
-    assert mock_cloudtrail.create_trail.call_count == 2
+      # Start logging
+      cloudtrail_client.start_logging(Name=trail_name)
 
-    # Verify CloudTrail configuration
-    trail_calls = mock_cloudtrail.create_trail.call_args_list
-    for call in trail_calls:
-      kwargs = call[1]
-      assert kwargs['IncludeGlobalServiceEvents'] is True
-      assert kwargs['EnableLogFileValidation'] is True
-      assert 'cloudtrail-logs' in kwargs['S3KeyPrefix']
+      # Validate CloudTrail configuration
+      trail_details = cloudtrail_client.describe_trails(trailNameList=[trail_name])['trailList'][0]
 
-  @patch('boto3.client')
-  def test_networking_gateway_configuration(self, mock_boto_client):
-    """Test Internet Gateway and NAT Gateway setup"""
-    mock_ec2 = Mock()
-    mock_boto_client.return_value = mock_ec2
+      self.assertEqual(trail_details['Name'], trail_name)
+      self.assertEqual(trail_details['S3BucketName'], bucket_name)
+      self.assertTrue(trail_details['IncludeGlobalServiceEvents'])
+      self.assertFalse(trail_details['IsMultiRegionTrail'])  # Per your implementation
+      self.assertTrue(trail_details['LogFileValidationEnabled'])
 
-    # Mock responses
-    mock_ec2.create_vpc.return_value = MOCK_VPC_RESPONSE
-    mock_ec2.create_subnet.return_value = MOCK_SUBNET_RESPONSE
-    mock_ec2.create_internet_gateway.return_value = MOCK_IGW_RESPONSE
-    mock_ec2.allocate_address.return_value = {'AllocationId': 'eipalloc-123'}
-    mock_ec2.create_nat_gateway.return_value = {
-      'NatGateway': {
-        'NatGatewayId': 'nat-123',
-        'SubnetId': 'subnet-12345678',
-        'State': 'pending'
-      }
-    }
-    mock_ec2.create_route_table.return_value = {
-      'RouteTable': {'RouteTableId': 'rtb-123'}
-    }
+      # Validate logging status
+      logging_status = cloudtrail_client.get_trail_status(Name=trail_name)
+      self.assertTrue(logging_status['IsLogging'])
 
-    # Simulate gateway setup
-    vpc_id = 'vpc-12345678'
+      print(f"✅ CloudTrail validated: {trail_name}")
 
-    # Create Internet Gateway
-    igw_response = mock_ec2.create_internet_gateway()
-    igw_id = igw_response['InternetGateway']['InternetGatewayId']
+    except ClientError as e:
+      self.fail(f"CloudTrail test failed: {e}")
 
-    # Attach to VPC
-    mock_ec2.attach_internet_gateway(
-      InternetGatewayId=igw_id,
-      VpcId=vpc_id
-    )
+  def test_cross_region_resource_consistency(self):
+    """Test that resources can be created consistently across regions"""
+    for region in self.regions:
+      with self.subTest(region=region):
+        ec2_client = self.aws_clients[region]['ec2']
 
-    # Create public subnet
-    public_subnet = mock_ec2.create_subnet(
-      VpcId=vpc_id,
-      CidrBlock="10.0.1.0/24"
-    )
-    public_subnet_id = public_subnet['Subnet']['SubnetId']
+        # Test basic region connectivity and resource creation capability
+        try:
+          # Test VPC creation capability
+          vpc_response = ec2_client.create_vpc(
+            CidrBlock=f'10.{self.regions.index(region) + 200}.0.0/16',
+            TagSpecifications=[{
+              'ResourceType': 'vpc',
+              'Tags': [
+                {'Key': 'Name', 'Value': f'{self.test_prefix}-cross-region-vpc-{region}'},
+                {'Key': 'Region', 'Value': region},
+                {'Key': 'TestType', 'Value': 'CrossRegion'}
+              ]
+            }]
+          )
 
-    # Create NAT Gateway
-    eip = mock_ec2.allocate_address(Domain='vpc')
-    nat_gw = mock_ec2.create_nat_gateway(
-      SubnetId=public_subnet_id,
-      AllocationId=eip['AllocationId']
-    )
+          vpc_id = vpc_response['Vpc']['VpcId']
+          self.cleanup_resources.append(
+            lambda vid=vpc_id, client=ec2_client: self._cleanup_vpc(vid, client)
+          )
 
-    # Create route tables
-    public_rt = mock_ec2.create_route_table(VpcId=vpc_id)
-    private_rt = mock_ec2.create_route_table(VpcId=vpc_id)
+          # Validate VPC was created in correct region
+          vpc_details = ec2_client.describe_vpcs(VpcIds=[vpc_id])['Vpcs'][0]
+          self.assertEqual(vpc_details['State'], 'available')
 
-    # Add routes
-    mock_ec2.create_route(
-      RouteTableId=public_rt['RouteTable']['RouteTableId'],
-      DestinationCidrBlock='0.0.0.0/0',
-      GatewayId=igw_id
-    )
+          # Validate region-specific tagging
+          tags = {tag['Key']: tag['Value'] for tag in vpc_details.get('Tags', [])}
+          self.assertEqual(tags['Region'], region)
 
-    mock_ec2.create_route(
-      RouteTableId=private_rt['RouteTable']['RouteTableId'],
-      DestinationCidrBlock='0.0.0.0/0',
-      NatGatewayId=nat_gw['NatGateway']['NatGatewayId']
-    )
+          print(f"✅ Cross-region test passed for {region}: {vpc_id}")
 
-    # Verify all components were created
-    assert mock_ec2.create_internet_gateway.called
-    assert mock_ec2.attach_internet_gateway.called
-    assert mock_ec2.create_nat_gateway.called
-    assert mock_ec2.create_route_table.call_count == 2
-    assert mock_ec2.create_route.call_count == 2
+        except ClientError as e:
+          self.fail(f"Cross-region test failed in {region}: {e}")
 
-    # Verify route configurations
-    route_calls = mock_ec2.create_route.call_args_list
-    public_route = route_calls[0][1]
-    private_route = route_calls[1][1]
-
-    assert public_route['GatewayId'] == igw_id
-    assert private_route['NatGatewayId'] == 'nat-123'
-    assert public_route['DestinationCidrBlock'] == '0.0.0.0/0'
-    assert private_route['DestinationCidrBlock'] == '0.0.0.0/0'
-
-  @patch('boto3.client')
-  def test_iam_roles_and_policies(self, mock_boto_client):
+  def test_iam_roles_and_policies_integration(self):
     """Test IAM role creation and policy attachment"""
-    mock_iam = Mock()
-    mock_boto_client.return_value = mock_iam
+    iam_client = self.aws_clients['us-east-1']['iam']  # IAM is global
+    role_name = f'{self.test_prefix}-test-role'
 
-    # Mock IAM responses
-    mock_iam.create_role.side_effect = [
-      {'Role': {'RoleName': 'EC2Role', 'Arn': 'arn:aws:iam::123:role/EC2Role'}},
-      {'Role': {'RoleName': 'LambdaRole', 'Arn': 'arn:aws:iam::123:role/LambdaRole'}}
-    ]
-
-    mock_iam.create_policy.return_value = {
-      'Policy': {'PolicyName': 'CustomPolicy', 'Arn': 'arn:aws:iam::123:policy/CustomPolicy'}
-    }
-
-    # Create IAM roles
-    ec2_trust_policy = {
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Principal": {"Service": "ec2.amazonaws.com"},
-          "Action": "sts:AssumeRole"
-        }
-      ]
-    }
-
-    lambda_trust_policy = {
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Principal": {"Service": "lambda.amazonaws.com"},
-          "Action": "sts:AssumeRole"
-        }
-      ]
-    }
-
-    # Create roles
-    iam_client = boto3.client('iam')
-
-    ec2_role = iam_client.create_role(
-      RoleName='EC2Role',
-      AssumeRolePolicyDocument=json.dumps(ec2_trust_policy),
-      Tags=[
-        {'Key': 'Environment', 'Value': 'test'},
-        {'Key': 'ManagedBy', 'Value': 'Pulumi'}
-      ]
-    )
-
-    lambda_role = iam_client.create_role(
-      RoleName='LambdaRole',
-      AssumeRolePolicyDocument=json.dumps(lambda_trust_policy),
-      Tags=[
-        {'Key': 'Environment', 'Value': 'test'},
-        {'Key': 'ManagedBy', 'Value': 'Pulumi'}
-      ]
-    )
-
-    # Attach managed policies
-    iam_client.attach_role_policy(
-      RoleName='EC2Role',
-      PolicyArn='arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
-    )
-
-    iam_client.attach_role_policy(
-      RoleName='LambdaRole',
-      PolicyArn='arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-    )
-
-    # Verify IAM operations
-    assert mock_iam.create_role.call_count == 2
-    assert mock_iam.attach_role_policy.call_count == 2
-
-    # Verify role configurations
-    role_calls = mock_iam.create_role.call_args_list
-    ec2_role_call = role_calls[0][1]
-    lambda_role_call = role_calls[1][1]
-
-    assert ec2_role_call['RoleName'] == 'EC2Role'
-    assert lambda_role_call['RoleName'] == 'LambdaRole'
-
-    # Verify trust policies
-    ec2_policy = json.loads(ec2_role_call['AssumeRolePolicyDocument'])
-    lambda_policy = json.loads(lambda_role_call['AssumeRolePolicyDocument'])
-
-    assert ec2_policy['Statement'][0]['Principal']['Service'] == 'ec2.amazonaws.com'
-    assert lambda_policy['Statement'][0]['Principal']['Service'] == 'lambda.amazonaws.com'
-
-  @patch('boto3.client')
-  def test_resource_tagging_compliance(self, mock_boto_client):
-    """Test that all resources are properly tagged"""
-    mock_ec2 = Mock()
-    mock_s3 = Mock()
-
-    def client_side_effect(service_name, **kwargs):
-      if service_name == 'ec2':
-        return mock_ec2
-      elif service_name == 's3':
-        return mock_s3
-      return Mock()
-
-    mock_boto_client.side_effect = client_side_effect
-
-    # Mock responses
-    mock_ec2.create_vpc.return_value = MOCK_VPC_RESPONSE
-    mock_ec2.create_subnet.return_value = MOCK_SUBNET_RESPONSE
-    mock_s3.create_bucket.return_value = {'Location': '/test-bucket'}
-
-    # Define common tags
-    common_tags = {
-      "Environment": "test",
-      "Owner": "DevOps-Team",
-      "Project": "test-project",
-      "ManagedBy": "Pulumi"
-    }
-
-    tag_specifications = [{
-      'ResourceType': 'vpc',
-      'Tags': [{'Key': k, 'Value': v} for k, v in common_tags.items()]
-    }]
-
-    # Create resources with tags
-    ec2_client = boto3.client('ec2', region_name='us-east-1')
-    s3_client = boto3.client('s3', region_name='us-east-1')
-
-    # Create VPC with tags
-    vpc_response = ec2_client.create_vpc(
-      CidrBlock="10.0.0.0/16",
-      TagSpecifications=tag_specifications
-    )
-
-    # Create subnet with tags
-    subnet_tags = [{
-      'ResourceType': 'subnet',
-      'Tags': [{'Key': k, 'Value': v} for k, v in common_tags.items()]
-    }]
-
-    subnet_response = ec2_client.create_subnet(
-      VpcId=vpc_response['Vpc']['VpcId'],
-      CidrBlock="10.0.1.0/24",
-      TagSpecifications=subnet_tags
-    )
-
-    # Create S3 bucket with tags
-    s3_client.create_bucket(Bucket='test-bucket')
-    s3_client.put_bucket_tagging(
-      Bucket='test-bucket',
-      Tagging={
-        'TagSet': [{'Key': k, 'Value': v} for k, v in common_tags.items()]
+    try:
+      # Create EC2 role (mimicking iam.py)
+      trust_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {"Service": "ec2.amazonaws.com"},
+            "Action": "sts:AssumeRole"
+          }
+        ]
       }
-    )
 
-    # Verify tagging calls
-    vpc_call = mock_ec2.create_vpc.call_args[1]
-    subnet_call = mock_ec2.create_subnet.call_args[1]
+      role_response = iam_client.create_role(
+        RoleName=role_name,
+        AssumeRolePolicyDocument=json.dumps(trust_policy),
+        Tags=[
+          {'Key': 'Environment', 'Value': 'test'},
+          {'Key': 'Project', 'Value': 'secure-infrastructure'}
+        ]
+      )
 
-    assert 'TagSpecifications' in vpc_call
-    assert 'TagSpecifications' in subnet_call
+      self.cleanup_resources.append(
+        lambda: self._cleanup_iam_role(role_name, iam_client)
+      )
 
-    # Verify tag content
-    vpc_tags = {tag['Key']: tag['Value'] for tag in vpc_call['TagSpecifications'][0]['Tags']}
-    for key, value in common_tags.items():
-      assert key in vpc_tags
-      assert vpc_tags[key] == value
+      # Attach SSM policy (as per iam.py)
+      iam_client.attach_role_policy(
+        RoleName=role_name,
+        PolicyArn='arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      )
 
-    assert mock_s3.put_bucket_tagging.called
+      # Create instance profile
+      profile_name = f'{role_name}-profile'
+      iam_client.create_instance_profile(InstanceProfileName=profile_name)
+      iam_client.add_role_to_instance_profile(
+        InstanceProfileName=profile_name,
+        RoleName=role_name
+      )
+
+      # Validate role creation
+      role_details = iam_client.get_role(RoleName=role_name)['Role']
+      self.assertEqual(role_details['RoleName'], role_name)
+
+      # Validate policy attachment
+      attached_policies = iam_client.list_attached_role_policies(RoleName=role_name)
+      policy_arns = [policy['PolicyArn'] for policy in attached_policies['AttachedPolicies']]
+      self.assertIn('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore', policy_arns)
+
+      # Validate instance profile
+      profile_details = iam_client.get_instance_profile(InstanceProfileName=profile_name)
+      self.assertEqual(len(profile_details['InstanceProfile']['Roles']), 1)
+      self.assertEqual(profile_details['InstanceProfile']['Roles'][0]['RoleName'], role_name)
+
+      print(f"✅ IAM role validated: {role_name}")
+
+    except ClientError as e:
+      self.fail(f"IAM role test failed: {e}")
+
+  def test_codepipeline_resources_creation(self):
+    """Test CodePipeline related resources can be created"""
+    test_region = 'us-east-1'
+    s3_client = self.aws_clients[test_region]['s3']
+    iam_client = self.aws_clients[test_region]['iam']
+
+    source_bucket_name = f'{self.test_prefix}-pipeline-source'
+    artifact_bucket_name = f'{self.test_prefix}-pipeline-artifacts'
+
+    try:
+      # Create source bucket (mimicking code_pipeline.py)
+      s3_client.create_bucket(Bucket=source_bucket_name)
+      self.cleanup_resources.append(
+        lambda: self._cleanup_s3_bucket(source_bucket_name, s3_client)
+      )
+
+      # Enable encryption on source bucket
+      s3_client.put_bucket_encryption(
+        Bucket=source_bucket_name,
+        ServerSideEncryptionConfiguration={
+          'Rules': [{
+            'ApplyServerSideEncryptionByDefault': {
+              'SSEAlgorithm': 'aws:kms'
+            }
+          }]
+        }
+      )
+
+      # Create artifacts bucket
+      s3_client.create_bucket(Bucket=artifact_bucket_name)
+      self.cleanup_resources.append(
+        lambda: self._cleanup_s3_bucket(artifact_bucket_name, s3_client)
+      )
+
+      # Create pipeline service role
+      pipeline_role_name = f'{self.test_prefix}-pipeline-role'
+      pipeline_trust_policy = {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Principal": {"Service": "codepipeline.amazonaws.com"},
+          "Action": "sts:AssumeRole"
+        }]
+      }
+
+      iam_client.create_role(
+        RoleName=pipeline_role_name,
+        AssumeRolePolicyDocument=json.dumps(pipeline_trust_policy)
+      )
+
+      self.cleanup_resources.append(
+        lambda: self._cleanup_iam_role(pipeline_role_name, iam_client)
+      )
+
+      # Validate bucket creation and encryption
+      source_encryption = s3_client.get_bucket_encryption(Bucket=source_bucket_name)
+      encryption_rule = source_encryption['ServerSideEncryptionConfiguration']['Rules'][0]
+      self.assertEqual(
+        encryption_rule['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'],
+        'aws:kms'
+      )
+
+      # Validate role creation
+      role_details = iam_client.get_role(RoleName=pipeline_role_name)['Role']
+      self.assertEqual(role_details['RoleName'], pipeline_role_name)
+
+      print(f"✅ CodePipeline resources validated")
+
+    except ClientError as e:
+      self.fail(f"CodePipeline resources test failed: {e}")
+
+  def _cleanup_vpc(self, vpc_id: str, ec2_client):
+    """Helper to clean up VPC and associated resources"""
+    try:
+      print(f"Cleaning up VPC: {vpc_id}")
+
+      # Delete subnets
+      subnets = ec2_client.describe_subnets(
+        Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
+      )['Subnets']
+
+      for subnet in subnets:
+        ec2_client.delete_subnet(SubnetId=subnet['SubnetId'])
+
+      # Delete security groups (except default)
+      security_groups = ec2_client.describe_security_groups(
+        Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
+      )['SecurityGroups']
+
+      for sg in security_groups:
+        if sg['GroupName'] != 'default':
+          ec2_client.delete_security_group(GroupId=sg['GroupId'])
+
+      # Detach and delete internet gateways
+      igws = ec2_client.describe_internet_gateways(
+        Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc_id]}]
+      )['InternetGateways']
+
+      for igw in igws:
+        ec2_client.detach_internet_gateway(
+          InternetGatewayId=igw['InternetGatewayId'],
+          VpcId=vpc_id
+        )
+        ec2_client.delete_internet_gateway(InternetGatewayId=igw['InternetGatewayId'])
+
+      # Delete VPC
+      ec2_client.delete_vpc(VpcId=vpc_id)
+
+    except ClientError as e:
+      print(f"Warning: Error cleaning up VPC {vpc_id}: {e}")
+
+  def _cleanup_s3_bucket(self, bucket_name: str, s3_client):
+    """Helper to clean up S3 bucket"""
+    try:
+      print(f"Cleaning up S3 bucket: {bucket_name}")
+
+      # Delete all objects and versions
+      try:
+        # Delete all object versions
+        versions = s3_client.list_object_versions(Bucket=bucket_name)
+
+        objects_to_delete = []
+        for version in versions.get('Versions', []):
+          objects_to_delete.append({
+            'Key': version['Key'],
+            'VersionId': version['VersionId']
+          })
+
+        for delete_marker in versions.get('DeleteMarkers', []):
+          objects_to_delete.append({
+            'Key': delete_marker['Key'],
+            'VersionId': delete_marker['VersionId']
+          })
+
+        if objects_to_delete:
+          s3_client.delete_objects(
+            Bucket=bucket_name,
+            Delete={'Objects': objects_to_delete}
+          )
+
+      except ClientError:
+        pass  # Bucket might be empty or versioning not enabled
+
+      # Delete bucket
+      s3_client.delete_bucket(Bucket=bucket_name)
+
+    except ClientError as e:
+      print(f"Warning: Error cleaning up bucket {bucket_name}: {e}")
+
+  def _cleanup_iam_role(self, role_name: str, iam_client):
+    """Helper to clean up IAM role"""
+    try:
+      print(f"Cleaning up IAM role: {role_name}")
+
+      # Detach all policies
+      attached_policies = iam_client.list_attached_role_policies(RoleName=role_name)
+      for policy in attached_policies['AttachedPolicies']:
+        iam_client.detach_role_policy(
+          RoleName=role_name,
+          PolicyArn=policy['PolicyArn']
+        )
+
+      # Remove from instance profiles
+      try:
+        profile_name = f'{role_name}-profile'
+        iam_client.remove_role_from_instance_profile(
+          InstanceProfileName=profile_name,
+          RoleName=role_name
+        )
+        iam_client.delete_instance_profile(InstanceProfileName=profile_name)
+      except ClientError:
+        pass  # Profile might not exist
+
+      # Delete role
+      iam_client.delete_role(RoleName=role_name)
+
+    except ClientError as e:
+      print(f"Warning: Error cleaning up IAM role {role_name}: {e}")
+
 
 if __name__ == '__main__':
-  pytest.main([__file__, '-v'])
+  # Run integration tests
+  print("🔗 Running Integration Tests for TAP Stack")
+  print("=" * 50)
+  print("⚠️  Note: These tests create real AWS resources and may incur costs")
+  print("=" * 50)
+
+  unittest.main(verbosity=2, buffer=True)
