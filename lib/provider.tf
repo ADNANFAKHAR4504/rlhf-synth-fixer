@@ -14,29 +14,29 @@ terraform {
   }
 }
 
-# Primary Region Provider (us-east-1)
+# Primary Region Provider
 provider "aws" {
   alias  = "primary"
-  region = "us-east-1"
-  
+  region = var.aws_region_primary
+
   default_tags {
     tags = {
-      Environment = "production"
-      Project     = "multi-region-ha"
+      Environment = var.environment_suffix
+      Project     = "multi-region-ha-${var.environment_suffix}"
       ManagedBy   = "terraform"
     }
   }
 }
 
-# Secondary Region Provider (us-west-2)
+# Secondary Region Provider
 provider "aws" {
   alias  = "secondary"
-  region = "us-west-2"
-  
+  region = var.aws_region_secondary
+
   default_tags {
     tags = {
-      Environment = "production"
-      Project     = "multi-region-ha"
+      Environment = var.environment_suffix
+      Project     = "multi-region-ha-${var.environment_suffix}"
       ManagedBy   = "terraform"
     }
   }

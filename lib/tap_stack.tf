@@ -8,13 +8,13 @@
 # VPC in Primary Region
 resource "aws_vpc" "primary" {
   provider             = aws.primary
-  cidr_block           = "10.0.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = {
-    Name   = "primary-vpc"
-    Region = "us-east-1"
+    Name   = "primary-vpc-${var.environment_suffix}"
+    Region = var.aws_region_primary
   }
 }
 
@@ -24,7 +24,7 @@ resource "aws_internet_gateway" "primary" {
   vpc_id   = aws_vpc.primary.id
 
   tags = {
-    Name = "primary-igw"
+    Name = "primary-igw-${var.environment_suffix}"
   }
 }
 
@@ -38,7 +38,7 @@ resource "aws_subnet" "primary_public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "primary-public-subnet-${count.index + 1}"
+    Name = "primary-public-subnet-${count.index + 1}-${var.environment_suffix}"
     Type = "public"
   }
 }
@@ -52,7 +52,7 @@ resource "aws_subnet" "primary_private" {
   availability_zone = data.aws_availability_zones.primary.names[count.index]
 
   tags = {
-    Name = "primary-private-subnet-${count.index + 1}"
+    Name = "primary-private-subnet-${count.index + 1}-${var.environment_suffix}"
     Type = "private"
   }
 }
@@ -68,7 +68,7 @@ resource "aws_route_table" "primary_public" {
   }
 
   tags = {
-    Name = "primary-public-rt"
+    Name = "primary-public-rt-${var.environment_suffix}"
   }
 }
 
@@ -86,7 +86,7 @@ resource "aws_eip" "primary_nat" {
   domain   = "vpc"
 
   tags = {
-    Name = "primary-nat-eip"
+    Name = "primary-nat-eip-${var.environment_suffix}"
   }
 }
 
@@ -96,7 +96,7 @@ resource "aws_nat_gateway" "primary" {
   subnet_id     = aws_subnet.primary_public[0].id
 
   tags = {
-    Name = "primary-nat-gateway"
+    Name = "primary-nat-gateway-${var.environment_suffix}"
   }
 
   depends_on = [aws_internet_gateway.primary]
@@ -113,7 +113,7 @@ resource "aws_route_table" "primary_private" {
   }
 
   tags = {
-    Name = "primary-private-rt"
+    Name = "primary-private-rt-${var.environment_suffix}"
   }
 }
 
@@ -132,13 +132,13 @@ resource "aws_route_table_association" "primary_private" {
 # VPC in Secondary Region
 resource "aws_vpc" "secondary" {
   provider             = aws.secondary
-  cidr_block           = "10.0.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = {
-    Name   = "secondary-vpc"
-    Region = "us-west-2"
+    Name   = "secondary-vpc-${var.environment_suffix}"
+    Region = var.aws_region_secondary
   }
 }
 
@@ -148,7 +148,7 @@ resource "aws_internet_gateway" "secondary" {
   vpc_id   = aws_vpc.secondary.id
 
   tags = {
-    Name = "secondary-igw"
+    Name = "secondary-igw-${var.environment_suffix}"
   }
 }
 
@@ -162,7 +162,7 @@ resource "aws_subnet" "secondary_public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "secondary-public-subnet-${count.index + 1}"
+    Name = "secondary-public-subnet-${count.index + 1}-${var.environment_suffix}"
     Type = "public"
   }
 }
@@ -176,7 +176,7 @@ resource "aws_subnet" "secondary_private" {
   availability_zone = data.aws_availability_zones.secondary.names[count.index]
 
   tags = {
-    Name = "secondary-private-subnet-${count.index + 1}"
+    Name = "secondary-private-subnet-${count.index + 1}-${var.environment_suffix}"
     Type = "private"
   }
 }
@@ -192,7 +192,7 @@ resource "aws_route_table" "secondary_public" {
   }
 
   tags = {
-    Name = "secondary-public-rt"
+    Name = "secondary-public-rt-${var.environment_suffix}"
   }
 }
 
@@ -210,7 +210,7 @@ resource "aws_eip" "secondary_nat" {
   domain   = "vpc"
 
   tags = {
-    Name = "secondary-nat-eip"
+    Name = "secondary-nat-eip-${var.environment_suffix}"
   }
 }
 
@@ -220,7 +220,7 @@ resource "aws_nat_gateway" "secondary" {
   subnet_id     = aws_subnet.secondary_public[0].id
 
   tags = {
-    Name = "secondary-nat-gateway"
+    Name = "secondary-nat-gateway-${var.environment_suffix}"
   }
 
   depends_on = [aws_internet_gateway.secondary]
@@ -237,7 +237,7 @@ resource "aws_route_table" "secondary_private" {
   }
 
   tags = {
-    Name = "secondary-private-rt"
+    Name = "secondary-private-rt-${var.environment_suffix}"
   }
 }
 
@@ -255,7 +255,7 @@ resource "aws_route_table_association" "secondary_private" {
 
 # IAM Role for RDS Enhanced Monitoring
 resource "aws_iam_role" "rds_enhanced_monitoring" {
-  name = "rds-enhanced-monitoring-role"
+  name = "rds-enhanced-monitoring-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -271,7 +271,7 @@ resource "aws_iam_role" "rds_enhanced_monitoring" {
   })
 
   tags = {
-    Name = "rds-enhanced-monitoring-role"
+    Name = "rds-enhanced-monitoring-role-${var.environment_suffix}"
   }
 }
 
@@ -288,22 +288,22 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 # DB Subnet Group for Primary Region
 resource "aws_db_subnet_group" "primary" {
   provider   = aws.primary
-  name       = "primary-db-subnet-group"
+  name       = "primary-db-subnet-group-${var.environment_suffix}"
   subnet_ids = aws_subnet.primary_private[*].id
 
   tags = {
-    Name = "primary-db-subnet-group"
+    Name = "primary-db-subnet-group-${var.environment_suffix}"
   }
 }
 
 # DB Subnet Group for Secondary Region
 resource "aws_db_subnet_group" "secondary" {
   provider   = aws.secondary
-  name       = "secondary-db-subnet-group"
+  name       = "secondary-db-subnet-group-${var.environment_suffix}"
   subnet_ids = aws_subnet.secondary_private[*].id
 
   tags = {
-    Name = "secondary-db-subnet-group"
+    Name = "secondary-db-subnet-group-${var.environment_suffix}"
   }
 }
 
@@ -314,7 +314,7 @@ resource "aws_db_subnet_group" "secondary" {
 # Security Group for RDS in Primary Region
 resource "aws_security_group" "rds_primary" {
   provider    = aws.primary
-  name        = "rds-primary-sg"
+  name        = "rds-primary-sg-${var.environment_suffix}"
   description = "Security group for RDS MySQL in primary region"
   vpc_id      = aws_vpc.primary.id
 
@@ -335,14 +335,14 @@ resource "aws_security_group" "rds_primary" {
   }
 
   tags = {
-    Name = "rds-primary-sg"
+    Name = "rds-primary-sg-${var.environment_suffix}"
   }
 }
 
 # Security Group for RDS in Secondary Region
 resource "aws_security_group" "rds_secondary" {
   provider    = aws.secondary
-  name        = "rds-secondary-sg"
+  name        = "rds-secondary-sg-${var.environment_suffix}"
   description = "Security group for RDS MySQL in secondary region"
   vpc_id      = aws_vpc.secondary.id
 
@@ -363,7 +363,7 @@ resource "aws_security_group" "rds_secondary" {
   }
 
   tags = {
-    Name = "rds-secondary-sg"
+    Name = "rds-secondary-sg-${var.environment_suffix}"
   }
 }
 
@@ -375,7 +375,7 @@ resource "aws_security_group" "rds_secondary" {
 resource "aws_db_parameter_group" "mysql" {
   provider = aws.primary
   family   = "mysql8.0"
-  name     = "custom-mysql8-params"
+  name     = "custom-mysql8-params-${var.environment_suffix}"
 
   parameter {
     name  = "innodb_buffer_pool_size"
@@ -388,7 +388,7 @@ resource "aws_db_parameter_group" "mysql" {
   }
 
   tags = {
-    Name = "custom-mysql8-params"
+    Name = "custom-mysql8-params-${var.environment_suffix}"
   }
 }
 
@@ -396,7 +396,7 @@ resource "aws_db_parameter_group" "mysql" {
 resource "aws_db_parameter_group" "mysql_secondary" {
   provider = aws.secondary
   family   = "mysql8.0"
-  name     = "custom-mysql8-params-secondary"
+  name     = "custom-mysql8-params-secondary-${var.environment_suffix}"
 
   parameter {
     name  = "innodb_buffer_pool_size"
@@ -409,7 +409,7 @@ resource "aws_db_parameter_group" "mysql_secondary" {
   }
 
   tags = {
-    Name = "custom-mysql8-params-secondary"
+    Name = "custom-mysql8-params-secondary-${var.environment_suffix}"
   }
 }
 
@@ -425,22 +425,23 @@ resource "random_password" "db_password" {
 
 # Store password in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "db_password" {
-  provider    = aws.primary
-  name        = "rds-mysql-password"
-  description = "Password for RDS MySQL instances"
+  provider                = aws.primary
+  name                    = "rds-mysql-password-${var.environment_suffix}"
+  description             = "Password for RDS MySQL instances"
+  recovery_window_in_days = 0 # Allow immediate deletion
 
   replica {
     region = "us-west-2"
   }
 
   tags = {
-    Name = "rds-mysql-password"
+    Name = "rds-mysql-password-${var.environment_suffix}"
   }
 }
 
 resource "aws_secretsmanager_secret_version" "db_password" {
-  provider      = aws.primary
-  secret_id     = aws_secretsmanager_secret.db_password.id
+  provider  = aws.primary
+  secret_id = aws_secretsmanager_secret.db_password.id
   secret_string = jsonencode({
     username = "admin"
     password = random_password.db_password.result
@@ -452,14 +453,14 @@ resource "aws_db_instance" "primary" {
   provider = aws.primary
 
   # Basic Configuration
-  identifier     = "mysql-primary"
+  identifier     = "mysql-primary-${var.environment_suffix}"
   engine         = "mysql"
   engine_version = "8.0.35"
-  instance_class = "db.t3.micro"
+  instance_class = var.db_instance_class
 
   # Storage Configuration
-  allocated_storage     = 20
-  max_allocated_storage = 100
+  allocated_storage     = var.db_allocated_storage
+  max_allocated_storage = var.db_max_allocated_storage
   storage_type          = "gp2"
   storage_encrypted     = true
 
@@ -478,8 +479,8 @@ resource "aws_db_instance" "primary" {
 
   # Backup Configuration
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Monitoring Configuration
   monitoring_interval = 60
@@ -499,7 +500,7 @@ resource "aws_db_instance" "primary" {
   copy_tags_to_snapshot = true
 
   tags = {
-    Name = "mysql-primary"
+    Name = "mysql-primary-${var.environment_suffix}"
     Role = "primary"
   }
 }
@@ -509,14 +510,14 @@ resource "aws_db_instance" "secondary" {
   provider = aws.secondary
 
   # Basic Configuration
-  identifier     = "mysql-secondary"
+  identifier     = "mysql-secondary-${var.environment_suffix}"
   engine         = "mysql"
   engine_version = "8.0.35"
-  instance_class = "db.t3.micro"
+  instance_class = var.db_instance_class
 
   # Storage Configuration
-  allocated_storage     = 20
-  max_allocated_storage = 100
+  allocated_storage     = var.db_allocated_storage
+  max_allocated_storage = var.db_max_allocated_storage
   storage_type          = "gp2"
   storage_encrypted     = true
 
@@ -535,8 +536,8 @@ resource "aws_db_instance" "secondary" {
 
   # Backup Configuration
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Monitoring Configuration
   monitoring_interval = 60
@@ -556,7 +557,7 @@ resource "aws_db_instance" "secondary" {
   copy_tags_to_snapshot = true
 
   tags = {
-    Name = "mysql-secondary"
+    Name = "mysql-secondary-${var.environment_suffix}"
     Role = "secondary"
   }
 }
