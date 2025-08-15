@@ -17,7 +17,8 @@ export class TapStack {
 
   constructor(scope: unknown, id: string, props?: TapStackProps) {
     this.environmentSuffix = props?.environmentSuffix || 'dev';
-    this.stateBucket = props?.stateBucket || `iac-rlhf-tfstate-${this.awsRegion || 'us-east-1'}`;
+    this.stateBucket =
+      props?.stateBucket || `iac-rlhf-tfstate-${this.awsRegion || 'us-east-1'}`;
     this.stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     this.awsRegion = props?.awsRegion || 'us-east-1';
 
@@ -28,8 +29,13 @@ export class TapStack {
   private loadTerraformFiles(): void {
     // Load root terraform files from lib directory
     const libPath = path.join(__dirname);
-    const rootTfFiles = ['main.tf', 'provider.tf', 'variables.tf', 'outputs.tf'];
-    
+    const rootTfFiles = [
+      'main.tf',
+      'provider.tf',
+      'variables.tf',
+      'outputs.tf',
+    ];
+
     rootTfFiles.forEach(file => {
       const filePath = path.join(libPath, file);
       if (fs.existsSync(filePath)) {
@@ -72,10 +78,13 @@ export class TapStack {
     // Check if common_tags includes required tags in locals or variables
     const mainContent = this.terraformFiles.get('main.tf') || '';
     const variablesContent = this.terraformFiles.get('variables.tf') || '';
-    
-    const hasEnvironmentTag = mainContent.includes('Environment') || variablesContent.includes('Environment');
-    const hasOwnerTag = mainContent.includes('Owner') || variablesContent.includes('Owner');
-    
+
+    const hasEnvironmentTag =
+      mainContent.includes('Environment') ||
+      variablesContent.includes('Environment');
+    const hasOwnerTag =
+      mainContent.includes('Owner') || variablesContent.includes('Owner');
+
     return hasEnvironmentTag && hasOwnerTag;
   }
 
@@ -101,9 +110,11 @@ export class TapStack {
 
   public hasRDSEncryption(): boolean {
     const mainContent = this.terraformFiles.get('main.tf') || '';
-    return mainContent.includes('resource "aws_db_instance"') && 
-           mainContent.includes('storage_encrypted') && 
-           mainContent.includes('= true');
+    return (
+      mainContent.includes('resource "aws_db_instance"') &&
+      mainContent.includes('storage_encrypted') &&
+      mainContent.includes('= true')
+    );
   }
 
   public hasSecurityGroups(): boolean {
@@ -118,8 +129,10 @@ export class TapStack {
 
   public hasAWSConfig(): boolean {
     const mainContent = this.terraformFiles.get('main.tf') || '';
-    return mainContent.includes('resource "aws_config_configuration_recorder"') ||
-           mainContent.includes('resource "aws_config_config_rule"');
+    return (
+      mainContent.includes('resource "aws_config_configuration_recorder"') ||
+      mainContent.includes('resource "aws_config_config_rule"')
+    );
   }
 
   public hasSSMParameterStore(): boolean {
@@ -134,8 +147,10 @@ export class TapStack {
 
   public hasS3Versioning(): boolean {
     const mainContent = this.terraformFiles.get('main.tf') || '';
-    return mainContent.includes('resource "aws_s3_bucket_versioning"') &&
-           mainContent.includes('status = "Enabled"');
+    return (
+      mainContent.includes('resource "aws_s3_bucket_versioning"') &&
+      mainContent.includes('status = "Enabled"')
+    );
   }
 
   public hasVPCFlowLogs(): boolean {
@@ -146,7 +161,9 @@ export class TapStack {
   public hasOutputs(): boolean {
     const outputsContent = this.terraformFiles.get('outputs.tf') || '';
     const mainContent = this.terraformFiles.get('main.tf') || '';
-    return outputsContent.includes('output ') || mainContent.includes('output ');
+    return (
+      outputsContent.includes('output ') || mainContent.includes('output ')
+    );
   }
 
   public getResourceCount(): number {
