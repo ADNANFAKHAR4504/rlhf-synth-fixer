@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -8,210 +9,162 @@ export class BasicSetupStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Get SSH IP address from context or use default parameter
-    const sshIpAddress = this.node.tryGetContext('sshIpAddress') || 
-                        new cdk.CfnParameter(this, 'SshIpAddress', {
-                          type: 'String',
-                          description: 'IP address allowed for SSH access',
-                          default: '0.0.0.0/32'
-                        }).valueAsString;
+    // Get SSH IP from context or use default
+    const sshAllowedIp = this.node.tryGetContext('sshIp') || '0.0.0.0/0';
 
-    // 1. VPC: Create VPC with CIDR block 10.0.0.0/16
-    const vpc = new ec2.Vpc(this, 'ProductionVpc', {
+    // Create VPC with specified CIDR block
+    const vpc = new ec2.Vpc(this, 'MainVpc', {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
-      subnetConfiguration: [], // We'll create subnets manually
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'subnet-1',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'subnet-2',
+          subnetType: ec2.SubnetType.PUBLIC,
+        }
+      ],
+      natGateways: 0, // No NAT gateways needed for this simple setup
     });
 
-    // Tag VPC with Environment: Production
+    // Apply Environment tag to VPC
     cdk.Tags.of(vpc).add('Environment', 'Production');
 
-    // 2. Subnets: Define two subnets within the VPC
-    const subnet1 = new ec2.Subnet(this, 'ProductionSubnet1', {
-      vpc: vpc,
-      cidrBlock: '10.0.1.0/24',
-      availabilityZone: cdk.Stack.of(this).availabilityZones[0],
-      mapPublicIpOnLaunch: true,
+    // Create S3 bucket with versioning enabled
+    const bucket = new s3.Bucket(this, 'MainBucket', {
+      versioned: true,
+      bucketName: undefined, // Let CDK generate unique name
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
+      autoDeleteObjects: true, // For demo purposes
     });
 
-    const subnet2 = new ec2.Subnet(this, 'ProductionSubnet2', {
-      vpc: vpc,
-      cidrBlock: '10.0.2.0/24',
-      availabilityZone: cdk.Stack.of(this).availabilityZones[1],
-      mapPublicIpOnLaunch: true,
-    });
+    // Apply Environment tag to S3 bucket
+    cdk.Tags.of(bucket).add('Environment', 'Production');
 
-    // Tag subnets with Environment: Production
-    cdk.Tags.of(subnet1).add('Environment', 'Production');
-    cdk.Tags.of(subnet2).add('Environment', 'Production');
-
-    // Create Internet Gateway and route table for public access
-    const internetGateway = new ec2.CfnInternetGateway(this, 'ProductionIGW');
-    new ec2.CfnVPCGatewayAttachment(this, 'ProductionIGWAttachment', {
-      vpcId: vpc.vpcId,
-      internetGatewayId: internetGateway.ref,
-    });
-
-    const routeTable = new ec2.CfnRouteTable(this, 'ProductionRouteTable', {
-      vpcId: vpc.vpcId,
-    });
-
-    new ec2.CfnRoute(this, 'ProductionRoute', {
-      routeTableId: routeTable.ref,
-      destinationCidrBlock: '0.0.0.0/0',
-      gatewayId: internetGateway.ref,
-    });
-
-    new ec2.CfnSubnetRouteTableAssociation(this, 'Subnet1RouteTableAssociation', {
-      subnetId: subnet1.subnetId,
-      routeTableId: routeTable.ref,
-    });
-
-    new ec2.CfnSubnetRouteTableAssociation(this, 'Subnet2RouteTableAssociation', {
-      subnetId: subnet2.subnetId,
-      routeTableId: routeTable.ref,
-    });
-
-    // 3. S3 Bucket: Create S3 bucket with versioning enabled
-    const s3Bucket = new s3.Bucket(this, 'ProductionS3Bucket', {
-      versioned: true, // Enable versioning as required
-      removalPolicy: cdk.RemovalPolicy.RETAIN, // Prevent accidental deletion
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // Security best practice
-    });
-
-    // Tag S3 bucket with Environment: Production
-    cdk.Tags.of(s3Bucket).add('Environment', 'Production');
-
-    // 4. IAM Role: Create IAM role following least-privilege principle
-    const ec2Role = new iam.Role(this, 'ProductionEC2Role', {
+    // Create IAM role for EC2 instance following least-privilege principle
+    const ec2Role = new iam.Role(this, 'EC2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'IAM role for EC2 instance with S3 and CloudWatch access',
-      inlinePolicies: {
-        // Least-privilege policy for S3 bucket access (read/write only to our bucket)
-        S3BucketAccess: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-                's3:DeleteObject',
-                's3:ListBucket',
-                's3:GetBucketLocation',
-              ],
-              resources: [
-                s3Bucket.bucketArn,
-                `${s3Bucket.bucketArn}/*`,
-              ],
-            }),
-          ],
-        }),
-        // Least-privilege policy for CloudWatch logging
-        CloudWatchLogging: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogStreams',
-                'logs:DescribeLogGroups',
-              ],
-              resources: [
-                `arn:aws:logs:${this.region}:${this.account}:log-group:*`,
-              ],
-            }),
-          ],
-        }),
-      },
+      description: 'IAM role for EC2 instance with S3 and CloudWatch permissions',
     });
 
-    // Tag IAM role with Environment: Production
+    // Add S3 permissions for the specific bucket only
+    ec2Role.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        's3:GetObject',
+        's3:PutObject',
+        's3:DeleteObject',
+        's3:ListBucket',
+        's3:GetObjectVersion',
+        's3:DeleteObjectVersion'
+      ],
+      resources: [
+        bucket.bucketArn,
+        `${bucket.bucketArn}/*`
+      ]
+    }));
+
+    // Add CloudWatch logging permissions
+    ec2Role.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams',
+        'logs:DescribeLogGroups'
+      ],
+      resources: [
+        `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/*`,
+        `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/*:*`
+      ]
+    }));
+
+    // Apply Environment tag to IAM role
     cdk.Tags.of(ec2Role).add('Environment', 'Production');
 
-    // Create instance profile for the EC2 instance
-    const instanceProfile = new iam.CfnInstanceProfile(this, 'ProductionInstanceProfile', {
+    // Create instance profile for the role
+    const instanceProfile = new iam.CfnInstanceProfile(this, 'EC2InstanceProfile', {
       roles: [ec2Role.roleName],
     });
 
-    // 6. Security Group: Allow inbound SSH traffic only from specified IP
-    const securityGroup = new ec2.SecurityGroup(this, 'ProductionSecurityGroup', {
+    // Create security group allowing SSH from specified IP only
+    const securityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc: vpc,
-      description: 'Security group for production EC2 instance',
-      allowAllOutbound: true, // Allow all outbound traffic
+      description: 'Security group for EC2 instance allowing SSH from specific IP',
+      allowAllOutbound: true,
     });
 
-    // Add SSH inbound rule for specified IP address only
+    // Add SSH inbound rule for specific IP
     securityGroup.addIngressRule(
-      ec2.Peer.ipv4(sshIpAddress),
+      ec2.Peer.ipv4(sshAllowedIp),
       ec2.Port.tcp(22),
-      'Allow SSH access from specified IP address'
+      'Allow SSH access from specified IP'
     );
 
-    // Tag security group with Environment: Production
+    // Apply Environment tag to security group
     cdk.Tags.of(securityGroup).add('Environment', 'Production');
 
-    // 5. EC2 Instance: t3.medium launched in subnet1 with IAM role
-    const ec2Instance = new ec2.CfnInstance(this, 'ProductionEC2Instance', {
-      instanceType: 't3.medium', // Required instance type
-      imageId: new ec2.AmazonLinuxImage({
-        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-      }).getImage(this).imageId,
-      subnetId: subnet1.subnetId, // Launch in first subnet
-      securityGroupIds: [securityGroup.securityGroupId],
-      iamInstanceProfile: instanceProfile.ref, // Attach IAM role
-      userData: cdk.Fn.base64(`#!/bin/bash
-        yum update -y
-        yum install -y awscli
-        # Install CloudWatch agent for logging
-        yum install -y amazon-cloudwatch-agent
-      `),
+    // Get the latest Amazon Linux 2 AMI
+    const amzn2Ami = new ec2.AmazonLinuxImage({
+      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+      cpuType: ec2.AmazonLinuxCpuType.X86_64,
     });
 
-    // Tag EC2 instance with Environment: Production
-    cdk.Tags.of(ec2Instance).add('Environment', 'Production');
+    // Launch EC2 instance in the first subnet
+    const instance = new ec2.CfnInstance(this, 'MainInstance', {
+      imageId: amzn2Ami.getImage(this).imageId,
+      instanceType: 't3.medium',
+      subnetId: vpc.publicSubnets[0].subnetId, // Use first subnet (10.0.1.0/24)
+      securityGroupIds: [securityGroup.securityGroupId],
+      iamInstanceProfile: instanceProfile.ref,
+      tags: [
+        {
+          key: 'Name',
+          value: 'MainInstance'
+        },
+        {
+          key: 'Environment',
+          value: 'Production'
+        }
+      ]
+    });
 
-    // 8. Dependencies: Ensure resources are created in correct order
-    // EC2 instance depends on IAM role and instance profile
-    ec2Instance.addDependency(instanceProfile);
-    
-    // Instance profile depends on IAM role
-    instanceProfile.addDependency(ec2Role.node.defaultChild as cdk.CfnResource);
-    
-    // EC2 instance depends on route table associations for internet access
-    ec2Instance.node.addDependency(routeTable);
+    // Ensure instance profile is created before instance
+    instance.addDependency(instanceProfile);
 
-    // Output important resource information
+    // Output important information
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
-      description: 'VPC ID',
+      description: 'VPC ID'
     });
 
-    new cdk.CfnOutput(this, 'S3BucketName', {
-      value: s3Bucket.bucketName,
-      description: 'S3 Bucket Name',
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: bucket.bucketName,
+      description: 'S3 Bucket Name'
     });
 
-    new cdk.CfnOutput(this, 'EC2InstanceId', {
-      value: ec2Instance.ref,
-      description: 'EC2 Instance ID',
+    new cdk.CfnOutput(this, 'InstanceId', {
+      value: instance.ref,
+      description: 'EC2 Instance ID'
     });
 
-    new cdk.CfnOutput(this, 'EC2PublicIp', {
-      value: ec2Instance.attrPublicIp,
-      description: 'EC2 Instance Public IP',
+    new cdk.CfnOutput(this, 'SSHCommand', {
+      value: `ssh -i your-key.pem ec2-user@${instance.attrPublicIp}`,
+      description: 'SSH command to connect to instance'
     });
   }
 }
 
-// CDK App definition - allows this file to be deployed directly
+// CDK App
 const app = new cdk.App();
 new BasicSetupStack(app, 'BasicSetupStack', {
   env: {
-    region: 'us-east-1', // Required region
     account: process.env.CDK_DEFAULT_ACCOUNT,
-  },
+    region: 'us-east-1'
+  }
 });
