@@ -1,10 +1,10 @@
 /**
  * Comprehensive Terraform Infrastructure Integration Tests
  * Author: ngwakoleslieelijah
- * Updated: 2025-08-15 14:21:06 UTC
+ * Updated: 2025-08-15 14:30:45 UTC
  * 
  * This file combines all integration tests for the tap_stack.tf infrastructure
- * with improved path resolution for CI/CD environments.
+ * with improved path resolution and proper TypeScript types for CI/CD environments.
  */
 
 import { exec } from 'child_process';
@@ -41,12 +41,12 @@ describe('Comprehensive Terraform Infrastructure Integration Tests', () => {
     privateSubnetCidrs: ['10.1.10.0/24', '10.1.20.0/24'],
     dbUsername: 'testadmin',
     dbPassword: 'TestPassword123!',
-    testTimestamp: '2025-08-15T14:21:06Z'
+    testTimestamp: '2025-08-15T14:30:45Z'
   };
 
   // Dynamic path resolution for different environments
   const findTerraformDir = (): string => {
-    const possiblePaths = [
+    const possiblePaths: string[] = [
       path.resolve(__dirname, '../'),                    // Standard: test/ directory in project root
       path.resolve(__dirname, '../../'),                 // If test is nested deeper
       process.cwd(),                                     // Current working directory
@@ -80,9 +80,9 @@ describe('Comprehensive Terraform Infrastructure Integration Tests', () => {
     }
 
     // Check if we're in a monorepo or have terraform files elsewhere
-    const tfFiles = [];
+    const tfFiles: string[] = []; // Fixed: Explicit type annotation
     try {
-      const findTfFiles = (dir: string, depth = 0) => {
+      const findTfFiles = (dir: string, depth = 0): void => { // Fixed: Added return type
         if (depth > 2) return; // Limit search depth
         const files = fs.readdirSync(dir);
         files.forEach(file => {
@@ -243,7 +243,7 @@ output "vpc_cidr" {
   const getTerraformOutputs = async (): Promise<TerraformOutputs> => {
     try {
       const output = await executeTerraform('output -json', 30000); // 30 second timeout for outputs
-      const parsedOutputs = JSON.parse(output);
+      const parsedOutputs: TerraformOutputs = JSON.parse(output);
       console.log(`📊 Retrieved ${Object.keys(parsedOutputs).length} Terraform outputs`);
       return parsedOutputs;
     } catch (error) {
@@ -310,7 +310,7 @@ output "vpc_cidr" {
       
       // Clean up test files
       if (terraformDir) {
-        const filesToClean = ['test.tfplan', 'terraform.tfstate.backup', 'main.tf'];
+        const filesToClean: string[] = ['test.tfplan', 'terraform.tfstate.backup', 'main.tf'];
         filesToClean.forEach(file => {
           const filePath = path.join(terraformDir, file);
           if (fs.existsSync(filePath) && (file !== 'main.tf' || process.env.CI)) {
@@ -516,6 +516,29 @@ output "vpc_cidr" {
       console.log(`   VPC CIDR: ${testConfig.vpcCidr}`);
       console.log(`   Public Subnets: ${testConfig.publicSubnetCidrs.join(', ')}`);
       console.log(`   Private Subnets: ${testConfig.privateSubnetCidrs.join(', ')}`);
+    });
+
+    test('should validate test environment setup', () => {
+      console.log('\n🧪 Test 3.4: Test Environment Setup');
+      console.log('===================================');
+      
+      // Validate test directory exists
+      expect(fs.existsSync(terraformDir)).toBe(true);
+      
+      // Validate test configuration
+      expect(testConfig.projectName).toContain('test');
+      expect(testConfig.environment).toBe('testing');
+      
+      // Check if we have terraform files or minimal config
+      const hasTerraformFiles = fs.existsSync(path.join(terraformDir, 'tap_stack.tf')) || 
+                               fs.existsSync(path.join(terraformDir, 'main.tf'));
+      expect(hasTerraformFiles).toBe(true);
+      
+      testResults['environment_setup'] = true;
+      
+      console.log('✅ Test environment setup is valid');
+      console.log(`   Terraform directory: ${terraformDir}`);
+      console.log(`   Has terraform files: ${hasTerraformFiles}`);
     });
   });
 
