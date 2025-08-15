@@ -1,47 +1,35 @@
-**Prompt**
-You are an AWS Professional Solutions Architect and expert in CloudFormation YAML best practices.
-Create a **CloudFormation YAML template** named `TapStack.yml` for a **secure AWS infrastructure** with the following specifications:
+# CloudFormation Template Request
 
-**Environment Context:**
+Hey, I need help creating a CloudFormation YAML template for a secure AWS setup. We're deploying in us-west-2 and need to build out some infrastructure.
 
-* Deployment region: **us-west-2**
-* Environment includes: IAM roles, S3 bucket, VPC with networking components, CloudWatch alarms, and resource tagging.
+## What we're building
 
-**Requirements:**
+Basically, we need a secure AWS environment with IAM roles, an S3 bucket, VPC networking, and some monitoring. Here's what I'm looking for:
 
-1. **IAM Roles**
+### IAM Roles
+We need different IAM roles for our applications. Each role should only have the permissions it actually needs - no wildcards unless absolutely necessary. Think least privilege principle.
 
-   * Create IAM roles for different application components.
-   * Each IAM role must have **minimal necessary permissions** (principle of least privilege).
-   * Roles should only grant access to the exact services and actions needed.
+### S3 Bucket
+Need an S3 bucket with a unique name. Has to have server-side encryption enabled (using AWS managed keys is fine).
 
-2. **S3 Bucket**
+### VPC Setup
+Create a VPC with both public and private subnets. Public subnet needs internet access via an Internet Gateway. Private subnet should be able to reach the internet through a NAT Gateway in the public subnet.
 
-   * Deploy an S3 bucket with **globally unique name**.
-   * Enable **server-side encryption** using **AWS managed KMS keys (SSE-S3)**.
+### Monitoring
+Set up CloudWatch alarms to catch unauthorized access attempts on our IAM roles or S3 buckets. Use CloudTrail logs to detect these events.
 
-3. **VPC Setup**
+### Tagging
+All resources need consistent tags for cost tracking - Environment, Owner, Project tags.
 
-   * Create a VPC with **one public subnet** and **one private subnet**.
-   * Attach an **Internet Gateway** for public subnet internet access.
-   * Deploy a **NAT Gateway** in the public subnet to allow private subnet resources outbound internet access.
+## Important notes
 
-4. **Monitoring & Security Alerts**
+- Keep IAM permissions tight - no unnecessary access
+- CloudWatch alarm should trigger on CloudTrail events for unauthorized access
+- Template needs to pass cfn-lint validation
+- Follow AWS security best practices
 
-   * Implement a **CloudWatch alarm** to detect and notify about **unauthorized access attempts** on IAM roles or S3 buckets.
-   * Use CloudTrail logs as the source for detecting these events.
+## Deliverable
 
-5. **Tagging**
+Just need one CloudFormation YAML file called `TapStack.yml` that does all this. Should be ready to deploy with `aws cloudformation deploy`.
 
-   * Apply consistent **Tags** to all resources for cost tracking and resource allocation (e.g., `Environment`, `Owner`, `Project`).
-
-**Constraints:**
-
-* The IAM roles must have only essential permissions (no wildcards like `"*"` unless unavoidable).
-* CloudWatch alarm must trigger on `AWS.CloudTrail` events for unauthorized access.
-* Ensure the template passes `cfn-lint` validation and follows AWS security best practices.
-
-**Expected Output:**
-
-* Provide a single **valid CloudFormation YAML file** named `TapStack.yml` that meets all the above requirements.
-* The YAML must be fully functional and ready for deployment with `aws cloudformation deploy`.
+Thanks!
