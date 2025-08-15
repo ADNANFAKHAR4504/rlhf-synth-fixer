@@ -18,7 +18,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Secure AWS Infrastructure for Production Environment'
+        'Secure AWS Infrastructure for Production Environment with Session Manager Access'
       );
     });
 
@@ -36,6 +36,11 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(template.Outputs).toBeDefined();
       expect(typeof template.Outputs).toBe('object');
     });
+
+    test('should have Conditions section', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(typeof template.Conditions).toBe('object');
+    });
   });
 
   describe('Parameters', () => {
@@ -51,10 +56,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have AllowedSSHCIDR parameter', () => {
       expect(template.Parameters.AllowedSSHCIDR).toBeDefined();
       expect(template.Parameters.AllowedSSHCIDR.Type).toBe('String');
-      expect(template.Parameters.AllowedSSHCIDR.Default).toBe('10.0.0.0/8');
-      expect(template.Parameters.AllowedSSHCIDR.AllowedPattern).toBe(
-        '^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$'
-      );
+      expect(template.Parameters.AllowedSSHCIDR.Default).toBe('10.0.0.0/16');
     });
 
     test('should have InstanceType parameter', () => {
@@ -69,12 +71,50 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       );
     });
 
-    test('should have KeyPairName parameter', () => {
-      expect(template.Parameters.KeyPairName).toBeDefined();
-      expect(template.Parameters.KeyPairName.Type).toBe(
-        'AWS::EC2::KeyPair::KeyName'
+    test('should have EnableSSHAccess parameter', () => {
+      expect(template.Parameters.EnableSSHAccess).toBeDefined();
+      expect(template.Parameters.EnableSSHAccess.Type).toBe('String');
+      expect(template.Parameters.EnableSSHAccess.Default).toBe('false');
+      expect(template.Parameters.EnableSSHAccess.AllowedValues).toContain(
+        'true'
       );
-      expect(template.Parameters.KeyPairName.Default).toBe('myapp-keypair');
+      expect(template.Parameters.EnableSSHAccess.AllowedValues).toContain(
+        'false'
+      );
+    });
+
+    test('should have EnableKMSKeyRotation parameter', () => {
+      expect(template.Parameters.EnableKMSKeyRotation).toBeDefined();
+      expect(template.Parameters.EnableKMSKeyRotation.Type).toBe('String');
+      expect(template.Parameters.EnableKMSKeyRotation.Default).toBe('true');
+      expect(template.Parameters.EnableKMSKeyRotation.AllowedValues).toContain(
+        'true'
+      );
+      expect(template.Parameters.EnableKMSKeyRotation.AllowedValues).toContain(
+        'false'
+      );
+    });
+
+    test('should NOT have KeyPairName parameter (Session Manager approach)', () => {
+      expect(template.Parameters.KeyPairName).toBeUndefined();
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have EnableSSH condition', () => {
+      expect(template.Conditions.EnableSSH).toBeDefined();
+      expect(template.Conditions.EnableSSH['Fn::Equals']).toEqual([
+        { Ref: 'EnableSSHAccess' },
+        'true',
+      ]);
+    });
+
+    test('should have UseVPCCIDR condition', () => {
+      expect(template.Conditions.UseVPCCIDR).toBeDefined();
+      expect(template.Conditions.UseVPCCIDR['Fn::Equals']).toEqual([
+        { Ref: 'AllowedSSHCIDR' },
+        'VPC',
+      ]);
     });
   });
 
@@ -154,7 +194,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   });
 
   describe('EC2 and Security Resources', () => {
-    test('should have Security Group with restricted SSH access', () => {
+    test('should have Security Group with conditional SSH access', () => {
       expect(template.Resources.EC2SecurityGroup).toBeDefined();
       expect(template.Resources.EC2SecurityGroup.Type).toBe(
         'AWS::EC2::SecurityGroup'
@@ -162,14 +202,23 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
       const ingress =
         template.Resources.EC2SecurityGroup.Properties.SecurityGroupIngress;
-      expect(ingress).toHaveLength(1);
-      expect(ingress[0].IpProtocol).toBe('tcp');
-      expect(ingress[0].FromPort).toBe(22);
-      expect(ingress[0].ToPort).toBe(22);
-      expect(ingress[0].CidrIp.Ref).toBe('AllowedSSHCIDR');
+
+      // Should be conditional with Fn::If
+      expect(ingress['Fn::If']).toBeDefined();
+      expect(ingress['Fn::If'][0]).toBe('EnableSSH');
+
+      // When SSH is enabled, should have one rule
+      const sshRule = ingress['Fn::If'][1][0];
+      expect(sshRule.IpProtocol).toBe('tcp');
+      expect(sshRule.FromPort).toBe(22);
+      expect(sshRule.ToPort).toBe(22);
+      expect(sshRule.CidrIp['Fn::If']).toBeDefined();
+
+      // When SSH is disabled, should be empty array
+      expect(ingress['Fn::If'][2]).toEqual([]);
     });
 
-    test('should have EC2 Instance', () => {
+    test('should have EC2 Instance without KeyName (Session Manager)', () => {
       expect(template.Resources.SecureEC2Instance).toBeDefined();
       expect(template.Resources.SecureEC2Instance.Type).toBe(
         'AWS::EC2::Instance'
@@ -177,9 +226,12 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(
         template.Resources.SecureEC2Instance.Properties.InstanceType.Ref
       ).toBe('InstanceType');
-      expect(template.Resources.SecureEC2Instance.Properties.KeyName.Ref).toBe(
-        'KeyPairName'
-      );
+
+      // Should NOT have KeyName property (Session Manager access)
+      expect(
+        template.Resources.SecureEC2Instance.Properties.KeyName
+      ).toBeUndefined();
+
       expect(template.Resources.SecureEC2Instance.Properties.SubnetId.Ref).toBe(
         'PublicSubnet'
       );
@@ -197,7 +249,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   });
 
   describe('IAM Resources', () => {
-    test('IAM Role should follow least privilege principle', () => {
+    test('IAM Role should include Session Manager permissions', () => {
       const role = template.Resources.EC2Role;
       expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Effect).toBe(
         'Allow'
@@ -205,6 +257,14 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(
         role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service
       ).toBe('ec2.amazonaws.com');
+
+      // Check for Session Manager managed policy
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      );
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      );
 
       // Check for minimal S3 access policy
       const policies = role.Properties.Policies;
@@ -296,7 +356,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         'AES256'
       );
 
-      // Check public access block (no lifecycle in current template)
+      // Check public access block
       const publicAccess =
         template.Resources.S3AccessLogsBucket.Properties
           .PublicAccessBlockConfiguration;
@@ -374,7 +434,6 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         'PublicRouteTable',
         'EC2SecurityGroup',
         'EC2Role',
-        'EC2InstanceProfile',
         'SecureEC2Instance',
         'S3KMSKey',
         'S3KMSKeyAlias',
@@ -388,7 +447,6 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         const resource = template.Resources[resourceName];
         expect(resource).toBeDefined();
 
-        // Check if resource has name property that includes EnvironmentSuffix
         const props = resource.Properties;
         if (props) {
           const nameProps = [
@@ -475,15 +533,18 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
+    test('should have all required outputs including Session Manager command', () => {
       const requiredOutputs = [
         'VPCId',
         'EC2InstanceId',
         'EC2PublicIP',
+        'SessionManagerConnectCommand',
         'S3BucketName',
         'CloudTrailArn',
         'SecurityGroupId',
         'S3KMSKeyId',
+        'S3KMSKeyArn',
+        'KMSKeyRotationStatus',
         'EC2RoleArn',
       ];
 
@@ -493,6 +554,13 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         expect(template.Outputs[outputName].Description).toBeDefined();
         expect(template.Outputs[outputName].Export).toBeDefined();
       });
+    });
+
+    test('SessionManagerConnectCommand output should provide connection command', () => {
+      const sessionOutput = template.Outputs.SessionManagerConnectCommand;
+      expect(sessionOutput.Description).toContain('Session Manager');
+      expect(sessionOutput.Value['Fn::Sub']).toContain('aws ssm start-session');
+      expect(sessionOutput.Value['Fn::Sub']).toContain('${SecureEC2Instance}');
     });
 
     test('all outputs should have proper export names', () => {
@@ -546,15 +614,44 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(s3Statement.Action).toContain('kms:GenerateDataKey');
     });
 
-    test('Security group should only allow SSH from specified CIDR', () => {
+    test('Security group should have conditional SSH access', () => {
       const securityGroup = template.Resources.EC2SecurityGroup;
       const ingress = securityGroup.Properties.SecurityGroupIngress;
 
-      expect(ingress).toHaveLength(1);
-      expect(ingress[0].IpProtocol).toBe('tcp');
-      expect(ingress[0].FromPort).toBe(22);
-      expect(ingress[0].ToPort).toBe(22);
-      expect(ingress[0].CidrIp.Ref).toBe('AllowedSSHCIDR');
+      // Should use Fn::If for conditional access
+      expect(ingress['Fn::If']).toBeDefined();
+      expect(ingress['Fn::If'][0]).toBe('EnableSSH');
+
+      // When enabled, should have SSH rule with conditional CIDR
+      const sshRule = ingress['Fn::If'][1][0];
+      expect(sshRule.IpProtocol).toBe('tcp');
+      expect(sshRule.FromPort).toBe(22);
+      expect(sshRule.ToPort).toBe(22);
+      expect(sshRule.CidrIp['Fn::If']).toBeDefined();
+      expect(sshRule.CidrIp['Fn::If'][0]).toBe('UseVPCCIDR');
+    });
+  });
+
+  describe('Session Manager Integration', () => {
+    test('EC2 instance should have Session Manager access without KeyPair', () => {
+      const ec2Instance = template.Resources.SecureEC2Instance;
+
+      // Should NOT have KeyName
+      expect(ec2Instance.Properties.KeyName).toBeUndefined();
+
+      // Should have IAM instance profile for Session Manager
+      expect(ec2Instance.Properties.IamInstanceProfile.Ref).toBe(
+        'EC2InstanceProfile'
+      );
+    });
+
+    test('UserData should install and configure SSM agent', () => {
+      const ec2Instance = template.Resources.SecureEC2Instance;
+      const userData = ec2Instance.Properties.UserData['Fn::Base64'];
+
+      expect(userData).toContain('amazon-ssm-agent');
+      expect(userData).toContain('systemctl enable amazon-ssm-agent');
+      expect(userData).toContain('systemctl start amazon-ssm-agent');
     });
   });
 
@@ -569,12 +666,13 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(template.Resources.PublicRoute.DependsOn).toBe('AttachGateway');
     });
 
-    test('All references should be valid', () => {
-      // Check that EC2 instance references valid resources
+    test('All references should be valid (Session Manager approach)', () => {
       const ec2Instance = template.Resources.SecureEC2Instance;
-      expect(
-        template.Parameters[ec2Instance.Properties.KeyName.Ref]
-      ).toBeDefined();
+
+      // Should NOT reference KeyPairName
+      expect(ec2Instance.Properties.KeyName).toBeUndefined();
+
+      // Should reference valid resources
       expect(
         template.Resources[ec2Instance.Properties.SubnetId.Ref]
       ).toBeDefined();

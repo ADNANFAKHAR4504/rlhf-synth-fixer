@@ -38,7 +38,7 @@ Parameters:
 
   AllowedSSHCIDR:
     Type: String
-    Default: 'VPC'
+    Default: '10.0.0.0/16'
     Description: 'CIDR block for SSH access - use "VPC" for VPC CIDR (10.0.0.0/16), or specify custom CIDR like 192.168.1.0/24'
 
 Conditions:
