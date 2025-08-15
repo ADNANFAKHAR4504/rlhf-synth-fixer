@@ -21,7 +21,7 @@ Parameters:
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: 'Name of an existing EC2 KeyPair for SSH access'
-    Default: MyKeyPair
+    Default: myapp-keypair
 
 Resources:
   SecureVPC:
