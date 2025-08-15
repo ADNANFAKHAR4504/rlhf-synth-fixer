@@ -354,13 +354,15 @@ describe('TAP Stack Integration Tests', () => {
 
       // Look for log groups that contain our service names
       const hasEc2Logs = logGroupNames.some(
-        name => name.includes('ec2') || name.includes('web-server')
+        name => name && (name.includes('ec2') || name.includes('web-server'))
       );
       const hasLambdaLogs = logGroupNames.some(
-        name => name.includes('lambda') || name.includes('s3-data-processor')
+        name =>
+          name &&
+          (name.includes('lambda') || name.includes('s3-data-processor'))
       );
       const hasRdsLogs = logGroupNames.some(
-        name => name.includes('rds') || name.includes('mysql')
+        name => name && (name.includes('rds') || name.includes('mysql'))
       );
 
       expect(hasEc2Logs || hasLambdaLogs || hasRdsLogs).toBe(true);
@@ -462,7 +464,7 @@ describe('TAP Stack Integration Tests', () => {
 
       expect(vpcIgw).toBeDefined();
       expect(vpcIgw!.Attachments).toBeDefined();
-      expect(vpcIgw!.Attachments!.some(att => att.State === 'available')).toBe(
+      expect(vpcIgw!.Attachments!.some(att => att.State === 'attached')).toBe(
         true
       );
     }, 30000);
