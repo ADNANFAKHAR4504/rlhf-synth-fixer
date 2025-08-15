@@ -1,6 +1,6 @@
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
 
 /**
  * Terraform Infrastructure Wrapper for Testing
@@ -75,6 +75,20 @@ export class TerraformInfrastructure {
    */
   public validateConfiguration(): { valid: boolean; message: string } {
     try {
+      // Try to initialize terraform first
+      try {
+        execSync('terraform init -reconfigure', {
+          cwd: this.libPath,
+          encoding: 'utf8',
+          stdio: 'pipe'
+        });
+      } catch (initError) {
+        return {
+          valid: false,
+          message: `Terraform init failed: ${initError instanceof Error ? initError.message : 'Unknown init error'}`,
+        };
+      }
+
       const result = execSync('terraform validate', {
         cwd: this.libPath,
         encoding: 'utf8',
@@ -96,6 +110,18 @@ export class TerraformInfrastructure {
    */
   public checkFormatting(): boolean {
     try {
+      // Try to initialize terraform first
+      try {
+        execSync('terraform init -reconfigure', {
+          cwd: this.libPath,
+          encoding: 'utf8',
+          stdio: 'pipe'
+        });
+      } catch (initError) {
+        // If init fails, we can still try formatting check as it doesn't require providers
+        console.warn('Terraform init failed, attempting formatting check anyway');
+      }
+
       execSync('terraform fmt -check', {
         cwd: this.libPath,
         encoding: 'utf8',
