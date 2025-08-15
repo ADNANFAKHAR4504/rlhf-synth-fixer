@@ -272,7 +272,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${Environment}-tap-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       MasterUsername: !Ref DatabaseUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${TapDatabasePassword}:SecretString:password}}'
       AllocatedStorage: 20
@@ -296,7 +296,6 @@ Resources:
   TapEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-tap-ec2-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -306,20 +305,7 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      Policies:
-        - PolicyName: 'TapS3AccessPolicy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetObject'
-                  - 's3:PutObject'
-                Resource: !Sub '${TapSecureS3Bucket.Arn}/*'
-              - Effect: Allow
-                Action:
-                  - 's3:ListBucket'
-                Resource: !GetAtt TapSecureS3Bucket.Arn
+
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-tap-ec2-role'
@@ -329,7 +315,6 @@ Resources:
   TapEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-tap-ec2-profile-${EnvironmentSuffix}'
       Roles:
         - !Ref TapEC2Role
 
@@ -337,7 +322,6 @@ Resources:
   TapLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-tap-lambda-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -347,15 +331,7 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-      Policies:
-        - PolicyName: 'TapLambdaS3Policy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetObject'
-                Resource: !Sub '${TapSecureS3Bucket.Arn}/*'
+
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-tap-lambda-role'
