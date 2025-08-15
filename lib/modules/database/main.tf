@@ -1,3 +1,8 @@
+# Remove these duplicate variable declarations from main.tf:
+# variable "rds_security_group_id" { ... }  <- DELETE THIS
+# variable "kms_key_arn" { ... }            <- DELETE THIS
+
+# Keep only the resource definitions in main.tf
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
@@ -67,17 +72,9 @@ resource "aws_db_instance" "main" {
   enabled_cloudwatch_logs_exports = ["error", "general", "slow-query"]
 
   tags = {
-    Name = "${var.project_name}-database"
+    Name        = "${var.project_name}-database"
+    Environment = "production"
+    Author      = "ngwakoleslieelijah"
+    CreatedDate = "2025-08-15T13:38:56Z"
   }
-}
-
-# Example variable declarations (put these in your variables.tf if not already present)
-variable "rds_security_group_id" {
-  description = "ID of the RDS security group"
-  type        = string
-}
-
-variable "kms_key_arn" {
-  description = "ARN of the KMS key"
-  type        = string
 }
