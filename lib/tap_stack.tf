@@ -525,6 +525,7 @@ resource "aws_ssm_parameter" "db_password" {
   name  = "/${local.name_prefix}/db/password"
   type  = "SecureString"
   value = random_password.db.result
+  overwrite = true
 
   tags = merge(
     local.common_tags,

@@ -21,7 +21,16 @@ terraform {
 variable "environment_suffix" {
   description = "Suffix for resource naming to ensure uniqueness"
   type        = string
-  default     = "dev"
+  default     = ""
+}
+
+# Generate unique suffix if not provided
+resource "random_string" "unique_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+  numeric = true
+  lower   = true
 }
 
 # AWS Region
@@ -40,12 +49,12 @@ variable "workspace_name" {
 
 # Local values for environment configuration
 locals {
-  # Use environment suffix for resource naming
-  environment_suffix = var.environment_suffix
+  # Use environment suffix for resource naming, fallback to random if empty
+  environment_suffix = var.environment_suffix != "" ? var.environment_suffix : "dev-${random_string.unique_suffix.result}"
 
   # Determine environment based on workspace or suffix
   environment = terraform.workspace != "default" ? terraform.workspace : (
-    contains(["pr", "dev"], substr(var.environment_suffix, 0, min(3, length(var.environment_suffix)))) ? "staging" : "production"
+    contains(["pr", "dev"], substr(local.environment_suffix, 0, min(3, length(local.environment_suffix)))) ? "staging" : "production"
   )
 
   # AWS region
