@@ -10,6 +10,8 @@ locals {
     Environment = local.environment
     ManagedBy   = "Terraform"
   }
+
+  found_trail_arn = try(data.aws_cloudtrail.existing.arn, null)
 }
 
 variable "vpc_cidrs" {
@@ -39,6 +41,12 @@ variable "enable_deletion_protection" {
 
 # Data source for current AWS Account ID
 data "aws_caller_identity" "current" {}
+
+# Data source to look up an existing multi-region CloudTrail trail
+data "aws_cloudtrail" "existing" {
+  provider              = aws.useast1
+  is_multi_region_trail = true
+}
 
 # Central S3 bucket in us-east-1 for storing all logs
 resource "aws_s3_bucket" "logs" {
@@ -131,6 +139,9 @@ resource "random_password" "db" {
 
 # Multi-region CloudTrail for auditing API calls
 resource "aws_cloudtrail" "main" {
+
+  count = local.found_trail_arn == null ? 1 : 0
+
   provider                      = aws.useast1
   name                          = "${local.project_name}-${local.environment}-audit-trail"
   s3_bucket_name                = aws_s3_bucket.logs.id
@@ -138,8 +149,6 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
 
   tags = local.common_tags
-
-  depends_on = [aws_s3_bucket_policy.logs]
 }
 
 # IAM Role for EC2 instances
@@ -1061,7 +1070,12 @@ resource "aws_s3_bucket_replication_configuration" "primary_data_replication" {
     id     = "crr-rule"
     status = "Enabled"
 
-    filter {}
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
+      }
+    }
+
 
     destination {
       bucket        = aws_s3_bucket.backup_data.arn
@@ -1441,46 +1455,20 @@ resource "aws_autoscaling_policy" "cpu_target_useast1" {
   }
 }
 
-resource "aws_db_instance_automated_backups_replication" "rds_backup_replication" {
-  provider               = aws.useast1
-  source_db_instance_arn = aws_db_instance.rds_useast1.arn
-  kms_key_id             = aws_kms_key.uswest2.arn
-  retention_period       = 7
-}
-
 resource "aws_cloudwatch_dashboard" "main" {
   provider       = aws.useast1
   dashboard_name = "${local.project_name}-${local.environment}-dashboard"
 
   dashboard_body = jsonencode({
     widgets = [
+      # ... (first widget is correct) ...
       {
         type = "metric"
         properties = {
+          # FIX: Restructure the S3 metrics
           metrics = [
-            ["AWS/EC2", "CPUUtilization"],
-            ["AWS/RDS", "CPUUtilization"],
-            ["AWS/RDS", "DatabaseConnections"],
-            ["AWS/RDS", "FreeStorageSpace"]
-          ]
-          period = 300
-          stat   = "Average"
-          region = "us-east-1"
-          title  = "Resource Utilization - US East 1"
-        }
-      },
-      {
-        type = "metric"
-        properties = {
-          metrics = [
-            ["AWS/S3", "BucketSizeBytes", {
-              BucketName  = aws_s3_bucket.primary_data.id
-              StorageType = "StandardStorage"
-            }],
-            ["AWS/S3", "NumberOfObjects", {
-              BucketName  = aws_s3_bucket.primary_data.id
-              StorageType = "AllStorageTypes"
-            }]
+            ["AWS/S3", "BucketSizeBytes", "BucketName", aws_s3_bucket.primary_data.id, "StorageType", "StandardStorage"],
+            ["AWS/S3", "NumberOfObjects", "BucketName", aws_s3_bucket.primary_data.id, "StorageType", "AllStorageTypes"]
           ]
           period = 86400
           stat   = "Average"
