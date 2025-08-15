@@ -436,7 +436,7 @@ resource "aws_launch_template" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.name_prefix}-asg"
+  name                      = "${local.name_prefix}-asg-${random_string.suffix.result}"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
@@ -463,7 +463,7 @@ resource "aws_autoscaling_group" "main" {
 ########################
 
 resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "${local.name_prefix}-scale-up"
+  name                   = "${local.name_prefix}-scale-up-${random_string.suffix.result}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -471,7 +471,7 @@ resource "aws_autoscaling_policy" "scale_up" {
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "${local.name_prefix}-scale-down"
+  name                   = "${local.name_prefix}-scale-down-${random_string.suffix.result}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -483,7 +483,7 @@ resource "aws_autoscaling_policy" "scale_down" {
 ########################
 
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "${local.name_prefix}-cpu-high"
+  alarm_name          = "${local.name_prefix}-cpu-high-${random_string.suffix.result}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -500,7 +500,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-  alarm_name          = "${local.name_prefix}-cpu-low"
+  alarm_name          = "${local.name_prefix}-cpu-low-${random_string.suffix.result}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
