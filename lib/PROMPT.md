@@ -1,78 +1,65 @@
-# CloudFormation Deployment Prompt
+# CloudFormation Template Request – TapStack Infrastructure
 
-## Objective
-You are an expert AWS CloudFormation architect. Create a **complete YAML CloudFormation template** that automates the deployment of a **secure, highly available, and cost-efficient AWS environment** in a **single AWS region (`us-east-1`)**.
+I need a CloudFormation YAML template that sets up a **secure, highly available, and cost-efficient AWS environment** in the **us-east-1** region. The goal is to create a reusable infrastructure stack for environments like Dev or Prod.
 
-The template must strictly follow the below **requirements** and **descriptions**.
+## ✅ Infrastructure Requirements
 
----
+- **Region and Availability Zones**
+  - Deploy everything in `us-east-1`.
+  - Use at least two Availability Zones for high availability.
 
-## Architecture Requirements
+- **VPC and Subnets**
+  - Create a custom VPC.
+  - At least one **public subnet** and one **private subnet per AZ**.
+  - Public subnets are for ALB and NAT.
+  - Private subnets are for EC2 instances and the database.
 
-1. **Single Region High Availability**  
-   - Deploy **all resources in `us-east-1`**.  
-   - Use **multiple Availability Zones** within the region to achieve high availability.  
-   - *Description:* Ensures redundancy and failover while keeping deployment within one AWS region.
+- **Auto Scaling Group + Load Balancer**
+  - Create an Auto Scaling Group: min 2, max 10.
+  - Attach an Application Load Balancer to it.
+  - EC2 instances should be launched with IAM roles that can access S3.
 
-2. **EC2 Auto Scaling Group with Load Balancer**  
-   - Auto Scaling Group: **min size = 2**, **max size = 10**.  
-   - Attach an **Elastic Load Balancer (ELB)** for traffic distribution.  
-   - *Description:* Optimizes cost and improves availability.
+- **RDS Database (PostgreSQL)**
+  - Use PostgreSQL version 12 or above.
+  - Multi-AZ enabled.
+  - Password should come from Secrets Manager, not hardcoded.
 
-3. **VPC with Public and Private Subnets**  
-   - Deploy all instances in a **custom VPC**.  
-   - At least **1 public and 1 private subnet per Availability Zone**.  
-   - *Description:* Public subnets for internet-facing resources; private subnets for sensitive backend resources.
+- **S3 Buckets**
+  - One bucket for application data (versioned, encrypted).
+  - One dedicated bucket for CloudTrail logs.
 
-4. **CloudWatch Monitoring**  
-   - Create alarms for **CPU utilization > 75%** on any EC2 instance.  
-   - *Description:* Enables proactive scaling and performance management.
+- **CloudWatch Monitoring**
+  - CloudWatch alarm for CPU > 75% on EC2 instances.
 
-5. **S3 Buckets (Secure & Versioned)**  
-   - Enable **server-side encryption** using AWS-managed keys (SSE-S3).  
-   - Enable **versioning**.  
-   - *Description:* Protects data with encryption and preserves file history.
+- **WAF Web ACL**
+  - Attach AWS WAF to the Application Load Balancer.
+  - Use AWS-managed rules for common threats.
 
-6. **RDS PostgreSQL (Multi-AZ)**  
-   - PostgreSQL version **12 or higher**.  
-   - **Multi-AZ** enabled.  
-   - *Description:* Ensures database failover and uptime.
+- **CloudTrail**
+  - Enable CloudTrail in `us-east-1`.
+  - Send logs to the dedicated S3 bucket.
 
-7. **IAM Roles for EC2 to Access S3**  
-   - Grant read/write permissions to S3 buckets.  
-   - *Description:* Avoids storing AWS credentials on instances.
+- **Route 53 (DNS)**
+  - Add a record to map a domain name to the load balancer (domain name can be a parameter).
 
-8. **Resource Tagging**  
-   - All resources tagged with:  
-     - `Environment` = environment name (e.g., Dev, Prod)  
-     - `Project` = project name  
-   - *Description:* Supports cost tracking and organization.
+- **Tagging**
+  - All resources should have tags:
+    - `Project` (parameter)
+    - `Environment` (parameter)
 
-9. **Route 53 DNS Routing**  
-   - Configure a domain to point to the Load Balancer.  
-   - *Description:* User-friendly domain and DNS routing.
+## 🧾 Output Requirements
 
-10. **AWS WAF Protection**  
-    - Attach to Load Balancer.  
-    - Block common web exploits (SQL injection, XSS).  
-    - *Description:* Adds application-layer security.
-
-11. **CloudTrail Auditing**  
-    - Enable in **`us-east-1`**.  
-    - *Description:* Tracks API calls and user activity for compliance and security.
-
----
-
-## Constraints
-- Deployment must be in **`us-east-1` only**.  
-- Must follow AWS best practices for **security**, **reliability**, and **cost efficiency**.  
-- Must deploy successfully with all resources functional.
+The CloudFormation template should:
+- Be written in YAML.
+- Include Parameters for things like instance type, subnet CIDRs, environment, and project name.
+- Include Outputs for:
+  - VPC ID
+  - ALB DNS name
+  - RDS endpoint
+  - S3 bucket names
+  - Web ACL ID
+  - Auto Scaling Group name
 
 ---
 
-## Expected Output
-- **Full YAML CloudFormation template** including:
-  - Parameters for customization (instance types, subnet CIDRs, etc.)
-  - Resources for all services listed above
-  - Outputs for key resource details (Load Balancer DNS, RDS endpoint, etc.)
-  - All dependencies and configurations for immediate deployment
+Please provide the **complete CloudFormation YAML** with Parameters, Resources, and Outputs.
