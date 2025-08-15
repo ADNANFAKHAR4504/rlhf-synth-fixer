@@ -20,14 +20,17 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+
     // Common tags for all resources
     const commonTags = {
       Owner: 'DevOps Team',
-      Purpose: '3-Tier Web Application'
+      Purpose: '3-Tier Web Application',
     };
 
     // Create VPC with public and private subnets across 2 AZs
     const vpc = new ec2.Vpc(this, 'TapVpc', {
+      vpcName: `tap-vpc-${environmentSuffix}`,
       maxAzs: 2,
       cidr: '10.0.0.0/16',
       subnetConfiguration: [
@@ -45,7 +48,7 @@ export class TapStack extends cdk.Stack {
           cidrMask: 24,
           name: 'DatabaseSubnet',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        }
+        },
       ],
       natGateways: 2,
       enableDnsHostnames: true,
@@ -59,6 +62,7 @@ export class TapStack extends cdk.Stack {
     // Security Group for ALB - Allow HTTP/HTTPS from internet
     const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
       vpc,
+      securityGroupName: `tap-alb-sg-${environmentSuffix}`,
       description: 'Security group for Application Load Balancer',
       allowAllOutbound: true,
     });
@@ -81,6 +85,7 @@ export class TapStack extends cdk.Stack {
     // Security Group for EC2 - Allow traffic only from ALB
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'Ec2SecurityGroup', {
       vpc,
+      securityGroupName: `tap-ec2-sg-${environmentSuffix}`,
       description: 'Security group for EC2 instances',
       allowAllOutbound: true,
     });
@@ -97,6 +102,7 @@ export class TapStack extends cdk.Stack {
     // Security Group for RDS - Allow traffic only from EC2
     const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
       vpc,
+      securityGroupName: `tap-rds-sg-${environmentSuffix}`,
       description: 'Security group for RDS database',
       allowAllOutbound: false,
     });
@@ -112,8 +118,9 @@ export class TapStack extends cdk.Stack {
 
     // KMS Key for RDS encryption
     const rdsKmsKey = new kms.Key(this, 'RdsKmsKey', {
-      description: 'KMS key for RDS encryption',
+      description: `KMS key for RDS encryption - ${environmentSuffix}`,
       enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     cdk.Tags.of(rdsKmsKey).add('Owner', commonTags.Owner);
@@ -133,10 +140,14 @@ export class TapStack extends cdk.Stack {
 
     // RDS Instance
     const database = new rds.DatabaseInstance(this, 'TapDatabase', {
+      instanceIdentifier: `tap-database-${environmentSuffix}`,
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0_35,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [rdsSecurityGroup],
@@ -144,10 +155,10 @@ export class TapStack extends cdk.Stack {
       storageEncrypted: true,
       storageEncryptionKey: rdsKmsKey,
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
+      deletionProtection: false,
       databaseName: 'tapdb',
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: 'tap-db-credentials',
+        secretName: `tap-db-credentials-${environmentSuffix}`,
       }),
       publiclyAccessible: false,
       allocatedStorage: 20,
@@ -161,8 +172,12 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'Ec2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
@@ -177,12 +192,16 @@ export class TapStack extends cdk.Stack {
       'systemctl start httpd',
       'systemctl enable httpd',
       'echo "<h1>Hello from TAP Application Server</h1>" > /var/www/html/index.html',
-      'yum install -y amazon-cloudwatch-agent',
+      'yum install -y amazon-cloudwatch-agent'
     );
 
     // Launch Template for Auto Scaling Group
     const launchTemplate = new ec2.LaunchTemplate(this, 'TapLaunchTemplate', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
+      launchTemplateName: `tap-lt-${environmentSuffix}`,
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MEDIUM
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       securityGroup: ec2SecurityGroup,
       role: ec2Role,
@@ -194,18 +213,24 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(launchTemplate).add('Purpose', commonTags.Purpose);
 
     // Auto Scaling Group
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
-      vpc,
-      launchTemplate,
-      minCapacity: 2,
-      maxCapacity: 6,
-      desiredCapacity: 2,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      healthCheckType: autoscaling.HealthCheckType.ELB,
-      healthCheckGracePeriod: cdk.Duration.seconds(300),
-    });
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'TapAutoScalingGroup',
+      {
+        autoScalingGroupName: `tap-asg-${environmentSuffix}`,
+        vpc,
+        launchTemplate,
+        minCapacity: 2,
+        maxCapacity: 6,
+        desiredCapacity: 2,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        healthCheck: autoscaling.HealthCheck.elb({
+          grace: cdk.Duration.seconds(300),
+        }),
+      }
+    );
 
     cdk.Tags.of(autoScalingGroup).add('Owner', commonTags.Owner);
     cdk.Tags.of(autoScalingGroup).add('Purpose', commonTags.Purpose);
@@ -213,6 +238,7 @@ export class TapStack extends cdk.Stack {
     // Application Load Balancer
     const alb = new elbv2.ApplicationLoadBalancer(this, 'TapAlb', {
       vpc,
+      loadBalancerName: `tap-alb-${environmentSuffix}`,
       internetFacing: true,
       securityGroup: albSecurityGroup,
       vpcSubnets: {
@@ -224,16 +250,22 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(alb).add('Purpose', commonTags.Purpose);
 
     // Target Group
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TapTargetGroup', {
-      vpc,
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targetType: elbv2.TargetType.INSTANCE,
-      healthCheckPath: '/',
-      healthCheckIntervalSeconds: 30,
-      healthyThresholdCount: 2,
-      unhealthyThresholdCount: 5,
-    });
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'TapTargetGroup',
+      {
+        vpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.INSTANCE,
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 5,
+        },
+      }
+    );
 
     cdk.Tags.of(targetGroup).add('Owner', commonTags.Owner);
     cdk.Tags.of(targetGroup).add('Purpose', commonTags.Purpose);
@@ -242,15 +274,23 @@ export class TapStack extends cdk.Stack {
     autoScalingGroup.attachToApplicationTargetGroup(targetGroup);
 
     // ALB Listener
-    const listener = alb.addListener('TapListener', {
+    alb.addListener('TapListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [targetGroup],
     });
 
     // CloudWatch Alarms for Auto Scaling
+    const cpuUtilization = new cloudwatch.Metric({
+      namespace: 'AWS/EC2',
+      metricName: 'CPUUtilization',
+      dimensionsMap: {
+        AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+      },
+    });
+
     const cpuHighAlarm = new cloudwatch.Alarm(this, 'CpuHighAlarm', {
-      metric: autoScalingGroup.metricCpuUtilization(),
+      metric: cpuUtilization,
       threshold: 70,
       evaluationPeriods: 2,
       datapointsToAlarm: 2,
@@ -258,7 +298,7 @@ export class TapStack extends cdk.Stack {
     });
 
     const cpuLowAlarm = new cloudwatch.Alarm(this, 'CpuLowAlarm', {
-      metric: autoScalingGroup.metricCpuUtilization(),
+      metric: cpuUtilization,
       threshold: 30,
       evaluationPeriods: 2,
       datapointsToAlarm: 2,
@@ -272,8 +312,8 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(cpuLowAlarm).add('Purpose', commonTags.Purpose);
 
     // Auto Scaling Policies
-    const scaleUpPolicy = autoScalingGroup.scaleOnMetric('ScaleUpPolicy', {
-      metric: autoScalingGroup.metricCpuUtilization(),
+    autoScalingGroup.scaleOnMetric('ScaleUpPolicy', {
+      metric: cpuUtilization,
       scalingSteps: [
         { upper: 70, change: +1 },
         { lower: 85, change: +2 },
@@ -281,16 +321,18 @@ export class TapStack extends cdk.Stack {
       adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
     });
 
-    const scaleDownPolicy = autoScalingGroup.scaleOnMetric('ScaleDownPolicy', {
-      metric: autoScalingGroup.metricCpuUtilization(),
+    autoScalingGroup.scaleOnMetric('ScaleDownPolicy', {
+      metric: cpuUtilization,
       scalingSteps: [
         { upper: 30, change: -1 },
+        { upper: 10, change: -2 },
       ],
       adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
     });
 
     // S3 Bucket for static content
     const staticContentBucket = new s3.Bucket(this, 'TapStaticContentBucket', {
+      bucketName: `tap-static-content-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -302,9 +344,13 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(staticContentBucket).add('Purpose', commonTags.Purpose);
 
     // Origin Access Identity for CloudFront
-    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'TapOai', {
-      comment: 'OAI for TAP static content',
-    });
+    const originAccessIdentity = new cloudfront.OriginAccessIdentity(
+      this,
+      'TapOai',
+      {
+        comment: 'OAI for TAP static content',
+      }
+    );
 
     // Grant CloudFront access to S3 bucket
     staticContentBucket.grantRead(originAccessIdentity);
@@ -329,7 +375,7 @@ export class TapStack extends cdk.Stack {
 
     // Route 53 Hosted Zone
     const hostedZone = new route53.HostedZone(this, 'TapHostedZone', {
-      zoneName: 'tap-app.example.com',
+      zoneName: `tap-app-${environmentSuffix}.example.com`,
       comment: 'Hosted zone for TAP application',
     });
 
@@ -340,7 +386,9 @@ export class TapStack extends cdk.Stack {
     new route53.ARecord(this, 'TapARecord', {
       zone: hostedZone,
       recordName: 'api',
-      target: route53.RecordTarget.fromAlias(new targets.LoadBalancerTarget(alb)),
+      target: route53.RecordTarget.fromAlias(
+        new targets.LoadBalancerTarget(alb)
+      ),
       ttl: cdk.Duration.seconds(300),
     });
 
@@ -348,7 +396,9 @@ export class TapStack extends cdk.Stack {
     new route53.AaaaRecord(this, 'TapAaaaRecord', {
       zone: hostedZone,
       recordName: 'api',
-      target: route53.RecordTarget.fromAlias(new targets.LoadBalancerTarget(alb)),
+      target: route53.RecordTarget.fromAlias(
+        new targets.LoadBalancerTarget(alb)
+      ),
       ttl: cdk.Duration.seconds(300),
     });
 
@@ -356,7 +406,9 @@ export class TapStack extends cdk.Stack {
     new route53.ARecord(this, 'TapCloudfrontARecord', {
       zone: hostedZone,
       recordName: 'www',
-      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
+      target: route53.RecordTarget.fromAlias(
+        new targets.CloudFrontTarget(distribution)
+      ),
       ttl: cdk.Duration.seconds(300),
     });
 
@@ -392,4 +444,3 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
-
