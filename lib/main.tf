@@ -145,7 +145,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier      = "${var.project_name}-aurora-cluster"
   engine                  = "aurora-mysql"
-  engine_version          = "8.0.mysql_aurora.3.02.0"
+  engine_version          = "8.0.mysql_aurora.3.07.1"
   database_name           = "serverlessdb"
   master_username         = var.db_username
   master_password         = var.db_password != null ? var.db_password : random_password.db_password.result
