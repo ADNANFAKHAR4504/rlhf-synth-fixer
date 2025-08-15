@@ -600,122 +600,6 @@
                 }
             }
         },
-        "WAFWebACL": {
-            "Type": "AWS::WAFv2::WebACL",
-            "Condition": "EnableWAFCondition",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "prod-waf-webacl-${EnvironmentSuffix}"
-                },
-                "Description": "WAF Web ACL for API Gateway protection",
-                "Scope": "REGIONAL",
-                "DefaultAction": {
-                    "Allow": {}
-                },
-                "Rules": [
-                    {
-                        "Name": "IPWhitelistRule",
-                        "Priority": 1,
-                        "Statement": {
-                            "NotStatement": {
-                                "Statement": {
-                                    "IPSetReferenceStatement": {
-                                        "Arn": {
-                                            "Fn::GetAtt": [
-                                                "WAFIPSet",
-                                                "Arn"
-                                            ]
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        "Action": {
-                            "Block": {}
-                        },
-                        "VisibilityConfig": {
-                            "SampledRequestsEnabled": true,
-                            "CloudWatchMetricsEnabled": true,
-                            "MetricName": "IPWhitelistRule"
-                        }
-                    },
-                    {
-                        "Name": "RateLimitRule",
-                        "Priority": 2,
-                        "Statement": {
-                            "RateBasedStatement": {
-                                "Limit": 2000,
-                                "AggregateKeyType": "IP"
-                            }
-                        },
-                        "Action": {
-                            "Block": {}
-                        },
-                        "VisibilityConfig": {
-                            "SampledRequestsEnabled": true,
-                            "CloudWatchMetricsEnabled": true,
-                            "MetricName": "RateLimitRule"
-                        }
-                    },
-                    {
-                        "Name": "CommonAttackRule",
-                        "Priority": 3,
-                        "Statement": {
-                            "ManagedRuleGroupStatement": {
-                                "VendorName": "AWS",
-                                "Name": "AWSManagedRulesCommonRuleSet"
-                            }
-                        },
-                        "Action": {
-                            "Block": {}
-                        },
-                        "VisibilityConfig": {
-                            "SampledRequestsEnabled": true,
-                            "CloudWatchMetricsEnabled": true,
-                            "MetricName": "CommonAttackRule"
-                        }
-                    }
-                ],
-                "VisibilityConfig": {
-                    "SampledRequestsEnabled": true,
-                    "CloudWatchMetricsEnabled": true,
-                    "MetricName": {
-                        "Fn::Sub": "prod-waf-webacl-${EnvironmentSuffix}"
-                    }
-                }
-            }
-        },
-        "WAFIPSet": {
-            "Type": "AWS::WAFv2::IPSet",
-            "Condition": "EnableWAFCondition",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "prod-waf-ipset-${EnvironmentSuffix}"
-                },
-                "Description": "IP whitelist for API Gateway",
-                "Scope": "REGIONAL",
-                "IPAddressVersion": "IPV4",
-                "Addresses": [
-                    "198.51.100.0/24",
-                    "203.0.113.25/32"
-                ]
-            }
-        },
-        "WAFWebACLAssociation": {
-            "Type": "AWS::WAFv2::WebACLAssociation",
-            "Condition": "EnableWAFCondition",
-            "Properties": {
-                "ResourceArn": {
-                    "Fn::Sub": "arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}"
-                },
-                "WebACLArn": {
-                    "Fn::GetAtt": [
-                        "WAFWebACL",
-                        "Arn"
-                    ]
-                }
-            }
-        },
         "LambdaErrorAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
@@ -774,14 +658,6 @@
                     "Ref": "EnvironmentType"
                 },
                 "prod"
-            ]
-        },
-        "EnableWAFCondition": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnableWAF"
-                },
-                "true"
             ]
         }
     },

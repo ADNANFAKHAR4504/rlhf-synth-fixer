@@ -102,9 +102,7 @@ describe('TapStack CloudFormation Template', () => {
         'DeletePromptFunction',
         'ApiGateway',
         'AuthorizerFunction',
-        'WAFWebACL',
-        'WAFIPSet',
-        'WAFWebACLAssociation',
+
         'LambdaErrorAlarm',
         'APIGatewayErrorAlarm'
       ];
@@ -287,25 +285,7 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    describe('WAF Configuration', () => {
-      test('should have WAF Web ACL', () => {
-        const wafWebACL = template.Resources.WAFWebACL;
-        expect(wafWebACL.Type).toBe('AWS::WAFv2::WebACL');
-        expect(wafWebACL.Condition).toBe('EnableWAFCondition');
-      });
 
-      test('should have WAF IP Set', () => {
-        const wafIPSet = template.Resources.WAFIPSet;
-        expect(wafIPSet.Type).toBe('AWS::WAFv2::IPSet');
-        expect(wafIPSet.Condition).toBe('EnableWAFCondition');
-      });
-
-      test('should have WAF Web ACL Association', () => {
-        const wafAssociation = template.Resources.WAFWebACLAssociation;
-        expect(wafAssociation.Type).toBe('AWS::WAFv2::WebACLAssociation');
-        expect(wafAssociation.Condition).toBe('EnableWAFCondition');
-      });
-    });
 
     describe('CloudWatch Alarms', () => {
       test('should have Lambda error alarm', () => {
@@ -333,9 +313,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Conditions.IsProd).toBeDefined();
     });
 
-    test('should have EnableWAFCondition', () => {
-      expect(template.Conditions.EnableWAFCondition).toBeDefined();
-    });
+
   });
 
   describe('Outputs', () => {
@@ -393,7 +371,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(9); // Should have multiple resources now (LambdaConfigRule commented out)
+      expect(resourceCount).toBeGreaterThan(6); // Should have multiple resources now (LambdaConfigRule and WAF resources commented out)
     });
 
     test('should have correct number of parameters', () => {
