@@ -5,12 +5,14 @@ We need to build a secure AWS storage system using Terraform. The main goal is t
 ## What we need to build
 
 **S3 Storage Setup:**
+
 - Encrypted S3 buckets (AES-256)
 - IP restrictions for bucket access
 - Versioning enabled
 - CloudTrail logging for API calls
 
 **IAM Security:**
+
 - Least privilege roles (no more permissions than needed)
 - CloudWatch monitoring for IAM changes
 - SNS notifications when roles are modified
@@ -29,10 +31,10 @@ We need to build a secure AWS storage system using Terraform. The main goal is t
 ## Technical specs
 
 Build everything in `tap_stack.tf` file:
+
 - Variable declarations (including aws_region)
 - Resources and outputs
 - No external modules - write everything directly
 - Follow security best practices
-- Include useful outputs for CI/CD (no secrets though)
 
 The infrastructure should be production-ready with proper tagging and security controls.

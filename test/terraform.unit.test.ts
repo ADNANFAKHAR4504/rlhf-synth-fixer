@@ -216,7 +216,14 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
     });
 
     test('implements proper resource dependencies', () => {
+      // Check for proper resource ordering without circular dependencies
+      // CloudTrail should be able to be created independently
+      expect(terraformContent).toMatch(/aws_cloudtrail.*secure_data_trail/);
       expect(terraformContent).toMatch(
+        /aws_s3_bucket_policy.*cloudtrail_logs_policy/
+      );
+      // Ensure no circular dependency exists (CloudTrail should not depend on its own policy)
+      expect(terraformContent).not.toMatch(
         /depends_on\s*=\s*\[aws_s3_bucket_policy\.cloudtrail_logs_policy\]/
       );
     });
@@ -251,9 +258,9 @@ describe('Terraform Secure Data Storage Infrastructure Unit Tests', () => {
     test('meets all PROMPT.md requirements', () => {
       // AES-256 encryption
       expect(terraformContent).toMatch(/sse_algorithm\s*=\s*"AES256"/);
-      // IP restrictions - check for both conditions used in the policy
-      expect(terraformContent).toMatch(/IpAddressIfExists.*aws:SourceIp/s);
+      // IP restrictions - check for proper IP restriction logic (not IpAddressIfExists)
       expect(terraformContent).toMatch(/IpAddress.*aws:SourceIp/s);
+      expect(terraformContent).not.toMatch(/IpAddressIfExists/); // Should not use flawed condition
       // CloudTrail logging
       expect(terraformContent).toMatch(/aws_cloudtrail/);
       // IAM roles (not keys)

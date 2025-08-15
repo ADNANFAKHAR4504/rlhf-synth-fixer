@@ -5,5 +5,22 @@
   "turn_type": "single",
   "po_id": "291309",
   "team": "5",
-  "startedAt": "2025-08-15T09:23:48.900Z"
+  "startedAt": "2025-08-15T09:23:48.900Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "terraform",
+    "aws",
+    "security",
+    "s3",
+    "cloudtrail",
+    "iam"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "CloudWatch",
+    "SNS"
+  ]
 }

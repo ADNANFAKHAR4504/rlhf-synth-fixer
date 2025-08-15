@@ -196,7 +196,7 @@ aws_s3_bucket.secure_storage.arn,
 "${aws_s3_bucket.secure_storage.arn}/*"
 ]
 Condition = {
-IpAddressIfExists = {
+IpAddress = {
 "aws:SourceIp" = var.allowed_ip_ranges
 }
 Bool = {
@@ -287,7 +287,7 @@ Action = "s3:GetBucketAcl"
 Resource = aws_s3_bucket.cloudtrail_logs.arn
 Condition = {
 StringEquals = {
-"AWS:SourceArn" = aws_cloudtrail.secure_data_trail.arn
+"AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/secure-data-cloudtrail-${random_id.bucket_suffix.hex}"
 }
 }
 },
@@ -302,7 +302,7 @@ Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
 Condition = {
 StringEquals = {
 "s3:x-amz-acl" = "bucket-owner-full-control"
-"AWS:SourceArn" = aws_cloudtrail.secure_data_trail.arn
+"AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/secure-data-cloudtrail-${random_id.bucket_suffix.hex}"
 }
 }
 }
@@ -341,8 +341,6 @@ exclude_management_event_sources = []
 tags = merge(local.common_tags, {
 Name = "SecureDataCloudTrail"
 })
-
-depends_on = [aws_s3_bucket_policy.cloudtrail_logs_policy]
 }
 
 # IAM role for application access

@@ -15,7 +15,7 @@ version = "~> 5.0"
 variable "aws_region" {
 description = "The AWS region to deploy resources"
 type = string
-default = "us-west-2"
+default = "eu-west-3"
 }
 
 variable "allowed_ip_ranges" {
@@ -212,6 +212,8 @@ s3_bucket_name = aws_s3_bucket.cloudtrail_logs.bucket
 include_global_service_events = true
 is_multi_region_trail = true
 enable_logging = true
+cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:\*"
+cloud_watch_logs_role_arn = aws_iam_role.cloudtrail_cloudwatch_role.arn
 
 event_selector {
 read_write_type = "All"
@@ -223,18 +225,70 @@ exclude_management_event_sources = []
       values = ["${aws_s3_bucket.secure_storage.arn}/*"]
     }
 
-    data_resource {
-      type   = "AWS::S3::Bucket"
-      values = [aws_s3_bucket.secure_storage.arn]
-    }
-
 }
 
 tags = merge(local.common_tags, {
 Name = "SecureDataCloudTrail"
 })
+}
 
-depends_on = [aws_s3_bucket_policy.cloudtrail_logs_policy]
+# CloudWatch Log Group for CloudTrail
+
+resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
+name = "/aws/cloudtrail/secure-data"
+retention_in_days = 14
+
+tags = merge(local.common_tags, {
+Name = "CloudTrailLogGroup"
+})
+}
+
+# IAM role for CloudTrail CloudWatch integration
+
+resource "aws_iam_role" "cloudtrail_cloudwatch_role" {
+name = "cloudtrail-cloudwatch-logs-role"
+
+assume_role_policy = jsonencode({
+Version = "2012-10-17"
+Statement = [
+{
+Action = "sts:AssumeRole"
+Effect = "Allow"
+Principal = {
+Service = "cloudtrail.amazonaws.com"
+}
+}
+]
+})
+
+tags = merge(local.common_tags, {
+Name = "CloudTrailCloudWatchRole"
+})
+}
+
+# IAM policy for CloudTrail CloudWatch logs
+
+resource "aws_iam_role_policy" "cloudtrail_cloudwatch_logs_policy" {
+name = "cloudtrail-cloudwatch-logs-policy"
+role = aws_iam_role.cloudtrail_cloudwatch_role.id
+
+policy = jsonencode({
+Version = "2012-10-17"
+Statement = [
+{
+Sid = "AWSCloudTrailLogsPolicy"
+Effect = "Allow"
+Action = [
+"logs:CreateLogGroup",
+"logs:CreateLogStream",
+"logs:PutLogEvents"
+]
+Resource = [
+"${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
+]
+}
+]
+})
 }
 
 # IAM role for application access
