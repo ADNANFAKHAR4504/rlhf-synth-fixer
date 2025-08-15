@@ -35,13 +35,13 @@ export class RDSStack extends pulumi.ComponentResource {
           Purpose: 'RDSNetworking',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
-    // Get available AZs
+    // Get available AZs for the specific region
     const availabilityZones = aws.getAvailabilityZones({
       state: 'available',
-    });
+    }, { provider: opts?.provider });
 
     // Create private subnets for RDS in multiple AZs
     const privateSubnet1 = new aws.ec2.Subnet(
@@ -57,7 +57,7 @@ export class RDSStack extends pulumi.ComponentResource {
           Purpose: 'RDSPrivate',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     const privateSubnet2 = new aws.ec2.Subnet(
@@ -73,7 +73,7 @@ export class RDSStack extends pulumi.ComponentResource {
           Purpose: 'RDSPrivate',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // RDS Subnet Group
@@ -91,7 +91,7 @@ export class RDSStack extends pulumi.ComponentResource {
           Purpose: 'DatabaseSubnets',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // RDS Parameter Group for security configurations
@@ -159,7 +159,7 @@ export class RDSStack extends pulumi.ComponentResource {
           Purpose: 'RDSAccess',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // Create RDS Enhanced Monitoring Role
