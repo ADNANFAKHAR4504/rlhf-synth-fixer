@@ -1,66 +1,27 @@
-# Production AWS Infrastructure Setup
+# Setting up production infrastructure for our web app
 
-## Your Role
+Hey team, we need to get our production AWS environment ready for the new web application. This needs to be rock solid - high availability, locked down security, proper tagging, and something we can deploy reliably every time.
 
-You are an expert DevOps engineer and Terraform specialist.
+Here's what we're looking at building:
 
-## Context
+So first off, we need a VPC that spans at least 3 availability zones in us-west-2. The app needs to scale automatically when traffic hits, so we're talking ALB plus an Auto Scaling Group setup. Everything needs to be tagged with Environment = Production (compliance is breathing down our necks about this).
 
-We're standing up a production-grade AWS environment for a web application. Key goals: high availability, tight security, clean tagging, and repeatable IaC.
+For storage, any S3 buckets we create need server access logging turned on. Security team is pretty adamant about this. We also need to make sure we're only allowing inbound traffic on the ports the application actually uses - probably 443 for HTTPS traffic, but let's make it configurable.
 
-## Requirements
+The code needs to work with Terraform 1.1.0 or newer since that's what we're standardizing on. For naming, let's stick with the "base-production" pattern we've been using.
 
-1.  VPC stretched across at least three AZs in us-west-2.
-    
-2.  EC2 fleet must auto-scale on demand (ALB + Auto Scaling Group).
-    
-3.  Every resource tagged Environment = Production.
-    
-4.  All S3 buckets use server-access logging.
-    
-5.  Code must run on Terraform >= 1.1.0.
-    
-6.  Inbound traffic only on ports the app actually needs (e.g., 443).
-    
-7.  Follow naming pattern base-production.
-    
+What I'm expecting to get back is a complete Terraform setup that actually works - something that passes validate, plan, and apply without any errors. The usual file structure would be good: main.tf, variables.tf, outputs.tf, versions.tf, plus any modules you think make sense.
 
-## Deliverables
+A few things to keep in mind while building this out:
+- Break things into reusable modules where it makes sense (VPC, ASG, logging, tagging stuff)
+- Use the aws_availability_zones data source so we don't have to hardcode AZ names
+- ALB should go in public subnets, EC2 instances in private subnets (standard setup)
+- For S3 logging, create a dedicated log bucket and hook up aws_s3_bucket_logging for the app buckets
+- Security groups should be restrictive - only allow what we actually need
+- Default tags should automatically inject Environment = Production
+- Include a terraform.tfvars.example file so people know what to set
+- Keep variables clean and well-documented
 
-*   Complete, self-contained Terraform package (HCL) that passes terraform validate, plan, and apply with zero errors.
-    
-*   Organized files: main.tf, variables.tf, outputs.tf, versions.tf, and any modules.
-    
-*   A short README.md explaining how to init, plan, and apply.
-    
+Also throw in a quick README explaining how to actually use this thing - init, plan, apply, the usual workflow.
 
-## Instructions
-
-1.  Code only - no commentary outside code blocks.
-    
-2.  Break reusable pieces into modules (VPC, ASG, logging, tagging baseline).
-    
-3.  Use aws\_availability\_zones data source to pick three AZs automatically.
-    
-4.  Attach an ALB in the public subnets and place EC2 instances in private subnets.
-    
-5.  Enable S3 logging by creating a log bucket plus aws\_s3\_bucket\_logging on each application bucket.
-    
-6.  Add a security-group module that restricts ingress to 443 from a supplied CIDR list.
-    
-7.  Default tags block should inject Environment = Production.
-    
-8.  Include a terraform.tfvars.example file showing sample values.
-    
-9.  Keep variables concise and describe them.
-    
-10.  After code blocks, output a short check list confirming each requirement was met.
-    
-
-## Expected Format
-
-Return your answer with sections for Terraform Files and a Validation Checklist confirming each requirement was met.
-
-## Final Reminder
-
-Think step-by-step: plan modules first, then write root config, then checklist.
+Once you've got the code ready, just confirm that everything we talked about is actually implemented. We've been burned before by missing requirements, so let's double-check everything works as expected.
