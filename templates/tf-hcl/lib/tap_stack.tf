@@ -1,11 +1,11 @@
 ########################
 # Variables
 ########################
-variable "aws_region" {
-  description = "AWS provider region"
-  type        = string
-  default     = "us-east-1"
-}
+# variable "aws_region" {
+#   description = "AWS provider region"
+#   type        = string
+#   default     = "us-east-1"
+# }
 variable "bucket_region" {
   description = "Region for the S3 bucket"
   type        = string
