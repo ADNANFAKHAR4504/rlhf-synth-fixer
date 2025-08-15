@@ -378,9 +378,6 @@
             "Type": "AWS::S3::Bucket",
             "DeletionPolicy": "Delete",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-app-assets-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
