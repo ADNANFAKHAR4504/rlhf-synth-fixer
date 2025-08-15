@@ -744,7 +744,7 @@ resource "aws_route53_health_check" "west" {
   request_interval                = "30"
   cloudwatch_alarm_region         = "us-west-2"
   cloudwatch_alarm_name           = "tap-alb-health-west"
-  insufficient_data_health_status = "Failure"
+  insufficient_data_health_status = "Unhealthy"
   
   tags = merge(local.common_tags, {
     Name = "tap-health-check-west"
@@ -760,7 +760,7 @@ resource "aws_route53_health_check" "east" {
   request_interval                = "30"
   cloudwatch_alarm_region         = "us-east-2"
   cloudwatch_alarm_name           = "tap-alb-health-east"
-  insufficient_data_health_status = "Failure"
+  insufficient_data_health_status = "Unhealthy"
   
   tags = merge(local.common_tags, {
     Name = "tap-health-check-east"
