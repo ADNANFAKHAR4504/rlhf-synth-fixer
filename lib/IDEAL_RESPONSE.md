@@ -1,30 +1,14 @@
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-/**
- * Interface for TapStack properties extending CDK StackProps
- * Requires environmentSuffix for proper resource naming and isolation
- */
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
 }
 
-/**
- * TapStack - Production-ready AWS infrastructure stack using CDK v2
- * 
- * This stack creates:
- * - VPC with 10.0.0.0/16 CIDR block
- * - Two public subnets (10.0.1.0/24 and 10.0.2.0/24)
- * - S3 bucket with versioning enabled
- * - EC2 instance (t3.medium) with IAM role for S3 and CloudWatch access
- * - Security group allowing SSH from specified IP
- * - All resources tagged with Environment: Production
- * - All resources are destroyable (no retain policies)
- */
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
@@ -130,9 +114,9 @@ export class TapStack extends cdk.Stack {
       this,
       `ProductionS3Bucket${environmentSuffix}`,
       {
-        // Auto-generated unique name to avoid conflicts
+        // Don't use explicit bucket name to avoid token issues, let CDK generate a unique name
         versioned: true, // Enable versioning as required
-        removalPolicy: cdk.RemovalPolicy.DESTROY, // Must be destroyable as per requirements
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Must be destroyable as per QA requirements
         autoDeleteObjects: true, // Automatically delete objects on stack deletion
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // Security best practice
       }
