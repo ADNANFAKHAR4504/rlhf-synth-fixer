@@ -3,13 +3,16 @@
 # Debug mode control - set DEBUG_MODE=1 to continue on failures
 DEBUG_MODE=${DEBUG_MODE:-0}
 
+# Report mode control - set REPORT=1 to only show final status
+REPORT=${REPORT:-false}
+
 if [ "$DEBUG_MODE" = "1" ]; then
-    echo "🔧 DEBUG MODE ENABLED - Script will continue on failures"
+    [ "$REPORT" != "true" ] && echo "🔧 DEBUG MODE ENABLED - Script will continue on failures"
 else
     set -e  # Exit on error only if not in debug mode
 fi
 
-echo "=== Docker Entry Point - Starting CI/CD Pipeline ==="
+[ "$REPORT" != "true" ] && echo "=== Docker Entry Point - Starting CI/CD Pipeline ==="
 
 # Track failed steps
 FAILED_STEPS=()
@@ -19,28 +22,47 @@ run_step() {
     local step_name="$1"
     local command="$2"
     
-    echo ""
-    echo "=== $step_name ==="
+    if [ "$REPORT" != "true" ]; then
+        echo ""
+        echo "=== $step_name ==="
+    fi
     
     if [ "$DEBUG_MODE" = "1" ]; then
         # In debug mode, capture exit code but continue
-        if eval "$command"; then
-            echo "✅ $step_name completed successfully"
+        if [ "$REPORT" = "true" ]; then
+            # Run command silently in report mode
+            if eval "$command" >/dev/null 2>&1; then
+                [ "$REPORT" != "true" ] && echo "✅ $step_name completed successfully"
+            else
+                local exit_code=$?
+                [ "$REPORT" != "true" ] && echo "❌ $step_name failed with exit code: $exit_code"
+                FAILED_STEPS+=("$step_name (exit code: $exit_code)")
+            fi
         else
-            local exit_code=$?
-            echo "❌ $step_name failed with exit code: $exit_code"
-            FAILED_STEPS+=("$step_name (exit code: $exit_code)")
+            # Normal debug mode with output
+            if eval "$command"; then
+                echo "✅ $step_name completed successfully"
+            else
+                local exit_code=$?
+                echo "❌ $step_name failed with exit code: $exit_code"
+                FAILED_STEPS+=("$step_name (exit code: $exit_code)")
+            fi
         fi
     else
         # Normal mode - let errors propagate
-        eval "$command"
-        echo "✅ $step_name completed successfully"
+        if [ "$REPORT" = "true" ]; then
+            # Run command silently in report mode
+            eval "$command" >/dev/null 2>&1
+        else
+            eval "$command"
+            echo "✅ $step_name completed successfully"
+        fi
     fi
 }
 
 # Set up AWS credentials if they exist
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-    echo "Setting up AWS credentials from environment variables..."
+    [ "$REPORT" != "true" ] && echo "Setting up AWS credentials from environment variables..."
     export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
     export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
     
@@ -50,20 +72,25 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
     [ -n "$AWS_REGION" ] && export AWS_REGION="$AWS_REGION"
     [ -n "$AWS_PROFILE" ] && export AWS_PROFILE="$AWS_PROFILE"
     
-    echo "AWS credentials configured successfully"
+    [ "$REPORT" != "true" ] && echo "AWS credentials configured successfully"
     
     # Verify AWS CLI is configured and ready
-    echo "Verifying AWS CLI configuration..."
-    if aws sts get-caller-identity >/dev/null 2>&1; then
-        echo "AWS CLI is configured and ready to use"
-        aws sts get-caller-identity --output table
+    if [ "$REPORT" != "true" ]; then
+        echo "Verifying AWS CLI configuration..."
+        if aws sts get-caller-identity >/dev/null 2>&1; then
+            echo "AWS CLI is configured and ready to use"
+            aws sts get-caller-identity --output table
+        else
+            echo "WARNING: AWS CLI configuration test failed"
+            echo "Please check your AWS credentials and permissions"
+        fi
     else
-        echo "WARNING: AWS CLI configuration test failed"
-        echo "Please check your AWS credentials and permissions"
+        # In report mode, just verify silently
+        aws sts get-caller-identity >/dev/null 2>&1 || true
     fi
 else
-    echo "No AWS credentials found in environment variables"
-    echo "AWS CLI will not be available for use"
+    [ "$REPORT" != "true" ] && echo "No AWS credentials found in environment variables"
+    [ "$REPORT" != "true" ] && echo "AWS CLI will not be available for use"
 fi
 
 # Set default environment variables
@@ -77,19 +104,21 @@ else
     ENVIRONMENT_SUFFIX="$TASK_PATH"
 fi
 
-echo "Environment configuration:"
-echo "  ENVIRONMENT_SUFFIX: $ENVIRONMENT_SUFFIX"
-echo "  CI: $CI"
+if [ "$REPORT" != "true" ]; then
+    echo "Environment configuration:"
+    echo "  ENVIRONMENT_SUFFIX: $ENVIRONMENT_SUFFIX"
+    echo "  CI: $CI"
+fi
 
 # If arguments are provided, execute them instead of the pipeline
 if [ $# -gt 0 ]; then
-    echo "Executing provided command: $*"
+    [ "$REPORT" != "true" ] && echo "Executing provided command: $*"
     exec "$@"
 fi
 
 # Extract task from archive
 cp -r archive/"$TASK_PATH"/* ./
-echo "Extracted task from archive: $TASK_PATH"
+[ "$REPORT" != "true" ] && echo "Extracted task from archive: $TASK_PATH"
 
 # Check if metadata.json exists
 if [ ! -f "metadata.json" ]; then
@@ -101,11 +130,13 @@ fi
 # Read project metadata
 PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
 LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
-echo "Detected project: platform=$PLATFORM, language=$LANGUAGE"
+[ "$REPORT" != "true" ] && echo "Detected project: platform=$PLATFORM, language=$LANGUAGE"
 
 # Execute CI/CD pipeline steps in order
-echo ""
-echo "Starting CI/CD pipeline execution..."
+if [ "$REPORT" != "true" ]; then
+    echo ""
+    echo "Starting CI/CD pipeline execution..."
+fi
 
 # STEP 1: BUILD
 if [ -f "scripts/build.sh" ]; then
@@ -132,21 +163,35 @@ run_step "STEP 6: INTEGRATION TESTS" "./scripts/integration-tests.sh"
 # STEP 7: DESTROY (Optional)
 run_step "STEP 7: DESTROY (Optional)" "./scripts/destroy.sh"
 
-echo ""
-echo "=== CI/CD Pipeline Execution Complete ==="
+if [ "$REPORT" != "true" ]; then
+    echo ""
+    echo "=== CI/CD Pipeline Execution Complete ==="
+fi
 
 # Report results
 if [ "$DEBUG_MODE" = "1" ] && [ ${#FAILED_STEPS[@]} -gt 0 ]; then
-    echo ""
-    echo "⚠️  SUMMARY: The following steps failed:"
-    for step in "${FAILED_STEPS[@]}"; do
-        echo "   - $step"
-    done
-    echo ""
-    echo "Exit with failure code since some steps failed"
+    if [ "$REPORT" = "true" ]; then
+        echo "Fail"
+    else
+        echo ""
+        echo "⚠️  SUMMARY: The following steps failed:"
+        for step in "${FAILED_STEPS[@]}"; do
+            echo "   - $step"
+        done
+        echo ""
+        echo "Exit with failure code since some steps failed"
+    fi
     exit 1
 elif [ ${#FAILED_STEPS[@]} -eq 0 ]; then
-    echo "✅ All pipeline steps completed successfully!"
+    if [ "$REPORT" = "true" ]; then
+        echo "Success"
+    else
+        echo "✅ All pipeline steps completed successfully!"
+    fi
 else
-    echo "=== CI/CD Pipeline Completed Successfully ==="
+    if [ "$REPORT" = "true" ]; then
+        echo "Success"
+    else
+        echo "=== CI/CD Pipeline Completed Successfully ==="
+    fi
 fi
