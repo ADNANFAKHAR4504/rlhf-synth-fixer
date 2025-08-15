@@ -127,7 +127,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     }
 
     // Initialize AWS clients
-    const region = process.env.AWS_REGION || 'us-west-2';
+    const region = process.env.AWS_REGION || 'us-east-2';
     ec2Client = new EC2Client({ region });
     rdsClient = new RDSClient({ region });
     s3Client = new S3Client({ region });
@@ -334,8 +334,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
         );
 
         if (locationResponse) {
-          // us-west-2 returns null for LocationConstraint (it's the default)
-          expect([null, 'us-west-2']).toContain(locationResponse.LocationConstraint);
+          // us-east-1 returns null for LocationConstraint (it's the default), us-east-2 returns 'us-east-2'
+          expect([null, 'us-east-2']).toContain(locationResponse.LocationConstraint);
         }
       }
     });
