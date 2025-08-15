@@ -24,13 +24,8 @@ boto3 = "*"
 moto = "*"
 pytest-testdox = "*"
 pytest-env = "*"
-pytest-cov = "*"
-pylint = "*"
 pytest = "*"
 requests = "*"
-pytest-cov = "*"
-cfn-lint = "*"
-cfn-flip = "*"
 
 
 [requires]
