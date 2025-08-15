@@ -8,7 +8,7 @@ variable "environment_suffix" {
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
 # Generate random suffix for unique resource names

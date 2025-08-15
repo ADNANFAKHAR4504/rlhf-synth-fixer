@@ -41,7 +41,7 @@ provider "random" {}
 A comprehensive infrastructure definition including:
 
 **Networking Module:**
-- VPC with CIDR 10.0.0.0/16 in us-east-1 region
+- VPC with CIDR 10.0.0.0/16 in us-west-2 region
 - Public/private/database subnets across multiple AZs
 - Internet Gateway and NAT Gateways for secure internet access
 - Proper route tables and associations
@@ -83,7 +83,7 @@ Comprehensive outputs for all major resources including:
 
 ## Key Security Features
 
- **Region Compliance**: All resources deployed to us-east-1  
+ **Region Compliance**: All resources deployed to us-west-2  
  **Encryption**: AES-256 for S3, encryption at rest/transit for RDS, encrypted EBS  
  **Network Security**: Custom VPC with private subnets, restricted security groups  
  **IAM Best Practices**: Roles instead of inline policies, minimal permissions  
