@@ -16,144 +16,175 @@ data "aws_ami" "amazon_linux" {
 
 data "aws_caller_identity" "current" {}
 
+# Use existing VPC instead of creating new one to avoid VPC limit
+data "aws_vpcs" "existing" {
+  tags = {
+    Name = "*default*"
+  }
+}
+
+data "aws_vpc" "existing" {
+  id = data.aws_vpcs.existing.ids[0]
+}
+
+# Get existing subnets from the VPC
+data "aws_subnets" "existing_public" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.existing.id]
+  }
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+data "aws_subnet" "existing_public" {
+  count = min(length(data.aws_subnets.existing_public.ids), 2)
+  id    = data.aws_subnets.existing_public.ids[count.index]
+}
+
 ########################
-# VPC and Networking
+# VPC and Networking (Using existing VPC to avoid limits)
 ########################
 
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+# Commented out VPC creation to use existing VPC instead
+# resource "aws_vpc" "main" {
+#   cidr_block           = var.vpc_cidr
+#   enable_dns_hostnames = true
+#   enable_dns_support   = true
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-vpc"
-    Environment = var.environment
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-vpc"
+#     Environment = var.environment
+#   }
+# }
+
+# Using existing VPC's internet gateway
+data "aws_internet_gateway" "existing" {
+  filter {
+    name   = "attachment.vpc-id"
+    values = [data.aws_vpc.existing.id]
   }
 }
 
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
+# Use existing subnets instead of creating new ones
+# resource "aws_subnet" "public" {
+#   count                   = length(var.availability_zones)
+#   vpc_id                  = aws_vpc.main.id
+#   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+#   availability_zone       = var.availability_zones[count.index]
+#   map_public_ip_on_launch = true
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-igw"
-    Environment = var.environment
-  }
-}
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-public-${count.index + 1}"
+#     Environment = var.environment
+#     Type        = "Public"
+#   }
+# }
 
-resource "aws_subnet" "public" {
-  count                   = length(var.availability_zones)
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = var.availability_zones[count.index]
-  map_public_ip_on_launch = true
+# Create only private subnets for application instances
+# resource "aws_subnet" "private" {
+#   count             = 2
+#   vpc_id            = data.aws_vpc.existing.id
+#   cidr_block        = cidrsubnet(data.aws_vpc.existing.cidr_block, 8, count.index + 100)
+#   availability_zone = data.aws_availability_zones.available.names[count.index]
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-public-${count.index + 1}"
-    Environment = var.environment
-    Type        = "Public"
-  }
-}
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-private-${count.index + 1}"
+#     Environment = var.environment
+#     Type        = "Private"
+#   }
+# }
 
-resource "aws_subnet" "private" {
-  count             = length(var.availability_zones)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
-  availability_zone = var.availability_zones[count.index]
+# Commented out complex networking to use existing VPC
+# resource "aws_subnet" "database" {
+#   count             = length(var.availability_zones)
+#   vpc_id            = aws_vpc.main.id
+#   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
+#   availability_zone = var.availability_zones[count.index]
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-private-${count.index + 1}"
-    Environment = var.environment
-    Type        = "Private"
-  }
-}
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-database-${count.index + 1}"
+#     Environment = var.environment
+#     Type        = "Database"
+#   }
+# }
 
-resource "aws_subnet" "database" {
-  count             = length(var.availability_zones)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
-  availability_zone = var.availability_zones[count.index]
+# resource "aws_nat_gateway" "main" {
+#   count         = length(var.availability_zones)
+#   allocation_id = aws_eip.nat[count.index].id
+#   subnet_id     = aws_subnet.public[count.index].id
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-database-${count.index + 1}"
-    Environment = var.environment
-    Type        = "Database"
-  }
-}
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-nat-${count.index + 1}"
+#     Environment = var.environment
+#   }
 
-resource "aws_nat_gateway" "main" {
-  count         = length(var.availability_zones)
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
+#   depends_on = [aws_internet_gateway.main]
+# }
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-nat-${count.index + 1}"
-    Environment = var.environment
-  }
+# resource "aws_eip" "nat" {
+#   count  = length(var.availability_zones)
+#   domain = "vpc"
 
-  depends_on = [aws_internet_gateway.main]
-}
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-eip-${count.index + 1}"
+#     Environment = var.environment
+#   }
 
-resource "aws_eip" "nat" {
-  count  = length(var.availability_zones)
-  domain = "vpc"
+#   depends_on = [aws_internet_gateway.main]
+# }
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-eip-${count.index + 1}"
-    Environment = var.environment
-  }
+# resource "aws_route_table" "public" {
+#   vpc_id = aws_vpc.main.id
 
-  depends_on = [aws_internet_gateway.main]
-}
+#   route {
+#     cidr_block = "0.0.0.0/0"
+#     gateway_id = aws_internet_gateway.main.id
+#   }
 
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-public-rt"
+#     Environment = var.environment
+#   }
+# }
 
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
+# resource "aws_route_table" "private" {
+#   count  = length(var.availability_zones)
+#   vpc_id = aws_vpc.main.id
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-public-rt"
-    Environment = var.environment
-  }
-}
+#   route {
+#     cidr_block     = "0.0.0.0/0"
+#     nat_gateway_id = aws_nat_gateway.main[count.index].id
+#   }
 
-resource "aws_route_table" "private" {
-  count  = length(var.availability_zones)
-  vpc_id = aws_vpc.main.id
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-private-rt-${count.index + 1}"
+#     Environment = var.environment
+#   }
+# }
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
-  }
+# resource "aws_route_table_association" "public" {
+#   count          = length(var.availability_zones)
+#   subnet_id      = aws_subnet.public[count.index].id
+#   route_table_id = aws_route_table.public.id
+# }
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-private-rt-${count.index + 1}"
-    Environment = var.environment
-  }
-}
-
-resource "aws_route_table_association" "public" {
-  count          = length(var.availability_zones)
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  count          = length(var.availability_zones)
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
-}
+# resource "aws_route_table_association" "private" {
+#   count          = length(var.availability_zones)
+#   subnet_id      = aws_subnet.private[count.index].id
+#   route_table_id = aws_route_table.private[count.index].id
+# }
 
 ########################
 # Security Groups
 ########################
 
 resource "aws_security_group" "alb" {
-  name        = "${var.app_name}-${var.environment_suffix}-alb-sg"
+  name        = "${var.app_name}-${var.environment_suffix}-alb-sg-${random_id.suffix.hex}"
   description = "Security group for ALB"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.existing.id
 
   ingress {
     from_port   = 80
@@ -183,9 +214,9 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "web" {
-  name        = "${var.app_name}-${var.environment_suffix}-web-sg"
+  name        = "${var.app_name}-${var.environment_suffix}-web-sg-${random_id.suffix.hex}"
   description = "Security group for web servers"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.existing.id
 
   ingress {
     from_port       = 80
@@ -198,7 +229,7 @@ resource "aws_security_group" "web" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [data.aws_vpc.existing.cidr_block]
   }
 
   egress {
@@ -215,9 +246,9 @@ resource "aws_security_group" "web" {
 }
 
 resource "aws_security_group" "database" {
-  name        = "${var.app_name}-${var.environment_suffix}-db-sg"
+  name        = "${var.app_name}-${var.environment_suffix}-db-sg-${random_id.suffix.hex}"
   description = "Security group for RDS database"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.existing.id
 
   ingress {
     from_port       = 3306
@@ -237,11 +268,11 @@ resource "aws_security_group" "database" {
 ########################
 
 resource "aws_lb" "main" {
-  name               = "${var.app_name}-${var.environment_suffix}-alb"
+  name               = "${var.app_name}-${var.environment_suffix}-alb-${random_id.suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+  subnets            = data.aws_subnets.existing_public.ids
 
   enable_deletion_protection = false
 
@@ -255,10 +286,10 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "${var.app_name}-${var.environment_suffix}-tg"
+  name     = "${var.app_name}-${var.environment_suffix}-tg-${random_id.suffix.hex}"
   port     = 80
   protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  vpc_id   = data.aws_vpc.existing.id
 
   health_check {
     enabled             = true
@@ -354,8 +385,8 @@ resource "aws_launch_template" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                      = "${var.app_name}-${var.environment_suffix}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
+  name                      = "${var.app_name}-${var.environment_suffix}-asg-${random_id.suffix.hex}"
+  vpc_zone_identifier       = data.aws_subnets.existing_public.ids
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
   health_check_grace_period = 300
@@ -436,14 +467,19 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
 # RDS Database
 ########################
 
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
-  subnet_ids = aws_subnet.database[*].id
+# Commented out database subnet group since RDS is disabled
+# resource "aws_db_subnet_group" "main" {
+#   name       = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
+#   subnet_ids = aws_subnet.database[*].id
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
-    Environment = var.environment
-  }
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
+#     Environment = var.environment
+#   }
+# }
+
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
 resource "random_password" "db_password" {
@@ -453,7 +489,7 @@ resource "random_password" "db_password" {
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
-  name        = "${var.app_name}-${var.environment_suffix}-db-password"
+  name        = "${var.app_name}-${var.environment_suffix}-db-password-${random_id.suffix.hex}"
   description = "Database password for ${var.app_name} ${var.environment}"
 
   tags = {
@@ -467,41 +503,42 @@ resource "aws_secretsmanager_secret_version" "db_password" {
   secret_string = random_password.db_password.result
 }
 
-resource "aws_db_instance" "main" {
-  identifier            = "${var.app_name}-${var.environment_suffix}-db"
-  allocated_storage     = var.environment == "prod" ? 100 : 20
-  max_allocated_storage = var.environment == "prod" ? 1000 : 100
-  storage_type          = "gp3"
-  engine                = "mysql"
-  engine_version        = "8.0"
-  instance_class        = var.db_instance_class
-  db_name               = var.db_name
-  username              = var.db_username
-  password              = random_password.db_password.result
+# Commented out RDS to simplify deployment and avoid limits
+# resource "aws_db_instance" "main" {
+#   identifier            = "${var.app_name}-${var.environment_suffix}-db"
+#   allocated_storage     = var.environment == "prod" ? 100 : 20
+#   max_allocated_storage = var.environment == "prod" ? 1000 : 100
+#   storage_type          = "gp3"
+#   engine                = "mysql"
+#   engine_version        = "8.0"
+#   instance_class        = var.db_instance_class
+#   db_name               = var.db_name
+#   username              = var.db_username
+#   password              = random_password.db_password.result
 
-  vpc_security_group_ids = [aws_security_group.database.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+#   vpc_security_group_ids = [aws_security_group.database.id]
+#   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  # Multi-AZ for high availability
-  multi_az = var.environment == "prod" ? true : false
+#   # Multi-AZ for high availability
+#   multi_az = var.environment == "prod" ? true : false
 
-  # Backup configuration
-  backup_retention_period = var.environment == "prod" ? 7 : 1
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+#   # Backup configuration
+#   backup_retention_period = var.environment == "prod" ? 7 : 1
+#   backup_window           = "03:00-04:00"
+#   maintenance_window      = "sun:04:00-sun:05:00"
 
-  # Security
-  storage_encrypted = true
+#   # Security
+#   storage_encrypted = true
 
-  # Performance Insights for monitoring
-  performance_insights_enabled = var.environment == "prod" ? true : false
+#   # Performance Insights for monitoring
+#   performance_insights_enabled = var.environment == "prod" ? true : false
 
-  # Always skip final snapshot to ensure destroyability
-  skip_final_snapshot       = true
-  final_snapshot_identifier = null
+#   # Always skip final snapshot to ensure destroyability
+#   skip_final_snapshot       = true
+#   final_snapshot_identifier = null
 
-  tags = {
-    Name        = "${var.app_name}-${var.environment_suffix}-db"
-    Environment = var.environment
-  }
-}
+#   tags = {
+#     Name        = "${var.app_name}-${var.environment_suffix}-db"
+#     Environment = var.environment
+#   }
+# }

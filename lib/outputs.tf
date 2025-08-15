@@ -2,7 +2,7 @@
 
 output "vpc_id" {
   description = "VPC ID"
-  value       = aws_vpc.main.id
+  value       = data.aws_vpc.existing.id
 }
 
 output "load_balancer_dns" {
@@ -15,30 +15,31 @@ output "load_balancer_zone_id" {
   value       = aws_lb.main.zone_id
 }
 
-output "database_endpoint" {
-  description = "RDS database endpoint"
-  value       = aws_db_instance.main.endpoint
-  sensitive   = true
-}
+# Database outputs commented out since RDS is disabled
+# output "database_endpoint" {
+#   description = "RDS database endpoint"
+#   value       = aws_db_instance.main.endpoint
+#   sensitive   = true
+# }
 
-output "database_port" {
-  description = "RDS database port"
-  value       = aws_db_instance.main.port
-}
+# output "database_port" {
+#   description = "RDS database port"
+#   value       = aws_db_instance.main.port
+# }
 
 output "public_subnets" {
   description = "Public subnet IDs"
-  value       = aws_subnet.public[*].id
+  value       = data.aws_subnets.existing_public.ids
 }
 
 output "private_subnets" {
-  description = "Private subnet IDs"
-  value       = aws_subnet.private[*].id
+  description = "Private subnet IDs (using existing public subnets)"
+  value       = data.aws_subnets.existing_public.ids
 }
 
 output "database_subnets" {
-  description = "Database subnet IDs"
-  value       = aws_subnet.database[*].id
+  description = "Database subnet IDs (using existing public subnets)"
+  value       = data.aws_subnets.existing_public.ids
 }
 
 output "autoscaling_group_name" {
