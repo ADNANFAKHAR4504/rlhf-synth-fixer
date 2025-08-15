@@ -335,7 +335,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       if (asg) {
         expect(asg.MinSize).toBeGreaterThanOrEqual(1);
         expect(asg.MaxSize).toBeGreaterThanOrEqual(3);
-        expect(asg.HealthCheckType).toBe('ELB');
+        expect(asg.HealthCheckType).toBe('EC2');
         expect(asg.LaunchTemplate).toBeDefined();
       }
     });
