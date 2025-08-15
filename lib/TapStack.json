@@ -18,6 +18,7 @@
         },
         "NotificationEmail": {
             "Type": "String",
+            "Default": "admin@example.com",
             "Description": "Email address for pipeline failure notifications",
             "AllowedPattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
             "ConstraintDescription": "Must be a valid email address"
@@ -28,7 +29,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ApplicationName}-source-code-${EnvironmentSuffix}-${AWS::Region}"
+                    "Fn::Sub": "${AWS::StackName}-source-code-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -48,18 +49,6 @@
                     "BlockPublicPolicy": true,
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
-                },
-                "NotificationConfiguration": {
-                    "CloudWatchConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "CloudWatchConfiguration": {
-                                "LogGroupName": {
-                                    "Ref": "S3LogGroup"
-                                }
-                            }
-                        }
-                    ]
                 },
                 "LoggingConfiguration": {
                     "DestinationBucketName": {
@@ -84,7 +73,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ApplicationName}-artifacts-${EnvironmentSuffix}-${AWS::Region}"
+                    "Fn::Sub": "${AWS::StackName}-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -117,7 +106,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${ApplicationName}-logs-${EnvironmentSuffix}-${AWS::Region}"
+                    "Fn::Sub": "${AWS::StackName}-logs-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -728,7 +717,6 @@
                     ]
                 },
                 "Timeout": 300,
-                "ReservedConcurrencyLimit": 5,
                 "Environment": {
                     "Variables": {
                         "APP_NAME": {
