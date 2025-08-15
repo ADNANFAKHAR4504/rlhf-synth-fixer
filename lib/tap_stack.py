@@ -38,6 +38,9 @@ class TapStack(ComponentResource):
         self.environment_suffix = args.environment_suffix
         self.name_prefix = f"tap-{self.environment_suffix}"
         
+        # Generate a unique suffix for ASG to avoid conflicts
+        self.unique_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+        
         # Initialize all infrastructure components
         self._create_kms_key()
         self._create_vpc_and_networking()
@@ -776,9 +779,6 @@ echo "<html><body><h1>Hello from $(hostname)</h1></body></html>" > /var/www/html
 # Add ec2-user to docker group
 usermod -a -G docker ec2-user
 
-# Signal completion to CloudFormation/Auto Scaling
-/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region} || true
-
 echo "User data script completed successfully"
 """
         
@@ -821,9 +821,12 @@ echo "User data script completed successfully"
     
     def _create_auto_scaling_group(self):
         """Create Auto Scaling Group for high availability."""
+        # Use unique name with suffix to avoid conflicts
+        asg_name = f"{self.name_prefix}-asg-{self.unique_suffix}"
+        
         self.asg = aws.autoscaling.Group(
             f"{self.name_prefix}-asg",
-            name=f"{self.name_prefix}-asg",
+            name=asg_name,
             vpc_zone_identifiers=[subnet.id for subnet in self.private_subnets],
             health_check_type="EC2",  # Use EC2 health checks instead of ELB initially
             health_check_grace_period=600,  # Increased grace period to allow startup time
@@ -851,6 +854,11 @@ echo "User data script completed successfully"
                 aws.autoscaling.GroupTagArgs(
                     key="Environment",
                     value=self.environment_suffix,
+                    propagate_at_launch=True,
+                ),
+                aws.autoscaling.GroupTagArgs(
+                    key="UniqueId",
+                    value=self.unique_suffix,
                     propagate_at_launch=True,
                 ),
             ],
@@ -1335,4 +1343,3 @@ echo "User data script completed successfully"
             },
             opts=ResourceOptions(parent=self)
         )
-
