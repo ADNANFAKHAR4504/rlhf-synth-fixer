@@ -8,6 +8,9 @@ const file = () => fs.readFileSync(TAP_STACK_TF, 'utf8');
 const has = (re: RegExp) => re.test(file());
 const s = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const tf = fs.readFileSync('tap_stack.tf', 'utf8');
+const has = (regex: RegExp) => regex.test(tf);
+
 describe('tap_stack.tf static structure', () => {
   it('exists and has sufficient content', () => {
     expect(fs.existsSync(TAP_STACK_TF)).toBe(true);
