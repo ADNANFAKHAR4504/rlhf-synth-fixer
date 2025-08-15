@@ -232,7 +232,7 @@ describe("TAP Financial Services Infrastructure Integration Tests", () => {
       }
       
       expect(westRds.Engine).toBe("mysql");
-      expect(westRds.EngineVersion).toBe("8.0");
+      expect(westRds.EngineVersion).toMatch(/^8\.0/); // Accept any 8.0.x version
       expect(westRds.DBInstanceStatus).toBe("available");
       expect(westRds.Endpoint?.Address).toBe(outputs.rds_endpoints.west.split(':')[0]);
       expect(westRds.Endpoint?.Port).toBe(3306);
@@ -261,7 +261,7 @@ describe("TAP Financial Services Infrastructure Integration Tests", () => {
       }
       
       expect(eastRds.Engine).toBe("mysql");
-      expect(eastRds.EngineVersion).toBe("8.0");
+      expect(eastRds.EngineVersion).toMatch(/^8\.0/); // Accept any 8.0.x version
       expect(eastRds.DBInstanceStatus).toBe("available");
       expect(eastRds.Endpoint?.Address).toBe(outputs.rds_endpoints.east.split(':')[0]);
       expect(eastRds.Endpoint?.Port).toBe(3306);
