@@ -535,27 +535,27 @@ resource "aws_s3_bucket_lifecycle_configuration" "prod_logs_bucket_lifecycle" {
     filter {}
 
     transition {
-      days          = 7
+      days          = 30
       storage_class = "STANDARD_IA"
     }
 
     transition {
-      days          = 30
+      days          = 90
       storage_class = "GLACIER"
     }
 
     transition {
-      days          = 90
+      days          = 365
       storage_class = "DEEP_ARCHIVE"
     }
 
     noncurrent_version_transition {
-      noncurrent_days = 7
+      noncurrent_days = 30
       storage_class   = "STANDARD_IA"
     }
 
     noncurrent_version_transition {
-      noncurrent_days = 30
+      noncurrent_days = 90
       storage_class   = "GLACIER"
     }
 
