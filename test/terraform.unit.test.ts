@@ -1,7 +1,6 @@
 // Unit tests for Multi-Region HA Terraform Infrastructure
 import fs from "fs";
 import path from "path";
-import * as hcl from "hcl2-parser";
 
 const libPath = path.resolve(__dirname, "../lib");
 
