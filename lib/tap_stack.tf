@@ -78,7 +78,7 @@ locals {
     }
     postgres = {
       engine         = "postgres"
-      engine_version = "14.9"
+      engine_version = "15"
       port           = 5432
       family         = "postgres14"
     }
