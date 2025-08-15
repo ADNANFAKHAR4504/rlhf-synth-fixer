@@ -39,8 +39,7 @@
             "default": "Database Configuration"
           },
           "Parameters": [
-            "DBMasterUsername",
-            "DBMasterPassword"
+            "DBMasterUsername"
           ]
         }
       ]
@@ -120,19 +119,41 @@
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters",
       "MinLength": 1,
       "MaxLength": 63
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "Default": "TempPassword123!",
-      "Description": "Database master password",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 128,
-      "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+={}\\[\\]|\\:;\"'<>,.?/-]*$",
-      "ConstraintDescription": "Must be 8-128 characters and contain alphanumeric and special characters"
     }
   },
   "Resources": {
+    "RDSMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-rds-master-password"
+        },
+        "Description": "Master password for RDS database",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/'",
+          "IncludeSpace": false
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-rds-secret"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
     "OpenSearchMasterSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "DeletionPolicy": "Delete",
@@ -789,9 +810,7 @@
         },
         "Monitoring": true,
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"metrics\": {\n    \"namespace\": \"CWAgent\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
-          }
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"metrics\": {\n    \"namespace\": \"CWAgent\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
         },
         "Tags": [
           {
@@ -850,7 +869,7 @@
           "Ref": "RDSInstanceClass"
         },
         "Engine": "mysql",
-        "EngineVersion": "8.0.43",
+        "EngineVersion": "8.0.42",
         "AllocatedStorage": 20,
         "StorageType": "gp2",
         "StorageEncrypted": true,
@@ -866,8 +885,11 @@
         "MasterUsername": {
           "Ref": "DBMasterUsername"
         },
-        "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
+        "ManageMasterUserPassword": true,
+        "MasterUserSecret": {
+          "SecretArn": {
+            "Ref": "RDSMasterSecret"
+          }
         },
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
@@ -982,7 +1004,6 @@
             "Arn"
           ]
         },
-        "ReservedConcurrency": 10,
         "Code": {
           "ZipFile": "import json\nimport boto3\n\ndef lambda_handler(event, context):\n    print(f\"Event: {json.dumps(event)}\")\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': 'Hello from Lambda!',\n            'environment': 'Production'\n        })\n    }\n"
         },

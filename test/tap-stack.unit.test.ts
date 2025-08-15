@@ -148,11 +148,18 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.DBMasterUsername.AllowedPattern).toBeDefined();
     });
 
-    test('should have database password parameter', () => {
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.Type).toBe('String');
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBMasterPassword.MinLength).toBe(8);
+    test('should have RDS master secret for secure password management', () => {
+      expect(template.Resources.RDSMasterSecret).toBeDefined();
+      expect(template.Resources.RDSMasterSecret.Type).toBe(
+        'AWS::SecretsManager::Secret'
+      );
+      expect(
+        template.Resources.RDSMasterSecret.Properties.GenerateSecretString
+      ).toBeDefined();
+      expect(
+        template.Resources.RDSMasterSecret.Properties.GenerateSecretString
+          .PasswordLength
+      ).toBe(16);
     });
   });
 
@@ -263,6 +270,16 @@ describe('TapStack CloudFormation Template', () => {
     test('RDS instance should not have deletion protection', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.Properties.DeletionProtection).toBe(false);
+    });
+
+    test('RDS instance should use Secrets Manager for password management', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.ManageMasterUserPassword).toBe(true);
+      expect(rds.Properties.MasterUserSecret).toBeDefined();
+      expect(rds.Properties.MasterUserSecret.SecretArn.Ref).toBe(
+        'RDSMasterSecret'
+      );
+      expect(rds.Properties.MasterUserPassword).toBeUndefined();
     });
   });
 
