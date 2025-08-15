@@ -62,6 +62,18 @@ variable "desired_capacity" {
   default     = 3
 }
 
+variable "enable_https" {
+  description = "Enable HTTPS with ACM certificate (requires domain ownership)"
+  type        = bool
+  default     = false
+}
+
+variable "domain_name" {
+  description = "Domain name for ACM certificate (only used if enable_https is true)"
+  type        = string
+  default     = "example.com"
+}
+
 ########################
 # Data Sources
 ########################
@@ -86,6 +98,7 @@ data "aws_ami" "amazon_linux" {
 
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
+  short_prefix = "${var.project_name}-prod"  # Shorter prefix for length-limited resources
   azs         = slice(data.aws_availability_zones.available.names, 0, 3)
 }
 
@@ -221,6 +234,17 @@ resource "aws_security_group" "alb" {
     cidr_blocks = var.allowed_cidrs
   }
 
+  dynamic "ingress" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      description = "HTTPS"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = var.allowed_cidrs
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -351,11 +375,32 @@ resource "aws_s3_bucket_logging" "app_bucket" {
 }
 
 ########################
+# ACM Certificate (Optional)
+########################
+
+resource "aws_acm_certificate" "main" {
+  count             = var.enable_https ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-cert"
+  }
+}
+
+# Note: You need to create the DNS validation records in your domain's DNS
+# This can be done manually or automated with Route53 if you use AWS for DNS
+
+########################
 # Load Balancer
 ########################
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb-${random_string.suffix.result}"
+  name               = "${local.short_prefix}-alb-${random_string.suffix.result}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -369,7 +414,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "${local.name_prefix}-tg-${random_string.suffix.result}"
+  name     = "${local.short_prefix}-tg-${random_string.suffix.result}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -391,14 +436,49 @@ resource "aws_lb_target_group" "main" {
   }
 }
 
-resource "aws_lb_listener" "main" {
+resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
+    type = var.enable_https ? "redirect" : "forward"
+    
+    dynamic "redirect" {
+      for_each = var.enable_https ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+    
+    dynamic "forward" {
+      for_each = var.enable_https ? [] : [1]
+      content {
+        target_group {
+          arn = aws_lb_target_group.main.arn
+        }
+      }
+    }
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  count             = var.enable_https ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = aws_acm_certificate.main[0].arn
+  
+  default_action {
+    type = "forward"
+    forward {
+      target_group {
+        arn = aws_lb_target_group.main.arn
+      }
+    }
   }
 }
 
