@@ -2,11 +2,12 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
+import { dataAwsAmi } from '@cdktf/provider-aws';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
-// Import your modules
-import { NetworkModule, SecurityModule, ComputeModule } from './modules';
+// FIX: Import the new consolidated VpcModule and the S3BucketModule
+import { VpcModule, S3BucketModule } from './modules';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -14,7 +15,6 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
-  sshKeyName?: string; // Required for EC2
 }
 
 const AWS_REGION_OVERRIDE = 'us-west-2';
@@ -29,69 +29,76 @@ export class TapStack extends TerraformStack {
       : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+    
+    // FIX: Add Environment: Production tag to meet compliance requirements
+    const defaultTags = {
+        tags: {
+            Environment: 'Production',
+            ...props?.defaultTags?.tags,
+        }
+    };
 
-    // AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags: defaultTags,
+      defaultTags: [defaultTags],
     });
 
-    // S3 Backend
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
     });
-
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // --- Network Module ---
-    const network = new NetworkModule(this, 'NetworkModule', {
+    const amzLinux2Ami = new dataAwsAmi.DataAwsAmi(this, 'AmzLinux2', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
+        { name: 'virtualization-type', values: ['hvm'] },
+      ],
+    });
+
+    // --- Instantiate Consolidated VPC and EC2 Module ---
+    // FIX: Instantiate the single VpcModule as required by the review
+    const vpcModule = new VpcModule(this, 'VpcAndCompute', {
       cidrBlock: '10.0.0.0/16',
-      publicSubnetCidr: '10.0.1.0/24',
-      privateSubnetCidr: '10.0.2.0/24',
-      availabilityZone: `${awsRegion}a`,
+      ami: amzLinux2Ami.id,
+      tags: defaultTags.tags, // Pass tags down to the module
     });
 
-    // --- Security Module ---
-    const security = new SecurityModule(this, 'SecurityModule', {
-      vpcId: network.vpcId,
-    });
-
-    // --- Compute Module ---
-    const compute = new ComputeModule(this, 'ComputeModule', {
-      vpcId: network.vpcId,
-      publicSubnetIds: network.publicSubnetIds,
-      securityGroupId: security.securityGroupId,
-      sshKeyName: props?.sshKeyName || 'my-dev-keypair', // Replace with your actual key
+    // --- Instantiate S3 Bucket Module ---
+    const s3Module = new S3BucketModule(this, 'S3Bucket', {
+      bucketName: `tap-secure-bucket-${this.node.addr}`,
+      tags: defaultTags.tags, // Pass tags down to the module
     });
 
     // --- Outputs ---
-    new TerraformOutput(this, 'vpcId', {
-      value: network.vpcId,
-      description: 'The ID of the main VPC.',
+    // FIX: Update outputs to reflect the new architecture with multiple subnets
+    new TerraformOutput(this, 'VpcId', {
+      description: 'ID of the provisioned VPC',
+      value: vpcModule.vpc.id,
     });
 
-    new TerraformOutput(this, 'publicSubnetIds', {
-      value: network.publicSubnetIds.join(', '),
-      description: 'The IDs of the public subnets.',
+    new TerraformOutput(this, 'PublicSubnetIds', {
+      description: 'IDs of the public subnets',
+      value: vpcModule.publicSubnets.map(subnet => subnet.id),
     });
 
-    new TerraformOutput(this, 'privateSubnetId', {
-      value: network.privateSubnetId,
-      description: 'The ID of the private subnet.',
+    new TerraformOutput(this, 'PrivateSubnetIds', {
+      description: 'IDs of the private subnets',
+      value: vpcModule.privateSubnets.map(subnet => subnet.id),
     });
 
-    new TerraformOutput(this, 'securityGroupId', {
-      value: security.securityGroupId,
-      description: 'The ID of the EC2 Security Group.',
+    new TerraformOutput(this, 'S3BucketName', {
+      description: 'Name of the secure S3 bucket',
+      value: s3Module.bucket.bucket,
     });
 
-    new TerraformOutput(this, 'instanceId', {
-      value: compute.instanceId,
-      description: 'The ID of the created EC2 instance.',
+    new TerraformOutput(this, 'Ec2InstanceId', {
+      description: 'ID of the EC2 instance',
+      value: vpcModule.instance.id,
     });
   }
 }
