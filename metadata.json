@@ -1,0 +1,9 @@
+{
+  "platform": "terraform",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr859",
+  "team": "synth",
+  "startedAt": "2025-08-15T11:59:23+05:30"
+}
