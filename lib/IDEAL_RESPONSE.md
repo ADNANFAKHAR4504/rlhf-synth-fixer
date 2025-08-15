@@ -9,7 +9,7 @@ Description: 'Secure AWS infrastructure with IAM roles, S3 bucket, VPC networkin
 Parameters:
   ProjectName:
     Type: String
-    Default: 'TapProject'
+    Default: 'tapproject'
     Description: 'Name of the project for resource naming and tagging'
   
   Environment:
@@ -25,15 +25,31 @@ Parameters:
 
   NotificationEmail:
     Type: String
-    Description: 'Email address for CloudWatch alarm notifications'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid email address'
+    Default: ''
+    Description: 'Email address for CloudWatch alarm notifications (optional)'
+    AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: 'Must be a valid email address or empty'
 
 Mappings:
   RegionMap:
     us-west-2:
       AvailabilityZone1: 'us-west-2a'
       AvailabilityZone2: 'us-west-2b'
+    us-east-1:
+      AvailabilityZone1: 'us-east-1a'
+      AvailabilityZone2: 'us-east-1b'
+    us-east-2:
+      AvailabilityZone1: 'us-east-2a'
+      AvailabilityZone2: 'us-east-2b'
+    eu-west-1:
+      AvailabilityZone1: 'eu-west-1a'
+      AvailabilityZone2: 'eu-west-1b'
+    ap-southeast-1:
+      AvailabilityZone1: 'ap-southeast-1a'
+      AvailabilityZone2: 'ap-southeast-1b'
+
+Conditions:
+  HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, '']]
 
 Resources:
   # ===============================
@@ -204,7 +220,7 @@ Resources:
   TapS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-secure-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectName}securebucket${AWS::AccountId}${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -217,45 +233,9 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      LoggingConfiguration:
-        DestinationBucketName: !Ref S3AccessLogsBucket
-        LogFilePrefix: 'access-logs/'
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3CloudWatchLogGroup
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-secure-bucket'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref ProjectName
-
-  S3AccessLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}-access-logs-${AWS::AccountId}-${AWS::Region}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-access-logs'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -271,7 +251,6 @@ Resources:
   EC2ApplicationRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-ec2-application-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -291,11 +270,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${TapS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${TapS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref TapS3Bucket
+                Resource: !Sub 'arn:aws:s3:::${TapS3Bucket}'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-ec2-role'
@@ -309,7 +288,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-ec2-instance-profile'
       Roles:
         - !Ref EC2ApplicationRole
 
@@ -317,7 +295,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-lambda-execution-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -355,7 +332,6 @@ Resources:
   CloudWatchEventsRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-cloudwatch-events-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -389,7 +365,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectName}cloudtrail${AWS::AccountId}${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -431,13 +407,13 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Sub '${CloudTrailS3Bucket}'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
@@ -458,10 +434,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${TapS3Bucket}/*'
-            - Type: 'AWS::S3::Bucket'
-              Values:
-                - !Ref TapS3Bucket
+                - !Sub 'arn:aws:s3:::${TapS3Bucket}/*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-cloudtrail'
@@ -508,22 +481,11 @@ Resources:
 
   SecurityAlarmSubscription:
     Type: AWS::SNS::Subscription
+    Condition: HasNotificationEmail
     Properties:
       TopicArn: !Ref SecurityAlarmTopic
       Protocol: email
       Endpoint: !Ref NotificationEmail
-
-  # Metric Filter for Unauthorized Access Attempts
-  UnauthorizedAccessMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Sub 'CloudTrail/${TapCloudTrail}'
-      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") || ($.sourceIPAddress != "AWS Internal") }'
-      MetricTransformations:
-        - MetricNamespace: !Sub '${ProjectName}/Security'
-          MetricName: 'UnauthorizedAccessAttempts'
-          MetricValue: '1'
-          DefaultValue: 0
 
   # CloudWatch Alarm for Unauthorized Access
   UnauthorizedAccessAlarm:
@@ -552,17 +514,6 @@ Resources:
           Value: !Ref ProjectName
 
   # S3 Bucket Access Denied Alarm
-  S3AccessDeniedMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Sub 'CloudTrail/${TapCloudTrail}'
-      FilterPattern: '{ ($.eventSource = s3.amazonaws.com) && (($.errorCode = "AccessDenied") || ($.errorCode = "InvalidUserID.NotFound")) }'
-      MetricTransformations:
-        - MetricNamespace: !Sub '${ProjectName}/Security'
-          MetricName: 'S3AccessDenied'
-          MetricValue: '1'
-          DefaultValue: 0
-
   S3AccessDeniedAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
