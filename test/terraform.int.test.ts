@@ -15,45 +15,57 @@ const OUTPUTS_PATH = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json")
 
 // Mock AWS SDK responses with proper typing
 jest.mock('aws-sdk', () => {
+  const mockDescribeVpcs = jest.fn((params?: EC2.DescribeVpcsRequest) => ({
+    promise: () => Promise.resolve({
+      Vpcs: [
+        {
+          CidrBlock: '10.0.0.0/16',
+          VpcId: 'vpc-mock123', // Added to match Vpc type
+          State: 'available',   // Added to match Vpc type
+        },
+      ],
+    } as EC2.DescribeVpcsResult),
+  })) as jest.MockedFunction<typeof EC2.prototype.describeVpcs>;
+
+  const mockDescribeSubnets = jest.fn((params?: EC2.DescribeSubnetsRequest) => ({
+    promise: () => Promise.resolve({
+      Subnets: [
+        {
+          MapPublicIpOnLaunch: true,
+          Tags: [{ Key: 'Tier', Value: 'public' }],
+          SubnetId: 'subnet-public123', // Added to match Subnet type
+          AvailabilityZone: 'us-east-1a', // Added to match Subnet type
+        },
+        {
+          MapPublicIpOnLaunch: false,
+          Tags: [{ Key: 'Tier', Value: 'private' }],
+          SubnetId: 'subnet-private123', // Added
+          AvailabilityZone: 'us-east-1b', // Added
+        },
+      ],
+    } as EC2.DescribeSubnetsResult),
+  })) as jest.MockedFunction<typeof EC2.prototype.describeSubnets>;
+
   const mockEC2: Partial<EC2> = {
-    describeVpcs: jest.fn().mockReturnValue({
-      promise: jest.fn().mockResolvedValue({
-        Vpcs: [
-          {
-            CidrBlock: '10.0.0.0/16',
-            EnableDnsSupport: true,
-            EnableDnsHostnames: true,
-          },
-        ],
-      } as EC2.DescribeVpcsResult),
-    }),
-    describeSubnets: jest.fn().mockReturnValue({
-      promise: jest.fn().mockResolvedValue({
-        Subnets: [
-          {
-            MapPublicIpOnLaunch: true,
-            Tags: [{ Key: 'Tier', Value: 'public' }],
-          },
-          {
-            MapPublicIpOnLaunch: false,
-            Tags: [{ Key: 'Tier', Value: 'private' }],
-          },
-        ],
-      } as EC2.DescribeSubnetsResult),
-    }),
+    describeVpcs: mockDescribeVpcs,
+    describeSubnets: mockDescribeSubnets,
   };
 
+  const mockDescribeLoadBalancers = jest.fn((params?: ELBv2.DescribeLoadBalancersInput) => ({
+    promise: () => Promise.resolve({
+      LoadBalancers: [
+        {
+          Scheme: 'internet-facing',
+          Type: 'application',
+          LoadBalancerArn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-load-balancer/50dc6c495c0c9188', // Added to match LoadBalancer type
+          DNSName: 'my-load-balancer-1234567890.us-east-1.elb.amazonaws.com', // Added
+        },
+      ],
+    } as ELBv2.DescribeLoadBalancersOutput),
+  })) as jest.MockedFunction<typeof ELBv2.prototype.describeLoadBalancers>;
+
   const mockELBv2: Partial<ELBv2> = {
-    describeLoadBalancers: jest.fn().mockReturnValue({
-      promise: jest.fn().mockResolvedValue({
-        LoadBalancers: [
-          {
-            Scheme: 'internet-facing',
-            Type: 'application',
-          },
-        ],
-      } as ELBv2.DescribeLoadBalancersOutput),
-    }),
+    describeLoadBalancers: mockDescribeLoadBalancers,
   };
 
   return {
