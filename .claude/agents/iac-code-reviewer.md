@@ -54,7 +54,6 @@ QA expert that ensures IaC meets quality standards and requirements.
     - 1 means that the improvement is minimal.
     - ...
     - 10 means that the data will increase the model's knowledge substantially on the specific domain of the task.
-  - Provide report on this quality metric and the justification.
 - Add `aws_services` to `metadata.json`, extracting from `lib/IDEAL_RESPONSE.md` a list of strings of AWS Services
 used in the task.
 - Provide report on the training_quality metric and it's justification.
