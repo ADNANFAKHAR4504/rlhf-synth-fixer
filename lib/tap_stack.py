@@ -117,12 +117,12 @@ class TapStack(pulumi.ComponentResource):
                 acl='log-delivery-write',
                 versioning=s3.BucketVersioningArgs(enabled=True),
                 server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
-                    rules=[s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    rule=s3.BucketServerSideEncryptionConfigurationRuleArgs(
                         apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                             sse_algorithm='aws:kms',
                             kms_master_key_id=self.kms_key.key_id
                         )
-                    )]
+                    )
                 ),
                 lifecycle_rules=[s3.BucketLifecycleRuleArgs(
                     enabled=True,
@@ -143,12 +143,12 @@ class TapStack(pulumi.ComponentResource):
                 f'static-web-{region}-{self.environment_suffix}',
                 versioning=s3.BucketVersioningArgs(enabled=True),
                 server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
-                    rules=[s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    rule=s3.BucketServerSideEncryptionConfigurationRuleArgs(
                         apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                             sse_algorithm='aws:kms',
                             kms_master_key_id=self.kms_key.key_id
                         )
-                    )]
+                    )
                 ),
                 website=s3.BucketWebsiteArgs(
                     index_document='index.html',
