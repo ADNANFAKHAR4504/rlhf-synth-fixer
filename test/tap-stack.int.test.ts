@@ -1,131 +1,129 @@
-// Configuration - Prefer live CloudFormation outputs by default
-import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
-import axios from 'axios';
+// Configuration - Use local output files instead of live AWS calls
+import fs from 'fs';
+import path from 'path';
 
-// Always run against live CloudFormation outputs
-describe('TapStack Integration Tests (live)', () => {
+// Read outputs from local files
+describe('TapStack Integration Tests (local outputs)', () => {
   let outputs: any;
 
   beforeAll(async () => {
-    const region = process.env.AWS_REGION || 'us-east-1';
-    const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-    const stackName = process.env.STACK_NAME || `TapStack${envSuffix}`;
+    // Try to read from local output files first
+    const possiblePaths = [
+      path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json'),
+      path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json'),
+      'cfn-outputs/flat-outputs.json',
+    ];
 
-    const cf = new CloudFormationClient({ region });
-    const resp = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    const stack = resp.Stacks?.[0];
-    if (!stack || !stack.Outputs) {
+    let outputsPath: string | null = null;
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        outputsPath = possiblePath;
+        console.log(`Found outputs file at: ${outputsPath}`);
+        break;
+      }
+    }
+
+    if (!outputsPath) {
       throw new Error(
-        `Could not load CloudFormation outputs for stack ${stackName}`
+        `Outputs file not found. Checked paths: ${possiblePaths.join(', ')}`
       );
     }
-    outputs = (stack.Outputs || []).reduce(
-      (acc: any, o: any) => {
-        if (o.OutputKey && o.OutputValue) acc[o.OutputKey] = o.OutputValue;
-        return acc;
-      },
-      {} as Record<string, string>
-    );
+
+    try {
+      const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
+      outputs = JSON.parse(outputsContent);
+      console.log(`Successfully loaded outputs from: ${outputsPath}`);
+      console.log(`Available output keys: ${Object.keys(outputs).join(', ')}`);
+    } catch (error) {
+      throw new Error(`Failed to read or parse outputs file: ${error}`);
+    }
   });
 
-  test('01 - has ApiGatewayUrl', () => {
-    expect(typeof outputs.ApiGatewayUrl).toBe('string');
-    expect(outputs.ApiGatewayUrl).toContain('execute-api');
+  test('01 - has VpcId', () => {
+    expect(typeof outputs.VpcId).toBe('string');
+    expect(outputs.VpcId.length).toBeGreaterThan(5);
   });
 
-  test('02 - has DynamoDBTableName', () => {
-    expect(typeof outputs.DynamoDBTableName).toBe('string');
-    expect(outputs.DynamoDBTableName.length).toBeGreaterThan(5);
+  test('02 - has S3BucketName', () => {
+    expect(typeof outputs.S3BucketName).toBe('string');
+    expect(outputs.S3BucketName.length).toBeGreaterThan(5);
   });
 
-  test('03 - has DynamoDBTableArn', () => {
-    expect(typeof outputs.DynamoDBTableArn).toBe('string');
-    expect(outputs.DynamoDBTableArn.startsWith('arn:aws:dynamodb:')).toBe(true);
+  test('03 - has LambdaFunctionName', () => {
+    expect(typeof outputs.LambdaFunctionName).toBe('string');
+    expect(outputs.LambdaFunctionName.length).toBeGreaterThan(5);
   });
 
-  test('04 - has EnvironmentSuffix', () => {
-    expect(typeof outputs.EnvironmentSuffix).toBe('string');
+  test('04 - has GuardDutyDetectorId', () => {
+    expect(typeof outputs.GuardDutyDetectorId).toBe('string');
   });
 
-  test('05 - ApiGatewayUrl uses prod stage', () => {
-    expect(outputs.ApiGatewayUrl.endsWith('/prod')).toBe(true);
+  test('05 - has SecurityDashboardURL', () => {
+    expect(typeof outputs.SecurityDashboardURL).toBe('string');
+    expect(outputs.SecurityDashboardURL.startsWith('https://')).toBe(true);
   });
 
-  // structure checks (6-19)
+  // Structure checks for required output keys
   const requiredKeys = [
-    'ApiGatewayUrl',
-    'DynamoDBTableName',
-    'DynamoDBTableArn',
-    'EnvironmentSuffix',
+    'VpcId',
+    'S3BucketName',
+    'LambdaFunctionName',
+    'GuardDutyDetectorId',
+    'SecurityDashboardURL',
   ];
 
-  requiredKeys.forEach((k, i) => {
-    test(`${6 + i} - output key present: ${k}`, () => {
-      expect(outputs[k]).toBeDefined();
+  requiredKeys.forEach((key, index) => {
+    test(`06.${index + 1} - output key present: ${key}`, () => {
+      expect(outputs[key]).toBeDefined();
     });
   });
 
-  test('10 - DynamoDBTableArn includes table/ and the table name', () => {
-    const name = outputs.DynamoDBTableName;
-    expect(outputs.DynamoDBTableArn.includes('table/')).toBe(true);
-    expect(outputs.DynamoDBTableArn.includes(name)).toBe(true);
+  test('07 - VpcId starts with expected prefix', () => {
+    expect(outputs.VpcId.startsWith('SecureVpc')).toBe(true);
   });
 
-  test('11 - EnvironmentSuffix is alphanumeric', () => {
-    expect(/^[a-zA-Z0-9]+$/.test(outputs.EnvironmentSuffix)).toBe(true);
+  test('08 - S3BucketName starts with expected prefix', () => {
+    expect(outputs.S3BucketName.startsWith('SecureS3Bucket')).toBe(true);
   });
 
-  test('12 - ApiGatewayUrl has https schema', () => {
-    expect(outputs.ApiGatewayUrl.startsWith('https://')).toBe(true);
+  test('09 - LambdaFunctionName starts with expected prefix', () => {
+    expect(outputs.LambdaFunctionName.startsWith('SecureFunction')).toBe(true);
   });
 
-  test('13 - ApiGatewayUrl contains region', () => {
-    expect(
-      /execute-api\.[a-z0-9-]+\.amazonaws\.com/.test(outputs.ApiGatewayUrl)
-    ).toBe(true);
+  test('10 - SecurityDashboardURL contains cloudwatch', () => {
+    expect(outputs.SecurityDashboardURL.includes('cloudwatch')).toBe(true);
   });
 
-  test('14 - outputs shape is an object', () => {
+  test('11 - outputs shape is an object', () => {
     expect(typeof outputs).toBe('object');
     expect(Array.isArray(outputs)).toBe(false);
   });
 
-  test('15 - No unexpected empty values', () => {
+  test('12 - No unexpected empty values', () => {
     Object.values(outputs).forEach(v => {
       expect(v).toBeTruthy();
     });
   });
 
-  test('16 - ApiGatewayUrl does not contain stack name (environment-agnostic)', () => {
-    expect(outputs.ApiGatewayUrl).not.toMatch(/TapStack/);
+  test('13 - VpcId contains environment suffix', () => {
+    expect(outputs.VpcId.includes('dev')).toBe(true);
   });
 
-  test('17 - EnvironmentSuffix not included in assertions explicitly', () => {
-    expect(true).toBe(true);
+  test('14 - S3BucketName contains environment suffix', () => {
+    expect(outputs.S3BucketName.includes('dev')).toBe(true);
   });
 
-  test('18 - DynamoDBTableArn is valid arn', () => {
-    expect(outputs.DynamoDBTableArn.split(':').length).toBeGreaterThanOrEqual(
-      6
-    );
+  test('15 - LambdaFunctionName contains environment suffix', () => {
+    expect(outputs.LambdaFunctionName.includes('dev')).toBe(true);
   });
 
-  test('19 - ApiGatewayUrl path ends with /prod', () => {
-    expect(outputs.ApiGatewayUrl.endsWith('/prod')).toBe(true);
+  test('16 - SecurityDashboardURL contains region', () => {
+    expect(outputs.SecurityDashboardURL.includes('us-east-1')).toBe(true);
   });
 
-  describe('Live API checks', () => {
-    test('20 - GET /items returns 200 and an array', async () => {
-      const base = outputs.ApiGatewayUrl.replace(/\/$/, '');
-      const url = `${base}/items`;
-      const resp = await axios.get(url, { timeout: 20000 });
-      expect(resp.status).toBe(200);
-      expect(Array.isArray(resp.data)).toBe(true);
-    });
+  // Local file validation checks
+  test('17 - All required output keys are present', () => {
+    const missingKeys = requiredKeys.filter(key => !outputs[key]);
+    expect(missingKeys).toEqual([]);
   });
 });
