@@ -758,6 +758,11 @@ class TapStack(pulumi.ComponentResource):
       task_definition=self.task_definition.arn,
       desired_count=2,
       launch_type="FARGATE",
+      network_configuration={
+        "subnets": [subnet.id for subnet in self.private_subnets],
+        "security_groups": [self.ecs_sg.id],
+        "assign_public_ip": False
+      },
       tags=self.common_tags,
       opts=ResourceOptions(parent=self, depends_on=[self.alb_listener])
     )
