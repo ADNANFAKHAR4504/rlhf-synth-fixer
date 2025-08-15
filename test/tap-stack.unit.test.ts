@@ -265,7 +265,7 @@ describe('TapStack', () => {
 
       // CloudWatch log group
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/cloudtrail/secureapp',
+        LogGroupName: Match.stringLikeRegexp('/aws/cloudtrail/secureapp-\\d{8}T\\d{6}'),
         RetentionInDays: 365,
       });
     });
