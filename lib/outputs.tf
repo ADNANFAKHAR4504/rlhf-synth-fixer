@@ -15,9 +15,19 @@ output "public_subnet_ids" {
   value       = aws_subnet.public[*].id
 }
 
+output "public_subnet_id" {
+  description = "ID of the first public subnet"
+  value       = aws_subnet.public[0].id
+}
+
 output "private_subnet_ids" {
   description = "IDs of the private subnets"
   value       = aws_subnet.private[*].id
+}
+
+output "private_subnet_id" {
+  description = "ID of the first private subnet"
+  value       = aws_subnet.private[0].id
 }
 
 output "database_subnet_ids" {
@@ -74,6 +84,11 @@ output "autoscaling_group_arn" {
 }
 
 # Database Outputs
+output "db_instance_id" {
+  description = "RDS instance identifier"
+  value       = aws_db_instance.main.identifier
+}
+
 output "rds_endpoint" {
   description = "RDS instance endpoint"
   value       = aws_db_instance.main.endpoint
