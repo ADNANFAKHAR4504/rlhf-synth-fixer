@@ -13,6 +13,7 @@ import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { Construct } from 'constructs';
 
 export class ComputeConstruct extends Construct {
+  public albArn: string;
   constructor(
     scope: Construct,
     id: string,
@@ -167,6 +168,7 @@ echo "$(date): User data script execution completed"
         Environment: 'production',
       },
     });
+    this.albArn = loadBalancer.arn;
 
     // Target Group
     const targetGroup = new LbTargetGroup(this, 'target-group', {

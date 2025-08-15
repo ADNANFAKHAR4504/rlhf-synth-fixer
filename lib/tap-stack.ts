@@ -2,7 +2,7 @@
 // Will import and compose all constructs
 
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { App, TerraformStack } from 'cdktf';
+import { App, TerraformOutput, TerraformStack } from 'cdktf';
 import { ComputeConstruct } from './compute-construct';
 import { DatabaseConstruct } from './database-construct';
 import { DynamoDbConstruct } from './dynamodb-construct';
@@ -40,7 +40,7 @@ export class TapStack extends TerraformStack {
       securityGroupId: security.rdsSecurityGroupId,
     });
     new DynamoDbConstruct(this, 'dynamodb');
-    new ComputeConstruct(this, 'compute', {
+    const compute = new ComputeConstruct(this, 'compute', {
       vpcId: vpc.vpcId,
       publicSubnetIds: vpc.publicSubnetIds,
       privateSubnetIds: vpc.privateSubnetIds,
@@ -48,6 +48,11 @@ export class TapStack extends TerraformStack {
       instanceProfile: security.instanceProfile,
       loadBalancerSecurityGroupId: security.loadBalancerSecurityGroupId,
       domainName: 'tapstack.example.com', // <-- update to your real domain
+    });
+
+    // Output the ARN of the Application Load Balancer
+    new TerraformOutput(this, 'albArn', {
+      value: compute.albArn,
     });
   }
 }
