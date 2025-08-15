@@ -112,14 +112,6 @@
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
       "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
     },
-    "OpenSearchMasterPassword": {
-      "Type": "String",
-      "Default": "OSPassword123!",
-      "Description": "Master password for OpenSearch domain",
-      "NoEcho": true,
-      "MinLength": 8,
-      "ConstraintDescription": "Must be at least 8 characters long"
-    },
     "DBMasterUsername": {
       "Type": "String",
       "Default": "admin",
@@ -141,6 +133,36 @@
     }
   },
   "Resources": {
+    "OpenSearchMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-opensearch-master-password"
+        },
+        "Description": "Master password for OpenSearch domain",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"osadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/'",
+          "IncludeSpace": false
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-opensearch-secret"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "DeletionPolicy": "Delete",
@@ -912,7 +934,7 @@
           "MasterUserOptions": {
             "MasterUserName": "osadmin",
             "MasterUserPassword": {
-              "Ref": "OpenSearchMasterPassword"
+              "Fn::Sub": "{{resolve:secretsmanager:${OpenSearchMasterSecret}:SecretString:password}}"
             }
           }
         },
