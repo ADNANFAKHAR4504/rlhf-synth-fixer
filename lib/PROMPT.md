@@ -1,49 +1,37 @@
-**You are an expert AWS and Pulumi infrastructure engineer.**
+# AWS Infrastructure Setup with Pulumi
 
-Your task is to generate a single, complete, and runnable Python Pulumi script that provisions the following infrastructure on AWS.
+I need a Python script that sets up AWS infrastructure using Pulumi. This should be a single file that I can run with `pulumi up`.
 
-The script must be an all-in-one file that can be executed with `pulumi up` without any additional dependencies besides the required Pulumi and AWS Python packages.
+## What I need:
 
-### Requirements
+### AWS Setup
+- Support for multiple regions (I might want to deploy to different regions later)
+- A VPC in each region with proper networking
 
-#### Cloud Provider
-* **AWS**: The solution must be designed to support deployment to multiple regions.
+### Network Requirements
+- VPC with DNS enabled
+- 2 public subnets and 2 private subnets
+- Spread across at least 2 availability zones
+- Internet gateway for public subnets
+- NAT gateway for private subnets (so private instances can reach internet)
+- Route tables configured properly
+- Security groups with tight rules - only allow what's necessary
 
-#### Networking
-* Create a secure **VPC architecture** that includes:
-    * At least one **VPC** per region.
-    * At least two **public** and two **private subnets** across at least two Availability Zones (AZs) per region.
-    * An **Internet Gateway** for the public subnets.
-    * A **NAT Gateway** for the private subnets.
-    * Appropriate **route tables** and associations for all subnets.
-    * **Security groups** with restrictive inbound rules and minimal required egress.
+### Resource Management
+- Tag everything consistently for cost tracking
+- Include Environment, Team, and Project tags
+- Use Pulumi config instead of hardcoding values
 
-#### Tagging
-* Apply a consistent tagging strategy to **all** resources for cost management and organization. Tags must include at least:
-    * `Environment`
-    * `Team`
-    * `Project`
+### Technical Details
+- Private subnets shouldn't auto-assign public IPs
+- One NAT gateway per region is fine for now (can optimize costs later)
+- Export VPC IDs, subnet IDs, and security group IDs
+- Make sure outputs work well with automated testing
 
-### Best Practices
-* Use Pulumi configuration (`pulumi.Config`) to define the target regions and base tags to avoid hard-coding values.
-* Use provider-level `default_tags` where possible, plus explicit tags on resources that do not inherit them.
-* Ensure private subnets do not automatically assign public IPs upon launch.
-* Use cost-conscious defaults, such as a single NAT Gateway per region unless configured for high availability.
+### Code Requirements
+- Single Python file, no external dependencies beyond Pulumi packages
+- Good comments explaining what each section does
+- Ready to run immediately
+- All AWS resources in one file
 
-### Outputs
-* Export the identifiers for the following created resources:
-    * VPCs
-    * Public and private subnets
-    * Security groups
-* The outputs must be structured in a way that allows for easy verification of tagging and network configuration via automated tests.
-
-### Output Format
-* **Provide only the Python code**. No explanations or commentary outside of inline code comments.
-* The code must be fully self-contained, well-documented with inline comments, and ready to run.
-* All AWS resources must be defined within the same Python file.
-
-### Compliance
-* **Infrastructure Coverage**: 100% (All required AWS resources and advanced features are included).
-* **Security Implementation**: 100% (The security posture is outstanding).
-* **Documentation Quality**: 100% (The code has excellent inline documentation).
-* **Requirements Compliance**: 100% (All prompt requirements are fully met).
+The script should be production-ready and follow AWS best practices for security and cost management.
