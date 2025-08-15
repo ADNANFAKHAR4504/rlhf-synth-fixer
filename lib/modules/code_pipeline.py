@@ -5,17 +5,17 @@ from typing import Dict
 import pulumi_aws as aws
 
 
-def setup_codepipeline() -> Dict:
+def setup_codepipeline(stack: str) -> Dict:
 
   # S3 bucket for source
   source_bucket = aws.s3.Bucket(
-    "pipeline-source-bucket",
+    f"pipeline-source-bucket-{stack}",
     bucket_prefix="infra-src-",
     force_destroy=True
   )
 
   aws.s3.BucketServerSideEncryptionConfigurationV2(
-    f"pipeline-source-bucket-encryption",
+    f"pipeline-source-bucket-encryption-{stack}",
     bucket=source_bucket.id,
     rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
       apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
@@ -25,14 +25,14 @@ def setup_codepipeline() -> Dict:
 
   # Artifact store bucket
   artifact_bucket = aws.s3.Bucket(
-    "pipeline-artifact-bucket",
+    f"pipeline-artifact-bucket-{stack}",
     bucket_prefix="infra-artifacts-",
     force_destroy=True
   )
 
   # IAM Roles
   pipeline_role = aws.iam.Role(
-    "pipeline-role",
+    f"pipeline-role-{stack}",
     assume_role_policy="""{
           "Version": "2012-10-17",
           "Statement": [{
@@ -44,13 +44,13 @@ def setup_codepipeline() -> Dict:
   )
 
   aws.iam.RolePolicyAttachment(
-    "pipeline-fullaccess",
+    f"pipeline-fullaccess-{stack}",
     role=pipeline_role.name,
     policy_arn="arn:aws:iam::aws:policy/AWSCodePipeline_FullAccess"
   )
 
   codebuild_role = aws.iam.Role(
-    "codebuild-role",
+    f"codebuild-role-{stack}",
     assume_role_policy="""{
           "Version": "2012-10-17",
           "Statement": [{
@@ -62,14 +62,14 @@ def setup_codepipeline() -> Dict:
   )
 
   aws.iam.RolePolicyAttachment(
-    "codebuild-admin",
+    f"codebuild-admin-{stack}",
     role=codebuild_role.name,
     policy_arn="arn:aws:iam::aws:policy/AdministratorAccess"
   )
 
   # CodeBuild project for tests
   test_project = aws.codebuild.Project(
-    "infra-test-project",
+    f"infra-test-project-{stack}",
     service_role=codebuild_role.arn,
     artifacts=aws.codebuild.ProjectArtifactsArgs(type="CODEPIPELINE"),
     environment=aws.codebuild.ProjectEnvironmentArgs(
@@ -95,7 +95,7 @@ def setup_codepipeline() -> Dict:
 
   # CodeBuild project for deploy
   deploy_project = aws.codebuild.Project(
-    "infra-deploy-project",
+    f"infra-deploy-project-{stack}",
     service_role=codebuild_role.arn,
     artifacts=aws.codebuild.ProjectArtifactsArgs(type="CODEPIPELINE"),
     environment=aws.codebuild.ProjectEnvironmentArgs(
@@ -141,12 +141,12 @@ def setup_codepipeline() -> Dict:
 
   # CodePipeline definition
   pipeline = aws.codepipeline.Pipeline(
-    "infra-pipeline",
+    f"infra-pipeline-{stack}",
     role_arn=pipeline_role.arn,
-    artifact_store=aws.codepipeline.PipelineArtifactStoreArgs(
+    artifact_stores=[aws.codepipeline.PipelineArtifactStoreArgs(
       location=artifact_bucket.bucket,
       type="S3",
-    ),
+    )],
     stages=[
       aws.codepipeline.PipelineStageArgs(
         name="Source",
