@@ -17,11 +17,15 @@
 variable "vpc_id" {
   description = "Target VPC ID"
   type        = string
+  # Default to a placeholder to avoid interactive prompts during plan
+  default = "vpc-00000000"
 }
 
 variable "subnet_id" {
   description = "Target subnet ID for the EC2 instance"
   type        = string
+  # Default to a placeholder to avoid interactive prompts during plan
+  default = "subnet-00000000"
 }
 
 variable "allowed_cidr" {
@@ -34,16 +38,22 @@ variable "allowed_cidr" {
 variable "s3_kms_key_arn" {
   description = "KMS key ARN used for S3 server-side encryption"
   type        = string
+  # Placeholder ARN in the enforced region us-west-2 to avoid prompts
+  default = "arn:aws:kms:us-west-2:111122223333:key/00000000-0000-0000-0000-000000000000"
 }
 
 variable "data_bucket_name" {
   description = "S3 bucket name for application data"
   type        = string
+  # Example bucket name; uniqueness is only enforced at apply time
+  default = "tap-data-bucket-example-123456"
 }
 
 variable "trail_bucket_name" {
   description = "S3 bucket name for CloudTrail logs"
   type        = string
+  # Example bucket name; uniqueness is only enforced at apply time
+  default = "tap-trail-bucket-example-123456"
 }
 
 variable "instance_ami" {
