@@ -429,16 +429,16 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
 
     test("multi-region deployment consistency", () => {
-      // Extract resource prefixes to ensure consistent naming
-      const apiUse1 = outputs.api_endpoint_url_use1.split('.')[0].split('//')[1];
-      const apiUsw2 = outputs.api_endpoint_url_usw2.split('.')[0].split('//')[1];
-      
+      // Extract Lambda function names for suffix validation (we control these names)
       const lambdaUse1 = outputs.lambda_alias_arn_use1.split(':')[6].split(':')[0];
       const lambdaUsw2 = outputs.lambda_alias_arn_usw2.split(':')[6].split(':')[0];
 
-      // Both resources should follow the same naming pattern but with different region suffixes
-      expect(apiUse1).toMatch(/.*use1.*/i);
-      expect(apiUsw2).toMatch(/.*usw2.*/i);
+      // For API Gateway, check the full endpoint hostname for region information
+      // API IDs are random, but hostnames contain region: execute-api.us-east-1.amazonaws.com
+      expect(outputs.api_endpoint_url_use1).toContain("us-east-1");
+      expect(outputs.api_endpoint_url_usw2).toContain("us-west-2");
+      
+      // Lambda function names should follow consistent naming with region suffixes
       expect(lambdaUse1).toMatch(/.*use1.*/i);
       expect(lambdaUsw2).toMatch(/.*usw2.*/i);
     });
