@@ -58,6 +58,19 @@ describe("Terraform Infrastructure Integration Tests", () => {
 
     outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 
+    // Validate outputs contain expected values
+    const requiredOutputs = [
+      'vpc_primary_id', 'vpc_secondary_id', 
+      'public_subnet_ids_primary', 'private_subnet_ids_primary',
+      'public_subnet_ids_secondary', 'private_subnet_ids_secondary'
+    ];
+
+    for (const output of requiredOutputs) {
+      if (!outputs[output] || (Array.isArray(outputs[output]) && outputs[output].length === 0)) {
+        throw new Error(`Required output '${output}' is missing or empty in deployment outputs`);
+      }
+    }
+
     // Initialize AWS clients
     const primaryRegion = outputs.primary_region || "us-west-2";
     const secondaryRegion = outputs.secondary_region || "us-east-2";
@@ -195,7 +208,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
 
     test("NAT gateways are deployed and available", async () => {
-      // Primary region NAT gateways
+      // Primary region NAT gateway (1 per region for cost optimization)
       const primaryNATResponse = await primaryEC2.send(new DescribeNatGatewaysCommand({
         Filter: [
           { Name: "vpc-id", Values: [outputs.vpc_primary_id] }
@@ -203,14 +216,14 @@ describe("Terraform Infrastructure Integration Tests", () => {
       }));
 
       expect(primaryNATResponse.NatGateways).toBeDefined();
-      expect(primaryNATResponse.NatGateways!.length).toBe(2);
+      expect(primaryNATResponse.NatGateways!.length).toBe(1);
 
       primaryNATResponse.NatGateways!.forEach(nat => {
         expect(nat.State).toBe("available");
         expect(nat.VpcId).toBe(outputs.vpc_primary_id);
       });
 
-      // Secondary region NAT gateways
+      // Secondary region NAT gateway (1 per region for cost optimization)
       const secondaryNATResponse = await secondaryEC2.send(new DescribeNatGatewaysCommand({
         Filter: [
           { Name: "vpc-id", Values: [outputs.vpc_secondary_id] }
@@ -218,7 +231,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       }));
 
       expect(secondaryNATResponse.NatGateways).toBeDefined();
-      expect(secondaryNATResponse.NatGateways!.length).toBe(2);
+      expect(secondaryNATResponse.NatGateways!.length).toBe(1);
 
       secondaryNATResponse.NatGateways!.forEach(nat => {
         expect(nat.State).toBe("available");
@@ -461,7 +474,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
 
     test("cross-region connectivity setup is consistent", async () => {
-      // Both regions should have 2 NAT gateways for high availability
+      // Both regions should have 1 NAT gateway for cost optimization
       const primaryNATResponse = await primaryEC2.send(new DescribeNatGatewaysCommand({
         Filter: [{ Name: "vpc-id", Values: [outputs.vpc_primary_id] }]
       }));
@@ -470,8 +483,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
         Filter: [{ Name: "vpc-id", Values: [outputs.vpc_secondary_id] }]
       }));
 
-      expect(primaryNATResponse.NatGateways!.length).toBe(2);
-      expect(secondaryNATResponse.NatGateways!.length).toBe(2);
+      expect(primaryNATResponse.NatGateways!.length).toBe(1);
+      expect(secondaryNATResponse.NatGateways!.length).toBe(1);
     });
   });
 
@@ -494,22 +507,22 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(secondaryAZs.size).toBe(2); // Should span 2 AZs
     });
 
-    test("NAT gateways provide redundancy", async () => {
-      // Primary region NAT gateways in different subnets
+    test("NAT gateways are properly configured", async () => {
+      // Primary region NAT gateway
       const primaryNATResponse = await primaryEC2.send(new DescribeNatGatewaysCommand({
         Filter: [{ Name: "vpc-id", Values: [outputs.vpc_primary_id] }]
       }));
 
-      const primaryNATSubnets = new Set(primaryNATResponse.NatGateways!.map(nat => nat.SubnetId));
-      expect(primaryNATSubnets.size).toBe(2); // Each NAT in different subnet
+      expect(primaryNATResponse.NatGateways!.length).toBe(1);
+      expect(primaryNATResponse.NatGateways![0].State).toBe("available");
 
-      // Secondary region NAT gateways in different subnets
+      // Secondary region NAT gateway  
       const secondaryNATResponse = await secondaryEC2.send(new DescribeNatGatewaysCommand({
         Filter: [{ Name: "vpc-id", Values: [outputs.vpc_secondary_id] }]
       }));
 
-      const secondaryNATSubnets = new Set(secondaryNATResponse.NatGateways!.map(nat => nat.SubnetId));
-      expect(secondaryNATSubnets.size).toBe(2); // Each NAT in different subnet
+      expect(secondaryNATResponse.NatGateways!.length).toBe(1);
+      expect(secondaryNATResponse.NatGateways![0].State).toBe("available");
     });
   });
 });
