@@ -50,6 +50,25 @@ describe('Terraform HCL Security Implementation Tests', () => {
       expect(() => stack.validateTerraformSyntax()).not.toThrow();
       expect(stack.validateTerraformSyntax()).toBe(true);
     });
+
+    test('throws error for invalid Terraform syntax', () => {
+      // Create a temporary mock stack to test error handling
+      const errorStack = new TapStack(null, 'ErrorStack');
+      
+      // Mock invalid terraform content with mismatched braces
+      errorStack.terraformFiles.set('main.tf', 'resource "aws_s3_bucket" "test" { # missing closing brace');
+
+      expect(() => errorStack.validateTerraformSyntax()).toThrow('Invalid Terraform syntax in main.tf');
+    });
+
+    test('handles missing Terraform files gracefully', () => {
+      // Create a new stack that won't find any files
+      const emptyStack = new TapStack(null, 'EmptyStack');
+      emptyStack.terraformFiles.clear();
+      
+      expect(() => emptyStack.validateTerraformSyntax()).not.toThrow();
+      expect(emptyStack.terraformFiles.size).toBe(0);
+    });
   });
 
   describe('Security Requirements Validation - trainr859', () => {
@@ -176,6 +195,126 @@ describe('Terraform HCL Security Implementation Tests', () => {
       expect(resourceTypes.length).toBeGreaterThanOrEqual(8); // Diverse resource types
     });
   });
-});
 
-// Additional test suites can be added for specific security controls or compliance validation
+  describe('Edge Cases and Negative Scenarios', () => {
+    let mockStack: TapStack;
+
+    beforeEach(() => {
+      mockStack = new TapStack(null, 'MockStack');
+    });
+
+    test('handles missing security features correctly', () => {
+      // Mock empty terraform content to test false conditions
+      const originalGet = mockStack.terraformFiles.get;
+      mockStack.terraformFiles.get = jest.fn((key: string) => {
+        return '# Empty terraform file with no resources';
+      });
+
+      expect(mockStack.hasIAMRoles()).toBe(false);
+      expect(mockStack.hasS3Buckets()).toBe(false);
+      expect(mockStack.hasVPCResources()).toBe(false);
+      expect(mockStack.hasCloudTrail()).toBe(false);
+      expect(mockStack.hasSecurityGroups()).toBe(false);
+      expect(mockStack.hasCloudWatchAlarms()).toBe(false);
+      expect(mockStack.hasSSMParameterStore()).toBe(false);
+      expect(mockStack.hasCloudFrontShield()).toBe(false);
+      expect(mockStack.hasVPCFlowLogs()).toBe(false);
+
+      // Restore original method
+      mockStack.terraformFiles.get = originalGet;
+    });
+
+    test('handles missing tags correctly', () => {
+      // Mock terraform content without required tags
+      const originalGet = mockStack.terraformFiles.get;
+      mockStack.terraformFiles.get = jest.fn((key: string) => {
+        if (key === 'main.tf') {
+          return 'resource "aws_s3_bucket" "test" { bucket = "test" }';
+        }
+        if (key === 'variables.tf') {
+          return 'variable "region" { default = "us-east-1" }';
+        }
+        return '';
+      });
+
+      expect(mockStack.hasRequiredTags()).toBe(false);
+
+      // Restore original method
+      mockStack.terraformFiles.get = originalGet;
+    });
+
+    test('handles incomplete RDS encryption configuration', () => {
+      // Mock RDS without encryption
+      const originalGet = mockStack.terraformFiles.get;
+      mockStack.terraformFiles.get = jest.fn((key: string) => {
+        if (key === 'main.tf') {
+          return 'resource "aws_db_instance" "test" { allocated_storage = 20 }';
+        }
+        return '';
+      });
+
+      expect(mockStack.hasRDSEncryption()).toBe(false);
+
+      // Restore original method
+      mockStack.terraformFiles.get = originalGet;
+    });
+
+    test('handles incomplete AWS Config configuration', () => {
+      // Mock incomplete AWS Config
+      const originalGet = mockStack.terraformFiles.get;
+      mockStack.terraformFiles.get = jest.fn((key: string) => {
+        if (key === 'main.tf') {
+          return 'resource "aws_config_delivery_channel" "test" { name = "test" }';
+        }
+        return '';
+      });
+
+      expect(mockStack.hasAWSConfig()).toBe(false);
+
+      // Restore original method
+      mockStack.terraformFiles.get = originalGet;
+    });
+
+    test('handles incomplete S3 versioning configuration', () => {
+      // Mock S3 without versioning
+      const originalGet = mockStack.terraformFiles.get;
+      mockStack.terraformFiles.get = jest.fn((key: string) => {
+        if (key === 'main.tf') {
+          return 'resource "aws_s3_bucket" "test" { bucket = "test" }';
+        }
+        return '';
+      });
+
+      expect(mockStack.hasS3Versioning()).toBe(false);
+
+      // Restore original method
+      mockStack.terraformFiles.get = originalGet;
+    });
+
+    test('handles missing outputs', () => {
+      // Mock terraform content without outputs
+      const originalGet = mockStack.terraformFiles.get;
+      mockStack.terraformFiles.get = jest.fn((key: string) => {
+        if (key === 'main.tf') {
+          return 'resource "aws_s3_bucket" "test" { bucket = "test" }';
+        }
+        return '';
+      });
+
+      expect(mockStack.hasOutputs()).toBe(false);
+
+      // Restore original method
+      mockStack.terraformFiles.get = originalGet;
+    });
+
+    test('handles resource counting edge cases', () => {
+      // Create a completely empty mock stack
+      const emptyStack = new TapStack(null, 'EmptyResourceStack');
+      emptyStack.terraformFiles.clear();
+      emptyStack.terraformFiles.set('empty.tf', '# No resources defined');
+
+      expect(emptyStack.getResourceCount()).toBe(0);
+      expect(emptyStack.getAllResourceTypes()).toEqual([]);
+    });
+  });
+});
