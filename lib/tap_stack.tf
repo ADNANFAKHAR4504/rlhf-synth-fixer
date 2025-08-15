@@ -394,7 +394,7 @@ resource "aws_network_acl" "environment_nacl" {
 resource "aws_security_group" "web_sg" {
   for_each = var.environments
 
-  name_prefix = "sg-web-${each.key}-"
+  name_prefix = "web-${each.key}-"
   vpc_id      = aws_vpc.environment_vpc[each.key].id
 
   ingress {
