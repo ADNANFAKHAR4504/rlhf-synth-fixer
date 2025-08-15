@@ -38,9 +38,9 @@ variable "trusted_account_ids" {
 variable "log_bucket_name" {
   description = "Name of the S3 bucket for CloudTrail logs"
   type        = string
-  default     = ""  # Will use local.default_log_bucket_name if empty
+  default     = "iac-cloudtrail-logs-dev-default"
   validation {
-    condition     = var.log_bucket_name == "" || (can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.log_bucket_name)) && length(var.log_bucket_name) >= 3 && length(var.log_bucket_name) <= 63)
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", local.log_bucket_name)) && length(local.log_bucket_name) >= 3 && length(local.log_bucket_name) <= 63
     error_message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, and start/end with alphanumeric characters."
   }
 }
@@ -48,9 +48,9 @@ variable "log_bucket_name" {
 variable "app_s3_bucket_name" {
   description = "Name of the S3 bucket for application uploads"
   type        = string
-  default     = ""  # Will use local.default_app_bucket_name if empty
+  default     = "iac-app-uploads-dev-default"
   validation {
-    condition     = var.app_s3_bucket_name == "" || (can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.app_s3_bucket_name)) && length(var.app_s3_bucket_name) >= 3 && length(var.app_s3_bucket_name) <= 63)
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", local.app_bucket_name)) && length(local.app_bucket_name) >= 3 && length(local.app_bucket_name) <= 63
     error_message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, and start/end with alphanumeric characters."
   }
 }
@@ -58,9 +58,9 @@ variable "app_s3_bucket_name" {
 variable "notification_email" {
   description = "Email address for IAM change notifications"
   type        = string
-  default     = ""  # Will use local.default_notification_email if empty
+  default     = "devops@example.com"
   validation {
-    condition     = var.notification_email == "" || can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
     error_message = "Must be a valid email address."
   }
 }
@@ -107,10 +107,9 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
   
-  # Use provided values or generate unique defaults
-  log_bucket_name = local.log_bucket_name != "" ? local.log_bucket_name : "iac-cloudtrail-logs-${var.environment}-${random_id.bucket_suffix.hex}"
-  app_bucket_name = local.app_bucket_name != "" ? local.app_bucket_name : "iac-app-uploads-${var.environment}-${random_id.bucket_suffix.hex}"
-  notification_email = local.notification_email != "" ? local.notification_email : "devops@example.com"
+  # Create unique bucket names by appending random suffix to defaults
+  log_bucket_name = "${var.log_bucket_name}-${random_id.bucket_suffix.hex}"
+  app_bucket_name = "${var.app_s3_bucket_name}-${random_id.bucket_suffix.hex}"
   
   common_tags = merge(var.tags, {
     Environment = var.environment
@@ -132,6 +131,8 @@ data "aws_region" "current" {}
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
+
+
 
 
 
@@ -691,7 +692,7 @@ resource "aws_sns_topic_subscription" "iam_email_notification" {
   count     = var.enable_sns_notifications ? 1 : 0
   topic_arn = aws_sns_topic.iam_notifications[0].arn
   protocol  = "email"
-  endpoint  = local.notification_email
+  endpoint  = var.notification_email
 }
 
 resource "aws_cloudwatch_event_rule" "iam_changes" {

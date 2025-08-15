@@ -230,11 +230,16 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
       expect(allContent).not.toMatch(/secret\s*=\s*"[^"]+"/);
     });
 
-    test('uses locals for sensitive configuration with defaults', () => {
-      expect(allContent).toMatch(/local\.account_id/); // Uses data source
-      expect(allContent).toMatch(/local\.log_bucket_name/); // Uses conditional defaults
-      expect(allContent).toMatch(/local\.notification_email/); // Uses conditional defaults
-      expect(allContent).toMatch(/default\s*=\s*""\s*#.*local/); // Has empty default with local fallback
+    test('uses variables with default values and unique bucket names', () => {
+      expect(allContent).toMatch(/local\.account_id/); // Uses data source for account_id
+      expect(allContent).toMatch(/local\.log_bucket_name/); // Uses local with random suffix
+      expect(allContent).toMatch(/local\.app_bucket_name/); // Uses local with random suffix
+      expect(allContent).toMatch(/var\.notification_email/); // Uses variable with default
+      expect(allContent).toMatch(
+        /default\s*=\s*"iac-cloudtrail-logs-dev-default"/
+      ); // Has bucket default
+      expect(allContent).toMatch(/default\s*=\s*"devops@example\.com"/); // Has email default
+      expect(allContent).toMatch(/random_id\.bucket_suffix\.hex/); // Uses random suffix for uniqueness
     });
 
     test('includes proper resource tagging', () => {
