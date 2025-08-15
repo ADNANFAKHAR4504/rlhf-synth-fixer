@@ -1,13 +1,28 @@
+import {
+  CloudTrailClient,
+  DescribeTrailsCommand,
+  GetTrailStatusCommand,
+} from '@aws-sdk/client-cloudtrail';
+import {
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import {
+  GetBucketLocationCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { S3Client, HeadBucketCommand, GetBucketLocationCommand } from '@aws-sdk/client-s3';
-import { CloudTrailClient, DescribeTrailsCommand, GetTrailStatusCommand } from '@aws-sdk/client-cloudtrail';
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 
 describe('Terraform Infrastructure Integration Tests', () => {
-  const flatOutputsPath = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
+  const flatOutputsPath = path.resolve(
+    __dirname,
+    '../cfn-outputs/flat-outputs.json'
+  );
   let outputs: any = {};
   let ec2Client: EC2Client;
   let rdsClient: RDSClient;
@@ -16,13 +31,20 @@ describe('Terraform Infrastructure Integration Tests', () => {
   let elbClient: ElasticLoadBalancingV2Client;
 
   // Helper function to handle AWS credential errors gracefully
-  const handleAwsCall = async <T>(awsCall: () => Promise<T>, testName: string): Promise<T | null> => {
+  const handleAwsCall = async <T>(
+    awsCall: () => Promise<T>,
+    testName: string
+  ): Promise<T | null> => {
     try {
       return await awsCall();
     } catch (error: any) {
-      if (error.name === 'CredentialsProviderError' || 
-          error.message?.includes('Could not load credentials')) {
-        console.log(`Skipping ${testName} - AWS credentials not available (CI environment)`);
+      if (
+        error.name === 'CredentialsProviderError' ||
+        error.message?.includes('Could not load credentials')
+      ) {
+        console.log(
+          `Skipping ${testName} - AWS credentials not available (CI environment)`
+        );
         return null;
       }
       throw error;
@@ -36,11 +58,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
       outputs = JSON.parse(outputsContent);
       console.log('Loaded deployment outputs:', Object.keys(outputs));
     } else {
-      throw new Error(`Deployment outputs not found at ${flatOutputsPath}. Please run deployment first.`);
+      throw new Error(
+        `Deployment outputs not found at ${flatOutputsPath}. Please run deployment first.`
+      );
     }
 
     // Initialize AWS clients
-    const region = process.env.AWS_REGION || 'us-east-1';
+    const region = process.env.AWS_REGION || 'us-west-2';
     ec2Client = new EC2Client({ region });
     rdsClient = new RDSClient({ region });
     s3Client = new S3Client({ region });
@@ -55,8 +79,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
 
       const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
-      const response = await handleAwsCall(() => ec2Client.send(command), 'VPC test');
-      
+      const response = await handleAwsCall(
+        () => ec2Client.send(command),
+        'VPC test'
+      );
+
       if (response) {
         expect(response.Vpcs).toHaveLength(1);
         expect(response.Vpcs![0].State).toBe('available');
@@ -66,16 +93,20 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('Public and private subnets exist', async () => {
       const publicSubnetId = outputs.PublicSubnetId || outputs.public_subnet_id;
-      const privateSubnetId = outputs.PrivateSubnetId || outputs.private_subnet_id;
-      
+      const privateSubnetId =
+        outputs.PrivateSubnetId || outputs.private_subnet_id;
+
       expect(publicSubnetId).toBeDefined();
       expect(privateSubnetId).toBeDefined();
 
-      const command = new DescribeSubnetsCommand({ 
-        SubnetIds: [publicSubnetId, privateSubnetId] 
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: [publicSubnetId, privateSubnetId],
       });
-      const response = await handleAwsCall(() => ec2Client.send(command), 'subnets test');
-      
+      const response = await handleAwsCall(
+        () => ec2Client.send(command),
+        'subnets test'
+      );
+
       if (response) {
         expect(response.Subnets).toHaveLength(2);
         response.Subnets!.forEach(subnet => {
@@ -88,9 +119,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const publicSubnetId = outputs.PublicSubnetId || outputs.public_subnet_id;
       expect(publicSubnetId).toBeDefined();
 
-      const subnetCommand = new DescribeSubnetsCommand({ SubnetIds: [publicSubnetId] });
-      const subnetResponse = await handleAwsCall(() => ec2Client.send(subnetCommand), 'subnet route test');
-      
+      const subnetCommand = new DescribeSubnetsCommand({
+        SubnetIds: [publicSubnetId],
+      });
+      const subnetResponse = await handleAwsCall(
+        () => ec2Client.send(subnetCommand),
+        'subnet route test'
+      );
+
       if (subnetResponse) {
         expect(subnetResponse.Subnets![0].MapPublicIpOnLaunch).toBe(true);
       }
@@ -99,7 +135,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('Auto Scaling Group', () => {
     test('Auto Scaling Group exists and is configured', async () => {
-      const asgName = outputs.AutoScalingGroupName || outputs.autoscaling_group_name;
+      const asgName =
+        outputs.AutoScalingGroupName || outputs.autoscaling_group_name;
       if (asgName) {
         // This would require AWS Auto Scaling client
         expect(asgName).toBeDefined();
@@ -112,12 +149,19 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('RDS instance is available', async () => {
       const dbInstanceId = outputs.DBInstanceId || outputs.db_instance_id;
       if (dbInstanceId) {
-        const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId });
-        const response = await handleAwsCall(() => rdsClient.send(command), 'RDS instance test');
-        
+        const command = new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        });
+        const response = await handleAwsCall(
+          () => rdsClient.send(command),
+          'RDS instance test'
+        );
+
         if (response) {
           expect(response.DBInstances).toHaveLength(1);
-          expect(['available', 'creating']).toContain(response.DBInstances![0].DBInstanceStatus);
+          expect(['available', 'creating']).toContain(
+            response.DBInstances![0].DBInstanceStatus
+          );
           expect(response.DBInstances![0].Engine).toBe('mysql');
         }
       }
@@ -126,11 +170,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('Database is in private subnet', async () => {
       const dbInstanceId = outputs.DBInstanceId || outputs.db_instance_id;
       if (dbInstanceId) {
-        const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId });
-        const response = await handleAwsCall(() => rdsClient.send(command), 'RDS private subnet test');
-        
+        const command = new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        });
+        const response = await handleAwsCall(
+          () => rdsClient.send(command),
+          'RDS private subnet test'
+        );
+
         if (!response) return;
-        
+
         const dbInstance = response.DBInstances![0];
         expect(dbInstance.PubliclyAccessible).toBe(false);
         expect(dbInstance.DBSubnetGroup).toBeDefined();
@@ -140,7 +189,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('Launch Template', () => {
     test('Launch template is configured correctly', async () => {
-      const launchTemplateId = outputs.LaunchTemplateId || outputs.launch_template_id;
+      const launchTemplateId =
+        outputs.LaunchTemplateId || outputs.launch_template_id;
       if (launchTemplateId) {
         expect(launchTemplateId).toBeDefined();
         expect(launchTemplateId).toMatch(/^lt-[a-f0-9]+$/);
@@ -152,19 +202,29 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('CloudTrail exists and is logging', async () => {
       const cloudTrailName = outputs.CloudTrailName || outputs.cloudtrail_name;
       if (cloudTrailName) {
-        const describeCommand = new DescribeTrailsCommand({ trailNameList: [cloudTrailName] });
-        const describeResponse = await handleAwsCall(() => cloudTrailClient.send(describeCommand), 'CloudTrail describe test');
-        
+        const describeCommand = new DescribeTrailsCommand({
+          trailNameList: [cloudTrailName],
+        });
+        const describeResponse = await handleAwsCall(
+          () => cloudTrailClient.send(describeCommand),
+          'CloudTrail describe test'
+        );
+
         if (describeResponse) {
           expect(describeResponse.trailList).toHaveLength(1);
-          
+
           const trail = describeResponse.trailList![0];
           expect(trail.IncludeGlobalServiceEvents).toBe(true);
           expect(trail.IsMultiRegionTrail).toBe(true);
 
-          const statusCommand = new GetTrailStatusCommand({ Name: cloudTrailName });
-          const statusResponse = await handleAwsCall(() => cloudTrailClient.send(statusCommand), 'CloudTrail status test');
-          
+          const statusCommand = new GetTrailStatusCommand({
+            Name: cloudTrailName,
+          });
+          const statusResponse = await handleAwsCall(
+            () => cloudTrailClient.send(statusCommand),
+            'CloudTrail status test'
+          );
+
           if (statusResponse) {
             expect(statusResponse.IsLogging).toBe(true);
           }
@@ -175,12 +235,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('S3 Storage', () => {
     test('CloudTrail S3 bucket exists and is accessible', async () => {
-      const s3BucketName = outputs.CloudTrailS3Bucket || outputs.cloudtrail_s3_bucket;
+      const s3BucketName =
+        outputs.CloudTrailS3Bucket || outputs.cloudtrail_s3_bucket;
       if (s3BucketName) {
         const headCommand = new HeadBucketCommand({ Bucket: s3BucketName });
         await expect(s3Client.send(headCommand)).resolves.not.toThrow();
 
-        const locationCommand = new GetBucketLocationCommand({ Bucket: s3BucketName });
+        const locationCommand = new GetBucketLocationCommand({
+          Bucket: s3BucketName,
+        });
         const locationResponse = await s3Client.send(locationCommand);
         expect(locationResponse.LocationConstraint).toBeDefined();
       }
@@ -191,18 +254,24 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('RDS instance has encryption enabled', async () => {
       const dbInstanceId = outputs.DBInstanceId || outputs.db_instance_id;
       if (dbInstanceId) {
-        const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId });
-        const response = await handleAwsCall(() => rdsClient.send(command), 'RDS private subnet test');
-        
+        const command = new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        });
+        const response = await handleAwsCall(
+          () => rdsClient.send(command),
+          'RDS private subnet test'
+        );
+
         if (!response) return;
-        
+
         const dbInstance = response.DBInstances![0];
         expect(dbInstance.StorageEncrypted).toBe(true);
       }
     });
 
     test('Auto Scaling Group uses secure subnets', async () => {
-      const asgName = outputs.AutoScalingGroupName || outputs.autoscaling_group_name;
+      const asgName =
+        outputs.AutoScalingGroupName || outputs.autoscaling_group_name;
       if (asgName) {
         // Auto Scaling Group should be in private subnets for security
         expect(asgName).toMatch(/secure-infra-.*-asg/);
@@ -215,15 +284,20 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const vpcId = outputs.VPCId || outputs.vpc_id;
       if (vpcId) {
         const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
-        const response = await handleAwsCall(() => ec2Client.send(command), 'EC2 test');
-        
+        const response = await handleAwsCall(
+          () => ec2Client.send(command),
+          'EC2 test'
+        );
+
         if (!response) return;
-        
+
         const vpc = response.Vpcs![0];
         const tags = vpc.Tags || [];
-        
+
         expect(tags.some(tag => tag.Key === 'Environment')).toBe(true);
-        expect(tags.some(tag => tag.Key === 'ManagedBy' && tag.Value === 'terraform')).toBe(true);
+        expect(
+          tags.some(tag => tag.Key === 'ManagedBy' && tag.Value === 'terraform')
+        ).toBe(true);
         expect(tags.some(tag => tag.Key === 'EnvironmentSuffix')).toBe(true);
       }
     });
@@ -234,10 +308,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const vpcId = outputs.VPCId || outputs.vpc_id;
       if (vpcId) {
         const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
-        const response = await handleAwsCall(() => ec2Client.send(command), 'EC2 test');
-        
+        const response = await handleAwsCall(
+          () => ec2Client.send(command),
+          'EC2 test'
+        );
+
         if (!response) return;
-        
+
         const vpc = response.Vpcs![0];
         expect(vpc.DhcpOptionsId).toBeDefined();
       }
