@@ -699,11 +699,6 @@ resource "aws_db_subnet_group" "app" {
   })
 }
 
-data "aws_rds_engine_version" "pg_default" {
-  engine                           = "postgres"
-  preferred_major_engine_version   = "15"  # keep Postgres 15 line; change to "16" if you prefer
-  default_only                     = true  # pick region's current default minor for that major
-}
 
 resource "aws_db_instance" "app" {
   identifier = "${local.name_prefix}-rds"
@@ -714,7 +709,7 @@ resource "aws_db_instance" "app" {
   storage_encrypted     = true
 
   engine         = "postgres"
-  engine_version = data.aws_rds_engine_version.pg_default.version  # <= updated
+  engine_version = "17.3"  # hardcoded for us-west-2
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
@@ -734,10 +729,11 @@ resource "aws_db_instance" "app" {
   final_snapshot_identifier  = "${local.name_prefix}-rds-final-snapshot"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-  multi_az                     = true
+  multi_az                        = true
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds" })
 }
+
 
 # =============================================================================
 # Outputs
