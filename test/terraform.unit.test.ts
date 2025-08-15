@@ -175,6 +175,8 @@ describe("Production AWS Infrastructure - Unit Tests", () => {
       
       expect(content).toMatch(/output\s+"vpc_id"/);
       expect(content).toMatch(/output\s+"load_balancer_dns"/);
+      expect(content).toMatch(/output\s+"load_balancer_name"/);
+      expect(content).toMatch(/output\s+"load_balancer_arn"/);
       expect(content).toMatch(/output\s+"s3_app_bucket_name"/);
       expect(content).toMatch(/output\s+"s3_log_bucket_name"/);
       expect(content).toMatch(/output\s+"autoscaling_group_name"/);

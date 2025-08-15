@@ -31,6 +31,8 @@ type OutputsFile = {
   vpc_id: TFVal<string>;
   load_balancer_dns: TFVal<string>;
   load_balancer_zone_id: TFVal<string>;
+  load_balancer_name: TFVal<string>;
+  load_balancer_arn: TFVal<string>;
   s3_app_bucket_name: TFVal<string>;
   s3_log_bucket_name: TFVal<string>;
   autoscaling_group_name: TFVal<string>;
@@ -59,6 +61,8 @@ function loadOutputs() {
     vpcId: req("vpc_id"),
     loadBalancerDns: req("load_balancer_dns"),
     loadBalancerZoneId: req("load_balancer_zone_id"),
+    loadBalancerName: req("load_balancer_name"),
+    loadBalancerArn: req("load_balancer_arn"),
     s3AppBucketName: req("s3_app_bucket_name"),
     s3LogBucketName: req("s3_log_bucket_name"),
     autoscalingGroupName: req("autoscaling_group_name"),
@@ -167,7 +171,7 @@ describe("Production AWS Infrastructure - Integration Tests", () => {
   describe("Load Balancer", () => {
     test("ALB exists and is active", async () => {
       const cmd = new DescribeLoadBalancersCommand({
-        Names: [outputs.loadBalancerDns.split('.')[0]], // Extract ALB name from DNS
+        Names: [outputs.loadBalancerName], // Use the actual ALB name from outputs
       });
       
       const result = await elbClient.send(cmd);
