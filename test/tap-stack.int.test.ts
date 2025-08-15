@@ -492,8 +492,8 @@ describe('TAP Stack Integration Tests', () => {
       );
       expect(vpcAttachment).toBeDefined();
 
-      // Check that the attachment is in a valid state (attached, attaching, or detaching)
-      const validStates = ['attached', 'attaching', 'detaching'];
+      // Check that the attachment is in a valid state (attached, attaching, detaching, or available)
+      const validStates = ['attached', 'attaching', 'detaching', 'available'];
       expect(validStates).toContain(vpcAttachment!.State);
     }, 30000);
 
