@@ -376,6 +376,7 @@
         },
         "S3Bucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "${AWS::StackName}-app-assets-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -397,6 +398,24 @@
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteIncompleteMultipartUploads",
+                            "Status": "Enabled",
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        },
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpiration": {
+                                "NoncurrentDays": 30
+                            }
+                        }
+                    ]
                 }
             }
         },
@@ -404,7 +423,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2-S3-Access-Role-${EnvironmentSuffix}"
+                    "Fn::Sub": "${AWS::StackName}-EC2S3AccessRole-${EnvironmentSuffix}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -620,7 +639,7 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.43",
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },

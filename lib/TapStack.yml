@@ -216,6 +216,7 @@ Resources:
   # S3 Bucket - Storage for application assets
   S3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${AWS::StackName}-app-assets-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
@@ -229,11 +230,22 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
 
   # IAM Role - Grants EC2 instances least-privilege access to S3
   EC2S3AccessRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-EC2S3AccessRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
