@@ -12,7 +12,6 @@ export interface IAMStackArgs {
   environmentSuffix: string;
   tags: pulumi.Input<{ [key: string]: string }>;
   namePrefix: string;
-  uniqueId: string;
   bucketArn: pulumi.Input<string>;
   region: string;
 }
@@ -23,7 +22,7 @@ export class IAMStack extends pulumi.ComponentResource {
   constructor(name: string, args: IAMStackArgs, opts?: ResourceOptions) {
     super('tap:iam:IAMStack', name, args, opts);
 
-    const s3AccessRoleName = `${args.namePrefix}-iam-role-s3-access-${args.uniqueId}`;
+    const s3AccessRoleName = `${args.namePrefix}-iam-role-s3-access-${args.environmentSuffix}`;
 
     // IAM Role with restricted S3 access
     const s3AccessRole = new aws.iam.Role(
@@ -52,7 +51,7 @@ export class IAMStack extends pulumi.ComponentResource {
     );
 
     // IAM Policy for restricted S3 bucket access (principle of least privilege)
-    const s3AccessPolicyName = `${args.namePrefix}-iam-policy-s3-restricted-${args.uniqueId}`;
+    const s3AccessPolicyName = `${args.namePrefix}-iam-policy-s3-restricted-${args.environmentSuffix}`;
     const s3AccessPolicy = new aws.iam.Policy(
       s3AccessPolicyName,
       {
@@ -75,7 +74,7 @@ export class IAMStack extends pulumi.ComponentResource {
                 Resource: [bucketArn, `${bucketArn}/*`],
                 Condition: {
                   StringEquals: {
-                    's3:ExistingObjectTag/Environment': 'production',
+                    's3:ExistingObjectTag/Environment': args.environmentSuffix,
                   },
                 },
               },

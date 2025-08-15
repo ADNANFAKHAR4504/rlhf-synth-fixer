@@ -12,7 +12,6 @@ export interface RDSStackArgs {
   environmentSuffix: string;
   tags: pulumi.Input<{ [key: string]: string }>;
   namePrefix: string;
-  uniqueId: string;
 }
 
 export class RDSStack extends pulumi.ComponentResource {
@@ -23,7 +22,7 @@ export class RDSStack extends pulumi.ComponentResource {
     super('tap:rds:RDSStack', name, args, opts);
 
     // RDS Subnet Group
-    const rdsSubnetGroupName = `${args.namePrefix}-rds-subnet-main-${args.uniqueId}`;
+    const rdsSubnetGroupName = `${args.namePrefix}-rds-subnet-main-${args.environmentSuffix}`;
     const rdsSubnetGroup = new aws.rds.SubnetGroup(
       rdsSubnetGroupName,
       {
@@ -48,7 +47,7 @@ export class RDSStack extends pulumi.ComponentResource {
     );
 
     // RDS Parameter Group for security configurations
-    const rdsParameterGroupName = `${args.namePrefix}-rds-params-secure-${args.uniqueId}`;
+    const rdsParameterGroupName = `${args.namePrefix}-rds-params-secure-${args.environmentSuffix}`;
     const rdsParameterGroup = new aws.rds.ParameterGroup(
       rdsParameterGroupName,
       {
@@ -75,7 +74,7 @@ export class RDSStack extends pulumi.ComponentResource {
     );
 
     // RDS Instance with encryption at rest using AWS-managed KMS key
-    const rdsInstanceName = `${args.namePrefix}-rds-primary-${args.uniqueId}`;
+    const rdsInstanceName = `${args.namePrefix}-rds-primary-${args.environmentSuffix}`;
 
     // Create a dedicated security group for RDS
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(

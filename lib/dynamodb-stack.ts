@@ -12,7 +12,6 @@ export interface DynamoDBStackArgs {
   environmentSuffix: string;
   tags: pulumi.Input<{ [key: string]: string }>;
   namePrefix: string;
-  uniqueId: string;
 }
 
 export class DynamoDBStack extends pulumi.ComponentResource {
@@ -23,7 +22,7 @@ export class DynamoDBStack extends pulumi.ComponentResource {
     super('tap:dynamodb:DynamoDBStack', name, args, opts);
 
     // DynamoDB Table with comprehensive production configuration
-    const dynamoTableName = `${args.namePrefix}-dynamodb-main-${args.uniqueId}`;
+    const dynamoTableName = `${args.namePrefix}-dynamodb-main-${args.environmentSuffix}`;
     const dynamoTable = new aws.dynamodb.Table(
       dynamoTableName,
       {

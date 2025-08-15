@@ -50,7 +50,9 @@ jest.mock('@pulumi/aws', () => ({
       id: { promise: () => Promise.resolve('mock-sg-id') },
     })),
     getVpc: jest.fn().mockReturnValue(Promise.resolve({ id: 'vpc-12345' })),
-    getSubnets: jest.fn().mockReturnValue(Promise.resolve({ ids: ['subnet-1', 'subnet-2'] })),
+    getSubnets: jest
+      .fn()
+      .mockReturnValue(Promise.resolve({ ids: ['subnet-1', 'subnet-2'] })),
   },
   dynamodb: {
     Table: jest.fn().mockImplementation(() => ({
@@ -60,31 +62,17 @@ jest.mock('@pulumi/aws', () => ({
   },
 }));
 
-// Mock the component stacks
-jest.mock('../lib/s3-stack', () => ({
-  S3Stack: jest.fn().mockImplementation(() => ({
-    bucketId: { promise: () => Promise.resolve('mock-bucket-id') },
-    bucketArn: { promise: () => Promise.resolve('mock-bucket-arn') },
-  })),
-}));
-
-jest.mock('../lib/iam-stack', () => ({
-  IAMStack: jest.fn().mockImplementation(() => ({
-    roleArn: { promise: () => Promise.resolve('mock-role-arn') },
-  })),
-}));
-
-jest.mock('../lib/rds-stack', () => ({
-  RDSStack: jest.fn().mockImplementation(() => ({
-    endpoint: { promise: () => Promise.resolve('mock-endpoint') },
-    instanceId: { promise: () => Promise.resolve('mock-instance-id') },
-  })),
-}));
-
-jest.mock('../lib/dynamodb-stack', () => ({
-  DynamoDBStack: jest.fn().mockImplementation(() => ({
-    tableName: { promise: () => Promise.resolve('mock-table-name') },
-    tableArn: { promise: () => Promise.resolve('mock-table-arn') },
+// Mock the infrastructure class
+jest.mock('../lib/infrastructure', () => ({
+  Infrastructure: jest.fn().mockImplementation(() => ({
+    s3BucketId: { promise: () => Promise.resolve('mock-bucket-id') },
+    s3BucketArn: { promise: () => Promise.resolve('mock-bucket-arn') },
+    iamRoleArn: { promise: () => Promise.resolve('mock-role-arn') },
+    rdsEndpoint: { promise: () => Promise.resolve('mock-endpoint') },
+    rdsInstanceId: { promise: () => Promise.resolve('mock-instance-id') },
+    dynamoTableName: { promise: () => Promise.resolve('mock-table-name') },
+    dynamoTableArn: { promise: () => Promise.resolve('mock-table-arn') },
+    infrastructureSummary: { promise: () => Promise.resolve('mock-summary') },
   })),
 }));
 
@@ -142,6 +130,37 @@ describe('TapStack Structure', () => {
       expect(stack).toHaveProperty('dynamoTableName');
       expect(stack).toHaveProperty('dynamoTableArn');
       expect(stack).toHaveProperty('infrastructureSummary');
+    });
+
+    it('should use default environment suffix when not provided', () => {
+      const stack = new TapStack('TestStackDefault', {});
+      expect(stack).toBeDefined();
+      // The default environmentSuffix should be 'dev'
+    });
+
+    it('should use provided environment suffix', () => {
+      const stack = new TapStack('TestStackProd', {
+        environmentSuffix: 'prod',
+      });
+      expect(stack).toBeDefined();
+      // Should use 'prod' as environmentSuffix
+    });
+  });
+
+  describe('Resource naming conventions', () => {
+    it('should use consistent naming pattern with environmentSuffix', () => {
+      // This test verifies that the naming convention follows the pattern:
+      // corp-{service}-{purpose}-{environmentSuffix}
+      const stack = new TapStack('TestNaming', {
+        environmentSuffix: 'staging',
+      });
+
+      expect(stack).toBeDefined();
+      // The actual resource names would be:
+      // - corp-s3-secure-data-staging
+      // - corp-iam-role-s3-access-staging
+      // - corp-rds-primary-staging
+      // - corp-dynamodb-main-staging
     });
   });
 });

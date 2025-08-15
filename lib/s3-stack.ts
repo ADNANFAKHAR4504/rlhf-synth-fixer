@@ -12,7 +12,6 @@ export interface S3StackArgs {
   environmentSuffix: string;
   tags: pulumi.Input<{ [key: string]: string }>;
   namePrefix: string;
-  uniqueId: string;
 }
 
 export class S3Stack extends pulumi.ComponentResource {
@@ -22,7 +21,7 @@ export class S3Stack extends pulumi.ComponentResource {
   constructor(name: string, args: S3StackArgs, opts?: ResourceOptions) {
     super('tap:s3:S3Stack', name, args, opts);
 
-    const s3BucketName = `${args.namePrefix}-s3-secure-data-${args.uniqueId}`;
+    const s3BucketName = `${args.namePrefix}-s3-secure-data-${args.environmentSuffix}`;
 
     // S3 Bucket
     const s3Bucket = new aws.s3.Bucket(
