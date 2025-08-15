@@ -188,11 +188,19 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBe(2);
 
-      response.Subnets!.forEach((subnet, index) => {
+      const expectedCidrBlocks = ["10.1.1.0/24", "10.1.2.0/24"];
+      const actualCidrBlocks = response.Subnets!.map(subnet => subnet.CidrBlock);
+      
+      response.Subnets!.forEach((subnet) => {
         expect(subnet.VpcId).toBe(outputs.vpc_secondary_id);
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.CidrBlock).toBe(`10.1.${index + 1}.0/24`);
+        expect(expectedCidrBlocks).toContain(subnet.CidrBlock);
         expect(subnet.State).toBe("available");
+      });
+      
+      // Ensure all expected CIDR blocks are present
+      expectedCidrBlocks.forEach(expectedCidr => {
+        expect(actualCidrBlocks).toContain(expectedCidr);
       });
     });
 
