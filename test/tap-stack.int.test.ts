@@ -577,7 +577,9 @@ describe('TapStack Integration Tests', () => {
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('mysql');
       // Accept either exact version or any 8.0.x
-      expect(dbInstance.EngineVersion.startsWith('8.0')).toBe(true);
+      expect(
+        dbInstance.EngineVersion && dbInstance.EngineVersion.startsWith('8.0')
+      ).toBe(true);
       expect(dbInstance.StorageEncrypted).toBe(true);
       expect(dbInstance.DeletionProtection).toBe(true);
       expect(dbInstance.PubliclyAccessible).toBe(false);
@@ -1032,7 +1034,9 @@ describe('TapStack Integration Tests', () => {
       // Allow for either the KeyId or the ARN in KMS KeyId checks
       const keyId = outputs.KMSKeyId;
       const actualKeyId = dbInstance.KmsKeyId;
-      expect(actualKeyId.endsWith(keyId) || actualKeyId === keyId).toBe(true);
+      expect(
+        actualKeyId && (actualKeyId.endsWith(keyId) || actualKeyId === keyId)
+      ).toBe(true);
     });
   });
 });
