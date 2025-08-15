@@ -4,7 +4,7 @@
 variable "aws_region" {
   description = "AWS region for all resources"
   type        = string
-  default     = "us-east-2"
+  default     = "ca-central-1"
 }
 
 variable "environment" {
@@ -896,7 +896,9 @@ output "logs_bucket_arn" { value = aws_s3_bucket.logs.arn }
 output "data_bucket_name" { value = aws_s3_bucket.data.bucket }
 output "data_bucket_arn" { value = aws_s3_bucket.data.arn }
 
-output "cloudtrail_arn" { value = aws_cloudtrail.main.arn }
+output "cloudtrail_arn" {
+  value = var.create_cloudtrail ? aws_cloudtrail.main[0].arn : null
+}
 output "cloudtrail_home_region" { value = var.aws_region }
 
 output "config_recorder_name" { value = aws_config_configuration_recorder.main.name }
