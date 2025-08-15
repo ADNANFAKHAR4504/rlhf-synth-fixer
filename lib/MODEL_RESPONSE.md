@@ -1,9 +1,9 @@
 # Complete Terraform AWS Secure Multi-Account Environment
 
-Here's a comprehensive `main.tf` file that creates a secure, multi-account AWS environment following all specified requirements:
+Here's a comprehensive `tap_stack.tf` file that creates a secure, multi-account AWS environment following all specified requirements:
 
 ```hcl
-# main.tf - Complete Terraform AWS Secure Multi-Account Environment
+# tap_stack.tf - Complete Terraform AWS Secure Multi-Account Environment
 
 # Variables
 variable "aws_region" {
@@ -138,7 +138,7 @@ module "vpc" {
 }
 
 # VPC Module Definition (inline)
-# Note: In a real scenario, this would be in ./modules/vpc/main.tf
+# Note: In a real scenario, this would be in ./modules/vpc/tap_stack.tf
 # For this exercise, we'll define it inline using locals and resources
 
 # VPC
