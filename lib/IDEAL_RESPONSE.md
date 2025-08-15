@@ -7,7 +7,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready IAM security configuration with MFA enforcement and least privilege access'
 
 Parameters:
-  EnvironmentSuffix:
+  DeploymentEnv:
     Type: String
     Default: 'pr'
     AllowedValues: ['development', 'staging', 'production', 'pr']
@@ -28,9 +28,9 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: SecurityAuditBucketPolicy
     Properties:
-      TrailName: !Sub '${EnvironmentSuffix}-security-audit-trail'
+      TrailName: !Sub '${DeploymentEnv}-security-audit-trail'
       S3BucketName: 
-        Fn::Sub: '${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs'
+        Fn::Sub: '${AWS::AccountId}-${DeploymentEnv}-security-audit-logs'
       S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
@@ -41,7 +41,7 @@ Resources:
           IncludeManagementEvents: true
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref DeploymentEnv
         - Key: Purpose
           Value: 'Security Audit Trail'
         - Key: Compliance
@@ -52,7 +52,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: 
-        Fn::Sub: '${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs'
+        Fn::Sub: '${AWS::AccountId}-${DeploymentEnv}-security-audit-logs'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -72,7 +72,7 @@ Resources:
             NoncurrentVersionExpirationInDays: 90
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref DeploymentEnv
         - Key: Purpose
           Value: 'Security Audit Storage'
 
@@ -90,15 +90,15 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource:
-              Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs
+              Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs
           - Sid: AWSCloudTrailWrite20150319
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
             Resource:
-              - Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*
-              - Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs/cloudtrail-logs/AWSLogs/*
+              - Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*
+              - Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/cloudtrail-logs/AWSLogs/*
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -136,7 +136,7 @@ Resources:
         - !Ref LimitedS3AccessPolicy
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref DeploymentEnv
         - Key: MFARequired
           Value: 'true'
         - Key: AccessLevel
@@ -148,7 +148,7 @@ Resources:
   ReadOnlyAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub '${EnvironmentSuffix}-readonly-access-policy'
+      ManagedPolicyName: !Sub '${DeploymentEnv}-readonly-access-policy'
       Description: 'Read-only access policy with MFA enforcement for security operations'
       PolicyDocument:
         Version: '2012-10-17'
@@ -200,7 +200,7 @@ Resources:
   LimitedS3AccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub '${EnvironmentSuffix}-limited-s3-access-policy'
+      ManagedPolicyName: !Sub '${DeploymentEnv}-limited-s3-access-policy'
       Description: 'Limited S3 access policy for specific operational needs with MFA enforcement'
       PolicyDocument:
         Version: '2012-10-17'
@@ -214,8 +214,8 @@ Resources:
               - 's3:ListBucket'
               - 's3:GetBucketLocation'
             Resource:
-              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs/*'
-              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs'
+              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/*'
+              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs'
             Condition:
               Bool:
                 'aws:MultiFactorAuthPresent': 'true'
@@ -227,8 +227,8 @@ Resources:
             Effect: Deny
             Action: 's3:*'
             NotResource:
-              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs/*'
-              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs'
+              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/*'
+              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs'
 
   # Additional security role for emergency access with stricter MFA requirements
   EmergencyAccessRole:
@@ -257,7 +257,7 @@ Resources:
         - !Ref EmergencyAccessPolicy
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref DeploymentEnv
         - Key: AccessType
           Value: 'Emergency'
         - Key: MFARequired
@@ -269,7 +269,7 @@ Resources:
   EmergencyAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub '${EnvironmentSuffix}-emergency-access-policy'
+      ManagedPolicyName: !Sub '${DeploymentEnv}-emergency-access-policy'
       Description: 'Emergency access policy with time-limited and MFA-enforced permissions'
       PolicyDocument:
         Version: '2012-10-17'
@@ -300,25 +300,25 @@ Outputs:
     Description: 'ARN of the secure access role with MFA enforcement'
     Value: !GetAtt SecureAccessRole.Arn
     Export:
-      Name: !Sub '${EnvironmentSuffix}-secure-access-role-arn'
+      Name: !Sub '${DeploymentEnv}-secure-access-role-arn'
 
   EmergencyAccessRoleArn:
     Description: 'ARN of the emergency access role with enhanced MFA requirements'
     Value: !GetAtt EmergencyAccessRole.Arn
     Export:
-      Name: !Sub '${EnvironmentSuffix}-emergency-access-role-arn'
+      Name: !Sub '${DeploymentEnv}-emergency-access-role-arn'
 
   SecurityAuditTrailArn:
     Description: 'ARN of the CloudTrail for security auditing'
     Value: !GetAtt SecurityAuditTrail.Arn
     Export:
-      Name: !Sub '${EnvironmentSuffix}-security-audit-trail-arn'
+      Name: !Sub '${DeploymentEnv}-security-audit-trail-arn'
 
   SecurityAuditBucketName:
     Description: 'Name of the S3 bucket storing security audit logs'
     Value: !Ref SecurityAuditBucket
     Export:
-      Name: !Sub '${EnvironmentSuffix}-security-audit-bucket-name'
+      Name: !Sub '${DeploymentEnv}-security-audit-bucket-name'
 
   MFAComplianceStatus:
     Description: 'Confirmation that all roles enforce MFA authentication'

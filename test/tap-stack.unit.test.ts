@@ -29,13 +29,13 @@ describe('CloudFormation Template', () => {
 
   describe('Parameters', () => {
     test('should define required parameters', () => {
-      const required = ['EnvironmentSuffix', 'MFAMaxSessionDuration'];
+      const required = ['DeploymentEnv', 'MFAMaxSessionDuration'];
       required.forEach(param =>
         expect(template.Parameters[param]).toBeDefined()
       );
     });
-    test('should have correct EnvironmentSuffix parameter', () => {
-      const p = template.Parameters.EnvironmentSuffix;
+    test('should have correct DeploymentEnv parameter', () => {
+      const p = template.Parameters.DeploymentEnv;
       expect(p.Type).toBe('String');
       expect(p.Default).toBe('pr');
       expect(p.AllowedPattern).toBe('[a-z]+');
@@ -213,9 +213,7 @@ describe('CloudFormation Template', () => {
           output.Export.Name &&
           output.Export.Name['Fn::Sub']
         ) {
-          expect(output.Export.Name['Fn::Sub']).toMatch(
-            /\${EnvironmentSuffix}-/
-          );
+          expect(output.Export.Name['Fn::Sub']).toMatch(/\${DeploymentEnv}-/);
         }
       });
     });

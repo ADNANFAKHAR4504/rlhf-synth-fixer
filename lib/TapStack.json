@@ -2,7 +2,7 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production-ready IAM security configuration with MFA enforcement and least privilege access",
     "Parameters": {
-        "EnvironmentSuffix": {
+        "DeploymentEnv": {
             "Type": "String",
             "Default": "pr",
             "AllowedValues": [
@@ -29,10 +29,10 @@
             "DependsOn": "SecurityAuditBucketPolicy",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-security-audit-trail"
+                    "Fn::Sub": "${DeploymentEnv}-security-audit-trail"
                 },
                 "S3BucketName": {
-                    "Fn::Sub": "${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs"
+                    "Fn::Sub": "${AWS::AccountId}-${DeploymentEnv}-security-audit-logs"
                 },
                 "S3KeyPrefix": "cloudtrail-logs",
                 "IncludeGlobalServiceEvents": true,
@@ -49,7 +49,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "DeploymentEnv"
                         }
                     },
                     {
@@ -67,7 +67,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs"
+                    "Fn::Sub": "${AWS::AccountId}-${DeploymentEnv}-security-audit-logs"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -101,7 +101,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "DeploymentEnv"
                         }
                     },
                     {
@@ -128,7 +128,7 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs"
+                                "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs"
                             }
                         },
                         {
@@ -140,10 +140,10 @@
                             "Action": "s3:PutObject",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*"
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*"
                                 },
                                 {
-                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs/cloudtrail-logs/AWSLogs/*"
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/cloudtrail-logs/AWSLogs/*"
                                 }
                             ],
                             "Condition": {
@@ -213,7 +213,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "DeploymentEnv"
                         }
                     },
                     {
@@ -235,7 +235,7 @@
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
                 "ManagedPolicyName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-readonly-access-policy"
+                    "Fn::Sub": "${DeploymentEnv}-readonly-access-policy"
                 },
                 "Description": "Read-only access policy with MFA enforcement for security operations",
                 "PolicyDocument": {
@@ -297,7 +297,7 @@
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
                 "ManagedPolicyName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-limited-s3-access-policy"
+                    "Fn::Sub": "${DeploymentEnv}-limited-s3-access-policy"
                 },
                 "Description": "Limited S3 access policy for specific operational needs with MFA enforcement",
                 "PolicyDocument": {
@@ -314,10 +314,10 @@
                             ],
                             "Resource": [
                                 {
-                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs/*"
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/*"
                                 },
                                 {
-                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs"
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs"
                                 }
                             ],
                             "Condition": {
@@ -335,10 +335,10 @@
                             "Action": "s3:*",
                             "NotResource": [
                                 {
-                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs/*"
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/*"
                                 },
                                 {
-                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${EnvironmentSuffix}-security-audit-logs"
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs"
                                 }
                             ]
                         }
@@ -389,7 +389,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "DeploymentEnv"
                         }
                     },
                     {
@@ -411,7 +411,7 @@
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
                 "ManagedPolicyName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-emergency-access-policy"
+                    "Fn::Sub": "${DeploymentEnv}-emergency-access-policy"
                 },
                 "Description": "Emergency access policy with time-limited and MFA-enforced permissions",
                 "PolicyDocument": {
@@ -461,7 +461,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-secure-access-role-arn"
+                    "Fn::Sub": "${DeploymentEnv}-secure-access-role-arn"
                 }
             }
         },
@@ -475,7 +475,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-emergency-access-role-arn"
+                    "Fn::Sub": "${DeploymentEnv}-emergency-access-role-arn"
                 }
             }
         },
@@ -489,7 +489,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-security-audit-trail-arn"
+                    "Fn::Sub": "${DeploymentEnv}-security-audit-trail-arn"
                 }
             }
         },
@@ -500,7 +500,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-security-audit-bucket-name"
+                    "Fn::Sub": "${DeploymentEnv}-security-audit-bucket-name"
                 }
             }
         },
