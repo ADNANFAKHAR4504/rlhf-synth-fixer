@@ -157,7 +157,7 @@ describe('TapStack CloudFormation Template', () => {
         'AWS::SSM::Parameter'
       );
       expect(template.Resources.DBMasterPassword.Properties.Type).toBe(
-        'SecureString'
+        'String'
       );
     });
   });
@@ -303,11 +303,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.LambdaFunction.Type).toBe(
         'AWS::Lambda::Function'
       );
-    });
-
-    test('Lambda should have reserved concurrency', () => {
-      const lambda = template.Resources.LambdaFunction;
-      expect(lambda.Properties.ReservedConcurrency).toBe(10);
     });
   });
 

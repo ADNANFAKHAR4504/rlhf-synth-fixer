@@ -353,7 +353,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Name: !Sub "/TapStack${EnvironmentSuffix}/db/master-password"
-      Type: SecureString
+      Type: String
       Value: "TempPassword123!"
       Description: "Database master password"
       Tags:
@@ -472,7 +472,7 @@ Resources:
       IamInstanceProfile: !Ref EC2InstanceProfile
       Monitoring: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -610,7 +610,6 @@ Resources:
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      ReservedConcurrency: 10
       Code:
         ZipFile: |
           import json

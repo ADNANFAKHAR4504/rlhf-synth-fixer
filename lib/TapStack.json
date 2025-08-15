@@ -590,7 +590,7 @@
         "Name": {
           "Fn::Sub": "/TapStack${EnvironmentSuffix}/db/master-password"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": "TempPassword123!",
         "Description": "Database master password",
         "Tags": {
