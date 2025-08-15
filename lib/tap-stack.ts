@@ -492,7 +492,5 @@ export class TapStack extends TerraformStack {
 
 // CDKTF App
 const app = new App();
-new TapStack(app, 'serverless-data-processing', {
-  environmentSuffix: 'v2', // Use different suffix to avoid conflicts
-});
+new TapStack(app, 'serverless-data-processing');
 app.synth();

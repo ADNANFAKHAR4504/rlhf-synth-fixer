@@ -5,7 +5,7 @@ import { TapStack } from '../lib/tap-stack';
 const app = new App();
 
 // Get environment variables from the environment or use defaults
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'v2';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
 const stateBucketRegion =
   process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
