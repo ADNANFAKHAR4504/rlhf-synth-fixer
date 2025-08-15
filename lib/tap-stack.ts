@@ -418,6 +418,7 @@ export class TapStack extends TerraformStack {
           {
             id: `${prefix}lifecycle-rule`,
             status: 'Enabled',
+            filter: { prefix: '' } as any,
             expiration: [
               {
                 days: 365,
