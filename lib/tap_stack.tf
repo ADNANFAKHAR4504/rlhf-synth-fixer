@@ -30,16 +30,16 @@ variable "aws_region" {
   }
 }
 
-# Source repository configuration
-variable "source_repository" {
-  description = "Source repository URL"
+# Source S3 configuration
+variable "source_s3_bucket" {
+  description = "S3 bucket name containing source code"
   type        = string
 }
 
-variable "source_branch" {
-  description = "Source repository branch"
+variable "source_s3_key" {
+  description = "S3 object key for source code (e.g., source.zip)"
   type        = string
-  default     = "main"
+  default     = "source.zip"
 }
 
 # Lambda function configuration
@@ -391,14 +391,10 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
       {
         Effect = "Allow"
         Action = [
-          "codecommit:CancelUploadArchive",
-          "codecommit:GetBranch",
-          "codecommit:GetCommit",
-          "codecommit:GetRepository",
-          "codecommit:ListBranches",
-          "codecommit:ListRepositories"
+          "s3:GetObject",
+          "s3:GetObjectVersion"
         ]
-        Resource = var.source_repository
+        Resource = "arn:aws:s3:::${var.source_s3_bucket}/${var.source_s3_key}"
       }
     ]
   })
@@ -422,13 +418,13 @@ resource "aws_codepipeline" "main" {
       name             = "Source"
       category         = "Source"
       owner            = "AWS"
-      provider         = "CodeCommit"
+      provider         = "S3"
       version          = "1"
       output_artifacts = ["source_output"]
 
       configuration = {
-        RepositoryName = basename(var.source_repository)
-        BranchName     = var.source_branch
+        S3Bucket    = var.source_s3_bucket
+        S3ObjectKey = var.source_s3_key
       }
     }
   }
