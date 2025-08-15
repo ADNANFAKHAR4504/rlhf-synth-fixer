@@ -15,12 +15,6 @@ Parameters:
     AllowedPattern: '[a-z]+'
     ConstraintDescription: 'Must contain only lowercase letters'
   
-  TrustedAccountId:
-    Type: String
-    Description: 'AWS Account ID that can assume the IAM role'
-    AllowedPattern: '[0-9]{12}'
-    ConstraintDescription: 'Must be a valid 12-digit AWS Account ID'
-
   MFAMaxSessionDuration:
     Type: Number
     Default: 3600
@@ -122,7 +116,7 @@ Resources:
           - Sid: 'RequireMFAForRoleAssumption'
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:root'
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'sts:AssumeRole'
             Condition:
               Bool:
@@ -132,7 +126,7 @@ Resources:
           - Sid: 'DenyAssumeRoleWithoutMFA'
             Effect: Deny
             Principal:
-              AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:root'
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'sts:AssumeRole'
             Condition:
               BoolIfExists:
@@ -248,7 +242,7 @@ Resources:
           - Sid: 'RequireRecentMFAForEmergencyAccess'
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:root'
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'sts:AssumeRole'
             Condition:
               Bool:

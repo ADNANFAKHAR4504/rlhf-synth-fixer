@@ -15,12 +15,6 @@
             "AllowedPattern": "[a-z]+",
             "ConstraintDescription": "Must contain only lowercase letters"
         },
-        "TrustedAccountId": {
-            "Type": "String",
-            "Description": "AWS Account ID that can assume the IAM role",
-            "AllowedPattern": "[0-9]{12}",
-            "ConstraintDescription": "Must be a valid 12-digit AWS Account ID"
-        },
         "MFAMaxSessionDuration": {
             "Type": "Number",
             "Default": 3600,
@@ -177,7 +171,7 @@
                             "Effect": "Allow",
                             "Principal": {
                                 "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${TrustedAccountId}:root"
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                                 }
                             },
                             "Action": "sts:AssumeRole",
@@ -195,7 +189,7 @@
                             "Effect": "Deny",
                             "Principal": {
                                 "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${TrustedAccountId}:root"
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                                 }
                             },
                             "Action": "sts:AssumeRole",
@@ -365,7 +359,7 @@
                             "Effect": "Allow",
                             "Principal": {
                                 "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${TrustedAccountId}:root"
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                                 }
                             },
                             "Action": "sts:AssumeRole",

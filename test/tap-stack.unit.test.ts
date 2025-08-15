@@ -29,11 +29,7 @@ describe('CloudFormation Template', () => {
 
   describe('Parameters', () => {
     test('should define required parameters', () => {
-      const required = [
-        'EnvironmentSuffix',
-        'TrustedAccountId',
-        'MFAMaxSessionDuration',
-      ];
+      const required = ['EnvironmentSuffix', 'MFAMaxSessionDuration'];
       required.forEach(param =>
         expect(template.Parameters[param]).toBeDefined()
       );
@@ -46,14 +42,6 @@ describe('CloudFormation Template', () => {
       expect(p.AllowedValues).toContain('production');
       expect(p.ConstraintDescription).toBe(
         'Must contain only lowercase letters'
-      );
-    });
-    test('should have correct TrustedAccountId parameter', () => {
-      const p = template.Parameters.TrustedAccountId;
-      expect(p.Type).toBe('String');
-      expect(p.AllowedPattern).toBe('[0-9]{12}');
-      expect(p.ConstraintDescription).toBe(
-        'Must be a valid 12-digit AWS Account ID'
       );
     });
     test('should have correct MFAMaxSessionDuration parameter', () => {
@@ -209,8 +197,8 @@ describe('CloudFormation Template', () => {
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
     });
-    test('should have at least 3 parameters', () => {
-      expect(Object.keys(template.Parameters).length).toBeGreaterThanOrEqual(3);
+    test('should have at least 2 parameters', () => {
+      expect(Object.keys(template.Parameters).length).toBeGreaterThanOrEqual(2);
     });
     test('should have at least 6 outputs', () => {
       expect(Object.keys(template.Outputs).length).toBeGreaterThanOrEqual(6);
