@@ -1,13 +1,13 @@
 variable "region" {
   description = "AWS region to deploy into."
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-2"
 }
 
 variable "aws_region" {
   description = "AWS region to deploy into"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-2"
 }
 
 variable "name_prefix" {
@@ -49,7 +49,7 @@ variable "environment_suffix" {
 variable "tags" {
   description = "Common tags applied to all resources."
   type        = map(string)
-  default     = {
+  default = {
     Project = "SecureFoundation"
     Owner   = "PlatformTeam"
   }
