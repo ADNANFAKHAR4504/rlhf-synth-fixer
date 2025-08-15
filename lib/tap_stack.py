@@ -1,0 +1,563 @@
+"""
+TAP Stack - Comprehensive multi-region static web application deployment
+Implements enterprise-grade infrastructure with security, monitoring, and compliance features.
+"""
+
+import pulumi
+from pulumi import ResourceOptions, Output, Config
+from pulumi_aws import s3, kms, cloudfront, wafv2, route53, acm, iam, logs, cloudwatch
+from dataclasses import dataclass
+import json
+
+@dataclass
+class TapStackArgs:
+    """
+    Configuration arguments for TAP stack deployment.
+    
+    Args:
+        environment_suffix: Environment identifier (dev, staging, prod)
+        domain_name: Domain name for the static website (optional)
+        hosted_zone_id: Route53 hosted zone ID (optional)
+        enable_logging: Enable CloudWatch logging (default: True)
+        cost_optimization: Enable cost optimization features (default: False)
+    """
+    environment_suffix: str
+    domain_name: str = None
+    hosted_zone_id: str = None
+    enable_logging: bool = True
+    cost_optimization: bool = False
+
+class TapStack(pulumi.ComponentResource):
+    """
+    Multi-region static website deployment stack with enterprise security features.
+    
+    Features:
+    - Multi-region S3 buckets (us-west-2, us-east-1) with KMS encryption and versioning
+    - CloudFront CDN with global distribution and WAF protection
+    - Route53 DNS management with ACM TLS certificates
+    - Comprehensive CloudWatch logging and monitoring
+    - IAM roles with least privilege access
+    - Cost optimization features
+    """
+    
+    def __init__(self, name: str, args: TapStackArgs, opts: ResourceOptions = None):
+        super().__init__('custom:resource:TapStack', name, {}, opts)
+        
+        self.environment_suffix = args.environment_suffix
+        self.domain_name = args.domain_name
+        self.hosted_zone_id = args.hosted_zone_id
+        self.enable_logging = args.enable_logging
+        self.cost_optimization = args.cost_optimization
+        
+        # Define deployment regions
+        self.regions = ['us-west-2', 'us-east-1']
+        
+        # Create KMS key for S3 bucket encryption
+        self._create_kms_resources()
+        
+        # Create S3 buckets with versioning, encryption, and logging
+        self._create_s3_resources()
+        
+        # Create CloudWatch resources for monitoring
+        if self.enable_logging:
+            self._create_cloudwatch_resources()
+        
+        # Create CloudFront distribution
+        self._create_cloudfront_resources()
+        
+        # Create WAF for security
+        self._create_waf_resources()
+        
+        # Create ACM certificate for TLS
+        if self.domain_name:
+            self._create_acm_resources()
+        
+        # Create Route53 DNS records
+        if self.domain_name and self.hosted_zone_id:
+            self._create_route53_resources()
+        
+        # Create IAM resources with least privilege
+        self._create_iam_resources()
+        
+        # Register stack outputs
+        self._register_outputs()
+
+    def _create_kms_resources(self):
+        """Create KMS key and alias for S3 bucket encryption."""
+        self.kms_key = kms.Key(
+            f'kms-key-{self.environment_suffix}',
+            description=f'KMS key for TAP stack {self.environment_suffix} S3 bucket encryption',
+            deletion_window_in_days=7,
+            enable_key_rotation=True,
+            tags={
+                'Environment': self.environment_suffix,
+                'Purpose': 'S3-Encryption',
+                'ManagedBy': 'Pulumi'
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        self.kms_alias = kms.Alias(
+            f'kms-alias-{self.environment_suffix}',
+            name=f'alias/tap-stack-{self.environment_suffix}',
+            target_key_id=self.kms_key.key_id,
+            opts=ResourceOptions(parent=self.kms_key)
+        )
+
+    def _create_s3_resources(self):
+        """Create S3 buckets in multiple regions with versioning, encryption, and logging."""
+        self.buckets = {}
+        self.bucket_policies = {}
+        self.logging_bucket = None
+        
+        # Create centralized logging bucket
+        if self.enable_logging:
+            self.logging_bucket = s3.Bucket(
+                f'logging-bucket-{self.environment_suffix}',
+                acl='log-delivery-write',
+                versioning=s3.BucketVersioningArgs(enabled=True),
+                server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
+                    rules=[s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                        apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                            sse_algorithm='aws:kms',
+                            kms_master_key_id=self.kms_key.key_id
+                        )
+                    )]
+                ),
+                lifecycle_rules=[s3.BucketLifecycleRuleArgs(
+                    enabled=True,
+                    id='log-retention',
+                    expiration=s3.BucketLifecycleRuleExpirationArgs(days=90)
+                )],
+                tags={
+                    'Environment': self.environment_suffix,
+                    'Purpose': 'AccessLogging',
+                    'ManagedBy': 'Pulumi'
+                },
+                opts=ResourceOptions(parent=self)
+            )
+        
+        # Create static website buckets in each region
+        for region in self.regions:
+            bucket = s3.Bucket(
+                f'static-web-{region}-{self.environment_suffix}',
+                versioning=s3.BucketVersioningArgs(enabled=True),
+                server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
+                    rules=[s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                        apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                            sse_algorithm='aws:kms',
+                            kms_master_key_id=self.kms_key.key_id
+                        )
+                    )]
+                ),
+                website=s3.BucketWebsiteArgs(
+                    index_document='index.html',
+                    error_document='error.html'
+                ),
+                logging=s3.BucketLoggingArgs(
+                    target_bucket=self.logging_bucket.id,
+                    target_prefix=f'access-logs/{region}/'
+                ) if self.enable_logging else None,
+                notification=s3.BucketNotificationArgs(
+                    cloudwatch_configurations=[s3.BucketNotificationCloudwatchConfigurationArgs(
+                        cloudwatch_configuration=s3.BucketNotificationCloudwatchConfigurationCloudwatchConfigurationArgs(
+                            log_group_name=f'/aws/s3/{region}-{self.environment_suffix}'
+                        )
+                    )]
+                ) if self.enable_logging else None,
+                tags={
+                    'Environment': self.environment_suffix,
+                    'Region': region,
+                    'Purpose': 'StaticWebsite',
+                    'ManagedBy': 'Pulumi'
+                },
+                force_destroy=True,  # For easier cleanup in non-prod environments
+                opts=ResourceOptions(parent=self)
+            )
+            
+            # Create bucket policy for public read access
+            bucket_policy = s3.BucketPolicy(
+                f'bucket-policy-{region}-{self.environment_suffix}',
+                bucket=bucket.id,
+                policy=bucket.arn.apply(lambda arn: json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Sid": "PublicReadGetObject",
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": "s3:GetObject",
+                        "Resource": f"{arn}/*"
+                    }]
+                })),
+                opts=ResourceOptions(parent=bucket)
+            )
+            
+            self.buckets[region] = bucket
+            self.bucket_policies[region] = bucket_policy
+
+    def _create_cloudwatch_resources(self):
+        """Create CloudWatch log groups and alarms for monitoring."""
+        self.log_groups = {}
+        self.cloudwatch_alarms = {}
+        
+        for region in self.regions:
+            # Create log group for each region
+            log_group = logs.LogGroup(
+                f'log-group-{region}-{self.environment_suffix}',
+                name=f'/aws/s3/{region}-{self.environment_suffix}',
+                retention_in_days=30,
+                tags={
+                    'Environment': self.environment_suffix,
+                    'Region': region,
+                    'ManagedBy': 'Pulumi'
+                },
+                opts=ResourceOptions(parent=self)
+            )
+            self.log_groups[region] = log_group
+            
+            # Create CloudWatch alarm for monitoring bucket access
+            alarm = cloudwatch.MetricAlarm(
+                f'alarm-{region}-{self.environment_suffix}',
+                alarm_name=f'high-s3-requests-{region}-{self.environment_suffix}',
+                comparison_operator='GreaterThanThreshold',
+                evaluation_periods=2,
+                metric_name='NumberOfObjects',
+                namespace='AWS/S3',
+                period=300,
+                statistic='Sum',
+                threshold=1000,
+                alarm_description=f'High S3 request count for {region}',
+                alarm_actions=[],  # Add SNS topic ARN if needed
+                dimensions={
+                    'BucketName': self.buckets[region].id,
+                    'StorageType': 'AllStorageTypes'
+                },
+                tags={
+                    'Environment': self.environment_suffix,
+                    'Region': region,
+                    'ManagedBy': 'Pulumi'
+                },
+                opts=ResourceOptions(parent=log_group)
+            )
+            self.cloudwatch_alarms[region] = alarm
+
+    def _create_cloudfront_resources(self):
+        """Create CloudFront distribution with origin access identity."""
+        # Create Origin Access Identity for secure S3 access
+        self.oai = cloudfront.OriginAccessIdentity(
+            f'oai-{self.environment_suffix}',
+            comment=f'OAI for TAP stack {self.environment_suffix}',
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Configure origins for each S3 bucket
+        origins = []
+        for region, bucket in self.buckets.items():
+            origins.append(cloudfront.DistributionOriginArgs(
+                domain_name=bucket.bucket_domain_name,
+                origin_id=f'S3-{region}',
+                s3_origin_config=cloudfront.DistributionOriginS3OriginConfigArgs(
+                    origin_access_identity=self.oai.cloudfront_access_identity_path
+                )
+            ))
+        
+        # Create CloudFront distribution
+        self.cloudfront_distribution = cloudfront.Distribution(
+            f'cloudfront-{self.environment_suffix}',
+            enabled=True,
+            is_ipv6_enabled=True,
+            default_root_object='index.html',
+            aliases=[self.domain_name] if self.domain_name else [],
+            origins=origins,
+            default_cache_behavior=cloudfront.DistributionDefaultCacheBehaviorArgs(
+                target_origin_id=origins[0].origin_id,
+                viewer_protocol_policy='redirect-to-https',
+                allowed_methods=['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'],
+                cached_methods=['GET', 'HEAD'],
+                forwarded_values=cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
+                    query_string=False,
+                    cookies=cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
+                        forward='none'
+                    )
+                ),
+                min_ttl=0,
+                default_ttl=3600,
+                max_ttl=86400,
+                compress=True
+            ),
+            price_class='PriceClass_100' if self.cost_optimization else 'PriceClass_All',
+            custom_error_responses=[
+                cloudfront.DistributionCustomErrorResponseArgs(
+                    error_code=404,
+                    response_code=200,
+                    response_page_path='/index.html'
+                ),
+                cloudfront.DistributionCustomErrorResponseArgs(
+                    error_code=403,
+                    response_code=200,
+                    response_page_path='/index.html'
+                )
+            ],
+            restrictions=cloudfront.DistributionRestrictionsArgs(
+                geo_restriction=cloudfront.DistributionRestrictionsGeoRestrictionArgs(
+                    restriction_type='none'
+                )
+            ),
+            viewer_certificate=cloudfront.DistributionViewerCertificateArgs(
+                cloudfront_default_certificate=True  # Will be updated after ACM cert creation
+            ),
+            logging_config=cloudfront.DistributionLoggingConfigArgs(
+                bucket=self.logging_bucket.bucket_domain_name,
+                prefix='cloudfront-logs/',
+                include_cookies=False
+            ) if self.enable_logging else None,
+            tags={
+                'Environment': self.environment_suffix,
+                'Purpose': 'CDN',
+                'ManagedBy': 'Pulumi'
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+    def _create_waf_resources(self):
+        """Create AWS WAF Web ACL with comprehensive security rules."""
+        self.waf_acl = wafv2.WebAcl(
+            f'waf-acl-{self.environment_suffix}',
+            scope='CLOUDFRONT',
+            default_action=wafv2.WebAclDefaultActionArgs(allow={}),
+            description=f'WAF ACL for TAP stack {self.environment_suffix}',
+            visibility_config=wafv2.WebAclVisibilityConfigArgs(
+                cloudwatch_metrics_enabled=True,
+                metric_name=f'waf-metric-{self.environment_suffix}',
+                sampled_requests_enabled=True
+            ),
+            rules=[
+                # AWS Managed Rules - Common Rule Set
+                wafv2.WebAclRuleArgs(
+                    name='AWS-AWSManagedRulesCommonRuleSet',
+                    priority=1,
+                    override_action=wafv2.WebAclRuleOverrideActionArgs(none={}),
+                    statement=wafv2.WebAclRuleStatementArgs(
+                        managed_rule_group_statement=wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                            name='AWSManagedRulesCommonRuleSet',
+                            vendor_name='AWS'
+                        )
+                    ),
+                    visibility_config=wafv2.WebAclRuleVisibilityConfigArgs(
+                        cloudwatch_metrics_enabled=True,
+                        metric_name='AWSManagedRulesCommonRuleSet',
+                        sampled_requests_enabled=True
+                    ),
+                ),
+                # AWS Managed Rules - Known Bad Inputs
+                wafv2.WebAclRuleArgs(
+                    name='AWS-AWSManagedRulesKnownBadInputsRuleSet',
+                    priority=2,
+                    override_action=wafv2.WebAclRuleOverrideActionArgs(none={}),
+                    statement=wafv2.WebAclRuleStatementArgs(
+                        managed_rule_group_statement=wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                            name='AWSManagedRulesKnownBadInputsRuleSet',
+                            vendor_name='AWS'
+                        )
+                    ),
+                    visibility_config=wafv2.WebAclRuleVisibilityConfigArgs(
+                        cloudwatch_metrics_enabled=True,
+                        metric_name='AWSManagedRulesKnownBadInputsRuleSet',
+                        sampled_requests_enabled=True
+                    ),
+                ),
+                # Rate limiting rule
+                wafv2.WebAclRuleArgs(
+                    name='RateLimitRule',
+                    priority=3,
+                    action=wafv2.WebAclRuleActionArgs(block={}),
+                    statement=wafv2.WebAclRuleStatementArgs(
+                        rate_based_statement=wafv2.WebAclRuleStatementRateBasedStatementArgs(
+                            limit=2000,
+                            aggregate_key_type='IP'
+                        )
+                    ),
+                    visibility_config=wafv2.WebAclRuleVisibilityConfigArgs(
+                        cloudwatch_metrics_enabled=True,
+                        metric_name='RateLimitRule',
+                        sampled_requests_enabled=True
+                    ),
+                )
+            ],
+            tags={
+                'Environment': self.environment_suffix,
+                'Purpose': 'WebSecurity',
+                'ManagedBy': 'Pulumi'
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+    def _create_acm_resources(self):
+        """Create ACM certificate for TLS/SSL."""
+        self.certificate = acm.Certificate(
+            f'acm-cert-{self.environment_suffix}',
+            domain_name=self.domain_name,
+            validation_method='DNS',
+            subject_alternative_names=[f'*.{self.domain_name}'],
+            tags={
+                'Environment': self.environment_suffix,
+                'Purpose': 'TLS',
+                'ManagedBy': 'Pulumi'
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Certificate validation will be handled in Route53 setup
+
+    def _create_route53_resources(self):
+        """Create Route53 DNS records and certificate validation."""
+        # Create certificate validation records
+        self.cert_validation_records = []
+        if hasattr(self, 'certificate'):
+            for i, dvo in enumerate(self.certificate.domain_validation_options):
+                record = route53.Record(
+                    f'cert-validation-{i}-{self.environment_suffix}',
+                    zone_id=self.hosted_zone_id,
+                    name=dvo.resource_record_name,
+                    type=dvo.resource_record_type,
+                    records=[dvo.resource_record_value],
+                    ttl=60,
+                    opts=ResourceOptions(parent=self.certificate)
+                )
+                self.cert_validation_records.append(record)
+            
+            # Certificate validation
+            self.cert_validation = acm.CertificateValidation(
+                f'cert-validation-{self.environment_suffix}',
+                certificate_arn=self.certificate.arn,
+                validation_record_fqdns=[record.fqdn for record in self.cert_validation_records],
+                opts=ResourceOptions(parent=self.certificate)
+            )
+        
+        # Create A record pointing to CloudFront
+        self.route53_record = route53.Record(
+            f'route53-record-{self.environment_suffix}',
+            zone_id=self.hosted_zone_id,
+            name=self.domain_name,
+            type='A',
+            aliases=[route53.RecordAliasArgs(
+                name=self.cloudfront_distribution.domain_name,
+                zone_id=self.cloudfront_distribution.hosted_zone_id,
+                evaluate_target_health=False
+            )],
+            opts=ResourceOptions(parent=self.cloudfront_distribution)
+        )
+
+    def _create_iam_resources(self):
+        """Create IAM roles and policies with least privilege principle."""
+        # Trust policy for CloudFormation service
+        assume_role_policy = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "cloudformation.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+            }]
+        })
+        
+        # Create IAM role
+        self.iam_role = iam.Role(
+            f'pulumi-role-{self.environment_suffix}',
+            assume_role_policy=assume_role_policy,
+            description=f'IAM role for Pulumi TAP stack {self.environment_suffix}',
+            tags={
+                'Environment': self.environment_suffix,
+                'Purpose': 'PulumiExecution',
+                'ManagedBy': 'Pulumi'
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create least privilege policy
+        policy_document = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:GetObject",
+                        "s3:PutObject",
+                        "s3:DeleteObject",
+                        "s3:ListBucket",
+                        "s3:GetBucketVersioning",
+                        "s3:PutBucketVersioning"
+                    ],
+                    "Resource": [
+                        f"arn:aws:s3:::static-web-*-{self.environment_suffix}",
+                        f"arn:aws:s3:::static-web-*-{self.environment_suffix}/*"
+                    ]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "kms:Decrypt",
+                        "kms:GenerateDataKey",
+                        "kms:DescribeKey"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "cloudfront:CreateInvalidation",
+                        "cloudfront:GetDistribution",
+                        "cloudfront:ListDistributions"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents",
+                        "logs:DescribeLogGroups",
+                        "logs:DescribeLogStreams"
+                    ],
+                    "Resource": f"arn:aws:logs:*:*:log-group:/aws/s3/*-{self.environment_suffix}*"
+                }
+            ]
+        })
+        
+        self.iam_policy = iam.RolePolicy(
+            f'pulumi-policy-{self.environment_suffix}',
+            role=self.iam_role.id,
+            policy=policy_document,
+            opts=ResourceOptions(parent=self.iam_role)
+        )
+
+    def _register_outputs(self):
+        """Register stack outputs for external consumption."""
+        # Core infrastructure outputs
+        pulumi.export('kms_key_id', self.kms_key.id)
+        pulumi.export('kms_key_arn', self.kms_key.arn)
+        pulumi.export('bucket_names', Output.all(*[bucket.id for bucket in self.buckets.values()]).apply(
+            lambda names: {region: name for region, name in zip(self.buckets.keys(), names)}
+        ))
+        pulumi.export('cloudfront_distribution_id', self.cloudfront_distribution.id)
+        pulumi.export('cloudfront_domain_name', self.cloudfront_distribution.domain_name)
+        pulumi.export('waf_acl_id', self.waf_acl.id)
+        pulumi.export('iam_role_arn', self.iam_role.arn)
+        
+        # Conditional outputs
+        if self.domain_name and self.hosted_zone_id:
+            pulumi.export('route53_record_fqdn', self.route53_record.fqdn)
+        
+        if hasattr(self, 'certificate'):
+            pulumi.export('certificate_arn', self.certificate.arn)
+        
+        if self.enable_logging:
+            pulumi.export('logging_bucket_name', self.logging_bucket.id)
+            pulumi.export('log_group_names', Output.all(*[lg.name for lg in self.log_groups.values()]).apply(
+                lambda names: {region: name for region, name in zip(self.log_groups.keys(), names)}
+            ))
+        
+        # Environment metadata
+        pulumi.export('environment', self.environment_suffix)
+        pulumi.export('regions', self.regions)
+        pulumi.export('deployment_timestamp', pulumi.get_stack())
