@@ -1,3 +1,35 @@
+terraform {
+  required_version = ">= 1.0.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
+  }
+  # Using local backend for testing - in production use S3
+  # backend "s3" {
+  #   bucket       = "prod-terraform-state"
+  #   key          = "prod/terraform.tfstate"  
+  #   region       = "us-west-1"
+  #   encrypt      = true
+  #   use_lockfile = true
+  # }
+}
+
+variable "environment_suffix" {
+  type        = string
+  default     = "dev"
+  description = "Environment suffix for resource naming"
+}
+
 variable "aws_region" {
   type        = string
   default     = "us-west-1"
@@ -6,11 +38,13 @@ variable "aws_region" {
 
 variable "allowed_https_cidrs" {
   type        = list(string)
+  default     = ["0.0.0.0/0"]
   description = "CIDRs allowed to reach the app tier on HTTPS"
 }
 
 variable "bastion_ingress_cidrs" {
   type        = list(string)
+  default     = ["0.0.0.0/0"]
   description = "CIDRs allowed to SSH to the bastion"
 }
 
@@ -62,11 +96,20 @@ variable "rds_allocated_storage" {
   description = "RDS allocated storage in GB"
 }
 
+variable "rds_username" {
+  type        = string
+  default     = "dbadmin"
+  description = "RDS master username"
+}
+
 locals {
+  env_suffix = var.environment_suffix != "" ? var.environment_suffix : "dev"
+
   common_tags = {
     Environment = "prod"
     Project     = "secure-stack"
     ManagedBy   = "terraform"
+    Suffix      = local.env_suffix
   }
 
   azs = data.aws_availability_zones.available.names
@@ -109,8 +152,19 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
+resource "random_password" "rds" {
+  length  = 16
+  special = true
+}
+
+resource "random_id" "bucket_suffix" {
+  byte_length = 8
+}
+
 resource "aws_dynamodb_table" "terraform_state_lock" {
-  name           = "prod-terraform-state-lock"
+  name           = "prod-terraform-state-lock-${local.env_suffix}"
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "LockID"
   stream_enabled = false
@@ -121,23 +175,30 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_id  = aws_kms_key.general.arn
-  }
-
-  point_in_time_recovery {
     enabled = true
   }
 
+  point_in_time_recovery {
+    enabled = false
+  }
+
   tags = merge(local.common_tags, {
-    Name = "prod-terraform-state-lock"
+    Name = "prod-terraform-state-lock-${local.env_suffix}"
   })
 }
 
 resource "aws_kms_key" "general" {
-  description             = "General purpose KMS key for prod environment"
+  description             = "General purpose KMS key for prod environment ${local.env_suffix}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  tags = merge(local.common_tags, {
+    Name = "prod-general-kms-key-${local.env_suffix}"
+  })
+}
+
+resource "aws_kms_key_policy" "general" {
+  key_id = aws_kms_key.general.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -152,31 +213,25 @@ resource "aws_kms_key" "general" {
         Resource = "*"
       },
       {
-        Sid    = "Allow S3 Service"
-        Effect = "Allow"
-        Principal = {
-          Service = "s3.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = "*"
-      },
-      {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.amazonaws.com"
+          Service = "logs.${var.aws_region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
           "kms:Decrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
+          "kms:CreateGrant",
           "kms:DescribeKey"
         ]
         Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
       },
       {
         Sid    = "Allow RDS"
@@ -186,24 +241,19 @@ resource "aws_kms_key" "general" {
         }
         Action = [
           "kms:Decrypt",
-          "kms:GenerateDataKey"
+          "kms:GenerateDataKey",
+          "kms:CreateGrant"
         ]
         Resource = "*"
       }
     ]
   })
-
-  tags = merge(local.common_tags, {
-    Name = "prod-general-kms-key"
-  })
 }
 
 resource "aws_kms_alias" "general" {
-  name          = "alias/prod-general"
+  name          = "alias/prod-general-${local.env_suffix}"
   target_key_id = aws_kms_key.general.key_id
 }
-
-data "aws_caller_identity" "current" {}
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -211,7 +261,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name = "prod-vpc"
+    Name = "prod-vpc-${local.env_suffix}"
   })
 }
 
@@ -219,7 +269,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
-    Name = "prod-igw"
+    Name = "prod-igw-${local.env_suffix}"
   })
 }
 
@@ -231,7 +281,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name = "prod-public-subnet-${count.index + 1}"
+    Name = "prod-public-subnet-${count.index + 1}-${local.env_suffix}"
     Type = "public"
   })
 }
@@ -243,7 +293,7 @@ resource "aws_subnet" "private" {
   availability_zone = local.azs[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "prod-private-subnet-${count.index + 1}"
+    Name = "prod-private-subnet-${count.index + 1}-${local.env_suffix}"
     Type = "private"
   })
 }
@@ -255,7 +305,7 @@ resource "aws_subnet" "db" {
   availability_zone = local.azs[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "prod-db-subnet-${count.index + 1}"
+    Name = "prod-db-subnet-${count.index + 1}-${local.env_suffix}"
     Type = "database"
   })
 }
@@ -265,7 +315,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = merge(local.common_tags, {
-    Name = "prod-nat-eip-${count.index + 1}"
+    Name = "prod-nat-eip-${count.index + 1}-${local.env_suffix}"
   })
 }
 
@@ -275,7 +325,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(local.common_tags, {
-    Name = "prod-nat-gateway-${count.index + 1}"
+    Name = "prod-nat-gateway-${count.index + 1}-${local.env_suffix}"
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -290,7 +340,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-public-rt"
+    Name = "prod-public-rt-${local.env_suffix}"
   })
 }
 
@@ -304,7 +354,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-private-rt-${count.index + 1}"
+    Name = "prod-private-rt-${count.index + 1}-${local.env_suffix}"
   })
 }
 
@@ -394,7 +444,7 @@ resource "aws_network_acl" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-public-nacl"
+    Name = "prod-public-nacl-${local.env_suffix}"
   })
 }
 
@@ -475,12 +525,12 @@ resource "aws_network_acl" "private" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-private-nacl"
+    Name = "prod-private-nacl-${local.env_suffix}"
   })
 }
 
 resource "aws_security_group" "bastion" {
-  name        = "prod-bastion-sg"
+  name        = "prod-bastion-sg-${local.env_suffix}"
   description = "Security group for bastion host"
   vpc_id      = aws_vpc.main.id
 
@@ -495,10 +545,10 @@ resource "aws_security_group" "bastion" {
   }
 
   egress {
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app.id]
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   egress {
@@ -516,12 +566,12 @@ resource "aws_security_group" "bastion" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-bastion-sg"
+    Name = "prod-bastion-sg-${local.env_suffix}"
   })
 }
 
 resource "aws_security_group" "app" {
-  name        = "prod-app-sg"
+  name        = "prod-app-sg-${local.env_suffix}"
   description = "Security group for app tier"
   vpc_id      = aws_vpc.main.id
 
@@ -533,13 +583,6 @@ resource "aws_security_group" "app" {
       protocol    = "tcp"
       cidr_blocks = [ingress.value]
     }
-  }
-
-  ingress {
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.nlb.id]
   }
 
   ingress {
@@ -564,46 +607,19 @@ resource "aws_security_group" "app" {
   }
 
   egress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-app-sg"
-  })
-}
-
-resource "aws_security_group" "nlb" {
-  name        = "prod-nlb-sg"
-  description = "Security group for NLB"
-  vpc_id      = aws_vpc.main.id
-
-  dynamic "ingress" {
-    for_each = var.allowed_https_cidrs
-    content {
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = [ingress.value]
-    }
-  }
-
-  egress {
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app.id]
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "prod-nlb-sg"
+    Name = "prod-app-sg-${local.env_suffix}"
   })
 }
 
 resource "aws_security_group" "rds" {
-  name        = "prod-rds-sg"
+  name        = "prod-rds-sg-${local.env_suffix}"
   description = "Security group for RDS"
   vpc_id      = aws_vpc.main.id
 
@@ -615,12 +631,12 @@ resource "aws_security_group" "rds" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-rds-sg"
+    Name = "prod-rds-sg-${local.env_suffix}"
   })
 }
 
 resource "aws_security_group" "lambda" {
-  name        = "prod-lambda-sg"
+  name        = "prod-lambda-sg-${local.env_suffix}"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.main.id
 
@@ -632,20 +648,17 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-lambda-sg"
+    Name = "prod-lambda-sg-${local.env_suffix}"
   })
 }
 
 resource "aws_s3_bucket" "logs" {
-  bucket = "prod-logs-${random_id.bucket_suffix.hex}"
+  bucket        = "prod-logs-${local.env_suffix}-${random_id.bucket_suffix.hex}"
+  force_destroy = true
 
   tags = merge(local.common_tags, {
-    Name = "prod-logs-bucket"
+    Name = "prod-logs-bucket-${local.env_suffix}"
   })
-}
-
-resource "random_id" "bucket_suffix" {
-  byte_length = 8
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
@@ -683,10 +696,10 @@ resource "aws_s3_bucket_policy" "logs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.logs.arn,
           "${aws_s3_bucket.logs.arn}/*"
@@ -698,16 +711,25 @@ resource "aws_s3_bucket_policy" "logs" {
         }
       },
       {
-        Sid    = "DenyUnencryptedPuts"
-        Effect = "Deny"
+        Sid       = "DenyUnencryptedPuts"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.logs.arn}/*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.logs.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
+      },
+      {
+        Sid    = "AllowS3ServerAccessLogging"
+        Effect = "Allow"
+        Principal = {
+          Service = "logging.s3.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/access-logs/*"
       }
     ]
   })
@@ -721,7 +743,7 @@ resource "aws_s3_bucket_logging" "logs" {
 }
 
 resource "aws_iam_role" "ec2_app" {
-  name = "prod-ec2-app-role"
+  name = "prod-ec2-app-role-${local.env_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -769,27 +791,73 @@ resource "aws_iam_role" "ec2_app" {
             "logs:PutLogEvents"
           ]
           Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/prod/*"
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "s3:PutObject",
+            "s3:GetObject"
+          ]
+          Resource = "${aws_s3_bucket.logs.arn}/*"
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:GenerateDataKey"
+          ]
+          Resource = aws_kms_key.general.arn
         }
       ]
     })
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-ec2-app-role"
+    Name = "prod-ec2-app-role-${local.env_suffix}"
   })
 }
 
 resource "aws_iam_instance_profile" "ec2_app" {
-  name = "prod-ec2-app-profile"
+  name = "prod-ec2-app-profile-${local.env_suffix}"
   role = aws_iam_role.ec2_app.name
 
   tags = merge(local.common_tags, {
-    Name = "prod-ec2-app-profile"
+    Name = "prod-ec2-app-profile-${local.env_suffix}"
+  })
+}
+
+resource "aws_iam_role" "bastion" {
+  name = "prod-bastion-role-${local.env_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "prod-bastion-role-${local.env_suffix}"
+  })
+}
+
+resource "aws_iam_instance_profile" "bastion" {
+  name = "prod-bastion-profile-${local.env_suffix}"
+  role = aws_iam_role.bastion.name
+
+  tags = merge(local.common_tags, {
+    Name = "prod-bastion-profile-${local.env_suffix}"
   })
 }
 
 resource "aws_iam_role" "lambda_security" {
-  name = "prod-lambda-security-role"
+  name = "prod-lambda-security-role-${local.env_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -842,12 +910,47 @@ resource "aws_iam_role" "lambda_security" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-lambda-security-role"
+    Name = "prod-lambda-security-role-${local.env_suffix}"
+  })
+}
+
+resource "aws_sns_topic" "security_alerts" {
+  name              = "prod-security-alerts-${local.env_suffix}"
+  kms_master_key_id = aws_kms_key.general.id
+
+  tags = merge(local.common_tags, {
+    Name = "prod-security-alerts-${local.env_suffix}"
+  })
+}
+
+resource "aws_instance" "bastion" {
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = var.bastion_instance_type
+  subnet_id              = aws_subnet.public[0].id
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+  iam_instance_profile   = aws_iam_instance_profile.bastion.name
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
+
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y amazon-cloudwatch-agent
+    systemctl enable amazon-cloudwatch-agent
+    systemctl start amazon-cloudwatch-agent
+  EOF
+  )
+
+  tags = merge(local.common_tags, {
+    Name = "prod-bastion-${local.env_suffix}"
   })
 }
 
 resource "aws_launch_template" "app" {
-  name_prefix   = "prod-app-"
+  name_prefix   = "prod-app-${local.env_suffix}-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = var.app_instance_type
 
@@ -860,7 +963,36 @@ resource "aws_launch_template" "app" {
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
-    yum install -y amazon-cloudwatch-agent
+    yum install -y amazon-cloudwatch-agent nginx
+    
+    # Configure self-signed cert for TLS termination
+    mkdir -p /etc/nginx/ssl
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+      -keyout /etc/nginx/ssl/server.key \
+      -out /etc/nginx/ssl/server.crt \
+      -subj "/C=US/ST=CA/L=SF/O=Prod/CN=localhost"
+    
+    # Configure nginx for HTTPS
+    cat > /etc/nginx/conf.d/https.conf <<'EOCONF'
+    server {
+        listen 443 ssl;
+        ssl_certificate /etc/nginx/ssl/server.crt;
+        ssl_certificate_key /etc/nginx/ssl/server.key;
+        
+        location / {
+            return 200 'Secure App Server\n';
+            add_header Content-Type text/plain;
+        }
+        
+        location /health {
+            return 200 'OK\n';
+            add_header Content-Type text/plain;
+        }
+    }
+    EOCONF
+    
+    systemctl enable nginx
+    systemctl start nginx
     systemctl enable amazon-cloudwatch-agent
     systemctl start amazon-cloudwatch-agent
   EOF
@@ -878,20 +1010,67 @@ resource "aws_launch_template" "app" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
-      Name = "prod-app-instance"
+      Name = "prod-app-instance-${local.env_suffix}"
     })
   }
 
   tags = merge(local.common_tags, {
-    Name = "prod-app-launch-template"
+    Name = "prod-app-launch-template-${local.env_suffix}"
   })
 }
 
+resource "aws_lb" "app" {
+  name               = "prod-app-nlb-${local.env_suffix}"
+  internal           = false
+  load_balancer_type = "network"
+  subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection       = false
+  enable_cross_zone_load_balancing = true
+
+  tags = merge(local.common_tags, {
+    Name = "prod-app-nlb-${local.env_suffix}"
+  })
+}
+
+resource "aws_lb_target_group" "app" {
+  name     = "prod-app-tg-${local.env_suffix}"
+  port     = 443
+  protocol = "TCP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    interval            = 30
+    port                = "443"
+    protocol            = "TCP"
+  }
+
+  deregistration_delay = 30
+
+  tags = merge(local.common_tags, {
+    Name = "prod-app-tg-${local.env_suffix}"
+  })
+}
+
+resource "aws_lb_listener" "app" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = "443"
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
 resource "aws_autoscaling_group" "app" {
-  name                = "prod-app-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
-  health_check_type   = "ELB"
+  name                      = "prod-app-asg-${local.env_suffix}"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.app.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.asg_min_size
@@ -911,10 +1090,14 @@ resource "aws_autoscaling_group" "app" {
     "GroupTotalInstances"
   ]
 
+  tag {
+    key                 = "Name"
+    value               = "prod-app-asg-${local.env_suffix}"
+    propagate_at_launch = false
+  }
+
   dynamic "tag" {
-    for_each = merge(local.common_tags, {
-      Name = "prod-app-asg"
-    })
+    for_each = local.common_tags
     content {
       key                 = tag.key
       value               = tag.value
@@ -924,7 +1107,7 @@ resource "aws_autoscaling_group" "app" {
 }
 
 resource "aws_autoscaling_policy" "scale_out" {
-  name                   = "prod-app-scale-out"
+  name                   = "prod-app-scale-out-${local.env_suffix}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -932,7 +1115,7 @@ resource "aws_autoscaling_policy" "scale_out" {
 }
 
 resource "aws_autoscaling_policy" "scale_in" {
-  name                   = "prod-app-scale-in"
+  name                   = "prod-app-scale-in-${local.env_suffix}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -940,7 +1123,7 @@ resource "aws_autoscaling_policy" "scale_in" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "prod-app-cpu-high"
+  alarm_name          = "prod-app-cpu-high-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -957,12 +1140,12 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_actions = [aws_autoscaling_policy.scale_out.arn]
 
   tags = merge(local.common_tags, {
-    Name = "prod-app-cpu-high"
+    Name = "prod-app-cpu-high-${local.env_suffix}"
   })
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-  alarm_name          = "prod-app-cpu-low"
+  alarm_name          = "prod-app-cpu-low-${local.env_suffix}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -979,12 +1162,12 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   alarm_actions = [aws_autoscaling_policy.scale_in.arn]
 
   tags = merge(local.common_tags, {
-    Name = "prod-app-cpu-low"
+    Name = "prod-app-cpu-low-${local.env_suffix}"
   })
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_critical" {
-  alarm_name          = "prod-app-cpu-critical"
+  alarm_name          = "prod-app-cpu-critical-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "CPUUtilization"
@@ -1001,12 +1184,252 @@ resource "aws_cloudwatch_metric_alarm" "cpu_critical" {
   alarm_actions = [aws_sns_topic.security_alerts.arn]
 
   tags = merge(local.common_tags, {
-    Name = "prod-app-cpu-critical"
+    Name = "prod-app-cpu-critical-${local.env_suffix}"
   })
 }
 
-resource "aws_lb" "app" {
-  name               = "prod-app-nlb"
-  internal           = false
-  load_balancer_type = ""
+resource "aws_db_subnet_group" "main" {
+  name       = "prod-db-subnet-group-${local.env_suffix}"
+  subnet_ids = aws_subnet.db[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "prod-db-subnet-group-${local.env_suffix}"
+  })
+}
+
+resource "aws_db_instance" "main" {
+  identifier        = "prod-db-${local.env_suffix}"
+  engine            = "postgres"
+  engine_version    = "15"
+  instance_class    = var.rds_instance_class
+  allocated_storage = var.rds_allocated_storage
+  storage_encrypted = true
+  kms_key_id        = aws_kms_key.general.arn
+
+  db_name  = "proddb"
+  username = var.rds_username
+  password = random_password.rds.result
+
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  enabled_cloudwatch_logs_exports = ["postgresql"]
+
+  deletion_protection = false
+  skip_final_snapshot = true
+
+  tags = merge(local.common_tags, {
+    Name = "prod-db-${local.env_suffix}"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "security_events" {
+  name              = "/prod/security-events-${local.env_suffix}"
+  retention_in_days = 7
+  kms_key_id        = aws_kms_key.general.arn
+
+  tags = merge(local.common_tags, {
+    Name = "prod-security-events-log-group-${local.env_suffix}"
+  })
+}
+
+data "archive_file" "lambda_security" {
+  type        = "zip"
+  output_path = "/tmp/lambda-security-${local.env_suffix}.zip"
+
+  source {
+    content  = <<EOF
+import json
+import boto3
+import os
+
+def lambda_handler(event, context):
+    print(f"Security event received: {json.dumps(event)}")
+    
+    sns = boto3.client('sns')
+    
+    detail = event.get('detail', {})
+    event_name = detail.get('eventName', 'Unknown')
+    
+    message = {
+        'EventName': event_name,
+        'EventTime': detail.get('eventTime', ''),
+        'UserIdentity': detail.get('userIdentity', {}),
+        'RequestParameters': detail.get('requestParameters', {})
+    }
+    
+    sns.publish(
+        TopicArn=os.environ['SNS_TOPIC_ARN'],
+        Subject=f'Security Alert: {event_name}',
+        Message=json.dumps(message, indent=2)
+    )
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Security event processed')
+    }
+EOF
+    filename = "lambda_function.py"
+  }
+}
+
+resource "aws_lambda_function" "security_automation" {
+  filename         = data.archive_file.lambda_security.output_path
+  function_name    = "prod-security-automation-${local.env_suffix}"
+  role             = aws_iam_role.lambda_security.arn
+  handler          = "lambda_function.lambda_handler"
+  source_code_hash = data.archive_file.lambda_security.output_base64sha256
+  runtime          = "python3.11"
+  timeout          = 60
+
+  vpc_config {
+    subnet_ids         = aws_subnet.private[*].id
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      SNS_TOPIC_ARN = aws_sns_topic.security_alerts.arn
+    }
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "prod-security-automation-${local.env_suffix}"
+  })
+}
+
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.security_automation.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.security_changes.arn
+}
+
+resource "aws_cloudwatch_event_rule" "security_changes" {
+  name        = "prod-security-changes-${local.env_suffix}"
+  description = "Capture security group changes"
+
+  event_pattern = jsonencode({
+    source      = ["aws.ec2"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource = ["ec2.amazonaws.com"]
+      eventName   = local.sg_change_events
+    }
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "prod-security-changes-rule-${local.env_suffix}"
+  })
+}
+
+resource "aws_cloudwatch_event_target" "lambda" {
+  rule      = aws_cloudwatch_event_rule.security_changes.name
+  target_id = "SecurityLambdaTarget"
+  arn       = aws_lambda_function.security_automation.arn
+}
+
+resource "aws_cloudwatch_event_target" "log_group" {
+  rule      = aws_cloudwatch_event_rule.security_changes.name
+  target_id = "SecurityLogGroupTarget"
+  arn       = aws_cloudwatch_log_group.security_events.arn
+}
+
+resource "aws_cloudwatch_event_rule" "periodic_compliance" {
+  name                = "prod-periodic-compliance-${local.env_suffix}"
+  description         = "Periodic compliance check"
+  schedule_expression = "rate(1 hour)"
+
+  tags = merge(local.common_tags, {
+    Name = "prod-periodic-compliance-rule-${local.env_suffix}"
+  })
+}
+
+resource "aws_cloudwatch_event_target" "periodic_lambda" {
+  rule      = aws_cloudwatch_event_rule.periodic_compliance.name
+  target_id = "PeriodicLambdaTarget"
+  arn       = aws_lambda_function.security_automation.arn
+}
+
+resource "aws_lambda_permission" "allow_periodic" {
+  statement_id  = "AllowExecutionFromPeriodicRule"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.security_automation.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.periodic_compliance.arn
+}
+
+output "vpc_id" {
+  value       = aws_vpc.main.id
+  description = "VPC ID"
+}
+
+output "public_subnet_ids" {
+  value       = aws_subnet.public[*].id
+  description = "Public subnet IDs"
+}
+
+output "private_subnet_ids" {
+  value       = aws_subnet.private[*].id
+  description = "Private subnet IDs"
+}
+
+output "db_subnet_ids" {
+  value       = aws_subnet.db[*].id
+  description = "Database subnet IDs"
+}
+
+output "bastion_sg_id" {
+  value       = aws_security_group.bastion.id
+  description = "Bastion security group ID"
+}
+
+output "app_sg_id" {
+  value       = aws_security_group.app.id
+  description = "App tier security group ID"
+}
+
+output "rds_sg_id" {
+  value       = aws_security_group.rds.id
+  description = "RDS security group ID"
+}
+
+output "nlb_dns_name" {
+  value       = aws_lb.app.dns_name
+  description = "NLB DNS name"
+}
+
+output "bastion_public_dns" {
+  value       = aws_instance.bastion.public_dns
+  description = "Bastion public DNS"
+}
+
+output "asg_name" {
+  value       = aws_autoscaling_group.app.name
+  description = "Auto Scaling Group name"
+}
+
+output "rds_endpoint" {
+  value       = aws_db_instance.main.endpoint
+  description = "RDS endpoint"
+}
+
+output "logs_bucket_name" {
+  value       = aws_s3_bucket.logs.id
+  description = "Logs bucket name"
+}
+
+output "sns_topic_arn" {
+  value       = aws_sns_topic.security_alerts.arn
+  description = "SNS topic ARN for security alerts"
+}
+
+output "lambda_function_name" {
+  value       = aws_lambda_function.security_automation.function_name
+  description = "Lambda function name for security automation"
 }
