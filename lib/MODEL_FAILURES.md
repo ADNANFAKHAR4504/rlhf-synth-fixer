@@ -30,17 +30,17 @@ const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
 });
 ```
 
-## 2. Architecture Issue: Monolithic Single-File Design
+## 2. Requirements Violation: Non-Modular Architecture Design
 
 ### What was the issue
-All infrastructure components were defined in a single file, creating a monolithic architecture that violates separation of concerns and makes the code difficult to maintain, test, and reuse.
+All infrastructure components were defined in a single file, violating the explicit PROMPT.md requirement for "modular" code and creating poor separation of concerns.
 
 ### What was the error
-Poor modularity leads to tight coupling, difficult testing, code duplication, and maintenance challenges as the infrastructure grows.
+PROMPT.md specifically stated "The code must be modular" but the model delivered a monolithic single-file implementation, directly violating this requirement.
 
 ### Code Model Generated
 ```typescript
-// All infrastructure in one massive file
+// All infrastructure in one massive file - VIOLATES "modular" requirement
 import * as aws from "@pulumi/aws";
 import * as pulumi from "@pulumi/pulumi";
 
@@ -53,7 +53,7 @@ const dynamoTable = new aws.dynamodb.Table(dynamoTableName, { ... });
 
 ### How we fixed it
 ```typescript
-// Modular architecture with separate, reusable components
+// Modular architecture as required by PROMPT.md
 lib/
 ├── tap-stack.ts           # Main orchestration stack
 ├── infrastructure.ts      # Infrastructure component orchestrator with AWS provider
@@ -252,7 +252,7 @@ Without explicit provider configuration, resources might be deployed in the wron
 ### Code Model Generated
 ```typescript
 // Configuration
-const region = "us-east-1";
+const region = "ap-south-1";
 // NO AWS PROVIDER CONFIGURATION
 // Resources might not be deployed in intended region consistently
 ```
@@ -309,13 +309,13 @@ const rdsParameterGroupName = `${args.namePrefix}-rds-params-secure-${args.envir
 const rdsInstanceName = `${args.namePrefix}-rds-primary-${args.environmentSuffix}`.toLowerCase();
 ```
 
-## 9. Production Feature Gap: Missing RDS Enhanced Monitoring Role
+## 9. Implementation Issue: Incomplete RDS Monitoring Configuration
 
 ### What was the issue
 RDS monitoring was enabled but without proper IAM role for enhanced monitoring functionality.
 
 ### What was the error
-Enhanced monitoring requires a specific IAM role with proper permissions, which was missing.
+Enhanced monitoring requires a specific IAM role with proper permissions, which was missing. This creates incomplete monitoring setup that doesn't meet production standards.
 
 ### Code Model Generated
 ```typescript
@@ -382,13 +382,10 @@ const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
 });
 ```
 
-## 11. Critical Infrastructure Issue: Missing VPC and Subnet Creation
+## 11. Implementation Issue: Reliance on Default VPC Infrastructure
 
 ### What was the issue
-Model relied on default VPC and subnets which may not exist in all regions, causing deployment failures.
-
-### What was the error
-Default VPCs are not guaranteed to exist in all AWS regions and accounts, leading to resource creation failures.
+Model never generated VPC for the RDS instance
 
 ### Code Model Generated
 ```typescript
@@ -441,27 +438,7 @@ const rdsSubnetGroup = new aws.rds.SubnetGroup(rdsSubnetGroupName, {
 });
 ```
 
-## 12. Regional Configuration Issue: Wrong Default Region
-
-### What was the issue
-Model used `us-east-1` as the default region instead of the required `ap-south-1` region.
-
-### What was the error
-Deploying to the wrong region can cause compliance issues, latency problems, and violate data residency requirements.
-
-### Code Model Generated
-```typescript
-// Configuration
-const region = "us-east-1"; // WRONG: Should be ap-south-1
-```
-
-### How we fixed it
-```typescript
-// Infrastructure component with correct region
-const region = 'ap-south-1'; // CORRECT: Required region for deployment
-```
-
-## 13. Security Issue: Invalid RDS KMS Key Configuration
+## 12. Security Issue: Invalid RDS KMS Key Configuration
 
 ### What was the issue
 Model used `kmsKeyId: "alias/aws/rds"` which causes ARN validation errors in Pulumi.
@@ -489,7 +466,7 @@ const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
 });
 ```
 
-## 14. Networking Issue: Improper Subnet Configuration
+## 13. Networking Issue: Improper Subnet Configuration
 
 ### What was the issue
 Model used flattened array syntax for subnet IDs which doesn't work correctly with Pulumi's async resource resolution.
@@ -515,13 +492,13 @@ subnetIds: [
 subnetIds: [privateSubnet1.id, privateSubnet2.id],
 ```
 
-## 15. Missing Production Feature: No Multi-AZ Deployment Strategy
+## 14. Implementation Issue: Inadequate High Availability Strategy
 
 ### What was the issue
-Model didn't implement proper multi-AZ deployment for high availability and fault tolerance.
+Model didn't implement proper multi-AZ deployment for high availability and fault tolerance. While PROMPT.md specified "production-ready" infrastructure.
 
 ### What was the error
-Single AZ deployment creates single points of failure and doesn't meet production resilience requirements.
+Single AZ deployment creates single points of failure and doesn't meet production resilience requirements implied by "production-ready" specification in PROMPT.md.
 
 ### Code Model Generated
 ```typescript

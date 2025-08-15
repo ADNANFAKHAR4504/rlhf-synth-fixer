@@ -26,7 +26,7 @@ import * as aws from "@pulumi/aws";
 import * as pulumi from "@pulumi/pulumi";
 
 // Configuration
-const region = "us-east-1";
+const region = "ap-south-1";
 const namePrefix = "corp";
 const uniqueId = "prod-001";
 
