@@ -767,7 +767,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     // Attach policy to role
     void new aws.iam.RolePolicyAttachment(
-      'ec2-role-policy-attachment',
+      `ec2-role-policy-attachment-${args.environment}`,
       {
         role: ec2Role.name,
         policyArn: ec2DeploymentPolicy.arn,
@@ -789,7 +789,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     const ec2InstanceProfile = new aws.iam.InstanceProfile(
       `ec2-instance-profile-${args.environment}`,
       {
-        name: 'ec2-deployment-instance-profile',
+        name: `ec2-deployment-instance-profile-${args.environment}`,
         role: ec2Role.name,
 
         tags: {
@@ -805,7 +805,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
      * Encrypted at rest using KMS
      */
     const dynamoTable = new aws.dynamodb.Table(
-      'application-table',
+      `application-table-${args.environment}`,
       {
         name: `application-data-table-${args.environment}`,
 
@@ -1113,9 +1113,9 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     // Config service role
     const configRole = new aws.iam.Role(
-      'aws-config-role',
+      `aws-config-role-${args.environment}`,
       {
-        name: 'aws-config-role',
+        name: `aws-config-role-${args.environment}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -1138,7 +1138,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     // Attach AWS managed policy for Config
     void new aws.iam.RolePolicyAttachment(
-      'config-role-policy',
+      `config-role-policy-${args.environment}`,
       {
         role: configRole.name,
         policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
@@ -1211,9 +1211,9 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
      * Enables secure access without SSH or public IPs
      */
     const ssmEndpointSecurityGroup = new aws.ec2.SecurityGroup(
-      'ssm-endpoint-sg',
+      `ssm-endpoint-sg-${args.environment}`,
       {
-        name: 'ssm-endpoint-sg',
+        name: `ssm-endpoint-sg-${args.environment}`,
         description: 'Security group for SSM VPC endpoints',
         vpcId: vpc.id,
         ingress: [
