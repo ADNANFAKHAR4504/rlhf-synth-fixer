@@ -1,4 +1,4 @@
-# Resource configuration for serverless CI/CD pipeline
+# Note: Provider configuration is in provider.tf
 
 ########################
 # Variables
@@ -176,7 +176,8 @@ resource "aws_lambda_function" "main" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash
+      source_code_hash,
+      last_modified
     ]
   }
 }
@@ -248,6 +249,14 @@ resource "aws_iam_role_policy" "codebuild_policy" {
           "arn:aws:s3:::${aws_s3_bucket.pipeline_artifacts.bucket}",
           "arn:aws:s3:::${aws_s3_bucket.pipeline_artifacts.bucket}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion"
+        ]
+        Resource = "arn:aws:s3:::${var.source_s3_bucket}/${var.source_s3_key}"
       },
       {
         Effect = "Allow"
@@ -529,6 +538,16 @@ output "lambda_function_arn" {
   value       = aws_lambda_function.main.arn
 }
 
+output "lambda_role_arn" {
+  description = "ARN of the Lambda execution role"
+  value       = aws_iam_role.lambda_role.arn
+}
+
+output "lambda_alias_arn" {
+  description = "ARN of the Lambda alias"
+  value       = aws_lambda_alias.main.arn
+}
+
 # Deployment status and configuration
 output "deployment_status" {
   description = "Deployment configuration status"
@@ -544,4 +563,13 @@ output "deployment_status" {
 output "artifacts_bucket" {
   description = "S3 bucket for pipeline artifacts"
   value       = aws_s3_bucket.pipeline_artifacts.bucket
+}
+
+# Source configuration outputs
+output "source_s3_configuration" {
+  description = "Source S3 bucket configuration"
+  value = {
+    bucket = var.source_s3_bucket
+    key    = var.source_s3_key
+  }
 }
