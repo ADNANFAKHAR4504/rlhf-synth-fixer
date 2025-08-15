@@ -321,12 +321,12 @@ describe("Enterprise Terraform Infrastructure Governance Audit - Unit Tests", ()
 
   /** ===================== REQUIREMENT 12: NO HARDCODED SECRETS ===================== */
   describe("Requirement 12: No Hardcoded Secrets", () => {
-    it("database credentials should be variables", () => {
-      const dbUser = extractFirstBlock(hcl, /variable\s+"db_username"\s*/g);
-      const dbPass = extractFirstBlock(hcl, /variable\s+"db_password"\s*/g);
+    it("database credentials should be random strings", () => {
+      const dbUser = extractFirstBlock(hcl, /resource\s+"random_string"\s+"db_username"\s*/g);
+      const dbPass = extractFirstBlock(hcl, /resource\s+"random_string"\s+"db_password"\s*/g);
       expect(dbUser && dbPass).toBeTruthy();
-      expect(dbUser!).toMatch(/sensitive\s*=\s*true/);
-      expect(dbPass!).toMatch(/sensitive\s*=\s*true/);
+      expect(dbUser!).toMatch(/length\s*=\s*16/);
+      expect(dbPass!).toMatch(/length\s*=\s*32/);
     });
 
     it("should use AWS Secrets Manager", () => {
