@@ -419,31 +419,33 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         description: 'KMS key for infrastructure encryption',
         keyUsage: 'ENCRYPT_DECRYPT',
 
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'Enable IAM User Permissions',
-              Effect: 'Allow',
-              Principal: {
-                AWS: pulumi.interpolate`arn:aws:iam::${aws
-                  .getCallerIdentity({}, { provider })
-                  .then(id => id.accountId)}:root`,
-              },
-              Action: 'kms:*',
-              Resource: '*',
-            },
-            {
-              Sid: 'Allow CloudTrail to encrypt logs',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudtrail.amazonaws.com',
-              },
-              Action: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
-              Resource: '*',
-            },
-          ],
-        }),
+        policy: pulumi
+          .all([aws.getCallerIdentity({}, { provider })])
+          .apply(([identity]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'Enable IAM User Permissions',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: `arn:aws:iam::${identity.accountId}:root`,
+                  },
+                  Action: 'kms:*',
+                  Resource: '*',
+                },
+                {
+                  Sid: 'Allow CloudTrail to encrypt logs',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
 
         tags: {
           ...commonTags,
@@ -469,9 +471,11 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     const cloudtrailBucket = new aws.s3.Bucket(
       'cloudtrail-logs-bucket',
       {
-        bucket: pulumi.interpolate`cloudtrail-logs-${aws
-          .getCallerIdentity({}, { provider })
-          .then(id => id.accountId)}-ap-south-1`,
+        bucket: pulumi
+          .all([aws.getCallerIdentity({}, { provider })])
+          .apply(
+            ([identity]) => `cloudtrail-logs-${identity.accountId}-ap-south-1`
+          ),
 
         tags: {
           ...commonTags,
@@ -1010,9 +1014,9 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     const configBucket = new aws.s3.Bucket(
       'aws-config-bucket',
       {
-        bucket: pulumi.interpolate`aws-config-${aws
-          .getCallerIdentity({}, { provider })
-          .then(id => id.accountId)}-ap-south-1`,
+        bucket: pulumi
+          .all([aws.getCallerIdentity({}, { provider })])
+          .apply(([identity]) => `aws-config-${identity.accountId}-ap-south-1`),
         tags: {
           ...commonTags,
           Name: 'aws-config-bucket',
