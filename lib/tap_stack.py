@@ -22,11 +22,25 @@ def create_infrastructure(export_outputs=True):
   project = config.get('project') or 'tap'
   
   # Security configuration
-  # For production, this should be restricted to specific management IPs
-  ssh_allowed_cidrs = config.get('ssh_allowed_cidrs') or ['0.0.0.0/0']
-  if environment == 'prod' and ssh_allowed_cidrs == ['0.0.0.0/0']:
-    # In production, default to VPC CIDR only if no specific IPs are configured
-    ssh_allowed_cidrs = ['10.0.0.0/16']  # Default VPC CIDR
+  # SSH access should be restricted for security
+  ssh_allowed_cidrs = config.get('ssh_allowed_cidrs')
+  
+  # Set secure defaults based on environment
+  if ssh_allowed_cidrs is None:
+    if environment == 'prod':
+      # Production: Default to VPC CIDR only (most secure)
+      ssh_allowed_cidrs = ['10.0.0.0/16']
+    elif environment == 'staging':
+      # Staging: Default to VPC CIDR (secure)
+      ssh_allowed_cidrs = ['10.0.0.0/16']
+    else:
+      # Development: Allow from anywhere for convenience
+      ssh_allowed_cidrs = ['0.0.0.0/0']
+  
+  # Additional security check: Never allow 0.0.0.0/0 in production
+  if environment == 'prod' and '0.0.0.0/0' in ssh_allowed_cidrs:
+    # Replace 0.0.0.0/0 with VPC CIDR in production
+    ssh_allowed_cidrs = [cidr if cidr != '0.0.0.0/0' else '10.0.0.0/16' for cidr in ssh_allowed_cidrs]
 
   # Get availability zones
   azs = get_availability_zones(state="available")
@@ -192,11 +206,11 @@ def create_infrastructure(export_outputs=True):
     vpc_id=vpc.id,
     ingress=[
       ec2.SecurityGroupIngressArgs(
-        description="SSH",
+        description="SSH - Restricted access based on environment",
         from_port=22,
         to_port=22,
         protocol="tcp",
-        cidr_blocks=ssh_allowed_cidrs
+        cidr_blocks=ssh_allowed_cidrs  # Environment-aware: VPC CIDR in prod/staging, 0.0.0.0/0 in dev
       ),
       ec2.SecurityGroupIngressArgs(
         description="HTTP",
