@@ -222,6 +222,8 @@ resource "aws_vpc" "main" {
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
+  depends_on = [aws_vpc.main]
+
   tags = {
     Name = "${local.name_prefix}-igw"
   }
@@ -238,6 +240,8 @@ resource "aws_subnet" "public" {
   cidr_block              = each.value.cidr
   availability_zone       = each.value.az
   map_public_ip_on_launch = true
+
+  depends_on = [aws_vpc.main]
 
   tags = {
     Name = "${local.name_prefix}-public-${each.key}"
@@ -256,6 +260,8 @@ resource "aws_subnet" "private" {
   cidr_block        = each.value.cidr
   availability_zone = each.value.az
 
+  depends_on = [aws_vpc.main]
+
   tags = {
     Name = "${local.name_prefix}-private-${each.key}"
     Tier = "private"
@@ -270,6 +276,8 @@ resource "aws_route_table" "public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
+
+  depends_on = [aws_vpc.main, aws_internet_gateway.igw]
 
   tags = {
     Name = "${local.name_prefix}-rt-public"
@@ -318,6 +326,8 @@ resource "aws_route_table" "private" {
     }
   }
 
+  depends_on = [aws_vpc.main]
+
   tags = {
     Name = "${local.name_prefix}-rt-private-${each.key}"
   }
@@ -338,6 +348,8 @@ resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
+
+  depends_on = [aws_vpc.main]
 
   ingress {
     description = "HTTP"
@@ -374,6 +386,8 @@ resource "aws_security_group" "app" {
   description = "Security group for application instances"
   vpc_id      = aws_vpc.main.id
 
+  depends_on = [aws_vpc.main]
+
   ingress {
     description     = "HTTP from ALB"
     from_port       = 80
@@ -408,6 +422,8 @@ resource "aws_security_group" "rds" {
   name        = "${local.name_prefix}-rds-sg"
   description = "Security group for RDS instance"
   vpc_id      = aws_vpc.main.id
+
+  depends_on = [aws_vpc.main]
 
   ingress {
     description     = "PostgreSQL from app instances"
@@ -499,6 +515,8 @@ resource "aws_lb_target_group" "main" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
+
+  depends_on = [aws_vpc.main]
 
   health_check {
     enabled             = true
