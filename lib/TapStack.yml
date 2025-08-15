@@ -985,7 +985,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub 'novamodel-sec-${EnvironmentSuffix}-lt-${AWS::StackName}'
       LaunchTemplateData:
-        ImageId: ami-0efdf839508ec2995 # Amazon Linux 2023 AMI in us-west-2
+        ImageId: ami-05a2d2d0a1020fecd # Amazon Linux 2023 AMI in us-west-2
         InstanceType: t3.micro
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
