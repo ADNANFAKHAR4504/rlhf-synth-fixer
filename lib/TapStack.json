@@ -249,7 +249,7 @@
                     },
                     "GenerateStringKey": "password",
                     "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\",
+                    "ExcludeCharacters": "\"@/\\\\",
                     "IncludeSpace": false
                 },
                 "Tags": [
@@ -405,7 +405,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "app-assets-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
+                    "Fn::Sub": "app-assets-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [

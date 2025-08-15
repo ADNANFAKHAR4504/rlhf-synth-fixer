@@ -234,7 +234,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'app-assets-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+      BucketName: !Sub 'app-assets-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
