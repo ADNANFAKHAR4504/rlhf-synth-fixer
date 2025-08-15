@@ -31,12 +31,7 @@ variable "aws_region" {
   }
 }
 
-# Source S3 configuration
-variable "source_s3_bucket" {
-  description = "S3 bucket name containing source code"
-  type        = string
-}
-
+# Source S3 configuration (now managed by infrastructure)
 variable "source_s3_key" {
   description = "S3 object key for source code (e.g., source.zip)"
   type        = string
@@ -127,6 +122,55 @@ resource "random_string" "bucket_suffix" {
   length  = 8
   special = false
   upper   = false
+}
+
+########################
+# S3 Bucket for Source Code
+########################
+
+resource "aws_s3_bucket" "source_code" {
+  bucket = "${var.environment}-${var.project_name}${var.environment_suffix}-source-code-${random_string.bucket_suffix.result}"
+}
+
+resource "aws_s3_bucket_versioning" "source_code" {
+  bucket = aws_s3_bucket.source_code.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "source_code" {
+  bucket = aws_s3_bucket.source_code.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "source_code" {
+  bucket = aws_s3_bucket.source_code.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Create source code archive for upload
+data "archive_file" "source_code" {
+  type        = "zip"
+  source_dir  = "${path.module}/sample-app"
+  output_path = "${path.module}/source.zip"
+}
+
+# Upload source code to S3
+resource "aws_s3_object" "source_code" {
+  bucket = aws_s3_bucket.source_code.id
+  key    = "source.zip"
+  source = data.archive_file.source_code.output_path
+  etag   = data.archive_file.source_code.output_md5
 }
 
 ########################
@@ -256,7 +300,7 @@ resource "aws_iam_role_policy" "codebuild_policy" {
           "s3:GetObject",
           "s3:GetObjectVersion"
         ]
-        Resource = "arn:aws:s3:::${var.source_s3_bucket}/${var.source_s3_key}"
+        Resource = "arn:aws:s3:::${aws_s3_bucket.source_code.bucket}/${var.source_s3_key}"
       },
       {
         Effect = "Allow"
@@ -404,7 +448,7 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
           "s3:GetObject",
           "s3:GetObjectVersion"
         ]
-        Resource = "arn:aws:s3:::${var.source_s3_bucket}/${var.source_s3_key}"
+        Resource = "arn:aws:s3:::${aws_s3_bucket.source_code.bucket}/${var.source_s3_key}"
       }
     ]
   })
@@ -433,7 +477,7 @@ resource "aws_codepipeline" "main" {
       output_artifacts = ["source_output"]
 
       configuration = {
-        S3Bucket    = var.source_s3_bucket
+        S3Bucket    = aws_s3_bucket.source_code.bucket
         S3ObjectKey = var.source_s3_key
       }
     }
@@ -569,7 +613,12 @@ output "artifacts_bucket" {
 output "source_s3_configuration" {
   description = "Source S3 bucket configuration"
   value = {
-    bucket = var.source_s3_bucket
+    bucket = aws_s3_bucket.source_code.bucket
     key    = var.source_s3_key
   }
+}
+
+output "source_s3_bucket_name" {
+  description = "Name of the source S3 bucket"
+  value       = aws_s3_bucket.source_code.bucket
 }
