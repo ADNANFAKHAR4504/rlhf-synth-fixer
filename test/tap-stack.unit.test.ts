@@ -48,7 +48,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.Environment.Default).toBe('prod');
       expect(template.Parameters.Environment.AllowedValues).toEqual(['dev', 'staging', 'prod']);
       expect(template.Parameters.InstanceType.AllowedValues).toEqual(['t3.micro', 't3.small', 't3.medium']);
-      expect(template.Parameters.KeyName.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(template.Parameters.KeyName.Type).toBe('String');
       expect(template.Parameters.DBUsername.NoEcho).toBe(true);
     });
   });

@@ -45,14 +45,19 @@ Parameters:
     Description: EC2 instance type
     
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
+    Description: EC2 Key Pair name (leave blank to launch without a key pair)
+    Type: String
+    Default: ""
+    AllowedPattern: "^[a-zA-Z0-9._-]*$"
     
   DBUsername:
     Type: String
     Default: admin
     Description: RDS master username
     NoEcho: true
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
 
 Mappings:
   RegionMap:
@@ -421,7 +426,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyName
+        KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:

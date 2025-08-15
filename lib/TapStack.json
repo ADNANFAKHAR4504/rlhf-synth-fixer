@@ -53,14 +53,30 @@
             "Description": "EC2 instance type"
         },
         "KeyName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 Key Pair for SSH access"
+            "Description": "EC2 Key Pair name (leave blank to launch without a key pair)",
+            "Type": "String",
+            "Default": "",
+            "AllowedPattern": "^[a-zA-Z0-9._-]*$"
         },
         "DBUsername": {
             "Type": "String",
             "Default": "admin",
             "Description": "RDS master username",
             "NoEcho": true
+        }
+    },
+    "Conditions": {
+        "HasKeyName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Mappings": {
@@ -745,7 +761,15 @@
                         "Ref": "InstanceType"
                     },
                     "KeyName": {
-                        "Ref": "KeyName"
+                        "Fn::If": [
+                            "HasKeyName",
+                            {
+                                "Ref": "KeyName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     },
                     "IamInstanceProfile": {
                         "Arn": {
