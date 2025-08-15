@@ -34,4 +34,4 @@ I need a Python script that sets up AWS infrastructure using Pulumi. This should
 - Ready to run immediately
 - All AWS resources in one file
 
-The script should be production-ready and follow AWS best practices for security and cost management.
+The script should be production-ready and follow AWS best practices for security and cost managements.
