@@ -15,7 +15,7 @@ terraform {
   }
 
   # Partial backend config: values are injected at `terraform init` time
-  # backend "s3" {} # Commented out for QA testing
+  backend "s3" {} # Commented out for QA testing
 }
 
 # Primary AWS provider for general resources
