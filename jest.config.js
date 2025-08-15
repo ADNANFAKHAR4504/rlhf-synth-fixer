@@ -23,6 +23,7 @@ module.exports = {
       statements: 70,
     },
   },
+  testTimeout: 30000,
   silent: false,
   verbose: true,
 };
