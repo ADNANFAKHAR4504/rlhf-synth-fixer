@@ -36,6 +36,8 @@ variable "hosted_zone_id" {
 # Providers
 ########################################
 
+# Main provider is configured in provider.tf using var.aws_region
+# This is just an alias for ACM in us-east-1
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
@@ -48,9 +50,9 @@ provider "aws" {
 locals {
   azs        = slice(data.aws_availability_zones.available.names, 0, 2)
   tags       = {
-    Project     = var.project_name
+    Project   = var.project_name
     Environment = var.env
-    ManagedBy   = "Terraform"
+    ManagedBy = "Terraform"
   }
   name_prefix = "${var.project_name}-${var.env}"
 }
@@ -69,7 +71,7 @@ resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags                 = merge(local.tags, { Name = "${local.name_prefix}-vpc" })
+  tags = merge(local.tags, { Name = "${local.name_prefix}-vpc" })
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -78,20 +80,20 @@ resource "aws_internet_gateway" "igw" {
 }
 
 resource "aws_subnet" "public" {
-  for_each                = toset(local.azs)
+  for_each = toset(local.azs)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet("10.0.0.0/16", 8, index(local.azs, each.key))
   availability_zone       = each.key
   map_public_ip_on_launch = true
-  tags                    = merge(local.tags, { Name = "${local.name_prefix}-public-${each.key}" })
+  tags = merge(local.tags, { Name = "${local.name_prefix}-public-${each.key}" })
 }
 
 resource "aws_subnet" "private" {
-  for_each         = toset(local.azs)
-  vpc_id           = aws_vpc.main.id
-  cidr_block       = cidrsubnet("10.0.0.0/16", 8, index(local.azs, each.key) + 10)
+  for_each = toset(local.azs)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet("10.0.0.0/16", 8, index(local.azs, each.key) + 10)
   availability_zone = each.key
-  tags             = merge(local.tags, { Name = "${local.name_prefix}-private-${each.key}" })
+  tags = merge(local.tags, { Name = "${local.name_prefix}-private-${each.key}" })
 }
 
 resource "aws_eip" "nat" {
@@ -198,11 +200,10 @@ resource "aws_security_group" "ec2_sg" {
 ########################################
 
 resource "aws_acm_certificate" "cert" {
-  provider          = aws.us_east_1
-  domain_name       = var.domain_name
-  validation_method = "DNS"
-  tags              = merge(local.tags, { Name = "${local.name_prefix}-cert" })
-
+  provider                  = aws.us_east_1
+  domain_name               = var.domain_name
+  validation_method         = "DNS"
+  tags                      = merge(local.tags, { Name = "${local.name_prefix}-cert" })
   lifecycle {
     create_before_destroy = true
   }
@@ -286,6 +287,25 @@ resource "aws_lb_listener" "https" {
 # Launch Template + Auto Scaling
 ########################################
 
+resource "aws_launch_template" "lt" {
+  name_prefix   = "${local.name_prefix}-lt-"
+  image_id      = data.aws_ami.amazon_linux.id
+  instance_type = "t3.micro"
+  monitoring {
+    enabled = true
+  }
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              yum install -y nginx
+              echo "Hello from $(hostname)" > /usr/share/nginx/html/index.html
+              systemctl enable nginx
+              systemctl start nginx
+            EOF
+  )
+  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
+  tags = merge(local.tags, { Name = "${local.name_prefix}-lt" })
+}
+
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -296,43 +316,18 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-resource "aws_launch_template" "lt" {
-  name_prefix   = "${local.name_prefix}-lt-"
-  image_id      = data.aws_ami.amazon_linux.id
-  instance_type = "t3.micro"
-
-  monitoring {
-    enabled = true
-  }
-
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              yum install -y nginx
-              echo "Hello from $(hostname)" > /usr/share/nginx/html/index.html
-              systemctl enable nginx
-              systemctl start nginx
-            EOF
-  )
-
-  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  tags                   = merge(local.tags, { Name = "${local.name_prefix}-lt" })
-}
-
 resource "aws_autoscaling_group" "asg" {
-  name             = "${local.name_prefix}-asg"
-  desired_capacity = 2
-  max_size         = 4
-  min_size         = 2
-
+  name                      = "${local.name_prefix}-asg"
+  desired_capacity          = 2
+  max_size                  = 4
+  min_size                  = 2
   launch_template {
     id      = aws_launch_template.lt.id
     version = "$Latest"
   }
-
   vpc_zone_identifier = [for s in aws_subnet.private : s.id]
   target_group_arns   = [aws_lb_target_group.tg.arn]
   health_check_type   = "ELB"
-
   tag {
     key                 = "Name"
     value               = "${local.name_prefix}-instance"
@@ -348,7 +343,6 @@ resource "aws_autoscaling_policy" "scale_out" {
   name                   = "${local.name_prefix}-scale-out"
   autoscaling_group_name = aws_autoscaling_group.asg.name
   policy_type            = "TargetTrackingScaling"
-
   target_tracking_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ASGAverageCPUUtilization"
@@ -370,11 +364,9 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   period              = 300
   statistic           = "Average"
   threshold           = 70
-
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.asg.name
   }
-
   alarm_description = "High CPU usage on ASG instances"
 }
 
@@ -387,12 +379,10 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
   period              = 60
   statistic           = "Average"
   threshold           = 0
-
   dimensions = {
     TargetGroup  = aws_lb_target_group.tg.arn_suffix
     LoadBalancer = aws_lb.alb.arn_suffix
   }
-
   alarm_description = "Unhealthy hosts detected in target group"
 }
 
