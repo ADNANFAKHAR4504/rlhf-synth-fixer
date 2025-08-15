@@ -1,3 +1,4 @@
+# Complete Serverless Infrastructure Stack - Creates VPC, Lambda, RDS Aurora, API Gateway from scratch
 # Data sources for availability zones
 data "aws_availability_zones" "available" {
   state = "available"
