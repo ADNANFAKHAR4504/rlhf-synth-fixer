@@ -1,65 +1,38 @@
-# CloudFormation Template Request – TapStack Infrastructure
+# Notes for TapStack CloudFormation Setup
 
-I need a CloudFormation YAML template that sets up a **secure, highly available, and cost-efficient AWS environment** in the **us-east-1** region. The goal is to create a reusable infrastructure stack for environments like Dev or Prod.
+I'm putting together a CloudFormation file to define some core AWS infrastructure for TapStack – primarily something we can reuse for both dev and prod environments. Everything will be in us-east-1.
 
-## ✅ Infrastructure Requirements
+The basic idea:
 
-- **Region and Availability Zones**
-  - Deploy everything in `us-east-1`.
-  - Use at least two Availability Zones for high availability.
+- We’ll need a VPC with multiple subnets (public + private) across two availability zones. 
+- Public subnets will be used by the load balancer and NAT gateways; private ones for app servers and the database.
+- An Auto Scaling Group should launch EC2 instances (at least two by default), and those should be behind an ALB.
+- We’ll probably want to attach a WAF with AWS managed rules to protect the ALB.
 
-- **VPC and Subnets**
-  - Create a custom VPC.
-  - At least one **public subnet** and one **private subnet per AZ**.
-  - Public subnets are for ALB and NAT.
-  - Private subnets are for EC2 instances and the database.
+For storage:
+- An S3 bucket for our application artifacts or assets (should have versioning and encryption).
+- A separate S3 bucket only for CloudTrail logs.
 
-- **Auto Scaling Group + Load Balancer**
-  - Create an Auto Scaling Group: min 2, max 10.
-  - Attach an Application Load Balancer to it.
-  - EC2 instances should be launched with IAM roles that can access S3.
+Database:
+- We’ll use Postgres (version 12 or higher) in RDS. It needs to be Multi-AZ.
+- The master password shouldn’t be hardcoded – it should come from Secrets Manager.
 
-- **RDS Database (PostgreSQL)**
-  - Use PostgreSQL version 12 or above.
-  - Multi-AZ enabled.
-  - Password should come from Secrets Manager, not hardcoded.
+Monitoring & Security:
+- CloudWatch alarms for high CPU usage.
+- CloudTrail enabled and logging to the dedicated bucket.
+- IAM roles for EC2 (mainly to allow S3 access).
 
-- **S3 Buckets**
-  - One bucket for application data (versioned, encrypted).
-  - One dedicated bucket for CloudTrail logs.
-
-- **CloudWatch Monitoring**
-  - CloudWatch alarm for CPU > 75% on EC2 instances.
-
-- **WAF Web ACL**
-  - Attach AWS WAF to the Application Load Balancer.
-  - Use AWS-managed rules for common threats.
-
-- **CloudTrail**
-  - Enable CloudTrail in `us-east-1`.
-  - Send logs to the dedicated S3 bucket.
-
-- **Route 53 (DNS)**
-  - Add a record to map a domain name to the load balancer (domain name can be a parameter).
-
-- **Tagging**
-  - All resources should have tags:
-    - `Project` (parameter)
-    - `Environment` (parameter)
-
-## 🧾 Output Requirements
-
-The CloudFormation template should:
-- Be written in YAML.
-- Include Parameters for things like instance type, subnet CIDRs, environment, and project name.
-- Include Outputs for:
-  - VPC ID
-  - ALB DNS name
-  - RDS endpoint
-  - S3 bucket names
-  - Web ACL ID
-  - Auto Scaling Group name
+It’d also be good if the template supports a Route 53 DNS record for the ALB — domain name can be a parameter so it’s optional.
+Everything should carry `Project` and `Environment` tags.
 
 ---
 
-Please provide the **complete CloudFormation YAML** with Parameters, Resources, and Outputs.
+Outputs we’ll need:
+- VPC ID
+- ALB DNS
+- RDS endpoint
+- S3 bucket names
+- WAF Web ACL ID
+- Auto Scaling Group name
+
+I’ll need all of this wrapped into a single YAML CloudFormation template with parameters for instance type, environment name, project name, and subnet CIDRs.
