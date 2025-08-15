@@ -926,7 +926,7 @@ class TapStack(pulumi.ComponentResource):
       origins=[
         aws.cloudfront.DistributionOriginArgs(
           domain_name=self.static_bucket.bucket_regional_domain_name,
-          origin_id=f"S3-{self.static_bucket.id}",
+          origin_id="static-origin",
           s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
             origin_access_identity=self.cloudfront_oai.cloudfront_access_identity_path
           )
@@ -935,7 +935,7 @@ class TapStack(pulumi.ComponentResource):
       default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
         allowed_methods=["GET", "HEAD"],
         cached_methods=["GET", "HEAD"],
-        target_origin_id=f"S3-{self.static_bucket.id}",
+        target_origin_id="static-origin",
         viewer_protocol_policy="redirect-to-https",
         forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
           query_string=False,
