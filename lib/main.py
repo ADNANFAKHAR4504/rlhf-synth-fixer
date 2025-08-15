@@ -149,7 +149,7 @@ def deploy_infrastructure():
       provider=provider
     )
 
-    code_pipeline = setup_codepipeline()
+    code_pipeline = setup_codepipeline(pulumi.get_stack().lower())
 
     # Ensure CloudTrail waits for S3 bucket policy
     pulumi.Output.all(bucket_policy.id, cloudtrail.name).apply(
