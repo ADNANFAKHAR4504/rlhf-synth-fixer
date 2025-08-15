@@ -46,6 +46,9 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: "source-access-logs/"
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
       LifecycleConfiguration:
         Rules:
           - Status: Enabled
@@ -684,9 +687,7 @@ Resources:
                 - Name: BuildOutput
               RunOrder: 1
 
-  # ==========================================
-  # EVENTBRIDGE RULE FOR PIPELINE TRIGGERS
-  # ==========================================
+  # EventBridge Rule for triggering CodePipeline (using CloudWatch Events)
   PipelineTriggerRule:
     Type: AWS::Events::Rule
     Properties:
@@ -697,14 +698,14 @@ Resources:
         source:
           - aws.s3
         detail-type:
-          - Object Created
+          - "Object Created"
         detail:
           bucket:
             name:
               - !Ref SourceCodeBucket
           object:
             key:
-              - source.zip
+              - "source.zip"
       Targets:
         - Arn: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
           Id: PipelineTarget
