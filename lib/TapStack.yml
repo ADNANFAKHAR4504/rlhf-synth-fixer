@@ -706,7 +706,9 @@ Resources:
             key:
               - source.zip
       Targets:
-        - Arn: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
+        - Arn: !Sub
+            - "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${PipelineName}"
+            - PipelineName: !Ref CodePipelinePipeline
           Id: PipelineTarget
           RoleArn: !GetAtt EventBridgeRole.Arn
 
@@ -729,7 +731,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - codepipeline:StartPipelineExecution
-                Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
+                Resource: !Sub
+                  - "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${PipelineName}"
+                  - PipelineName: !Ref CodePipelinePipeline
 
   # ==========================================
   # SYSTEMS MANAGER PARAMETERS FOR CONFIGURATION
