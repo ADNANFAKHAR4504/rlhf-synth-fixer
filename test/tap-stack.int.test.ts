@@ -33,6 +33,24 @@ import {
   DescribeDBSubnetGroupsCommand,
   RDSClient,
 } from '@aws-sdk/client-rds';
+
+// Helper: dynamically determine environment suffix from a resource tag or stack outputs
+async function detectEnvironmentSuffix(ec2Client) {
+  try {
+    const vpcs = await ec2Client.send(new DescribeVpcsCommand({}));
+    if (vpcs.Vpcs && vpcs.Vpcs.length > 0) {
+      const tags = vpcs.Vpcs[0].Tags || [];
+      const envTag = tags.find(t => t.Key.toLowerCase() === 'environment' || t.Key.toLowerCase() === 'env');
+      if (envTag && envTag.Value) {
+        return envTag.Value.trim();
+      }
+    }
+  } catch (err) {
+    console.warn("Could not detect environment suffix:", err.message);
+  }
+  return undefined; // fallback
+}
+
 import {
   GetBucketEncryptionCommand,
   GetBucketLifecycleConfigurationCommand,
