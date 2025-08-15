@@ -29,15 +29,21 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
   
-  DatabasePassword:
-    Type: String
-    NoEcho: true
-    Description: 'RDS Database password'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
+
 
 Resources:
+  # Database Password Secret
+  TapDatabasePassword:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-tap-database-password-${EnvironmentSuffix}'
+      Description: 'RDS Database password for TapStack'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "tapuser"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
   # KMS Key for S3 Encryption
   TapS3KMSKey:
     Type: AWS::KMS::Key
@@ -268,7 +274,7 @@ Resources:
       Engine: 'mysql'
       EngineVersion: '8.0.35'
       MasterUsername: !Ref DatabaseUsername
-      MasterUserPassword: !Ref DatabasePassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${TapDatabasePassword}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
