@@ -12,16 +12,14 @@ export class DynamoDbConstruct extends Construct {
     const dynamoTable = new DynamodbTable(this, 'production-table', {
       name: 'production-table',
       hashKey: 'id',
-      attribute: [
-        { name: 'id', type: 'S' }
-      ],
+      attribute: [{ name: 'id', type: 'S' }],
       billingMode: 'PROVISIONED',
       readCapacity: 5,
       writeCapacity: 5,
       tags: {
         Name: 'production-table',
-        Environment: 'production'
-      }
+        Environment: 'production',
+      },
     });
 
     // Auto Scaling Target
@@ -30,7 +28,7 @@ export class DynamoDbConstruct extends Construct {
       minCapacity: 5,
       resourceId: `table/${dynamoTable.name}`,
       scalableDimension: 'dynamodb:table:ReadCapacityUnits',
-      serviceNamespace: 'dynamodb'
+      serviceNamespace: 'dynamodb',
     });
 
     // Auto Scaling Policy
@@ -42,12 +40,12 @@ export class DynamoDbConstruct extends Construct {
       serviceNamespace: 'dynamodb',
       targetTrackingScalingPolicyConfiguration: {
         predefinedMetricSpecification: {
-          predefinedMetricType: 'DynamoDBReadCapacityUtilization'
+          predefinedMetricType: 'DynamoDBReadCapacityUtilization',
         },
         targetValue: 70,
         scaleInCooldown: 60,
-        scaleOutCooldown: 60
-      }
+        scaleOutCooldown: 60,
+      },
     });
   }
 }

@@ -1,8 +1,11 @@
 // Compute construct for production
+import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
+import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
 import { AutoscalingAttachment } from '@cdktf/provider-aws/lib/autoscaling-attachment';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { DataAwsRoute53Zone } from '@cdktf/provider-aws/lib/data-aws-route53-zone';
 import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { Lb } from '@cdktf/provider-aws/lib/lb';
 import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
@@ -20,6 +23,7 @@ export class ComputeConstruct extends Construct {
       securityGroupId: string;
       instanceProfile: string;
       loadBalancerSecurityGroupId: string;
+      domainName: string;
     }
   ) {
     super(scope, id);
@@ -188,14 +192,37 @@ echo "$(date): User data script execution completed"
       },
     });
 
-    // Load Balancer Listener
+    // Lookup Route53 Hosted Zone by domain name
+    new DataAwsRoute53Zone(this, 'hosted-zone', {
+      name: props.domainName.split('.').slice(-2).join('.'), // e.g., example.com
+      privateZone: false,
+    });
+
+    // ACM Certificate (DNS validation)
+    const certificate = new AcmCertificate(this, 'alb-certificate', {
+      domainName: props.domainName,
+      validationMethod: 'DNS',
+      tags: {
+        Name: 'production-alb-certificate',
+        Environment: 'production',
+      },
+    });
+
+    // ACM Certificate Validation
+    new AcmCertificateValidation(this, 'alb-certificate-validation', {
+      certificateArn: certificate.arn,
+      validationRecordFqdns: [
+        // This will be populated automatically by Terraform/CDKTF
+      ],
+    });
+
+    // Load Balancer Listener (use certificate.arn)
     new LbListener(this, 'lb-listener', {
       loadBalancerArn: loadBalancer.arn,
       port: 443,
       protocol: 'HTTPS',
       sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-      certificateArn:
-        'arn:aws:acm:us-west-2:ACCOUNT_ID:certificate/CERTIFICATE_ID', // Replace with actual certificate ARN
+      certificateArn: certificate.arn,
       defaultAction: [
         {
           type: 'forward',

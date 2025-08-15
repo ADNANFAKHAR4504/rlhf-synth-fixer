@@ -47,6 +47,7 @@ export class TapStack extends TerraformStack {
       securityGroupId: security.ec2SecurityGroupId,
       instanceProfile: security.instanceProfile,
       loadBalancerSecurityGroupId: security.loadBalancerSecurityGroupId,
+      domainName: 'tapstack.example.com', // <-- update to your real domain
     });
   }
 }
