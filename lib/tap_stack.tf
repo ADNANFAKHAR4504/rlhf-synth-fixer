@@ -53,6 +53,37 @@ variable "common_tags" {
   }
 }
 
+variable "user_data_template" {
+  description = "User data script for EC2 instances"
+  type        = string
+  default     = <<-EOF
+#!/bin/bash
+yum update -y
+yum install -y httpd -y
+systemctl start httpd
+systemctl enable httpd
+
+cat > /var/www/html/index.html << 'HTML'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>${environment} Environment</title>
+</head>
+<body>
+    <h1>Welcome to ${environment} Environment</h1>
+    <p>This server is running in the ${environment} environment.</p>
+    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+    <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+</body>
+</html>
+HTML
+
+# Install CloudWatch agent
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+rpm -U ./amazon-cloudwatch-agent.rpm
+EOF
+}
+
 # ============================================================================
 # DATA SOURCES
 # ============================================================================
@@ -524,9 +555,7 @@ resource "aws_instance" "web_servers" {
   subnet_id             = aws_subnet.public_subnets["${each.key}-public-0"].id
   iam_instance_profile  = aws_iam_instance_profile.ec2_profile[each.key].name
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    environment = each.key
-  }))
+  user_data = replace(var.user_data_template, "${environment}", each.key)
 
   root_block_device {
     volume_type = "gp3"
@@ -550,42 +579,6 @@ resource "aws_instance" "web_servers" {
   }
 }
 
-# ============================================================================
-# USER DATA SCRIPT (Create this file separately)
-# ============================================================================
-
-# Create user data script file
-resource "local_file" "user_data_script" {
-  content = <<-EOF
-#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-
-# Create a simple index page
-cat > /var/www/html/index.html << 'HTML'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>${environment} Environment</title>
-</head>
-<body>
-    <h1>Welcome to ${environment} Environment</h1>
-    <p>This server is running in the ${environment} environment.</p>
-    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-    <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
-</body>
-</html>
-HTML
-
-# Install CloudWatch agent
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
-EOF
-
-  filename = "${path.module}/user_data.sh"
-}
 
 # ============================================================================
 # OUTPUTS
