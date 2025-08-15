@@ -58,7 +58,7 @@ locals {
   # AWS region
   region = var.aws_region
 
-  # Consistent naming convention with environment suffix
+  # Consistent naming conventions with environment suffix
   name_prefix = "tap-${local.environment_suffix}"
 
   # Common tags applied to all resources
