@@ -1159,7 +1159,8 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'novamodel-${EnvironmentSuffix}-tg-${AWS::StackName}'
+      # FIX: Shortened the name to be under the 32-character limit
+      Name: !Sub 'nm-tg-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -1175,6 +1176,7 @@ Resources:
         - Id: !Ref EC2Instance
           Port: 80
       Tags:
+        # The Name tag can remain long and descriptive
         - Key: Name
           Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-target-group'
         - Key: Project
