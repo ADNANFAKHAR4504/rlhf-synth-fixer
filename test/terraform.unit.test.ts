@@ -1,9 +1,9 @@
 // Unit tests for Terraform HCL infrastructure
 // Tests validate structure, configuration, and resource definitions without deploying
 
+import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
 
 const libDir = path.resolve(__dirname, "../lib");
 
@@ -22,6 +22,18 @@ const fileExists = (fileName: string): boolean => {
 // Helper to run terraform validate
 const runTerraformValidate = (): boolean => {
   try {
+    // First, try to initialize terraform with backend reconfiguration
+    // This handles the case where backend configuration has changed
+    try {
+      execSync("terraform init -backend=false", {
+        cwd: libDir,
+        stdio: "pipe"
+      });
+    } catch (initError) {
+      // If init fails, still try to validate as it might work without backend
+      // for basic syntax validation
+    }
+    
     execSync("terraform validate", {
       cwd: libDir,
       stdio: "pipe"
