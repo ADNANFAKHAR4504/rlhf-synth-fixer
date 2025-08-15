@@ -679,7 +679,6 @@ resource "aws_cloudwatch_log_group" "app_logs_west" {
   provider          = aws.west
   name              = "/tap/application/west"
   retention_in_days = 7
-  kms_key_id        = aws_kms_key.west.arn
   
   tags = local.common_tags
 }
@@ -688,7 +687,6 @@ resource "aws_cloudwatch_log_group" "app_logs_east" {
   provider          = aws.east
   name              = "/tap/application/east"
   retention_in_days = 7
-  kms_key_id        = aws_kms_key.east.arn
   
   tags = local.common_tags
 }
