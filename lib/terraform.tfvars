@@ -9,4 +9,4 @@ public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
 private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
 
 db_username = "admin"
-# db_password should be set via environment variable or AWS Secrets Manager
+db_password = "r60[;.6Q:ZnmF{xH"
