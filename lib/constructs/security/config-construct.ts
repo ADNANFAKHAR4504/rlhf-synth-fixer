@@ -1,9 +1,9 @@
-import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 import * as config from 'aws-cdk-lib/aws-config';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
 import { SecurityConfig } from '../../config/security-config';
 
 /**
@@ -22,7 +22,10 @@ export class ConfigConstruct extends Construct {
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-Config-Bucket`,
       {
-        bucketName: `${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-config-logs-${this.node.addr.slice(-8)}`,
+        bucketName: `${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-cfg-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}-${new Date()
+          .toISOString()
+          .replace(/[-:T.]/g, '')
+          .slice(0, 8)}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: encryptionKey,
         versioned: true,

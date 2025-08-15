@@ -1,9 +1,9 @@
-import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
 import { SecurityConfig } from '../../config/security-config';
 
 /**
@@ -23,7 +23,10 @@ export class CloudTrailConstruct extends Construct {
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-CloudTrail-Bucket`,
       {
-        bucketName: `${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-cloudtrail-logs-${this.node.addr.slice(-8)}`,
+        bucketName: `${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-ct-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}-${new Date()
+          .toISOString()
+          .replace(/[-:T.]/g, '')
+          .slice(0, 8)}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: encryptionKey,
         versioned: true,
