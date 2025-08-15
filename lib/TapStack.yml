@@ -5,7 +5,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: "dev"
-    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    Description: "Environment suffix for resource naming (e.g., dev, test, prod)"
     AllowedPattern: "^[a-zA-Z0-9]+$"
     ConstraintDescription: "Must contain only alphanumeric characters"
 
@@ -101,7 +101,6 @@ Resources:
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ApplicationName}-CodePipeline-Role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -157,7 +156,6 @@ Resources:
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ApplicationName}-CodeBuild-Role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -202,7 +200,6 @@ Resources:
   CodeDeployServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ApplicationName}-CodeDeploy-Role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -232,7 +229,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ApplicationName}-Lambda-Role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -267,7 +263,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ApplicationName}-EC2-Role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -300,7 +295,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${ApplicationName}-EC2-Profile-${EnvironmentSuffix}"
       Roles:
         - !Ref EC2InstanceRole
 
@@ -728,7 +722,6 @@ Resources:
   EventBridgeRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ApplicationName}-EventBridge-Role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:

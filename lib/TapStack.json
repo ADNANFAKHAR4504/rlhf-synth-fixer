@@ -5,7 +5,7 @@
         "EnvironmentSuffix": {
             "Type": "String",
             "Default": "dev",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "Description": "Environment suffix for resource naming (e.g., dev, test, prod)",
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
         },
@@ -136,9 +136,6 @@
         "CodePipelineServiceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-CodePipeline-Role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -248,9 +245,6 @@
         "CodeBuildServiceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-CodeBuild-Role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -338,9 +332,6 @@
         "CodeDeployServiceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-CodeDeploy-Role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -389,9 +380,6 @@
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-Lambda-Role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -446,9 +434,6 @@
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-EC2-Role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -507,9 +492,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${ApplicationName}-EC2-Profile-${EnvironmentSuffix}"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2InstanceRole"
@@ -1031,9 +1013,6 @@
         "EventBridgeRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-EventBridge-Role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
