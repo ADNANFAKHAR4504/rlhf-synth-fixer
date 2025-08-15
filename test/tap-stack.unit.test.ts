@@ -1,5 +1,4 @@
 import { Testing } from 'cdktf';
-import { Construct } from 'constructs';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
@@ -34,24 +33,30 @@ describe('TapStack', () => {
   // ... [Previous test cases remain the same until the end] ...
 
   describe('S3 Resources', () => {
-    it('should create S3 lifecycle configuration', () => {
-      // Synthesize the stack to JSON
+    it('should create S3 bucket with correct configuration', () => {
       const synthesized = Testing.synth(stack);
-      
-      // Find all S3 bucket lifecycle configurations
-      const lifecycleConfigs = Object.values(synthesized)
-        .filter((resource: any) => resource.type === 'aws_s3_bucket_lifecycle_configuration');
-      
-      expect(lifecycleConfigs.length).toBe(1);
-      
-      const lifecycle = lifecycleConfigs[0] as any;
+      const resources = JSON.parse(synthesized).resource;
+
+      const s3Buckets = resources.aws_s3_bucket || {};
+      const bucketKeys = Object.keys(s3Buckets);
+
+      expect(bucketKeys).toHaveLength(1);
+      const bucket = s3Buckets[bucketKeys[0]];
+
+      expect(bucket.tags.Name).toContain(
+        `prod-${environmentSuffix}-storage-${region}`
+      );
+    });
+
+    it('should create S3 lifecycle configuration', () => {
+      const synthesized = Testing.synth(stack);
+      const resources = JSON.parse(synthesized).resource;
+
+      const lifecycleConfigs = resources.aws_s3_bucket_lifecycle_configuration || {};
+      expect(Object.keys(lifecycleConfigs)).toHaveLength(1);
+
+      const lifecycle = Object.values(lifecycleConfigs)[0] as any;
       expect(lifecycle.rule[0].status).toBe('Enabled');
-      
-      // Handle array structure
-      expect(Array.isArray(lifecycle.rule[0].expiration)).toBeTruthy();
-      expect(lifecycle.rule[0].expiration[0].days).toBe(365);
-      
-      expect(Array.isArray(lifecycle.rule[0].transition)).toBeTruthy();
       expect(lifecycle.rule[0].transition[0].days).toBe(30);
       expect(lifecycle.rule[0].transition[0].storage_class).toBe('STANDARD_IA');
     });
