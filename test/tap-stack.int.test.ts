@@ -22,7 +22,8 @@ import {
 } from "@aws-sdk/client-wafv2";
 import fs from "fs";
 
-const region = process.env.AWS_REGION || "us-east-1";
+const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+
 const ec2 = new EC2Client({ region });
 const s3 = new S3Client({ region });
 const alb = new ElasticLoadBalancingV2Client({ region });
@@ -77,14 +78,19 @@ describe("TapStack Infrastructure Integration Tests", () => {
       const location = await s3.send(
         new GetBucketLocationCommand({ Bucket: bucket })
       );
-      expect([null, "", region]).toContain(location.LocationConstraint);
+      // S3 returns null or "" for us-east-1
+      expect([null, "", region, "us-east-1"]).toContain(location.LocationConstraint);
     });
   });
 
   describe("Application Load Balancer", () => {
     test("should exist and have HTTP listener", async () => {
       const albDns = outputs.LoadBalancerDNS;
-      const res = await alb.send(new DescribeLoadBalancersCommand({ Names: [albDns] }));
+      // AWS API expects the short ALB name, not the full DNS
+      const albName = albDns.split(".")[0];
+      const res = await alb.send(
+        new DescribeLoadBalancersCommand({ Names: [albName] })
+      );
       expect(res.LoadBalancers?.[0].DNSName).toBe(albDns);
 
       const lbArn = res.LoadBalancers?.[0].LoadBalancerArn;
