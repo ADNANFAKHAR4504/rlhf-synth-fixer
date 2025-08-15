@@ -66,6 +66,12 @@ runs:
       with:
         pulumi-version: ${{ inputs.pulumi-version }}
 
+    - name: Install pipenv
+      shell: bash
+      run: |
+        pip install --upgrade pip pipenv==2025.0.4
+        echo "PIPENV_VENV_IN_PROJECT=1" >> $GITHUB_ENV
+
     - name: Cache Python virtual environment
       uses: actions/cache@v4
       with:
@@ -74,16 +80,36 @@ runs:
         restore-keys: |
           ${{ runner.os }}-python-
 
-    - name: Setup environment using script
+    - name: Install dependencies
       shell: bash
-      run: ./scripts/setup.sh
-      env:
-        NODE_VERSION: ${{ inputs.node-version }}
-        TERRAFORM_VERSION: ${{ inputs.terraform-version }}
-        PULUMI_VERSION: ${{ inputs.pulumi-version }}
-        DOWNLOAD_ARTIFACTS: ${{ inputs.download-artifacts }}
-        UPLOAD_ARTIFACTS: ${{ inputs.upload-artifacts }}
-        PLATFORM: ${{ inputs.platform }}
+      run: |  
+        # Node dependencies (cached by setup-node)
+        npm ci
+        
+        # Python dependencies (cached by actions/cache)
+        pipenv install --dev --ignore-pipfile
+
+    - name: Verify environment
+      shell: bash
+      run: |
+        echo "=== Environment Verification ==="
+        echo "Node.js: $(node --version)"
+        echo "Python: $(python --version)"
+        echo "Pipenv: $(pipenv --version)"
+        echo "Terraform: $(terraform version -json 2>/dev/null | jq -r '.terraform_version' || echo 'Not installed')"
+        echo "Terraform location: $(which terraform 2>/dev/null || echo 'Not found in PATH')"
+        echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
+        echo "Pulumi location: $(which pulumi 2>/dev/null || echo 'Not found in PATH')"
+        echo "=============================="
+
+    - name: Setup PATH
+      shell: bash
+      run: |
+        # Add binaries to PATH
+        [ -d "node_modules/.bin" ] && echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+        [ -d ".venv/bin" ] && echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+
 
     - name: Upload build artifacts
       if: inputs.upload-artifacts == 'true'

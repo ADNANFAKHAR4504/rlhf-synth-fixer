@@ -52,9 +52,9 @@ elif [ "$LANGUAGE" = "py" ]; then
 elif [ "$PLATFORM" = "cfn" ]; then
     echo "✅ CloudFormation project detected, running CloudFormation validation..."
     if [ "$LANGUAGE" = "json" ]; then
-        pipenv run cfn-validate-json
+        pipenv run cfn-validate-json -D
     elif [ "$LANGUAGE" = "yaml" ]; then
-        pipenv run cfn-validate-yaml
+        pipenv run cfn-validate-yaml -D
     fi
 else
     echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"
