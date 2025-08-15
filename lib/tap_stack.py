@@ -760,25 +760,25 @@ class TapStack(pulumi.ComponentResource):
       task_definition=self.task_definition.arn,
       desired_count=2,
       launch_type="FARGATE",
-      deployment_configuration={
-        "maximum_percent": 200,
-        "minimum_healthy_percent": 100,
-        "deployment_circuit_breaker": {
-          "enable": True,
-          "rollback": True
-        }
-      },
-      network_configuration={
-        "subnets": [subnet.id for subnet in self.private_subnets],
-        "security_groups": [self.ecs_sg.id],
-        "assign_public_ip": False
-      },
+      deployment_configuration=aws.ecs.ServiceDeploymentConfigurationArgs(
+        maximum_percent=200,
+        minimum_healthy_percent=100,
+        deployment_circuit_breaker=aws.ecs.ServiceDeploymentCircuitBreakerArgs(
+          enable=True,
+          rollback=True
+        )
+      ),
+      network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
+        subnets=[subnet.id for subnet in self.private_subnets],
+        security_groups=[self.ecs_sg.id],
+        assign_public_ip=False
+      ),
       load_balancers=[
-        {
-          "target_group_arn": self.target_group.arn,
-          "container_name": f"microservices-app-{self.environment_suffix}",
-          "container_port": 8000
-        }
+        aws.ecs.ServiceLoadBalancerArgs(
+          target_group_arn=self.target_group.arn,
+          container_name=f"microservices-app-{self.environment_suffix}",
+          container_port=8000
+        )
       ],
       health_check_grace_period_seconds=60,
       tags=self.common_tags,
