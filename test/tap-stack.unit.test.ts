@@ -171,31 +171,30 @@ describe('TapStack', () => {
     it('should create EC2 security group with SSH and HTTP from ALB', () => {
       const synthesized = Testing.synth(stack);
       const resources = JSON.parse(synthesized).resource;
-
+    
       const securityGroups = resources.aws_security_group || {};
       const ec2Sg = Object.entries(securityGroups).find(([key, _]) =>
         key.includes('ec2-sg')
       );
-
+    
       expect(ec2Sg).toBeDefined();
       const [_, sgConfig] = ec2Sg!;
       const sg = sgConfig as any;
-
+    
       expect(sg.description).toBe('Security group for EC2 instances');
       expect(sg.ingress).toHaveLength(2);
-
+    
       const sshRule = sg.ingress.find((rule: any) => rule.from_port === 22);
       const httpRule = sg.ingress.find((rule: any) => rule.from_port === 80);
-
+    
       expect(sshRule).toBeDefined();
       expect(sshRule.protocol).toBe('tcp');
-      expect(sshRule.cidr_blocks).toEqual(['0.0.0.0/0']);
-
+      expect(sshRule.cidr_blocks).toEqual(['10.0.0.0/16']); // Changed from 0.0.0.0/0 to 10.0.0.0/16
+    
       expect(httpRule).toBeDefined();
       expect(httpRule.protocol).toBe('tcp');
       expect(httpRule.security_groups).toBeDefined();
     });
-
     it('should create RDS security group with MySQL access from EC2', () => {
       const synthesized = Testing.synth(stack);
       const resources = JSON.parse(synthesized).resource;
