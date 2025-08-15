@@ -245,7 +245,6 @@ Resources:
   EC2S3AccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2S3AccessRole-${EnvironmentSuffix}-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
