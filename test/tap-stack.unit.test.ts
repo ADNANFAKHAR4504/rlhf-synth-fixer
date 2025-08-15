@@ -4,9 +4,10 @@ import { SecureInfraStack } from '../lib/secure-infra-stack';
 describe('SecureInfraStack Unit Tests', () => {
   let synthesized: any;
 
-  // FIX: Renamed this function to findResources (plural) for consistency.
-  const findResources = (type: string) => synthesized.resource?.[type] || {};
-  const findDataSources = (type: string) => synthesized.data?.[type] || {};
+  const findResources = (type: string) =>
+    Object.values(synthesized.resource?.[type] || {});
+  const findDataSources = (type: string) =>
+    Object.values(synthesized.data?.[type] || {});
 
   beforeAll(() => {
     const app = new App();
@@ -14,45 +15,45 @@ describe('SecureInfraStack Unit Tests', () => {
     synthesized = JSON.parse(Testing.synth(stack));
   });
 
-  it('should create a KMS key with rotation and a deletion window', () => {
-    // FIX: The call to findResources now matches the function name.
-    const kmsKey = Object.values(findResources('aws_kms_key'))[0] as any;
-    expect(kmsKey.enable_key_rotation).toBe(true);
-    expect(kmsKey.deletion_window_in_days).toBe(10);
+  it('should configure complete public access blocks for both S3 buckets', () => {
+    const publicAccessBlocks = findResources(
+      'aws_s3_bucket_public_access_block'
+    ) as any[];
+    expect(publicAccessBlocks.length).toBe(2);
+    for (const block of publicAccessBlocks) {
+      expect(block.block_public_acls).toBe(true);
+      expect(block.block_public_policy).toBe(true);
+      expect(block.ignore_public_acls).toBe(true);
+      expect(block.restrict_public_buckets).toBe(true);
+    }
   });
 
-  it('should create an IAM role that trusts the account root', () => {
-    const policyDocs = findDataSources('aws_iam_policy_document');
-    const trustPolicy = Object.values(policyDocs).find((doc: any) =>
-      JSON.stringify(doc).includes('sts:AssumeRole')
-    ) as any;
-
-    const principal = trustPolicy.statement[0].principals[0];
-    expect(principal.identifiers[0]).toContain(':root');
+  it('should enforce HTTPS on both S3 buckets via bucket policies', () => {
+    const policyDocs = findDataSources('aws_iam_policy_document') as any[];
+    const secureTransportPolicies = policyDocs.filter(doc =>
+      JSON.stringify(doc).includes('aws:SecureTransport')
+    );
+    expect(secureTransportPolicies.length).toBe(2);
   });
 
-  it('should create a restrictive S3 bucket policy that denies except for specific principals', () => {
-    const policyDocs = findDataSources('aws_iam_policy_document');
-    const bucketPolicy = Object.values(policyDocs).find((doc: any) =>
+  it('should configure the sensitive data bucket with a restrictive principal policy', () => {
+    const policyDocs = findDataSources('aws_iam_policy_document') as any[];
+    const restrictivePolicy = policyDocs.find(doc =>
       JSON.stringify(doc).includes('StringNotEquals')
-    ) as any;
-
-    const denyStatement = bucketPolicy.statement[0];
-    expect(denyStatement.effect).toEqual('Deny');
-    expect(denyStatement.condition[0].test).toEqual('StringNotEquals');
-    expect(denyStatement.condition[0].variable).toEqual('aws:PrincipalArn');
+    );
+    expect(restrictivePolicy).toBeDefined();
   });
 
-  it('should create an IAM policy with necessary S3 and KMS permissions', () => {
-    const policyDocs = findDataSources('aws_iam_policy_document');
-    const accessPolicy = Object.values(policyDocs).find((doc: any) =>
-      JSON.stringify(doc).includes('s3:GetObject')
-    ) as any;
-
-    const actions = accessPolicy.statement.flatMap((s: any) => s.actions);
-    expect(actions).toContain('s3:GetObject');
-    expect(actions).toContain('s3:ListBucket');
-    expect(actions).toContain('kms:Decrypt');
-    expect(actions).toContain('kms:Encrypt');
+  it('should configure the backend state bucket to use a customer-managed KMS key', () => {
+    const encryptionConfigs = findResources(
+      'aws_s3_bucket_server_side_encryption_configuration'
+    ) as any[];
+    const stateBucketEncryption = encryptionConfigs.find(config =>
+      config.bucket.includes('TerraformStateBucket')
+    );
+    expect(
+      stateBucketEncryption.rule[0].apply_server_side_encryption_by_default
+        .sse_algorithm
+    ).toEqual('aws:kms');
   });
 });

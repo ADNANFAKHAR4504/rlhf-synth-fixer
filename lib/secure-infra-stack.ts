@@ -30,14 +30,76 @@ export class SecureInfraStack extends TerraformStack {
     const callerIdentity = new DataAwsCallerIdentity(this, 'Deployer');
 
     // --- BACKEND RESOURCES ---
+
+    // FIX: Create a dedicated KMS key for the backend state bucket.
+    const backendKmsKey = new KmsKey(this, 'BackendKmsKey', {
+      description: 'KMS key for Terraform state bucket',
+      enableKeyRotation: true,
+      tags: commonTags,
+    });
+
     const stateBucket = new S3Bucket(this, 'TerraformStateBucket', {
       bucket: `secure-infra-tfstate-bucket-${uniqueSuffix}`,
       tags: commonTags,
     });
 
+    // FIX: Add complete public access block settings.
+    new S3BucketPublicAccessBlock(this, 'StateBucketPublicAccessBlock', {
+      bucket: stateBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    // FIX: Configure the state bucket to use the customer-managed KMS key.
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'StateBucketEncryption',
+      {
+        bucket: stateBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: backendKmsKey.id,
+            },
+          },
+        ],
+      }
+    );
+
     new S3BucketVersioningA(this, 'StateBucketVersioning', {
       bucket: stateBucket.id,
       versioningConfiguration: { status: 'Enabled' },
+    });
+
+    // FIX: Add a bucket policy to enforce HTTPS (secure transport).
+    const stateBucketPolicyDoc = new DataAwsIamPolicyDocument(
+      this,
+      'StateBucketPolicyDoc',
+      {
+        statement: [
+          {
+            effect: 'Deny',
+            principals: [{ type: '*', identifiers: ['*'] }],
+            actions: ['s3:*'],
+            resources: [stateBucket.arn, `${stateBucket.arn}/*`],
+            condition: [
+              {
+                test: 'Bool',
+                variable: 'aws:SecureTransport',
+                values: ['false'],
+              },
+            ],
+          },
+        ],
+      }
+    );
+
+    new S3BucketPolicy(this, 'StateBucketPolicy', {
+      bucket: stateBucket.id,
+      policy: stateBucketPolicyDoc.json,
     });
 
     const lockTable = new DynamodbTable(this, 'TerraformLockTable', {
@@ -101,10 +163,13 @@ export class SecureInfraStack extends TerraformStack {
       }
     );
 
+    // FIX: Add complete public access block settings.
     new S3BucketPublicAccessBlock(this, 'SensitiveDataPublicAccessBlock', {
       bucket: sensitiveDataBucket.id,
       blockPublicAcls: true,
       blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
     });
 
     const bucketPolicyDocument = new DataAwsIamPolicyDocument(
@@ -113,6 +178,7 @@ export class SecureInfraStack extends TerraformStack {
       {
         statement: [
           {
+            // This is the original Deny statement
             effect: 'Deny',
             principals: [{ type: '*', identifiers: ['*'] }],
             actions: ['s3:*'],
@@ -125,6 +191,23 @@ export class SecureInfraStack extends TerraformStack {
                 test: 'StringNotEquals',
                 variable: 'aws:PrincipalArn',
                 values: [limitedAccessRole.arn, callerIdentity.arn],
+              },
+            ],
+          },
+          // FIX: Add a second statement to enforce HTTPS (secure transport).
+          {
+            effect: 'Deny',
+            principals: [{ type: '*', identifiers: ['*'] }],
+            actions: ['s3:*'],
+            resources: [
+              sensitiveDataBucket.arn,
+              `${sensitiveDataBucket.arn}/*`,
+            ],
+            condition: [
+              {
+                test: 'Bool',
+                variable: 'aws:SecureTransport',
+                values: ['false'],
               },
             ],
           },
@@ -154,8 +237,7 @@ export class SecureInfraStack extends TerraformStack {
           },
           {
             effect: 'Allow',
-            // Adding GenerateDataKey to be extra thorough based on feedback
-            actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
+            actions: ['kms:Decrypt', 'kms:Encrypt'],
             resources: [kmsKey.arn],
           },
         ],
