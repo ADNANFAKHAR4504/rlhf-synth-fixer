@@ -97,7 +97,14 @@ variable "environment_suffix" {
 # =============================================================================
 
 locals {
-  name_prefix = "${var.project}-${var.environment}-${var.environment_suffix}"
+  # Avoid duplicate -dev-dev when suffix equals environment (or empty)
+  computed_suffix = var.environment_suffix != "" && var.environment_suffix != var.environment ? "-${var.environment_suffix}" : ""
+  name_prefix     = "${var.project}-${var.environment}${local.computed_suffix}"
+
+  # Enforce 32-char limits where AWS requires short names
+  alb_name = substr("${local.name_prefix}-alb", 0, 32)
+  tg_name  = substr("${local.name_prefix}-tg", 0, 32)
+
   common_tags = {
     project     = var.project
     environment = var.environment
@@ -513,6 +520,7 @@ resource "aws_cloudwatch_log_group" "rds" {
 # =============================================================================
 # User data (inline, single file)
 # =============================================================================
+
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-"
   image_id      = data.aws_ssm_parameter.amazon_linux_ami.value
@@ -635,7 +643,7 @@ resource "aws_autoscaling_group" "app" {
 # =============================================================================
 
 resource "aws_lb" "app" {
-  name               = "${local.name_prefix}-alb"
+  name               = local.alb_name
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -649,7 +657,7 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-tg"
+  name     = local.tg_name
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -699,7 +707,6 @@ resource "aws_db_subnet_group" "app" {
   })
 }
 
-
 resource "aws_db_instance" "app" {
   identifier = "${local.name_prefix}-rds"
 
@@ -733,7 +740,6 @@ resource "aws_db_instance" "app" {
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds" })
 }
-
 
 # =============================================================================
 # Outputs
