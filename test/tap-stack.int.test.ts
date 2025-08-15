@@ -67,6 +67,7 @@ const getOutputs = () => {
 const outputs = getOutputs();
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const env = outputs.Environment || environmentSuffix;
 const region = process.env.AWS_REGION || 'us-east-1';
 
 const ec2Client = new EC2Client({ region });
@@ -101,7 +102,7 @@ describe('TapStack Integration Tests', () => {
 
       const nameTag = vpc.Tags?.find(tag => tag.Key === 'Name');
       expect(nameTag?.Value).toContain('SecureEnv-VPC');
-      expect(nameTag?.Value).toContain(environmentSuffix);
+      expect(nameTag?.Value).toContain(env);
     });
 
     test('Public subnets should exist and be configured correctly', async () => {
@@ -129,7 +130,7 @@ describe('TapStack Integration Tests', () => {
 
         const nameTag = subnet.Tags?.find(tag => tag.Key === 'Name');
         expect(nameTag?.Value).toContain('SecureEnv-Public-Subnet');
-        expect(nameTag?.Value).toContain(environmentSuffix);
+        expect(nameTag?.Value).toContain(env);
       });
     });
 
@@ -158,7 +159,7 @@ describe('TapStack Integration Tests', () => {
 
         const nameTag = subnet.Tags?.find(tag => tag.Key === 'Name');
         expect(nameTag?.Value).toContain('SecureEnv-Private-Subnet');
-        expect(nameTag?.Value).toContain(environmentSuffix);
+        expect(nameTag?.Value).toContain(env);
       });
     });
 
@@ -183,7 +184,7 @@ describe('TapStack Integration Tests', () => {
 
       const nameTag = igw.Tags?.find(tag => tag.Key === 'Name');
       expect(nameTag?.Value).toContain('SecureEnv-IGW');
-      expect(nameTag?.Value).toContain(environmentSuffix);
+      expect(nameTag?.Value).toContain(env);
     });
 
     test('NAT Gateways should exist and be active', async () => {
@@ -207,7 +208,7 @@ describe('TapStack Integration Tests', () => {
 
         const nameTag = natGateway.Tags?.find(tag => tag.Key === 'Name');
         expect(nameTag?.Value).toContain('SecureEnv-NAT');
-        expect(nameTag?.Value).toContain(environmentSuffix);
+        expect(nameTag?.Value).toContain(env);
       });
     });
 
@@ -259,7 +260,7 @@ describe('TapStack Integration Tests', () => {
           { Name: 'vpc-id', Values: [vpcId] },
           {
             Name: 'group-name',
-            Values: [`SecureEnv-Bastion-SG-${environmentSuffix}`],
+            Values: [`SecureEnv-Bastion-SG-${env}`],
           },
         ],
       });
@@ -291,7 +292,7 @@ describe('TapStack Integration Tests', () => {
           { Name: 'vpc-id', Values: [vpcId] },
           {
             Name: 'group-name',
-            Values: [`SecureEnv-Web-SG-${environmentSuffix}`],
+            Values: [`SecureEnv-Web-SG-${env}`],
           },
         ],
       });
@@ -327,7 +328,7 @@ describe('TapStack Integration Tests', () => {
           { Name: 'vpc-id', Values: [vpcId] },
           {
             Name: 'group-name',
-            Values: [`SecureEnv-DB-SG-${environmentSuffix}`],
+            Values: [`SecureEnv-DB-SG-${env}`],
           },
         ],
       });
@@ -597,7 +598,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const command = new DescribeDBSubnetGroupsCommand({
-        DBSubnetGroupName: `SecureEnv-DB-SubnetGroup-${environmentSuffix}`,
+        DBSubnetGroupName: `SecureEnv-DB-SubnetGroup-${env}`,
       });
       const response = await rdsClient.send(command);
 
@@ -618,7 +619,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const command = new DescribeLaunchTemplatesCommand({
-        LaunchTemplateNames: [`SecureEnv-LaunchTemplate-${environmentSuffix}`],
+        LaunchTemplateNames: [`SecureEnv-LaunchTemplate-${env}`],
       });
       const response = await ec2Client.send(command);
 
@@ -626,7 +627,7 @@ describe('TapStack Integration Tests', () => {
       const launchTemplate = response.LaunchTemplates![0];
 
       expect(launchTemplate.LaunchTemplateName).toBe(
-        `SecureEnv-LaunchTemplate-${environmentSuffix}`
+        `SecureEnv-LaunchTemplate-${env}`
       );
     });
 
@@ -653,7 +654,7 @@ describe('TapStack Integration Tests', () => {
 
       const nameTag = instance.Tags?.find(tag => tag.Key === 'Name');
       expect(nameTag?.Value).toContain('SecureEnv-Web-Instance');
-      expect(nameTag?.Value).toContain(environmentSuffix);
+      expect(nameTag?.Value).toContain(env);
     });
 
     test('Bastion instance should exist and be running', async () => {
@@ -679,13 +680,13 @@ describe('TapStack Integration Tests', () => {
 
       const nameTag = instance.Tags?.find(tag => tag.Key === 'Name');
       expect(nameTag?.Value).toContain('SecureEnv-Bastion-Host');
-      expect(nameTag?.Value).toContain(environmentSuffix);
+      expect(nameTag?.Value).toContain(env);
     });
   });
 
   describe('IAM Resources', () => {
     test('EC2 role should exist', async () => {
-      const roleName = `SecureEnv-EC2-Role-${environmentSuffix}`;
+      const roleName = `SecureEnv-EC2-Role-${env}`;
 
       // Skip actual API call if using mock data
       if (outputs.WebInstanceId === 'i-mock123') {
@@ -701,7 +702,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('EC2 instance profile should exist', async () => {
-      const profileName = `SecureEnv-EC2-Profile-${environmentSuffix}`;
+      const profileName = `SecureEnv-EC2-Profile-${env}`;
 
       // Skip actual API call if using mock data
       if (outputs.WebInstanceId === 'i-mock123') {
@@ -718,7 +719,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Config role should exist', async () => {
-      const roleName = `SecureEnv-Config-Role-${environmentSuffix}`;
+      const roleName = `SecureEnv-Config-Role-${env}`;
 
       // Skip actual API call if using mock data
       if (outputs.WebInstanceId === 'i-mock123') {
@@ -733,7 +734,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Flow Log role should exist', async () => {
-      const roleName = `SecureEnv-FlowLog-Role-${environmentSuffix}`;
+      const roleName = `SecureEnv-FlowLog-Role-${env}`;
 
       // Skip actual API call if using mock data
       if (outputs.WebInstanceId === 'i-mock123') {
@@ -785,15 +786,13 @@ describe('TapStack Integration Tests', () => {
       }
 
       const command = new GetWebACLCommand({
-        Name: `SecureEnv-WebACL-${environmentSuffix}`,
+        Name: `SecureEnv-WebACL-${env}`,
         Scope: 'REGIONAL',
       });
       const response = await wafClient.send(command);
 
       expect(response.WebACL!.Id).toBe(webAclId);
-      expect(response.WebACL!.Name).toBe(
-        `SecureEnv-WebACL-${environmentSuffix}`
-      );
+      expect(response.WebACL!.Name).toBe(`SecureEnv-WebACL-${env}`);
 
       const rules = response.WebACL!.Rules!;
       expect(rules.length).toBeGreaterThan(0);
@@ -819,7 +818,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/vpc/flowlogs/${environmentSuffix}`,
+        logGroupNamePrefix: `/aws/vpc/flowlogs/${env}`,
       });
       const response = await logsClient.send(command);
 
@@ -827,8 +826,7 @@ describe('TapStack Integration Tests', () => {
       expect(response.logGroups!.length).toBeGreaterThan(0);
 
       const flowLogGroup = response.logGroups!.find(
-        (group: any) =>
-          group.LogGroupName === `/aws/vpc/flowlogs/${environmentSuffix}`
+        (group: any) => group.LogGroupName === `/aws/vpc/flowlogs/${env}`
       );
       expect(flowLogGroup).toBeDefined();
     });
