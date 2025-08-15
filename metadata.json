@@ -1,9 +1,9 @@
 {
-  "platform": "cfn",
-  "language": "yaml",
+  "platform": "tf",
+  "language": "hcl",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "291844",
   "team": "1",
-  "startedAt": "2025-08-11T15:31:19.727Z"
+  "startedAt": "2025-08-15T16:04:43.137Z"
 }
