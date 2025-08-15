@@ -22,7 +22,7 @@ variable "environment" {
 variable "trusted_account_ids" {
   description = "List of AWS account IDs that can assume roles"
   type        = list(string)
-  default     = ["111111111111", "222222222222"]
+  default     = []  # Will use current account if empty
 }
 
 variable "log_bucket_name" {
@@ -80,11 +80,14 @@ variable "tags" {
 locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
-
+  
+  # Use current account if trusted_account_ids is empty
+  trusted_accounts = length(var.trusted_account_ids) > 0 ? var.trusted_account_ids : [local.account_id]
+  
   # Create unique bucket names by appending random suffix to defaults
   log_bucket_name = "${var.log_bucket_name}-${random_id.bucket_suffix.hex}"
   app_bucket_name = "${var.app_s3_bucket_name}-${random_id.bucket_suffix.hex}"
-
+  
   common_tags = merge(var.tags, {
     Environment = var.environment
     ManagedBy   = "Terraform"
@@ -116,7 +119,7 @@ data "aws_iam_policy_document" "cross_account_trust" {
     effect = "Allow"
     principals {
       type        = "AWS"
-      identifiers = [for account_id in var.trusted_account_ids : "arn:${data.aws_partition.current.partition}:iam::${account_id}:root"]
+      identifiers = [for account_id in local.trusted_accounts : "arn:${data.aws_partition.current.partition}:iam::${account_id}:root"]
     }
     actions = ["sts:AssumeRole"]
     condition {
@@ -220,12 +223,16 @@ data "aws_iam_policy_document" "readonly_policy" {
     sid    = "DenyDestructiveActions"
     effect = "Deny"
     actions = [
-      "*:Delete*",
-      "*:Terminate*",
-      "*:Remove*",
-      "*:Detach*",
-      "*:Stop*",
-      "*:Destroy*"
+      "ec2:TerminateInstances",
+      "ec2:StopInstances",
+      "rds:DeleteDBInstance",
+      "rds:DeleteDBCluster",
+      "s3:DeleteBucket",
+      "s3:DeleteObject",
+      "iam:DeleteRole",
+      "iam:DeleteUser",
+      "iam:DeletePolicy",
+      "lambda:DeleteFunction"
     ]
     resources = ["*"]
   }
@@ -600,12 +607,12 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch_policy" {
     Statement = [
       {
         Effect = "Allow"
-        Actions = [
+        Action = [
           "logs:PutLogEvents",
           "logs:CreateLogGroup",
           "logs:CreateLogStream"
         ]
-        Resources = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
+        Resource = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
       }
     ]
   })
@@ -845,7 +852,7 @@ output "security_configuration_summary" {
   value = {
     environment         = var.environment
     account_id          = local.account_id
-    trusted_accounts    = var.trusted_account_ids
+    trusted_accounts    = local.trusted_accounts
     roles_created       = 3
     policies_created    = 6
     cloudtrail_enabled  = true

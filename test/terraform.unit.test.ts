@@ -175,8 +175,9 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
 
     test('readonly policy includes explicit deny for destructive actions', () => {
       expect(mainContent).toMatch(/DenyDestructiveActions/);
-      expect(mainContent).toMatch(/\*:Delete\*/);
-      expect(mainContent).toMatch(/\*:Terminate\*/);
+      expect(mainContent).toMatch(/ec2:TerminateInstances/);
+      expect(mainContent).toMatch(/s3:DeleteBucket/);
+      expect(mainContent).toMatch(/iam:DeleteRole/);
     });
 
     test('audit policy allows CloudTrail and compliance access', () => {
