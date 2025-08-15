@@ -2,7 +2,7 @@ You are an expert Terraform engineer. Generate a brand‑new, multi‑region ser
 
 provider.tf
 
-lib/main.tf
+lib/tap_stack.tf
 
 No other files or modules.
 
@@ -18,7 +18,7 @@ aws.use1 → us-east-1
 
 aws.usw2 → us-west-2
 
-Important: Do not declare any variables in provider.tf. The variable aws_region is declared in lib/main.tf and used here.
+Important: Do not declare any variables in provider.tf. The variable aws_region is declared in lib/tap_stack.tf and used here.
 
 Use the following shape (adjust to valid Terraform syntax), sourcing region values from variables and/or hardcoded aliases:
 
@@ -32,9 +32,9 @@ provider "aws" { alias = "usw2" region = "us-west-2" }
 
 Pin the AWS provider version to a recent, stable major (e.g., >= 5.0).
 
-B) Main stack (lib/main.tf) — single file only
+B) Main stack (lib/tap_stack.tf) — single file only
 
-You must place everything below into lib/main.tf:
+You must place everything below into lib/tap_stack.tf:
 
 All variable declarations (including aws_region used by provider.tf)
 
@@ -46,11 +46,11 @@ resources
 
 outputs
 
-Do not put any provider blocks in lib/main.tf. This file must be self‑contained and apply cleanly for a new stack (brand‑new AWS account sections are fine).
+Do not put any provider blocks in lib/tap_stack.tf. This file must be self‑contained and apply cleanly for a new stack (brand‑new AWS account sections are fine).
 
 Non‑negotiables
 
-Exactly one Terraform logic file: lib/main.tf
+Exactly one Terraform logic file: lib/tap_stack.tf
 
 No external modules. Build resources directly (this is a new stack).
 
@@ -74,7 +74,7 @@ Enforcing authenticated invocation.
 
 Ensure zero‑downtime Lambda updates via versioning + alias.
 
-C) Functional requirements to implement in lib/main.tf
+C) Functional requirements to implement in lib/tap_stack.tf
 
 Variables
 
@@ -92,7 +92,7 @@ kms_key_deletion_days (default: 7)
 
 Any additional variables needed for auth configuration
 
-All defaults go in lib/main.tf (no separate *.tfvars).
+All defaults go in lib/tap_stack.tf (no separate *.tfvars).
 
 Locals
 
@@ -225,7 +225,7 @@ provider "aws" { alias = "use1" region = "us-east-1" }
 
 provider "aws" { alias = "usw2" region = "us-west-2" }
 
-lib/main.tf
+lib/tap_stack.tf
 
 variable blocks (including aws_region)
 
@@ -273,7 +273,7 @@ Return two code blocks only, in order:
 
 provider.tf
 
-lib/main.tf
+lib/tap_stack.tf
 
 They must be complete, syntactically valid Terraform HCL, ready for terraform init && terraform apply in a new environment, and pass automated tests expecting:
 
@@ -287,4 +287,4 @@ Lambda env vars encrypted via KMS
 
 Deterministic tagging and naming
 
-No external modules, and no extra files beyond provider.tf and lib/main.tf
+No external modules, and no extra files beyond provider.tf and lib/tap_stack.tf
