@@ -93,8 +93,9 @@ export class TapStack extends TerraformStack {
     // Get environment suffix from props, defaulting to 'dev'
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // Project prefix for consistent naming as per requirements
-    const projectPrefix = `projectXYZ-${environmentSuffix}`;
+    // Project prefix for consistent naming with random suffix to avoid conflicts
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const projectPrefix = `projectXYZ-${environmentSuffix}-${randomSuffix}`;
 
     // VPC Configuration - use data source to get default VPC instead of hardcoded value
     const defaultVpc = new DataAwsVpc(this, 'default-vpc', {
