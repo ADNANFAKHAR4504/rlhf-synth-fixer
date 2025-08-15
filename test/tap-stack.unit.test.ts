@@ -177,6 +177,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(sshParam.Default).toBe("'10.0.0.0/8'");
       expect(sshParam.AllowedPattern).toBeDefined();
     });
+
+    test('should have KeyPairName parameter with validation', () => {
+      expect(template.Parameters.KeyPairName).toBeDefined();
+      const keyPairParam = template.Parameters.KeyPairName;
+      expect(keyPairParam.Type).toBe('String');
+      expect(keyPairParam.Default).toBe("''");
+      expect(keyPairParam.AllowedPattern).toBeDefined();
+    });
   });
 
   describe('Mappings', () => {

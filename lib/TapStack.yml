@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'High-Availability Web Application Stack with ALB, Auto Scaling, and Multi-AZ deployment'
+# Note: This template uses CAPABILITY_IAM (not CAPABILITY_NAMED_IAM) - IAM resources use auto-generated names
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -63,11 +64,6 @@ Metadata:
       S3BucketName:
         default: "S3 Bucket Name"
 
-# Required capabilities for IAM resources
-Capabilities:
-  - CAPABILITY_IAM
-  - CAPABILITY_NAMED_IAM
-
 Parameters:
   # Environment and naming parameters
   Environment:
@@ -122,8 +118,11 @@ Parameters:
     Description: 'EC2 instance type for web servers'
   
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'EC2 Key Pair for SSH access'
+    Type: String
+    Default: ''
+    Description: 'EC2 Key Pair for SSH access (leave empty to create a new key pair automatically)'
+    AllowedPattern: '^$|^[a-zA-Z0-9\-_]+$'
+    ConstraintDescription: 'Key pair name must be alphanumeric with hyphens and underscores only, or empty to create automatically'
   
   # Auto Scaling parameters
   MinSize:
@@ -152,6 +151,10 @@ Parameters:
     Type: String
     Default: 'tap-webapp-code-bucket'
     Description: 'S3 bucket name for application code (must be globally unique)'
+
+Conditions:
+  CreateKeyPair: !Equals [!Ref KeyPairName, '']
+  UseExistingKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Mappings:
   # AMI mapping for different regions (Amazon Linux 2)
@@ -199,6 +202,20 @@ Resources:
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
+
+  # ==================== Key Pair ====================
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Condition: CreateKeyPair
+    Properties:
+      KeyName: !Sub '${ProjectName}-${Environment}-KeyPair'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-KeyPair'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
   # Public Subnets
   PublicSubnet1:
@@ -464,7 +481,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -495,7 +511,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-${Environment}-EC2-Profile'
       Roles:
         - !Ref EC2Role
 
@@ -560,7 +575,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If [UseExistingKeyPair, !Ref KeyPairName, !Ref KeyPair]
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         IamInstanceProfile:
@@ -811,3 +826,9 @@ Outputs:
     Value: !Sub '${PrivateSubnet1}, ${PrivateSubnet2}'
     Export:
       Name: !Sub '${AWS::StackName}-Private-Subnets'
+
+  KeyPairName:
+    Description: 'EC2 Key Pair Name (if created automatically)'
+    Value: !If [CreateKeyPair, !Ref KeyPair, !Ref 'AWS::NoValue']
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyPair-Name'
