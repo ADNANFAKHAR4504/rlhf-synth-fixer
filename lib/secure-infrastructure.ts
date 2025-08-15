@@ -186,7 +186,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     );
 
     /**
-     * NAT Gateway for Private Subnet Internet Access
+     * NAT Gateway for Private Subnet Internet Access (Optional)
      * Provides secure outbound internet access for private subnets
      */
     const natEip = new aws.ec2.Eip(
@@ -196,6 +196,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         tags: {
           ...commonTags,
           Name: 'nat-eip',
+          Purpose: 'NAT Gateway for private subnet outbound access',
         },
       },
       { provider, parent: this }
@@ -209,9 +210,10 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         tags: {
           ...commonTags,
           Name: 'nat-gateway',
+          Purpose: 'Secure outbound internet access for private subnets',
         },
       },
-      { provider, parent: this }
+      { provider, parent: this, dependsOn: [natEip] }
     );
 
     /**
@@ -481,7 +483,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     );
 
     // Enable versioning on the S3 bucket
-    void new aws.s3.BucketVersioningV2(
+    void new aws.s3.BucketVersioning(
       'cloudtrail-bucket-versioning',
       {
         bucket: cloudtrailBucket.id,
@@ -493,7 +495,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     );
 
     // Configure server-side encryption
-    void new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    void new aws.s3.BucketServerSideEncryptionConfiguration(
       'cloudtrail-bucket-encryption',
       {
         bucket: cloudtrailBucket.id,
@@ -524,7 +526,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     );
 
     // S3 bucket lifecycle configuration for cost optimization
-    void new aws.s3.BucketLifecycleConfigurationV2(
+    void new aws.s3.BucketLifecycleConfiguration(
       'cloudtrail-bucket-lifecycle',
       {
         bucket: cloudtrailBucket.id,
@@ -685,74 +687,70 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         description:
           'Policy allowing only necessary EC2 actions for application deployment',
 
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'ec2:DescribeInstances',
-                'ec2:DescribeInstanceStatus',
-                'ec2:DescribeInstanceAttribute',
-                'ec2:DescribeTags',
-              ],
-              Resource: '*',
-              Condition: {
-                StringEquals: {
-                  'ec2:Region': 'ap-south-1',
+        policy: pulumi
+          .all([aws.getCallerIdentity({}, { provider })])
+          .apply(([identity]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'ec2:DescribeInstances',
+                    'ec2:DescribeInstanceStatus',
+                    'ec2:DescribeInstanceAttribute',
+                    'ec2:DescribeTags',
+                  ],
+                  Resource: '*',
+                  Condition: {
+                    StringEquals: {
+                      'ec2:Region': 'ap-south-1',
+                    },
+                  },
                 },
-              },
-            },
-            {
-              Effect: 'Allow',
-              Action: ['ec2:CreateTags'],
-              Resource: [
-                'arn:aws:ec2:ap-south-1:*:instance/*',
-                'arn:aws:ec2:ap-south-1:*:volume/*',
-              ],
-              Condition: {
-                StringEquals: {
-                  'ec2:CreateAction': ['RunInstances', 'CreateVolume'],
+                {
+                  Effect: 'Allow',
+                  Action: ['ec2:CreateTags'],
+                  Resource: [
+                    'arn:aws:ec2:ap-south-1:*:instance/*',
+                    'arn:aws:ec2:ap-south-1:*:volume/*',
+                  ],
+                  Condition: {
+                    StringEquals: {
+                      'ec2:CreateAction': ['RunInstances', 'CreateVolume'],
+                    },
+                  },
                 },
-              },
-            },
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogStreams',
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                    'logs:DescribeLogStreams',
+                  ],
+                  Resource: `arn:aws:logs:ap-south-1:${identity.accountId}:log-group:/aws/ec2/*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'dynamodb:GetItem',
+                    'dynamodb:PutItem',
+                    'dynamodb:UpdateItem',
+                    'dynamodb:DeleteItem',
+                    'dynamodb:Query',
+                    'dynamodb:Scan',
+                  ],
+                  Resource: `arn:aws:dynamodb:ap-south-1:${identity.accountId}:table/application-data-table`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['dynamodb:Query', 'dynamodb:Scan'],
+                  Resource: `arn:aws:dynamodb:ap-south-1:${identity.accountId}:table/application-data-table/index/*`,
+                },
               ],
-              Resource: pulumi.interpolate`arn:aws:logs:ap-south-1:${aws
-                .getCallerIdentity({}, { provider })
-                .then(id => id.accountId)}:log-group:/aws/ec2/*`,
-            },
-            {
-              Effect: 'Allow',
-              Action: [
-                'dynamodb:GetItem',
-                'dynamodb:PutItem',
-                'dynamodb:UpdateItem',
-                'dynamodb:DeleteItem',
-                'dynamodb:Query',
-                'dynamodb:Scan',
-              ],
-              Resource: pulumi.interpolate`arn:aws:dynamodb:ap-south-1:${aws
-                .getCallerIdentity({}, { provider })
-                .then(id => id.accountId)}:table/application-data-table`,
-            },
-            {
-              Effect: 'Allow',
-              Action: ['dynamodb:Query', 'dynamodb:Scan'],
-              Resource: pulumi.interpolate`arn:aws:dynamodb:ap-south-1:${aws
-                .getCallerIdentity({}, { provider })
-                .then(
-                  id => id.accountId
-                )}:table/application-data-table/index/*`,
-            },
-          ],
-        }),
+            })
+          ),
 
         tags: {
           ...commonTags,
@@ -962,27 +960,43 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       {
         enable: true,
         findingPublishingFrequency: 'FIFTEEN_MINUTES',
-        datasources: {
-          s3Logs: {
-            enable: true,
-          },
-          kubernetes: {
-            auditLogs: {
-              enable: true,
-            },
-          },
-          malwareProtection: {
-            scanEc2InstanceWithFindings: {
-              ebsVolumes: {
-                enable: true,
-              },
-            },
-          },
-        },
         tags: {
           ...commonTags,
           Name: 'main-guardduty-detector',
         },
+      },
+      { provider, parent: this }
+    );
+
+    // Enable S3 Data Events monitoring
+    void new aws.guardduty.DetectorFeature(
+      'guardduty-s3-data-events',
+      {
+        detectorId: guardDutyDetector.id,
+        name: 'S3_DATA_EVENTS',
+        status: 'ENABLED',
+      },
+      { provider, parent: this }
+    );
+
+    // Enable EKS Audit Logs monitoring
+    void new aws.guardduty.DetectorFeature(
+      'guardduty-eks-audit-logs',
+      {
+        detectorId: guardDutyDetector.id,
+        name: 'EKS_AUDIT_LOGS',
+        status: 'ENABLED',
+      },
+      { provider, parent: this }
+    );
+
+    // Enable Malware Protection
+    void new aws.guardduty.DetectorFeature(
+      'guardduty-malware-protection',
+      {
+        detectorId: guardDutyDetector.id,
+        name: 'EBS_MALWARE_PROTECTION',
+        status: 'ENABLED',
       },
       { provider, parent: this }
     );
@@ -1145,23 +1159,23 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: 'encrypted-volumes-rule',
         },
       },
-      { provider, parent: this }
+      { provider, parent: this, dependsOn: [configDeliveryChannel] }
     );
 
     void new aws.cfg.Rule(
-      's3-bucket-public-access-prohibited',
+      's3-bucket-public-read-prohibited',
       {
-        name: 's3-bucket-public-access-prohibited',
+        name: 's3-bucket-public-read-prohibited',
         source: {
           owner: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED',
+          sourceIdentifier: 'S3_BUCKET_PUBLIC_READ_PROHIBITED',
         },
         tags: {
           ...commonTags,
-          Name: 's3-bucket-public-access-prohibited',
+          Name: 's3-bucket-public-read-prohibited',
         },
       },
-      { provider, parent: this }
+      { provider, parent: this, dependsOn: [configDeliveryChannel] }
     );
 
     /**
