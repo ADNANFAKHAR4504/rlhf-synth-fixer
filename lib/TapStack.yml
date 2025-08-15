@@ -365,7 +365,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub "TapStack${EnvironmentSuffix}-ec2-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -410,7 +409,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub "TapStack${EnvironmentSuffix}-lambda-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
