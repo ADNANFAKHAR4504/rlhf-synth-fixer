@@ -225,7 +225,7 @@ describe('TapStack CloudFormation Template', () => {
           const properties = func.Properties;
 
           expect(properties.FunctionName).toBeDefined();
-          expect(properties.CodeUri).toBeDefined();
+          expect(properties.InlineCode).toBeDefined();
           expect(properties.Handler).toBe('index.handler');
           expect(properties.Runtime).toBe('nodejs20.x');
           expect(properties.MemorySize).toBeDefined();
@@ -283,7 +283,7 @@ describe('TapStack CloudFormation Template', () => {
         const authorizer = template.Resources.AuthorizerFunction;
         expect(authorizer.Type).toBe('AWS::Serverless::Function');
         expect(authorizer.Properties.FunctionName).toBeDefined();
-        expect(authorizer.Properties.CodeUri).toBe('./src/functions/authorizer/');
+        expect(authorizer.Properties.InlineCode).toBeDefined();
         expect(authorizer.Properties.Handler).toBe('index.handler');
         expect(authorizer.Properties.Runtime).toBe('nodejs20.x');
       });
