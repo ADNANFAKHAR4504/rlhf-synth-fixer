@@ -5,7 +5,7 @@ A comprehensive CDKTF implementation for serverless data processing using AWS se
 ## Architecture Overview
 
 - **S3 Bucket**: Data processing bucket with KMS encryption and secure policies
-- **Lambda Function**: Node.js 18.x function for data processing triggered by S3 events
+- **Lambda Function**: Node.js 20.x function for data processing triggered by S3 events
 - **KMS Key**: Customer-managed key for S3 encryption with automatic rotation
 - **Security Group**: Dedicated security group for Lambda with controlled egress
 - **VPC Integration**: Parameterized VPC configuration for network security
@@ -71,6 +71,7 @@ export class TapStack extends TerraformStack {
     id: string,
     props?: {
       environmentSuffix?: string;
+      projectPrefix?: string;
       stateBucket?: string;
       stateBucketRegion?: string;
       awsRegion?: string;
@@ -95,6 +96,7 @@ export class TapStack extends TerraformStack {
     // AWS Provider configuration
     new AwsProvider(this, 'aws', {
       region: awsRegion,
+      defaultTags: props?.defaultTags ? [props.defaultTags] : undefined,
     });
 
     // Data sources for account ID and region
@@ -105,7 +107,8 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Project prefix for consistent naming - deterministic for redeployments
-    const projectPrefix = `projectXYZ-${environmentSuffix}`;
+    const projectPrefix =
+      props?.projectPrefix || `projectXYZ-${environmentSuffix}`;
 
     // VPC Configuration - fully parameterized for production
     let vpcId: string;
@@ -341,7 +344,7 @@ export class TapStack extends TerraformStack {
 
     // Lambda configuration with production defaults
     const lambdaConfig = {
-      runtime: props?.lambdaConfig?.runtime || 'nodejs18.x',
+      runtime: props?.lambdaConfig?.runtime || 'nodejs20.x',
       timeout: props?.lambdaConfig?.timeout || 300,
       memorySize: props?.lambdaConfig?.memorySize || 512,
       architecture: props?.lambdaConfig?.architecture || 'x86_64',
@@ -562,7 +565,7 @@ interface TapStackProps {
   createVpc?: boolean;              // Create new VPC (not implemented)
   vpcCidr?: string;                 // VPC CIDR block
   lambdaConfig?: {                  // Lambda configuration
-    runtime?: string;               // Default: 'nodejs18.x'
+    runtime?: string;               // Default: 'nodejs20.x'
     timeout?: number;               // Default: 300s
     memorySize?: number;            // Default: 512MB
     architecture?: string;          // Default: 'x86_64'
