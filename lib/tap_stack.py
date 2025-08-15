@@ -61,23 +61,32 @@ config = pulumi.Config()
 ENVIRONMENT = config.get("environment") or "dev"
 AWS_REGION = "us-west-1"
 INSTANCE_TYPE = "t3.micro"
-PROJECT_NAME = "dswa-v9"
+PROJECT_NAME = "dswa-v10"
 
 DEPLOYMENT_ID = str(int(time.time()))[-4:]
 
+# Add random suffix for better uniqueness (Option 2 implementation)
+import random
+RANDOM_SUFFIX = str(random.randint(100, 999))
+
 def get_resource_name(resource_type: str) -> str:
-  """Generate consistent resource names."""
-  return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}-{DEPLOYMENT_ID}"
+  """Generate consistent resource names with enhanced uniqueness."""
+  return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}-{DEPLOYMENT_ID}-{RANDOM_SUFFIX}"
 
 
 def get_short_name(resource_type: str, max_length: int = 32) -> str:
   """Generate short names for AWS resources with character limits."""
-  short_name = f"{PROJECT_NAME}-{resource_type}-{DEPLOYMENT_ID}"
+  short_name = f"{PROJECT_NAME}-{resource_type}-{DEPLOYMENT_ID}-{RANDOM_SUFFIX}"
   if len(short_name) > max_length:
-    available_chars = max_length - len(f"-{DEPLOYMENT_ID}")
+    available_chars = max_length - len(f"-{DEPLOYMENT_ID}-{RANDOM_SUFFIX}")
     truncated = f"{PROJECT_NAME}-{resource_type}"[:available_chars]
-    short_name = f"{truncated}-{DEPLOYMENT_ID}"
+    short_name = f"{truncated}-{DEPLOYMENT_ID}-{RANDOM_SUFFIX}"
   return short_name
+
+
+def get_unique_name(resource_type: str) -> str:
+  """Generate highly unique names to avoid any naming conflicts."""
+  return f"dualstack-{resource_type}-{DEPLOYMENT_ID}-{RANDOM_SUFFIX}"
 
 
 def calculate_ipv6_cidr(vpc_cidr, subnet_index: int) -> str:
@@ -177,8 +186,10 @@ def _check_route_table_for_public_route(rt_id):
 def get_vpc_with_fallback():
   """Smart independent deployment: create completely new resources that don't depend on old ones."""
   try:
-    # Strategy 1: Always try to create completely new VPC first
-    unique_vpc_name = f"{PROJECT_NAME}-vpc-{DEPLOYMENT_ID}"
+    # Option 2: Generate unique name with timestamp and random suffix for better uniqueness
+    import random
+    random_suffix = str(random.randint(1000, 9999))
+    unique_vpc_name = f"{PROJECT_NAME}-dualstack-vpc-{DEPLOYMENT_ID}-{random_suffix}"
     
     new_vpc = aws.ec2.Vpc(
       unique_vpc_name,  # Completely unique name to avoid state conflicts
@@ -188,13 +199,14 @@ def get_vpc_with_fallback():
       enable_dns_support=True,
       assign_generated_ipv6_cidr_block=True,
       tags={
-        "Name": get_resource_name("vpc"),
+        "Name": f"dual-stack-vpc-{DEPLOYMENT_ID}-{random_suffix}",
         "Environment": ENVIRONMENT,
         "Project": PROJECT_NAME,
         "ManagedBy": "Pulumi-IaC",
-        "DeploymentType": "Completely-Independent",
+        "DeploymentType": "Dual-Stack-Independent",
         "Strategy": "New-Resources-Only",
-        "StateManagement": "Clean-Deployment"
+        "StateManagement": "Clean-Deployment",
+        "IPv6Enabled": "true"
       },
       opts=pulumi.ResourceOptions(
         provider=aws_provider, 
@@ -214,26 +226,53 @@ def get_vpc_with_fallback():
     if "VpcLimitExceeded" in error_msg or "maximum number of VPCs" in error_msg:
       pass  # Quota limit reached - use fallback
     
-    # Strategy 2: Only if new VPC fails, check for existing VPCs to reuse
+    # Option 3: Enhanced existing VPC reuse strategy with better filtering
     try:
+      # First, try to find VPCs with dual-stack capability
       existing_vpcs = aws.ec2.get_vpcs(
         filters=[
-          aws.ec2.GetVpcsFilterArgs(name="tag:Project", values=[PROJECT_NAME]),
-          aws.ec2.GetVpcsFilterArgs(name="state", values=["available"])
+          aws.ec2.GetVpcsFilterArgs(name="state", values=["available"]),
+          aws.ec2.GetVpcsFilterArgs(name="cidr", values=["10.0.0.0/16"]),
         ],
         opts=pulumi.InvokeOptions(provider=aws_provider)
       )
       
+      # If project-specific VPCs found, prefer them
       if existing_vpcs.ids and len(existing_vpcs.ids) > 0:
-        # Use the first available VPC to avoid quota issues
-        vpc_id = existing_vpcs.ids[0]
+        for vpc_id in existing_vpcs.ids:
+          try:
+            # Check if VPC has IPv6 CIDR block for dual-stack capability
+            vpc_details = aws.ec2.get_vpc(
+              id=vpc_id,
+              opts=pulumi.InvokeOptions(provider=aws_provider)
+            )
+            
+            # Prefer VPCs that already have IPv6 support
+            if hasattr(vpc_details, 'ipv6_cidr_block') and vpc_details.ipv6_cidr_block:
+              fallback_vpc_name = f"{PROJECT_NAME}-reused-dualstack-vpc-{DEPLOYMENT_ID}"
+              
+              reused_vpc = aws.ec2.Vpc.get(
+                fallback_vpc_name,
+                vpc_id,
+                opts=pulumi.ResourceOptions(
+                  provider=aws_provider,
+                  protect=True,  # Protect from deletion to avoid dependency conflicts
+                  retain_on_delete=True,  # Keep VPC to avoid dependency issues
+                  ignore_changes=["*"]  # Ignore all changes to prevent conflicts
+                )
+              )
+              
+              return (reused_vpc, vpc_id)
+          except:
+            continue
         
-        # Use unique name for fallback VPC reference to avoid state conflicts
+        # If no dual-stack VPC found, use the first available VPC
+        vpc_id = existing_vpcs.ids[0]
         fallback_vpc_name = f"{PROJECT_NAME}-fallback-vpc-{DEPLOYMENT_ID}"
         
         return (
           aws.ec2.Vpc.get(
-            fallback_vpc_name,  # Unique name for fallback VPC reference
+            fallback_vpc_name,
             vpc_id,
             opts=pulumi.ResourceOptions(
               provider=aws_provider,
@@ -244,9 +283,6 @@ def get_vpc_with_fallback():
           ),
           vpc_id
         )
-      
-      # No existing VPCs found for fallback
-      pass
       
     except Exception as fallback_error:
       pass  # Fallback search failed, try default VPC
