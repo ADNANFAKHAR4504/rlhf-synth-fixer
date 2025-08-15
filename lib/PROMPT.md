@@ -1,14 +1,14 @@
-Here's a prompt that is designed for Claude Sonnet, focusing on AWS and Terraform HCL for a Secure AWS Storage and IAM Management infrastructure, emphasizing resource connections, best practices, and detailed output requirements.
+Here's a prompt that is designed to focus on AWS and Terraform HCL for a Secure AWS Storage and IAM Management infrastructure. It emphasize resource connections, best practices, and detailed output requirements.
 
 # Objective:
 
-Configure an AWS infrastructure using Terraform, focusing on secure storage and managing IAM roles. The VPC is already set up, and all resources must be placed within the provided network CIDRs.
+Configure an AWS infrastructure using Terraform HCL, focused on secure storage and managing IAM roles. The VPC is already set up, and all resources must be placed within the provided network CIDRs.
 
 # High-Level Requirements:
 
 1. S3 Buckets Configuration
 
-Ensure all data stored in S3 buckets is encrypted with AES-256 encryption.
+Ensure that all data stored in S3 buckets is encrypted with AES-256 encryption.
 Restrict access to the S3 buckets to specific IP address ranges.
 Turn on versioning for all S3 buckets to keep a history of data changes.
 Set up logging for all AWS API calls using CloudTrail.
