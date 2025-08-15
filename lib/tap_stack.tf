@@ -1,33 +1,33 @@
 ############################################
-# ./lib/main.tf  —  Single-file stack
+# tap_stack.tf — Single-file stack with embedded Lambda code
 ############################################
 
-terraform {
-  required_version = ">= 1.6.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.4"
-    }
-  }
-}
+# terraform {
+#   required_version = ">= 1.6.0"
+#   required_providers {
+#     aws = {
+#       source  = "hashicorp/aws"
+#       version = "~> 5.0"
+#     }
+#     archive = {
+#       source  = "hashicorp/archive"
+#       version = "~> 2.4"
+#     }
+#   }
+# }
 
 ############################################
 # Variables
 ############################################
 
 variable "aws_region" {
-  description = "AWS region to deploy into (referenced from provider.tf)"
+  description = "AWS region to deploy into (referenced by provider.tf)"
   type        = string
   default     = "us-east-1"
 }
 
 variable "company_name" {
-  description = "Company name used in resource names and tags"
+  description = "Company name used in resource names"
   type        = string
   default     = "acme"
 }
@@ -86,7 +86,7 @@ variable "tags" {
 
 locals {
   name_prefix = "${var.company_name}-${var.environment}"
-  # Centralized, consistent tagging across resources
+  # Consistent tagging
   common_tags = merge(
     {
       Project     = "serverless-baseline"
@@ -107,20 +107,20 @@ locals {
 }
 
 ############################################
-# KMS: Customer-managed key for encryption
-# - Used by: CloudWatch Log Groups (encryption at rest)
-#            Lambda environment variables (optional, enabled here)
-#            DynamoDB table SSE (CMK)
+# Identity & Partition
 ############################################
-
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
-# Key policy grants:
-#  - Account root full access
-#  - Logs service in this region to use key for encrypting log streams
-#  - Lambda service to use for environment variables
+############################################
+# KMS: Customer-managed key and alias
+# - Used by: CloudWatch Log Groups (encryption at rest)
+#            Lambda environment variables
+#            DynamoDB table SSE (CMK)
+############################################
+
 data "aws_iam_policy_document" "kms_key_policy" {
+  # Root admin
   statement {
     sid     = "AllowRootAccount"
     effect  = "Allow"
@@ -132,7 +132,7 @@ data "aws_iam_policy_document" "kms_key_policy" {
     resources = ["*"]
   }
 
-  # Allow CloudWatch Logs service to use this key
+  # Allow CloudWatch Logs service in this region to use the key
   statement {
     sid    = "AllowCloudWatchLogsUse"
     effect = "Allow"
@@ -150,7 +150,7 @@ data "aws_iam_policy_document" "kms_key_policy" {
     resources = ["*"]
   }
 
-  # Allow Lambda service principal to use this key (for env var encryption)
+  # Allow Lambda service to use the key for environment variables
   statement {
     sid    = "AllowLambdaUse"
     effect = "Allow"
@@ -203,7 +203,7 @@ resource "aws_dynamodb_table" "main" {
     kms_key_arn = aws_kms_key.cmk.arn
   }
 
-  # Point-in-time recovery for safer restores
+  # Point-in-time recovery
   point_in_time_recovery {
     enabled = true
   }
@@ -212,7 +212,7 @@ resource "aws_dynamodb_table" "main" {
 }
 
 ############################################
-# CloudWatch Log Groups (pre-created, encrypted, retention)
+# CloudWatch Log Groups (encrypted, retention)
 ############################################
 
 resource "aws_cloudwatch_log_group" "lambda1" {
@@ -230,12 +230,7 @@ resource "aws_cloudwatch_log_group" "lambda2" {
 }
 
 ############################################
-# IAM: Execution role (least privilege)
-# - Trust: Lambda service
-# - Permissions:
-#   * CloudWatch Logs (AWS managed policy)
-#   * DynamoDB table CRUD (custom, scoped to table ARN)
-#   * KMS (decrypt/generate data key) for env/log encryption
+# IAM: Lambda execution role (least privilege)
 ############################################
 
 resource "aws_iam_role" "lambda_exec" {
@@ -251,13 +246,13 @@ resource "aws_iam_role" "lambda_exec" {
   tags = local.common_tags
 }
 
-# Attach AWS-managed basic execution policy (logs permissions)
+# AWS-managed: CloudWatch logs permissions
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Custom policy: scoped DynamoDB and KMS permissions
+# Custom least-privilege policy for DynamoDB + KMS
 data "aws_iam_policy_document" "lambda_custom" {
   statement {
     sid    = "DynamoDBCrudOnTable"
@@ -270,9 +265,7 @@ data "aws_iam_policy_document" "lambda_custom" {
       "dynamodb:Query",
       "dynamodb:Scan"
     ]
-    resources = [
-      aws_dynamodb_table.main.arn
-    ]
+    resources = [aws_dynamodb_table.main.arn]
   }
 
   statement {
@@ -302,25 +295,55 @@ resource "aws_iam_role_policy_attachment" "lambda_custom_attach" {
 }
 
 ############################################
-# Lambda packaging (zip the provided source dirs)
+# Embedded Lambda code (inline) -> zipped with archive_file
 ############################################
 
+# Lambda 1 writer
 data "archive_file" "lambda1_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/lambda_code/function1"
-  output_path = "${path.module}/lambda1.zip"
+  output_path = "${path.module}/lambda1_inline.zip"
+
+  source {
+    filename = "index.py"
+    content  = <<EOF
+import os, json, boto3
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table(os.environ["DYNAMODB_TABLE_NAME"])
+
+def handler(event, context):
+    item = {
+        "id": event.get("id", "default-1"),
+        "source": "lambda1",
+        "requestId": getattr(context, "aws_request_id", "unknown")
+    }
+    table.put_item(Item=item)
+    return {"statusCode": 200, "body": json.dumps({"written": item})}
+EOF
+  }
 }
 
+# Lambda 2 reader
 data "archive_file" "lambda2_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/lambda_code/function2"
-  output_path = "${path.module}/lambda2.zip"
+  output_path = "${path.module}/lambda2_inline.zip"
+
+  source {
+    filename = "index.py"
+    content  = <<EOF
+import os, json, boto3
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table(os.environ["DYNAMODB_TABLE_NAME"])
+
+def handler(event, context):
+    key = {"id": event.get("id", "default-1")}
+    resp = table.get_item(Key=key)
+    return {"statusCode": 200, "body": json.dumps(resp.get("Item", {"missing": True}))}
+EOF
+  }
 }
 
 ############################################
-# Lambda functions (env = DYNAMODB_TABLE_NAME)
-# - Precreated log groups control encryption/retention
-# - kms_key_arn secures environment variables at rest
+# Lambda Functions
 ############################################
 
 resource "aws_lambda_function" "lambda1" {
@@ -340,7 +363,7 @@ resource "aws_lambda_function" "lambda1" {
     }
   }
 
-  # Ensure log group exists (and is encrypted) before create/update
+  # Ensure encrypted log group exists before first writes
   depends_on = [aws_cloudwatch_log_group.lambda1]
 
   tags = local.common_tags
