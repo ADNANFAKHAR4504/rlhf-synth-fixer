@@ -1,5 +1,3 @@
-# main.tf - Complete Terraform AWS Secure Multi-Account Environment
-
 # Variables
 variable "aws_region" {
   description = "AWS region for resource deployment"

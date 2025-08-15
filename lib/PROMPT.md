@@ -7,12 +7,12 @@ You are tasked with creating a **secure, multi-account AWS environment** using T
 
 ### Provider Setup
 - The AWS provider configuration resides in `provider.tf` (already present).
-- The region is managed via an `aws_region` variable in `provider.tf`, so ensure `main.tf` declares and uses this variable appropriately.
+- The region is managed via an `aws_region` variable in `provider.tf`, so ensure `tap_stack.tf` declares and uses this variable appropriately.
 
-### `main.tf` Specifications
-- All **variable declarations**, **default/example values**, **resource logic**, and **outputs** must be included in `main.tf`.
+### `tap_stack.tf` Specifications
+- All **variable declarations**, **default/example values**, **resource logic**, and **outputs** must be included in `tap_stack.tf`.
 - All resources must be **newly created**; do NOT reference any existing modules or infrastructure.
-- Organize resources using Terraform modules created in `main.tf` itself.
+- Organize resources using Terraform modules created in `tap_stack.tf` itself.
 
 ### AWS Resources & Security Best Practices
 
@@ -47,9 +47,9 @@ You are tasked with creating a **secure, multi-account AWS environment** using T
    - Outputs should show active security group IDs and rules.
 
 ## Instructions
-- The **entire Terraform logic** must be in the `main.tf` file, including variables and outputs.
+- The **entire Terraform logic** must be in the `tap_stack.tf` file, including variables and outputs.
 - The configuration must be **modular**, secure, and ready to deploy a **brand new stack** for each environment.
-- The output must be a single, well-structured `main.tf` file that passes security constraints and Terraform validation.
+- The output must be a single, well-structured `tap_stack.tf` file that passes security constraints and Terraform validation.
 
 ## Expected Deliverable
-- A complete `main.tf` Terraform configuration file meeting all the above requirements.
+- A complete `tap_stack.tf` Terraform configuration file meeting all the above requirements.
