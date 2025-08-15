@@ -297,12 +297,6 @@ Outputs:
     Export:
       Name: !Ref AWS::StackName
 
-  EmergencyAccessRoleArn:
-    Description: 'ARN of the emergency access role with enhanced MFA requirements'
-    Value: !GetAtt EmergencyAccessRole.Arn
-    Export:
-      Name: !Ref AWS::StackName
-
   SecurityAuditTrailArn:
     Description: 'ARN of the CloudTrail for security auditing'
     Value: !GetAtt SecurityAuditTrail.Arn
