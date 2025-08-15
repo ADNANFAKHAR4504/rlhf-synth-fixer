@@ -58,7 +58,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
 
     outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 
-    // Validate outputs contain expected values
+    // Validate outputs contain expected values and are properly formatted
     const requiredOutputs = [
       'vpc_primary_id', 'vpc_secondary_id', 
       'public_subnet_ids_primary', 'private_subnet_ids_primary',
@@ -66,8 +66,24 @@ describe("Terraform Infrastructure Integration Tests", () => {
     ];
 
     for (const output of requiredOutputs) {
-      if (!outputs[output] || (Array.isArray(outputs[output]) && outputs[output].length === 0)) {
-        throw new Error(`Required output '${output}' is missing or empty in deployment outputs`);
+      if (!outputs[output]) {
+        throw new Error(`Required output '${output}' is missing in deployment outputs`);
+      }
+      
+      // For subnet ID arrays, ensure they are actually arrays and not strings
+      if (output.includes('subnet_ids')) {
+        if (!Array.isArray(outputs[output])) {
+          throw new Error(`Output '${output}' should be an array but got: ${typeof outputs[output]} - ${JSON.stringify(outputs[output])}`);
+        }
+        if (outputs[output].length === 0) {
+          throw new Error(`Required output '${output}' is empty in deployment outputs`);
+        }
+        // Validate each subnet ID looks like a proper AWS subnet ID (not individual characters)
+        for (const subnetId of outputs[output]) {
+          if (typeof subnetId !== 'string' || subnetId.length < 10 || !subnetId.startsWith('subnet-')) {
+            throw new Error(`Invalid subnet ID in '${output}': ${subnetId}`);
+          }
+        }
       }
     }
 
