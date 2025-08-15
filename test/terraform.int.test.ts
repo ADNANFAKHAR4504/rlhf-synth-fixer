@@ -1,16 +1,16 @@
 // Integration tests for deployed Terraform infrastructure
 // Tests use actual AWS outputs from cfn-outputs/flat-outputs.json
 
+import { APIGatewayClient, GetResourcesCommand } from "@aws-sdk/client-api-gateway";
+import { CloudWatchClient, GetDashboardCommand } from "@aws-sdk/client-cloudwatch";
+import { DescribeContinuousBackupsCommand, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { DescribeKeyCommand, KMSClient } from "@aws-sdk/client-kms";
+import { GetFunctionCommand, InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
+import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetTopicAttributesCommand, SNSClient } from "@aws-sdk/client-sns";
+import axios from "axios";
 import fs from "fs";
 import path from "path";
-import axios from "axios";
-import { DynamoDBClient, DescribeTableCommand, GetItemCommand, PutItemCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
-import { S3Client, HeadBucketCommand, ListObjectsV2Command, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-import { LambdaClient, InvokeCommand, GetFunctionCommand } from "@aws-sdk/client-lambda";
-import { APIGatewayClient, GetRestApiCommand, GetResourcesCommand } from "@aws-sdk/client-api-gateway";
-import { SNSClient, GetTopicAttributesCommand } from "@aws-sdk/client-sns";
-import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
-import { CloudWatchClient, GetDashboardCommand } from "@aws-sdk/client-cloudwatch";
 
 // Load deployment outputs
 const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
@@ -68,7 +68,13 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(response.Table?.TableStatus).toBe("ACTIVE");
       expect(response.Table?.BillingModeSummary?.BillingMode).toBe("PAY_PER_REQUEST");
       expect(response.Table?.SSEDescription?.Status).toBe("ENABLED");
-      expect(response.Table?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
+      
+      // Check point-in-time recovery separately
+      const backupCommand = new DescribeContinuousBackupsCommand({
+        TableName: outputs.DynamoDBUsersTable
+      });
+      const backupResponse = await dynamodbClient.send(backupCommand);
+      expect(backupResponse.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
     });
 
     test("Orders table should exist and be accessible", async () => {
