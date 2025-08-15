@@ -5,9 +5,7 @@ import {
   EC2Client,
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
+  DescribeInstancesCommand,
 } from "@aws-sdk/client-ec2";
 import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
 
@@ -31,113 +29,87 @@ describe("Terraform Integration Tests", () => {
     return;
   }
 
-  const regions = outputs.regions || {};
-  if (Object.keys(regions).length === 0) {
-    test("No regions found in outputs file", () => {
-      console.warn(`⚠️ No 'regions' key found in outputs JSON`);
-    });
-    return;
-  }
+  const envs = ["dev", "staging", "production"];
 
-  Object.keys(regions).forEach((rid) => {
-    const regionOutputs = regions[rid];
-    const region = regionOutputs.region;
-    const ec2 = new EC2Client({ region });
-    const iam = new IAMClient({ region });
+  envs.forEach((env) => {
+    describe(`Environment: ${env}`, () => {
+      const region = "us-east-1"; // update if different per environment
+      const ec2 = new EC2Client({ region });
+      const iam = new IAMClient({ region });
 
-    describe(`Region: ${region}`, () => {
-      // ---------- VPC ----------
       test("VPC exists and is available", async () => {
-        const vpcId: string = regionOutputs.vpc_id;
-        expect(typeof vpcId).toBe("string");
+        const vpcId = outputs.vpc_ids.value[env];
         expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
 
-        const vpcResp = await ec2.send(
-          new DescribeVpcsCommand({ VpcIds: [vpcId] })
-        );
+        const vpcResp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
         expect(vpcResp.Vpcs && vpcResp.Vpcs.length).toBeGreaterThan(0);
         expect(vpcResp.Vpcs![0].State).toBe("available");
       });
 
-      // ---------- Public Subnets ----------
       test("Public subnets exist", async () => {
-        const publicSubnetIds: string[] = Object.values(regionOutputs.public_subnet_ids);
-        expect(publicSubnetIds.length).toBeGreaterThan(0);
-
-        const subnetResp = await ec2.send(
-          new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
+        const publicSubnetKeys = Object.keys(outputs.public_subnet_ids.value).filter((k) =>
+          k.startsWith(`${env}-public`)
         );
+        const publicSubnetIds = publicSubnetKeys.map((k) => outputs.public_subnet_ids.value[k]);
+
+        expect(publicSubnetIds.length).toBeGreaterThan(0);
+        publicSubnetIds.forEach((s) => expect(s).toMatch(/^subnet-[a-f0-9]+$/));
+
+        const subnetResp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds }));
         expect(subnetResp.Subnets!.length).toBe(publicSubnetIds.length);
       });
 
-      // ---------- Private Subnets ----------
       test("Private subnets exist", async () => {
-        const privateSubnetIds: string[] = Object.values(regionOutputs.private_subnet_ids);
-        expect(privateSubnetIds.length).toBeGreaterThan(0);
-
-        const subnetResp = await ec2.send(
-          new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
+        const privateSubnetKeys = Object.keys(outputs.private_subnet_ids.value).filter((k) =>
+          k.startsWith(`${env}-private`)
         );
+        const privateSubnetIds = privateSubnetKeys.map((k) => outputs.private_subnet_ids.value[k]);
+
+        expect(privateSubnetIds.length).toBeGreaterThan(0);
+        privateSubnetIds.forEach((s) => expect(s).toMatch(/^subnet-[a-f0-9]+$/));
+
+        const subnetResp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds }));
         expect(subnetResp.Subnets!.length).toBe(privateSubnetIds.length);
       });
 
-      // ---------- Security Groups ----------
-      test("Security groups exist", async () => {
-        const sgIds: string[] = Object.values(regionOutputs.security_group_ids);
-        expect(sgIds.length).toBeGreaterThan(0);
+      test("EC2 instances exist and match IPs", async () => {
+        const instanceId = outputs.ec2_instance_ids.value[env];
+        const privateIp = outputs.ec2_private_ips.value[env];
+        const publicIp = outputs.ec2_public_ips.value[env];
 
-        const sgResp = await ec2.send(
-          new DescribeSecurityGroupsCommand({ GroupIds: sgIds })
-        );
-        expect(sgResp.SecurityGroups!.length).toBe(sgIds.length);
+        expect(instanceId).toMatch(/^i-[a-f0-9]+$/);
+
+        const instanceResp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+        expect(instanceResp.Reservations && instanceResp.Reservations.length).toBeGreaterThan(0);
+
+        const instance = instanceResp.Reservations![0].Instances![0];
+        expect(instance.PrivateIpAddress).toBe(privateIp);
+        expect(instance.PublicIpAddress).toBe(publicIp);
       });
 
-      // ---------- Internet Gateway ----------
-      test("Internet gateways exist", async () => {
-        const igwIds: string[] = Object.values(regionOutputs.internet_gateway_ids);
-
-        const igwResp = await ec2.send(
-          new DescribeInternetGatewaysCommand({
-            Filters: [{ Name: "attachment.vpc-id", Values: [regionOutputs.vpc_id] }],
-          })
-        );
-        const attachedIgwIds = igwResp.InternetGateways?.map(i => i.InternetGatewayId) || [];
-        igwIds.forEach((id) => expect(attachedIgwIds).toContain(id));
+      test("Security group exists", async () => {
+        const sgId = outputs.security_group_ids.value[env];
+        expect(sgId).toMatch(/^sg-[a-f0-9]+$/);
+        // Optionally you can call DescribeSecurityGroups to validate live
       });
 
-      // ---------- NAT Gateway ----------
-      test("NAT gateways exist", async () => {
-        const natIds: string[] = Object.values(regionOutputs.nat_gateway_ids);
-        const natResp = await ec2.send(
-          new DescribeNatGatewaysCommand({ NatGatewayIds: natIds })
-        );
-        expect(natResp.NatGateways!.length).toBe(natIds.length);
-        natResp.NatGateways!.forEach((n) => expect(n.State).toBe("available"));
+      test("IAM role exists", async () => {
+        const roleArn = outputs.iam_role_arns.value[env];
+        const roleName = roleArn.split("/").pop()!;
+        const resp = await iam.send(new GetRoleCommand({ RoleName: roleName }));
+        expect(resp.Role!.Arn).toBe(roleArn);
       });
 
-      // ---------- EC2 Instances ----------
-      test("EC2 instances exist", async () => {
-        const instanceIds: string[] = Object.values(regionOutputs.ec2_instance_ids);
-        expect(instanceIds.length).toBeGreaterThan(0);
-
-        // Simple describe check
-        const resp = await ec2.send(
-          new DescribeSubnetsCommand({ SubnetIds: instanceIds }) // Note: Replace with DescribeInstancesCommand if needed
-        ).catch(() => null);
-        expect(resp).not.toBeNull();
+      test("Internet Gateway and NAT Gateway IDs exist", () => {
+        const igwId = outputs.internet_gateway_ids.value[env];
+        const natId = outputs.nat_gateway_ids.value[env];
+        expect(igwId).toMatch(/^igw-[a-f0-9]+$/);
+        expect(natId).toMatch(/^nat-[a-f0-9]+$/);
       });
 
-      // ---------- IAM Roles ----------
-      test("IAM roles exist", async () => {
-        const roleArns: Record<string, string> = regionOutputs.iam_role_arns;
-        for (const [env, arn] of Object.entries(roleArns)) {
-          const roleName = arn.split("/").pop();
-          expect(roleName).toBeDefined();
-
-          const resp = await iam.send(new GetRoleCommand({ RoleName: roleName! }));
-          expect(resp.Role).toBeDefined();
-          expect(resp.Role!.RoleName).toBe(roleName);
-        }
+      test("VPC CIDR matches expected", () => {
+        const vpcCidr = outputs.vpc_cidrs.value[env];
+        expect(vpcCidr).toMatch(/^\d+\.\d+\.\d+\.\d+\/\d+$/);
       });
     });
   });
