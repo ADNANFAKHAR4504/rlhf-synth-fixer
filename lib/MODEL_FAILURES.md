@@ -36,11 +36,7 @@ SecureEnvDeliveryChannel:
     Name: SecureEnv-Config-DeliveryChannel
     S3BucketName: !Ref SecureEnvConfigBucket
 ```
-## 5. No MFA Enforcement for IAM Users
-
-**Statement**: The template does not implement policies or IAM user requirements to enforce Multi-Factor Authentication (MFA), which is a critical security control.
-
-## 6. Incomplete GuardDuty Configuration
+## 5. Incomplete GuardDuty Configuration
 
 **Statement**: GuardDuty is enabled but does not include explicit SNS notifications or integrations for alerting. A production-ready security deployment should capture findings automatically.
 ```yaml
@@ -49,13 +45,13 @@ SecureEnvGuardDutyDetector:
   Properties:
     Enable: true
 ```
-## 7. EBS Volume Encryption Key Hardcoding
+## 6. EBS Volume Encryption Key Hardcoding
 
 **Statement**: The EC2 launch template references a single KMS key directly. For multi-environment deployments, the KMS key ARN should be parameterized to support per-environment encryption.
 ```yaml
 KmsKeyId: !Ref SecureEnvKMSKey
 ```
-## 8. WAF Rules Missing Managed Rule Group Coverage
+## 7. WAF Rules Missing Managed Rule Group Coverage
 
 **Statement**: Only SQLi and XSS custom rules are included. A production WAF deployment should also include AWS Managed Rule Sets (e.g., AWSManagedRulesCommonRuleSet) to cover additional threats.
 ```yaml
@@ -65,23 +61,23 @@ Rules:
   - Name: XSSRule
     ...
 ```
-## 9. VPC Flow Logs Missing
+## 8. VPC Flow Logs Missing
 
 **Statement**: No VPC Flow Logs are defined. Flow Logs are required for auditing traffic and meeting compliance requirements.
 
-## 10. Static AMI Reference
+## 9. Static AMI Reference
 
 **Statement**: The template uses a static AMI ID, which is region-specific and can become outdated. Dynamic mapping or SSM Parameter store lookup is preferred.
 ```yaml
 ImageId: ami-0c55b159cbfafe1d0
 ```
-## 11. CloudWatch Log Group Retention Not Configurable
+## 10. CloudWatch Log Group Retention Not Configurable
 
 **Statement**: The CloudWatch Log Group for EC2 logs has a fixed retention of 90 days. For enterprise compliance, this should be parameterized.
 ```yaml
 RetentionInDays: 90
 ```
-## 12. IAM Role Policies May Be Too Broad
+## 11. IAM Role Policies May Be Too Broad
 
 **Statement**: Certain IAM roles (like KMS key policies) grant wide permissions (`kms:*`) which may violate least privilege requirements in some environments.
 ```yaml
