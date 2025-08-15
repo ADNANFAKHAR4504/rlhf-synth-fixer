@@ -17,7 +17,7 @@ export interface EnhancedSecureS3BucketArgs {
 
 export class EnhancedSecureS3Bucket extends pulumi.ComponentResource {
   public readonly bucket: aws.s3.Bucket;
-  public readonly bucketPolicy: aws.s3.BucketPolicy;
+  public readonly bucketPolicy?: aws.s3.BucketPolicy;
   public readonly publicAccessBlock: aws.s3.BucketPublicAccessBlock;
   public readonly accessLogsBucket?: aws.s3.Bucket;
   public readonly notification?: aws.s3.BucketNotification;
