@@ -23,6 +23,13 @@ Parameters:
     Description: 'Name of an existing EC2 KeyPair for SSH access'
     Default: myapp-keypair
 
+  EnvironmentSuffix:
+    Type: String
+    Default: 'prod'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
+
 Resources:
   SecureVPC:
     Type: AWS::EC2::VPC
@@ -32,18 +39,18 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: SecureProductionVPC
+          Value: !Sub 'SecureVPC-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: SecureProductionIGW
+          Value: !Sub 'SecureIGW-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -60,9 +67,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: SecurePublicSubnet
+          Value: !Sub 'SecurePublicSubnet-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   PrivateSubnet:
     Type: AWS::EC2::Subnet
@@ -72,9 +79,9 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: SecurePrivateSubnet
+          Value: !Sub 'SecurePrivateSubnet-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -82,9 +89,9 @@ Resources:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: PublicRouteTable
+          Value: !Sub 'PublicRouteTable-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -103,7 +110,8 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for EC2 instances with restricted SSH access'
+      GroupName: !Sub 'SecureEC2SG-${EnvironmentSuffix}'
+      GroupDescription: !Sub 'Security group for EC2 instances with restricted SSH access - ${EnvironmentSuffix}'
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -115,13 +123,14 @@ Resources:
           CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
-          Value: SecureEC2SecurityGroup
+          Value: !Sub 'SecureEC2SecurityGroup-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub 'SecureEC2Role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -132,7 +141,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: MinimalS3Access
+        - PolicyName: !Sub 'MinimalS3Access-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -140,20 +149,21 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+                Resource: !Sub '${SecureS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+                Resource: !Ref SecureS3Bucket
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-secure-bucket'
+          Value: !Sub 'SecureEC2Role-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
+      InstanceProfileName: !Sub 'SecureEC2InstanceProfile-${EnvironmentSuffix}'
       Roles:
         - !Ref EC2Role
 
@@ -181,14 +191,14 @@ Resources:
           yum install -y amazon-cloudwatch-agent
       Tags:
         - Key: Name
-          Value: SecureProductionInstance
+          Value: !Sub 'SecureInstance-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   S3KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: 'KMS Key for S3 bucket encryption'
+      Description: !Sub 'KMS Key for S3 bucket encryption - ${EnvironmentSuffix}'
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
@@ -207,19 +217,21 @@ Resources:
               - kms:GenerateDataKey
             Resource: '*'
       Tags:
+        - Key: Name
+          Value: !Sub 'S3KMSKey-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${AWS::StackName}-s3-key'
+      AliasName: !Sub 'alias/${AWS::StackName}-s3-key-${EnvironmentSuffix}'
       TargetKeyId: !Ref S3KMSKey
 
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      # Remove BucketName to let AWS auto-generate a compliant name
+      # AWS auto-generates compliant bucket name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -237,13 +249,15 @@ Resources:
         DestinationBucketName: !Ref S3AccessLogsBucket
         LogFilePrefix: 'access-logs/'
       Tags:
+        - Key: Name
+          Value: !Sub 'SecureS3Bucket-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   S3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # Remove BucketName to let AWS auto-generate a compliant name
+      # AWS auto-generates compliant bucket name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -255,14 +269,14 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-access-logs'
+          Value: !Sub 'S3AccessLogsBucket-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # Remove BucketName to let AWS auto-generate a compliant name
+      # AWS auto-generates compliant bucket name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -274,9 +288,9 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-cloudtrail'
+          Value: !Sub 'CloudTrailBucket-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -305,7 +319,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${AWS::StackName}-CloudTrail'
+      TrailName: !Sub '${AWS::StackName}-CloudTrail-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
@@ -318,21 +332,58 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+                - !Sub '${SecureS3Bucket}/*'
       Tags:
+        - Key: Name
+          Value: !Sub 'SecureCloudTrail-${EnvironmentSuffix}'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix
 
 Outputs:
   VPCId:
+    Description: 'VPC ID for the deployed environment'
     Value: !Ref SecureVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-${EnvironmentSuffix}'
+
   EC2InstanceId:
+    Description: 'EC2 Instance ID for the deployed environment'
     Value: !Ref SecureEC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-${EnvironmentSuffix}'
+
   EC2PublicIP:
+    Description: 'EC2 Public IP for the deployed environment'
     Value: !GetAtt SecureEC2Instance.PublicIp
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-PublicIP-${EnvironmentSuffix}'
+
   S3BucketName:
+    Description: 'S3 Bucket Name for the deployed environment'
     Value: !Ref SecureS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3Bucket-${EnvironmentSuffix}'
+
   CloudTrailArn:
+    Description: 'CloudTrail ARN for the deployed environment'
     Value: !GetAtt SecureCloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-${EnvironmentSuffix}'
+
   SecurityGroupId:
+    Description: 'Security Group ID for the deployed environment'
     Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup-${EnvironmentSuffix}'
+
+  S3KMSKeyId:
+    Description: 'KMS Key ID for S3 encryption in the deployed environment'
+    Value: !Ref S3KMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-S3KMSKey-${EnvironmentSuffix}'
+
+  EC2RoleArn:
+    Description: 'EC2 IAM Role ARN for the deployed environment'
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2Role-${EnvironmentSuffix}'
