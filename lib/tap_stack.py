@@ -72,6 +72,7 @@ class TapStack(pulumi.ComponentResource):
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.s3_kms_key = s3_kms_key  # <- expose
 
     aws.kms.Alias(
         f"{kms_name}-alias",
@@ -90,6 +91,8 @@ class TapStack(pulumi.ComponentResource):
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.artifact_bucket = artifact_bucket  # <- expose
+
     aws.s3.BucketVersioningV2(
         f"artifacts-versioning-{env}",
         bucket=artifact_bucket.id,
@@ -134,6 +137,8 @@ class TapStack(pulumi.ComponentResource):
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.logs_bucket = logs_bucket  # <- expose
+
     aws.s3.BucketVersioningV2(
         f"logs-versioning-{env}",
         bucket=logs_bucket.id,
@@ -194,6 +199,10 @@ class TapStack(pulumi.ComponentResource):
           f"arn:aws:codecommit:{region}:{account}:DUMMY")
       repo_clone_http_out = Output.from_input("https://example.com/dummy.git")
 
+    self.repo_name = repo_name_out          # <- expose (helpful for tests)
+    self.repo_arn = repo_arn_out            # <- expose
+    self.repo_clone_http = repo_clone_http_out
+
     # ------------------------------------------------------------
     # Lambda IAM role
     # ------------------------------------------------------------
@@ -210,6 +219,8 @@ class TapStack(pulumi.ComponentResource):
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.lambda_role = lambda_role  # <- expose
+
     aws.iam.RolePolicy(
         f"lambda-logs-policy-{env}",
         role=lambda_role.id,
@@ -267,15 +278,17 @@ def lambda_handler(event, context):
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.lambda_fn = lambda_fn  # <- expose
 
     # LogGroup (optional explicit to control retention)
-    aws.cloudwatch.LogGroup(
+    lg_lambda = aws.cloudwatch.LogGroup(
         f"lg-lambda-{env}",
         name=lambda_fn.name.apply(lambda n: f"/aws/lambda/{n}"),
         retention_in_days=14,
         tags=tags,
         opts=ResourceOptions(parent=lambda_fn),
     )
+    self.lambda_log_group = lg_lambda  # <- expose
 
     lambda_alias = aws.lambda_.Alias(
         f"alias-live-{env}",
@@ -286,6 +299,7 @@ def lambda_handler(event, context):
             additional_version_weights={}),
         opts=ResourceOptions(parent=lambda_fn),
     )
+    self.lambda_alias = lambda_alias  # <- expose
 
     # ------------------------------------------------------------
     # API Gateway (REST) → Lambda alias (AWS_PROXY)
@@ -299,6 +313,8 @@ def lambda_handler(event, context):
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.api_rest = rest  # <- expose
+
     api_res = aws.apigateway.Resource(
         f"api-res-{env}",
         rest_api=rest.id,
@@ -306,6 +322,8 @@ def lambda_handler(event, context):
         path_part="nova",
         opts=ResourceOptions(parent=rest),
     )
+    self.api_resource = api_res  # <- expose
+
     api_method = aws.apigateway.Method(
         f"api-get-{env}",
         rest_api=rest.id,
@@ -314,6 +332,8 @@ def lambda_handler(event, context):
         authorization="NONE",
         opts=ResourceOptions(parent=api_res),
     )
+    self.api_method = api_method  # <- expose
+
     api_integration = aws.apigateway.Integration(
         f"api-int-{env}",
         rest_api=rest.id,
@@ -326,8 +346,10 @@ def lambda_handler(event, context):
         ),
         opts=ResourceOptions(parent=api_res),
     )
+    self.api_integration = api_integration  # <- expose
+
     # Permission for API GW to invoke the alias
-    aws.lambda_.Permission(
+    lambda_perm = aws.lambda_.Permission(
         f"lambda-perm-apigw-{env}",
         action="lambda:InvokeFunction",
         function=lambda_alias.arn,
@@ -335,12 +357,16 @@ def lambda_handler(event, context):
         source_arn=rest.execution_arn.apply(lambda arn: f"{arn}/*/*"),
         opts=ResourceOptions(parent=lambda_alias),
     )
+    self.lambda_permission_apigw = lambda_perm  # <- expose
+
     # Deployment + Stage
     api_deploy = aws.apigateway.Deployment(
         f"api-deploy-{env}",
         rest_api=rest.id,
         opts=ResourceOptions(parent=rest, depends_on=[api_integration]),
     )
+    self.api_deployment = api_deploy  # <- expose
+
     api_stage = aws.apigateway.Stage(
         f"api-stage-{env}",
         rest_api=rest.id,
@@ -349,11 +375,12 @@ def lambda_handler(event, context):
         tags=tags,
         opts=ResourceOptions(parent=rest),
     )
+    self.api_stage = api_stage  # <- expose
 
     # ------------------------------------------------------------
     # CloudWatch alarms (basic)
     # ------------------------------------------------------------
-    aws.cloudwatch.MetricAlarm(
+    alarm_lambda_errors = aws.cloudwatch.MetricAlarm(
         f"alarm-lambda-errors-{env}",
         name=f"lambda-errors-{env}",
         comparison_operator="GreaterThanThreshold",
@@ -368,6 +395,7 @@ def lambda_handler(event, context):
         tags=tags,
         opts=ResourceOptions(parent=lambda_fn),
     )
+    self.alarm_lambda_errors = alarm_lambda_errors  # <- expose
 
     # ------------------------------------------------------------
     # CodeDeploy (Lambda) — Application + DeploymentGroup (traffic shift)
@@ -375,6 +403,7 @@ def lambda_handler(event, context):
     codedeploy_app = aws.codedeploy.Application(
         f"cd-app-{env}", compute_platform="Lambda", tags=tags, opts=ResourceOptions(parent=self)
     )
+    self.codedeploy_app = codedeploy_app  # <- expose
 
     codedeploy_role = aws.iam.Role(
         f"cd-role-{env}",
@@ -389,6 +418,8 @@ def lambda_handler(event, context):
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.codedeploy_role = codedeploy_role  # <- expose
+
     # Use AWS managed role for Lambda deployments
     aws.iam.RolePolicyAttachment(
         f"cd-role-attach-{env}",
@@ -417,6 +448,7 @@ def lambda_handler(event, context):
         tags=tags,
         opts=ResourceOptions(parent=codedeploy_app),
     )
+    self.codedeploy_deployment_group = cd_deploy_group  # <- expose
 
     # ------------------------------------------------------------
     # CodeBuild — builds, tests, updates Lambda code, publishes version, emits AppSpec
@@ -434,6 +466,7 @@ def lambda_handler(event, context):
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.codebuild_role = codebuild_role  # <- expose
 
     # Inline least-privilege for build (logs + S3 artifacts + Lambda code ops + read alias)
     aws.iam.RolePolicy(
@@ -539,6 +572,7 @@ artifacts:
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.codebuild_proj = codebuild_proj  # <- expose
 
     # ------------------------------------------------------------
     # CodePipeline — Source (CodeCommit) -> Build (CodeBuild) -> Deploy (CodeDeploy)
@@ -556,6 +590,7 @@ artifacts:
         tags=tags,
         opts=ResourceOptions(parent=self),
     )
+    self.codepipeline_role = codepipeline_role  # <- expose
 
     # Tight CodePipeline permissions
     aws.iam.RolePolicy(
@@ -681,6 +716,7 @@ artifacts:
         ),
         opts=ResourceOptions(parent=self),
     )
+    self.pipeline = pipeline  # <- expose
 
     # ------------------------------------------------------------
     # Exports
