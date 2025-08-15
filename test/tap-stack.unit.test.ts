@@ -42,7 +42,6 @@ describe('TapStack CloudFormation Template', () => {
         'EnvironmentSuffix',
         'EnvironmentType',
         'AllowedIPRange',
-        'EnableWAF',
         'LambdaMemorySize',
         'LambdaTimeout'
       ];
@@ -376,7 +375,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(5); // EnableWAF parameter is properly commented out
     });
 
     test('should have correct number of outputs', () => {
@@ -397,9 +396,7 @@ describe('TapStack CloudFormation Template', () => {
         'CreatePromptFunction',
         'UpdatePromptFunction',
         'DeletePromptFunction',
-        'AuthorizerFunction',
-        'WAFWebACL',
-        'WAFIPSet'
+        'AuthorizerFunction'
       ];
 
       keyResources.forEach(resourceName => {

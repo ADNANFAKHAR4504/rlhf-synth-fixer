@@ -15,7 +15,7 @@ Metadata:
           default: "Security Configuration"
         Parameters:
           - AllowedIPRange
-          - EnableWAF
+          # - EnableWAF  # COMMENTED OUT: WAF resources are commented out
       - Label:
           default: "Lambda Configuration"
         Parameters:
@@ -44,12 +44,12 @@ Parameters:
     AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
     ConstraintDescription: "Must be a valid CIDR block (e.g., 192.168.1.0/24)"
 
-  EnableWAF:
-    Type: String
-    Default: "true"
-    Description: "Enable WAF protection for API Gateway"
-    AllowedValues: ["true", "false"]
-    ConstraintDescription: "Must be true or false"
+  # EnableWAF:
+  #   Type: String
+  #   Default: "true"
+  #   Description: "Enable WAF protection for API Gateway"
+  #   AllowedValues: ["true", "false"]
+  #   ConstraintDescription: "Must be true or false"  # COMMENTED OUT: WAF resources are commented out
 
   LambdaMemorySize:
     Type: Number
