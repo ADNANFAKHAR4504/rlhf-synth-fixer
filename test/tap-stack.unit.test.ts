@@ -226,8 +226,8 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('EC2 Resources', () => {
     test('should have latest AMI lookup', () => {
-      expect(template.Resources.LatestAmiId).toBeDefined();
-      expect(template.Resources.LatestAmiId.Type).toBe(
+      expect(template.Parameters.LatestAmiId).toBeDefined();
+      expect(template.Parameters.LatestAmiId.Type).toBe(
         'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
       );
     });
@@ -307,7 +307,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('Lambda should have reserved concurrency', () => {
       const lambda = template.Resources.LambdaFunction;
-      expect(lambda.Properties.ReservedConcurrencyLimit).toBe(10);
+      expect(lambda.Properties.ReservedConcurrency).toBe(10);
     });
   });
 
