@@ -3,14 +3,14 @@ import 'cdktf/lib/testing/adapters/jest';
 import { TapStack } from '../lib/tap-stack';
 
 // --- Mocking the Modules ---
-// We mock all modules from `lib/modules.ts` to test the TapStack's assembly logic in isolation.
-// Each mock returns an object with the expected properties that the TapStack will use.
+// Updated mock includes privateSubnet2 for Multi-AZ support
 jest.mock('../lib/modules', () => {
   return {
     NetworkModule: jest.fn(() => ({
       vpc: { id: 'mock-vpc-id' },
       publicSubnet: { id: 'mock-public-subnet-id' },
       privateSubnet: { id: 'mock-private-subnet-id' },
+      privateSubnet2: { id: 'mock-private-subnet-2-id' }, // Added for Multi-AZ
       ec2SecurityGroup: { id: 'mock-ec2-sg-id' },
       rdsSecurityGroup: { id: 'mock-rds-sg-id' },
     })),
@@ -29,14 +29,8 @@ describe('TapStack Integration Tests', () => {
   let stack: TapStack;
   let synthesized: string;
 
-  // Mocked module constructors for easy access in tests
-  const {
-    NetworkModule,
-    ComputeModule,
-    DatabaseModule,
-  } = require('../lib/modules');
+  const { NetworkModule, ComputeModule, DatabaseModule } = require('../lib/modules');
 
-  // Clear all mocks before each test to ensure a clean slate
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -49,7 +43,6 @@ describe('TapStack Integration Tests', () => {
 
       expect(stack).toBeDefined();
       expect(synthesized).toBeDefined();
-      // Check for default values from the template
       expect(synthesized).toContain('iac-rlhf-tf-states');
       expect(synthesized).toContain('dev/TestDefaultStack.tfstate');
       expect(synthesized).toMatchSnapshot();
@@ -72,10 +65,9 @@ describe('TapStack Integration Tests', () => {
 
       expect(stack).toBeDefined();
       expect(synthesized).toBeDefined();
-      // Check for custom values
       expect(synthesized).toContain('my-custom-state-bucket');
       expect(synthesized).toContain('prod/TestCustomStack.tfstate');
-      // Check for custom tags
+
       const parsed = JSON.parse(synthesized);
       expect(parsed.provider.aws[0].default_tags[0].tags).toEqual({
         Project: 'TAP',
@@ -98,22 +90,20 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should enable S3 backend state locking', () => {
-        app = new App();
-        stack = new TapStack(app, 'TestStateLocking');
-        synthesized = Testing.synth(stack);
-        const parsed = JSON.parse(synthesized);
+      app = new App();
+      stack = new TapStack(app, 'TestStateLocking');
+      synthesized = Testing.synth(stack);
+      const parsed = JSON.parse(synthesized);
 
-        expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
+      expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
     });
   });
 
   describe('Module Instantiation and Wiring', () => {
-    // We create the stack once here for all tests in this block
     beforeEach(() => {
       app = new App();
-      // We use the default stack configuration for testing module wiring
       stack = new TapStack(app, 'TestModuleWiring');
-      Testing.fullSynth(stack); // Use fullSynth to process the entire construct tree
+      Testing.fullSynth(stack);
     });
 
     test('should create one NetworkModule instance', () => {
@@ -122,8 +112,8 @@ describe('TapStack Integration Tests', () => {
         expect.anything(),
         'Network',
         expect.objectContaining({
-            vpcCidrBlock: '10.0.0.0/16',
-            tags: { Environment: 'Production', Owner: 'DevOpsTeam' },
+          vpcCidrBlock: '10.0.0.0/16',
+          tags: { Environment: 'Production', Owner: 'DevOpsTeam' },
         })
       );
     });
@@ -143,17 +133,20 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should create one DatabaseModule instance wired to the NetworkModule', () => {
-        const networkInstance = NetworkModule.mock.results[0].value;
-        expect(DatabaseModule).toHaveBeenCalledTimes(1);
-        expect(DatabaseModule).toHaveBeenCalledWith(
-          expect.anything(),
-          'Database',
-          expect.objectContaining({
-            subnetIds: [networkInstance.privateSubnet.id],
-            securityGroupId: networkInstance.rdsSecurityGroup.id,
-          })
-        );
-      });
+      const networkInstance = NetworkModule.mock.results[0].value;
+      expect(DatabaseModule).toHaveBeenCalledTimes(1);
+      expect(DatabaseModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'Database',
+        expect.objectContaining({
+          subnetIds: [
+            networkInstance.privateSubnet.id,
+            networkInstance.privateSubnet2.id, // Multi-AZ subnet included
+          ],
+          securityGroupId: networkInstance.rdsSecurityGroup.id,
+        })
+      );
+    });
   });
 
   describe('Terraform Outputs', () => {
@@ -163,27 +156,13 @@ describe('TapStack Integration Tests', () => {
       const synthesizedOutput = Testing.synth(stack);
       const outputs = JSON.parse(synthesizedOutput).output;
 
-      // Check that all outputs are defined and have correct values
-      expect(outputs.vpcId).toBeDefined();
       expect(outputs.vpcId.value).toBe('mock-vpc-id');
-
-      expect(outputs.publicSubnetId).toBeDefined();
       expect(outputs.publicSubnetId.value).toBe('mock-public-subnet-id');
-
-      expect(outputs.privateSubnetId).toBeDefined();
       expect(outputs.privateSubnetId.value).toBe('mock-private-subnet-id');
-
-      expect(outputs.ec2InstanceId).toBeDefined();
       expect(outputs.ec2InstanceId.value).toBe('mock-instance-id');
-
-      expect(outputs.ec2PublicIp).toBeDefined();
       expect(outputs.ec2PublicIp.value).toBe('mock-public-ip');
-
-      expect(outputs.rdsInstanceEndpoint).toBeDefined();
       expect(outputs.rdsInstanceEndpoint.value).toBe('mock-rds-endpoint');
       expect(outputs.rdsInstanceEndpoint.sensitive).toBe(true);
-
-      expect(outputs.databaseSecretArn).toBeDefined();
       expect(outputs.databaseSecretArn.value).toBe('mock-secret-arn');
       expect(outputs.databaseSecretArn.sensitive).toBe(true);
     });
