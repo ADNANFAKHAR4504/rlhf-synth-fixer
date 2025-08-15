@@ -4,7 +4,7 @@ import * as path from 'path';
 const LIB_DIR = path.resolve(__dirname, '../lib');
 const TAP_STACK_TF = path.join(LIB_DIR, 'tap_stack.tf');
 
-// Load the file content once
+// Load the Terraform file once
 const tf = fs.readFileSync(TAP_STACK_TF, 'utf8');
 
 // Helper to check regex matches in the Terraform file
@@ -18,96 +18,93 @@ describe('tap_stack.tf static structure', () => {
 
   it('declares AWS region variable', () => {
     expect(has(/variable\s+"aws_region"/)).toBe(true);
-    expect(has(/default\s*=\s*"us-east-2"/)).toBe(true);
+    expect(has(/default\s*=\s*"us-west-2"/)).toBe(true);
   });
 
-  it('defines a VPC with correct CIDR and DNS support', () => {
-    expect(has(/resource\s+"aws_vpc"\s+"main"/)).toBe(true);
-    expect(has(/cidr_block\s*=\s*"10.0.0.0\/16"/)).toBe(true);
+  it('declares environments variable with dev, staging, production', () => {
+    expect(has(/variable\s+"environments"/)).toBe(true);
+    expect(has(/dev\s*=\s*{/)).toBe(true);
+    expect(has(/staging\s*=\s*{/)).toBe(true);
+    expect(has(/production\s*=\s*{/)).toBe(true);
+  });
+
+  it('defines VPC resources for each environment', () => {
+    expect(has(/resource\s+"aws_vpc"\s+"environment_vpc"/)).toBe(true);
     expect(has(/enable_dns_support\s*=\s*true/)).toBe(true);
     expect(has(/enable_dns_hostnames\s*=\s*true/)).toBe(true);
   });
 
-  it('creates public and private subnets in 2 AZs', () => {
-    expect(has(/resource\s+"aws_subnet"\s+"public"/)).toBe(true);
-    expect(has(/resource\s+"aws_subnet"\s+"private"/)).toBe(true);
-    expect(has(/count\s*=\s*2/)).toBe(true);
+  it('creates public subnets in each environment', () => {
+    expect(has(/resource\s+"aws_subnet"\s+"public_subnets"/)).toBe(true);
+    expect(has(/map_public_ip_on_launch\s*=\s*true/)).toBe(true);
   });
 
-  it('creates Internet Gateway and NAT Gateway', () => {
+  it('creates private subnets in each environment', () => {
+    expect(has(/resource\s+"aws_subnet"\s+"private_subnets"/)).toBe(true);
+  });
+
+  it('creates Internet Gateway for each environment', () => {
     expect(has(/resource\s+"aws_internet_gateway"/)).toBe(true);
+  });
+
+  it('creates NAT Gateway for each environment', () => {
     expect(has(/resource\s+"aws_nat_gateway"/)).toBe(true);
   });
 
-  it('associates public and private route tables correctly', () => {
-    expect(has(/resource\s+"aws_route_table_association"\s+"public"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table_association"\s+"private"/)).toBe(true);
+  it('creates public and private route tables and associates them', () => {
+    expect(has(/resource\s+"aws_route_table"\s+"public_rt"/)).toBe(true);
+    expect(has(/resource\s+"aws_route_table"\s+"private_rt"/)).toBe(true);
+    expect(has(/resource\s+"aws_route_table_association"\s+"public_rta"/)).toBe(true);
+    expect(has(/resource\s+"aws_route_table_association"\s+"private_rta"/)).toBe(true);
+  });
+
+  it('defines network ACLs to isolate environments', () => {
+    expect(has(/resource\s+"aws_network_acl"\s+"environment_nacl"/)).toBe(true);
+    expect(has(/action\s*=\s*"deny"/)).toBe(true); // Deny cross-env
   });
 
   it('defines security group for web servers', () => {
-    expect(has(/resource\s+"aws_security_group"\s+"web"/)).toBe(true);
+    expect(has(/resource\s+"aws_security_group"\s+"web_sg"/)).toBe(true);
     expect(has(/from_port\s*=\s*80/)).toBe(true);
     expect(has(/from_port\s*=\s*443/)).toBe(true);
     expect(has(/from_port\s*=\s*22/)).toBe(true);
   });
 
-  it('defines security group for RDS allowing correct DB port ingress', () => {
-    expect(has(/resource\s+"aws_security_group"\s+"rds"/)).toBe(true);
-    expect(has(/from_port\s*=\s*local\.db_config\[var\.db_engine\]\.port/)).toBe(true);
-    expect(has(/to_port\s*=\s*local\.db_config\[var\.db_engine\]\.port/)).toBe(true);
-    expect(has(/protocol\s*=\s*"tcp"/)).toBe(true);
-  });
-
-  it('defines IAM roles and instance profiles for EC2 and RDS', () => {
+  it('defines IAM roles, policies, and instance profiles for EC2', () => {
     expect(has(/resource\s+"aws_iam_role"\s+"ec2_role"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_policy"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role_policy_attachment"/)).toBe(true);
     expect(has(/resource\s+"aws_iam_instance_profile"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_role"\s+"rds_monitoring"/)).toBe(true);
   });
 
-  it('creates an EC2 launch template and Auto Scaling Group', () => {
-    expect(has(/resource\s+"aws_launch_template"/)).toBe(true);
-    expect(has(/resource\s+"aws_autoscaling_group"/)).toBe(true);
-    expect(has(/vpc_zone_identifier\s*=\s*aws_subnet\.public\[\*\]\.id/)).toBe(true);
+  it('defines EC2 instances with correct instance types and subnets', () => {
+    expect(has(/resource\s+"aws_instance"\s+"web_servers"/)).toBe(true);
+    expect(has(/instance_type\s*=\s*each.value.instance_type/)).toBe(true);
+    expect(has(/subnet_id\s*=\s*aws_subnet.public_subnets/)).toBe(true);
+    expect(has(/iam_instance_profile\s*=\s*aws_iam_instance_profile.ec2_profile/)).toBe(true);
   });
 
-  it('defines RDS DB instance with correct engine and subnet group', () => {
-    expect(has(/resource\s+"aws_db_instance"\s+"main"/)).toBe(true);
-    expect(has(/engine\s*=\s*local\.db_config\[var\.db_engine\]\.engine/)).toBe(true);
-    expect(has(/db_subnet_group_name\s*=\s*aws_db_subnet_group\.main\.name/)).toBe(true);
-    expect(has(/storage_encrypted\s*=\s*true/)).toBe(true);
+  it('defines EC2 key pairs', () => {
+    expect(has(/resource\s+"aws_key_pair"\s+"environment_key"/)).toBe(true);
   });
 
-  it('defines DB subnet group', () => {
-    expect(has(/resource\s+"aws_db_subnet_group"/)).toBe(true);
-    expect(has(/subnet_ids\s*=\s*aws_subnet\.private\[\*\]\.id/)).toBe(true);
-  });
-
-  it('creates S3 bucket for app data and CloudTrail logs with encryption and versioning', () => {
-    expect(has(/resource\s+"aws_s3_bucket"\s+"app_data"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket"\s+"cloudtrail_logs"/)).toBe(true);
-    expect(has(/aws_s3_bucket_versioning/)).toBe(true);
-    expect(has(/aws_s3_bucket_server_side_encryption_configuration/)).toBe(true);
-    expect(has(/aws_s3_bucket_public_access_block/)).toBe(true);
-  });
-
-  it('defines CloudTrail with logging enabled', () => {
-    expect(has(/resource\s+"aws_cloudtrail"/)).toBe(true);
-    expect(has(/enable_logging\s*=\s*true/)).toBe(true);
-    expect(has(/s3_bucket_name\s*=\s*aws_s3_bucket\.cloudtrail_logs\.bucket/)).toBe(true);
+  it('creates user_data script via local_file', () => {
+    expect(has(/resource\s+"local_file"\s+"user_data_script"/)).toBe(true);
+    expect(has(/filename\s*=\s*"\${path\.module}\/user_data\.sh"/)).toBe(true);
   });
 
   it('applies common tags to all resources', () => {
-    expect(has(/tags\s*=\s*merge\(local\.common_tags/)).toBe(true);
+    expect(has(/tags\s*=\s*merge\(var\.common_tags/)).toBe(true);
   });
 
-  it('declares required outputs', () => {
-    expect(has(/output\s+"vpc_id"/)).toBe(true);
+  it('defines outputs for VPCs, subnets, EC2, SGs, NAT, IGW', () => {
+    expect(has(/output\s+"vpc_ids"/)).toBe(true);
     expect(has(/output\s+"public_subnet_ids"/)).toBe(true);
     expect(has(/output\s+"private_subnet_ids"/)).toBe(true);
-    expect(has(/output\s+"autoscaling_group_name"/)).toBe(true);
-    expect(has(/output\s+"rds_endpoint"/)).toBe(true);
-    expect(has(/output\s+"app_data_bucket_name"/)).toBe(true);
-    expect(has(/output\s+"cloudtrail_arn"/)).toBe(true);
+    expect(has(/output\s+"ec2_instance_ids"/)).toBe(true);
+    expect(has(/output\s+"security_group_ids"/)).toBe(true);
+    expect(has(/output\s+"nat_gateway_ids"/)).toBe(true);
+    expect(has(/output\s+"internet_gateway_ids"/)).toBe(true);
   });
 
   it('does not contain hardcoded AWS credentials', () => {
