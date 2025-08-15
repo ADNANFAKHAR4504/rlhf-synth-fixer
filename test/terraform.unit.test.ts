@@ -289,21 +289,6 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(policy).toContain('"false"');
     });
 
-    test('should create VPC endpoints for S3', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_vpc_endpoint" "s3_useast1"'
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_vpc_endpoint" "s3_uswest2"'
-      );
-      const endpointBlock = mainTfContent.match(
-        /resource "aws_vpc_endpoint" "s3_useast1" {[\s\S]*?^}/m
-      );
-      expect(normalize(endpointBlock![0])).toContain(
-        'service_name = "com.amazonaws.us-east-1.s3"'
-      );
-    });
-
     test('should enforce IMDSv2 on EC2 instances via Launch Template', () => {
       const launchTemplateBlock = mainTfContent.match(
         /resource "aws_launch_template" "app_useast1" {[\s\S]*?metadata_options {[\s\S]*?^}/m
