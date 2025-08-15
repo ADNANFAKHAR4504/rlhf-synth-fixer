@@ -1,6 +1,7 @@
 ########################
 # Variables
 ########################
+
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
@@ -69,7 +70,7 @@ variable "db_password" {
 /* resource "aws_s3_bucket" "this" {
   bucket = var.bucket_name
   tags   = var.bucket_tags
-}
+}*/
 
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket                  = aws_s3_bucket.this.id
