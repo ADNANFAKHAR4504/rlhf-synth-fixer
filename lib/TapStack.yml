@@ -146,6 +146,8 @@ Resources:
                   - s3:ListBucket
                 Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
       Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-secure-bucket'
         - Key: Environment
           Value: Production
 
@@ -217,7 +219,7 @@ Resources:
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-secure-bucket-${AWS::AccountId}'
+      # Remove BucketName to let AWS auto-generate a compliant name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -241,7 +243,7 @@ Resources:
   S3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-access-logs-${AWS::AccountId}'
+      # Remove BucketName to let AWS auto-generate a compliant name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -252,13 +254,15 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-access-logs'
         - Key: Environment
           Value: Production
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-${AWS::AccountId}'
+      # Remove BucketName to let AWS auto-generate a compliant name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -269,6 +273,8 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-cloudtrail'
         - Key: Environment
           Value: Production
 
