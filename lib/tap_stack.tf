@@ -96,10 +96,6 @@ resource "aws_subnet" "private" {
   tags = merge(local.tags, { Name = "${local.name_prefix}-private-${each.key}" })
 }
 
-resource "aws_eip" "nat" {
-  tags = merge(local.tags, { Name = "${local.name_prefix}-nat-eip" })
-}
-
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
   subnet_id     = element(values(aws_subnet.public), 0).id
