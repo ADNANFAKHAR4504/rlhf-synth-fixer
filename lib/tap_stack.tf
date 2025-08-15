@@ -5,21 +5,21 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+
 variable "environment" {
   description = "Environment name (production, staging, development)"
   type        = string
-  default     = "development"
-  
+  default     = "newenv20250815"
   validation {
-    condition     = contains(["production", "staging", "development"], var.environment)
-    error_message = "Environment must be one of: production, staging, development."
+    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815"], var.environment)
+    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815."
   }
 }
 
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "secure-multi-account"
+  default     = "unique-project-20250815"
 }
 
 variable "vpc_cidr" {
