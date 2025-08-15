@@ -71,13 +71,22 @@ variable "lambda_memory_size" {
 
 # Environment suffix for resource naming to avoid conflicts
 variable "environment_suffix" {
-  description = "Environment suffix to avoid conflicts between deployments (e.g., pr123 for PR #123)"
+  description = "Environment suffix to avoid conflicts between deployments (e.g., pr123 for PR #123, or leave empty for random suffix)"
   type        = string
   default     = ""
   validation {
     condition     = can(regex("^$|^pr[0-9]+$", var.environment_suffix))
     error_message = "Environment suffix must be empty or follow pattern 'pr{number}' (e.g., pr123)."
   }
+}
+
+########################
+# Locals for Dynamic Naming
+########################
+
+locals {
+  # Use provided environment_suffix or generate a unique one with 'u' prefix
+  environment_suffix = var.environment_suffix != "" ? var.environment_suffix : "u${random_string.unique_suffix.result}"
 }
 
 ########################
@@ -93,7 +102,7 @@ data "aws_region" "current" {}
 ########################
 
 resource "aws_s3_bucket" "pipeline_artifacts" {
-  bucket = "${var.environment}-${var.project_name}${var.environment_suffix}-pipeline-artifacts-${random_string.bucket_suffix.result}"
+  bucket = "${var.environment}-${var.project_name}${local.environment_suffix}-pipeline-artifacts-${random_string.bucket_suffix.result}"
 }
 
 resource "aws_s3_bucket_versioning" "pipeline_artifacts" {
@@ -128,12 +137,18 @@ resource "random_string" "bucket_suffix" {
   upper   = false
 }
 
+resource "random_string" "unique_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
 ########################
 # S3 Bucket for Source Code
 ########################
 
 resource "aws_s3_bucket" "source_code" {
-  bucket = "${var.environment}-${var.project_name}${var.environment_suffix}-source-code-${random_string.bucket_suffix.result}"
+  bucket = "${var.environment}-${var.project_name}${local.environment_suffix}-source-code-${random_string.bucket_suffix.result}"
 }
 
 resource "aws_s3_bucket_versioning" "source_code" {
@@ -183,7 +198,7 @@ resource "aws_s3_object" "source_code" {
 
 # Lambda execution role
 resource "aws_iam_role" "lambda_role" {
-  name = "${var.environment}-${var.project_name}${var.environment_suffix}-${var.lambda_function_name}-role"
+  name = "${var.environment}-${var.project_name}${local.environment_suffix}-${var.lambda_function_name}-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -207,7 +222,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 
 # Lambda function
 resource "aws_lambda_function" "main" {
-  function_name = "${var.environment}-${var.project_name}${var.environment_suffix}-${var.lambda_function_name}"
+  function_name = "${var.environment}-${var.project_name}${local.environment_suffix}-${var.lambda_function_name}"
   role          = aws_iam_role.lambda_role.arn
   handler       = var.lambda_handler
   runtime       = var.lambda_runtime
@@ -242,7 +257,7 @@ data "archive_file" "dummy" {
 
 # Lambda alias for blue/green deployments
 resource "aws_lambda_alias" "main" {
-  name             = "live${var.environment_suffix}"
+  name             = "live${local.environment_suffix}"
   description      = "Live alias for ${aws_lambda_function.main.function_name}"
   function_name    = aws_lambda_function.main.function_name
   function_version = aws_lambda_function.main.version
@@ -254,7 +269,7 @@ resource "aws_lambda_alias" "main" {
 
 # CodeBuild service role
 resource "aws_iam_role" "codebuild_role" {
-  name = "${var.environment}-${var.project_name}${var.environment_suffix}-codebuild-role"
+  name = "${var.environment}-${var.project_name}${local.environment_suffix}-codebuild-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -323,7 +338,7 @@ resource "aws_iam_role_policy" "codebuild_policy" {
 
 # Build project for packaging Lambda code
 resource "aws_codebuild_project" "build" {
-  name         = "${var.environment}-${var.project_name}${var.environment_suffix}-build"
+  name         = "${var.environment}-${var.project_name}${local.environment_suffix}-build"
   description  = "Build project for packaging Lambda code"
   service_role = aws_iam_role.codebuild_role.arn
 
@@ -345,7 +360,7 @@ resource "aws_codebuild_project" "build" {
 
 # Test project for running automated tests
 resource "aws_codebuild_project" "test" {
-  name         = "${var.environment}-${var.project_name}${var.environment_suffix}-test"
+  name         = "${var.environment}-${var.project_name}${local.environment_suffix}-test"
   description  = "Test project for running automated tests"
   service_role = aws_iam_role.codebuild_role.arn
 
@@ -367,7 +382,7 @@ resource "aws_codebuild_project" "test" {
 
 # Deploy project for Lambda deployment with rollback
 resource "aws_codebuild_project" "deploy" {
-  name         = "${var.environment}-${var.project_name}${var.environment_suffix}-deploy"
+  name         = "${var.environment}-${var.project_name}${local.environment_suffix}-deploy"
   description  = "Deploy project for Lambda deployment with rollback"
   service_role = aws_iam_role.codebuild_role.arn
 
@@ -403,7 +418,7 @@ resource "aws_codebuild_project" "deploy" {
 
 # CodePipeline service role
 resource "aws_iam_role" "codepipeline_role" {
-  name = "${var.environment}-${var.project_name}${var.environment_suffix}-codepipeline-role"
+  name = "${var.environment}-${var.project_name}${local.environment_suffix}-codepipeline-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -465,7 +480,7 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
 
 # CodePipeline
 resource "aws_codepipeline" "main" {
-  name     = "${var.environment}-${var.project_name}${var.environment_suffix}-pipeline"
+  name     = "${var.environment}-${var.project_name}${local.environment_suffix}-pipeline"
   role_arn = aws_iam_role.codepipeline_role.arn
 
   artifact_store {

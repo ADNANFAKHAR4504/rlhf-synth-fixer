@@ -252,21 +252,21 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('all major resources use environment_suffix for conflict avoidance', () => {
-      // Check that all major resource names include environment_suffix
+      // Check that all major resource names include environment_suffix (now via local)
       expect(stackContent).toMatch(
-        /\$\{var\.environment\}-\$\{var\.project_name\}\$\{var\.environment_suffix\}/
+        /\$\{var\.environment\}-\$\{var\.project_name\}\$\{local\.environment_suffix\}/
       );
 
       // Verify specific resource types use the suffix
       const resourcesWithSuffix = stackContent.match(
-        /\$\{var\.environment\}-\$\{var\.project_name\}\$\{var\.environment_suffix\}/g
+        /\$\{var\.environment\}-\$\{var\.project_name\}\$\{local\.environment_suffix\}/g
       );
       expect(resourcesWithSuffix).toHaveLength(10); // S3 buckets, Lambda, IAM roles, CodeBuild projects, CodePipeline
     });
 
     test('Lambda alias uses environment_suffix', () => {
       expect(stackContent).toMatch(
-        /name\s*=\s*"live\$\{var\.environment_suffix\}"/
+        /name\s*=\s*"live\$\{local\.environment_suffix\}"/
       );
     });
 
