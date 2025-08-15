@@ -412,26 +412,45 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       { provider: awsProvider, parent: this }
     );
 
-    // S3 Buckets with AES-256 Encryption
+    // S3 Buckets with modern configuration approach
     const applicationDataBucket = new aws.s3.Bucket(
       `${projectName}-app-data-${environmentSuffix}`,
       {
-        bucket: `${projectName}-app-data-${environmentSuffix}-${pulumi.getStack()}`,
-        serverSideEncryptionConfiguration: {
-          rule: {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-            bucketKeyEnabled: true,
-          },
-        },
-        versioning: {
-          enabled: true,
-        },
+        bucket: `${projectName}-app-data-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`,
         tags: {
           Name: `${projectName}-app-data-${environmentSuffix}`,
           Environment: environmentSuffix,
           ...tags,
+        },
+      },
+      { provider: awsProvider, parent: this }
+    );
+
+    // S3 Bucket Server Side Encryption Configuration
+    const applicationDataBucketEncryption =
+      new aws.s3.BucketServerSideEncryptionConfiguration(
+        `${projectName}-app-data-encryption-${environmentSuffix}`,
+        {
+          bucket: applicationDataBucket.id,
+          rules: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'AES256',
+              },
+              bucketKeyEnabled: true,
+            },
+          ],
+        },
+        { provider: awsProvider, parent: this }
+      );
+
+    // S3 Bucket Versioning Configuration
+    const applicationDataBucketVersioning = new aws.s3.BucketVersioning(
+      `${projectName}-app-data-versioning-${environmentSuffix}`,
+      {
+        bucket: applicationDataBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
         },
       },
       { provider: awsProvider, parent: this }
@@ -507,22 +526,55 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
     const backupBucket = new aws.s3.Bucket(
       `${projectName}-backups-${environmentSuffix}`,
       {
-        bucket: `${projectName}-backups-${environmentSuffix}-${pulumi.getStack()}`,
-        serverSideEncryptionConfiguration: {
-          rule: {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
+        bucket: `${projectName}-backups-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`,
+        tags: {
+          Name: `${projectName}-backups-${environmentSuffix}`,
+          Environment: environmentSuffix,
+          ...tags,
+        },
+      },
+      { provider: awsProvider, parent: this }
+    );
+
+    // S3 Bucket Server Side Encryption Configuration for backup bucket
+    const backupBucketEncryption =
+      new aws.s3.BucketServerSideEncryptionConfiguration(
+        `${projectName}-backups-encryption-${environmentSuffix}`,
+        {
+          bucket: backupBucket.id,
+          rules: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'AES256',
+              },
+              bucketKeyEnabled: true,
             },
-            bucketKeyEnabled: true,
-          },
+          ],
         },
-        versioning: {
-          enabled: true,
+        { provider: awsProvider, parent: this }
+      );
+
+    // S3 Bucket Versioning Configuration for backup bucket
+    const backupBucketVersioning = new aws.s3.BucketVersioning(
+      `${projectName}-backups-versioning-${environmentSuffix}`,
+      {
+        bucket: backupBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
         },
-        lifecycleRules: [
+      },
+      { provider: awsProvider, parent: this }
+    );
+
+    // S3 Bucket Lifecycle Configuration for backup bucket
+    const backupBucketLifecycle = new aws.s3.BucketLifecycleConfiguration(
+      `${projectName}-backups-lifecycle-${environmentSuffix}`,
+      {
+        bucket: backupBucket.id,
+        rules: [
           {
             id: 'backup-lifecycle',
-            enabled: true,
+            status: 'Enabled',
             transitions: [
               {
                 days: 30,
@@ -535,11 +587,6 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
             ],
           },
         ],
-        tags: {
-          Name: `${projectName}-backups-${environmentSuffix}`,
-          Environment: environmentSuffix,
-          ...tags,
-        },
       },
       { provider: awsProvider, parent: this }
     );
@@ -626,22 +673,56 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
     const accessLogsBucket = new aws.s3.Bucket(
       `${projectName}-access-logs-${environmentSuffix}`,
       {
-        bucket: `${projectName}-access-logs-${environmentSuffix}-${pulumi.getStack()}`,
-        serverSideEncryptionConfiguration: {
-          rule: {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
+        bucket: `${projectName}-access-logs-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`,
+        tags: {
+          Name: `${projectName}-access-logs-${environmentSuffix}`,
+          Environment: environmentSuffix,
+          Purpose: 'AccessLogging',
+          ...tags,
+        },
+      },
+      { provider: awsProvider, parent: this }
+    );
+
+    // S3 Bucket Server Side Encryption Configuration for access logs bucket
+    const accessLogsBucketEncryption =
+      new aws.s3.BucketServerSideEncryptionConfiguration(
+        `${projectName}-access-logs-encryption-${environmentSuffix}`,
+        {
+          bucket: accessLogsBucket.id,
+          rules: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'AES256',
+              },
+              bucketKeyEnabled: true,
             },
-            bucketKeyEnabled: true,
-          },
+          ],
         },
-        versioning: {
-          enabled: true,
+        { provider: awsProvider, parent: this }
+      );
+
+    // S3 Bucket Versioning Configuration for access logs bucket
+    const accessLogsBucketVersioning = new aws.s3.BucketVersioning(
+      `${projectName}-access-logs-versioning-${environmentSuffix}`,
+      {
+        bucket: accessLogsBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
         },
-        lifecycleRules: [
+      },
+      { provider: awsProvider, parent: this }
+    );
+
+    // S3 Bucket Lifecycle Configuration for access logs bucket
+    const accessLogsBucketLifecycle = new aws.s3.BucketLifecycleConfiguration(
+      `${projectName}-access-logs-lifecycle-${environmentSuffix}`,
+      {
+        bucket: accessLogsBucket.id,
+        rules: [
           {
             id: 'access-logs-lifecycle',
-            enabled: true,
+            status: 'Enabled',
             expiration: {
               days: 90, // Delete access logs after 90 days
             },
@@ -653,12 +734,6 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
             ],
           },
         ],
-        tags: {
-          Name: `${projectName}-access-logs-${environmentSuffix}`,
-          Environment: environmentSuffix,
-          Purpose: 'AccessLogging',
-          ...tags,
-        },
       },
       { provider: awsProvider, parent: this }
     );
@@ -967,6 +1042,14 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       backupBucketName: this.backupBucketName,
       region: this.region,
       // Include dependencies to ensure proper resource creation order
+      _applicationDataBucketEncryption: applicationDataBucketEncryption.id,
+      _applicationDataBucketVersioning: applicationDataBucketVersioning.id,
+      _backupBucketEncryption: backupBucketEncryption.id,
+      _backupBucketVersioning: backupBucketVersioning.id,
+      _backupBucketLifecycle: backupBucketLifecycle.id,
+      _accessLogsBucketEncryption: accessLogsBucketEncryption.id,
+      _accessLogsBucketVersioning: accessLogsBucketVersioning.id,
+      _accessLogsBucketLifecycle: accessLogsBucketLifecycle.id,
       _applicationDataBucketPublicAccessBlock:
         applicationDataBucketPublicAccessBlock.id,
       _backupBucketPublicAccessBlock: backupBucketPublicAccessBlock.id,
