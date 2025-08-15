@@ -20,6 +20,13 @@ def create_infrastructure(export_outputs=True):
   environment = config.get('environment') or 'dev'
   team = config.get('team') or 'platform'
   project = config.get('project') or 'tap'
+  
+  # Security configuration
+  # For production, this should be restricted to specific management IPs
+  ssh_allowed_cidrs = config.get('ssh_allowed_cidrs') or ['0.0.0.0/0']
+  if environment == 'prod' and ssh_allowed_cidrs == ['0.0.0.0/0']:
+    # In production, default to VPC CIDR only if no specific IPs are configured
+    ssh_allowed_cidrs = ['10.0.0.0/16']  # Default VPC CIDR
 
   # Get availability zones
   azs = get_availability_zones(state="available")
@@ -189,7 +196,7 @@ def create_infrastructure(export_outputs=True):
         from_port=22,
         to_port=22,
         protocol="tcp",
-        cidr_blocks=["0.0.0.0/0"]  # Note: In production, restrict to specific IPs
+        cidr_blocks=ssh_allowed_cidrs
       ),
       ec2.SecurityGroupIngressArgs(
         description="HTTP",
