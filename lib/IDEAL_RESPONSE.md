@@ -26,6 +26,8 @@ Key features:
 - Implements cross-account role assumption with MFA and external ID requirements
 - Sets up real-time IAM change monitoring via EventBridge and SNS
 
+# main.tf - Single file IAM Security Configuration as Code
+
 ```
 # main.tf - Single file IAM Security Configuration as Code
 # All variables, locals, resources, and outputs in one file per team standards
@@ -113,6 +115,18 @@ variable "enable_sns_notifications" {
 
 variable "enable_aws_config" {
   description = "Enable AWS Config for compliance monitoring"
+  type        = bool
+  default     = false
+}
+
+variable "enable_guardduty" {
+  description = "Enable GuardDuty for threat detection"
+  type        = bool
+  default     = false
+}
+
+variable "enable_cloudtrail_insights_monitoring" {
+  description = "Enable CloudWatch alarms for CloudTrail Insights cost monitoring"
   type        = bool
   default     = false
 }
@@ -796,11 +810,108 @@ resource "aws_cloudtrail" "security_trail" {
     insight_type = "ApiErrorRateInsight"
   }
 
+  # Enable CloudTrail Insights for cost optimization
+  insight_selector {
+    insight_type = "ApiCallVolumeInsight"
+  }
+
   tags = merge(local.common_tags, {
     Purpose = "SecurityAudit"
   })
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs_policy]
+}
+
+########################
+# CloudTrail Insights Cost Monitoring
+########################
+
+# CloudWatch Alarm for CloudTrail Insights API Call Volume
+resource "aws_cloudwatch_metric_alarm" "cloudtrail_insights_volume" {
+  count = var.enable_cloudtrail_insights_monitoring ? 1 : 0
+
+  alarm_name          = "${var.environment}-cloudtrail-insights-volume"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "InsightRecordCount"
+  namespace           = "AWS/CloudTrail"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1000  # Alert if more than 1000 insight records in 5 minutes
+  alarm_description   = "CloudTrail Insights generating high volume of records"
+
+  dimensions = {
+    TrailName = aws_cloudtrail.security_trail.name
+  }
+
+  tags = merge(local.common_tags, {
+    Purpose = "CostMonitoring"
+  })
+}
+
+# CloudWatch Alarm for CloudTrail Insights Cost
+resource "aws_cloudwatch_metric_alarm" "cloudtrail_insights_cost" {
+  count = var.enable_cloudtrail_insights_monitoring ? 1 : 0
+
+  alarm_name          = "${var.environment}-cloudtrail-insights-cost"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "EstimatedCost"
+  namespace           = "AWS/CloudTrail"
+  period              = 86400  # Daily cost monitoring
+  statistic           = "Maximum"
+  threshold           = 50     # Alert if daily cost exceeds $50
+  alarm_description   = "CloudTrail Insights daily cost threshold exceeded"
+
+  dimensions = {
+    TrailName = aws_cloudtrail.security_trail.name
+  }
+
+  tags = merge(local.common_tags, {
+    Purpose = "CostMonitoring"
+  })
+}
+
+########################
+# GuardDuty for Threat Detection
+########################
+
+# GuardDuty Detector
+resource "aws_guardduty_detector" "threat_detector" {
+  count = var.enable_guardduty ? 1 : 0
+
+  enable = true
+
+  tags = merge(local.common_tags, {
+    Purpose = "ThreatDetection"
+  })
+}
+
+# GuardDuty S3 Protection Feature
+resource "aws_guardduty_detector_feature" "s3_protection" {
+  count = var.enable_guardduty ? 1 : 0
+
+  detector_id = aws_guardduty_detector.threat_detector[0].id
+  name        = "S3_DATA_EVENTS"
+  status      = "ENABLED"
+}
+
+# GuardDuty Malware Protection Feature
+resource "aws_guardduty_detector_feature" "malware_protection" {
+  count = var.enable_guardduty ? 1 : 0
+
+  detector_id = aws_guardduty_detector.threat_detector[0].id
+  name        = "MALWARE_PROTECTION"
+  status      = "ENABLED"
+}
+
+# GuardDuty EKS Protection Feature
+resource "aws_guardduty_detector_feature" "eks_protection" {
+  count = var.enable_guardduty ? 1 : 0
+
+  detector_id = aws_guardduty_detector.threat_detector[0].id
+  name        = "EKS_AUDIT_LOGS"
+  status      = "ENABLED"
 }
 
 ########################
@@ -856,7 +967,7 @@ resource "aws_iam_role" "config_role" {
 
 # AWS Config IAM Policy
 resource "aws_iam_role_policy_attachment" "config_policy" {
-  count = var.environment == "prod" ? 1 : 0
+  count = var.enable_aws_config ? 1 : 0  # Fixed: Use enable_aws_config instead of environment check
 
   role       = aws_iam_role.config_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
@@ -1044,6 +1155,24 @@ output "eventbridge_rule_arn" {
   value       = var.enable_sns_notifications ? aws_cloudwatch_event_rule.iam_changes[0].arn : null
 }
 
+output "guardduty_detector_id" {
+  description = "GuardDuty detector ID for threat detection (if enabled)"
+  value       = var.enable_guardduty ? aws_guardduty_detector.threat_detector[0].id : null
+}
+
+output "guardduty_detector_arn" {
+  description = "GuardDuty detector ARN for threat detection (if enabled)"
+  value       = var.enable_guardduty ? aws_guardduty_detector.threat_detector[0].arn : null
+}
+
+output "cloudtrail_insights_monitoring" {
+  description = "CloudTrail Insights cost monitoring alarms (if enabled)"
+  value = var.enable_cloudtrail_insights_monitoring ? {
+    volume_alarm_arn = aws_cloudwatch_metric_alarm.cloudtrail_insights_volume[0].arn
+    cost_alarm_arn   = aws_cloudwatch_metric_alarm.cloudtrail_insights_cost[0].arn
+  } : null
+}
+
 output "cross_account_assume_role_commands" {
   description = "AWS CLI commands to assume the created roles from trusted accounts"
   value = {
@@ -1066,14 +1195,14 @@ output "security_configuration_summary" {
     data_events_logging = var.cloudtrail_enable_data_events
     log_retention_days  = var.cloudtrail_retention_days
     aws_config_enabled  = var.enable_aws_config
+    guardduty_enabled   = var.enable_guardduty
     ip_restrictions     = length(var.restricted_ip_ranges) > 0 ? var.restricted_ip_ranges : ["No restrictions"]
     cloudtrail_insights = true
+    insights_monitoring = var.enable_cloudtrail_insights_monitoring
     lifecycle_policies  = true
   }
 }
 ```
-
-# main.tf - Single file IAM Security Configuration as Code
 
 # All variables, locals, resources, and outputs in one file per team standards
 
