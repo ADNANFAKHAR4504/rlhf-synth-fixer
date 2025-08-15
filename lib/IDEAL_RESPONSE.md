@@ -197,7 +197,7 @@ aws_s3_bucket.secure_storage.arn,
 ]
 Condition = {
 IpAddressIfExists = {
-"aws:SourceIp" = var.allowed*ip_ranges
+"aws:SourceIp" = var.allowed_ip_ranges
 }
 Bool = {
 "aws:ViaAWSService" = "false"
@@ -207,7 +207,7 @@ Bool = {
 {
 Sid = "AllowFromSpecificIPs"
 Effect = "Allow"
-Principal = "*"
+Principal = "_"
 Action = [
 "s3:GetObject",
 "s3:PutObject",
@@ -323,7 +323,7 @@ include_global_service_events = true
 is_multi_region_trail = true
 enable_logging = true
 
-cloud_watch_logs_group_arn = aws_cloudwatch_log_group.cloudtrail_log_group.arn
+cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:\*"
 cloud_watch_logs_role_arn = aws_iam_role.cloudtrail_logs_role.arn
 
 event_selector {
