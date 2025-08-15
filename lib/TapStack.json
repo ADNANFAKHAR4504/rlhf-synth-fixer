@@ -405,7 +405,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "app-assets-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "app-assets-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -512,7 +512,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "LoadBalancer-SG-${EnvironmentSuffix}"
+                    "Fn::Sub": "${AWS::StackName}-LoadBalancer-SG-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
@@ -555,7 +555,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "WebServer-SG-${EnvironmentSuffix}"
+                    "Fn::Sub": "${AWS::StackName}-WebServer-SG-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for web servers - only accessible via load balancer",
                 "VpcId": {
@@ -600,7 +600,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "Database-SG-${EnvironmentSuffix}"
+                    "Fn::Sub": "${AWS::StackName}-Database-SG-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for RDS database - only accessible from web servers",
                 "VpcId": {

@@ -234,7 +234,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'app-assets-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'app-assets-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -299,7 +299,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'LoadBalancer-SG-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-LoadBalancer-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -328,7 +328,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'WebServer-SG-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-WebServer-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for web servers - only accessible via load balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -357,7 +357,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'Database-SG-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-Database-SG-${EnvironmentSuffix}'
       GroupDescription: 'Security group for RDS database - only accessible from web servers'
       VpcId: !Ref VPC
       SecurityGroupIngress:
