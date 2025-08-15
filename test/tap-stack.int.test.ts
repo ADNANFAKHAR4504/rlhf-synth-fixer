@@ -78,16 +78,20 @@ describe("TapStack Infrastructure Integration Tests", () => {
       const location = await s3.send(
         new GetBucketLocationCommand({ Bucket: bucket })
       );
-      // S3 returns null or "" for us-east-1
-      expect([null, "", region, "us-east-1"]).toContain(location.LocationConstraint);
+      // S3 returns null or "" if bucket is in us-east-1
+      const expectedRegionSet = region === "us-east-1"
+        ? [null, "", "us-east-1"]
+        : [region];
+      expect(expectedRegionSet).toContain(location.LocationConstraint);
     });
   });
 
   describe("Application Load Balancer", () => {
     test("should exist and have HTTP listener", async () => {
       const albDns = outputs.LoadBalancerDNS;
-      // AWS API expects the short ALB name, not the full DNS
-      const albName = albDns.split(".")[0];
+      // Reconstruct the actual resource Name of the ALB used in CloudFormation:
+      const albName = `${process.env.PROJECT || "myproject"}-${process.env.ENVIRONMENT || "dev"}-ALB`;
+
       const res = await alb.send(
         new DescribeLoadBalancersCommand({ Names: [albName] })
       );
