@@ -20,14 +20,7 @@ variable "environment" {
   }
 }
 
-variable "account_id" {
-  description = "Current AWS account ID"
-  type        = string
-  validation {
-    condition     = can(regex("^[0-9]{12}$", var.account_id))
-    error_message = "Account ID must be a 12-digit number."
-  }
-}
+# account_id is now automatically retrieved via data source - no variable needed
 
 variable "trusted_account_ids" {
   description = "List of AWS account IDs that can assume roles"
@@ -107,6 +100,9 @@ variable "tags" {
 ########################
 
 locals {
+  account_id = data.aws_caller_identity.current.account_id
+  region     = data.aws_region.current.name
+  
   common_tags = merge(var.tags, {
     Environment = var.environment
     ManagedBy   = "Terraform"
@@ -121,6 +117,9 @@ locals {
 # Data source for current AWS account and partition
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
+data "aws_region" "current" {}
+
+
 
 # Trust policy for cross-account role assumption
 data "aws_iam_policy_document" "cross_account_trust" {
@@ -183,9 +182,9 @@ data "aws_iam_policy_document" "app_deploy_policy" {
       "ecs:DeleteService"
     ]
     resources = [
-      "arn:${data.aws_partition.current.partition}:ecs:*:${var.account_id}:cluster/${var.environment}-*",
-      "arn:${data.aws_partition.current.partition}:ecs:*:${var.account_id}:service/${var.environment}-*/*",
-      "arn:${data.aws_partition.current.partition}:ecs:*:${var.account_id}:task-definition/${var.environment}-*:*"
+      "arn:${data.aws_partition.current.partition}:ecs:*:${local.account_id}:cluster/${var.environment}-*",
+      "arn:${data.aws_partition.current.partition}:ecs:*:${local.account_id}:service/${var.environment}-*/*",
+      "arn:${data.aws_partition.current.partition}:ecs:*:${local.account_id}:task-definition/${var.environment}-*:*"
     ]
   }
 
@@ -193,7 +192,7 @@ data "aws_iam_policy_document" "app_deploy_policy" {
     sid    = "IAMPassRoleForDeployment"
     effect = "Allow"
     actions = ["iam:PassRole"]
-    resources = ["arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/${var.environment}-*"]
+    resources = ["arn:${data.aws_partition.current.partition}:iam::${local.account_id}:role/${var.environment}-*"]
     condition {
       test     = "StringEquals"
       variable = "iam:PassedToService"
@@ -353,7 +352,7 @@ data "aws_iam_policy_document" "cloudtrail_write_policy" {
       "logs:CreateLogStream",
       "logs:PutLogEvents"
     ]
-    resources = ["arn:${data.aws_partition.current.partition}:logs:*:${var.account_id}:log-group:/aws/cloudtrail/*"]
+    resources = ["arn:${data.aws_partition.current.partition}:logs:*:${local.account_id}:log-group:/aws/cloudtrail/*"]
   }
 }
 
@@ -371,7 +370,7 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = ["arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${var.account_id}:trail/${var.environment}-security-trail"]
+      values   = ["arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${local.account_id}:trail/${var.environment}-security-trail"]
     }
   }
 
@@ -392,7 +391,7 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = ["arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${var.account_id}:trail/${var.environment}-security-trail"]
+      values   = ["arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${local.account_id}:trail/${var.environment}-security-trail"]
     }
   }
 }
@@ -856,7 +855,7 @@ output "security_configuration_summary" {
   description = "Summary of the security configuration deployed"
   value = {
     environment             = var.environment
-    account_id             = var.account_id
+    account_id             = local.account_id
     trusted_accounts       = var.trusted_account_ids
     roles_created         = 3
     policies_created      = 6

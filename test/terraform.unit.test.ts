@@ -61,7 +61,6 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
     const requiredVariables = [
       'aws_region',
       'environment',
-      'account_id',
       'trusted_account_ids',
       'log_bucket_name',
       'app_s3_bucket_name',
@@ -81,8 +80,11 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
       expect(mainContent).toMatch(/(dev|staging|prod)/);
     });
 
-    test('account_id variable validates 12-digit format', () => {
-      expect(mainContent).toMatch(/\[0-9\]\{12\}/);
+    test('uses data source for account_id instead of variable', () => {
+      expect(mainContent).toMatch(/data\s+"aws_caller_identity"\s+"current"/);
+      expect(mainContent).toMatch(
+        /account_id\s*=\s*data\.aws_caller_identity\.current\.account_id/
+      );
     });
   });
 
@@ -229,7 +231,7 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
     });
 
     test('uses variables for sensitive configuration', () => {
-      expect(allContent).toMatch(/var\.account_id/);
+      expect(allContent).toMatch(/local\.account_id/); // Now uses data source
       expect(allContent).toMatch(/var\.log_bucket_name/);
       expect(allContent).toMatch(/var\.notification_email/);
     });
