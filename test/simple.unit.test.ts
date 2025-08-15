@@ -1,8 +1,8 @@
 import * as pulumi from '@pulumi/pulumi';
-import { DynamoDBStack } from '../lib/dynamodb-stack';
-import { LambdaStack } from '../lib/lambda-stack';
 import { ApiGatewayStack } from '../lib/api-gateway-stack';
 import { CloudWatchStack } from '../lib/cloudwatch-stack';
+import { DynamoDBStack } from '../lib/dynamodb-stack';
+import { LambdaStack } from '../lib/lambda-stack';
 import { TapStack } from '../lib/tap-stack';
 
 // Set up Pulumi runtime mocks before imports
@@ -77,7 +77,7 @@ describe('Serverless Infrastructure Components', () => {
 
       const stack = new LambdaStack('test-lambda', {
         environmentSuffix: 'test',
-        dynamoTableName: mockTableName,
+        tableName: mockTableName,
         tags: { Environment: 'test' },
       });
 

@@ -45,6 +45,19 @@ pulumiMock.interpolate = (
 };
 
 // Mock all function
-pulumiMock.all = (values: unknown[]) => {
-  return pulumi.Output.create(values);
+pulumiMock.all = function (...args: any[]): any {
+  // If called with a single object, treat as Record<string, Input<T>>
+  if (
+    args.length === 1 &&
+    typeof args[0] === 'object' &&
+    !Array.isArray(args[0])
+  ) {
+    return pulumi.Output.create(args[0]);
+  }
+  // If called with an array, treat as Input<T>[]
+  if (args.length === 1 && Array.isArray(args[0])) {
+    return pulumi.Output.create(args[0]);
+  }
+  // If called with multiple arguments, treat as Input<T1>, Input<T2>, ...
+  return pulumi.Output.create(args);
 };
