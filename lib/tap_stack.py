@@ -798,10 +798,9 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # CloudTrail for audit logging
-    stack_name = pulumi.get_stack()
     self.cloudtrail_bucket = aws.s3.Bucket(
       f"cloudtrail-{self.environment_suffix}",
-      bucket=f"microservices-cloudtrail-{self.environment_suffix}-{stack_name}",
+      bucket=f"microservices-cloudtrail-{self.environment_suffix}-{pulumi.get_stack()}".lower().replace("_", "-"),
       versioning=aws.s3.BucketVersioningArgs(enabled=True),
       server_side_encryption_configuration=(
         aws.s3.BucketServerSideEncryptionConfigurationArgs(
