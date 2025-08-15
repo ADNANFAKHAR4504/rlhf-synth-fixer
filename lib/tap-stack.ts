@@ -71,10 +71,14 @@ export class TapStack extends pulumi.ComponentResource {
     // --- Instantiate Nested Components Here ---
     // Create the secure infrastructure component
     const secureInfrastructure = new SecureInfrastructure(
-      'tap-secure-infrastructure',
+      `secure-infrastructure-${environment}`,
       {
         environment: environment,
-        tags: tags,
+        tags: {
+          ...tags,
+          ManagedBy: 'Pulumi',
+          Component: 'SecureInfrastructure',
+        },
       },
       { parent: this }
     );
