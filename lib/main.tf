@@ -355,7 +355,7 @@ resource "aws_s3_bucket_logging" "app_bucket" {
 ########################
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = "${local.name_prefix}-alb-${random_string.suffix.result}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -369,7 +369,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "${local.name_prefix}-tg"
+  name     = "${local.name_prefix}-tg-${random_string.suffix.result}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -543,6 +543,16 @@ output "load_balancer_name" {
 output "load_balancer_arn" {
   description = "ARN of the load balancer"
   value       = aws_lb.main.arn
+}
+
+output "target_group_name" {
+  description = "Name of the target group"
+  value       = aws_lb_target_group.main.name
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = aws_lb_target_group.main.arn
 }
 
 output "s3_app_bucket_name" {

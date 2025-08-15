@@ -33,6 +33,8 @@ type OutputsFile = {
   load_balancer_zone_id: TFVal<string>;
   load_balancer_name: TFVal<string>;
   load_balancer_arn: TFVal<string>;
+  target_group_name: TFVal<string>;
+  target_group_arn: TFVal<string>;
   s3_app_bucket_name: TFVal<string>;
   s3_log_bucket_name: TFVal<string>;
   autoscaling_group_name: TFVal<string>;
@@ -63,6 +65,8 @@ function loadOutputs() {
     loadBalancerZoneId: req("load_balancer_zone_id"),
     loadBalancerName: req("load_balancer_name"),
     loadBalancerArn: req("load_balancer_arn"),
+    targetGroupName: req("target_group_name"),
+    targetGroupArn: req("target_group_arn"),
     s3AppBucketName: req("s3_app_bucket_name"),
     s3LogBucketName: req("s3_log_bucket_name"),
     autoscalingGroupName: req("autoscaling_group_name"),
@@ -185,7 +189,7 @@ describe("Production AWS Infrastructure - Integration Tests", () => {
 
     test("target group is configured correctly", async () => {
       const cmd = new DescribeTargetGroupsCommand({
-        Names: [`base-production-tg`], // Based on naming pattern
+        Names: [outputs.targetGroupName], // Use actual target group name from outputs
       });
       
       const result = await elbClient.send(cmd);
