@@ -10,6 +10,25 @@ terraform {
 # Variables
 #######################
 
+variable "author" {
+  description = "Author of the project"
+  type        = string
+}
+
+variable "created_date" {
+  description = "Creation date"
+  type        = string
+}
+
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+}
 variable "aws_region" {
   description = "The AWS region where resources will be created"
   type        = string
