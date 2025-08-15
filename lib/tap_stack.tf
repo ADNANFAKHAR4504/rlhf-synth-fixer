@@ -12,7 +12,7 @@ data "aws_availability_zones" "secondary" {
 # KMS Keys for encryption
 resource "aws_kms_key" "financial_app_primary" {
   provider                = aws.primary
-  description             = "KMS key for financial app encryption - primary region"
+  description             = "KMS key for financial app encryption - primary region - ${local.environment_suffix}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -32,13 +32,19 @@ resource "aws_kms_key" "financial_app_primary" {
   })
 
   tags = {
-    Name = "financial-app-kms-primary"
+    Name        = "${local.name_prefix}-kms-primary"
+    Environment = local.environment_suffix
+  }
+
+  # Enable deletion protection can be removed for cleanup
+  lifecycle {
+    prevent_destroy = false
   }
 }
 
 resource "aws_kms_key" "financial_app_secondary" {
   provider                = aws.secondary
-  description             = "KMS key for financial app encryption - secondary region"
+  description             = "KMS key for financial app encryption - secondary region - ${local.environment_suffix}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -58,19 +64,25 @@ resource "aws_kms_key" "financial_app_secondary" {
   })
 
   tags = {
-    Name = "financial-app-kms-secondary"
+    Name        = "${local.name_prefix}-kms-secondary"
+    Environment = local.environment_suffix
+  }
+
+  # Enable deletion protection can be removed for cleanup
+  lifecycle {
+    prevent_destroy = false
   }
 }
 
 resource "aws_kms_alias" "financial_app_primary" {
   provider      = aws.primary
-  name          = "alias/financial-app-primary"
+  name          = "alias/${local.name_prefix}-primary"
   target_key_id = aws_kms_key.financial_app_primary.key_id
 }
 
 resource "aws_kms_alias" "financial_app_secondary" {
   provider      = aws.secondary
-  name          = "alias/financial-app-secondary"
+  name          = "alias/${local.name_prefix}-secondary"
   target_key_id = aws_kms_key.financial_app_secondary.key_id
 }
 
@@ -85,7 +97,8 @@ resource "aws_vpc" "primary" {
   enable_dns_support   = true
 
   tags = {
-    Name = "financial-app-vpc-primary"
+    Name        = "${local.name_prefix}-vpc-primary"
+    Environment = local.environment_suffix
   }
 }
 
@@ -97,7 +110,8 @@ resource "aws_vpc" "secondary" {
   enable_dns_support   = true
 
   tags = {
-    Name = "financial-app-vpc-secondary"
+    Name        = "${local.name_prefix}-vpc-secondary"
+    Environment = local.environment_suffix
   }
 }
 
@@ -107,7 +121,8 @@ resource "aws_internet_gateway" "primary" {
   vpc_id   = aws_vpc.primary.id
 
   tags = {
-    Name = "financial-app-igw-primary"
+    Name        = "${local.name_prefix}-igw-primary"
+    Environment = local.environment_suffix
   }
 }
 
@@ -116,7 +131,8 @@ resource "aws_internet_gateway" "secondary" {
   vpc_id   = aws_vpc.secondary.id
 
   tags = {
-    Name = "financial-app-igw-secondary"
+    Name        = "${local.name_prefix}-igw-secondary"
+    Environment = local.environment_suffix
   }
 }
 
@@ -130,8 +146,9 @@ resource "aws_subnet" "public_primary" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "financial-app-public-subnet-primary-${count.index + 1}"
-    Type = "public"
+    Name        = "${local.name_prefix}-public-subnet-primary-${count.index + 1}"
+    Type        = "public"
+    Environment = local.environment_suffix
   }
 }
 
@@ -144,8 +161,9 @@ resource "aws_subnet" "private_primary" {
   availability_zone = data.aws_availability_zones.primary.names[count.index]
 
   tags = {
-    Name = "financial-app-private-subnet-primary-${count.index + 1}"
-    Type = "private"
+    Name        = "${local.name_prefix}-private-subnet-primary-${count.index + 1}"
+    Type        = "private"
+    Environment = local.environment_suffix
   }
 }
 
@@ -159,8 +177,9 @@ resource "aws_subnet" "public_secondary" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "financial-app-public-subnet-secondary-${count.index + 1}"
-    Type = "public"
+    Name        = "${local.name_prefix}-public-subnet-secondary-${count.index + 1}"
+    Type        = "public"
+    Environment = local.environment_suffix
   }
 }
 
@@ -173,8 +192,9 @@ resource "aws_subnet" "private_secondary" {
   availability_zone = data.aws_availability_zones.secondary.names[count.index]
 
   tags = {
-    Name = "financial-app-private-subnet-secondary-${count.index + 1}"
-    Type = "private"
+    Name        = "${local.name_prefix}-private-subnet-secondary-${count.index + 1}"
+    Type        = "private"
+    Environment = local.environment_suffix
   }
 }
 
@@ -185,7 +205,8 @@ resource "aws_eip" "nat_primary" {
   domain   = "vpc"
 
   tags = {
-    Name = "financial-app-nat-eip-primary-${count.index + 1}"
+    Name        = "${local.name_prefix}-nat-eip-primary-${count.index + 1}"
+    Environment = local.environment_suffix
   }
 }
 
@@ -195,7 +216,8 @@ resource "aws_eip" "nat_secondary" {
   domain   = "vpc"
 
   tags = {
-    Name = "financial-app-nat-eip-secondary-${count.index + 1}"
+    Name        = "${local.name_prefix}-nat-eip-secondary-${count.index + 1}"
+    Environment = local.environment_suffix
   }
 }
 
@@ -206,7 +228,8 @@ resource "aws_nat_gateway" "primary" {
   subnet_id     = aws_subnet.public_primary[count.index].id
 
   tags = {
-    Name = "financial-app-nat-primary-${count.index + 1}"
+    Name        = "${local.name_prefix}-nat-primary-${count.index + 1}"
+    Environment = local.environment_suffix
   }
 
   depends_on = [aws_internet_gateway.primary]
@@ -219,7 +242,8 @@ resource "aws_nat_gateway" "secondary" {
   subnet_id     = aws_subnet.public_secondary[count.index].id
 
   tags = {
-    Name = "financial-app-nat-secondary-${count.index + 1}"
+    Name        = "${local.name_prefix}-nat-secondary-${count.index + 1}"
+    Environment = local.environment_suffix
   }
 
   depends_on = [aws_internet_gateway.secondary]
@@ -236,7 +260,8 @@ resource "aws_route_table" "public_primary" {
   }
 
   tags = {
-    Name = "financial-app-public-rt-primary"
+    Name        = "${local.name_prefix}-public-rt-primary"
+    Environment = local.environment_suffix
   }
 }
 
@@ -251,7 +276,8 @@ resource "aws_route_table" "private_primary" {
   }
 
   tags = {
-    Name = "financial-app-private-rt-primary-${count.index + 1}"
+    Name        = "${local.name_prefix}-private-rt-primary-${count.index + 1}"
+    Environment = local.environment_suffix
   }
 }
 
@@ -266,7 +292,8 @@ resource "aws_route_table" "public_secondary" {
   }
 
   tags = {
-    Name = "financial-app-public-rt-secondary"
+    Name        = "${local.name_prefix}-public-rt-secondary"
+    Environment = local.environment_suffix
   }
 }
 
@@ -281,7 +308,8 @@ resource "aws_route_table" "private_secondary" {
   }
 
   tags = {
-    Name = "financial-app-private-rt-secondary-${count.index + 1}"
+    Name        = "${local.name_prefix}-private-rt-secondary-${count.index + 1}"
+    Environment = local.environment_suffix
   }
 }
 
@@ -317,7 +345,7 @@ resource "aws_route_table_association" "private_secondary" {
 
 # IAM Roles and Policies
 resource "aws_iam_role" "financial_app_role" {
-  name = "financial-app-role"
+  name = "${local.name_prefix}-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -333,12 +361,13 @@ resource "aws_iam_role" "financial_app_role" {
   })
 
   tags = {
-    Name = "financial-app-role"
+    Name        = "${local.name_prefix}-role"
+    Environment = local.environment_suffix
   }
 }
 
 resource "aws_iam_policy" "financial_app_policy" {
-  name        = "financial-app-policy"
+  name        = "${local.name_prefix}-policy"
   description = "Policy for financial app with minimal required permissions"
 
   policy = jsonencode({
@@ -380,6 +409,11 @@ resource "aws_iam_policy" "financial_app_policy" {
       }
     ]
   })
+
+  tags = {
+    Name        = "${local.name_prefix}-policy"
+    Environment = local.environment_suffix
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "financial_app_policy_attachment" {
@@ -388,38 +422,45 @@ resource "aws_iam_role_policy_attachment" "financial_app_policy_attachment" {
 }
 
 resource "aws_iam_instance_profile" "financial_app_profile" {
-  name = "financial-app-profile"
+  name = "${local.name_prefix}-profile"
   role = aws_iam_role.financial_app_role.name
+
+  tags = {
+    Name        = "${local.name_prefix}-profile"
+    Environment = local.environment_suffix
+  }
 }
 
 # CloudWatch Log Groups - Primary Region
 resource "aws_cloudwatch_log_group" "financial_app_primary" {
   provider          = aws.primary
-  name              = "/aws/financial-app/primary"
+  name              = "/aws/${local.name_prefix}/primary"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.financial_app_primary.arn
 
   tags = {
-    Name = "financial-app-logs-primary"
+    Name        = "${local.name_prefix}-logs-primary"
+    Environment = local.environment_suffix
   }
 }
 
 # CloudWatch Log Groups - Secondary Region
 resource "aws_cloudwatch_log_group" "financial_app_secondary" {
   provider          = aws.secondary
-  name              = "/aws/financial-app/secondary"
+  name              = "/aws/${local.name_prefix}/secondary"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.financial_app_secondary.arn
 
   tags = {
-    Name = "financial-app-logs-secondary"
+    Name        = "${local.name_prefix}-logs-secondary"
+    Environment = local.environment_suffix
   }
 }
 
 # CloudWatch Alarms for monitoring
 resource "aws_cloudwatch_metric_alarm" "high_cpu_primary" {
   provider            = aws.primary
-  alarm_name          = "financial-app-high-cpu-primary"
+  alarm_name          = "${local.name_prefix}-high-cpu-primary"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -431,13 +472,14 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu_primary" {
   alarm_actions       = [aws_sns_topic.alerts_primary.arn]
 
   tags = {
-    Name = "financial-app-cpu-alarm-primary"
+    Name        = "${local.name_prefix}-cpu-alarm-primary"
+    Environment = local.environment_suffix
   }
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu_secondary" {
   provider            = aws.secondary
-  alarm_name          = "financial-app-high-cpu-secondary"
+  alarm_name          = "${local.name_prefix}-high-cpu-secondary"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -449,35 +491,38 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu_secondary" {
   alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
 
   tags = {
-    Name = "financial-app-cpu-alarm-secondary"
+    Name        = "${local.name_prefix}-cpu-alarm-secondary"
+    Environment = local.environment_suffix
   }
 }
 
 # SNS Topics for alerts
 resource "aws_sns_topic" "alerts_primary" {
   provider          = aws.primary
-  name              = "financial-app-alerts-primary"
+  name              = "${local.name_prefix}-alerts-primary"
   kms_master_key_id = aws_kms_key.financial_app_primary.id
 
   tags = {
-    Name = "financial-app-alerts-primary"
+    Name        = "${local.name_prefix}-alerts-primary"
+    Environment = local.environment_suffix
   }
 }
 
 resource "aws_sns_topic" "alerts_secondary" {
   provider          = aws.secondary
-  name              = "financial-app-alerts-secondary"
+  name              = "${local.name_prefix}-alerts-secondary"
   kms_master_key_id = aws_kms_key.financial_app_secondary.id
 
   tags = {
-    Name = "financial-app-alerts-secondary"
+    Name        = "${local.name_prefix}-alerts-secondary"
+    Environment = local.environment_suffix
   }
 }
 
 # Security Groups
 resource "aws_security_group" "financial_app_primary" {
   provider    = aws.primary
-  name        = "financial-app-sg-primary"
+  name        = "${local.name_prefix}-sg-primary"
   description = "Security group for financial app - primary region"
   vpc_id      = aws_vpc.primary.id
 
@@ -503,13 +548,14 @@ resource "aws_security_group" "financial_app_primary" {
   }
 
   tags = {
-    Name = "financial-app-sg-primary"
+    Name        = "${local.name_prefix}-sg-primary"
+    Environment = local.environment_suffix
   }
 }
 
 resource "aws_security_group" "financial_app_secondary" {
   provider    = aws.secondary
-  name        = "financial-app-sg-secondary"
+  name        = "${local.name_prefix}-sg-secondary"
   description = "Security group for financial app - secondary region"
   vpc_id      = aws_vpc.secondary.id
 
@@ -535,6 +581,7 @@ resource "aws_security_group" "financial_app_secondary" {
   }
 
   tags = {
-    Name = "financial-app-sg-secondary"
+    Name        = "${local.name_prefix}-sg-secondary"
+    Environment = local.environment_suffix
   }
 }

@@ -53,3 +53,20 @@ variable "environment" {
   type        = string
   default     = "production"
 }
+
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to avoid conflicts"
+  type        = string
+  default     = ""
+}
+
+variable "aws_region" {
+  description = "AWS region for deployment"
+  type        = string
+  default     = "us-east-1"
+}
+
+locals {
+  environment_suffix = var.environment_suffix != "" ? var.environment_suffix : "dev"
+  name_prefix        = "financial-app-${local.environment_suffix}"
+}
