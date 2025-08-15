@@ -3,6 +3,9 @@ import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
+// Set AWS_REGION environment variable for CI/CD pipeline
+process.env.AWS_REGION = 'us-west-2';
+
 const app = new cdk.App();
 
 // Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
@@ -21,6 +24,6 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1', // Set to us-east-1 as per updated PROMPT.md requirements
+    region: 'us-west-2', // Set to us-west-2 as per updated PROMPT.md requirements
   },
 });
