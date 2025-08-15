@@ -1,0 +1,20 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr876",
+  "team": "synth",
+  "startedAt": "2025-08-15T13:03:23+05:30",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "CI/CD Pipeline Infrastructure", 
+    "Serverless Architecture Implementation",
+    "Database Management",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
+  ]
+}

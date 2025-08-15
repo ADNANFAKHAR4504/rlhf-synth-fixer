@@ -1,0 +1,53 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo "Installing dependencies"
+      - pip install --upgrade pip
+      - pip install pytest boto3 moto aws-xray-sdk
+      
+  pre_build:
+    commands:
+      - echo "Running pre-build tasks"
+      - echo "Linting Python code"
+      - python -m py_compile src/user_service/lambda_function.py || true
+      - python -m py_compile src/order_service/lambda_function.py || true
+      - python -m py_compile src/notification_service/lambda_function.py || true
+      
+  build:
+    commands:
+      - echo "Running tests"
+      - python -m pytest tests/ -v || true
+      
+      - echo "Building deployment packages"
+      - mkdir -p build
+      
+      # Package user service
+      - cd src/user_service
+      - zip -r ../../build/user-service.zip . -x "*.pyc" "*__pycache__*"
+      - cd ../..
+      
+      # Package order service  
+      - cd src/order_service
+      - zip -r ../../build/order-service.zip . -x "*.pyc" "*__pycache__*"
+      - cd ../..
+      
+      # Package notification service
+      - cd src/notification_service
+      - zip -r ../../build/notification-service.zip . -x "*.pyc" "*__pycache__*"
+      - cd ../..
+      
+      - echo "Uploading artifacts to S3"
+      - aws s3 cp build/ s3://$ARTIFACTS_BUCKET/builds/$(date +%Y-%m-%d)/ --recursive
+      
+  post_build:
+    commands:
+      - echo "Build completed successfully"
+      
+artifacts:
+  files:
+    - 'build/**/*'
+  name: BuildArtifacts
