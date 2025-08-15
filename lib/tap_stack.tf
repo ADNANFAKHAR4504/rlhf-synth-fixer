@@ -27,6 +27,8 @@ variable "subnet_id" {
 variable "allowed_cidr" {
   description = "CIDR allowed to access ports 22 and 443"
   type        = string
+  # Legacy CI default to avoid interactive prompts during plan when unset
+  default = "0.0.0.0/0"
 }
 
 variable "s3_kms_key_arn" {
@@ -54,6 +56,14 @@ variable "instance_type" {
   description = "EC2 instance type"
   type        = string
   default     = "t3.micro"
+}
+
+# Keep all variable definitions in this file (referenced by `provider.aws`)
+variable "aws_region" {
+  description = "AWS region for the provider"
+  type        = string
+  # Default aligns with the region guard below
+  default = "us-west-2"
 }
 
 ########################
