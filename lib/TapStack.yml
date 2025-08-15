@@ -400,7 +400,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      InstanceProfileName: !Sub "TapStack${EnvironmentSuffix}-ec2-profile"
       Roles:
         - !Ref EC2Role
 
@@ -604,7 +603,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      FunctionName: !Sub "TapStack${EnvironmentSuffix}-lambda-function"
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -650,7 +648,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub "/aws/lambda/TapStack${EnvironmentSuffix}-lambda-function"
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
       RetentionInDays: 30
       Tags:
         - Key: Environment
