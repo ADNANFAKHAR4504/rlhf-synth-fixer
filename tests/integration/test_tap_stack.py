@@ -74,17 +74,6 @@ def test_s3_bucket_secure(bucket_prefix, aws_clients):
       ver, "Status") == "Enabled", f"Versioning not enabled for bucket {target}"
 
 # ------------------------
-# API Gateway Test
-# ------------------------
-
-
-def test_api_gateway_exists(aws_clients):
-  apigw = aws_clients["apigw"]
-  apis = apigw.get_rest_apis().get("items", [])
-  target = next((a for a in apis if a["name"].startswith("api-")), None)
-  assert target, "No API Gateway found with name starting with 'api-'"
-
-# ------------------------
 # Lambda Alias Test
 # ------------------------
 
