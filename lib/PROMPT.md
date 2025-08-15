@@ -10,7 +10,7 @@ The infrastructure includes:
 - **Security Groups**  
 - **IAM roles**  
 - **AWS WAF setups**  
-- **AWS Config** for compliance tracking  
+- **AWS Config** 
 
 ## Constraints & Requirements
 
@@ -36,9 +36,3 @@ The infrastructure includes:
   ```
 - The template must satisfy all constraints above.
 - It should deploy successfully in the outlined AWS environment.
-
-## Notes
-
-- Use YAML syntax for CloudFormation.
-- Focus on security best practices, compliance, and automation.
-- Provide clear, structured resource definitions.
