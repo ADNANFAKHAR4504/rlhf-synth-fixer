@@ -451,20 +451,6 @@
         }
     },
     "Outputs": {
-        "SecureAccessRoleArn": {
-            "Description": "ARN of the secure access role with MFA enforcement",
-            "Value": {
-                "Fn::GetAtt": [
-                    "SecureAccessRole",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Ref": "AWS::StackName"
-                }
-            }
-        },
         "SecurityAuditTrailArn": {
             "Description": "ARN of the CloudTrail for security auditing",
             "Value": {
