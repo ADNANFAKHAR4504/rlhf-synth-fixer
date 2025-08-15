@@ -66,11 +66,11 @@ resource "aws_s3_bucket" "app_data" {
 **Impact**: Enables multiple deployments without resource name conflicts
 
 ### 4. **Region Mismatch** 
-**Issue**: MODEL_RESPONSE used `us-east-2` but requirements specified `us-west-2`
+**Issue**: MODEL_RESPONSE used `us-east-1` but requirements specified `us-east-2`
 ```hcl
 # INCORRECT - Wrong region
 variable "aws_region" {
-  default = "us-east-2"
+  default = "us-east-1"
 }
 ```
 
@@ -78,7 +78,7 @@ variable "aws_region" {
 ```hcl
 # CORRECT - Required region  
 variable "aws_region" {
-  default = "us-west-2"
+  default = "us-east-2"
 }
 ```
 
