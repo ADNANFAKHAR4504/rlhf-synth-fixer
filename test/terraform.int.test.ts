@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { jest } from '@jest/globals';
+import { EC2, ELBv2 } from 'aws-sdk';
 
 // Interface for Terraform outputs
 interface TerraformOutputs {
@@ -12,9 +13,9 @@ interface TerraformOutputs {
 // Path to the outputs JSON file
 const OUTPUTS_PATH = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
 
-// Mock AWS SDK responses
+// Mock AWS SDK responses with proper typing
 jest.mock('aws-sdk', () => {
-  const mockEC2 = {
+  const mockEC2: Partial<EC2> = {
     describeVpcs: jest.fn().mockReturnValue({
       promise: jest.fn().mockResolvedValue({
         Vpcs: [
@@ -24,7 +25,7 @@ jest.mock('aws-sdk', () => {
             EnableDnsHostnames: true,
           },
         ],
-      }),
+      } as EC2.DescribeVpcsResult),
     }),
     describeSubnets: jest.fn().mockReturnValue({
       promise: jest.fn().mockResolvedValue({
@@ -38,11 +39,11 @@ jest.mock('aws-sdk', () => {
             Tags: [{ Key: 'Tier', Value: 'private' }],
           },
         ],
-      }),
+      } as EC2.DescribeSubnetsResult),
     }),
   };
 
-  const mockELBv2 = {
+  const mockELBv2: Partial<ELBv2> = {
     describeLoadBalancers: jest.fn().mockReturnValue({
       promise: jest.fn().mockResolvedValue({
         LoadBalancers: [
@@ -51,7 +52,7 @@ jest.mock('aws-sdk', () => {
             Type: 'application',
           },
         ],
-      }),
+      } as ELBv2.DescribeLoadBalancersOutput),
     }),
   };
 
@@ -65,8 +66,13 @@ describe('TAP Stack Integration Tests', () => {
   let outputs: TerraformOutputs;
 
   beforeAll(() => {
-    const outputsFile = fs.readFileSync(OUTPUTS_PATH, 'utf8');
-    outputs = JSON.parse(outputsFile);
+    try {
+      const outputsFile = fs.readFileSync(OUTPUTS_PATH, 'utf8');
+      outputs = JSON.parse(outputsFile) as TerraformOutputs;
+    } catch (error) {
+      console.error('Failed to load outputs file:', error);
+      throw error;
+    }
   });
 
   test('Outputs file exists and is valid JSON', () => {
