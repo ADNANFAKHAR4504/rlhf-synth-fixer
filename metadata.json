@@ -5,14 +5,6 @@
   "turn_type": "multi",
   "po_id": "291800",
   "team": "2",
-  "startedAt": "2025-08-14T09:54:34.697Z",
-  "subtask": "Security and Compliance Implementation",
-  "subject_labels": [
-    "Security Configuration",
-    "Access Control", 
-    "Network Configuration",
-    "Database Management",
-    "Monitoring Setup",
-    "General Infrastructure Tooling QA"
+  "startedAt": "2025-08-14T09:54:34.697Z"
   ]
 }
