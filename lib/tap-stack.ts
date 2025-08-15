@@ -86,7 +86,7 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Project prefix for consistent naming as per requirements
-    const projectPrefix = 'projectXYZ';
+    const projectPrefix = `projectXYZ-${environmentSuffix}`;
 
     // KMS Key for S3 encryption at rest
     const s3KmsKey = new KmsKey(this, 's3-kms-key', {
@@ -116,7 +116,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `${projectPrefix}-s3-kms-key-${environmentSuffix}`,
+        Name: `${projectPrefix}-s3-kms-key`,
         Project: projectPrefix,
         Environment: environmentSuffix,
       },
@@ -124,15 +124,15 @@ export class TapStack extends TerraformStack {
 
     // KMS Key Alias for easier reference
     new KmsAlias(this, 's3-kms-key-alias', {
-      name: `alias/${projectPrefix}-s3-encryption-${environmentSuffix}`,
+      name: `alias/${projectPrefix}-s3-encryption`,
       targetKeyId: s3KmsKey.keyId,
     });
 
     // S3 Bucket for data processing
     const dataBucket = new S3Bucket(this, 'data-bucket', {
-      bucket: `${projectPrefix.toLowerCase()}-data-processing-${environmentSuffix}-${current.accountId}`,
+      bucket: `${projectPrefix.toLowerCase()}-data-processing-${current.accountId}`,
       tags: {
-        Name: `${projectPrefix}-data-processing-bucket-${environmentSuffix}`,
+        Name: `${projectPrefix}-data-processing-bucket`,
         Project: projectPrefix,
         Environment: environmentSuffix,
       },
@@ -246,7 +246,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `${projectPrefix}-lambda-execution-role-${environmentSuffix}`,
+        Name: `${projectPrefix}-lambda-execution-role`,
         Project: projectPrefix,
         Environment: environmentSuffix,
       },
@@ -282,12 +282,12 @@ export class TapStack extends TerraformStack {
               'logs:CreateLogStream',
               'logs:PutLogEvents',
             ],
-            Resource: `arn:aws:logs:${currentRegion.name}:${current.accountId}:log-group:/aws/lambda/${projectPrefix}-*-${environmentSuffix}`,
+            Resource: `arn:aws:logs:${currentRegion.name}:${current.accountId}:log-group:/aws/lambda/${projectPrefix}-*`,
           },
         ],
       }),
       tags: {
-        Name: `${projectPrefix}-lambda-s3-kms-policy-${environmentSuffix}`,
+        Name: `${projectPrefix}-lambda-s3-kms-policy`,
         Project: projectPrefix,
         Environment: environmentSuffix,
       },
@@ -304,7 +304,7 @@ export class TapStack extends TerraformStack {
       this,
       'data-processor-lambda',
       {
-        functionName: `${projectPrefix}-data-processor-${environmentSuffix}`,
+        functionName: `${projectPrefix}-data-processor`,
         filename: lambdaAsset.path,
         sourceCodeHash: lambdaAsset.assetHash,
         handler: 'index.handler',
@@ -324,7 +324,7 @@ export class TapStack extends TerraformStack {
           },
         },
         tags: {
-          Name: `${projectPrefix}-data-processor-${environmentSuffix}`,
+          Name: `${projectPrefix}-data-processor`,
           Project: projectPrefix,
           Environment: environmentSuffix,
         },
