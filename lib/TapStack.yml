@@ -467,18 +467,25 @@ Resources:
         - Name: ApiName
           Value: !Ref ApiGateway
 
-  # AWS Config Rule - Using a valid managed rule
-  LambdaConfigRule:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: !Sub "prod-lambda-config-rule-${EnvironmentSuffix}"
-      Description: "Checks whether the Lambda function concurrency limit is appropriately configured."
-      Scope:
-        ComplianceResourceTypes:
-          - AWS::Lambda::Function
-      Source:
-        Owner: AWS
-        SourceIdentifier: LAMBDA_CONCURRENCY_CHECK
+  # AWS Config Rule - COMMENTED OUT: Requires AWS Config Recorder to be enabled
+  # Error: "NoAvailableConfigurationRecorder" - AWS Config must be set up first
+  # To enable this rule, you need to:
+  # 1. Enable AWS Config in your account/region
+  # 2. Create a Configuration Recorder
+  # 3. Start the Configuration Recorder
+  # 4. Then uncomment this resource
+  #
+  # LambdaConfigRule:
+  #   Type: AWS::Config::ConfigRule
+  #   Properties:
+  #     ConfigRuleName: !Sub "prod-lambda-config-rule-${EnvironmentSuffix}"
+  #     Description: "Checks whether the Lambda function concurrency limit is appropriately configured."
+  #     Scope:
+  #       ComplianceResourceTypes:
+  #         - AWS::Lambda::Function
+  #     Source:
+  #       Owner: AWS
+  #       SourceIdentifier: LAMBDA_CONCURRENCY_CHECK
 
 Conditions:
   IsProd: !Equals [!Ref EnvironmentType, "prod"]

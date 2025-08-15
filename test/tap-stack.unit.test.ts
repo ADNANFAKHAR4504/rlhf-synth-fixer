@@ -106,8 +106,7 @@ describe('TapStack CloudFormation Template', () => {
         'WAFIPSet',
         'WAFWebACLAssociation',
         'LambdaErrorAlarm',
-        'APIGatewayErrorAlarm',
-        'LambdaConfigRule'
+        'APIGatewayErrorAlarm'
       ];
 
       expectedResources.forEach(resourceName => {
@@ -326,14 +325,7 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    describe('AWS Config Rule', () => {
-      test('should have Lambda config rule', () => {
-        const configRule = template.Resources.LambdaConfigRule;
-        expect(configRule.Type).toBe('AWS::Config::ConfigRule');
-        expect(configRule.Properties.ConfigRuleName).toBeDefined();
-        expect(configRule.Properties.Description).toBe('Checks whether the Lambda function concurrency limit is appropriately configured.');
-      });
-    });
+
   });
 
   describe('Conditions', () => {
@@ -401,7 +393,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(10); // Should have multiple resources now
+      expect(resourceCount).toBeGreaterThan(9); // Should have multiple resources now (LambdaConfigRule commented out)
     });
 
     test('should have correct number of parameters', () => {

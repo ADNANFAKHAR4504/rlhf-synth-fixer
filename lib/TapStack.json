@@ -765,24 +765,6 @@
                     }
                 ]
             }
-        },
-        "LambdaConfigRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "Properties": {
-                "ConfigRuleName": {
-                    "Fn::Sub": "prod-lambda-config-rule-${EnvironmentSuffix}"
-                },
-                "Description": "Checks whether the Lambda function concurrency limit is appropriately configured.",
-                "Scope": {
-                    "ComplianceResourceTypes": [
-                        "AWS::Lambda::Function"
-                    ]
-                },
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "LAMBDA_CONCURRENCY_CHECK"
-                }
-            }
         }
     },
     "Conditions": {
