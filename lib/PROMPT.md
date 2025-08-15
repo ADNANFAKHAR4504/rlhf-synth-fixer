@@ -1,25 +1,16 @@
------
+We need to build a secure AWS infrastructure using Terraform. Deploy everything to the us-east-2 region.
 
-## Setting Up Our AWS Security: The Casual Version
+Requirements:
+- Use a custom VPC with 10.0.0.0/16 CIDR block
+- Restrict access to services from 203.0.113.0/24 network only
+- S3 buckets must have AES-256 encryption enabled
+- Enable encryption at rest and in transit for all S3 and RDS resources
+- Use IAM roles instead of inline policies where possible
+- Set up CloudTrail for audit logging with secure log storage
+- Organize Terraform code with separate modules for networking and compute
+- Tag all resources with Environment, Owner, and Department
+- Never hardcode IAM access keys in the code
+- Use Terraform version 0.14 or newer
+- Keep EC2 instances in private subnets, not exposed to the internet
 
-Okay, we need to get a **secure AWS setup** going with Terraform.
-
-Here's what we need to do:
-
-  * Put everything in **`us-east-2`**.
-  * All S3 buckets *have to* use **AES-256 encryption**.
-  * We need a **custom VPC** (let's use `10.0.0.0/16` for its network block). Only traffic from **`203.0.113.0/24`** should be able to get to our services there.
-  * Stick to **IAM roles** instead of those "inline policies" whenever possible. It's just cleaner.
-  * Make sure data is **encrypted everywhere** for S3 and RDS – both when it's moving around and when it's just sitting there.
-  * Turn on **CloudTrail** for auditing. We need to know who did what, and those logs need to be stored securely.
-  * Keep the Terraform code **nicely organized** with separate bits for networking and for our compute stuff (like servers).
-  * **Tag all our AWS resources** with 'Environment', 'Owner', and 'Department' for tracking.
-  * **No hardcoded IAM access keys** in the code. Seriously, don't put them in there\!
-  * Use **Terraform version 0.14 or newer**.
-  * Our EC2 instances shouldn't be sitting out there exposed to the internet. Keep 'em private.
-
-We're looking for the Terraform HCL files. They should be neat, **well-commented**, and definitely **not have any hardcoded secrets**. The big test: it needs to pass `terraform plan` and `terraform apply` without any warnings or failures, showing it meets all these security rules.
-
-Good luck\!
-
----
+The code should be clean, well commented, and pass both terraform plan and terraform apply without warnings or errors.
