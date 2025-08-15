@@ -68,3 +68,7 @@ This document lists the issues in the `MODEL_RESPONSE.md` file that were fixed i
   ```yaml
   MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProjectName}/database/${Environment}:SecretString:password}}'
   ```
+
+### **17. CAPABILITY_IAM Compatibility Issue
+- **Issue**: `InsufficientCapabilitiesException: Requires capabilities : [CAPABILITY_NAMED_IAM]`
+- **Fix**: Removed `RoleName` and `GroupName` properties to use auto-generated names compatible with `CAPABILITY_IAM`

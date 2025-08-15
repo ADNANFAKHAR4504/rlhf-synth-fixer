@@ -369,7 +369,6 @@ Resources:
   EC2S3Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Project}-${Environment}-EC2-S3-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -402,7 +401,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Project}-${Environment}-EC2-Profile'
       Roles:
         - !Ref EC2S3Role
 
