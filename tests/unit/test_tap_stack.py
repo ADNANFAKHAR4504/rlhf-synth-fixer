@@ -7,7 +7,11 @@ import unittest
 import ipaddress
 import sys
 import os
+import warnings
 from unittest.mock import Mock, patch
+
+# Suppress Pulumi deprecation warnings for tests
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pulumi_aws")
 
 # Add lib to path to import modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
@@ -114,9 +118,9 @@ class TestTapStackUnits(unittest.TestCase):
       mock_bucket_instance.id = "test-bucket"
       mock_bucket.return_value = mock_bucket_instance
 
-      # Mock other S3 resources with non-deprecated versions
-      with patch('pulumi_aws.s3.BucketVersioning'), \
-          patch('pulumi_aws.s3.BucketServerSideEncryptionConfiguration'), \
+      # Mock other S3 resources (using V2 versions that actually exist)
+      with patch('pulumi_aws.s3.BucketVersioningV2'), \
+          patch('pulumi_aws.s3.BucketServerSideEncryptionConfigurationV2'), \
           patch('pulumi_aws.s3.BucketPublicAccessBlock'), \
           patch('pulumi_aws.s3.BucketPolicy'), \
           patch('pulumi.Output.all') as mock_output:
@@ -222,8 +226,8 @@ class TestTapStackUnits(unittest.TestCase):
       mock_pipeline_instance.name = "test-pipeline"
       mock_pipeline.return_value = mock_pipeline_instance
 
-      # Mock other resources with non-deprecated versions
-      with patch('pulumi_aws.s3.BucketServerSideEncryptionConfiguration'), \
+      # Mock other resources (using V2 versions that actually exist)
+      with patch('pulumi_aws.s3.BucketServerSideEncryptionConfigurationV2'), \
           patch('pulumi_aws.iam.RolePolicyAttachment'):
 
         result = setup_codepipeline("test")
