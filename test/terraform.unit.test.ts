@@ -64,7 +64,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("defines local name_prefix", () => {
       expect(providerContent).toMatch(/locals\s*{\s*environment_suffix/);
-      expect(providerContent).toMatch(/name_prefix\s*=\s*"financial-app-\$\{local\.environment_suffix\}"/);
+      expect(providerContent).toMatch(/name_prefix\s*=\s*"financial-app-\$\{local\.environment_suffix\}-\$\{random_string\.suffix\.result\}"/);
     });
   });
 

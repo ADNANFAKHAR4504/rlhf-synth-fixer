@@ -240,7 +240,7 @@ resource "aws_subnet" "private_secondary" {
 
 # NAT Gateways for private subnets
 resource "aws_eip" "nat_primary" {
-  count    = 2
+  count    = 1
   provider = aws.primary
   domain   = "vpc"
 
@@ -251,7 +251,7 @@ resource "aws_eip" "nat_primary" {
 }
 
 resource "aws_eip" "nat_secondary" {
-  count    = 2
+  count    = 1
   provider = aws.secondary
   domain   = "vpc"
 
@@ -262,7 +262,7 @@ resource "aws_eip" "nat_secondary" {
 }
 
 resource "aws_nat_gateway" "primary" {
-  count         = 2
+  count         = 1
   provider      = aws.primary
   allocation_id = aws_eip.nat_primary[count.index].id
   subnet_id     = aws_subnet.public_primary[count.index].id
@@ -276,7 +276,7 @@ resource "aws_nat_gateway" "primary" {
 }
 
 resource "aws_nat_gateway" "secondary" {
-  count         = 2
+  count         = 1
   provider      = aws.secondary
   allocation_id = aws_eip.nat_secondary[count.index].id
   subnet_id     = aws_subnet.public_secondary[count.index].id
@@ -312,7 +312,7 @@ resource "aws_route_table" "private_primary" {
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.primary[count.index].id
+    nat_gateway_id = aws_nat_gateway.primary[0].id
   }
 
   tags = {
@@ -344,7 +344,7 @@ resource "aws_route_table" "private_secondary" {
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.secondary[count.index].id
+    nat_gateway_id = aws_nat_gateway.secondary[0].id
   }
 
   tags = {
