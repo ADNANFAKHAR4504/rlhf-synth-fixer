@@ -11,10 +11,10 @@
         },
         "ApplicationName": {
             "Type": "String",
-            "Default": "MyApp",
-            "Description": "Name of the application being deployed",
-            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
-            "ConstraintDescription": "Must start with a letter and contain only alphanumeric characters and hyphens"
+            "Default": "myapp",
+            "Description": "Name of the application being deployed (lowercase only)",
+            "AllowedPattern": "^[a-z][a-z0-9-]*$",
+            "ConstraintDescription": "Must start with a lowercase letter and contain only lowercase letters, numbers, and hyphens"
         },
         "NotificationEmail": {
             "Type": "String",
@@ -29,7 +29,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-source-code-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "${ApplicationName}-source-code-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -73,7 +73,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "${ApplicationName}-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -106,7 +106,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-logs-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "${ApplicationName}-logs-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
