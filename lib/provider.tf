@@ -5,65 +5,70 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
   }
-  
+
   # Backend configuration for state management
-  backend "s3" {
-    # These values should be configured during terraform init
-    # bucket = "your-terraform-state-bucket"
-    # key    = "terraform.tfstate"
-    # region = "us-west-2"
-    # dynamodb_table = "terraform-locks"
-    # encrypt = true
-  }
+  # backend "s3" {
+  #   # These values will be configured during terraform init via backend-config
+  # }
+}
+
+# Environment suffix for resource naming
+variable "environment_suffix" {
+  description = "Suffix for resource naming to ensure uniqueness"
+  type        = string
+  default     = "dev"
+}
+
+# AWS Region
+variable "aws_region" {
+  description = "AWS region for deployment"
+  type        = string
+  default     = "us-east-1"
+}
+
+# Workspace configuration
+variable "workspace_name" {
+  description = "Terraform workspace name"
+  type        = string
+  default     = "default"
 }
 
 # Local values for environment configuration
 locals {
-  # Environment mapping based on workspace
-  environment_config = {
-    staging-us-west-2 = {
-      environment = "staging"
-      region      = "us-west-2"
-      short_name  = "stg"
-    }
-    staging-eu-west-1 = {
-      environment = "staging"
-      region      = "eu-west-1"
-      short_name  = "stg"
-    }
-    production-us-west-2 = {
-      environment = "production"
-      region      = "us-west-2"
-      short_name  = "prod"
-    }
-    production-eu-west-1 = {
-      environment = "production"
-      region      = "eu-west-1"
-      short_name  = "prod"
-    }
-  }
-  
-  # Current environment configuration
-  current_env = local.environment_config[terraform.workspace]
-  
-  # Consistent naming convention
-  name_prefix = "${local.current_env.environment}-${replace(local.current_env.region, "-", "")}"
-  
+  # Use environment suffix for resource naming
+  environment_suffix = var.environment_suffix
+
+  # Determine environment based on workspace or suffix
+  environment = terraform.workspace != "default" ? terraform.workspace : (
+    contains(["pr", "dev"], substr(var.environment_suffix, 0, min(3, length(var.environment_suffix)))) ? "staging" : "production"
+  )
+
+  # AWS region
+  region = var.aws_region
+
+  # Consistent naming convention with environment suffix
+  name_prefix = "tap-${local.environment_suffix}"
+
   # Common tags applied to all resources
   common_tags = {
-    Environment   = local.current_env.environment
-    Region       = local.current_env.region
-    Workspace    = terraform.workspace
-    ManagedBy    = "terraform"
-    Project      = "tap-stack"
+    Environment       = local.environment
+    EnvironmentSuffix = local.environment_suffix
+    Region            = local.region
+    Workspace         = terraform.workspace
+    ManagedBy         = "terraform"
+    Project           = "tap-stack"
   }
 }
 
 # Primary AWS Provider
 provider "aws" {
-  region = local.current_env.region
-  
+  region = local.region
+
   default_tags {
     tags = local.common_tags
   }
@@ -72,12 +77,3 @@ provider "aws" {
 # Data source to get current AWS account ID and region
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
-
-# Validation to ensure workspace exists in configuration
-resource "null_resource" "workspace_validation" {
-  count = contains(keys(local.environment_config), terraform.workspace) ? 0 : 1
-  
-  provisioner "local-exec" {
-    command = "echo 'Error: Workspace ${terraform.workspace} is not configured. Valid workspaces: ${join(", ", keys(local.environment_config))}' && exit 1"
-  }
-}
