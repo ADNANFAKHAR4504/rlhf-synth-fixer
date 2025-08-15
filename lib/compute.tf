@@ -55,9 +55,18 @@ resource "aws_launch_template" "main" {
   }
 }
 
+# Random suffix for ASG to avoid naming conflicts
+resource "random_string" "asg_suffix" {
+  length  = 8
+  lower   = true
+  upper   = false
+  numeric = true
+  special = false
+}
+
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${var.resource_prefix}-${var.environment_suffix}-asg"
+  name                      = "${var.resource_prefix}-${var.environment_suffix}-asg-${random_string.asg_suffix.result}"
   vpc_zone_identifier       = aws_subnet.public[*].id
   health_check_type         = "EC2"
   health_check_grace_period = 300
