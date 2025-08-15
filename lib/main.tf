@@ -631,12 +631,14 @@ resource "aws_cloudtrail" "security_trail" {
     read_write_type           = "All"
     include_management_events = true
 
-    # Data events (conditional)
+    # Data events for our S3 buckets only (conditional)
     dynamic "data_resource" {
       for_each = var.cloudtrail_enable_data_events ? [1] : []
       content {
         type   = "AWS::S3::Object"
-        values = ["arn:${data.aws_partition.current.partition}:s3:::*/*"]
+        values = [
+          "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+        ]
       }
     }
   }
