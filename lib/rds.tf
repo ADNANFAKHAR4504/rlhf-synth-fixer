@@ -1,0 +1,150 @@
+# Random password for RDS
+resource "random_password" "db_password" {
+  length  = 16
+  special = true
+}
+
+# Store password in AWS Secrets Manager
+resource "aws_secretsmanager_secret" "db_password" {
+  provider    = aws.primary
+  name        = "${local.resource_prefix}-db-password"
+  description = "Database password for multi-region setup"
+
+  tags = local.common_tags
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  provider  = aws.primary
+  secret_id = aws_secretsmanager_secret.db_password.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = random_password.db_password.result
+  })
+}
+
+# DB Subnet Group - Primary Region
+resource "aws_db_subnet_group" "primary" {
+  provider   = aws.primary
+  name       = "${local.resource_prefix}-primary-db-subnet-group"
+  subnet_ids = aws_subnet.primary_private[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-primary-db-subnet-group"
+  })
+}
+
+# DB Subnet Group - Secondary Region
+resource "aws_db_subnet_group" "secondary" {
+  provider   = aws.secondary
+  name       = "${local.resource_prefix}-secondary-db-subnet-group"
+  subnet_ids = aws_subnet.secondary_private[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-secondary-db-subnet-group"
+  })
+}
+
+# Primary RDS Instance with Multi-AZ
+resource "aws_db_instance" "primary" {
+  provider              = aws.primary
+  identifier            = "${local.resource_prefix}-primary-db"
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_type          = "gp2"
+  engine                = "mysql"
+  engine_version        = "8.0"
+  instance_class        = var.db_instance_class
+  db_name               = var.db_name
+  username              = var.db_username
+  password              = random_password.db_password.result
+
+  # Multi-AZ for high availability
+  multi_az = true
+
+  # Backup configuration
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  # Security and Network
+  vpc_security_group_ids = [aws_security_group.primary_rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.primary.name
+
+  # Performance and Monitoring
+  # Disabled for t3.micro - not supported
+  performance_insights_enabled = false
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_enhanced_monitoring.arn
+
+  # Encryption
+  storage_encrypted = true
+
+  # Disable final snapshot for demo purposes
+  skip_final_snapshot = true
+
+  # Enable automated backups for cross-region read replica
+  copy_tags_to_snapshot = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-primary-db"
+  })
+
+  depends_on = [aws_iam_role.rds_enhanced_monitoring]
+}
+
+# Cross-region Read Replica in Secondary Region
+resource "aws_db_instance" "secondary_replica" {
+  provider            = aws.secondary
+  identifier          = "${local.resource_prefix}-secondary-replica"
+  replicate_source_db = aws_db_instance.primary.identifier
+
+  # Override source settings for replica
+  instance_class             = var.db_instance_class
+  auto_minor_version_upgrade = false
+
+  # Security and Network for replica
+  vpc_security_group_ids = [aws_security_group.secondary_rds.id]
+
+  # Performance and Monitoring
+  # Disabled for t3.micro - not supported
+  performance_insights_enabled = false
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_enhanced_monitoring.arn
+
+  # Disable final snapshot for demo purposes
+  skip_final_snapshot = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-secondary-replica"
+  })
+
+  depends_on = [
+    aws_db_instance.primary,
+    aws_iam_role.rds_enhanced_monitoring
+  ]
+}
+
+# IAM Role for RDS Enhanced Monitoring
+resource "aws_iam_role" "rds_enhanced_monitoring" {
+  name = "${var.project_name}-rds-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
+  role       = aws_iam_role.rds_enhanced_monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
