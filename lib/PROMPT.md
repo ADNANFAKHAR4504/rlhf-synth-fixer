@@ -1,82 +1,53 @@
-Secure AWS Storage and IAM Management
+Here's a prompt that is designed for Claude Sonnet, focusing on AWS and Terraform HCL for a Secure AWS Storage and IAM Management infrastructure, emphasizing resource connections, best practices, and detailed output requirements.
 
-Objective:
-We need to configure an AWS infrastructure using Terraform, focusing on secure storage and managing IAM roles. The VPC is already set up, and all resources must be placed within the provided network CIDRs.
+# Objective:
 
-What we need:
-Please write a Terraform HCL script that sets up the following:
+Configure an AWS infrastructure using Terraform, focusing on secure storage and managing IAM roles. The VPC is already set up, and all resources must be placed within the provided network CIDRs.
+
+# High-Level Requirements:
 
 1. S3 Buckets Configuration
 
 Ensure all data stored in S3 buckets is encrypted with AES-256 encryption.
-
 Restrict access to the S3 buckets to specific IP address ranges.
-
 Turn on versioning for all S3 buckets to keep a history of data changes.
-
 Set up logging for all AWS API calls using CloudTrail.
-
 Make sure IAM roles are used instead of hard-coding AWS access keys.
 
 2. IAM Configuration
 
 Implement least-privilege IAM role permissions, so each role has only the permissions it absolutely needs to function.
-
 Set up CloudWatch alarms to keep an eye on any IAM permission changes.
-
 Create an SNS topic to notify the security team whenever there’s a change to an IAM role.
 
 3. Region
 
 All resources should be deployed in the us-west-2 AWS region.
 
-Constraints and Best Practices:
+# Constraints and Best Practices:
 
 All S3 bucket data must be encrypted with AES-256.
-
 Only specific IP address ranges should be allowed to access the S3 buckets.
-
 Always use IAM roles instead of hard-coded AWS access keys.
-
 Follow the least-privilege principle for IAM permissions.
-
 Ensure all API calls are logged with CloudTrail.
-
 Enable versioning on all S3 buckets.
-
 Keep the deployment region set to us-west-2.
-
 Set up CloudWatch alarms to monitor IAM role changes.
+Avoid using external modules, everything must be defined directly in the Terraform HCL script.
 
-Avoid using external modules—everything must be defined directly in the HCL script.
+# The Expected Output :
 
-What’s Non-negotiable:
-Keep all Terraform logic in the file ./lib/tap_stack.tf, including variables, locals, resources, and outputs.
-
-The provider.tf file already handles the AWS provider and S3 backend, so no provider block should go into tap_stack.tf.
-
-Declare the variable (aws_region) in tap_stack.tf, which is then used in provider.tf.
-
-During the testing phase, do not run terraform init/plan/apply.
-
-The Expected Output :
-
-We need a single-file Terraform configuration in tap_stack.tf that includes:
+Generate a single-file Terraform configuration in the `tap_stack.tf` that includes:
 
 All variable declarations, including aws_region for provider.tf.
-
-Locals, resources, and outputs.
-
+The Locals, resources, and outputs.
 All resources should be built directly—no external modules.
-
-Adhere to best practices: least-privilege IAM, encryption, secure security groups, and consistent tagging.
-
+It must adhere to best practices: least-privilege IAM, encryption, secure security groups, and consistent tagging.
 Provide useful outputs for CI/CD and testing (but no secrets).
 
-Please ensure that the generated Terraform configuration follows these security guidelines:
+# Please ensure that the generated Terraform configuration follows these security guidelines:
 
 Least-privilege IAM roles and policies.
-
 Encryption for sensitive data.
-
 Logging and alerting for key changes in the system.
