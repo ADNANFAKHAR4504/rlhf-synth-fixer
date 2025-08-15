@@ -80,7 +80,7 @@ export class TerraformInfrastructure {
         execSync('terraform init -reconfigure', {
           cwd: this.libPath,
           encoding: 'utf8',
-          stdio: 'pipe'
+          stdio: 'pipe',
         });
       } catch (initError) {
         return {
@@ -115,11 +115,13 @@ export class TerraformInfrastructure {
         execSync('terraform init -reconfigure', {
           cwd: this.libPath,
           encoding: 'utf8',
-          stdio: 'pipe'
+          stdio: 'pipe',
         });
       } catch (initError) {
         // If init fails, we can still try formatting check as it doesn't require providers
-        console.warn('Terraform init failed, attempting formatting check anyway');
+        console.warn(
+          'Terraform init failed, attempting formatting check anyway'
+        );
       }
 
       execSync('terraform fmt -check', {
