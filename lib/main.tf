@@ -10,7 +10,7 @@ variable "aws_region" {
 variable "resource_id" {
   description = "Lowercase id used in names (e.g., 'abcd1234')."
   type        = string
-  default     = "abcd1234"
+  default     = "abcd12345"
   validation {
     condition     = can(regex("^[a-z0-9-]{4,32}$", var.resource_id))
     error_message = "resource_id must be 4-32 chars, lowercase letters, digits or hyphens."
