@@ -23,6 +23,12 @@ variable "trusted_admin_cidr" {
   default     = ""
 }
 
+variable "allowed_cidr" {
+  description = "Deprecated/compat alias for admin SSH CIDR (prefer trusted_admin_cidr)."
+  type        = string
+  default     = ""
+}
+
 variable "vpc_cidr" {
   description = "CIDR for the primary VPC"
   type        = string
@@ -70,6 +76,8 @@ locals {
     ManagedBy   = "terraform"
     Region      = data.aws_region.current.name
   }
+  # Prefer explicitly provided trusted_admin_cidr; fall back to legacy allowed_cidr if set
+  admin_cidr = length(var.trusted_admin_cidr) > 0 ? var.trusted_admin_cidr : (length(var.allowed_cidr) > 0 ? var.allowed_cidr : "")
   n = {
     kms_main          = "prod-kms-${var.resource_id}"
     cloudtrail_bucket = "prod-cloudtrail-logs-${var.resource_id}"
@@ -368,9 +376,9 @@ resource "aws_security_group" "public" {
 
 # Optional SSH for admin (off by default)
 resource "aws_vpc_security_group_ingress_rule" "public_ssh" {
-  count             = length(var.trusted_admin_cidr) > 0 ? 1 : 0
+  count             = length(local.admin_cidr) > 0 ? 1 : 0
   security_group_id = aws_security_group.public.id
-  cidr_ipv4         = var.trusted_admin_cidr
+  cidr_ipv4         = local.admin_cidr
   from_port         = 22
   to_port           = 22
   ip_protocol       = "tcp"
