@@ -62,65 +62,67 @@ export class VpcModule extends Construct {
       ],
       tags: { ...props.tags, Name: 'tap-public-rt' },
     });
-    
+
     // FIX: Create 2 Public and 2 Private Subnets across two AZs
     const availabilityZones = ['us-west-2a', 'us-west-2b'];
     const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
     const privateSubnetCidrs = ['10.0.101.0/24', '10.0.102.0/24'];
 
     for (let i = 0; i < availabilityZones.length; i++) {
-        const az = availabilityZones[i];
-        
-        // --- Public Subnet ---
-        const publicSubnet = new Subnet(this, `PublicSubnet-${i}`, {
-            vpcId: this.vpc.id,
-            cidrBlock: publicSubnetCidrs[i],
-            availabilityZone: az,
-            mapPublicIpOnLaunch: true,
-            tags: { ...props.tags, Name: `tap-public-subnet-${az}` },
-        });
-        this.publicSubnets.push(publicSubnet);
+      const az = availabilityZones[i];
 
-        new RouteTableAssociation(this, `PublicSubnetAssociation-${i}`, {
-            subnetId: publicSubnet.id,
-            routeTableId: publicRouteTable.id,
-        });
+      // --- Public Subnet ---
+      const publicSubnet = new Subnet(this, `PublicSubnet-${i}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: publicSubnetCidrs[i],
+        availabilityZone: az,
+        mapPublicIpOnLaunch: true,
+        tags: { ...props.tags, Name: `tap-public-subnet-${az}` },
+      });
+      this.publicSubnets.push(publicSubnet);
 
-        // --- NAT Gateway for Private Subnet ---
-        const eip = new Eip(this, `NatGatewayEip-${i}`, {
-            domain: 'vpc',
-            tags: { ...props.tags, Name: `tap-nat-eip-${az}` },
-        });
+      new RouteTableAssociation(this, `PublicSubnetAssociation-${i}`, {
+        subnetId: publicSubnet.id,
+        routeTableId: publicRouteTable.id,
+      });
 
-        const natGateway = new NatGateway(this, `NatGateway-${i}`, {
-            allocationId: eip.id,
-            subnetId: publicSubnet.id,
-            dependsOn: [internetGateway],
-            tags: { ...props.tags, Name: `tap-nat-gw-${az}` },
-        });
-        
-        // --- Private Subnet ---
-        const privateSubnet = new Subnet(this, `PrivateSubnet-${i}`, {
-            vpcId: this.vpc.id,
-            cidrBlock: privateSubnetCidrs[i],
-            availabilityZone: az,
-            tags: { ...props.tags, Name: `tap-private-subnet-${az}` },
-        });
-        this.privateSubnets.push(privateSubnet);
+      // --- NAT Gateway for Private Subnet ---
+      const eip = new Eip(this, `NatGatewayEip-${i}`, {
+        domain: 'vpc',
+        tags: { ...props.tags, Name: `tap-nat-eip-${az}` },
+      });
 
-        const privateRouteTable = new RouteTable(this, `PrivateRouteTable-${i}`, {
-            vpcId: this.vpc.id,
-            route: [{
-                cidrBlock: '0.0.0.0/0',
-                natGatewayId: natGateway.id,
-            }],
-            tags: { ...props.tags, Name: `tap-private-rt-${az}` },
-        });
+      const natGateway = new NatGateway(this, `NatGateway-${i}`, {
+        allocationId: eip.id,
+        subnetId: publicSubnet.id,
+        dependsOn: [internetGateway],
+        tags: { ...props.tags, Name: `tap-nat-gw-${az}` },
+      });
 
-        new RouteTableAssociation(this, `PrivateSubnetAssociation-${i}`, {
-            subnetId: privateSubnet.id,
-            routeTableId: privateRouteTable.id,
-        });
+      // --- Private Subnet ---
+      const privateSubnet = new Subnet(this, `PrivateSubnet-${i}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: privateSubnetCidrs[i],
+        availabilityZone: az,
+        tags: { ...props.tags, Name: `tap-private-subnet-${az}` },
+      });
+      this.privateSubnets.push(privateSubnet);
+
+      const privateRouteTable = new RouteTable(this, `PrivateRouteTable-${i}`, {
+        vpcId: this.vpc.id,
+        route: [
+          {
+            cidrBlock: '0.0.0.0/0',
+            natGatewayId: natGateway.id,
+          },
+        ],
+        tags: { ...props.tags, Name: `tap-private-rt-${az}` },
+      });
+
+      new RouteTableAssociation(this, `PrivateSubnetAssociation-${i}`, {
+        subnetId: privateSubnet.id,
+        routeTableId: privateRouteTable.id,
+      });
     }
 
     // --- Security Group ---
@@ -168,7 +170,13 @@ export class VpcModule extends Construct {
       name: 'ec2-ssm-role',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
-        Statement: [{ Action: 'sts:AssumeRole', Effect: 'Allow', Principal: { Service: 'ec2.amazonaws.com' }}],
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' },
+          },
+        ],
       }),
     });
 
@@ -181,7 +189,7 @@ export class VpcModule extends Construct {
       name: 'ec2-ssm-instance-profile',
       role: ec2Role.name,
     });
-    
+
     // --- EC2 Instance ---
     this.instance = new Instance(this, 'AppInstance', {
       ami: props.ami,
@@ -191,7 +199,7 @@ export class VpcModule extends Construct {
       iamInstanceProfile: instanceProfile.name,
       // FIX: Enable EBS encryption for better security
       rootBlockDevice: {
-          encrypted: true,
+        encrypted: true,
       },
       tags: { ...props.tags, Name: 'tap-ec2-instance' },
     });

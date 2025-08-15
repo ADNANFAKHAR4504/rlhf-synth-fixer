@@ -1,26 +1,56 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props and match snapshot 1`] = `
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props and merge tags 1`] = `
 "{
+  "data": {
+    "aws_ami": {
+      "AmzLinux2": {
+        "filter": [
+          {
+            "name": "name",
+            "values": [
+              "amzn2-ami-hvm-*-x86_64-gp2"
+            ]
+          },
+          {
+            "name": "virtualization-type",
+            "values": [
+              "hvm"
+            ]
+          }
+        ],
+        "most_recent": true,
+        "owners": [
+          "amazon"
+        ]
+      }
+    }
+  },
   "output": {
-    "instanceId": {
-      "description": "The ID of the created EC2 instance.",
+    "Ec2InstanceId": {
+      "description": "ID of the EC2 instance",
       "value": "mock-instance-id"
     },
-    "privateSubnetIds": {
-      "description": "The IDs of the private subnets.",
-      "value": "mock-private-subnet-1, mock-private-subnet-2"
+    "PrivateSubnetIds": {
+      "description": "IDs of the private subnets",
+      "value": [
+        "mock-private-subnet-id-1",
+        "mock-private-subnet-id-2"
+      ]
     },
-    "publicSubnetIds": {
-      "description": "The IDs of the public subnets.",
-      "value": "mock-public-subnet-1, mock-public-subnet-2"
+    "PublicSubnetIds": {
+      "description": "IDs of the public subnets",
+      "value": [
+        "mock-public-subnet-id-1",
+        "mock-public-subnet-id-2"
+      ]
     },
-    "securityGroupId": {
-      "description": "The ID of the EC2 Security Group.",
-      "value": "mock-sg-id"
+    "S3BucketName": {
+      "description": "Name of the secure S3 bucket",
+      "value": "mock-s3-bucket-name"
     },
-    "vpcId": {
-      "description": "The ID of the main VPC.",
+    "VpcId": {
+      "description": "ID of the provisioned VPC",
       "value": "mock-vpc-id"
     }
   },
@@ -31,8 +61,8 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
           {
             "tags": {
               "Environment": "Production",
-              "Owner": "CloudTeam",
-              "Project": "Phoenix"
+              "Owner": "Test",
+              "Project": "TAP"
             }
           }
         ],
@@ -43,9 +73,9 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
   "terraform": {
     "backend": {
       "s3": {
-        "bucket": "my-custom-bucket",
+        "bucket": "my-custom-state-bucket",
         "encrypt": true,
-        "key": "staging/TestCustomStack.tfstate",
+        "key": "prod/TestCustomStack.tfstate",
         "region": "us-east-1",
         "use_lockfile": true
       }
@@ -60,27 +90,57 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
 }"
 `;
 
-exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with default props and match snapshot 1`] = `
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should use default values and required tags when no props are provided 1`] = `
 "{
+  "data": {
+    "aws_ami": {
+      "AmzLinux2": {
+        "filter": [
+          {
+            "name": "name",
+            "values": [
+              "amzn2-ami-hvm-*-x86_64-gp2"
+            ]
+          },
+          {
+            "name": "virtualization-type",
+            "values": [
+              "hvm"
+            ]
+          }
+        ],
+        "most_recent": true,
+        "owners": [
+          "amazon"
+        ]
+      }
+    }
+  },
   "output": {
-    "instanceId": {
-      "description": "The ID of the created EC2 instance.",
+    "Ec2InstanceId": {
+      "description": "ID of the EC2 instance",
       "value": "mock-instance-id"
     },
-    "privateSubnetIds": {
-      "description": "The IDs of the private subnets.",
-      "value": "mock-private-subnet-1, mock-private-subnet-2"
+    "PrivateSubnetIds": {
+      "description": "IDs of the private subnets",
+      "value": [
+        "mock-private-subnet-id-1",
+        "mock-private-subnet-id-2"
+      ]
     },
-    "publicSubnetIds": {
-      "description": "The IDs of the public subnets.",
-      "value": "mock-public-subnet-1, mock-public-subnet-2"
+    "PublicSubnetIds": {
+      "description": "IDs of the public subnets",
+      "value": [
+        "mock-public-subnet-id-1",
+        "mock-public-subnet-id-2"
+      ]
     },
-    "securityGroupId": {
-      "description": "The ID of the EC2 Security Group.",
-      "value": "mock-sg-id"
+    "S3BucketName": {
+      "description": "Name of the secure S3 bucket",
+      "value": "mock-s3-bucket-name"
     },
-    "vpcId": {
-      "description": "The ID of the main VPC.",
+    "VpcId": {
+      "description": "ID of the provisioned VPC",
       "value": "mock-vpc-id"
     }
   },
@@ -89,6 +149,9 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       {
         "default_tags": [
           {
+            "tags": {
+              "Environment": "Production"
+            }
           }
         ],
         "region": "us-west-2"
@@ -100,7 +163,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       "s3": {
         "bucket": "iac-rlhf-tf-states",
         "encrypt": true,
-        "key": "dev/TestStack.tfstate",
+        "key": "dev/TestDefaultStack.tfstate",
         "region": "us-east-1",
         "use_lockfile": true
       }

@@ -29,13 +29,13 @@ export class TapStack extends TerraformStack {
       : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    
+
     // FIX: Add Environment: Production tag to meet compliance requirements
     const defaultTags = {
-        tags: {
-            Environment: 'Production',
-            ...props?.defaultTags?.tags,
-        }
+      tags: {
+        Environment: 'Production',
+        ...props?.defaultTags?.tags,
+      },
     };
 
     new AwsProvider(this, 'aws', {
