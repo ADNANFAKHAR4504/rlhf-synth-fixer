@@ -63,6 +63,19 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
+          - Sid: Allow RDS and Secrets Manager
+            Effect: Allow
+            Principal:
+              Service: 
+                - rds.amazonaws.com
+                - secretsmanager.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:ReEncrypt*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -492,11 +505,10 @@ Resources:
         - Key: ProjectName
           Value: !Ref ProjectName
 
-  # IAM Roles
+  # IAM Roles - NO RoleName property to avoid CAPABILITY_NAMED_IAM
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -537,6 +549,10 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource: !Ref SecurityAlertsTopic
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:rds!*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -575,6 +591,10 @@ Resources:
                 Action:
                   - kms:Decrypt
                 Resource: !GetAtt ApplicationKMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:rds!*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -584,7 +604,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      
       Roles:
         - !Ref EC2InstanceRole
 
@@ -698,7 +717,7 @@ Resources:
         - Key: ProjectName
           Value: !Ref ProjectName
 
-  # RDS Instance
+  # RDS Instance with AWS-managed master password
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
@@ -713,7 +732,9 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref ApplicationKMSKey
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:ssm:${SSMParameterPrefix}/database/password}}'
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        KmsKeyId: !Ref ApplicationKMSKey
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -1075,6 +1096,12 @@ Outputs:
     Value: !GetAtt DatabaseInstance.Endpoint.Address
     Export:
       Name: !Sub '${ProjectName}-${Environment}-DB-ENDPOINT'
+
+  MasterSecretArn:
+    Description: Master database user secret ARN
+    Value: !GetAtt DatabaseInstance.MasterUserSecret.SecretArn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-MASTER-SECRET'
 
   KMSKeyId:
     Description: KMS Key ID
