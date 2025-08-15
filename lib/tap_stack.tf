@@ -11,7 +11,7 @@
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
-  default     = "ap-south-1"
+  default     = "ap-southeast-1"
 
   validation {
     condition     = length(trimspace(var.aws_region)) > 0
