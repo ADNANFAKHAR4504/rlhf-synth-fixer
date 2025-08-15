@@ -594,6 +594,56 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       except Exception:
         pass
 
+      # Redis health
+      try:
+        replication_groups = self.elasticache_client.describe_replication_groups()
+        for rg in replication_groups['ReplicationGroups']:
+          if (rg['Status'] == 'available' and 
+              f'redis-{self.environment_suffix}' in rg['ReplicationGroupId']):
+            health_checks['redis'] = True
+            break
+      except Exception:
+        pass
+
+      # ALB health
+      try:
+        load_balancers = self.elbv2_client.describe_load_balancers()
+        for alb in load_balancers['LoadBalancers']:
+          if (alb['State']['Code'] == 'active' and 
+              f'microservices-alb-{self.environment_suffix}' in alb.get('LoadBalancerName', '')):
+            health_checks['alb'] = True
+            break
+      except Exception:
+        pass
+
+      # S3 health
+      try:
+        artifacts_bucket_name = f'microservices-artifacts-{self.environment_suffix}'
+        self.s3_client.head_bucket(Bucket=artifacts_bucket_name)
+        health_checks['s3'] = True
+      except Exception:
+        pass
+
+      # ECR health
+      try:
+        repo_name = f'microservices-{self.environment_suffix}'
+        self.ecr_client.describe_repositories(repositoryNames=[repo_name])
+        health_checks['ecr'] = True
+      except Exception:
+        pass
+
+      # CloudWatch logs health
+      try:
+        log_group_name = f'/ecs/microservices-{self.environment_suffix}'
+        response = self.logs_client.describe_log_groups(
+          logGroupNamePrefix=log_group_name
+        )
+        log_groups = [lg for lg in response['logGroups'] if lg['logGroupName'] == log_group_name]
+        if log_groups:
+          health_checks['logs'] = True
+      except Exception:
+        pass
+
     except Exception as e:
       self.fail(f"Infrastructure health check failed: {e}")
 
