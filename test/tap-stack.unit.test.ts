@@ -181,7 +181,6 @@ describe('TapStack CloudFormation Template', () => {
       test('should have Lambda execution role', () => {
         const role = template.Resources.LambdaExecutionRole;
         expect(role.Type).toBe('AWS::IAM::Role');
-        expect(role.Properties.RoleName).toBeDefined();
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
         expect(role.Properties.ManagedPolicyArns).toBeDefined();
         expect(role.Properties.Policies).toBeDefined();

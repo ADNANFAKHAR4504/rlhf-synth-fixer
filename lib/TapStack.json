@@ -183,9 +183,6 @@
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "prod-lambda-execution-role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -204,9 +201,7 @@
                 ],
                 "Policies": [
                     {
-                        "PolicyName": {
-                            "Fn::Sub": "prod-lambda-custom-policy-${EnvironmentSuffix}"
-                        },
+                        "PolicyName": "LambdaCustomPolicy",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [

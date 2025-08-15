@@ -130,7 +130,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "prod-lambda-execution-role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -142,7 +141,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
       Policies:
-        - PolicyName: !Sub "prod-lambda-custom-policy-${EnvironmentSuffix}"
+        - PolicyName: LambdaCustomPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
