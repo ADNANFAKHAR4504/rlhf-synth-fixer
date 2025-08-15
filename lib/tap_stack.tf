@@ -32,7 +32,7 @@ resource "aws_kms_key" "financial_app_primary" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.us-east-1.amazonaws.com"
+          Service = "logs.ap-southeast-1.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -44,7 +44,7 @@ resource "aws_kms_key" "financial_app_primary" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/primary"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:ap-southeast-1:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/primary"
           }
         }
       }
@@ -84,7 +84,7 @@ resource "aws_kms_key" "financial_app_secondary" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.us-west-2.amazonaws.com"
+          Service = "logs.ap-southeast-2.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -96,7 +96,7 @@ resource "aws_kms_key" "financial_app_secondary" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-west-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/secondary"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:ap-southeast-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/secondary"
           }
         }
       }
