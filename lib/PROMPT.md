@@ -1,6 +1,6 @@
 Prompt:
 
-Design and implement a multi-region AWS infrastructure using CDK for Terraform (CDKTF) with TypeScript. Your solution should follow this folder structure:
+Design and implement  multi-region AWS infrastructure using CDK for Terraform (CDKTF) with TypeScript. Your solution should follow this folder structure:
 
 main.ts (in the project root) – Entry point that synthesizes the app and defines stacks.
 
