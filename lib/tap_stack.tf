@@ -139,7 +139,7 @@ data "aws_ami" "al2023" {
 resource "null_resource" "region_guard" {
   lifecycle {
     precondition {
-      condition     = data.aws_region.current.name == "us-west-2"
+      condition     = data.aws_region.current.id == "us-west-2"
       error_message = "This stack must be deployed in us-west-2"
     }
   }
@@ -420,12 +420,12 @@ resource "aws_iam_user_policy" "deploy" {
           "s3:PutBucket*", "s3:DeleteBucketPolicy", "s3:PutEncryptionConfiguration", "s3:PutBucketVersioning",
           "s3:GetObject", "s3:PutObject", "s3:DeleteObject"
         ],
-        Resource = [
+        Resource = compact([
           aws_s3_bucket.data.arn,
-          aws_s3_bucket.trail.arn,
+          (var.enable_cloudtrail && length(aws_s3_bucket.trail) > 0 ? aws_s3_bucket.trail[0].arn : null),
           "${aws_s3_bucket.data.arn}/*",
-          "${aws_s3_bucket.trail.arn}/*"
-        ]
+          (var.enable_cloudtrail && length(aws_s3_bucket.trail) > 0 ? "${aws_s3_bucket.trail[0].arn}/*" : null)
+        ])
       },
       {
         Sid    = "EC2RunAndManageInstance",
