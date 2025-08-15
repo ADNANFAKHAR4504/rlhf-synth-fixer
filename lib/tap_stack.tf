@@ -149,6 +149,15 @@ variable "existing_private_subnet_ids" {
 }
 
 #######################
+# Random string for resource name shortening
+#######################
+resource "random_string" "short" {
+  length  = 6
+  upper   = false
+  special = false
+}
+
+#######################
 # Locals
 #######################
 
@@ -167,64 +176,50 @@ locals {
   public_subnet_ids   = var.use_existing_vpc ? var.existing_public_subnet_ids : aws_subnet.public[*].id
   private_subnet_ids  = var.use_existing_vpc ? var.existing_private_subnet_ids : aws_subnet.private[*].id
   database_subnet_ids = var.use_existing_vpc ? var.existing_private_subnet_ids : aws_subnet.database[*].id
+
+  # Shortened names for ALB and target group (<=32 chars)
+  alb_name = "${substr(local.name_prefix, 0, 24)}-alb-${random_string.short.result}"
+  tg_name  = "${substr(local.name_prefix, 0, 21)}-tg-${random_string.short.result}"
 }
 
 #######################
 # Data Sources
 #######################
 
-# Get current AWS account information
 data "aws_caller_identity" "current" {}
-
-# Get current AWS region information
 data "aws_region" "current" {}
-
-# Get available availability zones
 data "aws_availability_zones" "available" {
   state = "available"
-
   filter {
     name   = "opt-in-status"
     values = ["opt-in-not-required"]
   }
 }
-
-# Get latest Amazon Linux 2 AMI (trusted source)
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
-
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
   }
-
   filter {
     name   = "state"
     values = ["available"]
   }
 }
-
-# Get current partition for ARN construction
 data "aws_partition" "current" {}
-
-# Get existing VPC information if using existing infrastructure
 data "aws_vpc" "existing" {
   count = var.use_existing_vpc ? 1 : 0
   id    = var.existing_vpc_id
 }
-
-# Get existing subnet information
 data "aws_subnet" "existing_public" {
   count = var.use_existing_vpc ? length(var.existing_public_subnet_ids) : 0
   id    = var.existing_public_subnet_ids[count.index]
 }
-
 data "aws_subnet" "existing_private" {
   count = var.use_existing_vpc ? length(var.existing_private_subnet_ids) : 0
   id    = var.existing_private_subnet_ids[count.index]
@@ -234,40 +229,32 @@ data "aws_subnet" "existing_private" {
 # VPC and Networking (Conditional)
 #######################
 
-# Main VPC with DNS support enabled for RDS (only if not using existing)
 resource "aws_vpc" "main" {
   count = var.use_existing_vpc ? 0 : 1
-
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
     Type = "networking"
   })
 }
 
-# Internet Gateway for public subnet connectivity (only if not using existing)
 resource "aws_internet_gateway" "main" {
   count  = var.use_existing_vpc ? 0 : 1
   vpc_id = aws_vpc.main[0].id
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-igw"
     Type = "networking"
   })
 }
 
-# Public subnets for ALB and NAT Gateways (Multi-AZ) (only if not using existing)
 resource "aws_subnet" "public" {
   count = var.use_existing_vpc ? 0 : 2
-
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
     Type = "public-subnet"
@@ -275,14 +262,11 @@ resource "aws_subnet" "public" {
   })
 }
 
-# Private subnets for EC2 instances (Multi-AZ) (only if not using existing)
 resource "aws_subnet" "private" {
   count = var.use_existing_vpc ? 0 : 2
-
   vpc_id            = aws_vpc.main[0].id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
   availability_zone = data.aws_availability_zones.available.names[count.index]
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
     Type = "private-subnet"
@@ -290,14 +274,11 @@ resource "aws_subnet" "private" {
   })
 }
 
-# Database subnets for RDS (Multi-AZ) (only if not using existing)
 resource "aws_subnet" "database" {
   count = var.use_existing_vpc ? 0 : 2
-
   vpc_id            = aws_vpc.main[0].id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
   availability_zone = data.aws_availability_zones.available.names[count.index]
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database-subnet-${count.index + 1}"
     Type = "database-subnet"
@@ -309,12 +290,10 @@ resource "aws_subnet" "database" {
 # KMS Keys for Encryption
 #######################
 
-# KMS key for RDS encryption
 resource "aws_kms_key" "rds_key" {
   description             = "KMS key for RDS encryption in ${var.environment} environment"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -344,25 +323,21 @@ resource "aws_kms_key" "rds_key" {
       }
     ]
   })
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-kms-key"
     Type = "encryption"
   })
 }
 
-# KMS key alias for RDS
 resource "aws_kms_alias" "rds_key" {
   name          = "alias/${local.name_prefix}-rds-key"
   target_key_id = aws_kms_key.rds_key.key_id
 }
 
-# KMS key for S3 encryption
 resource "aws_kms_key" "s3_key" {
   description             = "KMS key for S3 encryption in ${var.environment} environment"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -392,32 +367,27 @@ resource "aws_kms_key" "s3_key" {
       }
     ]
   })
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-s3-kms-key"
     Type = "encryption"
   })
 }
 
-# KMS key alias for S3
 resource "aws_kms_alias" "s3_key" {
   name          = "alias/${local.name_prefix}-s3-key"
   target_key_id = aws_kms_key.s3_key.key_id
 }
 
-# KMS key for EBS encryption
 resource "aws_kms_key" "ebs_key" {
   description             = "KMS key for EBS encryption in ${var.environment} environment"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ebs-kms-key"
     Type = "encryption"
   })
 }
 
-# KMS key alias for EBS
 resource "aws_kms_alias" "ebs_key" {
   name          = "alias/${local.name_prefix}-ebs-key"
   target_key_id = aws_kms_key.ebs_key.key_id
@@ -428,7 +398,7 @@ resource "aws_kms_alias" "ebs_key" {
 #######################
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = local.alb_name
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -448,9 +418,8 @@ resource "aws_lb" "main" {
   })
 }
 
-# Target group for EC2 instances
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-app-tg"
+  name     = local.tg_name
   port     = 80
   protocol = "HTTP"
   vpc_id   = local.vpc_id
@@ -473,7 +442,6 @@ resource "aws_lb_target_group" "app" {
   })
 }
 
-# ALB Listener
 resource "aws_lb_listener" "app" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -494,7 +462,6 @@ resource "aws_lb_listener" "app" {
 # IAM Roles and Policies
 #######################
 
-# IAM role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name = "${local.name_prefix}-ec2-role"
   assume_role_policy = jsonencode({
@@ -507,25 +474,21 @@ resource "aws_iam_role" "ec2_role" {
       }
     }]
   })
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ec2-role"
     Type = "iam"
   })
 }
 
-# IAM instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ec2-instance-profile"
     Type = "iam"
   })
 }
 
-# IAM policy for EC2 S3 access
 resource "aws_iam_policy" "ec2_s3_access" {
   name        = "${local.name_prefix}-ec2-s3-policy"
   description = "Policy for EC2 instances to access S3 and KMS"
@@ -564,7 +527,6 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_access" {
   policy_arn = aws_iam_policy.ec2_s3_access.arn
 }
 
-# IAM policy for CloudWatch logs
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
   name        = "${local.name_prefix}-cloudwatch-logs-policy"
   description = "Policy for services to write to CloudWatch Logs"
@@ -590,8 +552,6 @@ resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_policy" {
   policy_arn = aws_iam_policy.cloudwatch_logs_policy.arn
 }
 
-
-# IAM role for Lambda functions
 resource "aws_iam_role" "lambda_role" {
   name = "${local.name_prefix}-lambda-role"
   assume_role_policy = jsonencode({
@@ -604,14 +564,12 @@ resource "aws_iam_role" "lambda_role" {
       }
     }]
   })
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-lambda-role"
     Type = "iam"
   })
 }
 
-# Attach VPC execution policy to Lambda role
 resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
@@ -621,7 +579,6 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
 # EC2 Instances
 #######################
 
-# Launch template for EC2 instances with security hardening
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-app-"
   image_id      = data.aws_ami.amazon_linux.id
@@ -644,7 +601,6 @@ resource "aws_launch_template" "app" {
     }
   }
 
-  # User data script with CloudWatch logging
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -708,7 +664,6 @@ resource "aws_launch_template" "app" {
   })
 }
 
-# Auto Scaling Group for high availability
 resource "aws_autoscaling_group" "app" {
   name                = "${local.name_prefix}-app-asg"
   vpc_zone_identifier = local.private_subnet_ids
@@ -744,25 +699,20 @@ resource "aws_autoscaling_group" "app" {
 # RDS Database
 #######################
 
-# DB subnet group
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = local.database_subnet_ids
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-subnet-group"
     Type = "database"
   })
 }
 
-# RDS instance with encryption and Multi-AZ
 resource "aws_db_instance" "main" {
   identifier = "${local.name_prefix}-database"
-
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.environment == "prod" ? "db.t3.medium" : "db.t3.micro"
-
   allocated_storage     = var.environment == "prod" ? 100 : 20
   max_allocated_storage = var.environment == "prod" ? 1000 : 100
   storage_type          = "gp3"
@@ -787,7 +737,6 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot       = var.environment != "prod"
   final_snapshot_identifier = var.environment == "prod" ? "${local.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
-  # Fixed: Use correct CloudWatch logs export names for MySQL
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   tags = merge(local.common_tags, {
@@ -800,34 +749,28 @@ resource "aws_db_instance" "main" {
 # S3 Buckets
 #######################
 
-# Random string for bucket naming
 resource "random_string" "bucket_suffix" {
   length  = 8
   special = false
   upper   = false
 }
 
-# S3 bucket for application data
 resource "aws_s3_bucket" "app_data" {
   bucket = "${local.name_prefix}-app-data-${random_string.bucket_suffix.result}"
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-data-bucket"
     Type = "storage"
   })
 }
 
-# S3 bucket for ALB access logs
 resource "aws_s3_bucket" "alb_logs" {
   bucket = "${local.name_prefix}-alb-logs-${random_string.bucket_suffix.result}"
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb-logs-bucket"
     Type = "storage"
   })
 }
 
-# S3 bucket versioning
 resource "aws_s3_bucket_versioning" "app_data" {
   bucket = aws_s3_bucket.app_data.id
   versioning_configuration {
@@ -842,10 +785,8 @@ resource "aws_s3_bucket_versioning" "alb_logs" {
   }
 }
 
-# S3 bucket encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   bucket = aws_s3_bucket.app_data.id
-
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.s3_key.arn
@@ -855,10 +796,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   }
 }
 
-# S3 bucket encryption for ALB logs
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.s3_key.arn
@@ -907,7 +846,6 @@ resource "aws_security_group" "alb" {
   })
 }
 
-# EC2 Instance Security Group
 resource "aws_security_group" "ec2" {
   name        = "${var.project_name}-${var.environment}-ec2-sg"
   description = "Security group for EC2 instances - allows traffic from ALB and specific management ports"
@@ -920,7 +858,6 @@ resource "aws_security_group" "ec2" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
-
   ingress {
     description     = "HTTPS traffic from ALB only"
     from_port       = 443
@@ -928,7 +865,6 @@ resource "aws_security_group" "ec2" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
-
   ingress {
     description = "SSH access from allowed CIDR blocks only"
     from_port   = 22
@@ -936,7 +872,6 @@ resource "aws_security_group" "ec2" {
     protocol    = "tcp"
     cidr_blocks = var.allowed_cidr_blocks
   }
-
   egress {
     description = "All outbound traffic"
     from_port   = 0
@@ -944,14 +879,12 @@ resource "aws_security_group" "ec2" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-ec2-sg"
     Type = "Compute"
   })
 }
 
-# RDS Database Security Group
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-${var.environment}-rds-sg"
   description = "Security group for RDS database - allows MySQL access from EC2 instances only"
@@ -964,7 +897,6 @@ resource "aws_security_group" "rds" {
     protocol        = "tcp"
     security_groups = [aws_security_group.ec2.id]
   }
-
   egress {
     description = "No outbound traffic required for RDS"
     from_port   = 0
@@ -972,14 +904,12 @@ resource "aws_security_group" "rds" {
     protocol    = "-1"
     cidr_blocks = []
   }
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-rds-sg"
     Type = "Database"
   })
 }
 
-# Lambda Security Group
 resource "aws_security_group" "lambda" {
   name        = "${var.project_name}-${var.environment}-lambda-sg"
   description = "Security group for Lambda functions - restricted VPC access"
@@ -992,7 +922,6 @@ resource "aws_security_group" "lambda" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   egress {
     description = "Database access to RDS"
     from_port   = 3306
@@ -1000,7 +929,6 @@ resource "aws_security_group" "lambda" {
     protocol    = "tcp"
     cidr_blocks = [var.use_existing_vpc ? data.aws_vpc.existing[0].cidr_block : var.vpc_cidr]
   }
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-lambda-sg"
     Type = "Serverless"
@@ -1011,48 +939,39 @@ resource "aws_security_group" "lambda" {
 # Monitoring
 ########################
 
-# CloudWatch Log Group for EC2 instances
 resource "aws_cloudwatch_log_group" "ec2_logs" {
   name              = "/aws/ec2/${var.project_name}-${var.environment}"
   retention_in_days = 14
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-ec2-logs"
     Type = "Logging"
   })
 }
 
-# CloudWatch Log Group for Lambda functions
 resource "aws_cloudwatch_log_group" "lambda_logs" {
   name              = "/aws/lambda/${var.project_name}-${var.environment}"
   retention_in_days = 14
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-lambda-logs"
     Type = "Logging"
   })
 }
 
-# SNS Topic for notifications
 resource "aws_sns_topic" "alerts" {
   name = "${var.project_name}-${var.environment}-alerts"
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-alerts"
     Type = "Notification"
   })
 }
 
-# SNS Topic Subscription - Only create if email is provided
 resource "aws_sns_topic_subscription" "email_alerts" {
   count = var.notification_email != "" && var.notification_email != null ? 1 : 0
-
   topic_arn = aws_sns_topic.alerts.arn
   protocol  = "email"
   endpoint  = var.notification_email
 }
 
-# CloudWatch Alarm for EC2 CPU utilization
 resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
   alarm_name          = "${var.project_name}-${var.environment}-ec2-cpu-high"
   comparison_operator = "GreaterThanThreshold"
@@ -1064,18 +983,15 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.app.name
   }
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-ec2-cpu-alarm"
     Type = "Monitoring"
   })
 }
 
-# CloudWatch Alarm for RDS CPU utilization
 resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
   alarm_name          = "${var.project_name}-${var.environment}-rds-cpu-high"
   comparison_operator = "GreaterThanThreshold"
@@ -1087,21 +1003,17 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
   threshold           = "75"
   alarm_description   = "This metric monitors RDS CPU utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-rds-cpu-alarm"
     Type = "Monitoring"
   })
 }
 
-# CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project_name}-${var.environment}-dashboard"
-
   dashboard_body = jsonencode({
     widgets = [
       {
@@ -1110,7 +1022,6 @@ resource "aws_cloudwatch_dashboard" "main" {
         y      = 0
         width  = 12
         height = 6
-
         properties = {
           metrics = [
             ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.app.name],
@@ -1131,7 +1042,6 @@ resource "aws_cloudwatch_dashboard" "main" {
 # Lambda Function
 ########################
 
-# Lambda function with VPC configuration
 resource "aws_lambda_function" "app" {
   filename         = "lambda_function.zip"
   function_name    = "${var.project_name}-${var.environment}-app-function"
@@ -1165,7 +1075,6 @@ resource "aws_lambda_function" "app" {
   ]
 }
 
-# Archive file for Lambda function
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "lambda_function.zip"
@@ -1195,30 +1104,24 @@ EOF
 # S3 Additional Configuration
 ########################
 
-# S3 Bucket public access block for app data
 resource "aws_s3_bucket_public_access_block" "app_data" {
   bucket = aws_s3_bucket.app_data.id
-
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-# S3 Bucket public access block for ALB logs
 resource "aws_s3_bucket_public_access_block" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-# S3 Bucket policy for app data (restrictive)
 resource "aws_s3_bucket_policy" "app_data" {
   bucket = aws_s3_bucket.app_data.id
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1239,14 +1142,11 @@ resource "aws_s3_bucket_policy" "app_data" {
       }
     ]
   })
-
   depends_on = [aws_s3_bucket_public_access_block.app_data]
 }
 
-# S3 Bucket policy for ALB logs (restrictive)
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1267,64 +1167,50 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       }
     ]
   })
-
   depends_on = [aws_s3_bucket_public_access_block.alb_logs]
 }
 
-# S3 Bucket lifecycle configuration for app data
 resource "aws_s3_bucket_lifecycle_configuration" "app_data" {
   bucket = aws_s3_bucket.app_data.id
-
   rule {
     id     = "app_data_lifecycle"
     status = "Enabled"
-
     filter {
       prefix = ""
     }
-
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
     }
-
     transition {
       days          = 90
       storage_class = "GLACIER"
     }
-
     expiration {
       days = 365
     }
-
     noncurrent_version_expiration {
       noncurrent_days = 30
     }
   }
 }
 
-# S3 Bucket lifecycle configuration for ALB logs - FIXED
 resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-
   rule {
     id     = "alb_logs_lifecycle"
     status = "Enabled"
-
     filter {
       prefix = ""
     }
-
     transition {
-      days          = 30 # Fixed: Must be ≥30 for STANDARD_IA
+      days          = 30 # Must be ≥30 for STANDARD_IA
       storage_class = "STANDARD_IA"
     }
-
     transition {
-      days          = 60 # Fixed: Must be >30 since STANDARD_IA is at 30
+      days          = 60 # Must be >30 since STANDARD_IA is at 30
       storage_class = "GLACIER"
     }
-
     expiration {
       days = 90
     }
