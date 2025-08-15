@@ -45,10 +45,10 @@ Parameters:
 
   AllowedIPRange:
     Type: String
-    Default: "0.0.0.0/0"
-    Description: "CIDR range for IP whitelisting in WAF"
-    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-    ConstraintDescription: "Must be a valid CIDR notation"
+    Description: "CIDR range for allowed IP addresses (e.g., 192.168.1.0/24)"
+    Default: "192.168.1.0/24"
+    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+    ConstraintDescription: "Must be a valid CIDR block (e.g., 192.168.1.0/24)"
 
   EnableWAF:
     Type: String
@@ -427,7 +427,9 @@ Resources:
       Scope: REGIONAL
       IPAddressVersion: IPV4
       Addresses:
-        - !Ref AllowedIPRange
+        # Example: allow only these trusted IPs/subnets
+        - 198.51.100.0/24
+        - 203.0.113.25/32
 
   WAFWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -471,18 +473,18 @@ Resources:
         - Name: ApiName
           Value: !Ref ApiGateway
 
-  # AWS Config Rule
+  # AWS Config Rule - Using a valid managed rule
   LambdaConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
       ConfigRuleName: !Sub "prod-lambda-config-rule-${EnvironmentSuffix}"
-      Description: "Track Lambda function configuration changes"
+      Description: "Checks whether the Lambda function concurrency limit is appropriately configured."
       Scope:
         ComplianceResourceTypes:
           - AWS::Lambda::Function
       Source:
         Owner: AWS
-        SourceIdentifier: AWS_LAMBDA_FUNCTION_SETTINGS_CHECK
+        SourceIdentifier: LAMBDA_CONCURRENCY_CHECK
 
 Conditions:
   IsProd: !Equals [!Ref EnvironmentType, "prod"]

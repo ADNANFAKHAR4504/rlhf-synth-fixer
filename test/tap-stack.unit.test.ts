@@ -331,7 +331,7 @@ describe('TapStack CloudFormation Template', () => {
         const configRule = template.Resources.LambdaConfigRule;
         expect(configRule.Type).toBe('AWS::Config::ConfigRule');
         expect(configRule.Properties.ConfigRuleName).toBeDefined();
-        expect(configRule.Properties.Description).toBe('Track Lambda function configuration changes');
+        expect(configRule.Properties.Description).toBe('Checks whether the Lambda function concurrency limit is appropriately configured.');
       });
     });
   });
