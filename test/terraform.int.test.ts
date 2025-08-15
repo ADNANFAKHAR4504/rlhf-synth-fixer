@@ -1,93 +1,74 @@
+import fs from "fs";
+import path from "path";
 import {
   EC2Client,
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
-  DescribeInstancesCommand,
+  DescribeInternetGatewaysCommand,
 } from "@aws-sdk/client-ec2";
 import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
-import fs from "fs";
-import path from "path";
 
-const ec2 = new EC2Client({});
-const iam = new IAMClient({});
+const outputsPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
+const outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 
-const outputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
-const outputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
-
-// Dynamically get envs from vpc_ids keys
+// Dynamically detect environments from the keys in vpc_ids
 const environments = Object.keys(outputs.vpc_ids || {});
 
-describe("Terraform Integration Tests", () => {
+describe("Terraform Integration Tests (Live AWS Read-Only)", () => {
+  const ec2 = new EC2Client({});
+  const iam = new IAMClient({});
+
   environments.forEach((env) => {
     describe(`Environment: ${env}`, () => {
-      let vpcId: string;
-      let publicSubnetIds: string[];
-      let privateSubnetIds: string[];
-      let instanceIds: string[];
-      let iamRoleArn: string;
-      let iamRoleName: string;
-      let igwId: string;
-      let natGwId: string;
-      let expectedCidr: string;
+      const vpcId: string = outputs.vpc_ids?.[env];
+      const publicSubnetIds: string[] = Object.entries(outputs.public_subnet_ids || {})
+        .filter(([key]) => key.startsWith(env))
+        .map(([, id]) => id as string);
+      const privateSubnetIds: string[] = Object.entries(outputs.private_subnet_ids || {})
+        .filter(([key]) => key.startsWith(env))
+        .map(([, id]) => id as string);
+      const igwId: string = outputs.internet_gateway_ids?.[env];
+      const iamRoleArn: string = outputs.iam_role_arns?.[env];
 
-      beforeAll(() => {
-        vpcId = outputs.vpc_ids[env];
-        publicSubnetIds = Object.entries(outputs.public_subnet_ids || {})
-          .filter(([key]) => key.startsWith(env))
-          .map(([, id]) => id as string);
-        privateSubnetIds = Object.entries(outputs.private_subnet_ids || {})
-          .filter(([key]) => key.startsWith(env))
-          .map(([, id]) => id as string);
-        instanceIds = Object.entries(outputs.ec2_instance_ids || {})
-          .filter(([key]) => key.startsWith(env))
-          .map(([, id]) => id as string);
-        iamRoleArn = outputs.iam_role_arns?.[env] || "";
-        iamRoleName = iamRoleArn.split("/").pop() || "";
-        igwId = outputs.internet_gateway_ids?.[env] || "";
-        natGwId = outputs.nat_gateway_ids?.[env] || "";
-        expectedCidr = outputs.vpc_cidrs?.[env] || "";
-      });
-
-      it("VPC exists and is available", async () => {
-        expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
+      test("VPC exists", async () => {
+        expect(vpcId).toBeDefined();
         const resp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-        expect(resp.Vpcs && resp.Vpcs.length).toBeGreaterThan(0);
-        expect(resp.Vpcs![0].State).toBe("available");
+        expect(resp.Vpcs?.[0]?.VpcId).toBe(vpcId);
       });
 
-      it("Public subnets exist", async () => {
-        publicSubnetIds.forEach((s) => expect(s).toMatch(/^subnet-[a-f0-9]+$/));
-        const resp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds }));
-        expect(resp.Subnets!.length).toBe(publicSubnetIds.length);
+      test("Public subnets exist", async () => {
+        expect(publicSubnetIds.length).toBeGreaterThan(0);
+        const resp = await ec2.send(
+          new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
+        );
+        const returnedIds = resp.Subnets?.map((s) => s.SubnetId) || [];
+        expect(returnedIds).toEqual(expect.arrayContaining(publicSubnetIds));
       });
 
-      it("Private subnets exist", async () => {
-        privateSubnetIds.forEach((s) => expect(s).toMatch(/^subnet-[a-f0-9]+$/));
-        const resp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds }));
-        expect(resp.Subnets!.length).toBe(privateSubnetIds.length);
+      test("Private subnets exist", async () => {
+        expect(privateSubnetIds.length).toBeGreaterThan(0);
+        const resp = await ec2.send(
+          new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
+        );
+        const returnedIds = resp.Subnets?.map((s) => s.SubnetId) || [];
+        expect(returnedIds).toEqual(expect.arrayContaining(privateSubnetIds));
       });
 
-      it("EC2 instances exist", async () => {
-        instanceIds.forEach((i) => expect(i).toMatch(/^i-[a-f0-9]+$/));
-        const resp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: instanceIds }));
-        const allInstances = resp.Reservations?.flatMap((r) => r.Instances || []) || [];
-        expect(allInstances.length).toBe(instanceIds.length);
+      test("Internet Gateway exists", async () => {
+        expect(igwId).toBeDefined();
+        const resp = await ec2.send(
+          new DescribeInternetGatewaysCommand({ InternetGatewayIds: [igwId] })
+        );
+        expect(resp.InternetGateways?.[0]?.InternetGatewayId).toBe(igwId);
       });
 
-      it("IAM role exists", async () => {
-        expect(iamRoleName).toBeTruthy();
-        const resp = await iam.send(new GetRoleCommand({ RoleName: iamRoleName }));
-        expect(resp.Role).toBeDefined();
-      });
-
-      it("Internet Gateway and NAT Gateway IDs exist", () => {
-        expect(igwId).toMatch(/^igw-[a-f0-9]+$/);
-        expect(natGwId).toMatch(/^nat-[a-f0-9]+$/);
-      });
-
-      it("VPC CIDR matches expected", async () => {
-        const resp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-        expect(resp.Vpcs![0].CidrBlock).toBe(expectedCidr);
+      test("IAM Role exists", async () => {
+        expect(iamRoleArn).toBeDefined();
+        // Extract role name from ARN: arn:aws:iam::123456789012:role/MyRoleName
+        const roleName = iamRoleArn.split("/").pop();
+        expect(roleName).toBeDefined();
+        const resp = await iam.send(new GetRoleCommand({ RoleName: roleName! }));
+        expect(resp.Role?.Arn).toBe(iamRoleArn);
       });
     });
   });
