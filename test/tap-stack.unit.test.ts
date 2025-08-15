@@ -237,7 +237,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(template.Resources.S3KMSKey.Type).toBe('AWS::KMS::Key');
       expect(
         template.Resources.S3KMSKey.Properties.Description['Fn::Sub']
-      ).toContain('KMS Key for S3 bucket encryption - ${EnvironmentSuffix}');
+      ).toContain(
+        'KMS Key for S3 bucket encryption with automatic rotation - ${EnvironmentSuffix}'
+      );
     });
 
     test('should have KMS Key Alias', () => {
