@@ -177,9 +177,9 @@ locals {
   private_subnet_ids  = var.use_existing_vpc ? var.existing_private_subnet_ids : aws_subnet.private[*].id
   database_subnet_ids = var.use_existing_vpc ? var.existing_private_subnet_ids : aws_subnet.database[*].id
 
-  # Shortened names for ALB and target group (<=32 chars)
-  alb_name = "${substr(local.name_prefix, 0, 24)}-alb-${random_string.short.result}"
-  tg_name  = "${substr(local.name_prefix, 0, 21)}-tg-${random_string.short.result}"
+  # Shortened names for ALB and target group (strict 32 char limit)
+  alb_name = "${substr(local.name_prefix, 0, 18)}-alb-${random_string.short.result}"
+  tg_name  = "${substr(local.name_prefix, 0, 17)}-tg-${random_string.short.result}"
 }
 
 #######################
