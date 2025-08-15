@@ -1,20 +1,37 @@
 // test/terraform.int.test.ts
 // Integration tests for deployed Terraform infrastructure
 
-import fs from "fs";
-import path from "path";
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand } from "@aws-sdk/client-ec2";
-import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand } from "@aws-sdk/client-s3";
-import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from "@aws-sdk/client-auto-scaling";
 import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
-import { SNSClient, GetTopicAttributesCommand } from "@aws-sdk/client-sns";
-import { LambdaClient, GetFunctionCommand } from "@aws-sdk/client-lambda";
+import {
+  DescribeInstancesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from "@aws-sdk/client-ec2";
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import { GetFunctionCommand, LambdaClient } from "@aws-sdk/client-lambda";
+import { DescribeDBInstancesCommand, RDSClient } from "@aws-sdk/client-rds";
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client
+} from "@aws-sdk/client-s3";
+import { GetTopicAttributesCommand, SNSClient } from "@aws-sdk/client-sns";
+import fs from "fs";
+import path from "path";
 
 describe("Terraform Infrastructure Integration Tests", () => {
   let outputs: any = {};
-  const region = process.env.AWS_REGION || "us-east-1";
+  const region = process.env.AWS_REGION || "us-west-1";
   const envSuffix = process.env.ENVIRONMENT_SUFFIX || "pr1362";
   
   // Initialize AWS SDK clients
@@ -68,8 +85,21 @@ describe("Terraform Infrastructure Integration Tests", () => {
         expect(response.Vpcs).toHaveLength(1);
         const vpc = response.Vpcs![0];
         expect(vpc.CidrBlock).toBe("10.20.0.0/16");
-        expect(vpc.EnableDnsHostnames).toBe(true);
-        expect(vpc.EnableDnsSupport).toBe(true);
+
+        // These attributes are retrieved via DescribeVpcAttribute, not DescribeVpcs
+        const [dnsHostnamesAttr, dnsSupportAttr] = await Promise.all([
+          ec2Client.send(new DescribeVpcAttributeCommand({
+            VpcId: outputs.vpc_id,
+            Attribute: "enableDnsHostnames"
+          })),
+          ec2Client.send(new DescribeVpcAttributeCommand({
+            VpcId: outputs.vpc_id,
+            Attribute: "enableDnsSupport"
+          }))
+        ]);
+
+        expect(dnsHostnamesAttr.EnableDnsHostnames?.Value).toBe(true);
+        expect(dnsSupportAttr.EnableDnsSupport?.Value).toBe(true);
       } catch (error) {
         console.log("Skipping VPC test - AWS credentials not configured");
       }
@@ -362,7 +392,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       }
 
       try {
-        const instanceId = outputs.rds_endpoint.split(".")[0];
+        const instanceId = outputs.rds_endpoint.split(".")[0]; // host prefix (no port)
         const command = new DescribeDBInstancesCommand({
           DBInstanceIdentifier: instanceId
         });
