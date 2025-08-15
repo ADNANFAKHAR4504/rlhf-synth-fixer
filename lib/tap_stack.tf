@@ -736,19 +736,18 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_east" {
 resource "aws_cloudwatch_metric_alarm" "alb_health_west" {
   provider            = aws.west
   alarm_name          = "tap-alb-health-west"
-  comparison_operator = "LessThanThreshold"
+  comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "HealthyHostCount"
+  metric_name         = "HTTPCode_ELB_5XX_Count"
   namespace           = "AWS/ApplicationELB"
   period              = "60"
-  statistic           = "Average"
-  threshold           = "1"
-  alarm_description   = "This metric monitors ALB healthy host count in us-west-2"
+  statistic           = "Sum"
+  threshold           = "0"
+  alarm_description   = "This metric monitors ALB 5XX errors in us-west-2"
   alarm_actions       = []
   
   dimensions = {
     LoadBalancer = aws_lb.west.arn_suffix
-    TargetGroup  = aws_lb_target_group.west.arn_suffix
   }
   
   tags = local.common_tags
@@ -757,19 +756,18 @@ resource "aws_cloudwatch_metric_alarm" "alb_health_west" {
 resource "aws_cloudwatch_metric_alarm" "alb_health_east" {
   provider            = aws.east
   alarm_name          = "tap-alb-health-east"
-  comparison_operator = "LessThanThreshold"
+  comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "HealthyHostCount"
+  metric_name         = "HTTPCode_ELB_5XX_Count"
   namespace           = "AWS/ApplicationELB"
   period              = "60"
-  statistic           = "Average"
-  threshold           = "1"
-  alarm_description   = "This metric monitors ALB healthy host count in us-east-2"
+  statistic           = "Sum"
+  threshold           = "0"
+  alarm_description   = "This metric monitors ALB 5XX errors in us-east-2"
   alarm_actions       = []
   
   dimensions = {
     LoadBalancer = aws_lb.east.arn_suffix
-    TargetGroup  = aws_lb_target_group.east.arn_suffix
   }
   
   tags = local.common_tags
