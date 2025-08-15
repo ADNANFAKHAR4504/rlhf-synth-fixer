@@ -15,7 +15,8 @@ Parameters:
   DBPasswordParameterName:
     Type: String
     Default: '/myapp/database/password'
-    Description: 'Name of the SSM Parameter Store parameter containing the database password'
+    Description: >-
+      Name of the SSM Parameter Store parameter containing the database password
     AllowedPattern: '^[a-zA-Z0-9/_-]+$'
 
   Environment:
@@ -189,7 +190,7 @@ Resources:
   # NAT Gateways (after route table associations)
   NATGateway1:
     Type: AWS::EC2::NatGateway
-    DependsOn: 
+    DependsOn:
       - PublicSubnet1RouteTableAssociation
       - PublicSubnet2RouteTableAssociation
     Properties:
@@ -203,7 +204,7 @@ Resources:
 
   NATGateway2:
     Type: AWS::EC2::NatGateway
-    DependsOn: 
+    DependsOn:
       - PublicSubnet1RouteTableAssociation
       - PublicSubnet2RouteTableAssociation
     Properties:
@@ -246,7 +247,8 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'myapp-access-logs-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: >-
+        myapp-access-logs-${Environment}-${AWS::AccountId}-${AWS::Region}
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -266,7 +268,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'MyApp-Lambda-Execution-Role-${Environment}-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -295,7 +296,8 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}/*'
+                Resource: >-
+                  arn:aws:s3:::myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}/*
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -361,7 +363,8 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: >-
+        myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}
       VersioningConfiguration:
         Status: Enabled
       LoggingConfiguration:
