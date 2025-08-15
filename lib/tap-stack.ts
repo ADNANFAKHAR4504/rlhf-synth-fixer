@@ -21,6 +21,7 @@ import {
   RDSModule,
   CloudWatchLogsModule,
 } from './modules';
+import { Fn } from 'cdktf';
 // import { MyStack } from './my-stack';
 
 interface TapStackProps {
@@ -91,6 +92,8 @@ export class TapStack extends TerraformStack {
       description: 'List of CIDR blocks allowed to SSH to EC2 instances',
       default: ['152.59.56.198/32'], // Replace with your IP or CIDR block
     });
+
+    const firstCidr = Fn.element(allowedSshCidrs.listValue, 0);
 
     // EC2 configuration variables
     const ec2InstanceType = new TerraformVariable(this, 'ec2_instance_type', {
@@ -170,7 +173,7 @@ export class TapStack extends TerraformStack {
     // 2. Create security groups for EC2 and RDS
     const securityGroups = new SecurityGroupModule(this, 'security-groups', {
       vpcId: vpc.vpc.id,
-      allowedSshCidrs: allowedSshCidrs.listValue,
+      allowedSshCidrs: [firstCidr],
       projectName: projectName.stringValue,
       environment: environment.stringValue,
     });
