@@ -3,6 +3,7 @@ import path from 'path';
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
   DescribeNatGatewaysCommand,
@@ -82,8 +83,25 @@ describe('TapStack CloudFormation Integration Tests', () => {
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].State).toBe('available');
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
+      
+      // Check VPC DNS attributes using separate API calls
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsHostnames'
+      });
+      
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsSupport'
+      });
+      
+      const [dnsHostnamesResponse, dnsSupportResponse] = await Promise.all([
+        ec2Client.send(dnsHostnamesCommand),
+        ec2Client.send(dnsSupportCommand)
+      ]);
+      
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('Subnets should be created in multiple AZs', async () => {
