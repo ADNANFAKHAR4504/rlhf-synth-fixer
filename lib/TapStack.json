@@ -1,0 +1,886 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TAP Stack - Serverless Infrastructure with API Gateway, Lambda, WAF, and Monitoring",
+    "Transform": "AWS::Serverless-2016-10-31",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix",
+                        "EnvironmentType"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "AllowedIPRange",
+                        "EnableWAF"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Lambda Configuration"
+                    },
+                    "Parameters": [
+                        "LambdaMemorySize",
+                        "LambdaTimeout"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "EnvironmentType": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment type (dev, staging, prod)",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "ConstraintDescription": "Must be dev, staging, or prod"
+        },
+        "AllowedIPRange": {
+            "Type": "String",
+            "Default": "0.0.0.0/0",
+            "Description": "CIDR range for IP whitelisting in WAF",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$",
+            "ConstraintDescription": "Must be a valid CIDR notation"
+        },
+        "EnableWAF": {
+            "Type": "String",
+            "Default": "true",
+            "Description": "Enable WAF protection for API Gateway",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "ConstraintDescription": "Must be true or false"
+        },
+        "LambdaMemorySize": {
+            "Type": "Number",
+            "Default": 256,
+            "Description": "Memory allocation for Lambda functions in MB",
+            "MinValue": 128,
+            "MaxValue": 3008,
+            "ConstraintDescription": "Must be between 128 and 3008 MB"
+        },
+        "LambdaTimeout": {
+            "Type": "Number",
+            "Default": 30,
+            "Description": "Timeout for Lambda functions in seconds",
+            "MinValue": 1,
+            "MaxValue": 900,
+            "ConstraintDescription": "Must be between 1 and 900 seconds"
+        }
+    },
+    "Resources": {
+        "EncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for ${EnvironmentType} environment encryption"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Lambda to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "lambda.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "EncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/prod-encryption-key-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "EncryptionKey"
+                }
+            }
+        },
+        "TurnAroundPromptTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "prod-TurnAroundPromptTable-${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "DeletionProtectionEnabled": {
+                    "Fn::If": [
+                        "IsProd",
+                        true,
+                        false
+                    ]
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "EncryptionKey"
+                    }
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "prod-lambda-execution-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "prod-lambda-custom-policy-${EnvironmentSuffix}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TurnAroundPromptTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "EncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/prod-*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "xray:PutTraceSegments",
+                                        "xray:PutTelemetryRecords"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "GetPromptFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "prod-get-prompt-${EnvironmentSuffix}"
+                },
+                "CodeUri": "./src/functions/get-prompt/",
+                "Handler": "index.handler",
+                "Runtime": "nodejs20.x",
+                "MemorySize": {
+                    "Ref": "LambdaMemorySize"
+                },
+                "Timeout": {
+                    "Ref": "LambdaTimeout"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TurnAroundPromptTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentType"
+                        },
+                        "LOG_LEVEL": {
+                            "Fn::If": [
+                                "IsProd",
+                                "ERROR",
+                                "WARN"
+                            ]
+                        }
+                    }
+                },
+                "Tracing": "Active",
+                "AutoPublishAlias": {
+                    "Ref": "EnvironmentType"
+                },
+                "DeploymentPreference": {
+                    "Type": "Linear10PercentEvery1Minute",
+                    "Alarms": [
+                        {
+                            "Ref": "LambdaErrorAlarm"
+                        }
+                    ]
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "EnvironmentType"
+                    },
+                    "Project": "prod-MyAPI"
+                }
+            }
+        },
+        "CreatePromptFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "prod-create-prompt-${EnvironmentSuffix}"
+                },
+                "CodeUri": "./src/functions/create-prompt/",
+                "Handler": "index.handler",
+                "Runtime": "nodejs20.x",
+                "MemorySize": {
+                    "Ref": "LambdaMemorySize"
+                },
+                "Timeout": {
+                    "Ref": "LambdaTimeout"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TurnAroundPromptTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentType"
+                        },
+                        "LOG_LEVEL": {
+                            "Fn::If": [
+                                "IsProd",
+                                "ERROR",
+                                "WARN"
+                            ]
+                        }
+                    }
+                },
+                "Tracing": "Active",
+                "AutoPublishAlias": {
+                    "Ref": "EnvironmentType"
+                },
+                "DeploymentPreference": {
+                    "Type": "Linear10PercentEvery1Minute",
+                    "Alarms": [
+                        {
+                            "Ref": "LambdaErrorAlarm"
+                        }
+                    ]
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "EnvironmentType"
+                    },
+                    "Project": "prod-MyAPI"
+                }
+            }
+        },
+        "UpdatePromptFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "prod-update-prompt-${EnvironmentSuffix}"
+                },
+                "CodeUri": "./src/functions/update-prompt/",
+                "Handler": "index.handler",
+                "Runtime": "nodejs20.x",
+                "MemorySize": {
+                    "Ref": "LambdaMemorySize"
+                },
+                "Timeout": {
+                    "Ref": "LambdaTimeout"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TurnAroundPromptTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentType"
+                        },
+                        "LOG_LEVEL": {
+                            "Fn::If": [
+                                "IsProd",
+                                "ERROR",
+                                "WARN"
+                            ]
+                        }
+                    }
+                },
+                "Tracing": "Active",
+                "AutoPublishAlias": {
+                    "Ref": "EnvironmentType"
+                },
+                "DeploymentPreference": {
+                    "Type": "Linear10PercentEvery1Minute",
+                    "Alarms": [
+                        {
+                            "Ref": "LambdaErrorAlarm"
+                        }
+                    ]
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "EnvironmentType"
+                    },
+                    "Project": "prod-MyAPI"
+                }
+            }
+        },
+        "DeletePromptFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "prod-delete-prompt-${EnvironmentSuffix}"
+                },
+                "CodeUri": "./src/functions/delete-prompt/",
+                "Handler": "index.handler",
+                "Runtime": "nodejs20.x",
+                "MemorySize": {
+                    "Ref": "LambdaMemorySize"
+                },
+                "Timeout": {
+                    "Ref": "LambdaTimeout"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TurnAroundPromptTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentType"
+                        },
+                        "LOG_LEVEL": {
+                            "Fn::If": [
+                                "IsProd",
+                                "ERROR",
+                                "WARN"
+                            ]
+                        }
+                    }
+                },
+                "Tracing": "Active",
+                "AutoPublishAlias": {
+                    "Ref": "EnvironmentType"
+                },
+                "DeploymentPreference": {
+                    "Type": "Linear10PercentEvery1Minute",
+                    "Alarms": [
+                        {
+                            "Ref": "LambdaErrorAlarm"
+                        }
+                    ]
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "EnvironmentType"
+                    },
+                    "Project": "prod-MyAPI"
+                }
+            }
+        },
+        "ApiGateway": {
+            "Type": "AWS::Serverless::Api",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "prod-MyAPI-${EnvironmentSuffix}"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentType"
+                },
+                "TracingEnabled": true,
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "MetricsEnabled": true,
+                        "DataTraceEnabled": {
+                            "Fn::If": [
+                                "IsProd",
+                                false,
+                                true
+                            ]
+                        },
+                        "LoggingLevel": {
+                            "Fn::If": [
+                                "IsProd",
+                                "ERROR",
+                                "INFO"
+                            ]
+                        }
+                    }
+                ],
+                "Cors": {
+                    "AllowMethods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                    "AllowHeaders": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                    "AllowOrigin": "'*'"
+                },
+                "Auth": {
+                    "DefaultAuthorizer": "LambdaAuthorizer",
+                    "Authorizers": {
+                        "LambdaAuthorizer": {
+                            "FunctionArn": {
+                                "Fn::GetAtt": [
+                                    "AuthorizerFunction",
+                                    "Arn"
+                                ]
+                            },
+                            "FunctionInvokeRole": {
+                                "Fn::GetAtt": [
+                                    "LambdaExecutionRole",
+                                    "Arn"
+                                ]
+                            },
+                            "Identity": {
+                                "Headers": [
+                                    "Authorization"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "EnvironmentType"
+                    },
+                    "Project": "prod-MyAPI"
+                }
+            }
+        },
+        "AuthorizerFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "prod-api-authorizer-${EnvironmentSuffix}"
+                },
+                "CodeUri": "./src/functions/authorizer/",
+                "Handler": "index.handler",
+                "Runtime": "nodejs20.x",
+                "MemorySize": 128,
+                "Timeout": 10,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentType"
+                        },
+                        "LOG_LEVEL": {
+                            "Fn::If": [
+                                "IsProd",
+                                "ERROR",
+                                "WARN"
+                            ]
+                        }
+                    }
+                },
+                "Tracing": "Active",
+                "Tags": {
+                    "Environment": {
+                        "Ref": "EnvironmentType"
+                    },
+                    "Project": "prod-MyAPI"
+                }
+            }
+        },
+        "WAFWebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Condition": "EnableWAFCondition",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "prod-waf-webacl-${EnvironmentSuffix}"
+                },
+                "Description": "WAF Web ACL for API Gateway protection",
+                "Scope": "REGIONAL",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "Rules": [
+                    {
+                        "Name": "IPWhitelistRule",
+                        "Priority": 1,
+                        "Statement": {
+                            "NotStatement": {
+                                "Statement": {
+                                    "IPSetReferenceStatement": {
+                                        "Arn": {
+                                            "Fn::GetAtt": [
+                                                "WAFIPSet",
+                                                "Arn"
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "IPWhitelistRule"
+                        }
+                    },
+                    {
+                        "Name": "RateLimitRule",
+                        "Priority": 2,
+                        "Statement": {
+                            "RateBasedStatement": {
+                                "Limit": 2000,
+                                "AggregateKeyType": "IP"
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "RateLimitRule"
+                        }
+                    },
+                    {
+                        "Name": "CommonAttackRule",
+                        "Priority": 3,
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "CommonAttackRule"
+                        }
+                    }
+                ],
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "prod-waf-webacl-${EnvironmentSuffix}"
+                    }
+                }
+            }
+        },
+        "WAFIPSet": {
+            "Type": "AWS::WAFv2::IPSet",
+            "Condition": "EnableWAFCondition",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "prod-waf-ipset-${EnvironmentSuffix}"
+                },
+                "Description": "IP whitelist for API Gateway",
+                "Scope": "REGIONAL",
+                "IPAddressVersion": "IPV4",
+                "Addresses": [
+                    {
+                        "Ref": "AllowedIPRange"
+                    }
+                ]
+            }
+        },
+        "WAFWebACLAssociation": {
+            "Type": "AWS::WAFv2::WebACLAssociation",
+            "Condition": "EnableWAFCondition",
+            "Properties": {
+                "ResourceArn": {
+                    "Fn::Sub": "arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}"
+                },
+                "WebACLArn": {
+                    "Fn::GetAtt": [
+                        "WAFWebACL",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "prod-lambda-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Lambda function errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "GetPromptFunction"
+                        }
+                    }
+                ]
+            }
+        },
+        "APIGatewayErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "prod-apigateway-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "API Gateway 5XX errors",
+                "MetricName": "5XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Ref": "ApiGateway"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaConfigRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "prod-lambda-config-rule-${EnvironmentSuffix}"
+                },
+                "Description": "Track Lambda function configuration changes",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::Lambda::Function"
+                    ]
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "AWS_LAMBDA_FUNCTION_SETTINGS_CHECK"
+                }
+            }
+        }
+    },
+    "Conditions": {
+        "IsProd": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnvironmentType"
+                },
+                "prod"
+            ]
+        },
+        "EnableWAFCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableWAF"
+                },
+                "true"
+            ]
+        }
+    },
+    "Outputs": {
+        "TurnAroundPromptTableName": {
+            "Description": "Name of the DynamoDB table",
+            "Value": {
+                "Ref": "TurnAroundPromptTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+                }
+            }
+        },
+        "TurnAroundPromptTableArn": {
+            "Description": "ARN of the DynamoDB table",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TurnAroundPromptTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+                }
+            }
+        },
+        "ApiGatewayUrl": {
+            "Description": "API Gateway URL",
+            "Value": {
+                "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentType}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayUrl"
+                }
+            }
+        },
+        "EncryptionKeyArn": {
+            "Description": "KMS Encryption Key ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EncryptionKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EncryptionKeyArn"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}
