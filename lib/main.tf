@@ -138,17 +138,21 @@ resource "aws_security_group" "rds" {
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
+  name       = "${var.project_name}-db-subnet-group-${random_id.suffix.hex}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}-db-subnet-group"
+    Name        = "${var.project_name}-db-subnet-group-${random_id.suffix.hex}"
+    Environment = var.environment
+    Project     = var.project_name
+    Owner       = var.owner
+    CostCenter  = var.cost_center
   }
 }
 
 # RDS Aurora Serverless v2 Cluster (Multi-AZ)
 resource "aws_rds_cluster" "main" {
-  cluster_identifier      = "${var.project_name}-aurora-cluster"
+  cluster_identifier      = "${var.project_name}-aurora-cluster-${random_id.suffix.hex}"
   engine                  = "aurora-mysql"
   engine_mode             = "provisioned"
   engine_version          = "8.0.mysql_aurora.3.07.1"
@@ -397,7 +401,7 @@ resource "aws_cloudwatch_log_group" "data_processor" {
 
 # API Gateway
 resource "aws_api_gateway_rest_api" "main" {
-  name        = "${var.project_name}-api"
+  name        = "${var.project_name}-api-${random_id.suffix.hex}"
   description = "Serverless API Gateway"
 
   endpoint_configuration {
