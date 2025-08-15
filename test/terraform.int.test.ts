@@ -1,139 +1,260 @@
-// tests/integration/integration-tests.ts
-// Integration tests for production AWS infrastructure
-// Tests actual Terraform validation and planning
+//int-tests.ts
+import fs from "fs";
+import path from "path";
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+} from "@aws-sdk/client-ec2";
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand as ASGDescribeCommand,
+} from "@aws-sdk/client-auto-scaling";
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
+  S3Client,
+  HeadBucketCommand,
+  GetBucketVersioningCommand,
+  GetBucketLoggingCommand,
+} from "@aws-sdk/client-s3";
 
-import { execSync } from 'child_process';
-import path from 'path';
-import fs from 'fs';
+/** ===================== Types & Outputs Loader ===================== */
 
-const TERRAFORM_DIR = path.resolve(__dirname, '../lib');
+type TFVal<T> = { sensitive: boolean; type: unknown; value: T };
 
-describe('Production AWS Infrastructure - Integration Tests', () => {
+type OutputsFile = {
+  vpc_id: TFVal<string>;
+  load_balancer_dns: TFVal<string>;
+  load_balancer_zone_id: TFVal<string>;
+  s3_app_bucket_name: TFVal<string>;
+  s3_log_bucket_name: TFVal<string>;
+  autoscaling_group_name: TFVal<string>;
+  security_group_alb_id: TFVal<string>;
+  security_group_ec2_id: TFVal<string>;
+  aws_region: TFVal<string>;
+};
+
+function loadOutputs() {
+  const file =
+    process.env.OUTPUTS_FILE ||
+    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+  if (!fs.existsSync(file)) throw new Error(`Outputs file not found at ${file}`);
+
+  const raw = JSON.parse(fs.readFileSync(file, "utf8")) as OutputsFile;
+
+  const req = <K extends keyof OutputsFile>(k: K) => {
+    const v = raw[k]?.value as any;
+    if (v === undefined || v === null || v === "") {
+      throw new Error(`Missing required output "${String(k)}" in ${file}`);
+    }
+    return v;
+  };
+
+  return {
+    vpcId: req("vpc_id"),
+    loadBalancerDns: req("load_balancer_dns"),
+    loadBalancerZoneId: req("load_balancer_zone_id"),
+    s3AppBucketName: req("s3_app_bucket_name"),
+    s3LogBucketName: req("s3_log_bucket_name"),
+    autoscalingGroupName: req("autoscaling_group_name"),
+    securityGroupAlbId: req("security_group_alb_id"),
+    securityGroupEc2Id: req("security_group_ec2_id"),
+    awsRegion: req("aws_region"),
+  };
+}
+
+/** ===================== AWS Clients ===================== */
+
+let ec2Client: EC2Client;
+let asgClient: AutoScalingClient;
+let elbClient: ElasticLoadBalancingV2Client;
+let s3Client: S3Client;
+let outputs: ReturnType<typeof loadOutputs>;
+
+beforeAll(() => {
+  outputs = loadOutputs();
   
-  beforeAll(() => {
-    // Ensure we're in the correct directory
-    process.chdir(TERRAFORM_DIR);
-  });
+  ec2Client = new EC2Client({ region: outputs.awsRegion });
+  asgClient = new AutoScalingClient({ region: outputs.awsRegion });
+  elbClient = new ElasticLoadBalancingV2Client({ region: outputs.awsRegion });
+  s3Client = new S3Client({ region: outputs.awsRegion });
+});
 
-  describe('Terraform Validation', () => {
-    test('terraform validate passes', () => {
-      try {
-        // Initialize terraform if not already done
-        if (!fs.existsSync('.terraform')) {
-          execSync('terraform init -backend=false', { 
-            stdio: 'pipe',
-            timeout: 30000 
-          });
-        }
-        
-        // Run terraform validate
-        const result = execSync('terraform validate', { 
-          stdio: 'pipe',
-          timeout: 15000,
-          encoding: 'utf8' 
-        });
-        
-        expect(result).toContain('Success');
-      } catch (error) {
-        console.error('Terraform validation failed:', error instanceof Error ? error.message : String(error));
-        throw error;
-      }
-    });
+/** ===================== Tests ===================== */
 
-    test('terraform fmt check passes', () => {
-      try {
-        execSync('terraform fmt -check', { 
-          stdio: 'pipe',
-          timeout: 10000 
-        });
-      } catch (error) {
-        console.error('Terraform formatting check failed. Run "terraform fmt" to fix.');
-        throw error;
-      }
-    });
-  });
-
-  describe('Terraform Planning', () => {
-    test('terraform plan with example vars does not fail', () => {
-      try {
-        // Create a temporary tfvars file for testing
-        const testVars = `
-aws_region = "us-west-2"
-project_name = "test"
-environment = "production"
-vpc_cidr = "10.0.0.0/16"
-allowed_cidrs = ["10.0.0.0/8"]
-instance_type = "t3.micro"
-min_size = 1
-max_size = 3
-desired_capacity = 2
-`;
-        fs.writeFileSync('test.tfvars', testVars);
-        
-        // Initialize terraform
-        execSync('terraform init -backend=false', { 
-          stdio: 'pipe',
-          timeout: 30000 
-        });
-        
-        // Run terraform plan (this will fail without AWS credentials, but syntax should be valid)
-        try {
-          execSync('terraform plan -var-file=test.tfvars', { 
-            stdio: 'pipe',
-            timeout: 30000 
-          });
-        } catch (planError) {
-          // Plan may fail due to missing AWS credentials, but it should not fail due to syntax errors
-          const errorOutput = (planError as any)?.stderr?.toString() || (planError instanceof Error ? planError.message : String(planError));
-          
-          // These are acceptable errors (missing credentials, etc.)
-          const acceptableErrors = [
-            'No valid credential sources found',
-            'Unable to locate credentials',
-            'Error: configuring Terraform AWS Provider',
-            'NoCredentialProviders'
-          ];
-          
-          const isAcceptableError = acceptableErrors.some(error => 
-            errorOutput.includes(error)
-          );
-          
-          if (!isAcceptableError) {
-            console.error('Terraform plan failed with unexpected error:', errorOutput);
-            throw planError;
-          }
-        }
-        
-        // Clean up
-        if (fs.existsSync('test.tfvars')) {
-          fs.unlinkSync('test.tfvars');
-        }
-        
-      } catch (error) {
-        console.error('Terraform planning test failed:', error instanceof Error ? error.message : String(error));
-        throw error;
-      }
-    });
-  });
-
-  describe('Resource Count Validation', () => {
-    test('infrastructure includes expected number of core resources', () => {
-      const stackContent = fs.readFileSync('tap_stack.tf', 'utf8');
+describe("Production AWS Infrastructure - Integration Tests", () => {
+  
+  describe("VPC and Networking", () => {
+    test("VPC exists and has correct configuration", async () => {
+      const cmd = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpcId],
+      });
       
-      // Count key resource types
-      const vpcCount = (stackContent.match(/resource "aws_vpc"/g) || []).length;
-      const subnetCount = (stackContent.match(/resource "aws_subnet"/g) || []).length;
-      const sgCount = (stackContent.match(/resource "aws_security_group"/g) || []).length;
-      const albCount = (stackContent.match(/resource "aws_lb"/g) || []).length;
-      const asgCount = (stackContent.match(/resource "aws_autoscaling_group"/g) || []).length;
-      const s3Count = (stackContent.match(/resource "aws_s3_bucket"/g) || []).length;
+      const result = await ec2Client.send(cmd);
+      expect(result.Vpcs).toHaveLength(1);
       
-      expect(vpcCount).toBeGreaterThanOrEqual(1);
-      expect(subnetCount).toBeGreaterThanOrEqual(6); // 3 public + 3 private
-      expect(sgCount).toBeGreaterThanOrEqual(2); // ALB + EC2
-      expect(albCount).toBeGreaterThanOrEqual(1);
-      expect(asgCount).toBeGreaterThanOrEqual(1);
-      expect(s3Count).toBeGreaterThanOrEqual(2); // app + log buckets
+      const vpc = result.Vpcs![0];
+      expect(vpc.State).toBe("available");
+      expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
+    });
+
+    test("public and private subnets exist across multiple AZs", async () => {
+      const cmd = new DescribeSubnetsCommand({
+        Filters: [
+          { Name: "vpc-id", Values: [outputs.vpcId] },
+        ],
+      });
+      
+      const result = await ec2Client.send(cmd);
+      const subnets = result.Subnets || [];
+      
+      expect(subnets.length).toBeGreaterThanOrEqual(6); // 3 public + 3 private
+      
+      const publicSubnets = subnets.filter(s => s.MapPublicIpOnLaunch);
+      const privateSubnets = subnets.filter(s => !s.MapPublicIpOnLaunch);
+      
+      expect(publicSubnets.length).toBeGreaterThanOrEqual(3);
+      expect(privateSubnets.length).toBeGreaterThanOrEqual(3);
+      
+      // Check AZ distribution
+      const azs = new Set(subnets.map(s => s.AvailabilityZone));
+      expect(azs.size).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe("Security Groups", () => {
+    test("ALB security group allows HTTPS traffic", async () => {
+      const cmd = new DescribeSecurityGroupsCommand({
+        GroupIds: [outputs.securityGroupAlbId],
+      });
+      
+      const result = await ec2Client.send(cmd);
+      expect(result.SecurityGroups).toHaveLength(1);
+      
+      const sg = result.SecurityGroups![0];
+      const httpsRule = sg.IpPermissions?.find(rule => 
+        rule.FromPort === 443 && rule.ToPort === 443
+      );
+      
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule?.IpProtocol).toBe("tcp");
+    });
+
+    test("EC2 security group allows traffic from ALB", async () => {
+      const cmd = new DescribeSecurityGroupsCommand({
+        GroupIds: [outputs.securityGroupEc2Id],
+      });
+      
+      const result = await ec2Client.send(cmd);
+      expect(result.SecurityGroups).toHaveLength(1);
+      
+      const sg = result.SecurityGroups![0];
+      const httpRule = sg.IpPermissions?.find(rule => 
+        rule.FromPort === 80 && rule.ToPort === 80
+      );
+      
+      expect(httpRule).toBeDefined();
+      expect(httpRule?.UserIdGroupPairs).toBeDefined();
+      expect(httpRule?.UserIdGroupPairs![0].GroupId).toBe(outputs.securityGroupAlbId);
+    });
+  });
+
+  describe("Load Balancer", () => {
+    test("ALB exists and is active", async () => {
+      const cmd = new DescribeLoadBalancersCommand({
+        Names: [outputs.loadBalancerDns.split('.')[0]], // Extract ALB name from DNS
+      });
+      
+      const result = await elbClient.send(cmd);
+      expect(result.LoadBalancers).toHaveLength(1);
+      
+      const alb = result.LoadBalancers![0];
+      expect(alb.State?.Code).toBe("active");
+      expect(alb.Type).toBe("application");
+      expect(alb.Scheme).toBe("internet-facing");
+    });
+
+    test("target group is configured correctly", async () => {
+      const cmd = new DescribeTargetGroupsCommand({
+        Names: [`base-production-tg`], // Based on naming pattern
+      });
+      
+      const result = await elbClient.send(cmd);
+      expect(result.TargetGroups).toHaveLength(1);
+      
+      const tg = result.TargetGroups![0];
+      expect(tg.Protocol).toBe("HTTP");
+      expect(tg.Port).toBe(80);
+      expect(tg.HealthCheckPath).toBe("/");
+    });
+  });
+
+  describe("Auto Scaling Group", () => {
+    test("ASG exists with correct configuration", async () => {
+      const cmd = new ASGDescribeCommand({
+        AutoScalingGroupNames: [outputs.autoscalingGroupName],
+      });
+      
+      const result = await asgClient.send(cmd);
+      expect(result.AutoScalingGroups).toHaveLength(1);
+      
+      const asg = result.AutoScalingGroups![0];
+      expect(asg.MinSize).toBeGreaterThanOrEqual(2);
+      expect(asg.MaxSize).toBeGreaterThanOrEqual(10);
+      expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
+      expect(asg.HealthCheckType).toBe("ELB");
+    });
+  });
+
+  describe("S3 Buckets", () => {
+    test("application bucket exists with versioning enabled", async () => {
+      // Check bucket exists
+      const headCmd = new HeadBucketCommand({
+        Bucket: outputs.s3AppBucketName,
+      });
+      await s3Client.send(headCmd); // Will throw if bucket doesn't exist
+      
+      // Check versioning
+      const versionCmd = new GetBucketVersioningCommand({
+        Bucket: outputs.s3AppBucketName,
+      });
+      const versionResult = await s3Client.send(versionCmd);
+      expect(versionResult.Status).toBe("Enabled");
+    });
+
+    test("log bucket exists and app bucket has logging configured", async () => {
+      // Check log bucket exists
+      const headCmd = new HeadBucketCommand({
+        Bucket: outputs.s3LogBucketName,
+      });
+      await s3Client.send(headCmd);
+      
+      // Check app bucket has logging configured
+      const loggingCmd = new GetBucketLoggingCommand({
+        Bucket: outputs.s3AppBucketName,
+      });
+      const loggingResult = await s3Client.send(loggingCmd);
+      expect(loggingResult.LoggingEnabled).toBeDefined();
+      expect(loggingResult.LoggingEnabled?.TargetBucket).toBe(outputs.s3LogBucketName);
+    });
+  });
+
+  describe("Resource Tagging", () => {
+    test("VPC has Environment=Production tag", async () => {
+      const cmd = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpcId],
+      });
+      
+      const result = await ec2Client.send(cmd);
+      const vpc = result.Vpcs![0];
+      
+      const envTag = vpc.Tags?.find(tag => tag.Key === "Environment");
+      expect(envTag?.Value).toBe("Production");
     });
   });
 
