@@ -15,17 +15,16 @@ output "load_balancer_zone_id" {
   value       = aws_lb.main.zone_id
 }
 
-# Database outputs commented out since RDS is disabled
-# output "database_endpoint" {
-#   description = "RDS database endpoint"
-#   value       = aws_db_instance.main.endpoint
-#   sensitive   = true
-# }
+output "database_endpoint" {
+  description = "RDS database endpoint"
+  value       = aws_db_instance.main.endpoint
+  sensitive   = true
+}
 
-# output "database_port" {
-#   description = "RDS database port"
-#   value       = aws_db_instance.main.port
-# }
+output "database_port" {
+  description = "RDS database port"
+  value       = aws_db_instance.main.port
+}
 
 output "public_subnets" {
   description = "Public subnet IDs"

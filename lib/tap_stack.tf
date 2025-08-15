@@ -433,66 +433,75 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
 }
 
 ########################
-# Secrets Manager (keeping for future use)
+# RDS Database
 ########################
 
-# Commented out RDS and related resources to avoid deployment issues
-# resource "random_password" "db_password" {
-#   length  = 16
-#   special = true
-#   override_special = "!#$%&*()-_=+[]{}<>:?"
-# }
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
+  subnet_ids = aws_subnet.database[*].id
 
-# resource "aws_secretsmanager_secret" "db_password" {
-#   name        = "${var.app_name}-${var.environment_suffix}-db-password"
-#   description = "Database password for ${var.app_name} ${var.environment}"
+  tags = {
+    Name        = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
+    Environment = var.environment
+  }
+}
 
-#   tags = {
-#     Name        = "${var.app_name}-${var.environment_suffix}-db-password"
-#     Environment = var.environment
-#   }
-# }
+resource "random_password" "db_password" {
+  length  = 16
+  special = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
 
-# resource "aws_secretsmanager_secret_version" "db_password" {
-#   secret_id     = aws_secretsmanager_secret.db_password.id
-#   secret_string = random_password.db_password.result
-# }
+resource "aws_secretsmanager_secret" "db_password" {
+  name        = "${var.app_name}-${var.environment_suffix}-db-password"
+  description = "Database password for ${var.app_name} ${var.environment}"
 
-# resource "aws_db_instance" "main" {
-#   identifier            = "${var.app_name}-${var.environment_suffix}-db"
-#   allocated_storage     = var.environment == "prod" ? 100 : 20
-#   max_allocated_storage = var.environment == "prod" ? 1000 : 100
-#   storage_type          = "gp3"
-#   engine                = "mysql"
-#   engine_version        = "8.0"
-#   instance_class        = var.db_instance_class
-#   db_name               = var.db_name
-#   username              = var.db_username
-#   password              = random_password.db_password.result
+  tags = {
+    Name        = "${var.app_name}-${var.environment_suffix}-db-password"
+    Environment = var.environment
+  }
+}
 
-#   vpc_security_group_ids = [aws_security_group.database.id]
-#   db_subnet_group_name   = aws_db_subnet_group.main.name
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_string = random_password.db_password.result
+}
 
-#   # Multi-AZ for high availability
-#   multi_az = var.environment == "prod" ? true : false
+resource "aws_db_instance" "main" {
+  identifier            = "${var.app_name}-${var.environment_suffix}-db"
+  allocated_storage     = var.environment == "prod" ? 100 : 20
+  max_allocated_storage = var.environment == "prod" ? 1000 : 100
+  storage_type          = "gp3"
+  engine                = "mysql"
+  engine_version        = "8.0"
+  instance_class        = var.db_instance_class
+  db_name               = var.db_name
+  username              = var.db_username
+  password              = random_password.db_password.result
 
-#   # Backup configuration
-#   backup_retention_period = var.environment == "prod" ? 7 : 1
-#   backup_window           = "03:00-04:00"
-#   maintenance_window      = "sun:04:00-sun:05:00"
+  vpc_security_group_ids = [aws_security_group.database.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
 
-#   # Security
-#   storage_encrypted = true
+  # Multi-AZ for high availability
+  multi_az = var.environment == "prod" ? true : false
 
-#   # Performance Insights for monitoring
-#   performance_insights_enabled = var.environment == "prod" ? true : false
+  # Backup configuration
+  backup_retention_period = var.environment == "prod" ? 7 : 1
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
-#   # Always skip final snapshot to ensure destroyability
-#   skip_final_snapshot       = true
-#   final_snapshot_identifier = null
+  # Security
+  storage_encrypted = true
 
-#   tags = {
-#     Name        = "${var.app_name}-${var.environment_suffix}-db"
-#     Environment = var.environment
-#   }
-# }
+  # Performance Insights for monitoring
+  performance_insights_enabled = var.environment == "prod" ? true : false
+
+  # Always skip final snapshot to ensure destroyability
+  skip_final_snapshot       = true
+  final_snapshot_identifier = null
+
+  tags = {
+    Name        = "${var.app_name}-${var.environment_suffix}-db"
+    Environment = var.environment
+  }
+}
