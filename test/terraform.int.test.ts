@@ -197,11 +197,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('Lambda alias exists for blue/green deployments', async () => {
       const command = new GetAliasCommand({
         FunctionName: outputs.lambda_function_name,
-        Name: 'live',
+        Name: outputs.lambda_alias_arn.split(':').pop()!, // Extract alias name from ARN
       });
 
       const response = await lambdaClient.send(command);
-      expect(response.Name).toBe('live');
+      expect(response.Name).toBeDefined();
       expect(response.FunctionVersion).toBeDefined();
     });
 
@@ -704,7 +704,7 @@ artifacts:
 
       // Function should be invokable after deployment
       const invokeCommand = new InvokeCommand({
-        FunctionName: outputs.lambda_function_name,
+        FunctionName: `${outputs.lambda_function_name}:${outputs.lambda_alias_arn.split(':').pop()!}`,
         Payload: JSON.stringify({ test: 'e2e-deployment' }),
       });
 

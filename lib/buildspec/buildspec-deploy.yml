@@ -10,7 +10,7 @@ phases:
       - echo Installing AWS CLI...
       - pip install awscli
       - echo Getting current Lambda version for rollback...
-      - CURRENT_VERSION=$(aws lambda get-alias --function-name $LAMBDA_FUNCTION_NAME --name live --query 'FunctionVersion' --output text)
+      - CURRENT_VERSION=$(aws lambda get-alias --function-name $LAMBDA_FUNCTION_NAME --name $LAMBDA_ALIAS_NAME --query 'FunctionVersion' --output text)
       - echo "Current version is $CURRENT_VERSION"
   build:
     commands:
@@ -21,13 +21,13 @@ phases:
       - NEW_VERSION=$(aws lambda publish-version --function-name $LAMBDA_FUNCTION_NAME --query 'Version' --output text)
       - echo "New version is $NEW_VERSION"
       - echo Updating alias to new version...
-      - aws lambda update-alias --function-name $LAMBDA_FUNCTION_NAME --name live --function-version $NEW_VERSION
+      - aws lambda update-alias --function-name $LAMBDA_FUNCTION_NAME --name $LAMBDA_ALIAS_NAME --function-version $NEW_VERSION
       - echo Running deployment verification...
       - sleep 10
       - echo Testing new deployment...
-      - aws lambda invoke --function-name $LAMBDA_FUNCTION_NAME:live response.json
-      - if [ $? -ne 0 ]; then echo "Deployment verification failed, rolling back..."; aws lambda update-alias --function-name $LAMBDA_FUNCTION_NAME --name live --function-version $CURRENT_VERSION; exit 1; fi
+      - aws lambda invoke --function-name $LAMBDA_FUNCTION_NAME:$LAMBDA_ALIAS_NAME response.json
+      - if [ $? -ne 0 ]; then echo "Deployment verification failed, rolling back..."; aws lambda update-alias --function-name $LAMBDA_FUNCTION_NAME --name $LAMBDA_ALIAS_NAME --function-version $CURRENT_VERSION; exit 1; fi
   post_build:
     commands:
       - echo Deploy completed successfully on `date`
-      - echo "Deployed version $NEW_VERSION to live alias"
+      - echo "Deployed version $NEW_VERSION to $LAMBDA_ALIAS_NAME alias"

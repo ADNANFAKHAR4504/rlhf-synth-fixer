@@ -71,9 +71,13 @@ variable "lambda_memory_size" {
 
 # Environment suffix for resource naming to avoid conflicts
 variable "environment_suffix" {
-  description = "Environment suffix to avoid conflicts between deployments"
+  description = "Environment suffix to avoid conflicts between deployments (e.g., pr123 for PR #123)"
   type        = string
   default     = ""
+  validation {
+    condition     = can(regex("^$|^pr[0-9]+$", var.environment_suffix))
+    error_message = "Environment suffix must be empty or follow pattern 'pr{number}' (e.g., pr123)."
+  }
 }
 
 ########################
@@ -238,7 +242,7 @@ data "archive_file" "dummy" {
 
 # Lambda alias for blue/green deployments
 resource "aws_lambda_alias" "main" {
-  name             = "live"
+  name             = "live${var.environment_suffix}"
   description      = "Live alias for ${aws_lambda_function.main.function_name}"
   function_name    = aws_lambda_function.main.function_name
   function_version = aws_lambda_function.main.version
@@ -379,6 +383,11 @@ resource "aws_codebuild_project" "deploy" {
     environment_variable {
       name  = "LAMBDA_FUNCTION_NAME"
       value = aws_lambda_function.main.function_name
+    }
+    
+    environment_variable {
+      name  = "LAMBDA_ALIAS_NAME"
+      value = aws_lambda_alias.main.name
     }
   }
 
