@@ -120,22 +120,7 @@ resource "aws_kms_alias" "main" {
   target_key_id = aws_kms_key.main.key_id
 }
 
-# VPC Module
-module "vpc" {
-  source = "./modules/vpc"
-  
-  # Pass variables to module
-  name_prefix        = local.name_prefix
-  vpc_cidr          = var.vpc_cidr
-  availability_zones = slice(data.aws_availability_zones.available.names, 0, 3)
-  common_tags       = local.common_tags
-  kms_key_id        = aws_kms_key.main.arn
-}
-
-# VPC Module Definition (inline)
-# Note: In a real scenario, this would be in ./modules/vpc/main.tf
-# For this exercise, we'll define it inline using locals and resources
-
+# VPC resources are defined inline below
 # VPC
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
