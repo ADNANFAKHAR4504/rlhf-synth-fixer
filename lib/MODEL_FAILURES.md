@@ -4,7 +4,7 @@ This document outlines the critical infrastructure issues that were identified a
 
 ## Critical Issues Fixed
 
-### 1. Missing Environment Isolation
+### 1. Missing Environment Isolations
 
 **Problem**: The original infrastructure lacked environment suffix support, making it impossible to deploy multiple instances in parallel (e.g., for different PRs or environments).
 
