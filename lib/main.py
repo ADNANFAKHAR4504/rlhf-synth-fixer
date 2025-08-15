@@ -2,6 +2,7 @@
 Multi-region AWS infrastructure with Pulumi Python SDK
 Implements secure VPCs, networking, monitoring, and compliance
 """
+import sys
 
 import pulumi
 import pulumi_aws as aws
@@ -75,7 +76,11 @@ def create_cloudtrail_s3_policy(bucket_name: pulumi.Output, account_id: str,
 def deploy_infrastructure():
   """Main function to orchestrate infrastructure deployment"""
 
-  current = aws.get_caller_identity()
+  try:
+    current = aws.get_caller_identity()
+  except Exception as e:
+    pulumi.log.error(f"Failed to get AWS caller identity: {e}")
+    sys.exit(1)
 
   # Store resources for cross-region references
   vpcs = {}
@@ -85,7 +90,11 @@ def deploy_infrastructure():
   code_pipeline = {}
 
   # Create IAM roles (global resources)
-  iam_roles = create_iam_roles(common_tags)
+  try:
+    iam_roles = create_iam_roles(common_tags)
+  except Exception as e:
+    pulumi.log.error(f"IAM role creation failed: {e}")
+    raise
 
   # Create CodePipeline
   code_pipeline = setup_codepipeline(pulumi.get_stack().lower())
@@ -93,62 +102,67 @@ def deploy_infrastructure():
   # Deploy infrastructure in each region
   for region in regions:
 
-    # Create AWS provider for this region
-    provider = aws.Provider(
-      f"aws-{region}",
-      region=region,
-      default_tags=aws.ProviderDefaultTagsArgs(
-        tags=common_tags
+    try:
+      # Create AWS provider for this region
+      provider = aws.Provider(
+        f"aws-{region}",
+        region=region,
+        default_tags=aws.ProviderDefaultTagsArgs(
+          tags=common_tags
+        )
       )
-    )
 
-    # Create VPC infrastructure
-    vpc_resources = create_vpc_infrastructure(
-      region=region,
-      cidr_block=vpc_cidrs[region],
-      tags=common_tags,
-      provider=provider
-    )
-    vpcs[region] = vpc_resources
+      # Create VPC infrastructure
+      vpc_resources = create_vpc_infrastructure(
+        region=region,
+        cidr_block=vpc_cidrs[region],
+        tags=common_tags,
+        provider=provider
+      )
+      vpcs[region] = vpc_resources
 
-    # Create security groups
-    sg_resources = create_security_groups(
-      region=region,
-      vpc_id=vpc_resources["vpc"].id,
-      tags=common_tags,
-      provider=provider
-    )
-    security_groups[region] = sg_resources
+      # Create security groups
+      sg_resources = create_security_groups(
+        region=region,
+        vpc_id=vpc_resources["vpc"].id,
+        tags=common_tags,
+        provider=provider
+      )
+      security_groups[region] = sg_resources
 
-    # Create S3 bucket for this region
-    s3_bucket = create_s3_bucket(
-      region=region,
-      tags=common_tags,
-      provider=provider
-    )
-    s3_buckets[region] = s3_bucket
+      # Create S3 bucket for this region
+      s3_bucket = create_s3_bucket(
+        region=region,
+        tags=common_tags,
+        provider=provider
+      )
+      s3_buckets[region] = s3_bucket
 
-    # Create S3 bucket policy for CloudTrail
-    cloudtrail_policy = create_cloudtrail_s3_policy(
-      bucket_name=s3_bucket.bucket,
-      account_id=current.account_id,
-      prefix=f"cloudtrail-logs/{region}"
-    )
+      # Create S3 bucket policy for CloudTrail
+      cloudtrail_policy = create_cloudtrail_s3_policy(
+        bucket_name=s3_bucket.bucket,
+        account_id=current.account_id,
+        prefix=f"cloudtrail-logs/{region}"
+      )
 
-    bucket_policy = aws.s3.BucketPolicy(
-      f"cloudtrail-bucket-policy-{region}",
-      bucket=s3_bucket.id,
-      policy=cloudtrail_policy,
-      opts=pulumi.ResourceOptions(provider=provider)
-    )
+      bucket_policy = aws.s3.BucketPolicy(
+        f"cloudtrail-bucket-policy-{region}",
+        bucket=s3_bucket.id,
+        policy=cloudtrail_policy,
+        opts=pulumi.ResourceOptions(provider=provider)
+      )
 
-    # Setup CloudTrail
-    cloudtrail = setup_cloudtrail(
-      region=region,
-      s3_bucket_name=s3_bucket.bucket,
-      tags=common_tags,
-      provider=provider
-    )
+      # Setup CloudTrail
+      cloudtrail = setup_cloudtrail(
+        region=region,
+        s3_bucket_name=s3_bucket.bucket,
+        tags=common_tags,
+        provider=provider
+      )
+
+    except Exception as e:
+      pulumi.log.error(f"Deployment failed in region {region}: {e}")
+      raise
 
     # Ensure CloudTrail waits for S3 bucket policy
     pulumi.Output.all(bucket_policy.id, cloudtrail.name).apply(
