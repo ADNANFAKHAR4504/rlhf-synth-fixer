@@ -160,10 +160,20 @@ jest.mock('@pulumi/aws', () => ({
     }),
   },
   guardduty: {
-    Detector: jest.fn().mockImplementation(function(this: any, name: string, args: any, opts: any) {
-      this.id = pulumi.output(`detector-${Math.random().toString(36).substr(2, 9)}`);
-      return this;
-    }),
+    getDetector: jest.fn().mockRejectedValue(new Error('No detector found')), // Simulate no existing detector
+    Detector: Object.assign(
+      jest.fn().mockImplementation(function(this: any, name: string, args: any, opts: any) {
+        this.id = pulumi.output(`detector-${Math.random().toString(36).substr(2, 9)}`);
+        return this;
+      }),
+      {
+        get: jest.fn().mockImplementation((name: string, id: string, state?: any, opts?: any) => {
+          return {
+            id: pulumi.output(id),
+          };
+        }),
+      }
+    ),
     DetectorFeature: jest.fn().mockImplementation(function(this: any, name: string, args: any, opts: any) {
       return this;
     }),

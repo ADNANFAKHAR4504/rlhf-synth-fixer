@@ -959,25 +959,45 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     /**
      * GuardDuty for Threat Detection
      * Enables threat detection and security monitoring
+     * Note: GuardDuty allows only one detector per AWS region per account
      */
-    const guardDutyDetector = new aws.guardduty.Detector(
-      `main-guardduty-detector-${args.environment}`,
-      {
-        enable: true,
-        findingPublishingFrequency: 'FIFTEEN_MINUTES',
-        tags: {
-          ...commonTags,
-          Name: `main-guardduty-detector-${args.environment}`,
+
+    // Check for existing GuardDuty detector first
+    const existingDetectorId = aws.guardduty
+      .getDetector({}, { provider })
+      .then(res => res.id)
+      .catch(() => undefined);
+
+    const guardDutyDetector = pulumi.output(existingDetectorId).apply(id => {
+      if (id) {
+        // Use existing detector
+        return aws.guardduty.Detector.get(
+          `existing-guardduty-detector-${args.environment}`,
+          id,
+          {},
+          { provider, parent: this }
+        );
+      }
+      // Create new detector if none exists
+      return new aws.guardduty.Detector(
+        `main-guardduty-detector-${args.environment}`,
+        {
+          enable: true,
+          findingPublishingFrequency: 'FIFTEEN_MINUTES',
+          tags: {
+            ...commonTags,
+            Name: `main-guardduty-detector-${args.environment}`,
+          },
         },
-      },
-      { provider, parent: this }
-    );
+        { provider, parent: this }
+      );
+    });
 
     // Enable S3 Data Events monitoring
     void new aws.guardduty.DetectorFeature(
       `guardduty-s3-data-events-${args.environment}`,
       {
-        detectorId: guardDutyDetector.id,
+        detectorId: guardDutyDetector.apply(detector => detector.id),
         name: 'S3_DATA_EVENTS',
         status: 'ENABLED',
       },
@@ -988,7 +1008,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     void new aws.guardduty.DetectorFeature(
       `guardduty-eks-audit-logs-${args.environment}`,
       {
-        detectorId: guardDutyDetector.id,
+        detectorId: guardDutyDetector.apply(detector => detector.id),
         name: 'EKS_AUDIT_LOGS',
         status: 'ENABLED',
       },
@@ -999,7 +1019,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     void new aws.guardduty.DetectorFeature(
       `guardduty-malware-protection-${args.environment}`,
       {
-        detectorId: guardDutyDetector.id,
+        detectorId: guardDutyDetector.apply(detector => detector.id),
         name: 'EBS_MALWARE_PROTECTION',
         status: 'ENABLED',
       },
@@ -1291,7 +1311,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     this.s3BucketName = cloudtrailBucket.bucket;
     this.availableAZs = pulumi.output(availabilityZones).apply(az => az.names);
     this.snsTopicArn = securityAlertsTopic.arn;
-    this.guardDutyDetectorId = guardDutyDetector.id;
+    this.guardDutyDetectorId = guardDutyDetector.apply(detector => detector.id);
     this.configDeliveryChannelName = configDeliveryChannel.name;
 
     // Register outputs
