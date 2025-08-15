@@ -258,6 +258,14 @@ resource "aws_launch_template" "prod_launch_template" {
 
   vpc_security_group_ids = [aws_security_group.prod_ec2_sg.id]
 
+  # Enforce IMDSv2 for enhanced security
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    instance_metadata_tags      = "enabled"
+  }
+
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -439,6 +447,46 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "prod_data_bucket_
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "prod_data_bucket_lifecycle" {
+  bucket = aws_s3_bucket.prod_data_bucket.id
+
+  rule {
+    id     = "prod_data_lifecycle"
+    status = "Enabled"
+
+    filter {}
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+
+    transition {
+      days          = 365
+      storage_class = "DEEP_ARCHIVE"
+    }
+
+    noncurrent_version_transition {
+      noncurrent_days = 30
+      storage_class   = "STANDARD_IA"
+    }
+
+    noncurrent_version_transition {
+      noncurrent_days = 90
+      storage_class   = "GLACIER"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 730
+    }
+  }
+}
+
 resource "aws_s3_bucket" "prod_logs_bucket" {
   bucket = "prod-logs${local.env_suffix}-${random_string.bucket_suffix.result}"
 
@@ -475,4 +523,128 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "prod_logs_bucket_
       sse_algorithm = "AES256"
     }
   }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "prod_logs_bucket_lifecycle" {
+  bucket = aws_s3_bucket.prod_logs_bucket.id
+
+  rule {
+    id     = "prod_logs_lifecycle"
+    status = "Enabled"
+
+    filter {}
+
+    transition {
+      days          = 7
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 30
+      storage_class = "GLACIER"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "DEEP_ARCHIVE"
+    }
+
+    noncurrent_version_transition {
+      noncurrent_days = 7
+      storage_class   = "STANDARD_IA"
+    }
+
+    noncurrent_version_transition {
+      noncurrent_days = 30
+      storage_class   = "GLACIER"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 365
+    }
+
+    expiration {
+      days = 2555 # ~7 years retention for logs
+    }
+  }
+}
+
+########################
+# CloudWatch Alarms for Monitoring
+########################
+
+# ALB Target Health Alarm
+resource "aws_cloudwatch_metric_alarm" "alb_target_health" {
+  alarm_name          = "prod-alb-target-health${local.env_suffix}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This metric monitors ALB healthy target count"
+  alarm_actions       = []
+
+  dimensions = {
+    LoadBalancer = aws_lb.prod_alb.arn_suffix
+    TargetGroup  = aws_lb_target_group.prod_tg.arn_suffix
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "prod-alb-target-health-alarm${local.env_suffix}"
+    }
+  )
+}
+
+# ASG Instances Alarm
+resource "aws_cloudwatch_metric_alarm" "asg_instance_health" {
+  alarm_name          = "prod-asg-instance-health${local.env_suffix}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "GroupInServiceInstances"
+  namespace           = "AWS/AutoScaling"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = var.min_size
+  alarm_description   = "This metric monitors ASG healthy instance count"
+  alarm_actions       = []
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.prod_asg.name
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "prod-asg-instance-health-alarm${local.env_suffix}"
+    }
+  )
+}
+
+# ALB Response Time Alarm
+resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
+  alarm_name          = "prod-alb-response-time${local.env_suffix}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "TargetResponseTime"
+  namespace           = "AWS/ApplicationELB"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This metric monitors ALB response time"
+  alarm_actions       = []
+
+  dimensions = {
+    LoadBalancer = aws_lb.prod_alb.arn_suffix
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "prod-alb-response-time-alarm${local.env_suffix}"
+    }
+  )
 }

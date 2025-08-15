@@ -78,3 +78,18 @@ output "environment_suffix" {
   description = "Environment suffix used for resource naming"
   value       = var.environment_suffix
 }
+
+output "cloudwatch_alarm_alb_target_health" {
+  description = "CloudWatch alarm for ALB target health"
+  value       = aws_cloudwatch_metric_alarm.alb_target_health.arn
+}
+
+output "cloudwatch_alarm_asg_instance_health" {
+  description = "CloudWatch alarm for ASG instance health"
+  value       = aws_cloudwatch_metric_alarm.asg_instance_health.arn
+}
+
+output "cloudwatch_alarm_alb_response_time" {
+  description = "CloudWatch alarm for ALB response time"
+  value       = aws_cloudwatch_metric_alarm.alb_response_time.arn
+}
