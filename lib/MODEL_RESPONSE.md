@@ -15,7 +15,6 @@ version = "~> 5.0"
 variable "aws_region" {
 description = "The AWS region to deploy resources"
 type = string
-default = "eu-west-2"
 }
 
 variable "allowed_ip_ranges" {
