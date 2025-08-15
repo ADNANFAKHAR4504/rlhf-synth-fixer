@@ -200,6 +200,15 @@ Resources:
         Type: Linear10PercentEvery1Minute
         Alarms:
           - !Ref LambdaErrorAlarm
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /prompts
+            Method: GET
+            RestApiId: !Ref ApiGateway
+            Auth:
+              Authorizer: LambdaAuthorizer
       Tags:
         Environment: !Ref EnvironmentType
         Project: "prod-MyAPI"
@@ -232,6 +241,15 @@ Resources:
         Type: Linear10PercentEvery1Minute
         Alarms:
           - !Ref LambdaErrorAlarm
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /prompts
+            Method: POST
+            RestApiId: !Ref ApiGateway
+            Auth:
+              Authorizer: LambdaAuthorizer
       Tags:
         Environment: !Ref EnvironmentType
         Project: "prod-MyAPI"
@@ -264,6 +282,15 @@ Resources:
         Type: Linear10PercentEvery1Minute
         Alarms:
           - !Ref LambdaErrorAlarm
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /prompts
+            Method: PUT
+            RestApiId: !Ref ApiGateway
+            Auth:
+              Authorizer: LambdaAuthorizer
       Tags:
         Environment: !Ref EnvironmentType
         Project: "prod-MyAPI"
@@ -296,6 +323,15 @@ Resources:
         Type: Linear10PercentEvery1Minute
         Alarms:
           - !Ref LambdaErrorAlarm
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /prompts
+            Method: DELETE
+            RestApiId: !Ref ApiGateway
+            Auth:
+              Authorizer: LambdaAuthorizer
       Tags:
         Environment: !Ref EnvironmentType
         Project: "prod-MyAPI"
@@ -329,6 +365,10 @@ Resources:
       Tags:
         Environment: !Ref EnvironmentType
         Project: "prod-MyAPI"
+
+  # API Gateway Resources and Methods - SIMPLIFIED SAM APPROACH
+  # Using SAM Events to automatically create API Gateway methods
+  # This approach is more reliable and follows SAM best practices
 
   # Lambda Authorizer
   AuthorizerFunction:
@@ -478,12 +518,12 @@ Resources:
         - Name: ApiName
           Value: !Ref ApiGateway
 
-  # AWS Config Rule - COMMENTED OUT: Requires AWS Config Recorder to be enabled
-  # Error: "NoAvailableConfigurationRecorder" - AWS Config must be set up first
+  # AWS Config Rule - COMMENTED OUT: AWS Config allows only one configuration recorder per region per account
+  # Error: "NoAvailableConfigurationRecorder" - AWS Config recorder may already be in use by another stack/service
   # To enable this rule, you need to:
-  # 1. Enable AWS Config in your account/region
-  # 2. Create a Configuration Recorder
-  # 3. Start the Configuration Recorder
+  # 1. Ensure AWS Config is enabled in your account/region
+  # 2. Verify no other stacks are using the Configuration Recorder
+  # 3. If needed, create a shared Configuration Recorder at account level
   # 4. Then uncomment this resource
   #
   # LambdaConfigRule:

@@ -370,7 +370,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(6); // Should have multiple resources now (LambdaConfigRule and WAF resources commented out)
+      expect(resourceCount).toBeGreaterThan(6); // Should have multiple resources now (using SAM Events for API Gateway)
     });
 
     test('should have correct number of parameters', () => {

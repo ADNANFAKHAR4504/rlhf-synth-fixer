@@ -299,6 +299,21 @@
                         }
                     ]
                 },
+                "Events": {
+                    "ApiEvent": {
+                        "Type": "Api",
+                        "Properties": {
+                            "Path": "/prompts",
+                            "Method": "GET",
+                            "RestApiId": {
+                                "Ref": "ApiGateway"
+                            },
+                            "Auth": {
+                                "Authorizer": "LambdaAuthorizer"
+                            }
+                        }
+                    }
+                },
                 "Tags": {
                     "Environment": {
                         "Ref": "EnvironmentType"
@@ -356,6 +371,21 @@
                             "Ref": "LambdaErrorAlarm"
                         }
                     ]
+                },
+                "Events": {
+                    "ApiEvent": {
+                        "Type": "Api",
+                        "Properties": {
+                            "Path": "/prompts",
+                            "Method": "POST",
+                            "RestApiId": {
+                                "Ref": "ApiGateway"
+                            },
+                            "Auth": {
+                                "Authorizer": "LambdaAuthorizer"
+                            }
+                        }
+                    }
                 },
                 "Tags": {
                     "Environment": {
@@ -415,6 +445,21 @@
                         }
                     ]
                 },
+                "Events": {
+                    "ApiEvent": {
+                        "Type": "Api",
+                        "Properties": {
+                            "Path": "/prompts",
+                            "Method": "PUT",
+                            "RestApiId": {
+                                "Ref": "ApiGateway"
+                            },
+                            "Auth": {
+                                "Authorizer": "LambdaAuthorizer"
+                            }
+                        }
+                    }
+                },
                 "Tags": {
                     "Environment": {
                         "Ref": "EnvironmentType"
@@ -472,6 +517,21 @@
                             "Ref": "LambdaErrorAlarm"
                         }
                     ]
+                },
+                "Events": {
+                    "ApiEvent": {
+                        "Type": "Api",
+                        "Properties": {
+                            "Path": "/prompts",
+                            "Method": "DELETE",
+                            "RestApiId": {
+                                "Ref": "ApiGateway"
+                            },
+                            "Auth": {
+                                "Authorizer": "LambdaAuthorizer"
+                            }
+                        }
+                    }
                 },
                 "Tags": {
                     "Environment": {
