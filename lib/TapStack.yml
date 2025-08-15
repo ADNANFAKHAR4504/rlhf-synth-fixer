@@ -26,7 +26,6 @@ Metadata:
           default: "Database Configuration"
         Parameters:
           - DBMasterUsername
-          - DBMasterPassword
 
 Parameters:
   EnvironmentSuffix:
@@ -90,21 +89,30 @@ Parameters:
     MinLength: 1
     MaxLength: 63
 
-  DBMasterPassword:
-    Type: String
-    Default: "TempPassword123!"
-    Description: "Database master password"
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 128
-    AllowedPattern: "^[a-zA-Z0-9!@#$%^&*()_+={}\\[\\]|\\:;\"'<>,.?/-]*$"
-    ConstraintDescription: "Must be 8-128 characters and contain alphanumeric and special characters"
-
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
+  # Secrets Manager for RDS password
+  RDSMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub "TapStack${EnvironmentSuffix}-rds-master-password"
+      Description: "Master password for RDS database"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub "TapStack${EnvironmentSuffix}-rds-secret"
+        - Key: Environment
+          Value: Production
+
   # Secrets Manager for OpenSearch password
   OpenSearchMasterSecret:
     Type: AWS::SecretsManager::Secret
@@ -532,7 +540,7 @@ Resources:
       DBInstanceIdentifier: !Sub "tapstack${EnvironmentSuffix}-database"
       DBInstanceClass: !Ref RDSInstanceClass
       Engine: mysql
-      EngineVersion: "8.0.43"
+      EngineVersion: "8.0.42"
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -541,7 +549,9 @@ Resources:
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        SecretArn: !Ref RDSMasterSecret
       BackupRetentionPeriod: 7
       PreferredBackupWindow: "03:00-04:00"
       PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
