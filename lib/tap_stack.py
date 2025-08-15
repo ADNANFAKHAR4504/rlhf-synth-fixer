@@ -580,7 +580,7 @@ class TapStack(pulumi.ComponentResource):
     self.task_role_policy = aws.iam.RolePolicy(
       f"task-role-policy-{self.environment_suffix}",
       role=self.ecs_task_role.id,
-      policy=json.dumps({
+      policy=self.artifacts_bucket.arn.apply(lambda arn: json.dumps({
         "Version": "2012-10-17",
         "Statement": [
           {
@@ -591,8 +591,8 @@ class TapStack(pulumi.ComponentResource):
               "s3:ListBucket"
             ],
             "Resource": [
-              self.artifacts_bucket.arn.apply(lambda arn: f"{arn}/*"),
-              self.artifacts_bucket.arn
+              f"{arn}/*",
+              arn
             ]
           },
           {
@@ -606,7 +606,7 @@ class TapStack(pulumi.ComponentResource):
             "Resource": "*"
           }
         ]
-      }),
+      })),
       opts=ResourceOptions(parent=self)
     )
 
@@ -760,25 +760,25 @@ class TapStack(pulumi.ComponentResource):
       task_definition=self.task_definition.arn,
       desired_count=2,
       launch_type="FARGATE",
-      deployment_configuration=aws.ecs.ServiceDeploymentConfigurationArgs(
-        maximum_percent=200,
-        minimum_healthy_percent=100,
-        deployment_circuit_breaker=aws.ecs.ServiceDeploymentCircuitBreakerArgs(
-          enable=True,
-          rollback=True
-        )
-      ),
-      network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
-        subnets=[subnet.id for subnet in self.private_subnets],
-        security_groups=[self.ecs_sg.id],
-        assign_public_ip=False
-      ),
+      deployment_configuration={
+        "maximum_percent": 200,
+        "minimum_healthy_percent": 100,
+        "deployment_circuit_breaker": {
+          "enable": True,
+          "rollback": True
+        }
+      },
+      network_configuration={
+        "subnets": [subnet.id for subnet in self.private_subnets],
+        "security_groups": [self.ecs_sg.id],
+        "assign_public_ip": False
+      },
       load_balancers=[
-        aws.ecs.ServiceLoadBalancerArgs(
-          target_group_arn=self.target_group.arn,
-          container_name=f"microservices-app-{self.environment_suffix}",
-          container_port=8000
-        )
+        {
+          "target_group_arn": self.target_group.arn,
+          "container_name": f"microservices-app-{self.environment_suffix}",
+          "container_port": 8000
+        }
       ],
       health_check_grace_period_seconds=60,
       tags=self.common_tags,
