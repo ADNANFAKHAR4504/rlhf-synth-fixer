@@ -116,6 +116,7 @@ resource "aws_kms_key" "main" {
 resource "aws_kms_alias" "main" {
   name          = "alias/${local.name_prefix}-key"
   target_key_id = aws_kms_key.main.key_id
+  depends_on    = [aws_kms_key.main]
 }
 
 # VPC resources are defined inline below
@@ -147,6 +148,7 @@ resource "aws_subnet" "public" {
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
+  depends_on              = [aws_vpc.main]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
@@ -161,6 +163,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
   availability_zone = data.aws_availability_zones.available.names[count.index]
+  depends_on        = [aws_vpc.main]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
