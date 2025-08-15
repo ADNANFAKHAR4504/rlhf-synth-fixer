@@ -1,4 +1,110 @@
-# main.tf - Root module for IAM security configuration
+# main.tf - Single file IAM Security Configuration as Code
+# All variables, locals, resources, and outputs in one file per team standards
+
+########################
+# Variables
+########################
+
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "environment" {
+  description = "Environment name (e.g., dev, staging, prod)"
+  type        = string
+  validation {
+    condition     = can(regex("^(dev|staging|prod)$", var.environment))
+    error_message = "Environment must be dev, staging, or prod."
+  }
+}
+
+variable "account_id" {
+  description = "Current AWS account ID"
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9]{12}$", var.account_id))
+    error_message = "Account ID must be a 12-digit number."
+  }
+}
+
+variable "trusted_account_ids" {
+  description = "List of AWS account IDs that can assume roles"
+  type        = list(string)
+  default     = ["111111111111", "222222222222"]
+  validation {
+    condition = alltrue([
+      for account_id in var.trusted_account_ids : can(regex("^[0-9]{12}$", account_id))
+    ])
+    error_message = "All account IDs must be 12-digit numbers."
+  }
+}
+
+variable "log_bucket_name" {
+  description = "Name of the S3 bucket for CloudTrail logs"
+  type        = string
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.log_bucket_name)) && length(var.log_bucket_name) >= 3 && length(var.log_bucket_name) <= 63
+    error_message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, and start/end with alphanumeric characters."
+  }
+}
+
+variable "app_s3_bucket_name" {
+  description = "Name of the S3 bucket for application uploads"
+  type        = string
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.app_s3_bucket_name)) && length(var.app_s3_bucket_name) >= 3 && length(var.app_s3_bucket_name) <= 63
+    error_message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, and start/end with alphanumeric characters."
+  }
+}
+
+variable "notification_email" {
+  description = "Email address for IAM change notifications"
+  type        = string
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
+    error_message = "Must be a valid email address."
+  }
+}
+
+variable "organization_id" {
+  description = "AWS Organization ID for CloudTrail configuration"
+  type        = string
+  default     = ""
+}
+
+variable "cloudtrail_enable_data_events" {
+  description = "Enable data events in CloudTrail"
+  type        = bool
+  default     = true
+}
+
+variable "cloudtrail_retention_days" {
+  description = "Number of days to retain CloudWatch logs for CloudTrail"
+  type        = number
+  default     = 90
+  validation {
+    condition     = var.cloudtrail_retention_days >= 1 && var.cloudtrail_retention_days <= 3653
+    error_message = "Retention days must be between 1 and 3653."
+  }
+}
+
+variable "enable_sns_notifications" {
+  description = "Enable SNS notifications for IAM changes"
+  type        = bool
+  default     = true
+}
+
+variable "tags" {
+  description = "Additional tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+}
+
+########################
+# Locals
+########################
 
 locals {
   common_tags = merge(var.tags, {
@@ -8,7 +114,293 @@ locals {
   })
 }
 
+########################
+# Data Sources
+########################
+
+# Data source for current AWS account and partition
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+# Trust policy for cross-account role assumption
+data "aws_iam_policy_document" "cross_account_trust" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = [for account_id in var.trusted_account_ids : "arn:${data.aws_partition.current.partition}:iam::${account_id}:root"]
+    }
+    actions = ["sts:AssumeRole"]
+    condition {
+      test     = "StringEquals"
+      variable = "sts:ExternalId"
+      values   = ["${var.environment}-cross-account"]
+    }
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+  }
+}
+
+# App Deploy Policy - Least privilege for application deployment
+data "aws_iam_policy_document" "app_deploy_policy" {
+  statement {
+    sid    = "EC2DeploymentAccess"
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeInstances",
+      "ec2:DescribeImages",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DescribeSubnets",
+      "ec2:DescribeVpcs",
+      "ec2:DescribeKeyPairs",
+      "ec2:RunInstances",
+      "ec2:TerminateInstances",
+      "ec2:StartInstances",
+      "ec2:StopInstances",
+      "ec2:CreateTags"
+    ]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.aws_region]
+    }
+  }
+
+  statement {
+    sid    = "ECSDeploymentAccess"
+    effect = "Allow"
+    actions = [
+      "ecs:DescribeClusters",
+      "ecs:DescribeServices",
+      "ecs:DescribeTaskDefinition",
+      "ecs:RegisterTaskDefinition",
+      "ecs:UpdateService",
+      "ecs:CreateService",
+      "ecs:DeleteService"
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ecs:*:${var.account_id}:cluster/${var.environment}-*",
+      "arn:${data.aws_partition.current.partition}:ecs:*:${var.account_id}:service/${var.environment}-*/*",
+      "arn:${data.aws_partition.current.partition}:ecs:*:${var.account_id}:task-definition/${var.environment}-*:*"
+    ]
+  }
+
+  statement {
+    sid    = "IAMPassRoleForDeployment"
+    effect = "Allow"
+    actions = ["iam:PassRole"]
+    resources = ["arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/${var.environment}-*"]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values = [
+        "ec2.amazonaws.com",
+        "ecs-tasks.amazonaws.com"
+      ]
+    }
+  }
+}
+
+# Read-only policy with explicit deny for destructive actions
+data "aws_iam_policy_document" "readonly_policy" {
+  statement {
+    sid    = "ReadOnlyAccess"
+    effect = "Allow"
+    actions = [
+      "ec2:Describe*",
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:GetBucketLocation",
+      "rds:Describe*",
+      "lambda:GetFunction",
+      "lambda:ListFunctions",
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:ListRoles",
+      "iam:ListRolePolicies",
+      "iam:ListAttachedRolePolicies",
+      "iam:GetAccountSummary"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "DenyDestructiveActions"
+    effect = "Deny"
+    actions = [
+      "*:Delete*",
+      "*:Terminate*",
+      "*:Remove*",
+      "*:Detach*",
+      "*:Stop*",
+      "*:Destroy*"
+    ]
+    resources = ["*"]
+  }
+}
+
+# Audit policy for compliance and security auditing
+data "aws_iam_policy_document" "audit_policy" {
+  statement {
+    sid    = "AuditReadAccess"
+    effect = "Allow"
+    actions = [
+      "cloudtrail:DescribeTrails",
+      "cloudtrail:GetTrailStatus",
+      "cloudtrail:LookupEvents",
+      "config:GetConfigurationRecorder",
+      "config:GetDeliveryChannel",
+      "config:GetComplianceDetailsByConfigRule",
+      "iam:GenerateCredentialReport",
+      "iam:GetCredentialReport",
+      "iam:ListUsers",
+      "iam:ListRoles",
+      "iam:ListPolicies",
+      "iam:GetAccountSummary",
+      "iam:GetAccountPasswordPolicy",
+      "iam:ListAccessKeys",
+      "iam:GetAccessKeyLastUsed"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "CloudTrailLogAccess"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket"
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.log_bucket_name}",
+      "arn:${data.aws_partition.current.partition}:s3:::${var.log_bucket_name}/*"
+    ]
+  }
+}
+
+# CloudWatch read-only policy
+data "aws_iam_policy_document" "cloudwatch_readonly_policy" {
+  statement {
+    sid    = "CloudWatchReadOnlyAccess"
+    effect = "Allow"
+    actions = [
+      "cloudwatch:DescribeAlarms",
+      "cloudwatch:DescribeAlarmsForMetric",
+      "cloudwatch:GetMetricStatistics",
+      "cloudwatch:GetMetricData",
+      "cloudwatch:ListMetrics",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+      "logs:GetLogEvents",
+      "logs:FilterLogEvents",
+      "logs:StartQuery",
+      "logs:StopQuery",
+      "logs:GetQueryResults"
+    ]
+    resources = ["*"]
+  }
+}
+
+# S3 upload policy for specific bucket
+data "aws_iam_policy_document" "s3_upload_policy" {
+  statement {
+    sid    = "S3UploadAccess"
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:PutObjectAcl",
+      "s3:GetObject",
+      "s3:DeleteObject"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.app_s3_bucket_name}/*"]
+  }
+
+  statement {
+    sid    = "S3BucketListAccess"
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucketLocation"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.app_s3_bucket_name}"]
+  }
+}
+
+# CloudTrail write policy for centralized logging
+data "aws_iam_policy_document" "cloudtrail_write_policy" {
+  statement {
+    sid    = "CloudTrailLogDelivery"
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:GetBucketAcl"
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.log_bucket_name}",
+      "arn:${data.aws_partition.current.partition}:s3:::${var.log_bucket_name}/*"
+    ]
+  }
+
+  statement {
+    sid    = "CloudWatchLogsAccess"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:logs:*:${var.account_id}:log-group:/aws/cloudtrail/*"]
+  }
+}
+
+# S3 Bucket Policy for CloudTrail
+data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
+  statement {
+    sid    = "AWSCloudTrailAclCheck"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:GetBucketAcl"]
+    resources = [aws_s3_bucket.cloudtrail_logs.arn]
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = ["arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${var.account_id}:trail/${var.environment}-security-trail"]
+    }
+  }
+
+  statement {
+    sid    = "AWSCloudTrailWrite"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.cloudtrail_logs.arn}/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = ["arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${var.account_id}:trail/${var.environment}-security-trail"]
+    }
+  }
+}
+
+########################
 # IAM Policies
+########################
+
 resource "aws_iam_policy" "app_deploy_policy" {
   name        = "${var.environment}-app-deploy-policy"
   description = "Policy for application deployment operations with least privilege"
@@ -57,7 +449,10 @@ resource "aws_iam_policy" "cloudtrail_write_policy" {
   tags = local.common_tags
 }
 
+########################
 # IAM Roles
+########################
+
 resource "aws_iam_role" "app_deploy_role" {
   name                 = "${var.environment}-AppDeployRole"
   description          = "Role for application deployment with least privilege access"
@@ -91,7 +486,10 @@ resource "aws_iam_role" "audit_role" {
   })
 }
 
+########################
 # Policy Attachments
+########################
+
 resource "aws_iam_role_policy_attachment" "app_deploy_policy_attachment" {
   role       = aws_iam_role.app_deploy_role.name
   policy_arn = aws_iam_policy.app_deploy_policy.arn
@@ -122,7 +520,10 @@ resource "aws_iam_role_policy_attachment" "audit_cloudtrail_attachment" {
   policy_arn = aws_iam_policy.cloudtrail_write_policy.arn
 }
 
-# S3 Bucket for CloudTrail logs
+########################
+# S3 Resources
+########################
+
 resource "aws_s3_bucket" "cloudtrail_logs" {
   bucket        = var.log_bucket_name
   force_destroy = false
@@ -159,69 +560,15 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail_logs_pab" {
   restrict_public_buckets = true
 }
 
-# S3 Bucket Policy for CloudTrail
-data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
-  statement {
-    sid    = "AWSCloudTrailAclCheck"
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    actions   = ["s3:GetBucketAcl"]
-    resources = [aws_s3_bucket.cloudtrail_logs.arn]
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = ["arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${var.account_id}:trail/${var.environment}-security-trail"]
-    }
-  }
-
-  statement {
-    sid    = "AWSCloudTrailWrite"
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.cloudtrail_logs.arn}/*"]
-    condition {
-      test     = "StringEquals"
-      variable = "s3:x-amz-acl"
-      values   = ["bucket-owner-full-control"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = ["arn:${data.aws_partition.current.partition}:cloudtrail:${var.aws_region}:${var.account_id}:trail/${var.environment}-security-trail"]
-    }
-  }
-}
-
 resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
   bucket = aws_s3_bucket.cloudtrail_logs.id
   policy = data.aws_iam_policy_document.cloudtrail_bucket_policy.json
 }
 
-# SNS Topic for IAM notifications (conditional)
-resource "aws_sns_topic" "iam_notifications" {
-  count = var.enable_sns_notifications ? 1 : 0
-  name  = "${var.environment}-iam-notifications"
+########################
+# CloudWatch Resources
+########################
 
-  tags = merge(local.common_tags, {
-    Purpose = "IAMNotifications"
-  })
-}
-
-resource "aws_sns_topic_subscription" "iam_email_notification" {
-  count     = var.enable_sns_notifications ? 1 : 0
-  topic_arn = aws_sns_topic.iam_notifications[0].arn
-  protocol  = "email"
-  endpoint  = var.notification_email
-}
-
-# CloudWatch Log Group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
   name              = "/aws/cloudtrail/${var.environment}-security-trail"
   retention_in_days = var.cloudtrail_retention_days
@@ -231,7 +578,10 @@ resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
   })
 }
 
-# IAM Role for CloudTrail to write to CloudWatch Logs
+########################
+# CloudTrail IAM Role
+########################
+
 resource "aws_iam_role" "cloudtrail_cloudwatch_role" {
   name = "${var.environment}-cloudtrail-cloudwatch-role"
 
@@ -273,7 +623,10 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch_policy" {
   })
 }
 
+########################
 # CloudTrail
+########################
+
 resource "aws_cloudtrail" "security_trail" {
   name           = "${var.environment}-security-trail"
   s3_bucket_name = aws_s3_bucket.cloudtrail_logs.bucket
@@ -308,7 +661,26 @@ resource "aws_cloudtrail" "security_trail" {
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs_policy]
 }
 
-# EventBridge Rule for IAM changes (conditional)
+########################
+# SNS and EventBridge (conditional)
+########################
+
+resource "aws_sns_topic" "iam_notifications" {
+  count = var.enable_sns_notifications ? 1 : 0
+  name  = "${var.environment}-iam-notifications"
+
+  tags = merge(local.common_tags, {
+    Purpose = "IAMNotifications"
+  })
+}
+
+resource "aws_sns_topic_subscription" "iam_email_notification" {
+  count     = var.enable_sns_notifications ? 1 : 0
+  topic_arn = aws_sns_topic.iam_notifications[0].arn
+  protocol  = "email"
+  endpoint  = var.notification_email
+}
+
 resource "aws_cloudwatch_event_rule" "iam_changes" {
   count       = var.enable_sns_notifications ? 1 : 0
   name        = "${var.environment}-iam-changes"
@@ -346,7 +718,6 @@ resource "aws_cloudwatch_event_target" "iam_changes_sns" {
   arn       = aws_sns_topic.iam_notifications[0].arn
 }
 
-# SNS Topic Policy to allow EventBridge to publish
 resource "aws_sns_topic_policy" "iam_notifications_policy" {
   count = var.enable_sns_notifications ? 1 : 0
   arn   = aws_sns_topic.iam_notifications[0].arn
@@ -364,4 +735,134 @@ resource "aws_sns_topic_policy" "iam_notifications_policy" {
       }
     ]
   })
+}
+
+########################
+# Outputs
+########################
+
+output "iam_roles" {
+  description = "Map of created IAM roles with their names and ARNs"
+  value = {
+    app_deploy_role = {
+      name = aws_iam_role.app_deploy_role.name
+      arn  = aws_iam_role.app_deploy_role.arn
+      id   = aws_iam_role.app_deploy_role.id
+    }
+    readonly_role = {
+      name = aws_iam_role.readonly_role.name
+      arn  = aws_iam_role.readonly_role.arn
+      id   = aws_iam_role.readonly_role.id
+    }
+    audit_role = {
+      name = aws_iam_role.audit_role.name
+      arn  = aws_iam_role.audit_role.arn
+      id   = aws_iam_role.audit_role.id
+    }
+  }
+}
+
+output "iam_policies" {
+  description = "Map of created IAM policies with their names and ARNs"
+  value = {
+    app_deploy_policy = {
+      name = aws_iam_policy.app_deploy_policy.name
+      arn  = aws_iam_policy.app_deploy_policy.arn
+      id   = aws_iam_policy.app_deploy_policy.id
+    }
+    readonly_policy = {
+      name = aws_iam_policy.readonly_policy.name
+      arn  = aws_iam_policy.readonly_policy.arn
+      id   = aws_iam_policy.readonly_policy.id
+    }
+    audit_policy = {
+      name = aws_iam_policy.audit_policy.name
+      arn  = aws_iam_policy.audit_policy.arn
+      id   = aws_iam_policy.audit_policy.id
+    }
+    cloudwatch_readonly_policy = {
+      name = aws_iam_policy.cloudwatch_readonly_policy.name
+      arn  = aws_iam_policy.cloudwatch_readonly_policy.arn
+      id   = aws_iam_policy.cloudwatch_readonly_policy.id
+    }
+    s3_upload_policy = {
+      name = aws_iam_policy.s3_upload_policy.name
+      arn  = aws_iam_policy.s3_upload_policy.arn
+      id   = aws_iam_policy.s3_upload_policy.id
+    }
+    cloudtrail_write_policy = {
+      name = aws_iam_policy.cloudtrail_write_policy.name
+      arn  = aws_iam_policy.cloudtrail_write_policy.arn
+      id   = aws_iam_policy.cloudtrail_write_policy.id
+    }
+  }
+}
+
+output "cloudtrail_arn" {
+  description = "ARN of the CloudTrail for security auditing"
+  value       = aws_cloudtrail.security_trail.arn
+}
+
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail for security auditing"
+  value       = aws_cloudtrail.security_trail.name
+}
+
+output "log_bucket_name" {
+  description = "Name of the S3 bucket storing CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail_logs.bucket
+}
+
+output "log_bucket_arn" {
+  description = "ARN of the S3 bucket storing CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail_logs.arn
+}
+
+output "cloudwatch_log_group_name" {
+  description = "Name of the CloudWatch log group for CloudTrail"
+  value       = aws_cloudwatch_log_group.cloudtrail_log_group.name
+}
+
+output "cloudwatch_log_group_arn" {
+  description = "ARN of the CloudWatch log group for CloudTrail"
+  value       = aws_cloudwatch_log_group.cloudtrail_log_group.arn
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for IAM notifications (if enabled)"
+  value       = var.enable_sns_notifications ? aws_sns_topic.iam_notifications[0].arn : null
+}
+
+output "sns_topic_name" {
+  description = "Name of the SNS topic for IAM notifications (if enabled)"
+  value       = var.enable_sns_notifications ? aws_sns_topic.iam_notifications[0].name : null
+}
+
+output "eventbridge_rule_arn" {
+  description = "ARN of the EventBridge rule for IAM monitoring (if enabled)"
+  value       = var.enable_sns_notifications ? aws_cloudwatch_event_rule.iam_changes[0].arn : null
+}
+
+output "cross_account_assume_role_commands" {
+  description = "AWS CLI commands to assume the created roles from trusted accounts"
+  value = {
+    app_deploy_role = "aws sts assume-role --role-arn ${aws_iam_role.app_deploy_role.arn} --role-session-name AppDeploySession --external-id ${var.environment}-cross-account"
+    readonly_role   = "aws sts assume-role --role-arn ${aws_iam_role.readonly_role.arn} --role-session-name ReadOnlySession --external-id ${var.environment}-cross-account"
+    audit_role      = "aws sts assume-role --role-arn ${aws_iam_role.audit_role.arn} --role-session-name AuditSession --external-id ${var.environment}-cross-account"
+  }
+}
+
+output "security_configuration_summary" {
+  description = "Summary of the security configuration deployed"
+  value = {
+    environment             = var.environment
+    account_id             = var.account_id
+    trusted_accounts       = var.trusted_account_ids
+    roles_created         = 3
+    policies_created      = 6
+    cloudtrail_enabled    = true
+    sns_notifications     = var.enable_sns_notifications
+    data_events_logging   = var.cloudtrail_enable_data_events
+    log_retention_days    = var.cloudtrail_retention_days
+  }
 }

@@ -10,14 +10,7 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
 
   // Core file existence tests
   describe('Required Files Existence', () => {
-    const requiredFiles = [
-      'main.tf',
-      'variables.tf',
-      'outputs.tf',
-      'policies.tf',
-      'provider.tf',
-      'tap_stack.tf',
-    ];
+    const requiredFiles = ['main.tf', 'provider.tf', 'tap_stack.tf'];
 
     requiredFiles.forEach(filename => {
       test(`${filename} exists`, () => {
@@ -56,13 +49,13 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
     });
   });
 
-  // Variables validation
+  // Variables validation (now in main.tf)
   describe('Variables Configuration', () => {
-    let variablesContent: string;
+    let mainContent: string;
 
     beforeAll(() => {
-      const variablesPath = path.join(libPath, 'variables.tf');
-      variablesContent = fs.readFileSync(variablesPath, 'utf8');
+      const mainPath = path.join(libPath, 'main.tf');
+      mainContent = fs.readFileSync(mainPath, 'utf8');
     });
 
     const requiredVariables = [
@@ -77,19 +70,19 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
 
     requiredVariables.forEach(varName => {
       test(`declares ${varName} variable`, () => {
-        expect(variablesContent).toMatch(
+        expect(mainContent).toMatch(
           new RegExp(`variable\\s+"${varName}"\\s*{`)
         );
       });
     });
 
     test('environment variable has validation', () => {
-      expect(variablesContent).toMatch(/validation\s*{/);
-      expect(variablesContent).toMatch(/(dev|staging|prod)/);
+      expect(mainContent).toMatch(/validation\s*{/);
+      expect(mainContent).toMatch(/(dev|staging|prod)/);
     });
 
     test('account_id variable validates 12-digit format', () => {
-      expect(variablesContent).toMatch(/\[0-9\]\{12\}/);
+      expect(mainContent).toMatch(/\[0-9\]\{12\}/);
     });
   });
 
@@ -155,70 +148,68 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
     });
   });
 
-  // Policies validation
+  // Policies validation (now in main.tf)
   describe('Policy Documents', () => {
-    let policiesContent: string;
+    let mainContent: string;
 
     beforeAll(() => {
-      const policiesPath = path.join(libPath, 'policies.tf');
-      policiesContent = fs.readFileSync(policiesPath, 'utf8');
+      const mainPath = path.join(libPath, 'main.tf');
+      mainContent = fs.readFileSync(mainPath, 'utf8');
     });
 
     test('defines cross-account trust policy with MFA requirement', () => {
-      expect(policiesContent).toMatch(
+      expect(mainContent).toMatch(
         /data\s+"aws_iam_policy_document"\s+"cross_account_trust"/
       );
-      expect(policiesContent).toMatch(/aws:MultiFactorAuthPresent/);
+      expect(mainContent).toMatch(/aws:MultiFactorAuthPresent/);
     });
 
     test('app deploy policy follows least privilege', () => {
-      expect(policiesContent).toMatch(/EC2DeploymentAccess/);
-      expect(policiesContent).toMatch(/ECSDeploymentAccess/);
-      expect(policiesContent).toMatch(/IAMPassRoleForDeployment/);
+      expect(mainContent).toMatch(/EC2DeploymentAccess/);
+      expect(mainContent).toMatch(/ECSDeploymentAccess/);
+      expect(mainContent).toMatch(/IAMPassRoleForDeployment/);
     });
 
     test('readonly policy includes explicit deny for destructive actions', () => {
-      expect(policiesContent).toMatch(/DenyDestructiveActions/);
-      expect(policiesContent).toMatch(/\*:Delete\*/);
-      expect(policiesContent).toMatch(/\*:Terminate\*/);
+      expect(mainContent).toMatch(/DenyDestructiveActions/);
+      expect(mainContent).toMatch(/\*:Delete\*/);
+      expect(mainContent).toMatch(/\*:Terminate\*/);
     });
 
     test('audit policy allows CloudTrail and compliance access', () => {
-      expect(policiesContent).toMatch(/AuditReadAccess/);
-      expect(policiesContent).toMatch(/cloudtrail:LookupEvents/);
-      expect(policiesContent).toMatch(/iam:GetCredentialReport/);
+      expect(mainContent).toMatch(/AuditReadAccess/);
+      expect(mainContent).toMatch(/cloudtrail:LookupEvents/);
+      expect(mainContent).toMatch(/iam:GetCredentialReport/);
     });
   });
 
-  // Outputs validation
+  // Outputs validation (now in main.tf)
   describe('Outputs Configuration', () => {
-    let outputsContent: string;
+    let mainContent: string;
 
     beforeAll(() => {
-      const outputsPath = path.join(libPath, 'outputs.tf');
-      outputsContent = fs.readFileSync(outputsPath, 'utf8');
+      const mainPath = path.join(libPath, 'main.tf');
+      mainContent = fs.readFileSync(mainPath, 'utf8');
     });
 
     test('outputs IAM roles information', () => {
-      expect(outputsContent).toMatch(/output\s+"iam_roles"/);
+      expect(mainContent).toMatch(/output\s+"iam_roles"/);
     });
 
     test('outputs CloudTrail information', () => {
-      expect(outputsContent).toMatch(/output\s+"cloudtrail_arn"/);
-      expect(outputsContent).toMatch(/output\s+"log_bucket_name"/);
+      expect(mainContent).toMatch(/output\s+"cloudtrail_arn"/);
+      expect(mainContent).toMatch(/output\s+"log_bucket_name"/);
     });
 
     test('outputs cross-account assume role commands', () => {
-      expect(outputsContent).toMatch(
+      expect(mainContent).toMatch(
         /output\s+"cross_account_assume_role_commands"/
       );
-      expect(outputsContent).toMatch(/aws sts assume-role/);
+      expect(mainContent).toMatch(/aws sts assume-role/);
     });
 
     test('outputs security configuration summary', () => {
-      expect(outputsContent).toMatch(
-        /output\s+"security_configuration_summary"/
-      );
+      expect(mainContent).toMatch(/output\s+"security_configuration_summary"/);
     });
   });
 
@@ -227,13 +218,8 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
     let allContent: string;
 
     beforeAll(() => {
-      const files = ['main.tf', 'policies.tf', 'variables.tf'];
-      allContent = files
-        .map(file => {
-          const filePath = path.join(libPath, file);
-          return fs.readFileSync(filePath, 'utf8');
-        })
-        .join('\n');
+      const mainPath = path.join(libPath, 'main.tf');
+      allContent = fs.readFileSync(mainPath, 'utf8');
     });
 
     test('does not contain hardcoded secrets or keys', () => {
@@ -263,49 +249,53 @@ describe('Terraform IAM Security Configuration - Unit Tests', () => {
 
   // File structure integrity
   describe('File Structure Integrity', () => {
-    test('no duplicate resource names across files', () => {
-      const files = ['main.tf', 'policies.tf', 'tap_stack.tf'];
-      const allResources: string[] = [];
+    test('no duplicate resource names in main.tf', () => {
+      const mainPath = path.join(libPath, 'main.tf');
+      const content = fs.readFileSync(mainPath, 'utf8');
+      const resources = content.match(/resource\s+"[^"]+"\s+"([^"]+)"/g) || [];
+      const resourceNames: string[] = [];
 
-      files.forEach(file => {
-        const filePath = path.join(libPath, file);
-        const content = fs.readFileSync(filePath, 'utf8');
-        const resources =
-          content.match(/resource\s+"[^"]+"\s+"([^"]+)"/g) || [];
-
-        resources.forEach(resource => {
-          const match = resource.match(/resource\s+"[^"]+"\s+"([^"]+)"/);
-          if (match) {
-            const resourceName = match[1];
-            expect(allResources).not.toContain(resourceName);
-            allResources.push(resourceName);
-          }
-        });
+      resources.forEach(resource => {
+        const match = resource.match(/resource\s+"[^"]+"\s+"([^"]+)"/);
+        if (match) {
+          const resourceName = match[1];
+          expect(resourceNames).not.toContain(resourceName);
+          resourceNames.push(resourceName);
+        }
       });
     });
 
-    test('all referenced variables are declared', () => {
-      const variablesPath = path.join(libPath, 'variables.tf');
-      const variablesContent = fs.readFileSync(variablesPath, 'utf8');
+    test('all referenced variables are declared in main.tf', () => {
+      const mainPath = path.join(libPath, 'main.tf');
+      const mainContent = fs.readFileSync(mainPath, 'utf8');
+
       const declaredVars =
-        variablesContent
+        mainContent
           .match(/variable\s+"([^"]+)"/g)
           ?.map(v => v.match(/variable\s+"([^"]+)"/)?.[1])
           .filter(Boolean) || [];
 
-      const files = ['main.tf', 'policies.tf', 'outputs.tf'];
-      files.forEach(file => {
-        const filePath = path.join(libPath, file);
-        const content = fs.readFileSync(filePath, 'utf8');
-        const usedVars =
-          content
-            .match(/var\.([a-zA-Z_][a-zA-Z0-9_]*)/g)
-            ?.map(v => v.replace('var.', '')) || [];
+      const usedVars =
+        mainContent
+          .match(/var\.([a-zA-Z_][a-zA-Z0-9_]*)/g)
+          ?.map(v => v.replace('var.', '')) || [];
 
-        usedVars.forEach(usedVar => {
-          expect(declaredVars).toContain(usedVar);
-        });
+      usedVars.forEach(usedVar => {
+        expect(declaredVars).toContain(usedVar);
       });
+    });
+
+    test('main.tf contains all required sections', () => {
+      const mainPath = path.join(libPath, 'main.tf');
+      const content = fs.readFileSync(mainPath, 'utf8');
+
+      // Check for required sections
+      expect(content).toMatch(/# Variables/);
+      expect(content).toMatch(/# Locals/);
+      expect(content).toMatch(/# Data Sources/);
+      expect(content).toMatch(/# IAM Policies/);
+      expect(content).toMatch(/# IAM Roles/);
+      expect(content).toMatch(/# Outputs/);
     });
   });
 });
