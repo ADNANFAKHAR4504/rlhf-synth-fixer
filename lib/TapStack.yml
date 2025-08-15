@@ -616,6 +616,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
+      FunctionName: !Sub "TapStack${EnvironmentSuffix}-lambda-function"
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -734,7 +735,7 @@ Outputs:
 
   OpenSearchDomainEndpoint:
     Description: "OpenSearch Domain Endpoint"
-    Value: !GetAtt OpenSearchDomain.DomainEndpoint
+    Value: !Sub "https://${OpenSearchDomain.DomainEndpoint}"
     Export:
       Name: !Sub "${AWS::StackName}-OpenSearchDomainEndpoint"
 

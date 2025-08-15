@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 
 // Configuration - These are coming from cfn-outputs after deployment
 const outputs = JSON.parse(
@@ -7,6 +8,11 @@ const outputs = JSON.parse(
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
+// Read AWS region from AWS_REGION file
+const awsRegion = fs
+  .readFileSync(path.join(__dirname, '../lib/AWS_REGION'), 'utf8')
+  .trim();
 
 describe('TapStack Infrastructure Integration Tests', () => {
   describe('Stack Outputs Validation', () => {
@@ -69,7 +75,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
   describe('RDS Infrastructure', () => {
     test('should have valid RDS endpoint format', () => {
       expect(outputs.RDSEndpoint).toMatch(
-        /^tapstack.+-database\..+\.us-east-1\.rds\.amazonaws\.com$/
+        new RegExp(
+          `^tapstack.+-database\\..+\\.${awsRegion}\\.rds\\.amazonaws\\.com$`
+        )
       );
     });
 
@@ -83,7 +91,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
   describe('OpenSearch Infrastructure', () => {
     test('should have valid OpenSearch endpoint format', () => {
       expect(outputs.OpenSearchDomainEndpoint).toMatch(
-        /^https:\/\/vpc-tapstack.+-os-domain-.+\.us-east-1\.es\.amazonaws\.com$/
+        new RegExp(
+          `^https:\\/\\/vpc-tapstack.+-os-domain-.+\\.${awsRegion}\\.es\\.amazonaws\\.com$`
+        )
       );
     });
 
@@ -103,7 +113,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
   describe('Lambda Infrastructure', () => {
     test('should have valid Lambda function ARN format', () => {
       expect(outputs.LambdaFunctionArn).toMatch(
-        /^arn:aws:lambda:us-east-1:\d{12}:function:TapStack.+-lambda-function$/
+        new RegExp(
+          `^arn:aws:lambda:${awsRegion}:\\d{12}:function:TapStack.+-lambda-function$`
+        )
       );
     });
 
@@ -111,8 +123,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(outputs.LambdaFunctionArn).toContain(outputs.EnvironmentSuffix);
     });
 
-    test('Lambda function should be in us-east-1 region', () => {
-      expect(outputs.LambdaFunctionArn).toContain('us-east-1');
+    test('Lambda function should be in correct region', () => {
+      expect(outputs.LambdaFunctionArn).toContain(awsRegion);
     });
   });
 
@@ -131,10 +143,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(outputs.LambdaFunctionArn).toContain(suffix);
     });
 
-    test('all AWS resources should be in us-east-1 region', () => {
-      expect(outputs.RDSEndpoint).toContain('us-east-1');
-      expect(outputs.OpenSearchDomainEndpoint).toContain('us-east-1');
-      expect(outputs.LambdaFunctionArn).toContain('us-east-1');
+    test('all AWS resources should be in correct region', () => {
+      expect(outputs.RDSEndpoint).toContain(awsRegion);
+      expect(outputs.OpenSearchDomainEndpoint).toContain(awsRegion);
+      expect(outputs.LambdaFunctionArn).toContain(awsRegion);
     });
   });
 
@@ -149,7 +161,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
     test('RDS endpoint should use instance format for availability', () => {
       expect(outputs.RDSEndpoint).toMatch(
-        /^tapstack.+-database\..+\.us-east-1\.rds\.amazonaws\.com$/
+        new RegExp(
+          `^tapstack.+-database\\..+\\.${awsRegion}\\.rds\\.amazonaws\\.com$`
+        )
       );
     });
   });
@@ -196,7 +210,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('infrastructure should support production workloads', () => {
       // RDS should use proper naming for high availability
       expect(outputs.RDSEndpoint).toMatch(
-        /^tapstack.+-database\..+\.us-east-1\.rds\.amazonaws\.com$/
+        new RegExp(
+          `^tapstack.+-database\\..+\\.${awsRegion}\\.rds\\.amazonaws\\.com$`
+        )
       );
 
       // OpenSearch should be in VPC for security
