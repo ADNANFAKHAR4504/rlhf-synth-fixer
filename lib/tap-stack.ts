@@ -8,6 +8,7 @@ import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
+import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
@@ -54,11 +55,15 @@ export class TapStack extends TerraformStack {
     // Get environment suffix from props, defaulting to 'dev'
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // Project prefix for consistent naming as per requirements
-    const projectPrefix = `projectXYZ-${environmentSuffix}`;
+    // Project prefix for consistent naming as per requirements with timestamp for uniqueness
+    const timestamp = Math.floor(Date.now() / 1000);
+    const projectPrefix = `projectXYZ-${environmentSuffix}-${timestamp}`;
 
-    // VPC Configuration - parameterized for flexibility
-    const vpcId = props?.vpcId || 'vpc-0abcd1234';
+    // VPC Configuration - use data source to get default VPC instead of hardcoded value
+    const defaultVpc = new DataAwsVpc(this, 'default-vpc', {
+      default: true,
+    });
+    const vpcId = props?.vpcId || defaultVpc.id;
 
     // Get subnets for the specified VPC
     const vpcSubnets = new DataAwsSubnets(this, 'vpc-subnets', {
