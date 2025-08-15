@@ -1,41 +1,75 @@
 Prompt:
 
-Design and implement the multi-region AWS infrastructure using CDK for Terraform (CDKTF) with TypeScript. Your solution should follow this folder structure:
+I have an existing CDK for Terraform (CDKTF) TypeScript project with the following folder structure:
 
-main.ts (in the project root) – Entry point that synthesizes the app and defines stacks.
+swift
+Copy
+Edit
+/bin/tap.ts         // entry point for the application  
+/lib/tapstack.ts    // main stack definition file  
+/test/              // test folder for stack/unit tests  
+The project name is "IaC - AWS Nova Model Breaking".
 
-lib/tapstack.ts – Contains the primary CDKTF stack (TapStack) that encapsulates all AWS resource logic.
+I want you to generate TypeScript CDKTF code implementing the following AWS infrastructure in the tapstack.ts file, using bin/tap.ts as the entry point and keeping all the best practices for CDKTF and TypeScript:
 
-test/ – Contains unit/integration tests validating the infrastructure.
+Requirements:
 
-Infrastructure Requirements:
+VPC with public and private subnets across multiple availability zones.
 
-Use CDKTF in TypeScript to provisionn AWS infrastructure across three regions: us-east-1, eu-west-1, and ap-southeast-2.
+EC2 instance in a private subnet:
 
-In each region, set up consistent networking components, including :
+No public IP.
 
-VPCs
+Accessible only through a bastion host in the public subnet.
 
-Public and private subnets
+Ensure EC2 launches with the latest security patches (e.g., latest AMI).
 
-Internet gateways
+IAM Policies with least privilege access for users and roles.
 
-Create one S3 bucket per region with the identical lifecycle policies for storage management.
+Enable MFA for all IAM users.
 
-Configure IAM roles with cross-account access between two distinct AWS accounts.
+Audit and remove unused IAM roles and policies.
 
-Apply a consistent tagging strategy across all resources for cost tracking and organizational compliance.
+AWS Lambda functions behind an API Gateway with strict access logging enabled.
 
-Optimize for cost-efficiency, leveraging regional pricing advantages and avoiding over-provisioning.
+RDS database instance:
 
-Implement security is best practices using proper security groups and NACLs.
+Backups enabled.
 
-Ensure high availability and fault tolerance for critical infrastructure components.
+Enhanced monitoring enabled.
 
-Automate deployment using CDKTF CLI and scripts to manage environments via environment-specific config.
+No public access.
 
-Use Terraform state management to track and protect infrastructure state.
+S3 Buckets:
 
-Validate all infrastructure changes against company compliance and security standards.
+Encryption at rest enabled by default (using AWS KMS).
 
-Write and organize all the test cases under the test directory to verify correct infrastructure deployment.
+Public access blocked at bucket and account level.
+
+AWS WAF in front of API Gateway for malicious traffic filtering.
+
+KMS for encryption key management across services.
+
+Security Groups and NACLs configured with least privilege principles for all resources.
+
+Constraints:
+
+Exclude AWS Config Rules.
+
+Exclude AWS CloudTrail.
+
+Follow CDKTF TypeScript idioms (constructs, stack outputs, environment configuration).
+
+Separate bin/tap.ts for app entry and lib/tapstack.ts for stack logic.
+
+Write tests in /test folder for validating security settings (e.g., S3 encryption, RDS public access disabled, IAM MFA enabled).
+
+Output:
+
+Provide only the TypeScript code for bin/tap.ts, lib/tapstack.ts, and sample tests under /test.
+
+Ensure the generated stack deploys in us-east-1.
+
+Use descriptive  resource naming with the environment name included.
+
+Follow Pulumi/HashiCorp AWS provider best practices for CDKTF.
