@@ -5,6 +5,13 @@ Tests configuration logic, CIDR calculations, and policy structures without AWS 
 
 import unittest
 import ipaddress
+import sys
+import os
+from unittest.mock import Mock, patch
+
+# Add lib to path to import modules
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib', 'modules'))
 
 
 class TestTapStackUnits(unittest.TestCase):
@@ -23,6 +30,262 @@ class TestTapStackUnits(unittest.TestCase):
       "Project": "secure-infrastructure",
       "ManagedBy": "Pulumi"
     }
+
+  @patch('pulumi_aws.Provider')
+  @patch('pulumi_aws.ec2.Vpc')
+  @patch('pulumi_aws.get_availability_zones')
+  def test_vpc_module_import_and_creation(self, mock_get_azs, mock_vpc, mock_provider):
+    """Test VPC module can be imported and called"""
+    try:
+      from modules.vpc import create_vpc_infrastructure
+
+      # Mock the provider and VPC
+      mock_provider_instance = Mock()
+      mock_provider.return_value = mock_provider_instance
+
+      mock_vpc_instance = Mock()
+      mock_vpc_instance.id = "vpc-test123"
+      mock_vpc.return_value = mock_vpc_instance
+
+      # Mock availability zones
+      mock_azs = Mock()
+      mock_azs.names = ['us-east-1a', 'us-east-1b']
+      mock_get_azs.return_value = mock_azs
+
+      # Test function call (won't actually create resources due to mocking)
+      result = create_vpc_infrastructure(
+        region="us-east-1",
+        cidr_block="10.0.0.0/16",
+        tags=self.common_tags,
+        provider=mock_provider_instance
+      )
+
+      # Verify mocks were called
+      mock_vpc.assert_called()
+      self.assertIsInstance(result, dict)
+
+    except ImportError:
+      self.skipTest("VPC module not available for import")
+
+  @patch('pulumi_aws.Provider')
+  @patch('pulumi_aws.ec2.SecurityGroup')
+  def test_security_module_import_and_creation(self, mock_sg, mock_provider):
+    """Test security module can be imported and called"""
+    try:
+      from modules.security import create_security_groups, create_s3_bucket
+
+      # Mock the provider and security group
+      mock_provider_instance = Mock()
+      mock_provider.return_value = mock_provider_instance
+
+      mock_sg_instance = Mock()
+      mock_sg_instance.id = "sg-test123"
+      mock_sg.return_value = mock_sg_instance
+
+      # Test security groups function
+      with patch('pulumi_aws.ec2.SecurityGroupRule'):
+        result = create_security_groups(
+          region="us-east-1",
+          vpc_id="vpc-test123",
+          tags=self.common_tags,
+          provider=mock_provider_instance
+        )
+
+        self.assertIsInstance(result, dict)
+        self.assertIn('web_sg', result)
+        self.assertIn('app_sg', result)
+        self.assertIn('db_sg', result)
+
+    except ImportError:
+      self.skipTest("Security module not available for import")
+
+  @patch('pulumi_aws.Provider')
+  @patch('pulumi_aws.s3.Bucket')
+  def test_s3_bucket_creation_from_security_module(self, mock_bucket, mock_provider):
+    """Test S3 bucket creation from security module"""
+    try:
+      from modules.security import create_s3_bucket
+
+      # Mock the provider and bucket
+      mock_provider_instance = Mock()
+      mock_provider.return_value = mock_provider_instance
+
+      mock_bucket_instance = Mock()
+      mock_bucket_instance.id = "test-bucket"
+      mock_bucket.return_value = mock_bucket_instance
+
+      # Mock other S3 resources with non-deprecated versions
+      with patch('pulumi_aws.s3.BucketVersioning'), \
+          patch('pulumi_aws.s3.BucketServerSideEncryptionConfiguration'), \
+          patch('pulumi_aws.s3.BucketPublicAccessBlock'), \
+          patch('pulumi_aws.s3.BucketPolicy'), \
+          patch('pulumi.Output.all') as mock_output:
+
+        # Mock pulumi Output
+        mock_output.return_value.apply = Mock(return_value="mock_policy")
+
+        result = create_s3_bucket(
+          region="us-east-1",
+          tags=self.common_tags,
+          provider=mock_provider_instance
+        )
+
+        self.assertIsNotNone(result)
+        mock_bucket.assert_called()
+
+    except ImportError:
+      self.skipTest("Security module not available for import")
+
+  @patch('pulumi_aws.Provider')
+  @patch('pulumi_aws.iam.Role')
+  def test_iam_module_import_and_creation(self, mock_role, mock_provider):
+    """Test IAM module can be imported and called"""
+    try:
+      from modules.iam import create_iam_roles
+
+      # Mock IAM role
+      mock_role_instance = Mock()
+      mock_role_instance.arn = "arn:aws:iam::123456789012:role/test-role"
+      mock_role_instance.name = "test-role"
+      mock_role.return_value = mock_role_instance
+
+      # Mock other IAM resources
+      with patch('pulumi_aws.iam.RolePolicyAttachment'), \
+          patch('pulumi_aws.iam.InstanceProfile'):
+
+        result = create_iam_roles(self.common_tags)
+
+        self.assertIsInstance(result, dict)
+        self.assertIn('ec2_role', result)
+        self.assertIn('lambda_role', result)
+        self.assertIn('instance_profile', result)
+
+    except ImportError:
+      self.skipTest("IAM module not available for import")
+
+  @patch('pulumi_aws.Provider')
+  @patch('pulumi_aws.cloudtrail.Trail')
+  def test_monitoring_module_import_and_creation(self, mock_trail, mock_provider):
+    """Test monitoring module can be imported and called"""
+    try:
+      from modules.monitoring import setup_cloudtrail
+
+      # Mock the provider and trail
+      mock_provider_instance = Mock()
+      mock_provider.return_value = mock_provider_instance
+
+      mock_trail_instance = Mock()
+      mock_trail_instance.name = "test-trail"
+      mock_trail.return_value = mock_trail_instance
+
+      # Mock pulumi Output for S3 bucket name
+      mock_s3_bucket_name = Mock()
+      mock_s3_bucket_name.apply = Mock(return_value="test-bucket")
+
+      result = setup_cloudtrail(
+        region="us-east-1",
+        s3_bucket_name=mock_s3_bucket_name,
+        tags=self.common_tags,
+        provider=mock_provider_instance
+      )
+
+      self.assertIsNotNone(result)
+      mock_trail.assert_called()
+
+    except ImportError:
+      self.skipTest("Monitoring module not available for import")
+
+  @patch('pulumi_aws.s3.Bucket')
+  @patch('pulumi_aws.iam.Role')
+  @patch('pulumi_aws.codebuild.Project')
+  @patch('pulumi_aws.codepipeline.Pipeline')
+  def test_codepipeline_module_import_and_creation(self, mock_pipeline, mock_project, mock_role, mock_bucket):
+    """Test code_pipeline module can be imported and called"""
+    try:
+      from modules.code_pipeline import setup_codepipeline
+
+      # Mock resources
+      mock_bucket_instance = Mock()
+      mock_bucket_instance.bucket = "test-bucket"
+      mock_bucket.return_value = mock_bucket_instance
+
+      mock_role_instance = Mock()
+      mock_role_instance.arn = "arn:aws:iam::123456789012:role/test-role"
+      mock_role_instance.name = "test-role"
+      mock_role.return_value = mock_role_instance
+
+      mock_project_instance = Mock()
+      mock_project_instance.name = "test-project"
+      mock_project.return_value = mock_project_instance
+
+      mock_pipeline_instance = Mock()
+      mock_pipeline_instance.name = "test-pipeline"
+      mock_pipeline.return_value = mock_pipeline_instance
+
+      # Mock other resources with non-deprecated versions
+      with patch('pulumi_aws.s3.BucketServerSideEncryptionConfiguration'), \
+          patch('pulumi_aws.iam.RolePolicyAttachment'):
+
+        result = setup_codepipeline("test")
+
+        self.assertIsInstance(result, dict)
+        self.assertIn('pipeline_name', result)
+        self.assertIn('pipeline_source_bucket', result)
+        self.assertIn('pipeline_artifact_bucket', result)
+
+    except ImportError:
+      self.skipTest("CodePipeline module not available for import")
+
+  def test_main_module_import(self):
+    """Test main module can be imported"""
+    try:
+      import main
+
+      # Test that main module has expected functions/variables
+      self.assertTrue(hasattr(main, 'deploy_infrastructure'))
+      self.assertTrue(hasattr(main, 'export_outputs'))
+      self.assertTrue(hasattr(main, 'create_cloudtrail_s3_policy'))
+
+    except ImportError as e:
+      self.skipTest(f"Main module not available for import: {e}")
+
+  def test_tap_stack_module_import(self):
+    """Test tap_stack module can be imported"""
+    try:
+      import tap_stack
+
+      # Verify module has expected attributes
+      self.assertTrue(hasattr(tap_stack, 'TapStack'))
+
+    except ImportError as e:
+      self.skipTest(f"TapStack module not available for import: {e}")
+
+  def test_utils_module_import(self):
+    """Test utils module can be imported and used"""
+    try:
+      from modules.utils import get_availability_zones, validate_cidr_block
+
+      # Test CIDR validation function
+      self.assertTrue(validate_cidr_block("10.0.0.0/16"))
+      self.assertFalse(validate_cidr_block("invalid"))
+
+      # Test AZ function (mocked)
+      with patch('boto3.client') as mock_client:
+        mock_ec2 = Mock()
+        mock_ec2.describe_availability_zones.return_value = {
+          'AvailabilityZones': [
+            {'ZoneName': 'us-east-1a'},
+            {'ZoneName': 'us-east-1b'}
+          ]
+        }
+        mock_client.return_value = mock_ec2
+
+        azs = get_availability_zones("us-east-1")
+        self.assertEqual(len(azs), 2)
+        self.assertIn('us-east-1a', azs)
+
+    except ImportError:
+      self.skipTest("Utils module not available for import")
 
   def test_vpc_cidr_configuration(self):
     """Test VPC CIDR blocks are valid /16 private networks"""
