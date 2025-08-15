@@ -165,10 +165,10 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${SourceCodeBucket}/*"
+                                            "Fn::Sub": "${SourceCodeBucket.Arn}/*"
                                         },
                                         {
-                                            "Fn::Sub": "${ArtifactsBucket}/*"
+                                            "Fn::Sub": "${ArtifactsBucket.Arn}/*"
                                         }
                                     ]
                                 },
@@ -285,10 +285,10 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${SourceCodeBucket}/*"
+                                            "Fn::Sub": "${SourceCodeBucket.Arn}/*"
                                         },
                                         {
-                                            "Fn::Sub": "${ArtifactsBucket}/*"
+                                            "Fn::Sub": "${ArtifactsBucket.Arn}/*"
                                         }
                                     ]
                                 },
@@ -470,7 +470,7 @@
                                             ]
                                         },
                                         {
-                                            "Fn::Sub": "${ArtifactsBucket}/*"
+                                            "Fn::Sub": "${ArtifactsBucket.Arn}/*"
                                         }
                                     ]
                                 },

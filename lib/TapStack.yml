@@ -121,8 +121,8 @@ Resources:
                   - s3:PutObject
                   - s3:PutObjectAcl
                 Resource:
-                  - !Sub "${SourceCodeBucket}/*"
-                  - !Sub "${ArtifactsBucket}/*"
+                  - !Sub "${SourceCodeBucket.Arn}/*"
+                  - !Sub "${ArtifactsBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -181,8 +181,8 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:PutObject
                 Resource:
-                  - !Sub "${SourceCodeBucket}/*"
-                  - !Sub "${ArtifactsBucket}/*"
+                  - !Sub "${SourceCodeBucket.Arn}/*"
+                  - !Sub "${ArtifactsBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -284,7 +284,7 @@ Resources:
                   - s3:ListBucket
                 Resource:
                   - !GetAtt ArtifactsBucket.Arn
-                  - !Sub "${ArtifactsBucket}/*"
+                  - !Sub "${ArtifactsBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
