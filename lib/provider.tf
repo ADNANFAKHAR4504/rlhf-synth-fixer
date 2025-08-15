@@ -20,6 +20,14 @@ terraform {
   }
 
   # Partial backend config: values are injected at `terraform init` time
+  # Recommended: Add DynamoDB table for state locking
+  # backend "s3" {
+  #   # bucket         = "terraform-state-bucket"
+  #   # key            = "security-config/terraform.tfstate"
+  #   # region         = "us-east-1"
+  #   # dynamodb_table = "terraform-state-lock"
+  #   # encrypt        = true
+  # }
   backend "s3" {}
 }
 

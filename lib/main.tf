@@ -23,6 +23,11 @@ variable "trusted_account_ids" {
   description = "List of AWS account IDs that can assume roles"
   type        = list(string)
   default     = []  # Will use current account if empty
+  
+  validation {
+    condition     = alltrue([for id in var.trusted_account_ids : can(regex("^[0-9]{12}$", id))])
+    error_message = "All account IDs must be 12-digit numbers."
+  }
 }
 
 variable "log_bucket_name" {
@@ -41,6 +46,11 @@ variable "notification_email" {
   description = "Email address for IAM change notifications"
   type        = string
   default     = "devops@example.com"
+  
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
+    error_message = "Must be a valid email address format."
+  }
 }
 
 variable "organization_id" {
@@ -58,13 +68,35 @@ variable "cloudtrail_enable_data_events" {
 variable "cloudtrail_retention_days" {
   description = "Number of days to retain CloudWatch logs for CloudTrail"
   type        = number
-  default     = 90
+  default     = 30  # Reduced from 90 days for cost optimization
+  
+  validation {
+    condition     = var.cloudtrail_retention_days >= 1 && var.cloudtrail_retention_days <= 3653
+    error_message = "Retention days must be between 1 and 3653 (10 years)."
+  }
 }
 
 variable "enable_sns_notifications" {
   description = "Enable SNS notifications for IAM changes"
   type        = bool
   default     = true
+}
+
+variable "enable_aws_config" {
+  description = "Enable AWS Config for compliance monitoring"
+  type        = bool
+  default     = false
+}
+
+variable "restricted_ip_ranges" {
+  description = "List of IP CIDR ranges allowed to assume roles (empty for no restrictions)"
+  type        = list(string)
+  default     = []
+  
+  validation {
+    condition     = alltrue([for ip in var.restricted_ip_ranges : can(cidrhost(ip, 0))])
+    error_message = "All values must be valid CIDR notation (e.g., 10.0.0.0/16)."
+  }
 }
 
 variable "tags" {
@@ -131,6 +163,15 @@ data "aws_iam_policy_document" "cross_account_trust" {
       test     = "Bool"
       variable = "aws:MultiFactorAuthPresent"
       values   = ["true"]
+    }
+    # Add IP restriction if specified
+    dynamic "condition" {
+      for_each = length(var.restricted_ip_ranges) > 0 ? [1] : []
+      content {
+        test     = "IpAddress"
+        variable = "aws:SourceIp"
+        values   = var.restricted_ip_ranges
+      }
     }
   }
 }
@@ -223,18 +264,47 @@ data "aws_iam_policy_document" "readonly_policy" {
     sid    = "DenyDestructiveActions"
     effect = "Deny"
     actions = [
+      # EC2 destructive actions
       "ec2:TerminateInstances",
       "ec2:StopInstances",
+      "ec2:DeleteInstance",
+      "ec2:DeleteVolume",
+      "ec2:DeleteSnapshot",
+      "ec2:DeleteSecurityGroup",
+      "ec2:DeleteSubnet",
+      "ec2:DeleteVpc",
+      # RDS destructive actions
       "rds:DeleteDBInstance",
       "rds:DeleteDBCluster",
+      "rds:DeleteDBSubnetGroup",
+      "rds:DeleteDBParameterGroup",
+      # S3 destructive actions
       "s3:DeleteBucket",
       "s3:DeleteObject",
+      "s3:DeleteBucketPolicy",
+      # IAM destructive actions
       "iam:DeleteRole",
       "iam:DeleteUser",
       "iam:DeletePolicy",
-      "lambda:DeleteFunction"
+      "iam:DeleteAccessKey",
+      "iam:DeleteLoginProfile",
+      # Lambda destructive actions
+      "lambda:DeleteFunction",
+      "lambda:DeleteEventSourceMapping",
+      # CloudFormation destructive actions
+      "cloudformation:DeleteStack",
+      "cloudformation:DeleteChangeSet",
+      # ECS destructive actions
+      "ecs:DeleteCluster",
+      "ecs:DeleteService",
+      "ecs:DeleteTaskDefinition"
     ]
     resources = ["*"]
+    condition {
+      test     = "StringNotEquals"
+      variable = "aws:PrincipalArn"
+      values   = ["arn:${data.aws_partition.current.partition}:iam::${local.account_id}:role/${var.environment}-AdminRole"]
+    }
   }
 }
 
@@ -300,7 +370,7 @@ data "aws_iam_policy_document" "cloudwatch_readonly_policy" {
   }
 }
 
-# S3 upload policy for specific bucket
+# S3 upload policy for specific bucket - restricted permissions
 data "aws_iam_policy_document" "s3_upload_policy" {
   statement {
     sid    = "S3UploadAccess"
@@ -308,10 +378,15 @@ data "aws_iam_policy_document" "s3_upload_policy" {
     actions = [
       "s3:PutObject",
       "s3:PutObjectAcl",
-      "s3:GetObject",
-      "s3:DeleteObject"
+      "s3:GetObject"
+      # Removed s3:DeleteObject for security - use lifecycle policies instead
     ]
     resources = ["arn:${data.aws_partition.current.partition}:s3:::${local.app_bucket_name}/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["private", "bucket-owner-full-control"]
+    }
   }
 
   statement {
@@ -560,6 +635,38 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
   policy = data.aws_iam_policy_document.cloudtrail_bucket_policy.json
 }
 
+# S3 Lifecycle Policy for automated object management
+resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail_logs_lifecycle" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  rule {
+    id     = "cloudtrail-logs-lifecycle"
+    status = "Enabled"
+
+    # Transition to IA after 30 days
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    # Transition to Glacier after 90 days
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+
+    # Delete objects after 7 years (2555 days)
+    expiration {
+      days = 2555
+    }
+
+    # Delete incomplete multipart uploads after 7 days
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 ########################
 # CloudWatch Resources
 ########################
@@ -650,12 +757,80 @@ resource "aws_cloudtrail" "security_trail" {
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true
+  
+  # Enable CloudTrail Insights for unusual activity detection
+  insight_selector {
+    insight_type = "ApiCallRateInsight"
+  }
+  
+  insight_selector {
+    insight_type = "ApiErrorRateInsight"
+  }
 
   tags = merge(local.common_tags, {
     Purpose = "SecurityAudit"
   })
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs_policy]
+}
+
+########################
+# AWS Config Rules for Compliance
+########################
+
+# AWS Config Configuration Recorder
+resource "aws_config_configuration_recorder" "config_recorder" {
+  count = var.enable_aws_config ? 1 : 0
+  
+  name     = "${var.environment}-config-recorder"
+  role_arn = aws_iam_role.config_role[0].arn
+
+  recording_group {
+    all_supported = true
+  }
+}
+
+# AWS Config Delivery Channel
+resource "aws_config_delivery_channel" "config_delivery" {
+  count = var.enable_aws_config ? 1 : 0
+  
+  name           = "${var.environment}-config-delivery"
+  s3_bucket_name = aws_s3_bucket.cloudtrail_logs.bucket
+  s3_key_prefix  = "config"
+  
+  depends_on = [aws_config_configuration_recorder.config_recorder]
+}
+
+# AWS Config IAM Role
+resource "aws_iam_role" "config_role" {
+  count = var.enable_aws_config ? 1 : 0
+  
+  name = "${var.environment}-config-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Purpose = "AWSConfig"
+  })
+}
+
+# AWS Config IAM Policy
+resource "aws_iam_role_policy_attachment" "config_policy" {
+  count = var.environment == "prod" ? 1 : 0
+  
+  role       = aws_iam_role.config_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
 }
 
 ########################
@@ -861,5 +1036,9 @@ output "security_configuration_summary" {
     sns_notifications   = var.enable_sns_notifications
     data_events_logging = var.cloudtrail_enable_data_events
     log_retention_days  = var.cloudtrail_retention_days
+    aws_config_enabled  = var.enable_aws_config
+    ip_restrictions     = length(var.restricted_ip_ranges) > 0 ? var.restricted_ip_ranges : ["No restrictions"]
+    cloudtrail_insights = true
+    lifecycle_policies  = true
   }
 }
