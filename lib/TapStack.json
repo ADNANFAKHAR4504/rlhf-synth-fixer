@@ -234,9 +234,6 @@
         "ReadOnlyAccessPolicy": {
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
-                "ManagedPolicyName": {
-                    "Fn::Sub": "${DeploymentEnv}-readonly-access-policy"
-                },
                 "Description": "Read-only access policy with MFA enforcement for security operations",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -296,9 +293,6 @@
         "LimitedS3AccessPolicy": {
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
-                "ManagedPolicyName": {
-                    "Fn::Sub": "${DeploymentEnv}-limited-s3-access-policy"
-                },
                 "Description": "Limited S3 access policy for specific operational needs with MFA enforcement",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
