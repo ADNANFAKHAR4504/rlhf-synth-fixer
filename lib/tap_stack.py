@@ -1335,3 +1335,4 @@ echo "User data script completed successfully"
             },
             opts=ResourceOptions(parent=self)
         )
+
