@@ -644,18 +644,6 @@
                         "DEPLOYMENT_STOP_ON_ALARM"
                     ]
                 },
-                "BlueGreenDeploymentConfiguration": {
-                    "TerminateBlueInstancesOnDeploymentSuccess": {
-                        "Action": "TERMINATE",
-                        "TerminationWaitTimeInMinutes": 5
-                    },
-                    "DeploymentReadyOption": {
-                        "ActionOnTimeout": "CONTINUE_DEPLOYMENT"
-                    },
-                    "GreenFleetProvisioningOption": {
-                        "Action": "COPY_AUTO_SCALING_GROUP"
-                    }
-                },
                 "Ec2TagFilters": [
                     {
                         "Type": "KEY_AND_VALUE",
