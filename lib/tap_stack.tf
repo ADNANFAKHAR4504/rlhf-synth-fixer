@@ -32,7 +32,7 @@ resource "aws_kms_key" "financial_app_primary" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.us-east-2.amazonaws.com"
+          Service = "logs.${var.primary_region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -41,10 +41,13 @@ resource "aws_kms_key" "financial_app_primary" {
           "kms:GenerateDataKey*",
           "kms:DescribeKey"
         ]
-        Resource = "*"
+        Resource = "arn:aws:kms:${var.primary_region}:${data.aws_caller_identity.current.account_id}:key/*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-east-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/primary"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/primary"
+          }
+          StringEquals = {
+            "aws:PrincipalAccount" = data.aws_caller_identity.current.account_id
           }
         }
       }
@@ -84,7 +87,7 @@ resource "aws_kms_key" "financial_app_secondary" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.us-west-1.amazonaws.com"
+          Service = "logs.${var.secondary_region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -93,10 +96,13 @@ resource "aws_kms_key" "financial_app_secondary" {
           "kms:GenerateDataKey*",
           "kms:DescribeKey"
         ]
-        Resource = "*"
+        Resource = "arn:aws:kms:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:key/*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-west-1:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/secondary"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/secondary"
+          }
+          StringEquals = {
+            "aws:PrincipalAccount" = data.aws_caller_identity.current.account_id
           }
         }
       }
@@ -436,7 +442,10 @@ resource "aws_iam_policy" "financial_app_policy" {
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/*",
+          "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${local.name_prefix}/*"
+        ]
       },
       {
         Effect = "Allow"
@@ -566,18 +575,26 @@ resource "aws_security_group" "financial_app_primary" {
   description = "Security group for financial app - primary region"
   vpc_id      = aws_vpc.primary.id
 
+  # HTTPS from VPC and common corporate networks only (more secure than 0.0.0.0/0)
   ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port = 443
+    to_port   = 443
+    protocol  = "tcp"
+    cidr_blocks = [
+      "10.0.0.0/16",   # VPC CIDR
+      "172.16.0.0/12", # RFC 1918 private networks
+      "192.168.0.0/16" # RFC 1918 private networks
+    ]
+    description = "HTTPS access from private networks"
   }
 
+  # HTTP from VPC only (redirect to HTTPS in application)
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["10.0.0.0/16"]
+    description = "HTTP access from VPC only (for health checks)"
   }
 
   egress {
@@ -599,18 +616,26 @@ resource "aws_security_group" "financial_app_secondary" {
   description = "Security group for financial app - secondary region"
   vpc_id      = aws_vpc.secondary.id
 
+  # HTTPS from VPC and common corporate networks only (more secure than 0.0.0.0/0)
   ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port = 443
+    to_port   = 443
+    protocol  = "tcp"
+    cidr_blocks = [
+      "10.1.0.0/16",   # VPC CIDR
+      "172.16.0.0/12", # RFC 1918 private networks
+      "192.168.0.0/16" # RFC 1918 private networks
+    ]
+    description = "HTTPS access from private networks"
   }
 
+  # HTTP from VPC only (redirect to HTTPS in application)
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["10.1.0.0/16"]
+    description = "HTTP access from VPC only (for health checks)"
   }
 
   egress {
