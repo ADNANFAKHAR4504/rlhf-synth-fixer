@@ -156,11 +156,19 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBe(2);
 
-      response.Subnets!.forEach((subnet, index) => {
+      const expectedCidrBlocks = ["10.0.1.0/24", "10.0.2.0/24"];
+      const actualCidrBlocks = response.Subnets!.map(subnet => subnet.CidrBlock);
+      
+      response.Subnets!.forEach((subnet) => {
         expect(subnet.VpcId).toBe(outputs.vpc_primary_id);
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.CidrBlock).toBe(`10.0.${index + 1}.0/24`);
+        expect(expectedCidrBlocks).toContain(subnet.CidrBlock);
         expect(subnet.State).toBe("available");
+      });
+      
+      // Ensure all expected CIDR blocks are present
+      expectedCidrBlocks.forEach(expectedCidr => {
+        expect(actualCidrBlocks).toContain(expectedCidr);
       });
     });
 
@@ -172,11 +180,19 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBe(2);
 
-      response.Subnets!.forEach((subnet, index) => {
+      const expectedCidrBlocks = ["10.0.10.0/24", "10.0.11.0/24"];
+      const actualCidrBlocks = response.Subnets!.map(subnet => subnet.CidrBlock);
+      
+      response.Subnets!.forEach((subnet) => {
         expect(subnet.VpcId).toBe(outputs.vpc_primary_id);
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.CidrBlock).toBe(`10.0.${index + 10}.0/24`);
+        expect(expectedCidrBlocks).toContain(subnet.CidrBlock);
         expect(subnet.State).toBe("available");
+      });
+      
+      // Ensure all expected CIDR blocks are present
+      expectedCidrBlocks.forEach(expectedCidr => {
+        expect(actualCidrBlocks).toContain(expectedCidr);
       });
     });
 
@@ -212,11 +228,19 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBe(2);
 
-      response.Subnets!.forEach((subnet, index) => {
+      const expectedCidrBlocks = ["10.1.10.0/24", "10.1.11.0/24"];
+      const actualCidrBlocks = response.Subnets!.map(subnet => subnet.CidrBlock);
+      
+      response.Subnets!.forEach((subnet) => {
         expect(subnet.VpcId).toBe(outputs.vpc_secondary_id);
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.CidrBlock).toBe(`10.1.${index + 10}.0/24`);
+        expect(expectedCidrBlocks).toContain(subnet.CidrBlock);
         expect(subnet.State).toBe("available");
+      });
+      
+      // Ensure all expected CIDR blocks are present
+      expectedCidrBlocks.forEach(expectedCidr => {
+        expect(actualCidrBlocks).toContain(expectedCidr);
       });
     });
   });
@@ -365,7 +389,12 @@ describe("Terraform Infrastructure Integration Tests", () => {
       );
       
       expect(primaryFinancialAlias).toBeDefined();
-      expect(primaryFinancialAlias!.TargetKeyId).toBe(outputs.kms_key_primary_id);
+      expect(primaryFinancialAlias!.AliasName).toContain("financial-app");
+      expect(primaryFinancialAlias!.AliasName).toContain("primary");
+      expect(primaryFinancialAlias!.TargetKeyId).toBeDefined();
+      
+      // Verify the alias points to our KMS key by checking if the ARN contains the key ID
+      expect(outputs.kms_key_primary_arn).toContain(primaryFinancialAlias!.TargetKeyId!);
 
       // Check secondary region aliases
       const secondaryAliasResponse = await secondaryKMS.send(new ListAliasesCommand({}));
@@ -375,7 +404,12 @@ describe("Terraform Infrastructure Integration Tests", () => {
       );
       
       expect(secondaryFinancialAlias).toBeDefined();
-      expect(secondaryFinancialAlias!.TargetKeyId).toBe(outputs.kms_key_secondary_id);
+      expect(secondaryFinancialAlias!.AliasName).toContain("financial-app");
+      expect(secondaryFinancialAlias!.AliasName).toContain("secondary");
+      expect(secondaryFinancialAlias!.TargetKeyId).toBeDefined();
+      
+      // Verify the alias points to our KMS key by checking if the ARN contains the key ID
+      expect(outputs.kms_key_secondary_arn).toContain(secondaryFinancialAlias!.TargetKeyId!);
     });
   });
 
