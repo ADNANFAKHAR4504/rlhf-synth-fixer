@@ -636,7 +636,7 @@
                         "Arn"
                     ]
                 },
-                "DeploymentConfigName": "CodeDeployDefault.AllInstancesOneByOne",
+                "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
                 "AutoRollbackConfiguration": {
                     "Enabled": true,
                     "Events": [

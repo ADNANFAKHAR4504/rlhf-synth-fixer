@@ -409,7 +409,7 @@ Resources:
       ApplicationName: !Ref CodeDeployApplication
       DeploymentGroupName: !Sub "${ApplicationName}-deployment-group-${EnvironmentSuffix}"
       ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
-      DeploymentConfigName: CodeDeployDefault.AllInstancesOneByOne
+      DeploymentConfigName: CodeDeployDefault.OneAtATime
       AutoRollbackConfiguration:
         Enabled: true
         Events:
