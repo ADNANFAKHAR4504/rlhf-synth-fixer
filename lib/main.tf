@@ -12,12 +12,12 @@ variable "bucket_region" {
   default     = "us-west-2"
 }
 
-variable "use1_region"{
+variable "use1_region" {
   description = "Region for the use1 bucket"
   type        = string
   default     = "us-east-1"
 }
-variable "usw2_region"{
+variable "usw2_region" {
   description = "Region for the usw2 bucket"
   type        = string
   default     = "us-west-2"
@@ -73,7 +73,7 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "${path.module}/lambda.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import json
 import logging
 
@@ -192,12 +192,12 @@ resource "aws_lambda_function" "main_use1" {
   provider         = aws.use1
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "${var.project_name}-lambda-use1"
-  role            = aws_iam_role.lambda_execution_use1.arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = "python3.12"
+  role             = aws_iam_role.lambda_execution_use1.arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.12"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  publish         = true
-  kms_key_arn     = aws_kms_key.lambda_env_use1.arn
+  publish          = true
+  kms_key_arn      = aws_kms_key.lambda_env_use1.arn
 
   environment {
     variables = {
@@ -415,12 +415,12 @@ resource "aws_lambda_function" "main_usw2" {
   provider         = aws.usw2
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "${var.project_name}-lambda-usw2"
-  role            = aws_iam_role.lambda_execution_usw2.arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = "python3.12"
+  role             = aws_iam_role.lambda_execution_usw2.arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.12"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  publish         = true
-  kms_key_arn     = aws_kms_key.lambda_env_usw2.arn
+  publish          = true
+  kms_key_arn      = aws_kms_key.lambda_env_usw2.arn
 
   environment {
     variables = {
