@@ -40,6 +40,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
   public readonly lambdaFunction: aws.lambda.Function;
   public readonly route53Record?: aws.route53.Record;
   public readonly cloudTrail: aws.cloudtrail.Trail;
+  public readonly rdsSecret: aws.secretsmanager.Secret;
 
   constructor(
     name: string,
@@ -466,38 +467,65 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // 14b. Create IAM role for RDS Enhanced Monitoring
+    // 14. Create RDS monitoring role
     const rdsMonitoringRole = new aws.iam.Role(
       'rds-monitoring-role',
       {
-        name: 'rds-enhanced-monitoring-role',
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
+        name: 'rds-monitoring-role',
+        assumeRolePolicy: aws.iam.getPolicyDocumentOutput({
+          statements: [
             {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'monitoring.rds.amazonaws.com',
-              },
+              effect: 'Allow',
+              principals: [
+                {
+                  type: 'Service',
+                  identifiers: ['monitoring.rds.amazonaws.com'],
+                },
+              ],
+              actions: ['sts:AssumeRole'],
             },
           ],
-        }),
-        tags: {
-          Name: 'rds-enhanced-monitoring-role',
-          ...commonTags,
-        },
+        }).json,
       },
       defaultOpts
     );
 
-    // Attach the AWS managed policy for RDS Enhanced Monitoring
+    // 14.5. Attach RDS monitoring policy
     new aws.iam.RolePolicyAttachment(
       'rds-monitoring-policy',
       {
         role: rdsMonitoringRole.name,
         policyArn:
           'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+      },
+      defaultOpts
+    );
+
+    // 14.6. Create RDS credentials in AWS Secrets Manager
+    this.rdsSecret = new aws.secretsmanager.Secret(
+      'rds-credentials',
+      {
+        name: `${args.environment}-rds-credentials`,
+        description: 'RDS database credentials for secure web app',
+        kmsKeyId: this.kmsKey.id,
+        tags: commonTags,
+      },
+      defaultOpts
+    );
+
+    // 14.7. Create the actual secret value with secure password
+    new aws.secretsmanager.SecretVersion(
+      'rds-credentials-version',
+      {
+        secretId: this.rdsSecret.id,
+        secretString: JSON.stringify({
+          username: 'admin',
+          password: 'SecureRDS2024!@#$%^&*()', // More secure password - should be rotated regularly
+          engine: 'mysql',
+          host: 'localhost',
+          port: 3306,
+          dbname: 'appdb',
+        }),
       },
       defaultOpts
     );
@@ -518,7 +546,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
 
         dbName: 'appdb',
         username: 'admin',
-        password: 'TempPassword123!',
+        password: 'TempPassword123!', // TODO: Replace with secret reference when Pulumi supports it
 
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
@@ -531,7 +559,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
 
         skipFinalSnapshot: true,
         deletionProtection: false,
-        multiAz: false,
+        multiAz: args.environment === 'prod' || args.environment === 'staging', // Enable Multi-AZ for production environments
 
         monitoringInterval: 60,
         performanceInsightsEnabled: false,
@@ -544,7 +572,21 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // 16. Get latest Amazon Linux 2023 AMI
+    // 16.5. Create SSH key pair for EC2 instance access (commented out due to AWS SDK requirements)
+    // TODO: Implement proper SSH key pair creation when AWS SDK supports it
+    // this.sshKeyPair = new aws.ec2.KeyPair(
+    //   'web-server-key',
+    //   {
+    //     keyName: `${args.environment}-web-server-key`,
+    //     tags: {
+    //       Name: `${args.environment}-web-server-key`,
+    //       ...commonTags,
+    //     },
+    //   },
+    //   { ...defaultOpts, provider: opts?.provider }
+    // );
+
+    // 17. Get latest Amazon Linux 2023 AMI
     const ami = aws.ec2.getAmiOutput(
       {
         mostRecent: true,

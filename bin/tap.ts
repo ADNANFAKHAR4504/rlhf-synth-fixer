@@ -71,5 +71,6 @@ export const lambdaFunctionArn = tapStack.secureWebApp.lambdaFunction.arn;
 export const kmsKeyId = tapStack.secureWebApp.kmsKey.keyId;
 export const kmsKeyArn = tapStack.secureWebApp.kmsKey.arn;
 export const cloudTrailArn = tapStack.secureWebApp.cloudTrail.arn;
+export const rdsSecretArn = tapStack.secureWebApp.rdsSecret.arn;
 export const domainUrl = tapStack.secureWebApp.route53Record?.name;
 export const applicationUrl = pulumi.interpolate`${domainUrl || 'http://'}${tapStack.secureWebApp.alb.dnsName}`;
