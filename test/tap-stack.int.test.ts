@@ -24,9 +24,9 @@ describe('TapStack Integration Tests', () => {
           // Mock outputs for testing when stack is not deployed
           outputs = {
             TurnAroundPromptTableName: 'prod-TurnAroundPromptTable-dev',
-            TurnAroundPromptTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/prod-TurnAroundPromptTable-dev',
-            ApiGatewayUrl: 'https://prod-myapi-dev.execute-api.us-east-1.amazonaws.com/dev',
-            EncryptionKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/mock-key-id',
+            TurnAroundPromptTableArn: 'arn:aws:dynamodb:us-east-2:123456789012:table/prod-TurnAroundPromptTable-dev',
+            ApiGatewayUrl: 'https://prod-myapi-dev.execute-api.us-east-2.amazonaws.com/dev',
+            EncryptionKeyArn: 'arn:aws:kms:us-east-2:123456789012:key/mock-key-id',
             StackName: 'TapStack-dev',
             EnvironmentSuffix: 'dev'
           };
@@ -36,9 +36,9 @@ describe('TapStack Integration Tests', () => {
         // Mock outputs for testing when stack is not deployed
         outputs = {
           TurnAroundPromptTableName: 'prod-TurnAroundPromptTable-dev',
-          TurnAroundPromptTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/prod-TurnAroundPromptTable-dev',
-          ApiGatewayUrl: 'https://prod-myapi-dev.execute-api.us-east-1.amazonaws.com/dev',
-          EncryptionKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/mock-key-id',
+          TurnAroundPromptTableArn: 'arn:aws:dynamodb:us-east-2:123456789012:table/prod-TurnAroundPromptTable-dev',
+          ApiGatewayUrl: 'https://prod-myapi-dev.execute-api.us-east-2.amazonaws.com/dev',
+          EncryptionKeyArn: 'arn:aws:kms:us-east-2:123456789012:key/mock-key-id',
           StackName: 'TapStack-dev',
           EnvironmentSuffix: 'dev'
         };
@@ -53,7 +53,7 @@ describe('TapStack Integration Tests', () => {
     test('API Gateway should be accessible', async () => {
       const apiUrl = outputs.ApiGatewayUrl;
       expect(apiUrl).toBeDefined();
-      expect(apiUrl).toMatch(/^https:\/\/.*\.execute-api\.us-east-1\.amazonaws\.com\/.*$/);
+      expect(apiUrl).toMatch(/^https:\/\/.*\.execute-api\.us-east-2\.amazonaws\.com\/.*$/);
     });
 
     test('API Gateway should require authorization', async () => {
@@ -141,7 +141,7 @@ describe('TapStack Integration Tests', () => {
     test('KMS encryption key should be accessible', async () => {
       const keyArn = outputs.EncryptionKeyArn;
       expect(keyArn).toBeDefined();
-      expect(keyArn).toMatch(/^arn:aws:kms:us-east-1:\d+:key\/.*$/);
+      expect(keyArn).toMatch(/^arn:aws:kms:us-east-2:\d+:key\/.*$/);
     });
 
     test('WAF should be protecting API Gateway', async () => {
@@ -196,7 +196,7 @@ describe('TapStack Integration Tests', () => {
       });
       
       // KMS key ARN doesn't follow prod- naming convention, but should be valid ARN
-      expect(outputs.EncryptionKeyArn).toMatch(/^arn:aws:kms:us-east-1:\d+:key\/.*$/);
+      expect(outputs.EncryptionKeyArn).toMatch(/^arn:aws:kms:us-east-2:\d+:key\/.*$/);
     });
   });
 
