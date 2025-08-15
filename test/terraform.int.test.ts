@@ -15,7 +15,7 @@ const TEST_CONFIG = {
   timeout: 30000,
   expectedResources: {
     bucketPrefix: 'secure-storage-',
-    cloudtrailName: 'secure-data-cloudtrail',
+    cloudtrailPrefix: 'secure-data-cloudtrail-',
     iamRoleName: 'secure-storage-app-role',
     snsTopicName: 'iam-role-changes',
   },
@@ -43,8 +43,8 @@ describe('AWS Secure Data Storage Infrastructure Integration Tests', () => {
       expect(TEST_CONFIG.expectedResources.bucketPrefix).toBe(
         'secure-storage-'
       );
-      expect(TEST_CONFIG.expectedResources.cloudtrailName).toBe(
-        'secure-data-cloudtrail'
+      expect(TEST_CONFIG.expectedResources.cloudtrailPrefix).toBe(
+        'secure-data-cloudtrail-'
       );
       expect(TEST_CONFIG.expectedResources.iamRoleName).toBe(
         'secure-storage-app-role'
@@ -69,7 +69,7 @@ describe('AWS Secure Data Storage Infrastructure Integration Tests', () => {
       // Test that AWS SDK commands can be created without errors
       const listBucketsCommand = new ListBucketsCommand({});
       const getTrailCommand = new GetTrailCommand({
-        Name: TEST_CONFIG.expectedResources.cloudtrailName,
+        Name: TEST_CONFIG.expectedResources.cloudtrailPrefix,
       });
       const getRoleCommand = new GetRoleCommand({
         RoleName: TEST_CONFIG.expectedResources.iamRoleName,
@@ -89,14 +89,14 @@ describe('AWS Secure Data Storage Infrastructure Integration Tests', () => {
     test('should have correct command inputs', () => {
       // Verify command parameters are correctly set
       const getTrailCommand = new GetTrailCommand({
-        Name: TEST_CONFIG.expectedResources.cloudtrailName,
+        Name: TEST_CONFIG.expectedResources.cloudtrailPrefix,
       });
       const getRoleCommand = new GetRoleCommand({
         RoleName: TEST_CONFIG.expectedResources.iamRoleName,
       });
 
       expect(getTrailCommand.input.Name).toBe(
-        TEST_CONFIG.expectedResources.cloudtrailName
+        TEST_CONFIG.expectedResources.cloudtrailPrefix
       );
       expect(getRoleCommand.input.RoleName).toBe(
         TEST_CONFIG.expectedResources.iamRoleName
@@ -116,7 +116,7 @@ describe('AWS Secure Data Storage Infrastructure Integration Tests', () => {
       expect(TEST_CONFIG.expectedResources.bucketPrefix).toMatch(
         /^[a-z0-9-]+$/
       );
-      expect(TEST_CONFIG.expectedResources.cloudtrailName).toMatch(
+      expect(TEST_CONFIG.expectedResources.cloudtrailPrefix).toMatch(
         /^[a-zA-Z0-9-_]+$/
       );
       expect(TEST_CONFIG.expectedResources.iamRoleName).toMatch(

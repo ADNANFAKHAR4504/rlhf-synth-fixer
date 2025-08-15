@@ -17,7 +17,7 @@
 variable "bucket_region" {
 description = "Region for the S3 bucket"
 type = string
-default = "us-west-2"
+default = "eu-west-3"
 }
 
 variable "bucket_name" {
@@ -103,7 +103,7 @@ value = aws_s3_bucket.this.tags
 variable "aws_region" {
 description = "The AWS region to deploy resources"
 type = string
-default = "us-west-2"
+default = "eu-west-3"
 }
 
 variable "allowed_ip_ranges" {
@@ -287,7 +287,7 @@ Action = "s3:GetBucketAcl"
 Resource = aws_s3_bucket.cloudtrail_logs.arn
 Condition = {
 StringEquals = {
-"AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/secure-data-cloudtrail"
+"AWS:SourceArn" = aws_cloudtrail.secure_data_trail.arn
 }
 }
 },
@@ -302,7 +302,7 @@ Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
 Condition = {
 StringEquals = {
 "s3:x-amz-acl" = "bucket-owner-full-control"
-"AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/secure-data-cloudtrail"
+"AWS:SourceArn" = aws_cloudtrail.secure_data_trail.arn
 }
 }
 }
@@ -317,7 +317,7 @@ data "aws_caller_identity" "current" {}
 # CloudTrail for API logging
 
 resource "aws_cloudtrail" "secure_data_trail" {
-name = "secure-data-cloudtrail"
+name = "secure-data-cloudtrail-${random_id.bucket_suffix.hex}"
 s3_bucket_name = aws_s3_bucket.cloudtrail_logs.bucket
 include_global_service_events = true
 is_multi_region_trail = true
