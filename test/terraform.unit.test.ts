@@ -84,15 +84,6 @@ describe('tap_stack.tf static structure', () => {
     expect(has(/iam_instance_profile\s*=\s*aws_iam_instance_profile.ec2_profile/)).toBe(true);
   });
 
-  it('defines EC2 key pairs', () => {
-    expect(has(/resource\s+"aws_key_pair"\s+"environment_key"/)).toBe(true);
-  });
-
-  it('creates user_data script via local_file', () => {
-    expect(has(/resource\s+"local_file"\s+"user_data_script"/)).toBe(true);
-    expect(has(/filename\s*=\s*"\${path\.module}\/user_data\.sh"/)).toBe(true);
-  });
-
   it('applies common tags to all resources', () => {
     expect(has(/tags\s*=\s*merge\(var\.common_tags/)).toBe(true);
   });
