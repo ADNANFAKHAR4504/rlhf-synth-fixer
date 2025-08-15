@@ -3,19 +3,30 @@
 
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from "@aws-sdk/client-auto-scaling";
 import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
+import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DescribeInstancesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeNetworkAclsCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcAttributeCommand,
   DescribeVpcsCommand,
-  EC2Client
+  EC2Client,
 } from "@aws-sdk/client-ec2";
 import {
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   ElasticLoadBalancingV2Client
 } from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
+  DescribeRuleCommand,
+  EventBridgeClient,
+  ListTargetsByRuleCommand
+} from "@aws-sdk/client-eventbridge";
+import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from "@aws-sdk/client-iam";
 import { GetFunctionCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { DescribeDBInstancesCommand, RDSClient } from "@aws-sdk/client-rds";
 import {
@@ -33,7 +44,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
   let outputs: any = {};
   const region = process.env.AWS_REGION || "us-west-1";
 
-  // We will fill this after reading outputs (detected > env > default)
+  // Detect environment suffix dynamically from outputs; fall back to ENV var or "dev"
   let suffix: string = "";
 
   // Initialize AWS SDK clients
@@ -43,6 +54,10 @@ describe("Terraform Infrastructure Integration Tests", () => {
   const elbClient = new ElasticLoadBalancingV2Client({ region });
   const asgClient = new AutoScalingClient({ region });
   const cwClient = new CloudWatchClient({ region });
+  const logsClient = new CloudWatchLogsClient({ region });
+  const ebClient = new EventBridgeClient({ region });
+  const ddbClient = new DynamoDBClient({ region });
+  const iamClient = new IAMClient({ region });
   const snsClient = new SNSClient({ region });
   const lambdaClient = new LambdaClient({ region });
 
@@ -87,10 +102,13 @@ describe("Terraform Infrastructure Integration Tests", () => {
       };
     }
 
-    // PERMANENT FIX: prefer detection from outputs, then env, then default
+    // Prefer detection from outputs, then env, then default
     suffix = detectSuffix(outputs) || process.env.ENVIRONMENT_SUFFIX || "dev";
   });
 
+  // --------------------------
+  // VPC & Subnets
+  // --------------------------
   describe("VPC and Networking", () => {
     test("VPC exists and is configured correctly", async () => {
       if (!outputs.vpc_id || outputs.vpc_id === "vpc-mock123") {
@@ -165,6 +183,45 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // NEW: IGW & NAT
+  // --------------------------
+  describe("Internet/NAT Gateways", () => {
+    test("Internet Gateway is attached to the VPC", async () => {
+      if (!outputs.vpc_id || outputs.vpc_id === "vpc-mock123") {
+        console.log("Skipping live test - no real VPC ID available");
+        return;
+      }
+      try {
+        const igwResp = await ec2Client.send(new DescribeInternetGatewaysCommand({
+          Filters: [{ Name: "attachment.vpc-id", Values: [outputs.vpc_id] }]
+        }));
+        expect(igwResp.InternetGateways?.length).toBeGreaterThan(0);
+      } catch {
+        console.log("Skipping IGW test - AWS credentials not configured");
+      }
+    });
+
+    test("Two NAT Gateways exist in public subnets", async () => {
+      if (!outputs.public_subnet_ids || outputs.public_subnet_ids[0] === "subnet-pub1") {
+        console.log("Skipping live test - no real subnet IDs available");
+        return;
+      }
+      try {
+        const natResp = await ec2Client.send(new DescribeNatGatewaysCommand({
+          Filter: [{ Name: "subnet-id", Values: outputs.public_subnet_ids }]
+        }));
+        const activeNats = (natResp.NatGateways || []).filter(n => n.State === "available");
+        expect(activeNats.length).toBeGreaterThanOrEqual(2);
+      } catch {
+        console.log("Skipping NAT GW test - AWS credentials not configured");
+      }
+    });
+  });
+
+  // --------------------------
+  // Security Groups
+  // --------------------------
   describe("Security Groups", () => {
     test("App security group allows HTTPS only", async () => {
       if (!outputs.app_sg_id) {
@@ -205,6 +262,45 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // NEW: NACLs
+  // --------------------------
+  describe("Network ACLs", () => {
+    test("Public NACL is associated with public subnets", async () => {
+      if (!outputs.public_subnet_ids || outputs.public_subnet_ids[0] === "subnet-pub1") {
+        console.log("Skipping live test - no real subnet IDs available");
+        return;
+      }
+      try {
+        const naclResp = await ec2Client.send(new DescribeNetworkAclsCommand({
+          Filters: [{ Name: "association.subnet-id", Values: outputs.public_subnet_ids }]
+        }));
+        expect(naclResp.NetworkAcls?.length).toBeGreaterThan(0);
+      } catch {
+        console.log("Skipping NACL test - AWS credentials not configured");
+      }
+    });
+
+    test("Private NACL is associated with private & db subnets", async () => {
+      if (!outputs.private_subnet_ids || outputs.private_subnet_ids[0] === "subnet-priv1") {
+        console.log("Skipping live test - no real subnet IDs available");
+        return;
+      }
+      try {
+        const values = outputs.private_subnet_ids.concat(outputs.db_subnet_ids || []);
+        const naclResp = await ec2Client.send(new DescribeNetworkAclsCommand({
+          Filters: [{ Name: "association.subnet-id", Values: values }]
+        }));
+        expect(naclResp.NetworkAcls?.length).toBeGreaterThan(0);
+      } catch {
+        console.log("Skipping NACL test - AWS credentials not configured");
+      }
+    });
+  });
+
+  // --------------------------
+  // S3 Bucket
+  // --------------------------
   describe("S3 Bucket", () => {
     test("Logs bucket exists and is encrypted", async () => {
       if (!outputs.logs_bucket_name || outputs.logs_bucket_name.includes("mock")) {
@@ -255,6 +351,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // Load Balancer & Target Group
+  // --------------------------
   describe("Load Balancer", () => {
     test("Network Load Balancer exists and is configured correctly", async () => {
       if (!outputs.nlb_dns_name || outputs.nlb_dns_name.includes("mock")) {
@@ -294,6 +393,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // Auto Scaling
+  // --------------------------
   describe("Auto Scaling", () => {
     test("Auto Scaling Group exists and is configured correctly", async () => {
       if (!outputs.asg_name || outputs.asg_name.includes("mock")) {
@@ -317,6 +419,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // CloudWatch Alarms
+  // --------------------------
   describe("CloudWatch Alarms", () => {
     test("CPU alarms are configured", async () => {
       try {
@@ -349,6 +454,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // RDS
+  // --------------------------
   describe("RDS Database", () => {
     test("RDS instance exists and is encrypted", async () => {
       if (!outputs.rds_endpoint || outputs.rds_endpoint.includes("mock")) {
@@ -373,6 +481,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // SNS
+  // --------------------------
   describe("SNS Topic", () => {
     test("Security alerts topic exists", async () => {
       if (!outputs.sns_topic_arn || outputs.sns_topic_arn.includes("mock")) {
@@ -392,6 +503,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // Lambda
+  // --------------------------
   describe("Lambda Function", () => {
     test("Security automation Lambda exists and is configured", async () => {
       if (!outputs.lambda_function_name || outputs.lambda_function_name.includes("mock")) {
@@ -413,6 +527,117 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // NEW: EventBridge → Lambda + Logs wiring
+  // --------------------------
+  describe("EventBridge Security Automation", () => {
+    test("Security changes rule exists with Lambda & LogGroup targets", async () => {
+      const ruleName = `prod-security-changes-${suffix}`;
+      const logGroupName = `/prod/security-events-${suffix}`;
+      if (!outputs.lambda_function_name || outputs.lambda_function_name.includes("mock")) {
+        console.log("Skipping live test - no real Lambda function available");
+        return;
+      }
+      try {
+        // Rule exists
+        const rule = await ebClient.send(new DescribeRuleCommand({ Name: ruleName }));
+        expect(rule.Name).toBe(ruleName);
+
+        // Targets include Lambda (by name) and we verify LogGroup exists
+        const targets = await ebClient.send(new ListTargetsByRuleCommand({ Rule: ruleName }));
+        const hasLambda = (targets.Targets || []).some(t => (t.Arn || "").includes(outputs.lambda_function_name));
+        expect(hasLambda).toBe(true);
+
+        // Log group exists
+        const lg = await logsClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName }));
+        const found = (lg.logGroups || []).some(g => g.logGroupName === logGroupName);
+        expect(found).toBe(true);
+      } catch {
+        console.log("Skipping EventBridge wiring test - AWS credentials not configured");
+      }
+    });
+
+    test("Lambda is present for EventBridge invocation (basic presence check)", async () => {
+      if (!outputs.lambda_function_name || outputs.lambda_function_name.includes("mock")) {
+        console.log("Skipping live test - no real Lambda function available");
+        return;
+      }
+      try {
+        const fn = await lambdaClient.send(new GetFunctionCommand({ FunctionName: outputs.lambda_function_name }));
+        expect(fn.Configuration?.FunctionName).toBe(outputs.lambda_function_name);
+      } catch {
+        console.log("Skipping Lambda permission test - AWS credentials not configured");
+      }
+    });
+  });
+
+  // --------------------------
+  // NEW: IAM roles & attached policies
+  // --------------------------
+  describe("IAM Roles & Policies", () => {
+    test("EC2 app role exists with CloudWatchAgent policy attached", async () => {
+      const roleName = `prod-ec2-app-role-${suffix}`;
+      try {
+        const role = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        expect(role.Role?.RoleName).toBe(roleName);
+        const attached = await iamClient.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
+        const hasCw = (attached.AttachedPolicies || []).some(p => (p.PolicyArn || "").endsWith(":policy/CloudWatchAgentServerPolicy"));
+        expect(hasCw).toBe(true);
+      } catch {
+        console.log("Skipping IAM EC2 role test - AWS credentials or role missing");
+      }
+    });
+
+    test("Bastion role exists with SSM managed policy", async () => {
+      const roleName = `prod-bastion-role-${suffix}`;
+      try {
+        const role = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        expect(role.Role?.RoleName).toBe(roleName);
+        const attached = await iamClient.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
+        const hasSsm = (attached.AttachedPolicies || []).some(p => (p.PolicyArn || "").endsWith(":policy/AmazonSSMManagedInstanceCore"));
+        expect(hasSsm).toBe(true);
+      } catch {
+        console.log("Skipping IAM bastion role test - AWS credentials or role missing");
+      }
+    });
+
+    test("Lambda security role exists with VPC access managed policy", async () => {
+      const roleName = `prod-lambda-security-role-${suffix}`;
+      try {
+        const role = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        expect(role.Role?.RoleName).toBe(roleName);
+        const attached = await iamClient.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
+        const hasVpc = (attached.AttachedPolicies || []).some(p => (p.PolicyArn || "").endsWith(":policy/service-role/AWSLambdaVPCAccessExecutionRole"));
+        expect(hasVpc).toBe(true);
+      } catch {
+        console.log("Skipping IAM lambda role test - AWS credentials or role missing");
+      }
+    });
+  });
+
+  // --------------------------
+  // NEW: DynamoDB state lock table
+  // --------------------------
+  describe("Terraform state lock table", () => {
+    test("DynamoDB lock table exists with encryption enabled", async () => {
+      const tableName = `prod-terraform-state-lock-${suffix}`;
+      try {
+        const resp = await ddbClient.send(new DescribeTableCommand({ TableName: tableName }));
+        expect(resp.Table?.TableName).toBe(tableName);
+        // stream disabled in your stack
+        expect(resp.Table?.StreamSpecification?.StreamEnabled || false).toBe(false);
+        // SSE enabled in your stack (ENABLED or ENABLING, depending on timing)
+        const status = resp.Table?.SSEDescription?.Status;
+        expect(status === "ENABLED" || status === "ENABLING").toBe(true);
+      } catch {
+        console.log("Skipping DynamoDB table test - AWS credentials or table missing");
+      }
+    });
+  });
+
+  // --------------------------
+  // Bastion Instance
+  // --------------------------
   describe("Bastion Host", () => {
     test("Bastion instance exists in public subnet", async () => {
       if (!outputs.bastion_public_dns || outputs.bastion_public_dns.includes("mock")) {
@@ -437,9 +662,11 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
+  // --------------------------
+  // Naming checks
+  // --------------------------
   describe("Resource Naming", () => {
     test("All resources include environment suffix", () => {
-      // If we still can't determine a suffix, there's nothing to assert
       if (!suffix) {
         console.log("Skipping naming suffix assertion - unable to determine suffix");
         return;

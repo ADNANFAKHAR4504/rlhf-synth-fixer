@@ -1,6 +1,6 @@
 # Ideal Terraform Infrastructure Response
 
-This is the complete, production-ready Terraform configuration that fully implements all requirements from the PROMPT.md. The solution is contained in a single `main.tf` file as requested, with a separate `provider.tf` for AWS provider configuration.
+This is the complete, production-ready Terraform configuration that fully implements all requirements from the PROMPT.md. The solution is contained in a single `tap_stack.tf` file as requested, with a separate `provider.tf` for AWS provider configuration.
 
 ## tap_stack.tf
 
