@@ -246,6 +246,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/flowlogs/${local.name_prefix}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
+  depends_on        = [aws_kms_key.main]
 
   tags = local.common_tags
 }
@@ -309,6 +310,7 @@ resource "aws_security_group" "web" {
   name_prefix = "${local.name_prefix}-web-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for web servers"
+  depends_on  = [aws_vpc.main]
 
   ingress {
     description = "HTTP"
@@ -347,6 +349,7 @@ resource "aws_security_group" "database" {
   name_prefix = "${local.name_prefix}-db-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for database servers"
+  depends_on  = [aws_vpc.main]
 
   ingress {
     description     = "MySQL/Aurora"
@@ -377,11 +380,17 @@ resource "aws_security_group" "database" {
 resource "aws_s3_bucket" "main" {
   bucket = "${local.name_prefix}-main-bucket-${random_id.bucket_suffix.hex}"
 
+  # Force delete bucket even if not empty
+  force_destroy = true
+
   tags = local.common_tags
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${local.name_prefix}-cloudtrail-${random_id.bucket_suffix.hex}"
+
+  # Force delete bucket even if not empty
+  force_destroy = true
 
   tags = merge(local.common_tags, {
     Purpose = "CloudTrail Logs"
@@ -562,6 +571,10 @@ resource "aws_iam_user" "app_user" {
   path = "/"
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # IAM User Policy
