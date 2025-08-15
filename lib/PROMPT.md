@@ -14,7 +14,7 @@ Using Pulumi's Python SDK Design and implement a secure infrastructure that sati
    - Implement S3 bucket policies to allow only encrypted connections.  
    - Configure IAM roles with least privilege policies.
 
-- Monitoring & Compliance 
+- Monitoring 
    - Enable CloudTrail in both regions for auditing.
 
 - Automation 
