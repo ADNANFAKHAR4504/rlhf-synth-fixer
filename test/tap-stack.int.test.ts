@@ -394,7 +394,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(response.KeyMetadata?.KeyState).toBe('Enabled');
       expect(response.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
       expect(response.KeyMetadata?.Description).toContain(
-        `KMS Key for S3 bucket encryption - ${environmentSuffix}`
+        `KMS Key for S3 bucket encryption with automatic rotation - ${environmentSuffix}`
       );
     });
   });
