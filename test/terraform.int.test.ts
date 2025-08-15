@@ -19,8 +19,9 @@ import {
   GetRoleCommand,
   IAMClient,
 } from '@aws-sdk/client-iam';
-import { KMSClient } from '@aws-sdk/client-kms';
+import { KMSClient, ListAliasesCommand, DescribeKeyCommand } from '@aws-sdk/client-kms';
 import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
+import { DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
 import fs from 'fs';
 import path from 'path';
 
@@ -512,6 +513,119 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(secondaryTopicResponse.Attributes!.KmsMasterKeyId).toBe(
         outputs.kms_key_secondary_id
       );
+    });
+  });
+
+  describe('Security Infrastructure Tests', () => {
+    test('security groups have correct configuration', async () => {
+      // Primary region security groups
+      const primarySGResponse = await primaryEC2.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [outputs.vpc_primary_id] }],
+        })
+      );
+
+      expect(primarySGResponse.SecurityGroups).toBeDefined();
+      const primaryFinancialSG = primarySGResponse.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('financial-app') && !sg.GroupName?.includes('default')
+      );
+
+      expect(primaryFinancialSG).toBeDefined();
+
+      // Check ingress rules - should not allow 0.0.0.0/0 for HTTP/HTTPS
+      const httpIngressRules = primaryFinancialSG!.IpPermissions!.filter(
+        rule => rule.FromPort === 80 || rule.FromPort === 443
+      );
+
+      httpIngressRules.forEach(rule => {
+        const hasBroadAccess = rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0');
+        expect(hasBroadAccess).toBe(false); // Should NOT have broad internet access
+        
+        // Should have VPC CIDR blocks instead
+        const hasVpcAccess = rule.IpRanges?.some(range => 
+          range.CidrIp === '10.0.0.0/16' || 
+          range.CidrIp === '172.16.0.0/12' || 
+          range.CidrIp === '192.168.0.0/16'
+        );
+        expect(hasVpcAccess).toBe(true);
+      });
+
+      // Secondary region security groups  
+      const secondarySGResponse = await secondaryEC2.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [outputs.vpc_secondary_id] }],
+        })
+      );
+
+      expect(secondarySGResponse.SecurityGroups).toBeDefined();
+      const secondaryFinancialSG = secondarySGResponse.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('financial-app') && !sg.GroupName?.includes('default')
+      );
+
+      expect(secondaryFinancialSG).toBeDefined();
+
+      // Same security checks for secondary region
+      const secondaryHttpIngressRules = secondaryFinancialSG!.IpPermissions!.filter(
+        rule => rule.FromPort === 80 || rule.FromPort === 443
+      );
+
+      secondaryHttpIngressRules.forEach(rule => {
+        const hasBroadAccess = rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0');
+        expect(hasBroadAccess).toBe(false);
+        
+        const hasVpcAccess = rule.IpRanges?.some(range => 
+          range.CidrIp === '10.1.0.0/16' || 
+          range.CidrIp === '172.16.0.0/12' || 
+          range.CidrIp === '192.168.0.0/16'
+        );
+        expect(hasVpcAccess).toBe(true);
+      });
+    });
+
+    test('KMS keys are functional and properly configured', async () => {
+      // Primary region KMS key
+      const primaryKeyResponse = await primaryKMS.send(
+        new DescribeKeyCommand({
+          KeyId: outputs.kms_key_primary_id,
+        })
+      );
+
+      expect(primaryKeyResponse.KeyMetadata).toBeDefined();
+      expect(primaryKeyResponse.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(primaryKeyResponse.KeyMetadata!.KeyState).toBe('Enabled');
+      expect(primaryKeyResponse.KeyMetadata!.KeyRotationStatus).toBeDefined();
+
+      // Secondary region KMS key
+      const secondaryKeyResponse = await secondaryKMS.send(
+        new DescribeKeyCommand({
+          KeyId: outputs.kms_key_secondary_id,
+        })
+      );
+
+      expect(secondaryKeyResponse.KeyMetadata).toBeDefined();
+      expect(secondaryKeyResponse.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(secondaryKeyResponse.KeyMetadata!.KeyState).toBe('Enabled');
+      expect(secondaryKeyResponse.KeyMetadata!.KeyRotationStatus).toBeDefined();
+    });
+
+    test('KMS aliases are properly configured', async () => {
+      // Check primary region aliases
+      const primaryAliasResponse = await primaryKMS.send(new ListAliasesCommand({}));
+      const primaryFinancialAlias = primaryAliasResponse.Aliases?.find(alias =>
+        alias.AliasName?.includes('financial-app') && alias.AliasName?.includes('primary')
+      );
+      
+      expect(primaryFinancialAlias).toBeDefined();
+      expect(primaryFinancialAlias!.TargetKeyId).toBe(outputs.kms_key_primary_id);
+
+      // Check secondary region aliases
+      const secondaryAliasResponse = await secondaryKMS.send(new ListAliasesCommand({}));
+      const secondaryFinancialAlias = secondaryAliasResponse.Aliases?.find(alias =>
+        alias.AliasName?.includes('financial-app') && alias.AliasName?.includes('secondary')
+      );
+      
+      expect(secondaryFinancialAlias).toBeDefined();
+      expect(secondaryFinancialAlias!.TargetKeyId).toBe(outputs.kms_key_secondary_id);
     });
   });
 

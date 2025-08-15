@@ -212,21 +212,51 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/Principal[\s\S]*AWS[\s\S]*arn:aws:iam/);
     });
 
+    test("KMS policies include CloudWatch Logs service permissions", () => {
+      expect(stackContent).toMatch(/"logs\.\$\{var\.primary_region\}\.amazonaws\.com"/);
+      expect(stackContent).toMatch(/"logs\.\$\{var\.secondary_region\}\.amazonaws\.com"/);
+      expect(stackContent).toMatch(/kms:EncryptionContext:aws:logs:arn/);
+    });
+
+    test("KMS policies include account-specific conditions", () => {
+      expect(stackContent).toMatch(/aws:PrincipalAccount.*data\.aws_caller_identity\.current\.account_id/);
+    });
+
     test("IAM policy includes KMS permissions", () => {
       expect(stackContent).toMatch(/"kms:Decrypt"/);
       expect(stackContent).toMatch(/"kms:Encrypt"/);
       expect(stackContent).toMatch(/"kms:GenerateDataKey\*"/);
     });
 
-    test("IAM policy includes CloudWatch permissions", () => {
+    test("IAM policy includes CloudWatch permissions with specific ARNs", () => {
       expect(stackContent).toMatch(/"logs:CreateLogGroup"/);
       expect(stackContent).toMatch(/"cloudwatch:PutMetricData"/);
+      expect(stackContent).toMatch(/"arn:aws:logs:\$\{var\.primary_region\}:\$\{data\.aws_caller_identity\.current\.account_id\}:log-group:\/aws\/\$\{local\.name_prefix\}\/\*"/);
+      expect(stackContent).toMatch(/"arn:aws:logs:\$\{var\.secondary_region\}:\$\{data\.aws_caller_identity\.current\.account_id\}:log-group:\/aws\/\$\{local\.name_prefix\}\/\*"/);
     });
 
-    test("Security groups allow HTTPS and HTTP", () => {
+    test("Security groups use restricted CIDR blocks (not 0.0.0.0/0)", () => {
       expect(stackContent).toMatch(/from_port\s*=\s*443/);
       expect(stackContent).toMatch(/from_port\s*=\s*80/);
       expect(stackContent).toMatch(/protocol\s*=\s*"tcp"/);
+      
+      // Should use VPC and RFC 1918 private networks instead of 0.0.0.0/0 for ingress
+      expect(stackContent).toMatch(/"10\.0\.0\.0\/16"/);
+      expect(stackContent).toMatch(/"10\.1\.0\.0\/16"/);
+      expect(stackContent).toMatch(/"172\.16\.0\.0\/12"/);
+      expect(stackContent).toMatch(/"192\.168\.0\.0\/16"/);
+      
+      // Ensure specific security descriptions are present
+      expect(stackContent).toMatch(/HTTPS access from private networks/);
+      expect(stackContent).toMatch(/HTTP access from VPC only \(for health checks\)/);
+    });
+
+    test("Security groups allow egress to 0.0.0.0/0 only", () => {
+      const egressMatches = stackContent.match(/egress\s*{[^}]*cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/g) || [];
+      const ingressMatches = stackContent.match(/ingress\s*{[^}]*cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/g) || [];
+      
+      expect(egressMatches.length).toBeGreaterThan(0); // Should have egress to 0.0.0.0/0
+      expect(ingressMatches.length).toBe(0); // Should NOT have ingress from 0.0.0.0/0
     });
   });
 
