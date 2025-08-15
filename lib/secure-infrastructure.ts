@@ -997,7 +997,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     void new aws.guardduty.DetectorFeature(
       `guardduty-s3-data-events-${args.environment}`,
       {
-        detectorId: guardDutyDetector.apply(detector => detector.id),
+        detectorId: guardDutyDetector.id,
         name: 'S3_DATA_EVENTS',
         status: 'ENABLED',
       },
@@ -1008,7 +1008,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     void new aws.guardduty.DetectorFeature(
       `guardduty-eks-audit-logs-${args.environment}`,
       {
-        detectorId: guardDutyDetector.apply(detector => detector.id),
+        detectorId: guardDutyDetector.id,
         name: 'EKS_AUDIT_LOGS',
         status: 'ENABLED',
       },
@@ -1019,7 +1019,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     void new aws.guardduty.DetectorFeature(
       `guardduty-malware-protection-${args.environment}`,
       {
-        detectorId: guardDutyDetector.apply(detector => detector.id),
+        detectorId: guardDutyDetector.id,
         name: 'EBS_MALWARE_PROTECTION',
         status: 'ENABLED',
       },
@@ -1141,26 +1141,13 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       `config-role-policy-${args.environment}`,
       {
         role: configRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
+        policyArn: 'arn:aws:iam::aws:policy/service-role/AWSConfigRole',
       },
       { provider, parent: this }
     );
 
-    // Config delivery channel
-    const configDeliveryChannel = new aws.cfg.DeliveryChannel(
-      `main-config-delivery-channel-${args.environment}`,
-      {
-        name: `main-config-delivery-channel-${args.environment}`,
-        s3BucketName: configBucket.bucket,
-        snapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      },
-      { provider, parent: this }
-    );
-
-    // Config configuration recorder
-    void new aws.cfg.Recorder(
+    // Config configuration recorder (must be created before delivery channel)
+    const configRecorder = new aws.cfg.Recorder(
       `main-config-recorder-${args.environment}`,
       {
         name: `main-config-recorder-${args.environment}`,
@@ -1170,7 +1157,20 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           includeGlobalResourceTypes: true,
         },
       },
-      { provider, parent: this, dependsOn: [configDeliveryChannel] }
+      { provider, parent: this }
+    );
+
+    // Config delivery channel (depends on recorder)
+    const configDeliveryChannel = new aws.cfg.DeliveryChannel(
+      `main-config-delivery-channel-${args.environment}`,
+      {
+        name: `main-config-delivery-channel-${args.environment}`,
+        s3BucketName: configBucket.bucket,
+        snapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
+        },
+      },
+      { provider, parent: this, dependsOn: [configRecorder] }
     );
 
     // Config rules for compliance
@@ -1187,7 +1187,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `encrypted-volumes-rule-${args.environment}`,
         },
       },
-      { provider, parent: this, dependsOn: [configDeliveryChannel] }
+      { provider, parent: this, dependsOn: [configRecorder] }
     );
 
     void new aws.cfg.Rule(
@@ -1203,7 +1203,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `s3-bucket-public-read-prohibited-${args.environment}`,
         },
       },
-      { provider, parent: this, dependsOn: [configDeliveryChannel] }
+      { provider, parent: this, dependsOn: [configRecorder] }
     );
 
     /**
@@ -1311,7 +1311,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     this.s3BucketName = cloudtrailBucket.bucket;
     this.availableAZs = pulumi.output(availabilityZones).apply(az => az.names);
     this.snsTopicArn = securityAlertsTopic.arn;
-    this.guardDutyDetectorId = guardDutyDetector.apply(detector => detector.id);
+    this.guardDutyDetectorId = guardDutyDetector.id;
     this.configDeliveryChannelName = configDeliveryChannel.name;
 
     // Register outputs
